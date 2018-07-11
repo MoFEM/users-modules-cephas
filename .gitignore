@@ -1,1 +1,25 @@
-# Add any directories, files, or patterns you don't want to be tracked by version control
+homogenisation
+fracture_mechanics
+moisture_transport
+ground_surface_temperature
+gels
+small_strain_plasticity
+obsolete
+solid_shell_prism_element
+soft_tissue_materials
+minimal_surface_equation
+bone_remodelling
+helmholtz
+optimal_mass_transport
+cell_engineering
+contact_mechanics
+contact_mechanics_zahur
+eshelbian_plasticty
+
+_Store
+*.swp
+*.swo
+*.swn
+*.bak
+.atom-build.json
+.build-tools.cson
