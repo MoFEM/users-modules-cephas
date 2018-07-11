@@ -1,0 +1,5 @@
+Implementation of non-linear elastic materials.
+
+
+1) Hooke (linear elastic)
+2) Neo-Hookean 

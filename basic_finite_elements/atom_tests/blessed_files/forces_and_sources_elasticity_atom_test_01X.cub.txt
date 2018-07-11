@@ -1,0 +1,43 @@
+meshset 12682136550675316767 type NODESET FORCESET msId 3
+
+F o r c e 
+ 
+Force magnitude: 1
+Moment magnitude: 0
+Force direction vector (X-component): 1
+Force direction vector (Y-component): 0
+Force direction vector (Z-component): 0
+Moment direction vector (X-component): 0
+Moment direction vector (Y-component): 0
+Moment direction vector (Z-component): 0
+ 
+
+0 0.333
+1 0.000
+2 0.000
+3 0.167
+4 0.000
+5 0.000
+6 0.333
+7 0.000
+8 0.000
+9 0.167
+10 0.000
+11 0.000
+12 0.042
+13 0.000
+14 0.000
+15 0.042
+16 0.000
+17 0.000
+18 0.042
+19 0.000
+20 0.000
+21 0.042
+22 0.000
+23 0.000
+24 0.083
+25 0.000
+26 0.000
+
+Sum : 1.250

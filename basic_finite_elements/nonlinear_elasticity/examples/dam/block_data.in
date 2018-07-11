@@ -1,0 +1,25 @@
+# Block numbers block_1, block_3 and block_6 corespond to block sets in Cubit
+# journal file.
+
+# Arbitrary order of approx. for blockset
+[block_1]
+displacemet_order = 2
+
+# Elastic material
+[block_1]
+# Elastic material properties. Possible materials are NEOHOOKEAN, HOOKE,
+# KIRCHHOFF or any other added by user.
+material = HOOKE
+young_modulus = 2.6e+4
+poisson_ratio = 0.2
+
+# Damper
+[block_3]
+# eta = 0.04, value eta*G=eta*E/2*(1+nu)
+dashG = 312
+# Only shear damping, damping bulk modulus = 0 when dashpot poison ratio is -1
+dashPoisson = -1
+
+# Body forces
+[block_6]
+density = 0.0023

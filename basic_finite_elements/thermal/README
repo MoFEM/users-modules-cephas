@@ -1,0 +1,131 @@
+Steady problem,
+
+mpirun -np 2 ./thermal_steady \
+  -my_file simple_thermal_problem.cub \
+  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
+  -my_order 4 -my_max_post_proc_ref_level 2
+
+Unsteady problem,
+
+mpirun -np 2 ./thermal_unsteady \
+  -my_file simple_thermal_problem.cub \
+  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
+  -snes_type newtonls -snes_linesearch_type basic -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor \
+  -ts_monitor -ts_type beuler -ts_dt 0.1 -ts_final_time 5 -snes_lag_jacobian -2 \
+  -my_order 4 -my_max_post_proc_ref_level 1
+
+Example thermo-elasticity
+=========================
+
+NOTE:
+
+Add option -snes_lag_jacobian -2 if no radiation (or other nonlinear terms) is
+present and problem is linear. It is no need to recalculate jacobian at each
+step.
+
+mpirun -np 2 ./thermal_unsteady \
+  -my_file heat_exchange.cub  \
+  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
+  -snes_type newtonls -snes_linesearch_type basic -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor \
+  -ts_monitor -ts_type beuler -ts_dt 0.0025 -ts_final_time 0.01 -snes_lag_jacobian -2 -ts_exact_final_time stepover \
+  -my_order 2 -my_max_post_proc_ref_level 1
+
+mpirun -np 2 ../elasticity/elasticity \
+  -my_file ../thermal/solution.h5m \
+  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
+  -my_order 3 -my_max_post_proc_ref_level 2 -my_ref_temp -5
+
+Example of ranning climate model
+================================
+
+mpirun -np 3 ./thermal_unsteady -my_file solution.h5m \
+-ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor  \
+-snes_type newtonls -snes_linesearch_type bt -snes_linesearch_monitor \
+-snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_stol 0 -snes_monitor -snes_converged_reason \
+-ts_monitor -ts_type alpha -ts_dt 0.1 -ts_final_time 1 -ts_exact_final_time stepover -my_order 1 -my_block_config config_blocks.inf \
+-my_ground_analysis_data parameters.in
+
+Example of block config file
+============================
+
+[block_1]
+
+temperature_order = 3
+
+[block_5]
+
+#heat_capacity = 2112000
+heat_capacity = 0
+heat_conductivity = 1.4352e-05
+
+[block_6]
+
+temperature_order = 3
+
+[climate_model]
+
+solar_radiation = no
+
+Example of parameters file
+==========================
+
+# Start date of symulation
+
+# 4-digit year, valid range: -2000 to 6000
+year = 2014
+
+# 2-digit month,         valid range: 1 to  12
+month = 1
+
+# 2-digit day,           valid range: 1 to  31
+day = 1
+
+# Observer local hour,   valid range: 0 to  24
+hour = 0
+
+# Observer local minute, valid range: 0 to  59
+minute = 0
+
+# Observer local second, valid range: 0 to <60
+second = 0
+
+# Observer time zone (negative west of Greenwich)
+# valid range: -18   to   18 hours,   error code: 8
+timezone = 0
+
+# Observer elevation [meters]
+# valid range: -6500000 or higher meters
+elevation = 10
+
+# Temerature in hotest summer day and night ( Celsius )
+TdayAtSummer = 20
+TdayAtWinter = 8
+
+# Temperature in cooles winter day and night
+TnigthAtSummer = 20
+TnigthAtWinter = 8
+
+# Day in the year with lowes temerature
+DayOfLowTemperature = 0
+
+# Localisation
+longitude = 0.127
+latitude = 51.5072
+
+# Dew Point ( Celsius )
+# The dew point is the temperature at which the water vapor in a sample of air at
+# constant barometric pressure condenses into liquid water at the same rate at
+# which it evaporates (Celsius)
+DewPoint = 10
+
+# wind at high 10m (m/s)
+u10 = 0
+
+# cloudness factor (0–1, dimensionless)
+CR = 0
+
+# Presssure [Pa]
+Pressure = 101325
+
+# observed solar radiation (W/m2)
+Rs = 1361

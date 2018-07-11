@@ -1,0 +1,214 @@
+/** \file PostProcStresses.hpp
+ * \brief Post-processing stresses for non-linear analysis
+ * \ingroup nonlinear_elastic_elem
+ *
+ * Implementation of method for post-processing stresses.
+ */
+
+/*
+ * This file is part of MoFEM.
+ * MoFEM is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * MoFEM is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+
+#ifndef __POSTPROCSTRESSES_HPP__
+#define __POSTPROCSTRESSES_HPP__
+
+#ifndef WITH_ADOL_C
+#error "MoFEM need to be compiled with ADOL-C"
+#endif
+
+struct PostProcStress
+    : public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+
+  moab::Interface &postProcMesh;
+  std::vector<EntityHandle> &mapGaussPts;
+
+  NonlinearElasticElement::BlockData &dAta;
+  PostProcCommonOnRefMesh::CommonDataForVolume &commonData;
+  bool fieldDisp;
+  bool replaceNonANumberByMaxValue;
+
+  PostProcStress(moab::Interface &post_proc_mesh,
+                 std::vector<EntityHandle> &map_gauss_pts,
+                 const std::string field_name,
+                 NonlinearElasticElement::BlockData &data,
+                 PostProcCommonOnRefMesh::CommonDataForVolume &common_data,
+                 bool field_disp = false,
+                 bool replace_nonanumber_by_max_value = false)
+      : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
+            field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
+        postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), dAta(data),
+        commonData(common_data), fieldDisp(field_disp),
+        replaceNonANumberByMaxValue(replace_nonanumber_by_max_value) {}
+
+  NonlinearElasticElement::CommonData nonLinearElementCommonData;
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (type != MBVERTEX)
+      MoFEMFunctionReturnHot(0);
+    if (data.getIndices().size() == 0)
+      MoFEMFunctionReturnHot(0);
+    if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tEts.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
+    const FENumeredDofEntity *dof_ptr;
+    CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
+        data.getIndices()[0], &dof_ptr);
+
+    int id = dAta.iD;
+
+    Tag th_id;
+    int def_block_id = -1;
+    CHKERR postProcMesh.tag_get_handle("BLOCK_ID", 1, MB_TYPE_INTEGER, th_id,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       &def_block_id);
+    Range::iterator tit = commonData.tEts.begin();
+    for (; tit != commonData.tEts.end(); tit++) {
+      rval = postProcMesh.tag_set_data(th_id, &*tit, 1, &id);
+      CHKERRG(rval);
+    }
+
+    string tag_name_piola1 = dof_ptr->getName() + "_PIOLA1_STRESS";
+    string tag_name_energy = dof_ptr->getName() + "_ENERGY_DENSITY";
+
+    int tag_length = 9;
+    double def_VAL[tag_length];
+    bzero(def_VAL, tag_length * sizeof(double));
+    Tag th_piola1, th_energy;
+    CHKERR postProcMesh.tag_get_handle(tag_name_piola1.c_str(), tag_length,
+                                       MB_TYPE_DOUBLE, th_piola1,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+    CHKERR postProcMesh.tag_get_handle(tag_name_energy.c_str(), 1,
+                                       MB_TYPE_DOUBLE, th_energy,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+    int nb_gauss_pts = data.getN().size1();
+    if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Nb. of integration points is not equal to number points on "
+              "post-processing mesh");
+    }
+    if (commonData.gradMap[rowFieldName].size() != (unsigned int)nb_gauss_pts) {
+      SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+               "Gradient of field not found, filed <%s> not found",
+               rowFieldName.c_str());
+    }
+
+    MatrixDouble3by3 H, invH;
+    double detH;
+
+    dAta.materialDoublePtr->commonDataPtr = &nonLinearElementCommonData;
+    dAta.materialDoublePtr->opPtr = this;
+    CHKERR dAta.materialDoublePtr->getDataOnPostProcessor(commonData.fieldMap,
+                                                          commonData.gradMap);
+
+    nonLinearElementCommonData.dataAtGaussPts = commonData.fieldMap;
+    nonLinearElementCommonData.gradAtGaussPts = commonData.gradMap;
+
+    double max_energy = 0;
+    MatrixDouble3by3 maxP(3, 3);
+    maxP.clear();
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      dAta.materialDoublePtr->gG = gg;
+      dAta.materialDoublePtr->F.resize(3, 3);
+      noalias(dAta.materialDoublePtr->F) =
+          (commonData.gradMap[rowFieldName])[gg];
+      if (fieldDisp) {
+        for (int dd = 0; dd != 3; dd++) {
+          dAta.materialDoublePtr->F(dd, dd) += 1;
+        }
+      }
+      if (commonData.gradMap["MESH_NODE_POSITIONS"].size() ==
+          (unsigned int)nb_gauss_pts) {
+        H.resize(3, 3);
+        invH.resize(3, 3);
+        noalias(H) = (commonData.gradMap["MESH_NODE_POSITIONS"])[gg];
+
+        CHKERR dAta.materialDoublePtr->dEterminant(H, detH);
+        CHKERR dAta.materialDoublePtr->iNvert(detH, H, invH);
+        noalias(dAta.materialDoublePtr->F) =
+            prod(dAta.materialDoublePtr->F, invH);
+      }
+
+      int nb_active_variables = 9;
+      CHKERR dAta.materialDoublePtr->setUserActiveVariables(
+          nb_active_variables);
+      CHKERR dAta.materialDoublePtr->calculateP_PiolaKirchhoffI(
+          dAta, getNumeredEntFiniteElementPtr());
+      CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
+          dAta, getNumeredEntFiniteElementPtr());
+      if (!std::isnormal(dAta.materialDoublePtr->eNergy) &&
+          replaceNonANumberByMaxValue) {
+        // If value is non a number because of singularity repleca it max double
+        // value
+        for (unsigned int r = 0; r != dAta.materialDoublePtr->P.size1(); ++r) {
+          for (unsigned int c = 0; c != dAta.materialDoublePtr->P.size2();
+               ++c) {
+            if (std::isnormal(dAta.materialDoublePtr->P(r, c))) {
+              maxP(r, c) =
+                  copysign(std::max(fabs(dAta.materialDoublePtr->P(r, c)),
+                                    fabs(maxP(r, c))),
+                           dAta.materialDoublePtr->P(r, c));
+            }
+          }
+        }
+      }
+      CHKERR postProcMesh.tag_set_data(th_piola1, &mapGaussPts[gg], 1,
+                                       &dAta.materialDoublePtr->P(0, 0));
+      if (std::isnormal(dAta.materialDoublePtr->eNergy) &&
+          replaceNonANumberByMaxValue) {
+        // I value is infinity at singularity, set max value
+        max_energy = std::max(dAta.materialDoublePtr->eNergy, max_energy);
+      }
+      CHKERR postProcMesh.tag_set_data(th_energy, &mapGaussPts[gg], 1,
+                                       &dAta.materialDoublePtr->eNergy);
+    }
+
+    if (replaceNonANumberByMaxValue && max_energy > 0) {
+      MatrixDouble3by3 P(3, 3);
+      for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+        double val_energy;
+        CHKERR postProcMesh.tag_get_data(th_energy, &mapGaussPts[gg], 1,
+                                         &val_energy);
+        if (!std::isnormal(val_energy)) {
+          CHKERR postProcMesh.tag_set_data(th_energy, &mapGaussPts[gg], 1,
+                                           &max_energy);
+          CHKERR postProcMesh.tag_get_data(th_piola1, &mapGaussPts[gg], 1,
+                                           &P(0, 0));
+          for (unsigned int r = 0; r != P.size1(); ++r) {
+            for (unsigned int c = 0; c != P.size2(); ++c) {
+              if (!std::isnormal(P(r, c)))
+                P(r, c) = maxP(r, c);
+            }
+          }
+          CHKERR postProcMesh.tag_set_data(th_piola1, &mapGaussPts[gg], 1,
+                                           &P(0, 0));
+        }
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+/// \brief USe PostProcStress
+DEPRECATED typedef PostProcStress PostPorcStress;
+
+#endif //__POSTPROCSTRESSES_HPP__

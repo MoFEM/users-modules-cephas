@@ -1,0 +1,32 @@
+reset
+
+create sphere radius 1 
+
+
+block 1 volume 1 
+block 1 name 'MAT_THERMAL'
+block 1 attribute count 2
+block 1 attribute index 1 1
+block 1 attribute index 2 1
+
+set duplicate block elements on
+block 2 surface 1
+block 2 name 'ANALYTICAL_BC'
+
+volume all scheme Tetmesh
+volume all size auto factor 8
+mesh volume all
+
+set duplicate block elements on
+block 3 tet all    
+block 3 element type tetra10 
+
+
+
+
+
+save as "/Users/xuanmeng/Documents/mofem-cephas/mofem/users_modules/analytical_Dirichlet_boundary_conditions/atom_tests/second_sphere.cub" overwrit
+
+
+
+

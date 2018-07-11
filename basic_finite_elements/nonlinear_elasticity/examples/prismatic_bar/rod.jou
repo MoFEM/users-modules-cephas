@@ -1,0 +1,30 @@
+reset
+set duplicate block elements on
+
+brick x 1 y 1 z 10
+
+create Displacement  on surface 1 dof 3 fix 0
+create Displacement  on vertex 1  dof 3 dof 2 fix 0 
+create Displacement  on vertex 3  dof 3 dof 1 fix 0 
+create Displacement  on vertex 4  dof 1 dof 2 dof 3 fix 0
+
+create pressure  on surface 2 magnitude 2
+#create force  on surface 2 force value 1 direction   y 
+
+block 1 volume all 
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2
+block 1 attribute index 1 1e1 	#young modulus
+block 1 attribute index 2 0.25 #poisson ratio
+
+block 2 volume 1
+block 2 name "BODY_FORCES")
+block 2 attribute count 4
+block 2 attribute index 1 0.01		#material density
+block 2 attribute index 2 0.		#constant acceleration in x-direction
+block 2 attribute index 3 0.		#constant acceleration in y-direction
+block 2 attribute index 4 0.		#constant acceleration in z-direction
+
+volume all scheme Tetmesh
+volume all size auto factor 9
+mesh volume all

@@ -1,0 +1,42 @@
+reset
+
+set duplicate block elements on
+
+brick x 10 y 2 z 1
+webcut volume 1 with plane yplane imprint merge
+webcut volume 1 2 with plane xplane imprint merge
+
+
+create Displacement  on surface 16 9  dof 1 dof 2 dof 3 fix 0
+create force  on surface 13  vector 0 -1 0 0 0 0 
+create force  on surface 11  vector 0 1 0 0 0 0 
+
+create cfd_bc  interface on surface 20 
+
+block 1 volume all
+block 1 name "MAT_ELASTIC"
+block 1 attribute count 2
+block 1 attribute index 1 1
+block 1 attribute index 2 0.0
+block 2 surface 20
+block 2 name "MAT_INTERF"
+block 2 attribute count 4
+block 2 attribute index 1 1
+block 2 attribute index 2 0
+block 2 attribute index 3 1
+block 2 attribute index 4 1
+
+block 3 vertex 2 1 6 5 10 12 
+block 3 name "LoadPath"
+
+volume all scheme Tetmesh
+volume all size auto factor 7
+mesh volume all
+
+#save as "/Users/likask/MyBuild/mofem-bitbucket/mofem/meshes/PeelTestHalfCrack.cub" overwrite
+
+
+
+
+
+

@@ -1,0 +1,71 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{graphicx}
+\usepackage{times}
+\parindent0pt
+\parskip 1.5ex plus 1ex minus .5ex
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Do not change above this line! Do not add packages! You may comment
+% out packages missing in your installation.
+%
+% Everything before "\begin{document}" will be ignored! Do not define
+%   macros!
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+\title{Implementation in MoFEM of hierarchical and heterogenous approximations bases}
+\author{%
+  Lukasz Kaczmarczyk and Chris Pearce,\\
+  \em{University of Glasgow},\\
+  \texttt{lukasz.kaczmarczyk@glasgow.ac.uk}\\
+  \texttt{chris.pearce@glasgow.ac.uk}\\
+}
+\maketitle
+
+MoFEM~\cite{MoFEMWebPage} (Mesh Oriented Finite Element Method) is a C++ library
+supporting the solution of finite elements problems. It is developed to provide
+a free and open  finite element code for engineers, students and academics. It
+is tailored for the solution of multi-physics problems with arbitrary levels of
+approximation, different levels of mesh refinement and optimised for
+high-performance computing. It is also designed to be able manage complexities
+related to heterogeneous order of approximations for L2,H1,H-div and H-curl
+spaces, see~\cite{ainsworth2001essential}.
+
+MoFEM is the blend of the Boost MultiIndex containers, MOAB (Mesh Oriented
+Database)~\cite{tautges2010canonical} and PETSc (Portable, Extensible Toolkit
+for Scientific Computation)~\cite{petsc-web-page}. It is open-source software
+under the GNU Lesser General Public License. MoFEM can read and write a number
+of different mesh file formats using functionality provided by MoAB. The current
+version of MoFEM has full support for CUBIT/TRELIS, TetGEN and NetGEN for
+pre-processing and ParaView for post-processing.
+
+The MoFEM library itself is designed to be small, modular and extendable. Users
+can implement modules as independent projects, located in its own repository,
+which can be either public or private, with their own copyright and license.
+Such flexibility, allowing for privacy and different licensing parts of the
+code, is designed to accommodate the needs of both academics and industry. Since
+each user module is implemented in MoFEM using its internal database, data
+between modules can be exchanged without prior knowledge of how each module is
+developed.
+
+We will present various implementations of problems involving hierarchical
+approximations spaces focussing attention on implementation and general
+philosophy of the code.
+
+% begin{thebibliography}{10}
+%
+% \bibitem{PDESoft}
+% P.~Bastian, V.~Heuveline, G.~Kanschat, A.~Reuter, PDESoft 2014
+% Proceedings, \emph{Archive of Numerical Software} \textbf{2}
+% (2014), 1234--4321.
+% \end{thebibliography}
+
+\bibliography{references}{}
+\bibliographystyle{plain}
+
+\end{document}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

@@ -1,0 +1,39 @@
+reset
+set duplicate block elements on
+
+create sphere radius 1.02
+create sphere radius 0.98
+
+subtract volume 2 from volume 1
+
+brick x 4 y 4 z 4
+move Volume 4 x 0 y -2 z 0 include_merged
+subtract volume 4 from volume 3
+
+create Displacement  on surface 10  dof 2  fix 0
+create Displacement  on vertex 9 dof 1 dof 2 dof 3 fix 0 
+create Displacement  on vertex 10 dof 1 dof 2 fix 0 
+create pressure  on surface 12  magnitude 1
+
+block 1 volume all 
+block 1 name "MAT_ELASTIC_1"  
+block 1 attribute count 10 
+block 1 attribute index 1 1 
+block 1 attribute index 2 0.25  
+block 1 attribute index 3 0 
+block 1 attribute index 4 0 
+block 1 attribute index 5 0 
+block 1 attribute index 6 0 
+block 1 attribute index 7 0 
+block 1 attribute index 8 0 
+block 1 attribute index 9 0 
+block 1 attribute index 10 0 
+
+volume all scheme Tetmesh 
+volume all size auto factor 8
+mesh volume all 
+ 
+block 3 tet all  
+block 3 element type tetra10 
+
+save as "/Users/likask/MyBuild/mofem-cephas/mofem/users_modules/nonlinear_elasticit/dome_stability.cub" overwrite

@@ -1,0 +1,23 @@
+#!/bin/sh
+
+
+while test $# -gt 0; do
+
+  for H5M_FILE in $1
+  do 
+
+    BASE_NAME=`basename $H5M_FILE .h5m`
+    echo $H5M_FILE convert to $BASE_NAME
+
+    VTK_FILE=$BASE_NAME.vtk
+    if [ $VTK_FILE -nt $H5M_FILE ]; then
+      echo $H5M_FILE is older than $VTK_FILE
+    else 
+      @MBCONVERT@ $H5M_FILE $VTK_FILE
+    fi
+
+  done
+
+  shift
+
+done
