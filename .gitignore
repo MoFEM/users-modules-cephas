@@ -1,3 +1,4 @@
+# Users modules folders
 homogenisation
 fracture_mechanics
 moisture_transport
@@ -16,6 +17,7 @@ contact_mechanics
 contact_mechanics_zahur
 eshelbian_plasticty
 
+# Temorary files
 _Store
 *.swp
 *.swo
