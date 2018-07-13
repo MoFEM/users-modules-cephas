@@ -19,6 +19,10 @@ project(MoFEM-UserModules C CXX)
 set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 
 include(cmake/GetGitRevisionDescription.cmake)
+
+# options
+option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
+
 if(STAND_ALLONE_USERS_MODULES)
   find_package(
     MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
