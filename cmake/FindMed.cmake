@@ -4,7 +4,7 @@ if(MED_DIR)
 
   find_library(
     MED_LIBRARY 
-    NAMES med
+    NAMES med medC
     PATHS ${PROJECT_BINARY_DIR}/external/lib
     NO_DEFAULT_PATH
     NO_CMAKE_ENVIRONMENT_PATH
@@ -33,7 +33,7 @@ if(MED_DIR)
     # Check MED_DIR
     find_library(
       MED_LIBRARY 
-      NAMES med
+      NAMES med medC
       PATHS ${MED_DIR}/lib
     )
     find_path(MED_HEADER
