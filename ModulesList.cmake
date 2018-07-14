@@ -21,13 +21,22 @@ include(${UM_SOURCE_DIR}/basic_finite_elements/AddModule.cmake)
 add_library(users_modules ${UM_LIB_SOURCES})
 
 # Download some known modules (Obsolete)
-include(WithModules.cmake)
+include(cmake/WithModules.cmake)
 
 file(
   GLOB_RECURSE INSTLLED_MODULES
   FOLLOW_SYMLINKS
-  ?*/InstalledAddModule.cmake
+  ${PROJECT_SOURCE_DIR}/?*/InstalledAddModule.cmake
 )
+
+if(EXTERNAL_MODULE_SOURCE_DIRS)
+  file(
+    GLOB_RECURSE EXTERNAL_INSTLLED_MODULES
+    FOLLOW_SYMLINKS
+    ${EXTERNAL_MODULE_SOURCE_DIRS}/?*/InstalledAddModule.cmake
+  )
+  set(INSTLLED_MODULES ${INSTLLED_MODULES} ${EXTERNAL_INSTLLED_MODULES})
+endif(EXTERNAL_MODULE_SOURCE_DIRS)
 
 # Install modules && git pull for all users modules
 add_custom_target(
