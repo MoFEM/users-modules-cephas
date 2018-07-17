@@ -30,12 +30,16 @@ file(
 )
 
 if(EXTERNAL_MODULE_SOURCE_DIRS)
-  file(
-    GLOB_RECURSE EXTERNAL_INSTLLED_MODULES
-    FOLLOW_SYMLINKS
-    ${EXTERNAL_MODULE_SOURCE_DIRS}/?*/InstalledAddModule.cmake
-  )
-  set(INSTLLED_MODULES ${INSTLLED_MODULES} ${EXTERNAL_INSTLLED_MODULES})
+  foreach(LOOP_DIR ${EXTERNAL_MODULE_SOURCE_DIRS})
+    message(STATUS "Search module directory: " ${LOOP_DIR})
+    file(
+      GLOB_RECURSE EXTERNAL_INSTLLED_MODULES
+      FOLLOW_SYMLINKS
+      ${LOOP_DIR}/?*/InstalledAddModule.cmake
+    )
+    message(STATUS "Found: " ${EXTERNAL_INSTLLED_MODULES})
+    set(INSTLLED_MODULES ${INSTLLED_MODULES} ${EXTERNAL_INSTLLED_MODULES})
+  endforeach(LOOP_DIR)
 endif(EXTERNAL_MODULE_SOURCE_DIRS)
 
 # Install modules && git pull for all users modules
