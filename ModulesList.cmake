@@ -17,8 +17,13 @@ include(cmake/PrecompileHeaders.cmake)
 # If the basic UMs are already loaded target to um library. Otherwise, build a
 # basic user modules library.
 if(EXTERNAL_MODULES_BUILD)
-  include(
-    ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
+  if(UM_INSTALL_BREFIX)
+    include(
+      ${UM_INSTALL_BREFIX}/lib/basic_finite_elements/users_modules_targets.cmake)
+  else(UM_INSTALL_BREFIX)
+    include(
+      ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
+  endif(UM_INSTALL_BREFIX)
 else(EXTERNAL_MODULES_BUILD)
   # Build basic finite element library
   include(${UM_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
@@ -47,7 +52,7 @@ if(EXTERNAL_MODULE_SOURCE_DIRS)
     file(
       GLOB_RECURSE EXTERNAL_INSTLLED_MODULES
       FOLLOW_SYMLINKS
-      ${LOOP_DIR}/?*/InstalledAddModule.cmake)
+      ${LOOP_DIR}/*InstalledAddModule.cmake)
     message(STATUS "Found: " ${EXTERNAL_INSTLLED_MODULES})
     set(INSTLLED_MODULES ${INSTLLED_MODULES} ${EXTERNAL_INSTLLED_MODULES})
   endforeach(LOOP_DIR)
