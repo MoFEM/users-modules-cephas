@@ -25,7 +25,7 @@ set(BFE_DIRS
 function(bfe_install bfe_mod_dir)
   install(
     DIRECTORY
-    bfe_mod_dir 
+    ${PROJECT_SOURCE_DIR}/basic_finite_elements/${bfe_mod_dir} 
     DESTINATION
     ${CMAKE_INSTALL_PREFIX}
     FILES_MATCHING
