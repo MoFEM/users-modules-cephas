@@ -18,11 +18,16 @@ project(MoFEM-UserModules C CXX)
 #search include directories before system directories
 set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 
-include(cmake/GetGitRevisionDescription.cmake)
-
 # options
+option(NOT_PRECOMPILED_HEADRES "Do not use procompiled headers" OFF)
 option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
 option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
+
+if(NOT_PRECOMPILED_HEADRES) 
+  set(MoFEM_PRECOMPILED_HEADRES OFF CACHE FORCE)
+endif(NOT_PRECOMPILED_HEADRES)
+
+include(cmake/GetGitRevisionDescription.cmake)
 
 if(STAND_ALLONE_USERS_MODULES)
   find_package(
@@ -62,7 +67,8 @@ add_definitions(${MoFEM_DEFINE_RESTRICT})
 find_package(Git)
 find_program(
   MBCONVERT NAMES mbconvert
-  PATH ${MoFEM_PETSC_DIR}/${MoFEM_PETSC_ARCH}/bin
+  PATH 
+  ${MoFEM_PETSC_DIR}/${MoFEM_PETSC_ARCH}/bin
 )
 
 include(ExternalProject)
