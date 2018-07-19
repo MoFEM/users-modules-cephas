@@ -36,7 +36,6 @@ function(bfe_install bfe_mod_dir)
     PATTERN "*.msh"
     PATTERN "*.cfg"
     PATTERN "*.geo"
-    PATTERN "*.sh"
     PATTERN "src" EXCLUDE
     PATTERN "doc" EXCLUDE
     PATTERN "atom_tests" EXCLUDE)

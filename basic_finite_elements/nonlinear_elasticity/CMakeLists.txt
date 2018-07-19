@@ -17,32 +17,27 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elastic_materials/s
 if(ADOL-C_LIBRARY)
   bfe_build_and_install(arc_length_nonlinear_elasticity
     ${CMAKE_CURRENT_SOURCE_DIR}/arc_length_nonlinear_elasticity.cpp)
-  configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/do_vtk.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh
-    @ONLY
-  )
 
-  configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/do_vtk.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh
-    @ONLY)
   file(
-    COPY ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh
+    COPY ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh.in
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
+  configure_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh
+    @ONLY)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh 
     DESTINATION ${BFE_MOD_DIR} 
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
 
-  configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/arc_length_nonlinear_elasticity.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh
-    @ONLY)
   file(
-    COPY ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh
+    COPY ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh.in
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
+  configure_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh
+    @ONLY)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh
     DESTINATION ${BFE_MOD_DIR} 
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
@@ -57,8 +52,7 @@ if(ADOL-C_LIBRARY)
     -snes_type newtonls -snes_linesearch_type basic -snes_linesearch_monitor
     -snes_max_it 16 -snes_atol 1e-8 -snes_rtol 1e-8
     -my_sr 1e-6 -my_ms 3 -snes_converged_reason
-    -log_view
-  )
+    -log_view)
 
   bfe_build_and_install(nonlinear_dynamics
     ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamics.cpp)

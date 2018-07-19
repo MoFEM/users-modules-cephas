@@ -27,15 +27,6 @@ install(
   FILE users_modules_targets.cmake
   DESTINATION lib/basic_finite_elements
 )
-install(
-  DIRECTORY 
-  ${PROJECT_SOURCE_DIR}/basic_finite_elements/src/
-  DESTINATION 
-  ${CMAKE_INSTALL_PREFIX}/include/users_modules
-  FILES_MATCHING 
-  PATTERN "*.hpp"
-  PATTERN "impl" EXCLUDE
-)
 
 if(MOFEM_UM_BUILD_TETS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/atom_tests 
