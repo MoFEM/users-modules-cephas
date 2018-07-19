@@ -24,9 +24,19 @@ if(ADOL-C_LIBRARY)
   bfe_build_and_install(
     unsaturated_transport ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated_transport.cpp)
 
+  file(
+    COPY
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_uf.sh
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
+  install(FILES run_uf.sh 
+    DESTINATION ${BFE_MOD_DIR} 
+    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
+
   add_test(
     unsaturated_flow ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh
-    soil_impermeable.cub unsaturated.cfg 2 0.0001 0.0003)
+    ${CMAKE_CURRENT_SOURCE_DIR}/soil_impermeable.cub 
+    ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated.cfg 2 0.0001 0.0003)
 
 endif(ADOL-C_LIBRARY)
 

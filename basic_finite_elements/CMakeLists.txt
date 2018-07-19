@@ -43,8 +43,8 @@ function(bfe_install bfe_mod_dir)
 endfunction(bfe_install)
 
 function(bfe_build_and_install target source)
-  bfe_add_executable(target source)
-  target_link_libraries(traget
+  bfe_add_executable(${target} ${source})
+  target_link_libraries(${target}
     users_modules
     mofem_finite_elements
     mofem_interfaces
@@ -54,11 +54,11 @@ function(bfe_build_and_install target source)
     mofem_third_party
     mofem_cblas
     ${MoFEM_PROJECT_LIBS})
-  install(TARGETS target DESTINATION ${BFE_MOD_DIR})
+  install(TARGETS ${target} DESTINATION ${BFE_MOD_DIR})
 endfunction(bfe_build_and_install)
 
 foreach(LOOP_DIR ${BFE_DIRS})
-  set(BFE_MOD_DIR ${LOOP_DIR} INTERNAL)
+  set(BFE_MOD_DIR ${LOOP_DIR})
   add_subdirectory(${LOOP_DIR})
   bfe_install(${LOOP_DIR})
 endforeach(LOOP_DIR)

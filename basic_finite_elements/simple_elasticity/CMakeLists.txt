@@ -21,6 +21,6 @@ bfe_build_and_install(simple_elasticity
 add_test(simple_elasticity
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/simple_elasticity
-  -file_name simple_elasticity.h5m -order 3
+  -file_name ${CMAKE_CURRENT_SOURCE_DIR}/simple_elasticity.h5m -order 3
   -test 1)
 
