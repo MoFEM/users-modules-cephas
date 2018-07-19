@@ -11,15 +11,24 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
+# Load precompile headers to the speed-up compilation process.
 include(cmake/PrecompileHeaders.cmake)
+
+# If the basic UMs are already loaded target to um library. Otherwise, build a
+# basic user modules library.
 if(EXTERNAL_MODULES_BUILD)
   include(
     ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
 else(EXTERNAL_MODULES_BUILD)
-  # Those are default sub-modules
+  # Build basic finite element library
   include(${UM_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
-  # Download some known modules (Obsolete)
+  # Download some known modules (Obsolete). It is used to resting on the
+  # developemnt server to automatically clone some modules from git repsitort
+  # to root source directory.
   include(cmake/WithModules.cmake)
+  # Find modules in a users modules source directory. If file
+  # InstalledAddModule.cmake if found in the directory, it is recognised that
+  # director is module and name of directory become module name.
   file(
     GLOB_RECURSE INSTLLED_MODULES
     FOLLOW_SYMLINKS
@@ -29,6 +38,9 @@ else(EXTERNAL_MODULES_BUILD)
   add_subdirectory(${PROJECT_SOURCE_DIR}/tools)
 endif(EXTERNAL_MODULES_BUILD)
 
+# Find modules in an external directory. If file InstalledAddModule.cmake if
+# found in the directory, it is recognised that director is module and name of
+# directory become module name.
 if(EXTERNAL_MODULE_SOURCE_DIRS)
   foreach(LOOP_DIR ${EXTERNAL_MODULE_SOURCE_DIRS})
     message(STATUS "Search module directory: " ${LOOP_DIR})
