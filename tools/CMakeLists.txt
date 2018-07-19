@@ -23,6 +23,7 @@ if(MED_LIBRARY)
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
+  install(TARGETS read_med DESTINATION bin)
 endif(MED_LIBRARY)
 
 add_executable(mofem_part ${CMAKE_CURRENT_SOURCE_DIR}/mofem_part.cpp)
@@ -36,6 +37,7 @@ target_link_libraries(mofem_part
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
+install(TARGETS mofem_part DESTINATION bin)
 
 add_executable(split_sideset ${CMAKE_CURRENT_SOURCE_DIR}/split_sideset.cpp)
 target_link_libraries(split_sideset
@@ -48,6 +50,7 @@ target_link_libraries(split_sideset
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
+install(TARGETS split_sideset DESTINATION bin)
 
 add_executable(mesh_cut ${CMAKE_CURRENT_SOURCE_DIR}/mesh_cut.cpp)
 target_link_libraries(mesh_cut
@@ -60,6 +63,7 @@ target_link_libraries(mesh_cut
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
+install(TARGETS mesh_cut DESTINATION bin)
 
 add_executable(field_to_vertices ${CMAKE_CURRENT_SOURCE_DIR}/field_to_vertices.cpp)
 target_link_libraries(field_to_vertices
@@ -72,6 +76,7 @@ target_link_libraries(field_to_vertices
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
+install(TARGETS field_to_vertices DESTINATION bin)
 
 add_executable(delete_ho_nodes ${CMAKE_CURRENT_SOURCE_DIR}/delete_ho_nodes.cpp)
 target_link_libraries(delete_ho_nodes
@@ -84,6 +89,7 @@ target_link_libraries(delete_ho_nodes
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
+install(TARGETS delete_ho_nodes DESTINATION bin)
 
 if(ADOL-C_LIBRARY)
 
@@ -103,5 +109,6 @@ if(ADOL-C_LIBRARY)
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
+  install(TARGETS mesh_smoothing DESTINATION bin)
 
 endif(ADOL-C_LIBRARY)

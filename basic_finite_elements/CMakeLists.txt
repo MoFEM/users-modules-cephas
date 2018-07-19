@@ -1,4 +1,3 @@
-# MoFEM is free software: you can redistribute it and/or modify it under
 # the terms of the GNU Lesser General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or (at your
 # option) any later version.
@@ -11,14 +10,55 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/atom_tests)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/elasticity)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/simple_elasticity)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/nonlinear_elasticity)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/mix_transport)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/thermal)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/cohesive_interface)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/magnetostatic)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/poisson)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/hello_world)
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/hierarchical_approximation)
+set(BFE_DIRS 
+  elasticity
+  simple_elasticity
+  nonlinear_elasticity
+  mix_transport
+  thermal
+  cohesive_interface
+  magnetostatic
+  poisson
+  hello_world
+  hierarchical_approximation)
+
+function(bfe_install bfe_mod_dir)
+  install(
+    DIRECTORY
+    bfe_mod_dir 
+    DESTINATION
+    ${CMAKE_INSTALL_PREFIX}
+    FILES_MATCHING
+    PATTERN "README"
+    PATTERN "*.h5m"
+    PATTERN "*.cub"
+    PATTERN "*.jou"
+    PATTERN "*.msh"
+    PATTERN "*.cfg"
+    PATTERN "*.geo"
+    PATTERN "*.sh"
+    PATTERN "src" EXCLUDE
+    PATTERN "doc" EXCLUDE
+    PATTERN "atom_tests" EXCLUDE)
+endfunction(bfe_install)
+
+function(bfe_build_and_install target source)
+  bfe_add_executable(target source)
+  target_link_libraries(traget
+    users_modules
+    mofem_finite_elements
+    mofem_interfaces
+    mofem_multi_indices
+    mofem_petsc
+    mofem_approx
+    mofem_third_party
+    mofem_cblas
+    ${MoFEM_PROJECT_LIBS})
+  install(TARGETS target DESTINATION ${BFE_MOD_DIR})
+endfunction(bfe_build_and_install)
+
+foreach(LOOP_DIR ${BFE_DIRS})
+  set(BFE_MOD_DIR ${LOOP_DIR} INTERNAL)
+  add_subdirectory(${LOOP_DIR})
+  bfe_install(${LOOP_DIR})
+endforeach(LOOP_DIR)

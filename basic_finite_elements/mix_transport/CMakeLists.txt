@@ -11,94 +11,22 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/l-shape.msh
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/l-shape.geo
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/bc.cfg
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated.cfg
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/soil_impermeable.cub
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/upward_infiltration.cub
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-)
-file(
-  COPY
-  ${CMAKE_CURRENT_SOURCE_DIR}/run_uf.sh
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE
-)
-
-include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Add tests
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/atom_tests)
 
-# For convinience source files from MoFEM project are used. If user is
-# implementing independent application it will be using instead project
-# directories.
-
-bfe_add_executable(
-  h_adaptive_transport ${CMAKE_CURRENT_SOURCE_DIR}/h_adaptive_transport.cpp
-)
-target_link_libraries(h_adaptive_transport
-  users_modules
-  mofem_finite_elements
-  mofem_interfaces
-  mofem_multi_indices
-  mofem_petsc
-  mofem_approx
-  mofem_third_party
-  mofem_cblas
-  ${MoFEM_PROJECT_LIBS}
-)
+bfe_build_and_install(
+  h_adaptive_transport ${CMAKE_CURRENT_SOURCE_DIR}/h_adaptive_transport.cpp)
 
 if(ADOL-C_LIBRARY)
 
-  bfe_add_executable(
-    unsaturated_transport ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated_transport.cpp
-  )
-  target_link_libraries(unsaturated_transport
-    users_modules
-    mofem_finite_elements
-    mofem_interfaces
-    mofem_multi_indices
-    mofem_petsc
-    mofem_approx
-    mofem_third_party
-    mofem_cblas
-    ${MoFEM_PROJECT_LIBS}
-  )
+  bfe_build_and_install(
+    unsaturated_transport ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated_transport.cpp)
 
   add_test(
     unsaturated_flow ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh
-    soil_impermeable.cub unsaturated.cfg 2 0.0001 0.0003
-  )
+    soil_impermeable.cub unsaturated.cfg 2 0.0001 0.0003)
 
 endif(ADOL-C_LIBRARY)
+

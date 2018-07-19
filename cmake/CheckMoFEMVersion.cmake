@@ -11,11 +11,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hello_world)
+macro(CHECK_MOFEM_VERSION VERSION_MAJOR VERSION_MINOR VERSION_PATCH)
 
-bfe_build_and_install(hello_world
-  ${CMAKE_CURRENT_SOURCE_DIR}/hello_world.cpp)
-  
-add_test(hello_world
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
-  ${CMAKE_CURRENT_BINARY_DIR}/hello_world)
+  if(${MoFEM_VERSION} VERSION_LESS ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
+    message(
+      FATAL_ERROR
+      "(Update MoFEM) Wrong MoFEM version: "
+      "${MoFEM_VERSION} < ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
+    )
+  endif(${MoFEM_VERSION} VERSION_LESS ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
+
+endmacro(CHECK_MOFEM_VERSION)

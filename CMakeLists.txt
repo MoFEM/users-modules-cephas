@@ -22,6 +22,7 @@ include(cmake/GetGitRevisionDescription.cmake)
 
 # options
 option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
+option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
 
 if(STAND_ALLONE_USERS_MODULES)
   find_package(
@@ -53,21 +54,10 @@ else(STAND_ALLONE_USERS_MODULES)
     )  
   endif(GIT_VERSION)
 endif(STAND_ALLONE_USERS_MODULES)
+include(cmake/CheckMoFEMVersion.cmake)
 
 message(STATUS "MoFEM version ${MoFEM_VERSION}")
 add_definitions(${MoFEM_DEFINE_RESTRICT})
-
-macro(CHECK_MOFEM_VERSION VERSION_MAJOR VERSION_MINOR VERSION_PATCH)
-
-  if(${MoFEM_VERSION} VERSION_LESS ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-    message(
-      FATAL_ERROR
-      "(Update MoFEM) Wrong MoFEM version: "
-      "${MoFEM_VERSION} < ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
-    )
-  endif(${MoFEM_VERSION} VERSION_LESS ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-
-endmacro(CHECK_MOFEM_VERSION)
 
 find_package(Git)
 find_program(
@@ -76,12 +66,23 @@ find_program(
 )
 
 include(ExternalProject)
-include(${MoFEM_INSTALL_DIR}/cmake/ExportFile.cmake)
+include(${MoFEM_INSTALL_DIR}/lib/cmake/mofem/ExportFile.cmake)
 
 set(CMAKE_C_COMPILER ${MoFEM_CMAKE_C_COMPILER})
 set(CMAKE_CXX_COMPILER ${MoFEM_CMAKE_CXX_COMPILER})
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add options unique to compiliation with Spack
+include(${MoFEM_INSTALL_DIR}/lib/cmake/mofem/WithSpack.cmake)
+
+#add coverage
+option(WITHCOVERAGE "Add gcc coverage compile tags" OFF)
+if(WITHCOVERAGE)
+  set(GCC_COVERAGE_COMPILE_FLAGS "-Wall -fprofile-arcs -ftest-coverage")
+  add_definitions(${GCC_COVERAGE_COMPILE_FLAGS})
+  set(CMAKE_EXE_LINKER_FLAGS "${GCC_COVERAGE_COMPILE_FLAGS}")
+endif(WITHCOVERAGE)
 
 include_directories(
   ${MoFEM_PROJECT_INCLUDE_DIRECTORIES}
@@ -130,15 +131,13 @@ endif(MoFEM_CBLAS_INCLUDE_DIR)
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 
 #add executable library form subdirectory
-enable_testing()
-include(CTest)
+option(STAND_ALLONE_USERS_MODULES "If is ON copy files, othrewise make link" OFF)
 
-#add coverage
-if(WITHCOVERAGE)
-  set(GCC_COVERAGE_COMPILE_FLAGS "-Wall -fprofile-arcs -ftest-coverage")
-  add_definitions(${GCC_COVERAGE_COMPILE_FLAGS})
-  set(CMAKE_EXE_LINKER_FLAGS "${GCC_COVERAGE_COMPILE_FLAGS}")
-endif(WITHCOVERAGE)
+option(MOFEM_UM_BUILD_TETS "If is ON enbale testing" ON)
+if(MOFEM_UM_BUILD_TETS)
+  enable_testing()
+  include(CTest)
+endif(MOFEM_UM_BUILD_TETS)
 
 # source path
 if(STAND_ALLONE_USERS_MODULES)
@@ -177,6 +176,3 @@ message(STATUS ${MoFEM_PROJECT_LIBS})
 
 # Add modules
 include(ModulesList.cmake)
-
-# Compile tools
-add_subdirectory(${PROJECT_SOURCE_DIR}/tools)

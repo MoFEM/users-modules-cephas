@@ -19,56 +19,15 @@ include_directories(
   ${UM_SOURCE_DIR}/basic_finite_elements/poisson/src
 )
 
-bfe_add_executable(analytical_poisson
+bfe_build_and_install(analytical_poisson
   ${CMAKE_CURRENT_SOURCE_DIR}/analytical_poisson.cpp
 )
-target_link_libraries(analytical_poisson
-  users_modules
-  mofem_finite_elements
-  mofem_interfaces
-  mofem_multi_indices
-  mofem_petsc
-  mofem_approx
-  mofem_third_party
-  mofem_cblas
-  ${MoFEM_PROJECT_LIBS}
-)
 
-bfe_add_executable(analytical_poisson_field_split
-  ${CMAKE_CURRENT_SOURCE_DIR}/analytical_poisson_field_split.cpp
-)
-target_link_libraries(analytical_poisson_field_split
-  users_modules
-  mofem_finite_elements
-  mofem_interfaces
-  mofem_multi_indices
-  mofem_petsc
-  mofem_approx
-  mofem_third_party
-  mofem_cblas
-  ${MoFEM_PROJECT_LIBS}
-)
+bfe_build_and_install(analytical_poisson_field_split
+  ${CMAKE_CURRENT_SOURCE_DIR}/analytical_poisson_field_split.cpp)
 
-bfe_add_executable(analytical_nonlinear_poisson
-  ${CMAKE_CURRENT_SOURCE_DIR}/analytical_nonlinear_poisson.cpp
-)
-target_link_libraries(analytical_nonlinear_poisson
-  users_modules
-  mofem_finite_elements
-  mofem_interfaces
-  mofem_multi_indices
-  mofem_petsc
-  mofem_approx
-  mofem_third_party
-  mofem_cblas
-  ${MoFEM_PROJECT_LIBS}
-)
-
-cm_export_file("cube_1part.h5m" export_files_poisson)
-cm_export_file("cube_2part.h5m" export_files_poisson)
-cm_export_file("pop_test_mesh.cub" export_files_poisson)
-
-cm_export_file(".petscrc" export_files_poisson)
+bfe_build_and_install(analytical_nonlinear_poisson
+  ${CMAKE_CURRENT_SOURCE_DIR}/analytical_nonlinear_poisson.cpp)
 
 add_test(analytical_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2

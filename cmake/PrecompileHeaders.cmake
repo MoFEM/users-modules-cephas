@@ -12,7 +12,6 @@
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/src)
-include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/src/impl)
 
 if(MoFEM_PRECOMPILED_HEADRES)
 
@@ -50,7 +49,8 @@ if(MoFEM_PRECOMPILED_HEADRES)
 
 endif(MoFEM_PRECOMPILED_HEADRES)
 
-set(PERCOMPILED_HEADER ${PROJECT_BINARY_DIR}/basic_finite_elements/src/precompile/BasicFiniteElements.hpp)
+set(PERCOMPILED_HEADER 
+  ${PROJECT_BINARY_DIR}/basic_finite_elements/src/precompile/BasicFiniteElements.hpp)
 
 function(bfe_add_executable target source)
   if(MoFEM_PRECOMPILED_HEADRES)
@@ -62,8 +62,4 @@ function(bfe_add_executable target source)
   endif(MoFEM_PRECOMPILED_HEADRES)
 endfunction(bfe_add_executable)
 
-set(UM_LIB_SOURCES
-  ${UM_LIB_SOURCES} ${PROJECT_SOURCE_DIR}/basic_finite_elements/src/impl/All.cpp
-)
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements)
