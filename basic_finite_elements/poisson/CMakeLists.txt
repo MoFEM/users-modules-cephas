@@ -36,20 +36,17 @@ add_test(analytical_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/analytical_poisson
   -file_name ${CMAKE_CURRENT_SOURCE_DIR}/cube_2part.h5m -order 3
-  -test 1
-)
+  -test 1)
 
 add_test(analytical_poisson_field_split
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/analytical_poisson_field_split
   -file_name ${CMAKE_CURRENT_SOURCE_DIR}/cube_2part.h5m -order 3 -pc_type fieldsplit
-  -test 1
-)
+  -test 1)
 
 add_test(analytical_nonlinear_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/analytical_nonlinear_poisson
-  -file_name ${CMAKE_CURRENT_SOURCE_DIR}/cube_2part.h5m -order 3
+  -file_name ${CMAKE_CURRENT_SOURCE_DIR}/cube_2part.h5m -order 4
   -snes_monitor -snes_converged_reason
-  -snes_type newtonls -snes_linesearch_type basic -test 1
-)
+  -snes_type newtonls -snes_linesearch_type basic -test 1)
