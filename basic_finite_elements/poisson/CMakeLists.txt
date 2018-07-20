@@ -29,6 +29,8 @@ bfe_build_and_install(analytical_nonlinear_poisson
   ${CMAKE_CURRENT_SOURCE_DIR}/analytical_nonlinear_poisson.cpp)
 
 cm_export_file(".petscrc" export_files_poisson)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc 
+  DESTINATION ${BFE_MOD_DIR})
   
 add_test(analytical_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
