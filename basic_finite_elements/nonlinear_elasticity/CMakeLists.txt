@@ -19,7 +19,7 @@ if(ADOL-C_LIBRARY)
     ${CMAKE_CURRENT_SOURCE_DIR}/arc_length_nonlinear_elasticity.cpp)
 
   file(
-    COPY ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh.in
+    COPY ${CMAKE_CURRENT_SOURCE_DIR}/do_vtk.sh.in
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
   configure_file(
@@ -27,18 +27,6 @@ if(ADOL-C_LIBRARY)
     ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh
     @ONLY)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/do_vtk.sh 
-    DESTINATION ${BFE_MOD_DIR} 
-    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
-
-  file(
-    COPY ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh.in
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-    FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
-  configure_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh
-    @ONLY)
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity.sh
     DESTINATION ${BFE_MOD_DIR} 
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
 
