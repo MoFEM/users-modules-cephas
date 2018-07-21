@@ -15,11 +15,11 @@ bfe_build_and_install(thermal_steady ${CMAKE_CURRENT_SOURCE_DIR}/thermal_steady.
 
 if(${GROUND_SURFACE_TEMPERATURE})
   # FIXME: That will not always work if is installed in external directory
-  include_directories("${UM_SOURCE_DIR}/ground_surface_temperature/src")
-  include_directories("${UM_SOURCE_DIR}/ground_surface_temperature/third_party")
+  include_directories("${PROJECT_SOURCE_DIR}/ground_surface_temperature/src")
+  include_directories("${PROJECT_SOURCE_DIR}/ground_surface_temperature/third_party")
   bfe_build_and_install(thermal_unseady
     ${CMAKE_CURRENT_BINARY_DIR}/thermal_unsteady.cpp
-    ${UM_SOURCE_DIR}/ground_surface_temperature/third_party/spa.c)
+    ${PROJECT_SOURCE_DIR}/ground_surface_temperature/third_party/spa.c)
 else(${GROUND_SURFACE_TEMPERATURE})
   bfe_build_and_install(
     thermal_unsteady ${CMAKE_CURRENT_SOURCE_DIR}/thermal_unsteady.cpp)

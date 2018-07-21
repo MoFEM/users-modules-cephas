@@ -26,7 +26,7 @@ if(EXTERNAL_MODULES_BUILD)
   endif(UM_INSTALL_BREFIX)
 else(EXTERNAL_MODULES_BUILD)
   # Build basic finite element library
-  include(${UM_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
+  include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
   # Download some known modules (Obsolete). It is used to resting on the
   # developemnt server to automatically clone some modules from git repsitort
   # to root source directory.

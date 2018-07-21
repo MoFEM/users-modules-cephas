@@ -22,6 +22,12 @@ set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 option(NOT_PRECOMPILED_HEADRES "Do not use procompiled headers" OFF)
 option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
 option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
+option(MOFEM_UM_BUILD_TETS "If is ON enbale testing" ON)
+
+# This is obsolete option should not be used, is set for back comaptibility
+# with some old modules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
+# when you spot it in your code.
+set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
 if(NOT_PRECOMPILED_HEADRES) 
   set(MoFEM_PRECOMPILED_HEADRES OFF CACHE FORCE)
@@ -136,21 +142,10 @@ endif(MoFEM_CBLAS_INCLUDE_DIR)
 
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 
-#add executable library form subdirectory
-option(STAND_ALLONE_USERS_MODULES "If is ON copy files, othrewise make link" OFF)
-
-option(MOFEM_UM_BUILD_TETS "If is ON enbale testing" ON)
 if(MOFEM_UM_BUILD_TETS)
   enable_testing()
   include(CTest)
 endif(MOFEM_UM_BUILD_TETS)
-
-# source path
-if(STAND_ALLONE_USERS_MODULES)
-  set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
-else(STAND_ALLONE_USERS_MODULES)
-  set(UM_SOURCE_DIR ${MoFEM_PROJECT_SOURCE_DIR}/users_modules)
-endif(STAND_ALLONE_USERS_MODULES)
 
 if(SLEPC_LIBRARY)
   include_directories("${SLEPC_DIR}/${PETSC_ARCH}/include")

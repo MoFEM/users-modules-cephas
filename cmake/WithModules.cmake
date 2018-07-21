@@ -2,92 +2,92 @@
 # for testing with docker container.
 
 if(WITH_MODULE_OBSOLETE)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/obsolete)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/obsolete)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_obsolete.git obsolete
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/obsolete)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/obsolete)
 endif(WITH_MODULE_OBSOLETE)
 
 if(WITH_MODULE_HOMOGENISATION)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/homogenisation)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/homogenisation)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_homogenisation homogenisation
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/homogenisation)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/homogenisation)
 endif(WITH_MODULE_HOMOGENISATION)
 
 if(WITH_MODULE_BONE_REMODELLING)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/bone_remodelling)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/bone_remodelling)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_bone_remodelling.git bone_remodelling
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/bone_remodelling)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/bone_remodelling)
 endif(WITH_MODULE_BONE_REMODELLING)
 
  if(WITH_MODULE_MWLS_APPROX)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/mwls_approx)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/mwls_approx)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone git clone https://bitbucket.org/karol41/mofem_um_mwls.git mwls_approx
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/mwls_approx)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/mwls_approx)
 endif(WITH_MODULE_MWLS_APPROX)
 
 if(WITH_MODULE_FRACTURE_MECHANICS)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/fracture_mechanics)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/fracture_mechanics)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_fracture_mechanics fracture_mechanics
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/fracture_mechanics)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/fracture_mechanics)
 endif(WITH_MODULE_FRACTURE_MECHANICS)
 
 if(WITH_MODULE_GELS)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/gels)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/gels)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_gels gels
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/gels)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/gels)
 endif(WITH_MODULE_GELS)
 
 if(WITH_MODULE_STRAIN_PLASTICITY)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/small_strain_plasticity)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/small_strain_plasticity)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_small_strain_plasticity small_strain_plasticity
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/small_strain_plasticity)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/small_strain_plasticity)
 endif(WITH_MODULE_STRAIN_PLASTICITY)
 
 if(WITH_MODULE_SOLID_SHELL_PRISM_ELEMENT)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/solid_shell_prism_element)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/solid_shell_prism_element)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_solid_shell_prism_element solid_shell_prism_element
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/solid_shell_prism_element)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/solid_shell_prism_element)
 endif(WITH_MODULE_SOLID_SHELL_PRISM_ELEMENT)
 
 if(WITH_MODULE_MINIMAL_SURFACE_EQUATION)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/minimal_surface_equation)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/minimal_surface_equation)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_minimal_surface_equation minimal_surface_equation
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/minimal_surface_equation)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/minimal_surface_equation)
 endif(WITH_MODULE_MINIMAL_SURFACE_EQUATION)
 
 if(WITH_MODULE_HELMHOLTZ)
-  if(NOT EXISTS ${UM_SOURCE_DIR}/helmholtz)
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/helmholtz)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} clone https://bitbucket.org/likask/mofem_um_helmholtz helmholtz
-      WORKING_DIRECTORY ${UM_SOURCE_DIR}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
-  endif(NOT EXISTS ${UM_SOURCE_DIR}/helmholtz)
+  endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/helmholtz)
 endif(WITH_MODULE_HELMHOLTZ)
 

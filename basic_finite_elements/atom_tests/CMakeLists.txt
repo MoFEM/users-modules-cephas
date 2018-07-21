@@ -12,13 +12,11 @@
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 include_directories(
-  ${UM_SOURCE_DIR}/basic_finite_elements/nonlinear_elastic_materials/src
+  ${PROJECT_SOURCE_DIR}/basic_finite_elements/nonlinear_elastic_materials/src
 )
 
-set(UM_CURRENT_SOURCE_DIR ${UM_SOURCE_DIR}/basic_finite_elements/atom_tests)
-
 # body forces test
-bfe_add_executable(body_force_atom ${UM_CURRENT_SOURCE_DIR}/body_force_atom_test.cpp)
+bfe_add_executable(body_force_atom ${CMAKE_CURRENT_SOURCE_DIR}/body_force_atom_test.cpp)
 target_link_libraries(body_force_atom
   mofem_finite_elements
   mofem_interfaces
@@ -42,7 +40,7 @@ add_test(basic_forces_and_sources_body_force_atom_test_compare ${CMAKE_COMMAND} 
 # neumann forces
 cm_export_file("elasticity_atom_test_01X_pressure.h5m" export_atom_tests_basic_fe)
 
-bfe_add_executable(neumann_forces_atom ${UM_CURRENT_SOURCE_DIR}/neumann_forces.cpp)
+bfe_add_executable(neumann_forces_atom ${CMAKE_CURRENT_SOURCE_DIR}/neumann_forces.cpp)
 target_link_libraries(neumann_forces_atom
   users_modules
   mofem_finite_elements
@@ -81,7 +79,7 @@ add_test(basic_neumann_sphre_pressure_test_compare ${CMAKE_COMMAND} -E compare_f
 
 # add example test for forces_and_sources_fluid_pressure_element_atom
 cm_export_file("fluid_presssure_cub_test.h5m" export_atom_tests_basic_fe)
-bfe_add_executable(fluid_pressure_element_atom ${UM_CURRENT_SOURCE_DIR}/fluid_pressure_element.cpp)
+bfe_add_executable(fluid_pressure_element_atom ${CMAKE_CURRENT_SOURCE_DIR}/fluid_pressure_element.cpp)
 target_link_libraries(fluid_pressure_element_atom
   users_modules
   mofem_finite_elements
@@ -100,7 +98,7 @@ add_test(basic_fluid_pressure_element_atom_test
 
 # add example test for temperature element
 cm_export_file("simple_thermal_problem.h5m" export_atom_tests_basic_fe)
-bfe_add_executable(thermal_elem_atom ${UM_CURRENT_SOURCE_DIR}/thermal_elem.cpp)
+bfe_add_executable(thermal_elem_atom ${CMAKE_CURRENT_SOURCE_DIR}/thermal_elem.cpp)
 target_link_libraries(thermal_elem_atom
   users_modules
   mofem_finite_elements
@@ -119,7 +117,7 @@ add_test(
 )
 
 # add test test for temerature unsteady element
-bfe_add_executable(thermal_elem_unsteady_atom ${UM_CURRENT_SOURCE_DIR}/thermal_elem_unsteady.cpp)
+bfe_add_executable(thermal_elem_unsteady_atom ${CMAKE_CURRENT_SOURCE_DIR}/thermal_elem_unsteady.cpp)
 target_link_libraries(thermal_elem_unsteady_atom
   users_modules
   mofem_finite_elements
@@ -144,7 +142,7 @@ add_test(
 
 # add theraml stress eleme
 cm_export_file("elasticity_atom_test_thermal_expansion.h5m" export_atom_tests_basic_fe)
-bfe_add_executable(thermal_stress_elem ${UM_CURRENT_SOURCE_DIR}/thermal_stress_elem.cpp)
+bfe_add_executable(thermal_stress_elem ${CMAKE_CURRENT_SOURCE_DIR}/thermal_stress_elem.cpp)
 target_link_libraries(thermal_stress_elem
   users_modules
   mofem_finite_elements
@@ -169,7 +167,7 @@ cm_export_file("sphere.cub" export_analytical_bc_atom_tests)
 # Analytical dirihlet boundary condition
 
 add_executable(thermal_with_analytical_bc
-${UM_CURRENT_SOURCE_DIR}/thermal_with_analytical_bc.cpp
+${CMAKE_CURRENT_SOURCE_DIR}/thermal_with_analytical_bc.cpp
 )
 
 target_link_libraries(thermal_with_analytical_bc
@@ -194,7 +192,7 @@ add_test(thermal_with_analytical_bc_atom
 
 # Testing field approximation
 bfe_add_executable(
-  field_approximation ${UM_CURRENT_SOURCE_DIR}/field_approximation.cpp
+  field_approximation ${CMAKE_CURRENT_SOURCE_DIR}/field_approximation.cpp
 )
 target_link_libraries(field_approximation
   users_modules
@@ -226,7 +224,7 @@ if(ADOL-C_LIBRARY)
 
   bfe_add_executable(
     nonlinear_elastic_basic_test
-    ${UM_CURRENT_SOURCE_DIR}/nonlinear_elastic.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_elastic.cpp
   )
   target_link_libraries(nonlinear_elastic_basic_test
     users_modules
@@ -246,7 +244,7 @@ if(ADOL-C_LIBRARY)
 
   bfe_add_executable(
     nonlinear_elastic_test_jacobian
-    ${UM_CURRENT_SOURCE_DIR}/nonlinear_elastic_test_jacobian.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_elastic_test_jacobian.cpp
   )
   target_link_libraries(
     nonlinear_elastic_test_jacobian
@@ -281,7 +279,7 @@ endif(ADOL-C_LIBRARY)
 if(ADOL-C_LIBRARY)
 
   bfe_add_executable(damper_jacobian_test
-    ${UM_CURRENT_SOURCE_DIR}/damper_jacobian_test.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/damper_jacobian_test.cpp
   )
 
   target_link_libraries(damper_jacobian_test
@@ -310,7 +308,7 @@ endif(ADOL-C_LIBRARY)
 if(ADOL-C_LIBRARY)
 
   bfe_add_executable(convective_matrix
-    ${UM_CURRENT_SOURCE_DIR}/convective_matrix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/convective_matrix.cpp
   )
 
   target_link_libraries(convective_matrix

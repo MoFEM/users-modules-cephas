@@ -13,10 +13,10 @@
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 include_directories(
-  ${UM_SOURCE_DIR}/basic_finite_elements/poisson
+  ${PROJECT_SOURCE_DIR}/basic_finite_elements/poisson
 )
 include_directories(
-  ${UM_SOURCE_DIR}/basic_finite_elements/poisson/src
+  ${PROJECT_SOURCE_DIR}/basic_finite_elements/poisson/src
 )
 
 bfe_build_and_install(analytical_poisson

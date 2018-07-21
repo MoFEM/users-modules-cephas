@@ -16,7 +16,7 @@ include_directories(simple_elasticity
   ${CMAKE_CURRENT_SOURCE_DIR}/simple_elasticity.cpp)
 
 bfe_build_and_install(simple_elasticity
-  ${UM_SOURCE_DIR}/basic_finite_elements/simple_elasticity/simple_elasticity.cpp)
+  ${PROJECT_SOURCE_DIR}/basic_finite_elements/simple_elasticity/simple_elasticity.cpp)
 
 add_test(simple_elasticity
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
