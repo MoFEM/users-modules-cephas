@@ -24,6 +24,13 @@ option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF
 option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
 option(MOFEM_UM_BUILD_TETS "If is ON enbale testing" ON)
 
+# set MPI runtime flags when not set form command line but set in core library
+if(NOT MPI_RUN_FLAGS)
+  if(MoFEM_MPI_RUN_FLAGS)
+    set(MPI_RUN_FLAGS ${MoFEM_MPI_RUN_FLAGS})
+  endif(MoFEM_MPI_RUN_FLAGS)
+endif(NOT MPI_RUN_FLAGS)
+
 # This is obsolete option should not be used, is set for back comaptibility
 # with some old modules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
 # when you spot it in your code.
