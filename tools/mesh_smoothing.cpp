@@ -1,5 +1,5 @@
 /** \file mesh_smoothing.cpp
- * \brief test for mesh cut interface
+ * \brief Improve mesh quality using Volume-length quality measure with barrier
  * \example mesh_smoothing.cpp
  *
  */
