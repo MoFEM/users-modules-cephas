@@ -29,7 +29,7 @@ using namespace MoFEM;
 
 using namespace MoFEM;
 
-static char help[] = "mesh cutting\n\n";
+static char help[] = "mesh smoothing\n\n";
 
 PetscBool flg_myfile = PETSC_TRUE;
 char mesh_file_name[255];
