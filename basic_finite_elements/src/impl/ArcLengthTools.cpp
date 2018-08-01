@@ -263,12 +263,7 @@ MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x) {
   ArcLengthMatShell *mat_ctx = (ArcLengthMatShell *)void_MatCtx;
   PetscBool same;
   PetscObjectTypeCompare((PetscObject)ctx->kSP, KSPPREONLY, &same);
-  if (same != PETSC_TRUE) {
-    CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_TRUE);
-  } else {
-    CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
-  }
-  // CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
+  CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
   CHKERR KSPSolve(ctx->kSP, pc_f, pc_x);
   if (same != PETSC_TRUE) {
     CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_TRUE);
