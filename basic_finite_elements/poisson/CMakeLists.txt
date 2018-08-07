@@ -28,6 +28,9 @@ bfe_build_and_install(analytical_poisson_field_split
 bfe_build_and_install(analytical_nonlinear_poisson
   ${CMAKE_CURRENT_SOURCE_DIR}/analytical_nonlinear_poisson.cpp)
 
+bfe_build_and_install(analytical_nonlinear_poisson_adolc
+  ${CMAKE_CURRENT_SOURCE_DIR}/analytical_nonlinear_poisson_adolc.cpp)
+
 cm_export_file(".petscrc" export_files_poisson)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc 
   DESTINATION ${BFE_MOD_DIR})
