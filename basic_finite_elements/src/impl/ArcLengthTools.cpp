@@ -264,15 +264,18 @@ MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x) {
   PetscBool same;
   PetscObjectTypeCompare((PetscObject)ctx->kSP, KSPPREONLY, &same);
   CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
+  CHKERR VecZeroEntries(pc_x);
   CHKERR KSPSolve(ctx->kSP, pc_f, pc_x);
   if (same != PETSC_TRUE) {
     CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_TRUE);
   } else {
     CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
   }
-  CHKERR KSPSolve(ctx->kSP, ctx->arcPtrRaw->F_lambda, ctx->arcPtrRaw->xLambda);
-  double db_dot_pc_x, db_dot_x_lambda;
+  double db_dot_pc_x;
   CHKERR VecDot(ctx->arcPtrRaw->db, pc_x, &db_dot_pc_x);
+  CHKERR VecDot(ctx->arcPtrRaw->db, pc_x, &db_dot_pc_x);
+  CHKERR KSPSolve(ctx->kSP, ctx->arcPtrRaw->F_lambda, ctx->arcPtrRaw->xLambda);
+  double db_dot_x_lambda;
   CHKERR VecDot(ctx->arcPtrRaw->db, ctx->arcPtrRaw->xLambda, &db_dot_x_lambda);
   double denominator = ctx->arcPtrRaw->dIag + db_dot_x_lambda;
   double res_lambda;
@@ -303,9 +306,9 @@ MoFEMErrorCode PCSetupArcLength(PC pc) {
   void *void_ctx;
   CHKERR PCShellGetContext(pc, &void_ctx);
   PCArcLengthCtx *ctx = (PCArcLengthCtx *)void_ctx;
-  CHKERR PCSetFromOptions(ctx->pC);
   CHKERR PCGetOperators(pc, &ctx->shellAij, &ctx->Aij);
   CHKERR PCSetOperators(ctx->pC, ctx->Aij, ctx->Aij);
+  CHKERR PCSetFromOptions(ctx->pC);
   CHKERR PCSetUp(ctx->pC);
   // SetUp PC KSP solver
   CHKERR KSPSetType(ctx->kSP, KSPPREONLY);
@@ -331,6 +334,10 @@ MoFEMErrorCode ZeroFLmabda::preProcess() {
     CHKERR VecGhostUpdateBegin(arcPtr->F_lambda, INSERT_VALUES,
                                SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(arcPtr->F_lambda, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecZeroEntries(arcPtr->xLambda);
+    CHKERR VecGhostUpdateBegin(arcPtr->xLambda, INSERT_VALUES,
+                               SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(arcPtr->xLambda, INSERT_VALUES, SCATTER_FORWARD);
   } break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Impossible case");
