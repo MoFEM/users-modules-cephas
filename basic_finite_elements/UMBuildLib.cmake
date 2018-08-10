@@ -28,7 +28,7 @@ install(
   DESTINATION lib/basic_finite_elements
 )
 
-if(MOFEM_UM_BUILD_TETS)
+if(MOFEM_UM_BUILD_TESTS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/atom_tests 
   ${PROJECT_BINARY_DIR}/basic_finite_elements/atom_tests)
-endif(MOFEM_UM_BUILD_TETS)
+endif(MOFEM_UM_BUILD_TESTS)

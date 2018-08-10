@@ -22,7 +22,7 @@ set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 option(NOT_PRECOMPILED_HEADRES "Do not use procompiled headers" OFF)
 option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
 option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
-option(MOFEM_UM_BUILD_TETS "If is ON enbale testing" ON)
+option(MOFEM_UM_BUILD_TESTS "If is ON enbale testing" ON)
 
 # set MPI runtime flags when not set form command line but set in core library
 if(NOT MPI_RUN_FLAGS)
@@ -149,10 +149,10 @@ endif(MoFEM_CBLAS_INCLUDE_DIR)
 
 link_directories(${MoFEM_INSTALL_DIR}/lib)
 
-if(MOFEM_UM_BUILD_TETS)
+if(MOFEM_UM_BUILD_TESTS)
   enable_testing()
   include(CTest)
-endif(MOFEM_UM_BUILD_TETS)
+endif(MOFEM_UM_BUILD_TESTS)
 
 if(SLEPC_LIBRARY)
   include_directories("${SLEPC_DIR}/${PETSC_ARCH}/include")
