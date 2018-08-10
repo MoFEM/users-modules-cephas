@@ -227,25 +227,24 @@ private:
 struct ArcLengthMatShell {
 
   Mat Aij;
-  ArcLengthCtx* arcPtrRaw; // this is for back compatibility
+  ArcLengthCtx *arcPtrRaw; // this is for back compatibility
   string problemName;
 
   /// \deprecated use constructor with shared_ptr
-  DEPRECATED ArcLengthMatShell(Mat aij,ArcLengthCtx *arc_ptr_raw,string problem_name);
+  DEPRECATED ArcLengthMatShell(Mat aij, ArcLengthCtx *arc_ptr_raw,
+                               string problem_name);
 
-  ArcLengthMatShell(Mat aij,boost::shared_ptr<ArcLengthCtx> arc_ptr,string problem_name);
-
+  ArcLengthMatShell(Mat aij, boost::shared_ptr<ArcLengthCtx> arc_ptr,
+                    string problem_name);
 
   virtual ~ArcLengthMatShell();
 
-  MoFEMErrorCode setLambda(Vec ksp_x,double *lambda,ScatterMode scattermode);
+  MoFEMErrorCode setLambda(Vec ksp_x, double *lambda, ScatterMode scattermode);
 
-  friend MoFEMErrorCode ArcLengthMatMultShellOp(Mat A,Vec x,Vec f);
+  friend MoFEMErrorCode ArcLengthMatMultShellOp(Mat A, Vec x, Vec f);
 
 private:
-
   boost::shared_ptr<ArcLengthCtx> arcPtr;
-
 };
 
 /**

@@ -152,27 +152,27 @@ MoFEMErrorCode ArcLengthMatShell::setLambda(Vec ksp_x, double *lambda,
   int part = arcPtrRaw->getPart();
   int rank = arcPtrRaw->mField.get_comm_rank();
 
-  Vec lambda_ghost;
-  if (rank == part) {
-    CHKERR VecCreateGhostWithArray(arcPtrRaw->mField.get_comm(), 1, 1, 0,
-                                   PETSC_NULL, lambda, &lambda_ghost);
-  } else {
-    int one[] = {0};
-    CHKERR VecCreateGhostWithArray(arcPtrRaw->mField.get_comm(), 0, 1, 1, one,
-                                   lambda, &lambda_ghost);
-  }
-
   switch (scattermode) {
   case SCATTER_FORWARD: {
+    Vec lambda_ghost;
+    if (rank == part) {
+      CHKERR VecCreateGhostWithArray(arcPtrRaw->mField.get_comm(), 1, 1, 0,
+                                 PETSC_NULL, lambda, &lambda_ghost);
+    } else {
+      int one[] = {0};
+      CHKERR VecCreateGhostWithArray(arcPtrRaw->mField.get_comm(), 0, 1, 1, one,
+                                     lambda, &lambda_ghost);
+    }
     int idx = arcPtrRaw->getPetscGlobalDofIdx();
     if (part == rank) {
       CHKERR VecGetValues(ksp_x, 1, &idx, lambda);
     }
     CHKERR VecGhostUpdateBegin(lambda_ghost, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(lambda_ghost, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecDestroy(&lambda_ghost);
   } break;
   case SCATTER_REVERSE: {
-    if (part == rank) {
+    if (arcPtrRaw->getPetscLocalDofIdx() != -1) {
       PetscScalar *array;
       CHKERR VecGetArray(ksp_x, &array);
       array[arcPtrRaw->getPetscLocalDofIdx()] = *lambda;
@@ -182,8 +182,6 @@ MoFEMErrorCode ArcLengthMatShell::setLambda(Vec ksp_x, double *lambda,
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "not implemented");
   }
-
-  CHKERR VecDestroy(&lambda_ghost);
 
   MoFEMFunctionReturn(0);
 }
@@ -263,24 +261,35 @@ MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x) {
   ArcLengthMatShell *mat_ctx = (ArcLengthMatShell *)void_MatCtx;
   PetscBool same;
   PetscObjectTypeCompare((PetscObject)ctx->kSP, KSPPREONLY, &same);
+
+  double res_lambda;
+  CHKERR mat_ctx->setLambda(pc_f, &res_lambda, SCATTER_FORWARD);
+
+  // Solve residual
   CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
-  CHKERR VecZeroEntries(pc_x);
+  CHKERR KSPSetInitialGuessKnoll(ctx->kSP, PETSC_FALSE);
   CHKERR KSPSolve(ctx->kSP, pc_f, pc_x);
+  double db_dot_pc_x;
+  CHKERR VecDot(ctx->arcPtrRaw->db, pc_x, &db_dot_pc_x);
+
+  // Solve for x_lambda
   if (same != PETSC_TRUE) {
     CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_TRUE);
   } else {
     CHKERR KSPSetInitialGuessNonzero(ctx->kSP, PETSC_FALSE);
   }
-  double db_dot_pc_x;
-  CHKERR VecDot(ctx->arcPtrRaw->db, pc_x, &db_dot_pc_x);
-  CHKERR VecDot(ctx->arcPtrRaw->db, pc_x, &db_dot_pc_x);
   CHKERR KSPSolve(ctx->kSP, ctx->arcPtrRaw->F_lambda, ctx->arcPtrRaw->xLambda);
   double db_dot_x_lambda;
   CHKERR VecDot(ctx->arcPtrRaw->db, ctx->arcPtrRaw->xLambda, &db_dot_x_lambda);
+
+  // Calculate d_lambda
   double denominator = ctx->arcPtrRaw->dIag + db_dot_x_lambda;
-  double res_lambda;
-  CHKERR mat_ctx->setLambda(pc_f, &res_lambda, SCATTER_FORWARD);
-  double ddlambda = (res_lambda - db_dot_pc_x) / denominator;
+  double ddlambda = -(res_lambda - db_dot_pc_x) / denominator;
+
+  // Update solution vector
+  CHKERR VecAXPY(pc_x, -ddlambda, ctx->arcPtrRaw->xLambda);
+  CHKERR mat_ctx->setLambda(pc_x, &ddlambda, SCATTER_REVERSE);
+
   if (ddlambda != ddlambda || denominator == 0) {
     double nrm2_pc_f, nrm2_db, nrm2_pc_x, nrm2_xLambda;
     CHKERR VecNorm(pc_f, NORM_2, &nrm2_pc_f);
@@ -294,10 +303,27 @@ MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x) {
        << "\ndiag=" << ctx->arcPtrRaw->dIag << "\nnrm2_db=" << nrm2_db
        << "\nnrm2_pc_f=" << nrm2_pc_f << "\nnrm2_pc_x=" << nrm2_pc_x
        << "\nnrm2_xLambda=" << nrm2_xLambda;
+    // PetscPrintf(PETSC_COMM_WORLD,"%s\n",ss.str().c_str());
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, ss.str().c_str());
   }
-  CHKERR VecAXPY(pc_x, ddlambda, ctx->arcPtrRaw->xLambda);
-  CHKERR mat_ctx->setLambda(pc_x, &ddlambda, SCATTER_REVERSE);
+
+  // Debugging PC
+  if(0) {
+    Vec y;
+    CHKERR VecDuplicate(pc_x, &y);
+    CHKERR MatMult(ctx->shellAij, pc_x, y);
+    CHKERR VecAXPY(y, -1, pc_f);
+    double res_lambda_y;
+    CHKERR mat_ctx->setLambda(y, &res_lambda_y, SCATTER_FORWARD);
+    double zero;
+    CHKERR mat_ctx->setLambda(y, &zero, SCATTER_REVERSE);
+    double norm_y;
+    CHKERR VecNorm(y, NORM_2, &norm_y);
+    PetscPrintf(PETSC_COMM_WORLD, "Debug res y = %3.4e res_lambda_y = %3.4e\n",
+                norm_y, res_lambda_y);
+    CHKERR VecDestroy(&y);
+  }
+
   MoFEMFunctionReturn(0);
 }
 
@@ -307,11 +333,12 @@ MoFEMErrorCode PCSetupArcLength(PC pc) {
   CHKERR PCShellGetContext(pc, &void_ctx);
   PCArcLengthCtx *ctx = (PCArcLengthCtx *)void_ctx;
   CHKERR PCGetOperators(pc, &ctx->shellAij, &ctx->Aij);
+  CHKERR PCSetUseAmat(pc, PETSC_TRUE);
   CHKERR PCSetOperators(ctx->pC, ctx->Aij, ctx->Aij);
   CHKERR PCSetFromOptions(ctx->pC);
   CHKERR PCSetUp(ctx->pC);
   // SetUp PC KSP solver
-  CHKERR KSPSetType(ctx->kSP, KSPPREONLY);
+  // CHKERR KSPSetType(ctx->kSP, KSPPREONLY);
   CHKERR KSPSetTabLevel(ctx->kSP, 3);
   CHKERR KSPSetFromOptions(ctx->kSP);
   CHKERR KSPSetOperators(ctx->kSP, ctx->Aij, ctx->Aij);
