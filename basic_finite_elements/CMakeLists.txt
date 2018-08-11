@@ -56,8 +56,14 @@ function(bfe_build_and_install target source)
   install(TARGETS ${target} DESTINATION ${BFE_MOD_DIR})
 endfunction(bfe_build_and_install)
 
+if(MOFEM_UM_BUILD_TESTS)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/atom_tests 
+  ${PROJECT_BINARY_DIR}/basic_finite_elements/atom_tests)
+endif(MOFEM_UM_BUILD_TESTS)
+
 foreach(LOOP_DIR ${BFE_DIRS})
   set(BFE_MOD_DIR ${LOOP_DIR})
   add_subdirectory(${LOOP_DIR})
   bfe_install(${LOOP_DIR})
 endforeach(LOOP_DIR)
+
