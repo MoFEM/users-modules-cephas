@@ -37,8 +37,7 @@ else(EXTERNAL_MODULES_BUILD)
   file(
     GLOB_RECURSE INSTLLED_MODULES
     FOLLOW_SYMLINKS
-    ${PROJECT_SOURCE_DIR}/?*/InstalledAddModule.cmake
-  )
+    ${PROJECT_SOURCE_DIR}/?*/InstalledAddModule.cmake)
   # Compile tools
   add_subdirectory(${PROJECT_SOURCE_DIR}/tools)
 endif(EXTERNAL_MODULES_BUILD)
