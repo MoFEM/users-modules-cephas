@@ -93,9 +93,9 @@ struct ExactLaplacianFunction {
 //};
 
 struct FunA {
+  adouble u_Adbl, A_Adbl;
+  double A_dbl;
   double operator()(const double u) { 
-    adouble u_Adbl, A_Adbl;
-    double A_dbl;
     trace_on(1);
     u_Adbl <<= u;
     A_Adbl = 1 + u_Adbl * u_Adbl;
@@ -105,9 +105,17 @@ struct FunA {
     }
 };
 
+struct TapedFunA {
+  double A_dbl;
+  double operator()(double u) { 
+    ::function(1,1,1,&u,&A_dbl);
+    return A_dbl;
+    }
+};
+
 struct DiffFunA {
+  double DiffA;
   double operator()(const double u) { 
-    double DiffA;
     gradient(1,1,&u,&DiffA);
     return DiffA;
     }
@@ -126,6 +134,9 @@ int main(int argc, char *argv[]) {
   moab::Interface &moab = moab_core; // create interface to database
 
   try {
+    //Record Tape - create object
+    FunA ob_funA;
+    ob_funA.operator()(1); //initialise tape
 
     // Get command line options
     int order = 3;                    // default approximation order
@@ -176,7 +187,7 @@ int main(int argc, char *argv[]) {
       // matrices and vectors.
       CHKERR PoissonExample::CreateFiniteElements(m_field)
           .createFEToAssembleMatrixAndVectorForNonlinearProblem(
-              ExactFunction(), ExactLaplacianFunction(), FunA(), DiffFunA(),
+              ExactFunction(), ExactLaplacianFunction(), TapedFunA(), DiffFunA(),
               domain_lhs_fe, boundary_lhs_fe, domain_rhs_fe, boundary_rhs_fe,
               VolRuleNonlinear());
       // Add problem specific operators the generic finite elements to calculate
