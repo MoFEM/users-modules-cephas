@@ -44,31 +44,27 @@ DirichletDisplacementBc::DirichletDisplacementBc(MoFEM::Interface &m_field,
 };
 
 MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
-  MoFEMFunctionBeginHot;
+  MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
     ParallelComm *pcomm =
         ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              mField, NODESET | DISPLACEMENTSET, it)) {
       DisplacementCubitBcData mydata;
-      ierr = it->getBcDataStructure(mydata);
-      CHKERRG(ierr);
+      CHKERR it->getBcDataStructure(mydata);
       VectorDouble scaled_values(3);
       scaled_values[0] = mydata.data.value1;
       scaled_values[1] = mydata.data.value2;
       scaled_values[2] = mydata.data.value3;
-      ierr = MethodForForceScaling::applyScale(this, methodsOp, scaled_values);
-      CHKERRG(ierr);
+      CHKERR MethodForForceScaling::applyScale(this, methodsOp, scaled_values);
       for (int dim = 0; dim < 3; dim++) {
         Range ents;
-        ierr = it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
                                                    true);
-        CHKERRG(ierr);
         if (dim > 1) {
           Range _edges;
-          ierr = mField.get_moab().get_adjacencies(ents, 1, false, _edges,
+          CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
                                                    moab::Interface::UNION);
-          CHKERRG(ierr);
           ents.insert(_edges.begin(), _edges.end());
         }
         if (dim > 0) {
@@ -118,7 +114,7 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
       // std::cerr << dofsIndices[ii] << " " << dofsValues[ii] << std::endl;
     }
   }
-  MoFEMFunctionReturnHot(0);
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode DirichletDisplacementBc::preProcess() {
