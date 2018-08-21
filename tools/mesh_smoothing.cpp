@@ -1,5 +1,5 @@
 /** \file mesh_smoothing.cpp
- * \brief test for mesh cut interface
+ * \brief Improve mesh quality using Volume-length quality measure with barrier
  * \example mesh_smoothing.cpp
  *
  */
@@ -29,7 +29,7 @@ using namespace MoFEM;
 
 using namespace MoFEM;
 
-static char help[] = "mesh cutting\n\n";
+static char help[] = "mesh smoothing\n\n";
 
 PetscBool flg_myfile = PETSC_TRUE;
 char mesh_file_name[255];

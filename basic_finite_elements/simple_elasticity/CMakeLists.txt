@@ -12,11 +12,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-include_directories(simple_elasticity
-  ${CMAKE_CURRENT_SOURCE_DIR}/simple_elasticity.cpp)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-bfe_build_and_install(simple_elasticity
-  ${PROJECT_SOURCE_DIR}/basic_finite_elements/simple_elasticity/simple_elasticity.cpp)
+bfe_build_and_install(simple_elasticity simple_elasticity.cpp)
 
 add_test(simple_elasticity
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
