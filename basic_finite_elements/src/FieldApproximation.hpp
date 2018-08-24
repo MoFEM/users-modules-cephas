@@ -309,8 +309,8 @@ struct FieldApproximationH1 {
       unsigned int nb_gauss_pts = row_data.getN().size1();
       for(unsigned int gg = 0;gg!=nb_gauss_pts;gg++) {
         double w = getGaussPts()(2,gg);
-        if(getNormalsAtGaussPt().size1()) {
-          w *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPt()(gg,0),1);
+        if(getNormalsAtGaussPts().size1()) {
+          w *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPts()(gg,0),1);
         } else {
           w *= getArea();
         }
@@ -412,8 +412,8 @@ struct FieldApproximationH1 {
       for(unsigned int gg = 0;gg != nb_gauss_pts;gg++) {
         double x,y,z,w;
         w = getGaussPts()(2,gg);
-        if(getNormalsAtGaussPt().size1()) {
-          w *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPt()(gg,0),1);
+        if(getNormalsAtGaussPts().size1()) {
+          w *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPts()(gg,0),1);
         } else {
           w *= getArea();
         }
@@ -430,11 +430,11 @@ struct FieldApproximationH1 {
           z = getCoordsAtGaussPts()(gg,2);
         }
 
-        if(getNormalsAtGaussPt().size1()) {
-         noalias(normal) = getNormalsAtGaussPt(gg);
+        if(getNormalsAtGaussPts().size1()) {
+         noalias(normal) = getNormalsAtGaussPts(gg);
          for(int dd = 0;dd<3;dd++) {
-          tangent1[dd] = getTangent1AtGaussPt()(gg,dd);
-          tangent2[dd] = getTangent2AtGaussPt()(gg,dd);
+          tangent1[dd] = getTangent1AtGaussPts()(gg,dd);
+          tangent2[dd] = getTangent2AtGaussPts()(gg,dd);
         }
        } else {
          noalias(normal) = getNormal();

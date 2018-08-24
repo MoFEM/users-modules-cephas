@@ -134,7 +134,7 @@ struct AnalyticalDirichletBC {
             double x,y,z;
             double val = getGaussPts()(2,gg);
             if(hoCoords.size1() == data.getN().size1()) {
-              double area = norm_2(getNormalsAtGaussPt(gg))*0.5;
+              double area = norm_2(getNormalsAtGaussPts(gg))*0.5;
               val *= area;
               x = hoCoords(gg,0);
               y = hoCoords(gg,1);

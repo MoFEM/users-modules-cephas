@@ -379,7 +379,7 @@ namespace MixTransport {
         // Get flux
         auto t_flux = getFTensor1FromMat<3>(cTx.fluxesAtGaussPts);
         // Coords at integration points
-        auto t_coords = getTensor1CoordsAtGaussPts();
+        auto t_coords = getFTensor1CoordsAtGaussPts();
         // Get integration weight
         auto t_w = getFTensor0IntegrationWeight();
         // Get volume
@@ -459,7 +459,7 @@ namespace MixTransport {
         // Get integration weight
         auto t_w = getFTensor0IntegrationWeight();
         // Coords at integration points
-        auto t_coords = getTensor1CoordsAtGaussPts();
+        auto t_coords = getFTensor1CoordsAtGaussPts();
         // Scale eq.
         const double scale = block_data->sCale;
         // Get volume
@@ -542,7 +542,7 @@ namespace MixTransport {
           // Get pressure
           auto t_h = getFTensor0FromVec(cTx.valuesAtGaussPts);
           // Coords at integration points
-          auto t_coords = getTensor1CoordsAtGaussPts();
+          auto t_coords = getFTensor1CoordsAtGaussPts();
           // Get base functions
           auto t_n_hdiv_row = row_data.getFTensor1HdivN<3>();
           // Get integration weight
@@ -657,7 +657,7 @@ namespace MixTransport {
           // Get integration weight
           auto t_w = getFTensor0IntegrationWeight();
           // Coords at integration points
-          auto t_coords = getTensor1CoordsAtGaussPts();
+          auto t_coords = getFTensor1CoordsAtGaussPts();
           // Scale eq.
           const double scale = block_data->sCale;
           // Time step factor
@@ -858,7 +858,7 @@ namespace MixTransport {
           // Get flux
           auto t_flux = getFTensor1FromMat<3>(cTx.fluxesAtGaussPts);
           // Coords at integration points
-          auto t_coords = getTensor1CoordsAtGaussPts();
+          auto t_coords = getFTensor1CoordsAtGaussPts();
           // Get integration weight
           auto t_w = getFTensor0IntegrationWeight();
           // Get base function
@@ -1012,7 +1012,7 @@ namespace MixTransport {
           // Get base function
           auto t_n_hdiv = data.getFTensor1HdivN<3>();
           // get normal of face
-          auto t_normal = getTensor1Normal();
+          auto t_normal = getFTensor1Normal();
           // Integration weight
           auto t_w = getFTensor0IntegrationWeight();
           double flux_on_entity = 0;
@@ -1122,7 +1122,7 @@ namespace MixTransport {
         // Get pressure at integration points
         auto t_h = getFTensor0FromVec(cTx.valuesAtGaussPts);
         // Coords at integration points
-        auto t_coords = getTensor1CoordsAtGaussPts();
+        auto t_coords = getFTensor1CoordsAtGaussPts();
 
         int nb_gauss_pts = data.getN().size1();
         for(int gg = 0;gg<nb_gauss_pts;gg++) {

@@ -1190,7 +1190,7 @@ struct MixTransportElement {
         int nb_gauss_pts = data.getHdivN().size1();
         for(int gg = 0;gg<nb_gauss_pts;gg++) {
           double x,y,z;
-          if(getNormalsAtGaussPt().size1() == (unsigned int)nb_gauss_pts) {
+          if(getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
             x = getHoCoordsAtGaussPts()(gg,0);
             y = getHoCoordsAtGaussPts()(gg,1);
             z = getHoCoordsAtGaussPts()(gg,2);
@@ -1202,8 +1202,8 @@ struct MixTransportElement {
           double value;
           ierr = cTx.getBcOnValues(fe_ent,gg,x,y,z,value); CHKERRG(ierr);
           double w = getGaussPts()(2,gg)*0.5;
-          if(getNormalsAtGaussPt().size1() == (unsigned int)nb_gauss_pts) {
-            noalias(nF) += w*prod(data.getHdivN(gg),getNormalsAtGaussPt(gg))*value;
+          if(getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
+            noalias(nF) += w*prod(data.getHdivN(gg),getNormalsAtGaussPts(gg))*value;
           } else {
             noalias(nF) += w*prod(data.getHdivN(gg),getNormal())*value;
           }
@@ -1265,9 +1265,9 @@ struct MixTransportElement {
         // face element could be curved, i.e. normal can be different at each integration
         // point.
         double *normal_ptr;
-        if(getNormalsAtGaussPt().size1() == (unsigned int)nb_gauss_pts) {
+        if(getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
           // HO geometry
-          normal_ptr = &getNormalsAtGaussPt(0)[0];
+          normal_ptr = &getNormalsAtGaussPts(0)[0];
         } else {
           // Linear geometry, i.e. constant normal on face
           normal_ptr = &getNormal()[0];
@@ -1284,7 +1284,7 @@ struct MixTransportElement {
 
           // get integration point coordinates
           double x,y,z;
-          if(getNormalsAtGaussPt().size1() == (unsigned int)nb_gauss_pts) {
+          if(getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
             x = getHoCoordsAtGaussPts()(gg,0);
             y = getHoCoordsAtGaussPts()(gg,1);
             z = getHoCoordsAtGaussPts()(gg,2);
@@ -1322,7 +1322,7 @@ struct MixTransportElement {
           }
 
           // If HO geometry increment t_normal to next integration point
-          if(getNormalsAtGaussPt().size1() == (unsigned int)nb_gauss_pts) {
+          if(getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
             ++t_normal;
             nrm2  = sqrt(t_normal(i)*t_normal(i));
           }
@@ -1689,7 +1689,7 @@ struct MixTransportElement {
             }
             for(int gg = 0;gg!=nb_gauss_pts;gg++) {
               double x,y,z;
-              if(static_cast<int>(getNormalsAtGaussPt().size1()) == nb_gauss_pts) {
+              if(static_cast<int>(getNormalsAtGaussPts().size1()) == nb_gauss_pts) {
                 x = getHoCoordsAtGaussPts()(gg,0);
                 y = getHoCoordsAtGaussPts()(gg,1);
                 z = getHoCoordsAtGaussPts()(gg,2);
@@ -1701,8 +1701,8 @@ struct MixTransportElement {
               double value;
               ierr = cTx.getBcOnValues(fe_ent,gg,x,y,z,value); CHKERRG(ierr);
               double w = getGaussPts()(2,gg);
-              if(static_cast<int>(getNormalsAtGaussPt().size1()) == nb_gauss_pts) {
-                w *= norm_2(getNormalsAtGaussPt(gg))*0.5;
+              if(static_cast<int>(getNormalsAtGaussPts().size1()) == nb_gauss_pts) {
+                w *= norm_2(getNormalsAtGaussPts(gg))*0.5;
               } else {
                 w *= getArea();
               }
@@ -1711,8 +1711,8 @@ struct MixTransportElement {
           } else if(valMap.size()==2) {
             for(int gg = 0;gg!=nb_gauss_pts;gg++) {
               double w = getGaussPts()(2,gg);
-              if(getNormalsAtGaussPt().size1() == (unsigned int)nb_gauss_pts) {
-                w *= norm_2(getNormalsAtGaussPt(gg))*0.5;
+              if(getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
+                w *= norm_2(getNormalsAtGaussPts(gg))*0.5;
               } else {
                 w *= getArea();
               }

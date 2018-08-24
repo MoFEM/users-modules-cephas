@@ -732,7 +732,7 @@ struct MagneticElement {
 
         // get integration weight scaled by volume
         double area;
-        area = norm_2(getNormalsAtGaussPt(gg)) * 0.5;
+        area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
         double w = getGaussPts()(2, gg) * area;
 
         // Current is on surface where natural bc are applied. It is set that
