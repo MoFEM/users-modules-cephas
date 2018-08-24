@@ -47,9 +47,11 @@ fi
 ../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
 
 # Run code
-rm -f out_*.h5m && \
-make -j 4 unsaturated_transport && \
-mpirun --allow-run-as-root -np $NBPROCS ./unsaturated_transport \
+rm -f out_*.h5m 
+#make -j 4 unsaturated_transport 
+
+#mpirun --allow-run-as-root -np $NBPROCS \
+./unsaturated_transport \
 -my_file out.h5m  -configure $CONFIGFILE  \
 -ts_monitor -ts_type beuler \
 -ts_dt $DT -ts_final_time $FT \
