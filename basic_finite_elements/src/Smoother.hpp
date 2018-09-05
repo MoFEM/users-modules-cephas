@@ -320,7 +320,7 @@ struct Smoother {
                            fieldCrackAreaTangentConstrains, getConn()[nn]));
 
           // continue if Lagrange are on element
-          if (distance(dit, hi_dit) > 0) {
+          if (std::distance(dit, hi_dit) > 0) {
 
             FENumeredDofEntityByNameAndEnt::iterator diit, hi_diit;
 
