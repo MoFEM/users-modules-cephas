@@ -79,7 +79,7 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
   dIt = dofs_ptr_no_const->get<FieldName_mi_tag>().lower_bound(field_name);
   hi_dit = dofs_ptr_no_const->get<FieldName_mi_tag>().upper_bound(field_name);
 
-  if (distance(dIt, hi_dit) != 1) {
+  if (std::distance(dIt, hi_dit) != 1) {
     SETERRABORT(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                 "can not find unique LAMBDA (load factor)");
   }
