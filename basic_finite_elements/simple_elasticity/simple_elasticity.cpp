@@ -314,7 +314,8 @@ struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
-      FTensor::Tensor1<double *, 3> t_nf(&nF[0], &nF[1], &nF[2], 3);
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
+                                                              &nF[2]);
       for (int bb = 0; bb != nb_dofs / 3; ++bb) {
         // scale the three components of t_normal and pass them to the t_nf
         // (hence to nF)

@@ -1250,10 +1250,10 @@ is the struct presented below
 
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    FTensor::Tensor1<double *, 3> t_normal = getFTensor1Normal();
+    auto t_normal = getFTensor1Normal();
 
     //vector of base functions 
-    FTensor::Tensor0<double *> t_base      = data.getFTensor0N();
+    auto t_base = data.getFTensor0N();
 
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -1262,7 +1262,7 @@ is the struct presented below
 
       //create a vector t_nf whose pointer points an array of 3 pointers pointing to nF 
       //memory location of components
-      FTensor::Tensor1<double *, 3> t_nf(&nF[0], &nF[1], &nF[2], 3);
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1], &nF[2]);
       for (int bb = 0; bb != nb_dofs / 3; ++bb) {
         //scale the three components of t_normal and pass them to the t_nf (hence to nF)
         t_nf(i) += (w * pressureVal * t_base) * t_normal(i);
@@ -1312,7 +1312,7 @@ the normal to the face is passed to \e t\_normal variable
 \code
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    FTensor::Tensor1<double *, 3> t_normal = getFTensor1Normal();
+    auto t_normal = getFTensor1Normal();
 \endcode 
 
 Vector \e t\_normal has 3 component (one for each global axis). Its magnitude is
@@ -1327,7 +1327,7 @@ Furthermore, \e t\_base vector containing the element's shape functions is initi
 
 \code 
     //vector of base functions 
-    FTensor::Tensor0<double *> t_base      = data.getFTensor0N();
+    auto t_base = data.getFTensor0N();
 \endcode 
 
 Then, the loop over all gauss points is performed to evaluate the area integral presented in (12) in ``Hierarchical Approximation'' 
@@ -1341,7 +1341,7 @@ tutorial
 
       //create a vector t_nf whose pointer points an array of 3 pointers pointing to nF 
       //memory location of components
-      FTensor::Tensor1<double *, 3> t_nf(&nF[0], &nF[1], &nF[2], 3);
+      auto t_nf(&nF[0], &nF[1], &nF[2], 3);
       for (int bb = 0; bb != nb_dofs / 3; ++bb) {
         //scale the three components of t_normal and pass them to the t_nf (hence to nF)
         t_nf(i) += (w * pressureVal * t_base) * t_normal(i);
