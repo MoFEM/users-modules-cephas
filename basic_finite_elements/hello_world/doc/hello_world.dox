@@ -413,16 +413,17 @@ struct OpVolumeSide: public MoFEM::VolumeElementForcesAndSourcesCoreOnSide::User
 where from members of this class information about face normal and adjacent entity
 volume can be accessed.
 
-\section poisson_tut1_running_program Running the program
+\section hello_word_running_program Running the program
 
 The easiest installation is with Docker containers; please see youtube video how
-to run installation <a href=https://www.youtube.com/watch?v=6opfKER7JHA>link</a>. You can also look
+to run installation <a href=https://www.youtube.com/watch?v=6opfKER7JHA>link</a>. 
+You can also look
 here \ref install_docker. Open terminal and run Docker container
 \code
 docker run --rm=true -it --volumes-from mofem_build  -v $HOME/mofem-cephas/mofem:/mofem -v $HOME:$HOME -e HOSTHOME=$HOME mofem_build /bin/bash
 \endcode
 
-You are now in Docker container, go to directory where Poisson problem is
+You are now in Docker container, go to directory where Hello Problem problem is
 located, and compile code
 \code
 cd /mofem_build/um/basic_finite_elements/hello_world/
