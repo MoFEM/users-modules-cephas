@@ -29,20 +29,11 @@ static char help[] = "-my_block_config set block data\n"
 
 struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
-  // B_i matrix
-  MatrixDouble rowB;
-
-  // B_j matrix
-  MatrixDouble colB;
-
-  // Matrix used to evaluate matrix product D B_j
-  MatrixDouble CB;
-
   // Finite element stiffness sub-matrix K_ij
   MatrixDouble K;
 
-  // Elastic stiffness matrix
-  MatrixDouble D;
+  // Elastic stiffness tensor (4th rank tensor with minor and major symmetry)
+  FTensor::Ddg<double, 3, 3> tD;
 
   // Young's modulus
   double yOung;
@@ -53,7 +44,7 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
       : VolumeElementForcesAndSourcesCore::UserDataOperator("U", "U", OPROWCOL,
                                                             symm) {
 
-    // Evaluation of the elastic stiffness matrix, D, in the Voigt notation is
+    // Evaluation of the elastic stiffness tensor, D, in the Voigt notation is
     // done in the constructor
 
     // hardcoded choice of elastic parameters
@@ -61,77 +52,32 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
     yOung   = 10;
 
     // coefficient used in intermediate calculation
-    double coefficient = 0.;
+    const double coefficient = yOung / ((1 + pOisson) * (1 - 2 * pOisson));
 
-    coefficient = yOung / ((1 + pOisson) * (1 - 2 * pOisson));
-    D.resize(6, 6, false);
-    D.clear();
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
 
-    D(0, 0) = 1 - pOisson;
-    D(1, 1) = 1 - pOisson;
-    D(2, 2) = 1 - pOisson;
-    D(3, 3) = 0.5 * (1 - 2 * pOisson);
-    D(4, 4) = 0.5 * (1 - 2 * pOisson);
-    D(5, 5) = 0.5 * (1 - 2 * pOisson);
+    tD(i, j, k, l) = 0.;
 
-    D(0, 1) = pOisson;
-    D(0, 2) = pOisson;
-    D(1, 0) = pOisson;
+    tD(0, 0, 0, 0) = 1 - pOisson;
+    tD(1, 1, 1, 1) = 1 - pOisson;
+    tD(2, 2, 2, 2) = 1 - pOisson;
 
-    D(1, 2) = pOisson;
-    D(2, 0) = pOisson;
-    D(2, 1) = pOisson;
+    tD(0, 1, 0, 1) = 0.5 * (1 - 2 * pOisson);
+    tD(0, 2, 0, 2) = 0.5 * (1 - 2 * pOisson);
+    tD(1, 2, 1, 2) = 0.5 * (1 - 2 * pOisson);
 
-    D *= coefficient;
-  }
+    tD(0, 0, 1, 1) = pOisson;
+    tD(1, 1, 0, 0) = pOisson;
+    tD(0, 0, 2, 2) = pOisson;
+    tD(2, 2, 0, 0) = pOisson;
+    tD(1, 1, 2, 2) = pOisson;
+    tD(2, 2, 1, 1) = pOisson;
 
-  /**
-  Evaluates B matrix of
-  @param diffN array of gradients of shape functions
-  @param B returning B matrix
-  */
-  MoFEMErrorCode makeB(const MatrixAdaptor &diffN, MatrixDouble &B) {
+    tD(i, j, k, l) *= coefficient;
 
-    // initiation of error handler
-    MoFEMFunctionBegin;
-
-    // number of gradients of shape functions is passed to nb_dofs variable
-    // total number of degrees of freedom is nb_dofs*3
-    unsigned int nb_dofs = diffN.size1();
-
-    // inidialise B matrix
-    // 6 rows equal to the number of strains in Voigt notation
-    // 3 * nb_dofs number of columns equal to the number of degrees of freedom
-    // of the element
-    B.resize(6, 3 * nb_dofs, false);
-
-    // B matrix is cleared
-    B.clear();
-
-    // Loop over degrees of freedom treated as groups of three
-    for (unsigned int dd = 0; dd < nb_dofs; ++dd) {
-
-      // array diff containing the gradients of shape functions
-      // gradient in x direction for 0, in y direction for 1 and in x for 2
-      const double diff[] = {diffN(dd, 0), diffN(dd, 1), diffN(dd, 2)};
-      const int dd3       = 3 * dd;
-      for (int rr = 0; rr < 3; ++rr) {
-        // gamma_xx for rr = 0, gamma_yy for rr = 1 and gamma_zz for rr = 2
-        B(rr, dd3 + rr) = diff[rr];
-      }
-      // gamma_xy
-      B(3, dd3 + 0) = diff[1];
-      B(3, dd3 + 1) = diff[0];
-      // gamma_yz
-      B(4, dd3 + 1) = diff[2];
-      B(4, dd3 + 2) = diff[1];
-      // gamma_xz
-      B(5, dd3 + 0) = diff[2];
-      B(5, dd3 + 2) = diff[0];
-    }
-
-    // End of error handling
-    MoFEMFunctionReturn(0);
   }
 
   /**
@@ -150,16 +96,26 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
                         DataForcesAndSourcesCore::EntData &col_data) {
 
     MoFEMFunctionBegin;
+
     // get number of dofs on row
     nbRows = row_data.getIndices().size();
     // if no dofs on row, exit that work, nothing to do here
     if (!nbRows)
       MoFEMFunctionReturnHot(0);
+
     // get number of dofs on column
     nbCols = col_data.getIndices().size();
     // if no dofs on Columbia, exit nothing to do here
     if (!nbCols)
       MoFEMFunctionReturnHot(0);
+
+    // K_ij matrix will have 3 times the number of degrees of freedom of the
+    // i-th entity set (nbRows)
+    // and 3 times the number of degrees of freedom of the j-th entity set
+    // (nbCols)
+    K.resize(nbRows, nbCols, false);
+    K.clear();
+
     // get number of integration points
     nbIntegrationPts = getGaussPts().size2();
     // check if entity block is on matrix diagonal
@@ -168,6 +124,7 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
     } else {
       isDiag = false;
     }
+
     // integrate local matrix for entity block
     CHKERR iNtegrate(row_data, col_data);
 
@@ -189,51 +146,70 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return error code
    */
-  virtual MoFEMErrorCode
+  MoFEMErrorCode
   iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
             DataForcesAndSourcesCore::EntData &col_data) {
     MoFEMFunctionBegin;
 
-    // check if one of i-th or j-th entity sets are not populated
-    int nb_dofs_row = row_data.getFieldData().size();
-    if (nb_dofs_row == 0)
-      MoFEMFunctionReturnHot(0);
-    int nb_dofs_col = col_data.getFieldData().size();
-    if (nb_dofs_col == 0)
-      MoFEMFunctionReturnHot(0);
+    // get sub-block (3x3) of local stiffens matrix, here represented by second
+    // order tensor
+    auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+          &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+          &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+          &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+    };
 
-    // K_ij matrix will have 3 times the number of degrees of freedom of the
-    // i-th entity set (nb_dofs_row)
-    // and 3 times the number of degrees of freedom of the j-th entity set
-    // (nb_dofs_col)
-    K.resize(nb_dofs_row, nb_dofs_col, false);
-    K.clear();
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
 
-    // matrix CB will have 6 rows since D matrix has 6 rows
-    // number of columns nb_dofs_col  that is equal to the number of columns of
-    // B_j matrix
-    CB.resize(6, nb_dofs_col, false);
+    // get element volume
+    double vol = getVolume();
 
+    // get intergrayion weights
+    auto t_w = getFTensor0IntegrationWeight();
+
+    // get derivatives of base functions on rows
+    auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+    // iterate over integration points
     for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-      // get element volume
-      // get integration weight
-      double val = getVolume() * getGaussPts()(3, gg);
 
-      const MatrixAdaptor &diffN_row = row_data.getDiffN(gg, nb_dofs_row / 3);
-      const MatrixAdaptor &diffN_col = col_data.getDiffN(gg, nb_dofs_col / 3);
+      // calculate scalar weight times element volume
+      const double a = t_w * vol;
 
-      // evaluate B_i
-      CHKERR makeB(diffN_row, rowB);
+      // iterate over row base functions
+      for (int rr = 0; rr != nbRows / 3; ++rr) {
 
-      // evaluate B_j
-      CHKERR makeB(diffN_col, colB);
+        // get sub matrix for the row
+        auto t_m = get_tensor2(K, 3 * rr, 0);
 
-      // compute matrix product D B_i
-      noalias(CB) = prod(D, colB);
+        // get derivatives of base functions for columns
+        auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
-      // compute product (B_j)^T D B_i
-      noalias(K) += val * prod(trans(rowB), CB);
+        // iterate column base functions
+        for (int cc = 0; cc != nbCols / 3;++cc) {
+
+          // integrate block local stiffens matrix
+          t_m(i, k) +=
+              a * (tD(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l)));
+
+          // move to next column base function
+          ++t_col_diff_base;
+
+          // move to next block of local stiffens matrix
+          ++t_m;
+        }
+
+        // move to next row base function
+        ++t_row_diff_base;
+      }
+
+      // move to next integration weight
+      ++t_w;
     }
+
     MoFEMFunctionReturn(0);
   }
 
@@ -243,7 +219,7 @@ protected:
    * @param  col_data column data (consist base functions on column entity)
    * @return          error code
    */
-  virtual MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
+  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
                                   DataForcesAndSourcesCore::EntData &col_data) {
     MoFEMFunctionBegin;
     // get pointer to first global index on row
@@ -272,9 +248,7 @@ struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   double pressureVal;
 
   OpPressure(const double pressure_val = 1)
-      :
-
-        MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator("U", OPROW),
+      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator("U", OPROW),
         pressureVal(pressure_val) {}
 
   // vector used to store force vector for each degree of freedom
@@ -304,13 +278,16 @@ struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // to the face area
     auto t_normal = getFTensor1Normal();
 
+    // get intergrayion weights
+    auto t_w = getFTensor0IntegrationWeight();
+
     // vector of base functions
     auto t_base = data.getFTensor0N();
 
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
-      double w = 0.5 * getGaussPts()(2, gg);
+      double w = 0.5 * t_w;
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
@@ -325,6 +302,9 @@ struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         // move to next base function
         ++t_base;
       }
+
+      // move to next integration weight
+      ++t_w;
     }
 
     // add computed values of pressure in the global right hand side vector
@@ -615,14 +595,15 @@ int main(int argc, char *argv[]) {
 
     {
       if (flg_test == PETSC_TRUE) {
-
-        const PetscReal x_vec_norm_const = 4.975588;
-
+        const double x_vec_norm_const = 0.4;
         // Check norm_1  value
-        PetscReal norm_check;
-        CHKERR VecNorm(x, NORM_1, &norm_check);
-        if (fabs(norm_check - x_vec_norm_const) < 1.e-8) {
-          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID, "test failed");
+        double norm_check;
+        // Takes maximal element of the vector, that should be maximal
+        // displacement at the end of the bar
+        CHKERR VecNorm(x, NORM_INFINITY, &norm_check);
+        if (fabs(norm_check - x_vec_norm_const) / x_vec_norm_const > 1.e-10) {
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+           "test failed (nrm 2 %6.4e)", norm_check);
         }
       }
     }
