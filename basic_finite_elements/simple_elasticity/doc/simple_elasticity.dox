@@ -1,6 +1,3 @@
-#include <BasicFiniteElements.hpp>
-using namespace MoFEM;
-
 /*! \page simple_elasticity_1 Simple elasticity
 
 This tutorial motivation to show how finite element is implemented using
@@ -693,173 +690,62 @@ destroyed as presented below
 to free the heap memory and prevent any memory leaks.
 \section simple_elastic_UDO User Defined Operators (UDOs)
 
-\note Following implementation is NOT intended to be most efficient, to make fast
-matrix assembly use FTensor. In this tutorial, we aim to present
-implementation which is familiar to most of the users, using concept of
-\f$\mathbf{B}\f$ matrix.
-
 \subsection simple_elastic_element_stiffness Element stiffness matrix
 
-In structural computational mechanics, the most common relationship to
-evaluate the stiffness matrix for an element is given by
-
+In structural computational mechanics, the relationship to
+evaluate the element stiffness matrix \f$\mathbf{K}\f$ is given by
 \f[
-\begin{equation}
-{\mathbf {K}^{e}} = 
-\int_{\Omega^e} { \mathbf{B}}^{\textrm T} {\mathbf {D}} {\mathbf{B}} \, {d\Omega^e}
+{}^{(r,c)}_eK^{\alpha\beta}_{ik} = 
+\int_{\Omega^e} 
+\varphi_{,j}^\alpha 
+D_{ijkl}  
+\phi_{,k}^\beta
+\, {d\Omega^e}
 \label{eq:StiffnessIntegral}
-\end{equation}
 \f]
-
 where \f${\Omega^e}\f$ is the element volume, \f${\mathbf {D}}\f$ is the
-elastic material stiffness matrix and \f${\mathbf{B}}\f$ is the matrix
-containing the first derivatives of the element shape functions as presented
-in Hierarchical approach tutorial as
-
+elastic material stiffness tensor. The row base funcrions and column base
+functions are represented by \f$\pmb\varphi^\alpha\f$ and
+\f$\pmb\phi^\beta\f$, respectively. \f$\alpha=1,\dots,N^\textrm{row}\f$ and
+\f$\beta= 1,\dots,N^\textrm{col}\f$ are indices of base function on row
+entities and column entities, respectively. \f$N^\textrm{row}\f$ and
+\f$N^\textrm{col}\f$ are numbers of base funcions on row entity and collumn
+entity. The differentation is indicated
+by subscript and index after the comma, as follows
 \f[
-\begin{equation}
-{\mathbf {B}} = {\mathbf {L}} {\mathbf {H}}^e
-\label{eq:HL}
-\end{equation}
+\varphi^\alpha_{,j} :=  \frac{\partial \varphi^\alpha}{\partial x_j}.
+\f]
+where
+\f[
+  i,j = 0,1,2
 \f]
 
-\f${\mathbf {L}}\f$ is the kinematic operator matrix defined as 
-
+The integration of the element stiffness matrix is broken down into blocks,
+utilizing the construction of hierarchical approximation basis. For a
+hierarchical approximation, base DOFs are grouped on vertices, edges, faces
+and in the volume of the element, see for details to tutorial \ref
+hello_world_tut1. In this tutorial matrix \f${}^{(r,c)}_e\mathbf{K}\f$ is
+integrated by running over a combination of block, that is indicated by
+superscripts \f$(r,c)\f$ on the left to the matrix \f$\mathbf{K}\f$, where
+left-subscripts takes values
 \f[
-\begin{equation}
-{{\mathbf {L}}}= 
-\left[\begin{array}{ccc}
- \dfrac{\partial}{\partial x} & 0 & 0\\
-0 & \dfrac{\partial}{\partial y} & 0\\
-0 & 0 & \dfrac{\partial}{\partial z}\\
- \dfrac{\partial}{\partial y} & \dfrac{\partial}{\partial x} & 0\\
-0 & \dfrac{\partial}{\partial z} & \dfrac{\partial}{\partial y}\\
-\dfrac{\partial}{\partial z} & 0 & \dfrac{\partial}{\partial x}\\
-\end{array} 
-\right]
-\label{eq:L}
-\end{equation}
-\f]
-
-and the matrix \f${\mathbf {H}}^e\f$ is a block matrix defined as
-
-\f[
-\begin{equation}
-{\mathbf {H}}^e =
-{\mathbf {H}}_{j}^{e}
-\label{eq:H}
-\end{equation}
-\f]
-
-where the set \f$j\f$ is defined as
-
-\f[
-\begin{equation}
-j := \{\textrm{ver, edge, face, vol} \}
-\label{eq:setJ}
-\end{equation}
-\f]
-
-
-thus \f${\mathbf {H}}^e\f$ is a matrix containing sub-matrices \f${\mathbf {H}}_{\textrm {ver}}^{e}\f$, \f${\mathbf {H}}_{\textrm {edge}}^{e}\f$,
- \f${\mathbf {H}}_{\textrm {face}}^{e}\f$ and \f${\mathbf {H}}_{\textrm {vol}}^{e}\f$ associated 
-to shape function vectors of vertices, edges, faces and volumes, respectively.
-Each submatrix \f${\mathbf {H}}_{j}^{e}\f$ is defined as
-
-\f[
-\newcommand{\myarray}[1]{{\overset{\xrightarrow[\hphantom{#1}]{\text{$n$ degrees of freedom of all entities of set $j$}}}{#1}}}
-\begin{equation}
-{\mathbf {H}}_{j}^{e} = 
-\myarray{
-\left[
-\begin{array}{ccccccc}
-  {N}^e_{j1} & 0 & 0 & \dots & {N}^e_{jn} & 0 & 0\\
-  0 & {N}^e_{j1} & 0 & \dots & 0 & {N}^e_{jn}  & 0\\
-  0 & 0 & {N}^e_{j1} & \dots & 0 & 0 & {N}^e_{jn}  \\
-\end{array} 
-\right]
-}
-\label{eq:Hver}
-\end{equation}
-\f]
-
-where \f${N}^e_{jn}\f$ is the shape function of the \f$n\f$-th degree of
-freedom of the \f$j\f$-th set of entities.
-
-For instance, multiplication of \f${\mathbf {L}}\f$ with the first three
-columns of \f${\mathbf {H}}_{j}^{e}\f$ i.e. all columns associated with a
-single degree of freedom of \f$j\f$-th set of entities is
-
-\f[
-\begin{equation}
-\left[
-\begin{array}{ccc}
- \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial x} & 0 & 0\\
-0 & \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial y} & 0\\
-0 & 0 & \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial z}\\
-\dfrac{\partial {N}^e_{j\textrm {1}}}{\partial y} & \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial x} & 0\\
-0 & \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial z} & \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial y}\\
-\dfrac{\partial {N}^e_{j\textrm {1}}}{\partial z} & 0 & \dfrac{\partial {N}^e_{j\textrm {1}}}{\partial x}\\
-\end{array} 
-\right]
-\label{eq:example}
-\end{equation}
-\f]
-
-All non-zero entries of \f$\eqref {eq:example}\f$ can be directly populated
-by elements of the matrix presented in equation (13) in \ref
-hierarchical_approximation_1.
-
-Furthermore, the matrix product presented in \f$\eqref
-{eq:StiffnessIntegral}\f$ by substitution of \f$\eqref {eq:HL}\f$ and
-\f$\eqref{eq:H}\f$ can be evaluated as
-
-\f[
-\begin{equation}
-{ \mathbf{B}}^{\rm T} {\mathbf {D}} {\mathbf{B}} = { \mathbf{B}_{i}}^{\rm T} {\mathbf {D}} {\mathbf{B}_{j}} = ({\mathbf {L}} {\mathbf {H}}_{i}^e)^{\textrm T} {\mathbf D}  {\mathbf {L}} {\mathbf {H}}_{j}^e
-\label{eq:MatProduct}
-\end{equation}
-\f]
-
-where the set \f$i\f$ is defined similarly to set \f$j\f$ as
-
-\f[
-\begin{equation}
-i := \{\textrm{ver, edge, face, vol} \}
+r,c := \{\textrm{ver, edge, face, vol} \}
 \label{eq:setI}
-\end{equation}
 \f]
-
-In MoFEM, for each gauss point evaluation of stiffness matrix as presented in \f$\eqref {eq:StiffnessIntegral}\f$ 
-is evaluated by computing all permutations of the entities \f$i\f$-\f$j\f$ combinations for the expression presented
- in \f$\eqref{eq:MatProduct}\f$.
-For each permutation,matrices \f$\mathbf{B}_{i}\f$ and \f$\mathbf{B}_{j}\f$ are evaluated and multiplied with the 
-gauss point's weight and its associated volume.
-
-Then, element stiffness matrix is evaluated and assembled by calculating all block matrices defined in \f$\eqref {eq:MatProduct}\f$
- all permutations of sets \f$i\f$ and \f$j\f$ as
-
+The element matrix broked down on block subentities cab be represented as follows
 \f[
-\begin{equation}
-\mathbf{K}^e = \mathbf{K}_{ij}^e = 
+{}_e\mathbf{K} =  
 \left[
 \begin{array}{cccc} 
- \mathbf{K}_{\textrm {ver ver}} & \mathbf{K}_{\textrm {ver edge}} & \mathbf{K}_{\textrm {ver face}} & \mathbf{K}_{\textrm {ver vol}}\\ 
- \mathbf{K}_{\textrm {edge ver}} & \mathbf{K}_{\textrm {edge edge}} & \mathbf{K}_{\textrm {edge face}} & \mathbf{K}_{\textrm {edge vol}}\\ 
- \mathbf{K}_{\textrm {face ver}} & \mathbf{K}_{\textrm {face edge}} & \mathbf{K}_{\textrm {face face}} & \mathbf{K}_{\textrm {face vol}}\\ 
- \mathbf{K}_{\textrm {vol ver}} & \mathbf{K}_{\textrm {vol edge}} & \mathbf{K}_{\textrm {vol face}} & \mathbf{K}_{\textrm {vol vol}}\\
+ {}^{\textrm {ver ver}}\mathbf{K} & {}^{\textrm {ver edge}}\mathbf{K} & {}^{\textrm {ver face}}\mathbf{K} & {}^{\textrm {ver vol}}\mathbf{K}\\ 
+ & {}^{\textrm {edge edge}}\mathbf{K} & {}^{\textrm {edge face}}\mathbf{K} & {}^{\textrm {edge vol}}\mathbf{K}\\ 
+ && {}^{\textrm {face face}}\mathbf{K} & {}^{\textrm {face vol}}\mathbf{K}\\
+ &&& {}^{\textrm {vol vol}}\mathbf{K}\\
  \end{array} 
 \right]
 \label{eq:StiffStiff}
-\end{equation}
 \f]
-
-If the matrix is symmetric like in this, that is exploited, and only upper
-part of the matrix is calculated.
-
-In the continuation of this tutorial, evaluation of the stiffness matrix at
-each element, and consequently in each Gauss point, is going to be performed
-through calculations of \f${\mathbf{B}_i}\f$ and \f${\mathbf{B}_j}\f$.
+Note that only symmetric part is calculated since the element stiffness matrix is symmetric.
 
 \subsection simple_elasticity_OpK OpK
 
@@ -872,22 +758,12 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 \endcode
 
 Struct's public members are 
-
 \code
-  //B_i matrix
-  MatrixDouble rowB;
-  
-  //B_j matrix
-  MatrixDouble colB;
-  
-  //Matrix used to evaluate matrix product D B_j
-  MatrixDouble CB;
-  
-  //Finite element stiffness sub-matrix K_ij
+  // Finite element stiffness sub-matrix K
   MatrixDouble K;
 
-  //Elastic stiffness matrix
-  MatrixDouble D;
+  // Elastic stiffness tensor (4th rank tensor with minor and major symmetry)
+  FTensor::Ddg<double, 3, 3> tD;
 
   //Young's modulus
   double yOung;
@@ -898,46 +774,50 @@ Struct's public members are
 The first four lines encompass the declaration of matrices used for the
 calculation of the elements stiffness matrix as presented in Section \ref simple_elastic_element_stiffness.
 
-The next three variables are associated to the material stiffness matrix
-where D is used to evaluate the elastic material stiffness matrix, \e yOung is
-the Young's modulus and \e pOisson is Poisson's ratio.
-
+The next line variables are associated to the material stiffness tensor where
+D is forth order tensor symmetric on two fisrt and two last indices, \e yOung
+is the Young's modulus and \e pOisson is Poisson's ratio.
 OpK constructor is implemented as follows
 \code
  OpK(bool symm = true) : VolumeElementForcesAndSourcesCore::UserDataOperator("U", "U", OPROWCOL, symm)
   {
-  //Evaluation of the elastic stiffness matrix, D, in the Voigt notation is done in the constructor
-    
-    //hard coded choice of elastic parameters
-    pOisson     = 0.1;
-    yOung       = 10;
 
-    //coefficient used in intermediate calculation
-    double coefficient = 0.; 
-    
-    coefficient = yOung / ((1 + pOisson) * (1 - 2 * pOisson));
-    D.resize(6, 6, false);
-    D.clear();
+    // Evaluation of the elastic stiffness tensor, D, in the Voigt notation is
+    // done in the constructor
 
-    D(0, 0) = 1 - pOisson;
-    D(1, 1) = 1 - pOisson;
-    D(2, 2) = 1 - pOisson;
-    D(3, 3) = 0.5 * (1 - 2 * pOisson);
-    D(4, 4) = 0.5 * (1 - 2 * pOisson);
-    D(5, 5) = 0.5 * (1 - 2 * pOisson);
+    // hardcoded choice of elastic parameters
+    pOisson = 0.1;
+    yOung   = 10;
 
-    D(0, 1) = pOisson;
-    D(0, 2) = pOisson;
-    D(1, 0) = pOisson;
+    // coefficient used in intermediate calculation
+    const double coefficient = yOung / ((1 + pOisson) * (1 - 2 * pOisson));
 
-    D(1, 2) = pOisson;
-    D(2, 0) = pOisson;
-    D(2, 1) = pOisson;
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
 
-    D *= coefficient;
+    tD(i, j, k, l) = 0.;
+
+    tD(0, 0, 0, 0) = 1 - pOisson;
+    tD(1, 1, 1, 1) = 1 - pOisson;
+    tD(2, 2, 2, 2) = 1 - pOisson;
+
+    tD(0, 1, 0, 1) = 0.5 * (1 - 2 * pOisson);
+    tD(0, 2, 0, 2) = 0.5 * (1 - 2 * pOisson);
+    tD(1, 2, 1, 2) = 0.5 * (1 - 2 * pOisson);
+
+    tD(0, 0, 1, 1) = pOisson;
+    tD(1, 1, 0, 0) = pOisson;
+    tD(0, 0, 2, 2) = pOisson;
+    tD(2, 2, 0, 0) = pOisson;
+    tD(1, 1, 2, 2) = pOisson;
+    tD(2, 2, 1, 1) = pOisson;
+
+    tD(i, j, k, l) *= coefficient;
   }
 \endcode
-where the material stiffness matrix for Hooke material is calculated.
+where the material stiffness tensor for Hooke material is calculated.
 
 When solving the problem, as presented in Section \ref simple_elastic_solve_problem, 
 all finite elements are looped where this loop
@@ -950,44 +830,44 @@ MoFEMErrorCode doWork(
       DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data)
   {
     MoFEMFunctionBeginHot;
+
     // get number of dofs on row
     nbRows = row_data.getIndices().size();
-
     // if no dofs on row, exit that work, nothing to do here
     if (!nbRows)
       MoFEMFunctionReturnHot(0);
 
     // get number of dofs on column
     nbCols = col_data.getIndices().size();
-    
-    // if no dofs on columns, exit nothing to do here
+    // if no dofs on Columbia, exit nothing to do here
     if (!nbCols)
       MoFEMFunctionReturnHot(0);
 
+    // K_ij matrix will have 3 times the number of degrees of freedom of the
+    // i-th entity set (nbRows)
+    // and 3 times the number of degrees of freedom of the j-th entity set
+    // (nbCols)
+    K.resize(nbRows, nbCols, false);
+    K.clear();
+
     // get number of integration points
     nbIntegrationPts = getGaussPts().size2();
-
     // check if entity block is on matrix diagonal
-    if (
-        row_side == col_side &&
-        row_type == col_type)
-    {
-      isDiag = true; // yes, it is
-    }
-    else
-    {
+    if (row_side == col_side && row_type == col_type) {
+      isDiag = true;
+    } else {
       isDiag = false;
     }
+
     // integrate local matrix for entity block
     CHKERR iNtegrate(row_data, col_data);
-    
+
     // assemble local matrix
     CHKERR aSsemble(row_data, col_data);
     
     MoFEMFunctionReturnHot(0);
   }
 \endcode
-
 
 The element's column and row data structures as described in ``Hierarchic
 approximation'' tutorial are passed to this function as \e col\_type and
@@ -1008,12 +888,17 @@ and \e nbRows and checked that they are non-zero
     if (!nbCols)
       MoFEMFunctionReturnHot(0);
 \endcode
+after the element's lengths of row and columns are passed to nbRows
+and nbCols and checked to be non-zero, memory for the element's
+stiffness matrix K that is allocated;
+\code
+ K.resize(nbRows, nbCols, false);
+ K.clear();
+\endcode
 
-Thereafter, integration presented in \f$\eqref {eq:StiffnessIntegral}\f$ to
-evaluate element's stiffness matrix and the its assembly to the element's row
-and column data structures is performed by invoking  OpK::iNtegrate and
-OpK::aSsemble functions
-
+Next, integration of element block stiffnes matrxi is executed, explained in
+\f$\eqref {eq:StiffnessIntegral}\f$, and finally local matrix is assmble into
+global stiffnes matrix as follows
 \code
     // integrate local matrix for entity block
     CHKERR iNtegrate(row_data, col_data);
@@ -1022,63 +907,104 @@ OpK::aSsemble functions
     CHKERR aSsemble(row_data, col_data);
 \endcode
 
-
 Lets first see the OpK::iNtegrate implementation that performs the two inner
 loops described in Section \ref hierarchical_approximation_data_structures of
 \ref hierarchical_approximation_1 tutorial
 \code
-virtual MoFEMErrorCode iNtegrate(
+MoFEMErrorCode iNtegrate(
       DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data)
   {
     MoFEMFunctionBegin;
 
-  //check if one of i-th or j-th entity sets are not populated  
-  int nb_dofs_row = row_data.getFieldData().size();
-    if (nb_dofs_row == 0)
-      MoFEMFunctionReturnHot(0);
-    int nb_dofs_col = col_data.getFieldData().size();
-    if (nb_dofs_col == 0)
-      MoFEMFunctionReturnHot(0);
+    // get sub-block (3x3) of local stiffens matrix, here represented by second
+    // order tensor
+    auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+          &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+          &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+          &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+    };
 
-    //K_ij matrix will have 3 times the number of degrees of freedom of the i-th entity set (nb_dofs_row)
-    // and 3 times the number of degrees of freedom of the j-th entity set (nb_dofs_col)
-    K.resize(nb_dofs_row, nb_dofs_col, false);
-    K.clear();
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
 
-    //matrix CB will have 6 rows since D matrix has 6 rows
-    //number of columns nb_dofs_col  that is equal to the number of columns of B_j matrix
-    CB.resize(6, nb_dofs_col, false);
+    // get element volume
+    double vol = getVolume();
 
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
-      // get element volume
-      // get integration weight
-      double val = getVolume() * getGaussPts()(3, gg);
-      
-      const MatrixAdaptor &diffN_row = row_data.getDiffN(gg, nb_dofs_row / 3);
-      const MatrixAdaptor &diffN_col = col_data.getDiffN(gg, nb_dofs_col / 3);
-      
-      //evaluate B_i
-      CHKERR makeB(diffN_row, rowB);
+    // get intergrayion weights
+    auto t_w = getFTensor0IntegrationWeight();
 
-      //evaluate B_j
-      CHKERR makeB(diffN_col, colB);
+    // get derivatives of base functions on rows
+    auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+    // iterate over integration points
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
-      //compute matrix product D B_i 
-      noalias(CB) = prod(D, colB);
+      // calculate scalar weight times element volume
+      const double a = t_w * vol;
 
-      //compute product (B_j)^T D B_i 
-      noalias(K) += val * prod(trans(rowB), CB);
+      // iterate over row base functions
+      for (int rr = 0; rr != nbRows / 3; ++rr) {
+
+        // get sub matrix for the row
+        auto t_m = get_tensor2(K, 3 * rr, 0);
+
+        // get derivatives of base functions for columns
+        auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+        // iterate column base functions
+        for (int cc = 0; cc != nbCols / 3;++cc) {
+
+          // integrate block local stiffens matrix
+          t_m(i, k) +=
+              a * (tD(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l)));
+
+          // move to next column base function
+          ++t_col_diff_base;
+
+          // move to next block of local stiffens matrix
+          ++t_m;
+        }
+
+        // move to next row base function
+        ++t_row_diff_base;
+      }
+
+      // move to next integration weight
+      ++t_w;
     }
+
+    
     MoFEMFunctionReturn(0);
   }
+\endcode
+The code iterates over integration points, base functions on rows and base
+functions on columns. The essential part of the code is integration itself,
+\code
+t_m(i, k) += a * (tD(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l)));
+\endcode
+Note that is equivalent of sub integral (\ref eq:StiffnessIntegral ). Here we
+group operation in blocks using brackets, that first directives of vase
+functions on rows and columns are multiplied yielding tensor of rank 2
+\code
+t_row_diff_base(j) * t_col_diff_base(l)
+\endcode
+and then the tenor of rank two is multiplied by the tenor of rank two,
+yielding tensor of rank two. Resultant is multiplied by integration weight
+times volume of the element and added to local element stiffnes matrix. For 
+more information about tenorial operations see \ref ftenso_readme
 
+Finally, block local stiffness matrix is assembled into global stiffness
+matrix as follows
+\code
   /**
      * \brief Assemble local entity block matrix
      * @param  row_data row data (consist base functions on row entity)
      * @param  col_data column data (consist base functions on column entity)
      * @return          error code
      */
-  virtual MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
+  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
                                   DataForcesAndSourcesCore::EntData &col_data) {
     MoFEMFunctionBegin;
     // get pointer to first global index on row
@@ -1101,115 +1027,6 @@ virtual MoFEMErrorCode iNtegrate(
     MoFEMFunctionReturn(0);
    }
 \endcode
-
-after the element's lengths of row and columns are passed to nb\_dofs\_row
-and nb\_dofs\_columns and checked to be non-zero, memory for the element's
-stiffness matrix K that is allocated so that the number of rows is equal to
-three number of degrees of freedom stored in the row data structure.
-
-Similarly the number of columns of K matrix is equal to three times the
-degrees of freedom stored in the column data structure as can be understood
-by inspection of equation (13) in ``Hierachical Approach'' tutorial. Finally,
-data stored in K is set equal to zero
-\code
- K.resize(nb_dofs_row, nb_dofs_col, false);
- K.clear();
-\endcode
-
-Then, we allocate memory for the \f$\mathbf{CB}\f$ matrix used to evaluate
-\f$\mathbf{K}\f$ matrix that is the matrix product
-\f$\mathbf{D}\mathbf{B}_j\f$ used to evaluate \f$\mathbf{K}_{ij}\f$.
-
-Moreover, the number of columns of \f$\mathbf{CB}\f$ matrix is equal to the number of
-columns of matrix \f$\mathbf{B}_j\f$ that is nb\_dofs\_col aligned with
-dimensions of \f$\mathbf{K}_{ij}\f$ matrix.
-\code
-  CB.resize(6, nb_dofs_col, false);
-\endcode
-
-The above code line resizes \f$\mathbf{CB}\f$ matrix to have 6 rows while
-keeping the number of columns the same as the material stiffness matrix D.
-
-This is done since the material stiffness matrix is \f$6\times 6\f$. Then,
-the integration process is performed for each gauss point associated to the
-finite element under consideration
-\code
- for (int gg = 0; gg != nbIntegrationPts; gg++)
-\endcode
-
-Within the loop, initially the element's volume is evaluated
-
-\code
- double val = getVolume() * getGaussPts()(3, gg);
-\endcode
- 
-We can now have a closer look in makeB function that is used to evaluate either \f$\mathbf{B}_i\f$ or \f$\mathbf{B}_j\f$ matrix
-
-\code
-MoFEMErrorCode makeB(const MatrixAdaptor &diffN,
-                       MatrixDouble &B)
-  {
-
-    //initiation of error handler
-    MoFEMFunctionBegin;
-
-    //number of gradients of shape functions is passed to nb_dofs variable
-    //total number of degrees of freedom is nb_dofs*3
-    unsigned int nb_dofs = diffN.size1();
-
-    //initialise B matrix 
-    //6 rows equal to the number of strains in Voigt notation
-    //3 * nb_dofs number of columns equal to the number of degrees of freedom of the element
-    B.resize(6, 3 * nb_dofs, false);
-    
-    //B matrix is cleared
-    B.clear();
-
-    // Loop over degrees of freedom treated as groups of three
-    for (unsigned int dd = 0; dd < nb_dofs; dd++) {
-
-      //array diff containing the gradients of shape functions
-      //gradient in x direction for 0, in y direction for 1 and in x for 2
-      const double diff[] = {diffN(dd, 0), diffN(dd, 1), diffN(dd, 2)};
-      const int dd3       = 3 * dd;
-      for (int rr = 0; rr < 3; rr++) {
-        // gamma_xx for rr = 0, gamma_yy for rr = 1 and gamma_zz for rr = 2
-        B(rr, dd3 + rr) = diff[rr];
-      }
-      // gamma_xy
-      B(3, dd3 + 0) = diff[1];
-      B(3, dd3 + 1) = diff[0];
-      // gamma_yz
-      B(4, dd3 + 1) = diff[2];
-      B(4, dd3 + 2) = diff[1];
-      // gamma_xz
-      B(5, dd3 + 0) = diff[2];
-      B(5, dd3 + 2) = diff[0];
-    }
-
-    //End of error handling
-    MoFEMFunctionReturn(0);
-  }
-\endcode
-
-where initially the number of degrees of freedom associated with the entity
-block under consideration is evaluated and then \f$\mathbf{B}_i\f$ or
-\f$\mathbf{B}_j\f$ matrix is declared as B and resized to have number of
-columns equal to three times the number of degrees of freedom according since
-it will result from the product \f${\mathbf {L}}{\mathbf {H}}_{j}^{e}\f$
-where the number of columns of the resulting matrix is going to be equal to
-that of the matrix in \f$\eqref{eq:Hver}\f$
-
-\code
-  unsigned int nb_dofs = 3 * diffN.size1();
-    B.resize(6, nb_dofs, false);
-    B.clear();
-\endcode
-
-the number of degrees of freedom is equal to three times the number of shape
-function gradients since they operate in three dimensions (they have x, y and
-z components). If the unknown field would be pressure, the number of degrees
-of freedom would be equal to the number of shape function gradients.
 
 \subsection simple_elasticity_op_pressure OpPressure
 
@@ -1323,21 +1140,23 @@ common origin on one of the faces vertex and their non-coinciding ends
 located at the other two vertices. This product is the area defined by the
 parallelogram rule.
 
-Furthermore, \e t\_base vector containing the element's shape functions is initialised 
-
+Furthermore, \e t\_base vector containing the element's shape functions is
+initialised
 \code 
     //vector of base functions 
     auto t_base = data.getFTensor0N();
 \endcode 
 
-Then, the loop over all gauss points is performed to evaluate the area integral presented in (12) in ``Hierarchical Approximation'' 
-tutorial
-
+Then, the loop over all gauss points is performed to evaluate the area
+integral 
 \code 
+    // get intergrayion weights
+    auto t_w = getFTensor0IntegrationWeight();
+
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
-      double w = 0.5 * getGaussPts()(2, gg);
+      double w = 0.5 * t_w;
 
       //create a vector t_nf whose pointer points an array of 3 pointers pointing to nF 
       //memory location of components
@@ -1350,6 +1169,9 @@ tutorial
         //move to next base function
         ++t_base;
       }
+
+      // move to next integration weight
+      ++t_w;
     }
 \endcode 
   
