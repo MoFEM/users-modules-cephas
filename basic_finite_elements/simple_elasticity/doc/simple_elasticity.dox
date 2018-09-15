@@ -1072,10 +1072,13 @@ is the struct presented below
     //vector of base functions 
     auto t_base = data.getFTensor0N();
 
+    // get intergrayion weights
+    auto t_w = getFTensor0IntegrationWeight();
+
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
-      double w = 0.5 * getGaussPts()(2, gg);
+      double w = 0.5 * t_w;
 
       //create a vector t_nf whose pointer points an array of 3 pointers pointing to nF 
       //memory location of components
@@ -1088,6 +1091,9 @@ is the struct presented below
         //move to next base function
         ++t_base;
       }
+
+      // move to next integration weight
+      ++t_w;
     }
 
     CHKERR VecSetValues(
