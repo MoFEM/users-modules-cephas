@@ -198,7 +198,7 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::MyTriangleSpatialFE(
 MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::rHs() {
   MoFEMFunctionBegin;
 
-  auto &data_h1 = *dataOnElement[MBTRI][H1];
+  auto &data_h1 = *dataOnElement[H1];
 
   fExtNode.resize(9);
   fExtFace.resize(data_h1.dataOnEntities[MBTRI][0].getFieldData().size());
@@ -281,7 +281,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::lHs() {
     MoFEMFunctionReturnHot(0);
   }
 
-  auto& data_h1 = *dataOnElement[MBTRI][H1];
+  auto& data_h1 = *dataOnElement[H1];
 
   double center[3];
   tricircumcenter3d_tp(&coords.data()[0], &coords.data()[3], &coords.data()[6],

@@ -326,7 +326,7 @@ struct NitscheMethod {
             sit = commonData.facesContainer.get<3>().find(boost::make_tuple(gg,0,MBVERTEX));
             const VectorDouble &shape_fun = sit->shapeFunctions;
             //std::cerr << shape_fun << std::endl;
-            DataForcesAndSourcesCore &data_h1 = *dataOnElement[MBTRI][H1];
+            DataForcesAndSourcesCore &data_h1 = *dataOnElement[H1];
             for(int dd = 0;dd<3;dd++) {
               gaussPts(dd,gg) =
               shape_fun[0]*coords_tet[3*data_h1.facesNodes(ff,0)+dd]+
