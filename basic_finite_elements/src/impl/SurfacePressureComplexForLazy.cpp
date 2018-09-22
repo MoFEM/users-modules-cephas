@@ -198,10 +198,10 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::MyTriangleSpatialFE(
 MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::rHs() {
   MoFEMFunctionBegin;
 
-  auto &data_h1 = *dataOnElement[H1];
+  auto &dataH1 = *dataOnElement[H1];
 
   fExtNode.resize(9);
-  fExtFace.resize(data_h1.dataOnEntities[MBTRI][0].getFieldData().size());
+  fExtFace.resize(dataH1.dataOnEntities[MBTRI][0].getFieldData().size());
   fExtEdge.resize(3);
   for (int ee = 0; ee < 3; ee++) {
     int nb_edge_dofs = dOfs_x_edge_indices[ee].size();
@@ -281,7 +281,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::lHs() {
     MoFEMFunctionReturnHot(0);
   }
 
-  auto& data_h1 = *dataOnElement[H1];
+  auto& dataH1 = *dataOnElement[H1];
 
   double center[3];
   tricircumcenter3d_tp(&coords.data()[0], &coords.data()[3], &coords.data()[6],
@@ -320,7 +320,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::lHs() {
   for (int ee = 0; ee < 3; ee++) {
     kExtEdgeFace[ee].resize(
         dOfs_x_edge_indices[ee].size(),
-        data_h1.dataOnEntities[MBTRI][0].getIndices().size());
+        dataH1.dataOnEntities[MBTRI][0].getIndices().size());
     Kext_edge_face[ee] = &*kExtEdgeFace[ee].data().begin();
   }
   kExtFaceFace.resize(dOfs_x_face_indices.size(), dOfs_x_face_indices.size());
