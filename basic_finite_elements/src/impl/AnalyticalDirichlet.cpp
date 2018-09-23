@@ -98,7 +98,7 @@ MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
     if(hoCoords.size1() == row_data.getN().size1()) {
 
       // higher order element
-      double area = norm_2(getNormalsAtGaussPt(gg))*0.5;
+      double area = norm_2(getNormalsAtGaussPts(gg))*0.5;
       w *= area;
 
     } else {

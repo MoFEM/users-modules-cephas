@@ -498,7 +498,7 @@ struct SurfaceSlidingConstrains: public GenericSliding {
       c_vec.clear();
       f_vec.clear();
 
-      auto t_coord_ref = getTensor1CoordsAtGaussPts();
+      auto t_coord_ref = getFTensor1CoordsAtGaussPts();
 
       for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -994,7 +994,7 @@ struct EdgeSlidingConstrains: public GenericSliding {
       FTensor::Tensor1<adouble, 3> t_position;
       FTensor::Tensor1<adouble, 2> t_lambda;
       FTensor::Tensor1<adouble, 3> t_delta;
-      auto t_coord_ref = getTensor1CoordsAtGaussPts();
+      auto t_coord_ref = getFTensor1CoordsAtGaussPts();
 
       ublas::vector<adouble> c_vec(4);
       ublas::vector<adouble> f_vec(6);

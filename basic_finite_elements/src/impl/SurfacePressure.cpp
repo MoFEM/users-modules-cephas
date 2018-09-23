@@ -62,7 +62,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForce::doWork(
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2,gg);
     if(hoGeometry) {
-      val *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPt()(gg,0),1);
+      val *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPts()(gg,0),1);
     } else {
       val *= getArea();
     }
@@ -157,10 +157,10 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForceAnalytical::doWork(
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2,gg);
     if(hoGeometry) {
-      val *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPt()(gg,0),1);
+      val *= 0.5*cblas_dnrm2(3,&getNormalsAtGaussPts()(gg,0),1);
       for(int dd = 0;dd!=3;dd++) {
         coords[dd] = getHoCoordsAtGaussPts()(gg,dd);
-        normal[dd] = getNormalsAtGaussPt()(gg,dd);
+        normal[dd] = getNormalsAtGaussPts()(gg,dd);
       }
     } else {
       val *= getArea();
@@ -241,7 +241,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
   Nf.clear();
 
   //std::cerr << getNormal() << std::endl;
-  //std::cerr << getNormalsAtGaussPt() << std::endl;
+  //std::cerr << getNormalsAtGaussPts() << std::endl;
 
   for(unsigned int gg = 0;gg<data.getN().size1();gg++) {
 
@@ -250,7 +250,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
 
       double force;
       if(hoGeometry) {
-        force = dAta.data.data.value1*getNormalsAtGaussPt()(gg,rr);
+        force = dAta.data.data.value1*getNormalsAtGaussPts()(gg,rr);
       } else {
         force = dAta.data.data.value1*getNormal()[rr];
       }
@@ -323,14 +323,14 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannFlux::doWork(
   Nf.resize(data.getIndices().size(),false);
   Nf.clear();
   //std::cerr << getNormal() << std::endl;
-  //std::cerr << getNormalsAtGaussPt() << std::endl;
+  //std::cerr << getNormalsAtGaussPts() << std::endl;
 
   for(unsigned int gg = 0;gg<data.getN().size1();gg++) {
 
     double val = getGaussPts()(2,gg);
     double flux;
     if(hoGeometry) {
-      double area = 0.5*cblas_dnrm2(3,&getNormalsAtGaussPt()(gg,0),1);
+      double area = 0.5*cblas_dnrm2(3,&getNormalsAtGaussPts()(gg,0),1);
       flux = dAta.data.data.value1*area;
     } else {
       flux = dAta.data.data.value1*getArea();

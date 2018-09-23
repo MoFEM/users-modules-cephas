@@ -1250,7 +1250,7 @@ is the struct presented below
 
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    FTensor::Tensor1<double *, 3> t_normal = getTensor1Normal();
+    FTensor::Tensor1<double *, 3> t_normal = getFTensor1NormalsAtGaussPts();
 
     //vector of base functions 
     FTensor::Tensor0<double *> t_base      = data.getFTensor0N();
@@ -1312,7 +1312,7 @@ the normal to the face is passed to \e t\_normal variable
 \code
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    FTensor::Tensor1<double *, 3> t_normal = getTensor1Normal();
+    FTensor::Tensor1<double *, 3> t_normal = getFTensor1NormalsAtGaussPts();
 \endcode 
 
 Vector \e t\_normal has 3 component (one for each global axis). Its magnitude is

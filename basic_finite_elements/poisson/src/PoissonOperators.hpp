@@ -262,7 +262,7 @@ protected:
     // get base functions on entity
     auto t_v = data.getFTensor0N();
     // get coordinates at integration points
-    auto t_coords = getTensor1CoordsAtGaussPts();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
     // loop over all integration points
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
       // evaluate constant term
@@ -462,7 +462,7 @@ protected:
     // get base function
     auto t_l = data.getFTensor0N();
     // get coordinates at integration point
-    auto t_coords = getTensor1CoordsAtGaussPts();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
     // make loop over integration points
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
       // evaluate function on boundary and scale it by area and integration
@@ -558,7 +558,7 @@ private:
     // get solution at integration point
     auto t_grad = getFTensor1FromMat<3>(*gradVals);
     // get coordinates at integration point
-    auto t_coords = getTensor1CoordsAtGaussPts();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
     // keep exact gradient and error or gradient
     FTensor::Tensor1<double, 3> t_exact_grad, t_error_grad;
     // integrate over
@@ -703,7 +703,7 @@ protected:
     // get base function gradient on rows
     auto t_v_grad = data.getFTensor1DiffN<3>();
     // get coordinates at integration points
-    auto t_coords = getTensor1CoordsAtGaussPts();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
     // loop over all integration points
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
       // evaluate constant term
@@ -762,7 +762,7 @@ protected:
     // get solution at integration point
     auto t_u = getFTensor0FromVec(*fieldVals);
     // get coordinates at integration point
-    auto t_coords = getTensor1CoordsAtGaussPts();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
     // make loop over integration points
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
       // evaluate function on boundary and scale it by area and integration

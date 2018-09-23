@@ -301,14 +301,14 @@ MoFEMErrorCode ThermalElement::OpHeatFlux::doWork(int side,EntityType type,DataF
   Nf.resize(data.getIndices().size());
   Nf.clear();
   //std::cerr << getNormal() << std::endl;
-  //std::cerr << getNormalsAtGaussPt() << std::endl;
+  //std::cerr << getNormalsAtGaussPts() << std::endl;
 
   for(unsigned int gg = 0;gg<data.getN().size1();gg++) {
 
     double val = getGaussPts()(2,gg);
     double flux;
     if(hoGeometry) {
-      double area = norm_2(getNormalsAtGaussPt(gg))*0.5; //cblas_dnrm2(3,&getNormalsAtGaussPt()(gg,0),1);
+      double area = norm_2(getNormalsAtGaussPts(gg))*0.5; //cblas_dnrm2(3,&getNormalsAtGaussPts()(gg,0),1);
       flux = dAta.dAta.data.value1*area;  //FluxData.HeatFluxCubitBcData.data.value1 * area
     } else {
       flux = dAta.dAta.data.value1*getArea();
@@ -359,7 +359,7 @@ MoFEMErrorCode ThermalElement::OpRadiationLhs::doWork(
 
       double radiationConst;
       if(hoGeometry) {
-        double area = norm_2(getNormalsAtGaussPt(gg))*0.5;
+        double area = norm_2(getNormalsAtGaussPts(gg))*0.5;
         radiationConst = dAta.sIgma*dAta.eMissivity*area;
       } else {
         radiationConst = dAta.sIgma*dAta.eMissivity*getArea();
@@ -414,7 +414,7 @@ MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(int side,EntityType type,D
   Nf.resize(data.getIndices().size());
   Nf.clear();
   //std::cerr << getNormal() << std::endl;
-  //std::cerr << getNormalsAtGaussPt() << std::endl;
+  //std::cerr << getNormalsAtGaussPts() << std::endl;
 
   for(unsigned int gg = 0;gg<data.getN().size1();gg++) {
 
@@ -430,7 +430,7 @@ MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(int side,EntityType type,D
     double radiationConst;
 
     if(hoGeometry) {
-      double area = norm_2(getNormalsAtGaussPt(gg))*0.5;
+      double area = norm_2(getNormalsAtGaussPts(gg))*0.5;
       radiationConst = dAta.sIgma*dAta.eMissivity*tEmp*area;
     } else {
       radiationConst = dAta.sIgma*dAta.eMissivity*tEmp*getArea();
@@ -472,14 +472,14 @@ MoFEMErrorCode ThermalElement::OpConvectionRhs::doWork(
   Nf.clear();
   //std::fill(Nf.begin(),Nf.end(),0);
   //std::cerr << getNormal() << std::endl;
-  //std::cerr << getNormalsAtGaussPt() << std::endl;
+  //std::cerr << getNormalsAtGaussPts() << std::endl;
 
   for(unsigned int gg = 0;gg<data.getN().size1();gg++) {
 
     double T_at_Gauss_pt = commonData.temperatureAtGaussPts[gg];
     double convectionConst;
     if(hoGeometry) {
-      double area = norm_2(getNormalsAtGaussPt(gg))*0.5;
+      double area = norm_2(getNormalsAtGaussPts(gg))*0.5;
       convectionConst = dAta.cOnvection*area*(T_at_Gauss_pt-dAta.tEmperature);
     } else {
       convectionConst = dAta.cOnvection*getArea()*(T_at_Gauss_pt-dAta.tEmperature);
@@ -534,7 +534,7 @@ MoFEMErrorCode ThermalElement::OpConvectionLhs::doWork(
 
       double convectionConst;
       if(hoGeometry) {
-        double area = norm_2(getNormalsAtGaussPt(gg))*0.5;
+        double area = norm_2(getNormalsAtGaussPts(gg))*0.5;
         convectionConst = dAta.cOnvection*area;
       }   else {
         convectionConst = dAta.cOnvection*getArea();
