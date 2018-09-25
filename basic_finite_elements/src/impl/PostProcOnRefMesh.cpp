@@ -97,9 +97,6 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
   const void *tags_ptr[mapGaussPts.size()];
   int nb_gauss_pts = data.getN().size1();
   if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) {
-    // cerr << *data.getFieldDofs()[0] << endl;
-    // cerr << data.getFieldData().size() << " " << data.getN().size2() << endl;
-    // cerr << data.getDataOrder() << endl;
     SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
              "data inconsistency %d!=%d", mapGaussPts.size(), nb_gauss_pts);
   }
