@@ -49,7 +49,7 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
     // hardcoded choice of elastic parameters
     pOisson = 0.1;
-    yOung   = 10;
+    yOung   = 5;
 
     // coefficient used in intermediate calculation
     const double coefficient = yOung / ((1 + pOisson) * (1 - 2 * pOisson));
