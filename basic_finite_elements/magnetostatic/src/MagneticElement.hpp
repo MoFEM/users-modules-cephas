@@ -473,10 +473,10 @@ struct MagneticElement {
       if (col_type == MBVERTEX)
         MoFEMFunctionReturnHot(0);
 
-      const int nb_row_dofs = row_data.getHcurlN().size2() / 3;
+      const int nb_row_dofs = row_data.getVectorN().size2() / 3;
       if (nb_row_dofs == 0)
         MoFEMFunctionReturnHot(0);
-      const int nb_col_dofs = col_data.getHcurlN().size2() / 3;
+      const int nb_col_dofs = col_data.getVectorN().size2() / 3;
       if (nb_col_dofs == 0)
         MoFEMFunctionReturnHot(0);
       entityLocalMatrix.resize(nb_row_dofs, nb_col_dofs, false);
@@ -498,11 +498,11 @@ struct MagneticElement {
       MatrixDouble row_curl_mat, col_curl_mat;
       FTensor::Index<'i', 3> i;
 
-      // cerr << row_data.getHcurlN() << endl;
-      // cerr << row_data.getDiffHcurlN() << endl;
+      // cerr << row_data.getVectorN() << endl;
+      // cerr << row_data.getVectorDiffN() << endl;
 
       const double c0 = 1. / blockData.mU;
-      const int nb_gauss_pts = row_data.getHcurlN().size1();
+      const int nb_gauss_pts = row_data.getVectorN().size1();
 
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
@@ -518,14 +518,14 @@ struct MagneticElement {
         // cerr << row_curl_mat << endl;
         // cerr << col_curl_mat << endl;
 
-        FTensor::Tensor1<double *, 3> t_row_curl(&row_curl_mat(0, HCURL0),
-                                                 &row_curl_mat(0, HCURL1),
-                                                 &row_curl_mat(0, HCURL2), 3);
+        FTensor::Tensor1<double *, 3> t_row_curl(&row_curl_mat(0, HVEC0),
+                                                 &row_curl_mat(0, HVEC1),
+                                                 &row_curl_mat(0, HVEC2), 3);
         for (int aa = 0; aa != nb_row_dofs; aa++) {
           FTensor::Tensor0<double *> t_local_mat(&entityLocalMatrix(aa, 0), 1);
-          FTensor::Tensor1<double *, 3> t_col_curl(&col_curl_mat(0, HCURL0),
-                                                   &col_curl_mat(0, HCURL1),
-                                                   &col_curl_mat(0, HCURL2), 3);
+          FTensor::Tensor1<double *, 3> t_col_curl(&col_curl_mat(0, HVEC0),
+                                                   &col_curl_mat(0, HVEC1),
+                                                   &col_curl_mat(0, HVEC2), 3);
           for (int bb = 0; bb != nb_col_dofs; bb++) {
             t_local_mat += c0 * w * t_row_curl(i) * t_col_curl(i);
             ++t_col_curl;
@@ -597,10 +597,10 @@ struct MagneticElement {
       if (col_type == MBVERTEX)
         MoFEMFunctionReturnHot(0);
 
-      const int nb_row_dofs = row_data.getHcurlN().size2() / 3;
+      const int nb_row_dofs = row_data.getVectorN().size2() / 3;
       if (nb_row_dofs == 0)
         MoFEMFunctionReturnHot(0);
-      const int nb_col_dofs = col_data.getHcurlN().size2() / 3;
+      const int nb_col_dofs = col_data.getVectorN().size2() / 3;
       if (nb_col_dofs == 0)
         MoFEMFunctionReturnHot(0);
       entityLocalMatrix.resize(nb_row_dofs, nb_col_dofs, false);
@@ -622,12 +622,12 @@ struct MagneticElement {
       MatrixDouble row_curl_mat, col_curl_mat;
       FTensor::Index<'i', 3> i;
 
-      // cerr << row_data.getHcurlN() << endl;
-      // cerr << row_data.getDiffHcurlN() << endl;
+      // cerr << row_data.getVectorN() << endl;
+      // cerr << row_data.getVectorDiffN() << endl;
 
       const double c0 = 1. / blockData.mU;
       const double c1 = blockData.ePsilon * c0;
-      const int nb_gauss_pts = row_data.getHcurlN().size1();
+      const int nb_gauss_pts = row_data.getVectorN().size1();
 
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
@@ -640,16 +640,16 @@ struct MagneticElement {
         // cerr << col_curl_mat << endl;
 
         FTensor::Tensor1<const double *, 3> t_row_base(
-            &row_data.getHcurlN(gg)(0, HCURL0),
-            &row_data.getHcurlN(gg)(0, HCURL1),
-            &row_data.getHcurlN(gg)(0, HCURL2), 3);
+            &row_data.getVectorN(gg)(0, HVEC0),
+            &row_data.getVectorN(gg)(0, HVEC1),
+            &row_data.getVectorN(gg)(0, HVEC2), 3);
 
         for (int aa = 0; aa != nb_row_dofs; aa++) {
           FTensor::Tensor0<double *> t_local_mat(&entityLocalMatrix(aa, 0), 1);
           FTensor::Tensor1<const double *, 3> t_col_base(
-              &col_data.getHcurlN(gg)(0, HCURL0),
-              &col_data.getHcurlN(gg)(0, HCURL1),
-              &col_data.getHcurlN(gg)(0, HCURL2), 3);
+              &col_data.getVectorN(gg)(0, HVEC0),
+              &col_data.getVectorN(gg)(0, HVEC1),
+              &col_data.getVectorN(gg)(0, HVEC2), 3);
           for (int bb = 0; bb != nb_col_dofs; bb++) {
             t_local_mat += c1 * w * t_row_base(i) * t_col_base(i);
             ++t_col_base;
@@ -717,7 +717,7 @@ struct MagneticElement {
       if (row_type == MBVERTEX)
         MoFEMFunctionReturnHot(0);
 
-      const int nb_row_dofs = row_data.getHcurlN().size2() / 3;
+      const int nb_row_dofs = row_data.getVectorN().size2() / 3;
       if (nb_row_dofs == 0)
         MoFEMFunctionReturnHot(0);
       naturalBC.resize(nb_row_dofs, false);
@@ -725,8 +725,8 @@ struct MagneticElement {
 
       FTensor::Index<'i', 3> i;
 
-      const int nb_gauss_pts = row_data.getHcurlN().size1();
-      auto t_row_base = row_data.getFTensor1HcurlN<3>();
+      const int nb_gauss_pts = row_data.getVectorN().size1();
+      auto t_row_base = row_data.getFTensor1N<3>();
 
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
@@ -797,13 +797,13 @@ struct MagneticElement {
       CHKERR postProcMesh.tag_get_handle("MAGNETIC_INDUCTION_FIELD", 3,
                                          MB_TYPE_DOUBLE, th,
                                          MB_TAG_CREAT | MB_TAG_SPARSE, def_val);
-      const int nb_row_dofs = row_data.getHcurlN().size2() / 3;
+      const int nb_row_dofs = row_data.getVectorN().size2() / 3;
       if (nb_row_dofs == 0)
         MoFEMFunctionReturnHot(0);
       const void *tags_ptr[mapGaussPts.size()];
       MatrixDouble row_curl_mat;
       FTensor::Index<'i', 3> i;
-      const int nb_gauss_pts = row_data.getHcurlN().size1();
+      const int nb_gauss_pts = row_data.getVectorN().size1();
       if (nb_gauss_pts != static_cast<int>(mapGaussPts.size())) {
         SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                  "Inconsistency number of dofs %d!=%d", nb_gauss_pts,
@@ -818,9 +818,9 @@ struct MagneticElement {
         // get curl of base functions
         CHKERR getCurlOfHCurlBaseFunctions(row_side, row_type, row_data, gg,
                                            row_curl_mat);
-        FTensor::Tensor1<double *, 3> t_base_curl(&row_curl_mat(0, HCURL0),
-                                                  &row_curl_mat(0, HCURL1),
-                                                  &row_curl_mat(0, HCURL2), 3);
+        FTensor::Tensor1<double *, 3> t_base_curl(&row_curl_mat(0, HVEC0),
+                                                  &row_curl_mat(0, HVEC1),
+                                                  &row_curl_mat(0, HVEC2), 3);
 
         // get pointer to tag values on entity (i.e. vertex on refined
         // post-processing mesh)

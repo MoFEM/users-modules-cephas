@@ -619,7 +619,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
       switch (type) {
       case MBTRI:
-        for (unsigned int dd = 0; dd < data.getHdivN().size2() / 3; dd++) {
+        for (unsigned int dd = 0; dd < data.getVectorN().size2() / 3; dd++) {
           std::ostringstream ss;
           ss << "HDIV_FACE_" << side << "_" << dd;
           rval = postProcMesh.tag_get_handle(
@@ -629,7 +629,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
         }
         break;
       case MBTET:
-        for (unsigned int dd = 0; dd < data.getHdivN().size2() / 3; dd++) {
+        for (unsigned int dd = 0; dd < data.getVectorN().size2() / 3; dd++) {
           std::ostringstream ss;
           ss << "HDIV_TET_" << dd;
           rval = postProcMesh.tag_get_handle(
@@ -643,10 +643,10 @@ struct PostProcTemplateVolumeOnRefinedMesh
                 "data inconsistency");
       }
 
-      for (unsigned int gg = 0; gg < data.getHdivN().size1(); gg++) {
-        for (unsigned int dd = 0; dd < data.getHdivN().size2() / 3; dd++) {
+      for (unsigned int gg = 0; gg < data.getVectorN().size1(); gg++) {
+        for (unsigned int dd = 0; dd < data.getVectorN().size2() / 3; dd++) {
           ierr = postProcMesh.tag_set_data(th[dd], &mapGaussPts[gg], 1,
-                                           &data.getHdivN(gg)(dd, 0));
+                                           &data.getVectorN(gg)(dd, 0));
           CHKERRG(ierr);
         }
       }
