@@ -167,7 +167,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           }
           ++t_n_hcurl;
         }
-        for (; ll != static_cast<int>(data.getVectorN().size2() / 3); ll++) {
+        for (; ll != static_cast<int>(data.getN().size2() / 3); ll++) {
           ++t_n_hcurl;
         }
       }
@@ -197,7 +197,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           }
           ++t_n_hdiv;
         }
-        for (; ll != static_cast<int>(data.getVectorN().size2() / 3); ll++) {
+        for (; ll != static_cast<int>(data.getN().size2() / 3); ll++) {
           ++t_n_hdiv;
         }
       }

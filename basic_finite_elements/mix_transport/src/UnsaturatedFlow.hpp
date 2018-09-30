@@ -313,7 +313,7 @@ namespace MixTransport {
           nF.resize(data.getIndices().size());
           nF.clear();
           // Get number of integration points
-          int nb_gauss_pts = data.getVectorN().size1();
+          int nb_gauss_pts = data.getN().size1();
           for(int gg = 0;gg<nb_gauss_pts;gg++) {
             double x,y,z;
             x = getCoordsAtGaussPts()(gg,0);
@@ -324,7 +324,7 @@ namespace MixTransport {
             ierr = cTx.getBcOnValues(fe_ent,gg,x,y,z,value); CHKERRG(ierr);
             const double w = getGaussPts()(2,gg)*0.5;
             const double beta = w*(value-z);
-            noalias(nF) += beta*prod(data.getVectorN(gg),getNormal());
+            noalias(nF) += beta*prod(data.getVectorN<3>(gg),getNormal());
           }
           // Scale vector if history  evaluating method is given
           Vec f = getFEMethod()->ts_F;
@@ -385,7 +385,7 @@ namespace MixTransport {
         // Get volume
         double vol = getVolume();
         // Get material parameters
-        int nb_gauss_pts = data.getVectorN().size1();
+        int nb_gauss_pts = data.getN().size1();
         for(int gg = 0;gg!=nb_gauss_pts;gg++) {
           // Get divergence
           ierr = getDivergenceOfHDivBaseFunctions(side,type,data,gg,divVec); CHKERRG(ierr);
@@ -549,7 +549,7 @@ namespace MixTransport {
           auto t_w = getFTensor0IntegrationWeight();
           // Get volume
           const double vol = getVolume();
-          int nb_gauss_pts = row_data.getVectorN().size1();
+          int nb_gauss_pts = row_data.getN().size1();
           for(int gg = 0;gg!=nb_gauss_pts;gg++) {
             block_data->h = t_h;
             block_data->x = t_coords(0);
@@ -775,7 +775,7 @@ namespace MixTransport {
           nN.clear();
           // Scale eq.
           const double scale = block_data->sCale;
-          int nb_gauss_pts = row_data.getVectorN().size1();
+          int nb_gauss_pts = row_data.getN().size1();
           for(int gg = 0;gg<nb_gauss_pts;gg++) {
             double alpha = getGaussPts()(3,gg)*getVolume()*scale;
             ierr = getDivergenceOfHDivBaseFunctions(
@@ -865,7 +865,7 @@ namespace MixTransport {
           auto t_n_hdiv_row = row_data.getFTensor1N<3>();
           // Get volume
           double vol = getVolume();
-          int nb_gauss_pts = row_data.getVectorN().size1();
+          int nb_gauss_pts = row_data.getN().size1();
           for(int gg = 0;gg!=nb_gauss_pts;gg++) {
             block_data->h = t_h;
             block_data->x = t_coords(0);
@@ -1016,7 +1016,7 @@ namespace MixTransport {
           // Integration weight
           auto t_w = getFTensor0IntegrationWeight();
           double flux_on_entity = 0;
-          int nb_gauss_pts = data.getVectorN().size1();
+          int nb_gauss_pts = data.getN().size1();
           for(int gg = 0;gg<nb_gauss_pts;gg++) {
             auto t_data = data.getFTensor0FieldData();
             for(int rr = 0;rr!=nb_dofs;rr++) {
