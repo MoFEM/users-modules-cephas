@@ -1,13 +1,14 @@
 #ignore every file
 *
 #apart from:
-!basic_finite_elements
-!cmake
-!doc		
-!scripts		
-!tools		
-!.gitignore	
-!CMakeLists.txt  
+!*/
+!basic_finite_elements/**
+!cmake/**
+!doc/**
+!scripts/**
+!tools/**
+!.gitignore
+!CMakeLists.txt
 !CTestConfig.cmake
 !ModulesList.cmake
 
