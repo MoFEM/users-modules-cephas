@@ -1,22 +1,18 @@
 #ignore every file
 *
+
 #apart from:
-!*/
+!basic_finite_elements
 !basic_finite_elements/**
+!cmake
 !cmake/**
+!doc
 !doc/**
+!scripts
 !scripts/**
+!tools
 !tools/**
 !.gitignore
 !CMakeLists.txt
 !CTestConfig.cmake
 !ModulesList.cmake
-
-# Temorary files
-_Store
-*.swp
-*.swo
-*.swn
-*.bak
-.atom-build.json
-.build-tools.cson
