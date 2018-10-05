@@ -81,7 +81,7 @@ and when you are intrigued, always ask questions on our <a href=https://groups.g
 
 We solve the most basic of all PDEs, i.e. the Poisson equation,
 \f[
--\nabla^2 u(\mathbf{x}) = f(x),\quad \textrm{in}\,\Omega\\
+-\nabla^2 u(\mathbf{x}) = f(\mathbf{x}),\quad \textrm{in}\,\Omega\\
 \f]
 where \f$u=u(\mathbf{x})\f$ is unknown function, \f$f(\mathbf{x})\f$ is a given
 source term. The Poisson equation is in so-called \e strong form, it has to be
