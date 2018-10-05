@@ -94,6 +94,8 @@ u(x)=\overline{u}(\mathbf{x}),\quad \textrm{on}\,\partial\Omega
 \f]
 where \f$\overline{u}\f$ is prescribed function on the boundary.
 
+\image html poisson_tut1_fig2.png "Figure 2. Poisson Problem" width=400px
+
 The Laplacian \f$\nabla^2\f$ in 3d space with Cartesian coordinates is
 \f[
 \nabla^2 u(x,y,z) = \nabla \cdot \nabla u =
@@ -328,7 +330,7 @@ CHKERR PoissonExample::CreateFiniteElements(m_field).creatFEToPostProcessResults
 Note that those implementations are problem independent, we could use them in
 different problems context. To make that more visible, we create those elements
 before fields and problem are defined and build. The purpose of finite elements
-is shown in Figure 2 and Figure 3, by users data operators added to a finite
+is shown in Figure 3 and Figure 4, by users data operators added to a finite
 element. Finite element "domain_lhs_fe" is used to calculate matrix by using
 PoissonExample::OpK, finite element "domain_rhs_fe" is used with
 PoissonExample::OpF. Similarly for a boundary, operators PoissonExample::OpC
@@ -344,8 +346,8 @@ tetrahedra if needed. More details about implementation of
 PoissonExample::CreateFiniteElements and operators is in \ref poisson_tut2.
 Basic of user data operators are explained here \ref general_data_structure.
 
-\image html poisson_tut1_fig2.png "Figure 2. Operators of volume finite element" width=700px
-\image html poisson_tut1_fig3.png "Figure 3. Operators of boundary finite element" width=400px
+\image html poisson_tut1_fig3.png "Figure 3. Operators of volume finite element" width=700px
+\image html poisson_tut1_fig4.png "Figure 4. Operators of boundary finite element" width=400px
 
 \subsection poisson_tut1_code_disection_ss4 Simple interface
 
@@ -631,7 +633,7 @@ cp out_vol.vtk $HOSTHOME/Desktop/
 \endcode
 Now your file is visible on Desktop, run ParaView and open file.
 
-\image html poisson_tut1_fig4.png "Figure 4. ParaView and result" width=800px
+\image html poisson_tut1_fig5.png "Figure 5. ParaView and result" width=800px
 
 \subsection poisson_tut1_running_genrating_mesh Mesh formats
 
