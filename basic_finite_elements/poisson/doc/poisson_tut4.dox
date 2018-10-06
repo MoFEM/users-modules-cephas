@@ -72,7 +72,7 @@ first order term, as a result we have
 \mathbf{0}
 \f]
 where \f$(\cdot)^i\f$ is quantity at Newton iteration \f$i\f$,
-\f$u^{i+1} = u^i + \delta u^i\f$ and \f$\lambda^{i+1} = \lambda^i + \delta \lambda^i\f$.
+\f$u^{i+1} = u^i + \delta u^{i+1}\f$ and \f$\lambda^{i+1} = \lambda^i + \delta \lambda^{i+1}\f$.
 The linearized system of equations takes form
 \f[
 \left\{
