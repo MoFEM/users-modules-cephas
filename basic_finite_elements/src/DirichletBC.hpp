@@ -252,6 +252,35 @@ struct DirichletSetFieldFromBlockWithFlags: public DirichletDisplacementBc {
 /// \deprecated use DirichletSetFieldFromBlockWithFlags
 DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFEMethodPreAndPostProcWithFlags;
 
+
+/**
+ * @brief calculate reactions from vector of internal forces on a given meshset id
+ * 
+ */
+struct Reactions {
+
+  Reactions(MoFEM::Interface &m_field, string problem_name, string field_name,
+            Vec &f_internal, int meshset_id)
+      : mField(m_field), problemName(problem_name), fieldName(field_name),
+        fInternal(f_internal), meshsetId(meshset_id) {}
+
+  typedef std::map<int, double> ReactionsMap;
+  MoFEM::Interface &mField;
+  const ReactionsMap &getReactionsMap() const { return reactionsMap; }
+  const double &getReactions(const int id) { return reactionsMap[id]; }
+  const VectorDouble &getReactionsVector() { return Reaction; }
+
+  MoFEMErrorCode calculateReactions();
+
+private:
+  int meshsetId;
+  std::string problemName;
+  std::string fieldName;
+  ReactionsMap reactionsMap;
+  Vec fInternal;
+  VectorDouble Reaction;
+};
+
 #endif //__DIRICHLET_HPP__
 
 /***************************************************************************//**

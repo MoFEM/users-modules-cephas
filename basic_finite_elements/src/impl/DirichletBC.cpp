@@ -713,3 +713,62 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   }
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode Reactions::calculateReactions() {
+
+  MoFEMFunctionBegin;
+
+  const Problem *problem_ptr;
+  CHKERR mField.get_problem(problemName.c_str(), &problem_ptr);
+
+  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+           mField, NODESET | DISPLACEMENTSET, it)) {
+
+    if (it->getMeshsetId() != meshsetId)
+      continue;
+    Range verts;
+    for (int dim = 0; dim != 3; ++dim) {
+      Range ents;
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
+                                                 true);
+      Range nodes;
+      CHKERR mField.get_moab().get_connectivity(ents, nodes, true);
+      verts.insert(nodes.begin(), nodes.end());
+    }
+    for (auto eit : verts) {
+      for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
+               problem_ptr, fieldName, eit, mField.get_comm_rank(), dof_ptr)) {
+
+        const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
+        std::bitset<8> pstatus(dof->getPStatus());
+        if (pstatus.test(0))
+          continue; // only local
+        const double *array;
+        CHKERR VecGetArrayRead(fInternal, &array);
+        if (Reaction.size() != dof->getNbOfCoeffs()) {
+          Reaction.resize(dof->getNbOfCoeffs());
+          Reaction.clear();
+        }
+
+        Reaction[dof->getDofCoeffIdx()] += array[dof->getPetscLocalDofIdx()];
+        reactionsMap[dof->getPetscGlobalDofIdx()] =
+            array[dof->getPetscLocalDofIdx()];
+
+        CHKERR VecRestoreArrayRead(fInternal, &array);
+      }
+    }
+  }
+  Vec v;
+  CHKERR VecCreateMPI(mField.get_comm(), PETSC_DETERMINE, Reaction.size(), &v);
+  for (int dd = 0; dd != Reaction.size(); ++dd)
+    CHKERR VecSetValue(v, dd, Reaction[dd], ADD_VALUES);
+  CHKERR VecAssemblyBegin(v);
+  CHKERR VecAssemblyEnd(v);
+  const double *res_array;
+  CHKERR VecGetArrayRead(v, &res_array);
+  for (int dd = 0; dd != Reaction.size(); ++dd)
+    Reaction[dd] = res_array[dd];
+  CHKERR VecRestoreArrayRead(v, &res_array);
+
+  MoFEMFunctionReturn(0);
+}
