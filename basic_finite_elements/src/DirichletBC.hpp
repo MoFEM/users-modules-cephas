@@ -260,9 +260,9 @@ DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFE
 struct Reactions {
 
   Reactions(MoFEM::Interface &m_field, string problem_name, string field_name,
-            Vec &f_internal, int meshset_id)
+            Vec &f_internal)
       : mField(m_field), problemName(problem_name), fieldName(field_name),
-        fInternal(f_internal), meshsetId(meshset_id) {}
+        fInternal(f_internal) {}
 
   typedef std::map<int, double> ReactionsMap;
   MoFEM::Interface &mField;
@@ -270,10 +270,9 @@ struct Reactions {
   const double &getReactions(const int id) { return reactionsMap[id]; }
   const VectorDouble &getReactionsVector() { return Reaction; }
 
-  MoFEMErrorCode calculateReactions();
+  MoFEMErrorCode calculateReactions(const int meshset_id);
 
 private:
-  int meshsetId;
   std::string problemName;
   std::string fieldName;
   ReactionsMap reactionsMap;

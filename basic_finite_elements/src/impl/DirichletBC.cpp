@@ -714,7 +714,7 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Reactions::calculateReactions() {
+MoFEMErrorCode Reactions::calculateReactions(const int meshset_id) {
 
   MoFEMFunctionBegin;
 
@@ -724,7 +724,7 @@ MoFEMErrorCode Reactions::calculateReactions() {
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
            mField, NODESET | DISPLACEMENTSET, it)) {
 
-    if (it->getMeshsetId() != meshsetId)
+    if (it->getMeshsetId() != meshset_id)
       continue;
     Range verts;
     for (int dim = 0; dim != 3; ++dim) {
