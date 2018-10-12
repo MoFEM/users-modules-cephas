@@ -295,7 +295,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
   */
   MoFEMErrorCode generateReferenceElementMesh() {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
 
     int max_level = 0;
     if (nbOfRefLevels == -1) {
@@ -313,77 +313,57 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     EntityHandle nodes[4];
     for (int nn = 0; nn < 4; nn++) {
-      rval = moab_ref.create_vertex(&base_coords[3 * nn], nodes[nn]);
-      CHKERRG(rval);
+      CHKERR moab_ref.create_vertex(&base_coords[3 * nn], nodes[nn]);
     }
     EntityHandle tet;
-    rval = moab_ref.create_element(MBTET, nodes, 4, tet);
-    CHKERRG(rval);
+    CHKERR moab_ref.create_element(MBTET, nodes, 4, tet);
 
     MoFEM::Core m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
     MoFEM::Interface &m_field_ref = m_core_ref;
 
-    ierr = m_field_ref.getInterface<BitRefManager>()->setBitRefLevelByDim(
+    CHKERR m_field_ref.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, BitRefLevel().set(0));
-    CHKERRG(ierr);
 
     for (int ll = 0; ll < max_level; ll++) {
       PetscPrintf(T::mField.get_comm(), "Refine Level %d\n", ll);
       Range edges;
-      ierr = m_field_ref.getInterface<BitRefManager>()
-                 ->getEntitiesByTypeAndRefLevel(
-                     BitRefLevel().set(ll), BitRefLevel().set(), MBEDGE, edges);
-      CHKERRG(ierr);
+      CHKERR m_field_ref.getInterface<BitRefManager>()
+          ->getEntitiesByTypeAndRefLevel(BitRefLevel().set(ll),
+                                         BitRefLevel().set(), MBEDGE, edges);
       Range tets;
-      ierr = m_field_ref.getInterface<BitRefManager>()
-                 ->getEntitiesByTypeAndRefLevel(
-                     BitRefLevel().set(ll), BitRefLevel(ll).set(), MBTET, tets);
-      CHKERRG(ierr);
+      CHKERR m_field_ref.getInterface<BitRefManager>()
+          ->getEntitiesByTypeAndRefLevel(BitRefLevel().set(ll),
+                                         BitRefLevel(ll).set(), MBTET, tets);
       // refine mesh
       MeshRefinement *m_ref;
-      ierr = m_field_ref.getInterface(m_ref);
-      CHKERRG(ierr);
-      ierr = m_ref->add_verices_in_the_middel_of_edges(
+      CHKERR m_field_ref.getInterface(m_ref);
+      CHKERR m_ref->add_verices_in_the_middel_of_edges(
           edges, BitRefLevel().set(ll + 1));
-      CHKERRG(ierr);
-      ierr = m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
-      CHKERRG(ierr);
+      CHKERR m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
     }
 
     Range tets;
-    ierr =
-        m_field_ref.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
-            BitRefLevel().set(max_level), BitRefLevel().set(max_level), MBTET,
-            tets);
-    CHKERRG(ierr);
+    CHKERR m_field_ref.getInterface<BitRefManager>()
+        ->getEntitiesByTypeAndRefLevel(BitRefLevel().set(max_level),
+                                       BitRefLevel().set(max_level), MBTET,
+                                       tets);
 
     if (tenNodesPostProcTets) {
-      // Range edges;
-      // rval = moab_ref.get_adjacencies(tets,1,true,edges); CHKERRG(rval);
       EntityHandle meshset;
-      rval = moab_ref.create_meshset(MESHSET_SET, meshset);
-      CHKERRG(rval);
-      rval = moab_ref.add_entities(meshset, tets);
-      CHKERRG(rval);
-      rval = moab_ref.convert_entities(meshset, true, false, false);
-      CHKERRG(rval);
-      rval = moab_ref.delete_entities(&meshset, 1);
-      CHKERRG(rval);
+      CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
+      CHKERR moab_ref.add_entities(meshset, tets);
+      CHKERR moab_ref.convert_entities(meshset, true, false, false);
+      CHKERR moab_ref.delete_entities(&meshset, 1);
     }
 
     Range elem_nodes;
-    rval = moab_ref.get_connectivity(tets, elem_nodes, false);
-    CHKERRG(rval);
-    // ierr = m_field_ref.get_entities_by_type_and_ref_level(
-    //   BitRefLevel().set(max_level),BitRefLevel().set(),MBVERTEX,elem_nodes
-    // ); CHKERRG(ierr);
+    CHKERR moab_ref.get_connectivity(tets, elem_nodes, false);
 
     std::map<EntityHandle, int> little_map;
     gaussPts_FirstOrder.resize(elem_nodes.size(), 4, 0);
     Range::iterator nit = elem_nodes.begin();
     for (int gg = 0; nit != elem_nodes.end(); nit++, gg++) {
-      rval = moab_ref.get_coords(&*nit, 1, &gaussPts_FirstOrder(gg, 0));
-      CHKERRG(rval);
+      CHKERR moab_ref.get_coords(&*nit, 1, &gaussPts_FirstOrder(gg, 0));
       little_map[*nit] = gg;
     }
     T::gaussPts = gaussPts_FirstOrder;
@@ -393,8 +373,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
     for (int tt = 0; tit != tets.end(); tit++, tt++) {
       const EntityHandle *conn;
       int num_nodes;
-      rval = moab_ref.get_connectivity(*tit, conn, num_nodes, false);
-      CHKERRG(rval);
+      CHKERR moab_ref.get_connectivity(*tit, conn, num_nodes, false);
       if (tt == 0) {
         // Ref tets has number of rows equal to number of tets on element,
         // columns are number of gauss points
@@ -406,20 +385,11 @@ struct PostProcTemplateVolumeOnRefinedMesh
     }
 
     shapeFunctions.resize(elem_nodes.size(), 4);
-    ierr =
-        ShapeMBTET(&*shapeFunctions.data().begin(), &T::gaussPts(0, 0),
-                   &T::gaussPts(1, 0), &T::gaussPts(2, 0), elem_nodes.size());
-    CHKERRG(ierr);
+    CHKERR ShapeMBTET(&*shapeFunctions.data().begin(), &T::gaussPts(0, 0),
+                      &T::gaussPts(1, 0), &T::gaussPts(2, 0),
+                      elem_nodes.size());
 
-    // EntityHandle meshset;
-    // rval = moab_ref.create_meshset(MESHSET_SET|MESHSET_TRACK_OWNER,meshset);
-    // CHKERRG(rval); rval = moab_ref.add_entities(meshset,tets); CHKERRG(rval);
-    // rval =
-    // moab_ref.write_file("test_reference_mesh.vtk","VTK","",&meshset,1);
-    // CHKERRG(rval);
-    // moab_ref.list_entities(tets);
-
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
 
   /** \brief Set integration points
