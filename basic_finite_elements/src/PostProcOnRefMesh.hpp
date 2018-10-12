@@ -400,79 +400,63 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
   */
   MoFEMErrorCode setGaussPts(int order) {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
 
-    try {
+    Tag th;
+    int def_in_the_loop = -1;
+    CHKERR T::postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER,
+                                          th, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                          &def_in_the_loop);
 
-      Tag th;
-      int def_in_the_loop = -1;
-      rval = T::postProcMesh.tag_get_handle(
-          "NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER, th,
-          MB_TAG_CREAT | MB_TAG_SPARSE, &def_in_the_loop);
-      CHKERRG(rval);
-
-      T::mapGaussPts.resize(gaussPts_FirstOrder.size1());
-      for (unsigned int gg = 0; gg < gaussPts_FirstOrder.size1(); gg++) {
-        rval = T::postProcMesh.create_vertex(&gaussPts_FirstOrder(gg, 0),
-                                             T::mapGaussPts[gg]);
-        CHKERRG(rval);
-      }
-
-      commonData.tEts.clear();
-      for (unsigned int tt = 0; tt < refTets.size1(); tt++) {
-        int num_nodes = refTets.size2();
-        EntityHandle conn[num_nodes];
-        for (int nn = 0; nn != num_nodes; nn++) {
-          conn[nn] = T::mapGaussPts[refTets(tt, nn)];
-        }
-        EntityHandle tet;
-        rval = T::postProcMesh.create_element(MBTET, conn, num_nodes, tet);
-        CHKERRG(rval);
-        int n_in_loop = T::nInTheLoop;
-        rval = T::postProcMesh.tag_set_data(th, &tet, 1, &n_in_loop);
-        CHKERRG(rval);
-        commonData.tEts.insert(tet);
-      }
-
-      EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
-      T::coords.resize(12, false);
-      {
-        const EntityHandle *conn;
-        int num_nodes;
-        T::mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
-        // coords.resize(3*num_nodes,false);
-        rval = T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
-        CHKERRG(rval);
-      }
-
-      Range nodes;
-      rval = T::postProcMesh.get_connectivity(commonData.tEts, nodes, false);
-      CHKERRG(rval);
-
-      coordsAtGaussPts.resize(nodes.size(), 3, false);
-      for (unsigned int gg = 0; gg < nodes.size(); gg++) {
-        for (int dd = 0; dd < 3; dd++) {
-          coordsAtGaussPts(gg, dd) =
-              cblas_ddot(4, &shapeFunctions(gg, 0), 1, &T::coords[dd], 3);
-        }
-      }
-
-      T::mapGaussPts.resize(nodes.size());
-      Range::iterator nit = nodes.begin();
-      for (int gg = 0; nit != nodes.end(); nit++, gg++) {
-        rval = T::postProcMesh.set_coords(&*nit, 1, &coordsAtGaussPts(gg, 0));
-        CHKERRG(rval);
-        T::mapGaussPts[gg] = *nit;
-      }
-
-    } catch (std::exception &ex) {
-      std::ostringstream ss;
-      ss << "throw in method: " << ex.what() << " at line " << __LINE__
-         << " in file " << __FILE__;
-      SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
+    T::mapGaussPts.resize(gaussPts_FirstOrder.size1());
+    for (unsigned int gg = 0; gg != gaussPts_FirstOrder.size1(); ++gg) {
+      CHKERR T::postProcMesh.create_vertex(&gaussPts_FirstOrder(gg, 0),
+                                           T::mapGaussPts[gg]);
     }
 
-    MoFEMFunctionReturnHot(0);
+    commonData.tEts.clear();
+    for (unsigned int tt = 0; tt != refTets.size1(); ++tt) {
+      int num_nodes = refTets.size2();
+      EntityHandle conn[num_nodes];
+      for (int nn = 0; nn != num_nodes; nn++) {
+        conn[nn] = T::mapGaussPts[refTets(tt, nn)];
+      }
+      EntityHandle tet;
+      CHKERR T::postProcMesh.create_element(MBTET, conn, num_nodes, tet);
+      int n_in_loop = T::nInTheLoop;
+      CHKERR T::postProcMesh.tag_set_data(th, &tet, 1, &n_in_loop);
+      commonData.tEts.insert(tet);
+    }
+
+    EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
+    T::coords.resize(12, false);
+    {
+      const EntityHandle *conn;
+      int num_nodes;
+      T::mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
+      // coords.resize(3*num_nodes,false);
+      CHKERR T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
+    }
+
+    Range nodes;
+    CHKERR T::postProcMesh.get_connectivity(commonData.tEts, nodes, false);
+
+    coordsAtGaussPts.resize(nodes.size(), 3, false);
+    for (unsigned int gg = 0; gg != nodes.size(); ++gg) {
+      for (int dd = 0; dd != 3; ++dd) {
+        coordsAtGaussPts(gg, dd) =
+            cblas_ddot(4, &shapeFunctions(gg, 0), 1, &T::coords[dd], 3);
+      }
+    }
+
+    T::mapGaussPts.resize(nodes.size());
+    Range::iterator nit = nodes.begin();
+    for (int gg = 0; nit != nodes.end(); ++nit, ++gg) {
+      CHKERR T::postProcMesh.set_coords(&*nit, 1, &coordsAtGaussPts(gg, 0));
+      T::mapGaussPts[gg] = *nit;
+    }
+
+    MoFEMFunctionReturn(0);
   }
 
   /** \brief Clear operators list
