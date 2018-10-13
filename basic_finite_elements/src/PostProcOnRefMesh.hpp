@@ -479,10 +479,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
     }
     CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
     commonData.tEts = Range(starte, starte + num_el - 1);
-    std::vector<int> n_in_loop_vec(num_el);
-    std::fill(n_in_loop_vec.begin(), n_in_loop_vec.end(), T::nInTheLoop);
-    CHKERR T::postProcMesh.tag_set_data(th, commonData.tEts,
-                                        &*n_in_loop_vec.begin());
+    CHKERR T::postProcMesh.tag_clear_data(th, commonData.tEts,
+                                          &(T::nInTheLoop));
 
     EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
     T::coords.resize(12, false);
