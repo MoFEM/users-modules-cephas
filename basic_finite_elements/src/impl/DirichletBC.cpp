@@ -714,7 +714,7 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Reactions::calculateReactions(const int meshset_id) {
+MoFEMErrorCode Reactions::calculateReactionsFromSet(const int meshset_id) {
 
   MoFEMFunctionBegin;
 

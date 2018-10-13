@@ -270,7 +270,7 @@ struct Reactions {
   const double &getReactions(const int id) { return reactionsMap[id]; }
   const VectorDouble &getReactionsVector() { return Reaction; }
 
-  MoFEMErrorCode calculateReactions(const int meshset_id);
+  MoFEMErrorCode calculateReactionsFromSet(const int meshset_id);
 
 private:
   std::string problemName;
