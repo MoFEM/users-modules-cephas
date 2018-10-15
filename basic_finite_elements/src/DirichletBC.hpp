@@ -252,10 +252,30 @@ struct DirichletSetFieldFromBlockWithFlags: public DirichletDisplacementBc {
 /// \deprecated use DirichletSetFieldFromBlockWithFlags
 DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFEMethodPreAndPostProcWithFlags;
 
-
 /**
  * @brief calculate reactions from vector of internal forces on a given meshset id
- * 
+ *
+ * example usage
+ *
+ * \code
+      Vec F_int;
+      DMCreateGlobalVector_MoFEM(dm, &F_int);
+
+      feRhs->snes_ctx = FEMethod::CTX_SNESSETFUNCTION;
+      feRhs->snes_f = F_int;
+      DMoFEMLoopFiniteElements(dm, "ELASTIC", feRhs);
+
+      VecAssemblyBegin(F_int);
+      VecAssemblyEnd(F_int);
+      VecGhostUpdateBegin(F_int, INSERT_VALUES, SCATTER_FORWARD);
+      VecGhostUpdateEnd(F_int, INSERT_VALUES, SCATTER_FORWARD);
+
+      Reactions my_react(m_field, "DM_ELASTIC", "U", F_int);
+      my_react.calculateReactions();
+      int fix_nodes_meshset_id = 1;
+      cout << my_react.getReactionsFromSet(fix_nodes_meshset_id) << endl;
+
+* \endcode
  */
 struct Reactions {
 
@@ -264,20 +284,35 @@ struct Reactions {
       : mField(m_field), problemName(problem_name), fieldName(field_name),
         fInternal(f_internal) {}
 
-  typedef std::map<int, double> ReactionsMap;
+  typedef std::map<int, VectorDouble> ReactionsMap;
   MoFEM::Interface &mField;
-  const ReactionsMap &getReactionsMap() const { return reactionsMap; }
-  const double &getReactions(const int id) { return reactionsMap[id]; }
-  const VectorDouble &getReactionsVector() { return Reaction; }
-
-  MoFEMErrorCode calculateReactionsFromSet(const int meshset_id);
+  /**
+   * @brief Get the Reactions Map
+   *
+   * @return const ReactionsMap&
+   */
+  inline const ReactionsMap &getReactionsMap() const { return reactionsMap; }
+  /**
+   * @brief Get the Reactions at specified meshset id
+   *
+   * @param id meshset id (from Cubit)
+   * @return const VectorDouble&
+   */
+  inline const VectorDouble &getReactionsFromSet(const int &id) const {
+    return reactionsMap.at(id);
+  }
+  /**
+   * @brief calculate reactions from a given vector
+   *
+   * @return MoFEMErrorCode
+   */
+  MoFEMErrorCode calculateReactions();
 
 private:
   std::string problemName;
   std::string fieldName;
   ReactionsMap reactionsMap;
   Vec fInternal;
-  VectorDouble Reaction;
 };
 
 #endif //__DIRICHLET_HPP__

@@ -714,7 +714,7 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Reactions::calculateReactionsFromSet(const int meshset_id) {
+MoFEMErrorCode Reactions::calculateReactions() {
 
   MoFEMFunctionBegin;
 
@@ -724,8 +724,10 @@ MoFEMErrorCode Reactions::calculateReactionsFromSet(const int meshset_id) {
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
            mField, NODESET | DISPLACEMENTSET, it)) {
 
-    if (it->getMeshsetId() != meshset_id)
-      continue;
+    const int id = it->getMeshsetId();
+    VectorDouble &reaction_vec = reactionsMap[id];
+    ;
+
     Range verts;
     for (int dim = 0; dim != 3; ++dim) {
       Range ents;
@@ -745,30 +747,52 @@ MoFEMErrorCode Reactions::calculateReactionsFromSet(const int meshset_id) {
           continue; // only local
         const double *array;
         CHKERR VecGetArrayRead(fInternal, &array);
-        if (Reaction.size() != dof->getNbOfCoeffs()) {
-          Reaction.resize(dof->getNbOfCoeffs());
-          Reaction.clear();
+        if (reaction_vec.size() != dof->getNbOfCoeffs()) {
+          reaction_vec.resize(dof->getNbOfCoeffs());
+          reaction_vec.clear();
         }
 
-        Reaction[dof->getDofCoeffIdx()] += array[dof->getPetscLocalDofIdx()];
-        reactionsMap[dof->getPetscGlobalDofIdx()] =
-            array[dof->getPetscLocalDofIdx()];
+        reaction_vec[dof->getDofCoeffIdx()] += array[dof->getPetscLocalDofIdx()];
 
         CHKERR VecRestoreArrayRead(fInternal, &array);
       }
     }
-  }
-  Vec v;
-  CHKERR VecCreateMPI(mField.get_comm(), PETSC_DETERMINE, Reaction.size(), &v);
-  for (int dd = 0; dd != Reaction.size(); ++dd)
-    CHKERR VecSetValue(v, dd, Reaction[dd], ADD_VALUES);
-  CHKERR VecAssemblyBegin(v);
-  CHKERR VecAssemblyEnd(v);
-  const double *res_array;
-  CHKERR VecGetArrayRead(v, &res_array);
-  for (int dd = 0; dd != Reaction.size(); ++dd)
-    Reaction[dd] = res_array[dd];
-  CHKERR VecRestoreArrayRead(v, &res_array);
 
+    int nb_coefficients = reaction_vec.size();
+    std::vector<int> ghosts(nb_coefficients);
+    for (int g = 0; g != nb_coefficients; ++g)
+      ghosts[g] = g;
+    Vec v;
+    VecCreateGhost(
+        mField.get_comm(), (mField.get_comm_rank() ? 0 : nb_coefficients),
+        nb_coefficients, (mField.get_comm_rank() ? nb_coefficients : 0),
+        &*ghosts.begin(), &v);
+
+    for (int dd = 0; dd != reaction_vec.size(); ++dd)
+      CHKERR VecSetValue(v, dd, reaction_vec[dd], ADD_VALUES);
+
+    CHKERR VecGhostUpdateBegin(v,ADD_VALUES,SCATTER_REVERSE); 
+    CHKERR VecGhostUpdateEnd(v,ADD_VALUES,SCATTER_REVERSE);  
+    CHKERR VecGhostUpdateBegin(v,INSERT_VALUES,SCATTER_FORWARD);  
+    CHKERR VecGhostUpdateEnd(v,INSERT_VALUES,SCATTER_FORWARD);
+  
+    CHKERR VecAssemblyBegin(v);
+    CHKERR VecAssemblyEnd(v);
+    VecScatter     ctx;
+    Vec            V_SEQ;
+    VecScatterCreateToAll(v,&ctx,&V_SEQ);
+    VecScatterBegin(ctx,v,V_SEQ,INSERT_VALUES,SCATTER_FORWARD);
+    VecScatterEnd(ctx,v,V_SEQ,INSERT_VALUES,SCATTER_FORWARD);
+    const double *res_array;
+    // CHKERR VecGetArrayRead(v, &res_array);
+    CHKERR  VecGetArrayRead(V_SEQ,&res_array);
+    for (int dd = 0; dd != reaction_vec.size(); ++dd)
+      reaction_vec[dd] = res_array[dd];
+    CHKERR VecRestoreArrayRead(V_SEQ, &res_array);
+
+    VecScatterDestroy(&ctx);
+    VecDestroy(&V_SEQ);
+    VecDestroy(&v);
+  }
   MoFEMFunctionReturn(0);
 }
