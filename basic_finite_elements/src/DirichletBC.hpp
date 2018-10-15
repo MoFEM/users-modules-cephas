@@ -300,7 +300,7 @@ struct Reactions {
     return reactionsMap.at(id);
   }
   /**
-   * @brief alculate reactions from a given vector
+   * @brief calculate reactions from a given vector
    *
    * @param internal forces vector
    * @return MoFEMErrorCode
