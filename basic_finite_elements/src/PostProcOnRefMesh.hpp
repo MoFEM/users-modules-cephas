@@ -271,11 +271,6 @@ struct PostProcTemplateVolumeOnRefinedMesh
     }
   }
 
-  MatrixDouble shapeFunctions;
-  MatrixDouble coordsAtGaussPts;
-  ublas::matrix<int> refTets;
-  MatrixDouble gaussPts_FirstOrder;
-
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
 
@@ -295,131 +290,128 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
   */
   MoFEMErrorCode generateReferenceElementMesh() {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
 
-    int max_level = 0;
-    if (nbOfRefLevels == -1) {
-      PetscBool flg = PETSC_TRUE;
-      PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_max_post_proc_ref_level",
-                         &max_level, &flg);
-    } else {
-      max_level = nbOfRefLevels;
-    }
-
-    double base_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
+    auto get_nb_of_ref_levels_from_options = [this] {
+      if (nbOfRefLevels == -1) {
+        int max_level = 0;
+        PetscBool flg = PETSC_TRUE;
+        PetscOptionsGetInt(PETSC_NULL, PETSC_NULL,
+                           "-my_max_post_proc_ref_level", &max_level, &flg);
+        return max_level;
+      } else {
+        return nbOfRefLevels;
+      }
+      return 0;
+    };
+    const int max_level = get_nb_of_ref_levels_from_options();
 
     moab::Core core_ref;
     moab::Interface &moab_ref = core_ref;
-
-    EntityHandle nodes[4];
-    for (int nn = 0; nn < 4; nn++) {
-      rval = moab_ref.create_vertex(&base_coords[3 * nn], nodes[nn]);
-      CHKERRG(rval);
-    }
-    EntityHandle tet;
-    rval = moab_ref.create_element(MBTET, nodes, 4, tet);
-    CHKERRG(rval);
+    
+    auto create_reference_element = [&moab_ref]() {
+      MoFEMFunctionBegin;
+      const double base_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
+      EntityHandle nodes[4];
+      for (int nn = 0; nn < 4; nn++) {
+        CHKERR moab_ref.create_vertex(&base_coords[3 * nn], nodes[nn]);
+      }
+      EntityHandle tet;
+      CHKERR moab_ref.create_element(MBTET, nodes, 4, tet);
+      MoFEMFunctionReturn(0);
+    };
 
     MoFEM::Core m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
     MoFEM::Interface &m_field_ref = m_core_ref;
 
-    ierr = m_field_ref.getInterface<BitRefManager>()->setBitRefLevelByDim(
-        0, 3, BitRefLevel().set(0));
-    CHKERRG(ierr);
-
-    for (int ll = 0; ll < max_level; ll++) {
-      PetscPrintf(T::mField.get_comm(), "Refine Level %d\n", ll);
-      Range edges;
-      ierr = m_field_ref.getInterface<BitRefManager>()
-                 ->getEntitiesByTypeAndRefLevel(
-                     BitRefLevel().set(ll), BitRefLevel().set(), MBEDGE, edges);
-      CHKERRG(ierr);
-      Range tets;
-      ierr = m_field_ref.getInterface<BitRefManager>()
-                 ->getEntitiesByTypeAndRefLevel(
-                     BitRefLevel().set(ll), BitRefLevel(ll).set(), MBTET, tets);
-      CHKERRG(ierr);
-      // refine mesh
-      MeshRefinement *m_ref;
-      ierr = m_field_ref.getInterface(m_ref);
-      CHKERRG(ierr);
-      ierr = m_ref->add_verices_in_the_middel_of_edges(
-          edges, BitRefLevel().set(ll + 1));
-      CHKERRG(ierr);
-      ierr = m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
-      CHKERRG(ierr);
-    }
-
-    Range tets;
-    ierr =
-        m_field_ref.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
-            BitRefLevel().set(max_level), BitRefLevel().set(max_level), MBTET,
-            tets);
-    CHKERRG(ierr);
-
-    if (tenNodesPostProcTets) {
-      // Range edges;
-      // rval = moab_ref.get_adjacencies(tets,1,true,edges); CHKERRG(rval);
-      EntityHandle meshset;
-      rval = moab_ref.create_meshset(MESHSET_SET, meshset);
-      CHKERRG(rval);
-      rval = moab_ref.add_entities(meshset, tets);
-      CHKERRG(rval);
-      rval = moab_ref.convert_entities(meshset, true, false, false);
-      CHKERRG(rval);
-      rval = moab_ref.delete_entities(&meshset, 1);
-      CHKERRG(rval);
-    }
-
-    Range elem_nodes;
-    rval = moab_ref.get_connectivity(tets, elem_nodes, false);
-    CHKERRG(rval);
-    // ierr = m_field_ref.get_entities_by_type_and_ref_level(
-    //   BitRefLevel().set(max_level),BitRefLevel().set(),MBVERTEX,elem_nodes
-    // ); CHKERRG(ierr);
-
-    std::map<EntityHandle, int> little_map;
-    gaussPts_FirstOrder.resize(elem_nodes.size(), 4, 0);
-    Range::iterator nit = elem_nodes.begin();
-    for (int gg = 0; nit != elem_nodes.end(); nit++, gg++) {
-      rval = moab_ref.get_coords(&*nit, 1, &gaussPts_FirstOrder(gg, 0));
-      CHKERRG(rval);
-      little_map[*nit] = gg;
-    }
-    T::gaussPts = gaussPts_FirstOrder;
-    T::gaussPts = trans(T::gaussPts);
-
-    Range::iterator tit = tets.begin();
-    for (int tt = 0; tit != tets.end(); tit++, tt++) {
-      const EntityHandle *conn;
-      int num_nodes;
-      rval = moab_ref.get_connectivity(*tit, conn, num_nodes, false);
-      CHKERRG(rval);
-      if (tt == 0) {
-        // Ref tets has number of rows equal to number of tets on element,
-        // columns are number of gauss points
-        refTets.resize(tets.size(), num_nodes);
+    auto refine_ref_tetrahedron = [this, &m_field_ref, max_level]() {
+      MoFEMFunctionBegin;
+      // seed ref mofem database by setting bit ref level to reference
+      // tetrahedron
+      CHKERR m_field_ref.getInterface<BitRefManager>()->setBitRefLevelByDim(
+          0, 3, BitRefLevel().set(0));
+      for (int ll = 0; ll != max_level; ++ll) {
+        PetscPrintf(T::mField.get_comm(), "Refine Level %d\n", ll);
+        Range edges;
+        CHKERR m_field_ref.getInterface<BitRefManager>()
+            ->getEntitiesByTypeAndRefLevel(BitRefLevel().set(ll),
+                                           BitRefLevel().set(), MBEDGE, edges);
+        Range tets;
+        CHKERR m_field_ref.getInterface<BitRefManager>()
+            ->getEntitiesByTypeAndRefLevel(BitRefLevel().set(ll),
+                                           BitRefLevel(ll).set(), MBTET, tets);
+        // refine mesh
+        MeshRefinement *m_ref;
+        CHKERR m_field_ref.getInterface(m_ref);
+        CHKERR m_ref->add_verices_in_the_middel_of_edges(
+            edges, BitRefLevel().set(ll + 1));
+        CHKERR m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
       }
-      for (int nn = 0; nn < num_nodes; nn++) {
-        refTets(tt, nn) = little_map[conn[nn]];
+      MoFEMFunctionReturn(0);
+    };
+
+    auto get_ref_gauss_pts_and_shape_functions = [this, max_level, &moab_ref,
+                                                  &m_field_ref]() {
+      MoFEMFunctionBegin;
+      for (int ll = 0; ll != max_level + 1; ++ll) {
+        Range tets;
+        CHKERR m_field_ref.getInterface<BitRefManager>()
+            ->getEntitiesByTypeAndRefLevel(BitRefLevel().set(ll),
+                                           BitRefLevel().set(ll), MBTET, tets);
+        if (tenNodesPostProcTets) {
+          EntityHandle meshset;
+          CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
+          CHKERR moab_ref.add_entities(meshset, tets);
+          CHKERR moab_ref.convert_entities(meshset, true, false, false);
+          CHKERR moab_ref.delete_entities(&meshset, 1);
+        }
+        Range elem_nodes;
+        CHKERR moab_ref.get_connectivity(tets, elem_nodes, false);
+
+        auto &gauss_pts = levelGaussPtsOnRefMesh[ll];
+        gauss_pts.resize(elem_nodes.size(), 4, false);
+        std::map<EntityHandle, int> little_map;
+        Range::iterator nit = elem_nodes.begin();
+        for (int gg = 0; nit != elem_nodes.end(); nit++, gg++) {
+          CHKERR moab_ref.get_coords(&*nit, 1, &gauss_pts(gg, 0));
+          little_map[*nit] = gg;
+        }
+        gauss_pts = trans(gauss_pts);
+
+        auto &ref_tets = levelRefTets[ll];
+        Range::iterator tit = tets.begin();
+        for (int tt = 0; tit != tets.end(); ++tit, ++tt) {
+          const EntityHandle *conn;
+          int num_nodes;
+          CHKERR moab_ref.get_connectivity(*tit, conn, num_nodes, false);
+          if (tt == 0) {
+            // Ref tets has number of rows equal to number of tets on element,
+            // columns are number of gauss points
+            ref_tets.resize(tets.size(), num_nodes);
+          }
+          for (int nn = 0; nn != num_nodes; ++nn) {
+            ref_tets(tt, nn) = little_map[conn[nn]];
+          }
+        }
+
+        auto &shape_functions = levelShapeFunctions[ll];
+        shape_functions.resize(elem_nodes.size(), 4);
+        CHKERR ShapeMBTET(&*shape_functions.data().begin(), &gauss_pts(0, 0),
+                          &gauss_pts(1, 0), &gauss_pts(2, 0),
+                          elem_nodes.size());
       }
-    }
+      MoFEMFunctionReturn(0);
+    };
 
-    shapeFunctions.resize(elem_nodes.size(), 4);
-    ierr =
-        ShapeMBTET(&*shapeFunctions.data().begin(), &T::gaussPts(0, 0),
-                   &T::gaussPts(1, 0), &T::gaussPts(2, 0), elem_nodes.size());
-    CHKERRG(ierr);
+    levelRefTets.resize(max_level + 1);
+    levelGaussPtsOnRefMesh.resize(max_level + 1);
+    levelShapeFunctions.resize(max_level + 1);
 
-    // EntityHandle meshset;
-    // rval = moab_ref.create_meshset(MESHSET_SET|MESHSET_TRACK_OWNER,meshset);
-    // CHKERRG(rval); rval = moab_ref.add_entities(meshset,tets); CHKERRG(rval);
-    // rval =
-    // moab_ref.write_file("test_reference_mesh.vtk","VTK","",&meshset,1);
-    // CHKERRG(rval);
-    // moab_ref.list_entities(tets);
+    CHKERR create_reference_element();
+    CHKERR refine_ref_tetrahedron();
+    CHKERR get_ref_gauss_pts_and_shape_functions();
 
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
 
   /** \brief Set integration points
@@ -430,79 +422,96 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
   */
   MoFEMErrorCode setGaussPts(int order) {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
 
-    try {
+    auto get_element_max_dofs_order = [this]() {
+      int max_order = 0;
+      auto &dofs_multi_index = *this->dataPtr;
+      for (auto &dof : dofs_multi_index) {
+        const int dof_order = dof->getDofOrder();
+        max_order = (max_order < dof_order) ? dof_order : max_order;
+      };
+      return max_order;
+    };
 
-      Tag th;
-      int def_in_the_loop = -1;
-      rval = T::postProcMesh.tag_get_handle(
-          "NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER, th,
-          MB_TAG_CREAT | MB_TAG_SPARSE, &def_in_the_loop);
-      CHKERRG(rval);
-
-      T::mapGaussPts.resize(gaussPts_FirstOrder.size1());
-      for (unsigned int gg = 0; gg < gaussPts_FirstOrder.size1(); gg++) {
-        rval = T::postProcMesh.create_vertex(&gaussPts_FirstOrder(gg, 0),
-                                             T::mapGaussPts[gg]);
-        CHKERRG(rval);
-      }
-
-      commonData.tEts.clear();
-      for (unsigned int tt = 0; tt < refTets.size1(); tt++) {
-        int num_nodes = refTets.size2();
-        EntityHandle conn[num_nodes];
-        for (int nn = 0; nn != num_nodes; nn++) {
-          conn[nn] = T::mapGaussPts[refTets(tt, nn)];
-        }
-        EntityHandle tet;
-        rval = T::postProcMesh.create_element(MBTET, conn, num_nodes, tet);
-        CHKERRG(rval);
-        int n_in_loop = T::nInTheLoop;
-        rval = T::postProcMesh.tag_set_data(th, &tet, 1, &n_in_loop);
-        CHKERRG(rval);
-        commonData.tEts.insert(tet);
-      }
-
-      EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
-      T::coords.resize(12, false);
-      {
-        const EntityHandle *conn;
-        int num_nodes;
-        T::mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
-        // coords.resize(3*num_nodes,false);
-        rval = T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
-        CHKERRG(rval);
-      }
-
-      Range nodes;
-      rval = T::postProcMesh.get_connectivity(commonData.tEts, nodes, false);
-      CHKERRG(rval);
-
-      coordsAtGaussPts.resize(nodes.size(), 3, false);
-      for (unsigned int gg = 0; gg < nodes.size(); gg++) {
-        for (int dd = 0; dd < 3; dd++) {
-          coordsAtGaussPts(gg, dd) =
-              cblas_ddot(4, &shapeFunctions(gg, 0), 1, &T::coords[dd], 3);
-        }
-      }
-
-      T::mapGaussPts.resize(nodes.size());
-      Range::iterator nit = nodes.begin();
-      for (int gg = 0; nit != nodes.end(); nit++, gg++) {
-        rval = T::postProcMesh.set_coords(&*nit, 1, &coordsAtGaussPts(gg, 0));
-        CHKERRG(rval);
-        T::mapGaussPts[gg] = *nit;
-      }
-
-    } catch (std::exception &ex) {
-      std::ostringstream ss;
-      ss << "throw in method: " << ex.what() << " at line " << __LINE__
-         << " in file " << __FILE__;
-      SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
+    const int dof_max_order = get_element_max_dofs_order();
+    int level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
+    if (level > levelGaussPtsOnRefMesh.size() - 1) {
+      level = levelGaussPtsOnRefMesh.size() - 1;
     }
 
-    MoFEMFunctionReturnHot(0);
+    auto &level_ref_gauss_pts = levelGaussPtsOnRefMesh[level];
+    auto &level_ref_tets = levelRefTets[level];
+    auto &shape_functions = levelShapeFunctions[level];
+    T::gaussPts.resize(level_ref_gauss_pts.size1(),
+                       level_ref_gauss_pts.size2(), false);
+    noalias(T::gaussPts) = level_ref_gauss_pts;
+
+    ReadUtilIface *iface;
+    CHKERR T::postProcMesh.query_interface(iface);
+
+    const int num_nodes = level_ref_gauss_pts.size2();
+    std::vector<double *> arrays;
+    EntityHandle startv;
+    CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
+    T::mapGaussPts.resize(level_ref_gauss_pts.size2());
+    for (int gg = 0; gg != num_nodes; ++gg)
+      T::mapGaussPts[gg] = startv + gg;
+
+
+    Tag th;
+    int def_in_the_loop = -1;
+    CHKERR T::postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER,
+                                          th, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                          &def_in_the_loop);
+
+    commonData.tEts.clear();
+    const int num_el = level_ref_tets.size1();
+    const int num_nodes_on_ele = level_ref_tets.size2();
+    EntityHandle starte;
+    EntityHandle *conn;
+    CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTET, 0,
+                                      starte, conn);
+    for (unsigned int tt = 0; tt != level_ref_tets.size1(); ++tt) {
+      for (int nn = 0; nn != num_nodes_on_ele; ++nn) 
+        conn[num_nodes_on_ele * tt + nn] =
+            T::mapGaussPts[level_ref_tets(tt, nn)];
+    }
+    CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
+    commonData.tEts = Range(starte, starte + num_el - 1);
+    CHKERR T::postProcMesh.tag_clear_data(th, commonData.tEts,
+                                          &(T::nInTheLoop));
+
+    EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
+    T::coords.resize(12, false);
+    {
+      const EntityHandle *conn;
+      int num_nodes;
+      T::mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
+      CHKERR T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
+    }
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_n(
+        &*shape_functions.data().begin());
+    FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3> t_coords(
+        arrays[0], arrays[1], arrays[2]);
+    const double *t_coords_ele_x = &T::coords[0];
+    const double *t_coords_ele_y = &T::coords[1];
+    const double *t_coords_ele_z = &T::coords[2];
+    for (unsigned int gg = 0; gg != num_nodes; ++gg) {
+      FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
+          t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
+      t_coords(i) = 0;
+      for (int nn = 0; nn != 4; ++nn) {
+        t_coords(i) += t_n * t_ele_coords(i);
+        ++t_ele_coords;
+        ++t_n;
+      }
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
   }
 
   /** \brief Clear operators list
@@ -516,158 +525,140 @@ struct PostProcTemplateVolumeOnRefinedMesh
     MoFEMFunctionBeginHot;
     T::getOpPtrVector().clear();
     MoFEMFunctionReturnHot(0);
-  }
-
-  MoFEMErrorCode preProcess() {
-    MoFEMFunctionBeginHot;
-
-    moab::Interface &moab = T::coreMesh;
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-    rval = T::postProcMesh.delete_mesh();
-    CHKERRG(rval);
-    MoFEMFunctionReturnHot(0);
-  }
-
-  MoFEMErrorCode postProcess() {
-    MoFEMFunctionBeginHot;
-
-    moab::Interface &moab = T::coreMesh;
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&T::mField.get_moab(), MYPCOMM_INDEX);
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh == NULL) {
-      pcomm_post_proc_mesh = new ParallelComm(&moab, T::mField.get_comm());
     }
 
-    Range edges;
-    rval = T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
-    CHKERRG(rval);
-    rval = T::postProcMesh.delete_entities(edges);
-    CHKERRG(rval);
-    Range tris;
-    rval = T::postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
-    CHKERRG(rval);
-    rval = T::postProcMesh.delete_entities(tris);
-    CHKERRG(rval);
-
-    Range tets;
-    rval = T::postProcMesh.get_entities_by_type(0, MBTET, tets, false);
-    CHKERRG(rval);
-
-    // std::cerr << "total tets size " << tets.size() << std::endl;
-
-    int rank = pcomm->rank();
-    Range::iterator tit = tets.begin();
-    for (; tit != tets.end(); tit++) {
-      rval = T::postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(),
-                                          &*tit, 1, &rank);
-      CHKERRG(rval);
+    MoFEMErrorCode preProcess() {
+      MoFEMFunctionBeginHot;
+      moab::Interface &moab = T::coreMesh;
+      ParallelComm *pcomm_post_proc_mesh =
+          ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+      if (pcomm_post_proc_mesh != NULL) {
+        delete pcomm_post_proc_mesh;
+      }
+      CHKERR T::postProcMesh.delete_mesh();
+      MoFEMFunctionReturnHot(0);
     }
 
-    rval = pcomm_post_proc_mesh->resolve_shared_ents(0);
-    CHKERRG(rval);
-
-    // #ifndef MOAB_HDF5_PARALLEL
-    // #warning "No parallel HDF5, not most efficient way of writing files"
-    // for(int r = 0;r<pcomm_post_proc_mesh->size();r++) {
-    //   // FIXME make better communication send only to proc 0
-    //   rval = pcomm_post_proc_mesh->broadcast_entities(r,tets,false,true);
-    //   CHKERRG(rval);
-    // }
-    // #endif //
-
-    MoFEMFunctionReturnHot(0);
-  }
-
-  /** \brief Add operator to post-process Hdiv field
-   */
-  MoFEMErrorCode addHdivFunctionsPostProc(const std::string field_name) {
-    MoFEMFunctionBeginHot;
-    T::getOpPtrVector().push_back(
-        new OpHdivFunctions(T::postProcMesh, T::mapGaussPts, field_name));
-    MoFEMFunctionReturnHot(0);
-  }
-
-  struct OpHdivFunctions : public VOLUME_ELEMENT::UserDataOperator {
-
-    moab::Interface &postProcMesh;
-    std::vector<EntityHandle> &mapGaussPts;
-
-    OpHdivFunctions(moab::Interface &post_proc_mesh,
-                    std::vector<EntityHandle> &map_gauss_pts,
-                    const std::string field_name)
-        : VOLUME_ELEMENT::UserDataOperator(field_name,
-                                           T::UserDataOperator::OPCOL),
-          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+    MoFEMErrorCode postProcess() {
       MoFEMFunctionBeginHot;
 
-      if (data.getIndices().size() == 0)
-        MoFEMFunctionReturnHot(0);
-
-      std::vector<Tag> th;
-      th.resize(data.getFieldData().size());
-
-      double def_VAL[9] = {0, 0, 0};
-
-      switch (type) {
-      case MBTRI:
-        for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
-          std::ostringstream ss;
-          ss << "HDIV_FACE_" << side << "_" << dd;
-          rval = postProcMesh.tag_get_handle(
-              ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
-              MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-          CHKERRG(rval);
-        }
-        break;
-      case MBTET:
-        for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
-          std::ostringstream ss;
-          ss << "HDIV_TET_" << dd;
-          rval = postProcMesh.tag_get_handle(
-              ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
-              MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-          CHKERRG(rval);
-        }
-        break;
-      default:
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "data inconsistency");
+      moab::Interface &moab = T::coreMesh;
+      ParallelComm *pcomm =
+          ParallelComm::get_pcomm(&T::mField.get_moab(), MYPCOMM_INDEX);
+      ParallelComm *pcomm_post_proc_mesh =
+          ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+      if (pcomm_post_proc_mesh == NULL) {
+        pcomm_post_proc_mesh = new ParallelComm(&moab, T::mField.get_comm());
       }
 
-      for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
-        for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
-          ierr = postProcMesh.tag_set_data(th[dd], &mapGaussPts[gg], 1,
-                                           &data.getVectorN<3>(gg)(dd, 0));
-          CHKERRG(ierr);
-        }
+      Range edges;
+      CHKERR T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
+      CHKERR T::postProcMesh.delete_entities(edges);
+      Range tris;
+      CHKERR T::postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
+      CHKERR T::postProcMesh.delete_entities(tris);
+
+      Range tets;
+      CHKERR T::postProcMesh.get_entities_by_type(0, MBTET, tets, false);
+
+      int rank = pcomm->rank();
+      Range::iterator tit = tets.begin();
+      for (; tit != tets.end(); tit++) {
+        CHKERR T::postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(),
+                                            &*tit, 1, &rank);
       }
+
+      CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
 
       MoFEMFunctionReturnHot(0);
     }
+
+    /** \brief Add operator to post-process Hdiv field
+     */
+    MoFEMErrorCode addHdivFunctionsPostProc(const std::string field_name) {
+      MoFEMFunctionBeginHot;
+      T::getOpPtrVector().push_back(
+          new OpHdivFunctions(T::postProcMesh, T::mapGaussPts, field_name));
+      MoFEMFunctionReturnHot(0);
+    }
+
+    struct OpHdivFunctions : public VOLUME_ELEMENT::UserDataOperator {
+
+      moab::Interface &postProcMesh;
+      std::vector<EntityHandle> &mapGaussPts;
+
+      OpHdivFunctions(moab::Interface &post_proc_mesh,
+                      std::vector<EntityHandle> &map_gauss_pts,
+                      const std::string field_name)
+          : VOLUME_ELEMENT::UserDataOperator(field_name,
+                                             T::UserDataOperator::OPCOL),
+            postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
+
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (data.getIndices().size() == 0)
+          MoFEMFunctionReturnHot(0);
+
+        std::vector<Tag> th;
+        th.resize(data.getFieldData().size());
+
+        double def_VAL[9] = {0, 0, 0};
+
+        switch (type) {
+        case MBTRI:
+          for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
+            std::ostringstream ss;
+            ss << "HDIV_FACE_" << side << "_" << dd;
+            CHKERR postProcMesh.tag_get_handle(
+                ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
+                MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+          }
+          break;
+        case MBTET:
+          for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
+            std::ostringstream ss;
+            ss << "HDIV_TET_" << dd;
+            CHKERR postProcMesh.tag_get_handle(
+                ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
+                MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+          }
+          break;
+        default:
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "data inconsistency");
+        }
+
+        for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
+          for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
+            CHKERR postProcMesh.tag_set_data(th[dd], &mapGaussPts[gg], 1,
+                                             &data.getVectorN<3>(gg)(dd, 0));
+          }
+        }
+
+        MoFEMFunctionReturn(0);
+      }
+    };
+
+  private:
+    std::vector<MatrixDouble> levelShapeFunctions;
+    std::vector<MatrixDouble> levelGaussPtsOnRefMesh;
+    std::vector<ublas::matrix<int>> levelRefTets;
   };
-};
 
-/** \brief Post processing
- * \ingroup mofem_fs_post_proc
- */
-struct PostProcVolumeOnRefinedMesh
-    : public PostProcTemplateVolumeOnRefinedMesh<
-          MoFEM::VolumeElementForcesAndSourcesCore> {
+  /** \brief Post processing
+   * \ingroup mofem_fs_post_proc
+   */
+  struct PostProcVolumeOnRefinedMesh
+      : public PostProcTemplateVolumeOnRefinedMesh<
+            MoFEM::VolumeElementForcesAndSourcesCore> {
 
-  PostProcVolumeOnRefinedMesh(MoFEM::Interface &m_field,
-                              bool ten_nodes_post_proc_tets = true,
-                              int nb_ref_levels = -1)
-      : PostProcTemplateVolumeOnRefinedMesh<
-            MoFEM::VolumeElementForcesAndSourcesCore>(m_field) {}
+    PostProcVolumeOnRefinedMesh(MoFEM::Interface &m_field,
+                                bool ten_nodes_post_proc_tets = true,
+                                int nb_ref_levels = -1)
+        : PostProcTemplateVolumeOnRefinedMesh<
+              MoFEM::VolumeElementForcesAndSourcesCore>(m_field) {}
 };
 
 // /** \deprecated Use PostPocOnRefinedMesh instead
