@@ -720,13 +720,14 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
 
   const Problem *problem_ptr;
   CHKERR mField.get_problem(problemName.c_str(), &problem_ptr);
+  const double *array;
+  CHKERR VecGetArrayRead(internal, &array);
 
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
            mField, NODESET | DISPLACEMENTSET, it)) {
 
     const int id = it->getMeshsetId();
     VectorDouble &reaction_vec = reactionsMap[id];
-    ;
 
     Range verts;
     for (int dim = 0; dim != 3; ++dim) {
@@ -745,8 +746,6 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
         std::bitset<8> pstatus(dof->getPStatus());
         if (pstatus.test(0))
           continue; // only local
-        const double *array;
-        CHKERR VecGetArrayRead(internal, &array);
         if (reaction_vec.size() != dof->getNbOfCoeffs()) {
           reaction_vec.resize(dof->getNbOfCoeffs());
           reaction_vec.clear();
@@ -754,8 +753,6 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
 
         reaction_vec[dof->getDofCoeffIdx()] +=
             array[dof->getPetscLocalDofIdx()];
-
-        CHKERR VecRestoreArrayRead(internal, &array);
       }
     }
 
@@ -769,9 +766,9 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
         nb_coefficients, (mField.get_comm_rank() ? nb_coefficients : 0),
         &*ghosts.begin(), &v);
 
-    for (int dd = 0; dd != reaction_vec.size(); ++dd)
-      CHKERR VecSetValue(v, dd, reaction_vec[dd], ADD_VALUES);
-      
+    CHKERR VecSetValues(v, reaction_vec.size(), &*ghosts.begin(), &*reaction_vec.begin(),
+                        ADD_VALUES);
+
     CHKERR VecAssemblyBegin(v);
     CHKERR VecAssemblyEnd(v);
 
@@ -788,5 +785,6 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
 
     CHKERR VecDestroy(&v);
   }
+  CHKERR VecRestoreArrayRead(internal, &array);
   MoFEMFunctionReturn(0);
 }
