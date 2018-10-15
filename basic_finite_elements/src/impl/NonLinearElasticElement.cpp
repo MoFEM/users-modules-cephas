@@ -285,7 +285,7 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::recordTag(
     const int gg) {
   MoFEMFunctionBegin;
 
-  trace_on(tAg);
+  trace_on(tAg, 1);
 
   dAta.materialAdoublePtr->F.resize(3, 3, false);
 
