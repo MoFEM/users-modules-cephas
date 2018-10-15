@@ -714,7 +714,7 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Reactions::calculateReactions() {
+MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
 
   MoFEMFunctionBegin;
 
@@ -746,15 +746,16 @@ MoFEMErrorCode Reactions::calculateReactions() {
         if (pstatus.test(0))
           continue; // only local
         const double *array;
-        CHKERR VecGetArrayRead(fInternal, &array);
+        CHKERR VecGetArrayRead(internal, &array);
         if (reaction_vec.size() != dof->getNbOfCoeffs()) {
           reaction_vec.resize(dof->getNbOfCoeffs());
           reaction_vec.clear();
         }
 
-        reaction_vec[dof->getDofCoeffIdx()] += array[dof->getPetscLocalDofIdx()];
+        reaction_vec[dof->getDofCoeffIdx()] +=
+            array[dof->getPetscLocalDofIdx()];
 
-        CHKERR VecRestoreArrayRead(fInternal, &array);
+        CHKERR VecRestoreArrayRead(internal, &array);
       }
     }
 
@@ -763,36 +764,29 @@ MoFEMErrorCode Reactions::calculateReactions() {
     for (int g = 0; g != nb_coefficients; ++g)
       ghosts[g] = g;
     Vec v;
-    VecCreateGhost(
+    CHKERR VecCreateGhost(
         mField.get_comm(), (mField.get_comm_rank() ? 0 : nb_coefficients),
         nb_coefficients, (mField.get_comm_rank() ? nb_coefficients : 0),
         &*ghosts.begin(), &v);
 
     for (int dd = 0; dd != reaction_vec.size(); ++dd)
       CHKERR VecSetValue(v, dd, reaction_vec[dd], ADD_VALUES);
-
-    CHKERR VecGhostUpdateBegin(v,ADD_VALUES,SCATTER_REVERSE); 
-    CHKERR VecGhostUpdateEnd(v,ADD_VALUES,SCATTER_REVERSE);  
-    CHKERR VecGhostUpdateBegin(v,INSERT_VALUES,SCATTER_FORWARD);  
-    CHKERR VecGhostUpdateEnd(v,INSERT_VALUES,SCATTER_FORWARD);
-  
+      
     CHKERR VecAssemblyBegin(v);
     CHKERR VecAssemblyEnd(v);
-    VecScatter     ctx;
-    Vec            V_SEQ;
-    VecScatterCreateToAll(v,&ctx,&V_SEQ);
-    VecScatterBegin(ctx,v,V_SEQ,INSERT_VALUES,SCATTER_FORWARD);
-    VecScatterEnd(ctx,v,V_SEQ,INSERT_VALUES,SCATTER_FORWARD);
+
+    CHKERR VecGhostUpdateBegin(v, ADD_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateEnd(v, ADD_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateBegin(v, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(v, INSERT_VALUES, SCATTER_FORWARD);
+
     const double *res_array;
-    // CHKERR VecGetArrayRead(v, &res_array);
-    CHKERR  VecGetArrayRead(V_SEQ,&res_array);
+    CHKERR VecGetArrayRead(v, &res_array);
     for (int dd = 0; dd != reaction_vec.size(); ++dd)
       reaction_vec[dd] = res_array[dd];
-    CHKERR VecRestoreArrayRead(V_SEQ, &res_array);
+    CHKERR VecRestoreArrayRead(v, &res_array);
 
-    VecScatterDestroy(&ctx);
-    VecDestroy(&V_SEQ);
-    VecDestroy(&v);
+    CHKERR VecDestroy(&v);
   }
   MoFEMFunctionReturn(0);
 }

@@ -253,7 +253,7 @@ struct DirichletSetFieldFromBlockWithFlags: public DirichletDisplacementBc {
 DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFEMethodPreAndPostProcWithFlags;
 
 /**
- * @brief calculate reactions from vector of internal forces on a given meshset id
+ * @brief calculate reactions from vector of internal forces on meshsets
  *
  * example usage
  *
@@ -270,8 +270,8 @@ DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFE
       VecGhostUpdateBegin(F_int, INSERT_VALUES, SCATTER_FORWARD);
       VecGhostUpdateEnd(F_int, INSERT_VALUES, SCATTER_FORWARD);
 
-      Reactions my_react(m_field, "DM_ELASTIC", "U", F_int);
-      my_react.calculateReactions();
+      Reactions my_react(m_field, "DM_ELASTIC", "U");
+      my_react.calculateReactions(F_int);
       int fix_nodes_meshset_id = 1;
       cout << my_react.getReactionsFromSet(fix_nodes_meshset_id) << endl;
 
@@ -279,10 +279,8 @@ DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFE
  */
 struct Reactions {
 
-  Reactions(MoFEM::Interface &m_field, string problem_name, string field_name,
-            Vec &f_internal)
-      : mField(m_field), problemName(problem_name), fieldName(field_name),
-        fInternal(f_internal) {}
+  Reactions(MoFEM::Interface &m_field, string problem_name, string field_name)
+      : mField(m_field), problemName(problem_name), fieldName(field_name) {}
 
   typedef std::map<int, VectorDouble> ReactionsMap;
   MoFEM::Interface &mField;
@@ -302,17 +300,17 @@ struct Reactions {
     return reactionsMap.at(id);
   }
   /**
-   * @brief calculate reactions from a given vector
+   * @brief alculate reactions from a given vector
    *
+   * @param internal forces vector
    * @return MoFEMErrorCode
    */
-  MoFEMErrorCode calculateReactions();
+  MoFEMErrorCode calculateReactions(Vec &internal);
 
 private:
   std::string problemName;
   std::string fieldName;
   ReactionsMap reactionsMap;
-  Vec fInternal;
 };
 
 #endif //__DIRICHLET_HPP__
