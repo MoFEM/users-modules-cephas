@@ -313,7 +313,7 @@ namespace MixTransport {
           nF.resize(data.getIndices().size());
           nF.clear();
           // Get number of integration points
-          int nb_gauss_pts = data.getHdivN().size1();
+          int nb_gauss_pts = data.getN().size1();
           for(int gg = 0;gg<nb_gauss_pts;gg++) {
             double x,y,z;
             x = getCoordsAtGaussPts()(gg,0);
@@ -324,7 +324,7 @@ namespace MixTransport {
             ierr = cTx.getBcOnValues(fe_ent,gg,x,y,z,value); CHKERRG(ierr);
             const double w = getGaussPts()(2,gg)*0.5;
             const double beta = w*(value-z);
-            noalias(nF) += beta*prod(data.getHdivN(gg),getNormal());
+            noalias(nF) += beta*prod(data.getVectorN<3>(gg),getNormal());
           }
           // Scale vector if history  evaluating method is given
           Vec f = getFEMethod()->ts_F;
@@ -373,7 +373,7 @@ namespace MixTransport {
         boost::shared_ptr<GenericMaterial>& block_data = cTx.dMatMap.at(block_id);
         // block_data->printMatParameters(block_id,"Read material");
         // Get base function
-        auto t_n_hdiv = data.getFTensor1HdivN<3>();
+        auto t_n_hdiv = data.getFTensor1N<3>();
         // Get pressure
         auto t_h = getFTensor0FromVec(cTx.valuesAtGaussPts);
         // Get flux
@@ -385,7 +385,7 @@ namespace MixTransport {
         // Get volume
         double vol = getVolume();
         // Get material parameters
-        int nb_gauss_pts = data.getHdivN().size1();
+        int nb_gauss_pts = data.getN().size1();
         for(int gg = 0;gg!=nb_gauss_pts;gg++) {
           // Get divergence
           ierr = getDivergenceOfHDivBaseFunctions(side,type,data,gg,divVec); CHKERRG(ierr);
@@ -544,12 +544,12 @@ namespace MixTransport {
           // Coords at integration points
           auto t_coords = getFTensor1CoordsAtGaussPts();
           // Get base functions
-          auto t_n_hdiv_row = row_data.getFTensor1HdivN<3>();
+          auto t_n_hdiv_row = row_data.getFTensor1N<3>();
           // Get integration weight
           auto t_w = getFTensor0IntegrationWeight();
           // Get volume
           const double vol = getVolume();
-          int nb_gauss_pts = row_data.getHdivN().size1();
+          int nb_gauss_pts = row_data.getN().size1();
           for(int gg = 0;gg!=nb_gauss_pts;gg++) {
             block_data->h = t_h;
             block_data->x = t_coords(0);
@@ -562,7 +562,7 @@ namespace MixTransport {
             const double beta = alpha*(1/K);
             FTensor::Tensor0<double*> t_a(&*nN.data().begin());
             for(int kk = 0;kk!=nb_row;kk++) {
-              auto t_n_hdiv_col = col_data.getFTensor1HdivN<3>(gg,0);
+              auto t_n_hdiv_col = col_data.getFTensor1N<3>(gg,0);
               for(int ll = 0;ll!=nb_col;ll++) {
                 t_a += beta*(t_n_hdiv_row(j)*t_n_hdiv_col(j));
                 ++t_n_hdiv_col;
@@ -775,7 +775,7 @@ namespace MixTransport {
           nN.clear();
           // Scale eq.
           const double scale = block_data->sCale;
-          int nb_gauss_pts = row_data.getHdivN().size1();
+          int nb_gauss_pts = row_data.getN().size1();
           for(int gg = 0;gg<nb_gauss_pts;gg++) {
             double alpha = getGaussPts()(3,gg)*getVolume()*scale;
             ierr = getDivergenceOfHDivBaseFunctions(
@@ -862,10 +862,10 @@ namespace MixTransport {
           // Get integration weight
           auto t_w = getFTensor0IntegrationWeight();
           // Get base function
-          auto t_n_hdiv_row = row_data.getFTensor1HdivN<3>();
+          auto t_n_hdiv_row = row_data.getFTensor1N<3>();
           // Get volume
           double vol = getVolume();
-          int nb_gauss_pts = row_data.getHdivN().size1();
+          int nb_gauss_pts = row_data.getN().size1();
           for(int gg = 0;gg!=nb_gauss_pts;gg++) {
             block_data->h = t_h;
             block_data->x = t_coords(0);
@@ -1010,13 +1010,13 @@ namespace MixTransport {
           int nb_dofs = data.getFieldData().size();
           if(nb_dofs==0) MoFEMFunctionReturnHot(0);
           // Get base function
-          auto t_n_hdiv = data.getFTensor1HdivN<3>();
+          auto t_n_hdiv = data.getFTensor1N<3>();
           // get normal of face
           auto t_normal = getFTensor1Normal();
           // Integration weight
           auto t_w = getFTensor0IntegrationWeight();
           double flux_on_entity = 0;
-          int nb_gauss_pts = data.getHdivN().size1();
+          int nb_gauss_pts = data.getN().size1();
           for(int gg = 0;gg<nb_gauss_pts;gg++) {
             auto t_data = data.getFTensor0FieldData();
             for(int rr = 0;rr!=nb_dofs;rr++) {

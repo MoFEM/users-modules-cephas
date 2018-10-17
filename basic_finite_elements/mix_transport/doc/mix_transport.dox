@@ -1081,7 +1081,7 @@ struct MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv: public MoFEM::Volu
     C.resize(nb_row,nb_col);
     C.clear();
     divVec.resize(nb_row,false);
-    int nb_gauss_pts = row_data.getHdivN().size1();
+    int nb_gauss_pts = row_data.getVectorN().size1();
     for(int gg = 0;gg<nb_gauss_pts;gg++) {
       double w = getGaussPts()(3,gg)*getVolume();
       ierr = getDivergenceOfHDivBaseFunctions(
@@ -1143,7 +1143,7 @@ functions, global and local DOF indices, DOF values on evaluated entities. For
 example, you can get indices on the row using \b row_data.getIndices(), or matrix
 of base functions at integration point as follows
 \code
-MatrixDouble &base_row_hdiv = row_data.getHdivN(gg);
+MatrixDouble &base_row_hdiv = row_data.getVectorN(gg);
 \endcode
 In this case, each row of the matrix \b base_row_hdiv represents base function, where columns
 represent values of the element of base function vector. Look to
@@ -1162,7 +1162,7 @@ and much more.
 After above explanation, we focus on implementation itself, so finally we loop
 over integration points and calculate local matrix \b C, as follows
 \code
-int nb_gauss_pts = row_data.getHdivN().size1();
+int nb_gauss_pts = row_data.getVectorN().size1();
 for(int gg = 0;gg<nb_gauss_pts;gg++) {
   double w = getGaussPts()(3,gg)*getVolume();
   ierr = getDivergenceOfHDivBaseFunctions(
@@ -1222,7 +1222,7 @@ struct MixTransport::MixTransportElement::OpRhsBcOnValues: public MoFEM::FaceEle
     if(data.getFieldData().size()==0) MoFEMFunctionReturnHot(0);
     Nf.resize(data.getIndices().size());
     Nf.clear();
-    int nb_gauss_pts = data.getHdivN().size1();
+    int nb_gauss_pts = data.getVectorN().size1();
     for(int gg = 0;gg<nb_gauss_pts;gg++) {
       const double x = getCoordsAtGaussPts()(gg,0);
       const double y = getCoordsAtGaussPts()(gg,1);
@@ -1230,7 +1230,7 @@ struct MixTransport::MixTransportElement::OpRhsBcOnValues: public MoFEM::FaceEle
       double value;
       ierr = cTx.getBcOnValues(x,y,z,value); CHKERRG(ierr);
       double w = getGaussPts()(2,gg)*0.5;
-      noalias(Nf) += w*prod(data.getHdivN(gg),getNormal())*value;
+      noalias(Nf) += w*prod(data.getVectorN(gg),getNormal())*value;
     }
     ierr = VecSetValues(F,data.getIndices().size(),&data.getIndices()[0],&Nf[0],ADD_VALUES); CHKERRG(ierr);
     MoFEMFunctionReturnHot(0);
@@ -1277,7 +1277,7 @@ for(int gg = 0;gg<nb_gauss_pts;gg++) {
   double value;
   ierr = cTx.getBcOnValues(x,y,z,value); CHKERRG(ierr);
   double w = getGaussPts()(2,gg)*0.5;
-  noalias(Nf) += w*prod(data.getHdivN(gg),getNormal())*value;
+  noalias(Nf) += w*prod(data.getVectorN(gg),getNormal())*value;
 }
 \endcode
 where \b getNormal() get normal of the face and \b cTx.getBcOnValues(x,y,z,value)
@@ -1585,7 +1585,7 @@ MoFEMErrorCode MixTransport::MixTransportElement::OpSkeleton::doWork(int side,En
     // calculate values form adjacent tets
     valMap.clear();
     ierr = loopSideVolumes("MIX",volSideFe); CHKERRG(ierr);
-    int nb_gauss_pts = data.getHdivN().size1();
+    int nb_gauss_pts = data.getVectorN().size1();
     // it is only one face, so it has to be bc natural boundary condition
     if(valMap.size()==1) {
       if(valMap.begin()->second.size()!=nb_gauss_pts) {

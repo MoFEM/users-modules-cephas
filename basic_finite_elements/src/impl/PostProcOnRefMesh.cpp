@@ -97,9 +97,6 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
   const void *tags_ptr[mapGaussPts.size()];
   int nb_gauss_pts = data.getN().size1();
   if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) {
-    // cerr << *data.getFieldDofs()[0] << endl;
-    // cerr << data.getFieldData().size() << " " << data.getN().size2() << endl;
-    // cerr << data.getDataOrder() << endl;
     SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
              "data inconsistency %d!=%d", mapGaussPts.size(), nb_gauss_pts);
   }
@@ -157,7 +154,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
                                        tags_ptr);
     {
       FTensor::Index<'i', 3> i;
-      auto t_n_hcurl = data.getFTensor1HcurlN<3>();
+      auto t_n_hcurl = data.getFTensor1N<3>();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         double *ptr = &((double *)tags_ptr[gg])[0];
         int ll = 0;
@@ -170,7 +167,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           }
           ++t_n_hcurl;
         }
-        for (; ll != static_cast<int>(data.getHcurlN().size2() / 3); ll++) {
+        for (; ll != static_cast<int>(data.getN().size2() / 3); ll++) {
           ++t_n_hcurl;
         }
       }
@@ -187,7 +184,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
                                        tags_ptr);
     {
       FTensor::Index<'i', 3> i;
-      auto t_n_hdiv = data.getFTensor1HdivN<3>();
+      auto t_n_hdiv = data.getFTensor1N<3>();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         double *ptr = &((double *)tags_ptr[gg])[0];
         int ll = 0;
@@ -200,7 +197,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           }
           ++t_n_hdiv;
         }
-        for (; ll != static_cast<int>(data.getHdivN().size2() / 3); ll++) {
+        for (; ll != static_cast<int>(data.getN().size2() / 3); ll++) {
           ++t_n_hdiv;
         }
       }

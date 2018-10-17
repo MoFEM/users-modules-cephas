@@ -713,3 +713,79 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   }
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
+
+  MoFEMFunctionBegin;
+
+  const Problem *problem_ptr;
+  CHKERR mField.get_problem(problemName.c_str(), &problem_ptr);
+  const double *array;
+  CHKERR VecGetArrayRead(internal, &array);
+
+  auto field_ptr = mField.get_field_structure(fieldName);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+  std::vector<int> ghosts(nb_coefficients);
+  for (int g = 0; g != nb_coefficients; ++g)
+    ghosts[g] = g;
+
+  Vec v;
+  CHKERR VecCreateGhost(
+      mField.get_comm(), (mField.get_comm_rank() ? 0 : nb_coefficients),
+      nb_coefficients, (mField.get_comm_rank() ? nb_coefficients : 0),
+      &*ghosts.begin(), &v);
+
+  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+           mField, NODESET | DISPLACEMENTSET, it)) {
+
+    const int id = it->getMeshsetId();
+    VectorDouble &reaction_vec = reactionsMap[id];
+    reaction_vec.resize(nb_coefficients);
+    reaction_vec.clear();
+
+    Range verts;
+    for (int dim = 0; dim != 3; ++dim) {
+      Range ents;
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
+                                                 true);
+      Range nodes;
+      CHKERR mField.get_moab().get_connectivity(ents, nodes, true);
+      verts.insert(nodes.begin(), nodes.end());
+    }
+
+    for (auto eit : verts) {
+      for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
+               problem_ptr, fieldName, eit, mField.get_comm_rank(), dof_ptr)) {
+
+        const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
+        std::bitset<8> pstatus(dof->getPStatus());
+        if (pstatus.test(0))
+          continue; // only local
+
+        reaction_vec[dof->getDofCoeffIdx()] +=
+            array[dof->getPetscLocalDofIdx()];
+      }
+    }
+
+    double *res_array;
+
+    CHKERR VecGetArray(v, &res_array);
+    for (int dd = 0; dd != reaction_vec.size(); ++dd)
+      res_array[dd] = reaction_vec[dd];
+    CHKERR VecRestoreArray(v, &res_array);
+
+    CHKERR VecGhostUpdateBegin(v, ADD_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateEnd(v, ADD_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateBegin(v, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(v, INSERT_VALUES, SCATTER_FORWARD);
+
+    CHKERR VecGetArray(v, &res_array);
+    for (int dd = 0; dd != reaction_vec.size(); ++dd)
+      reaction_vec[dd] = res_array[dd];
+    CHKERR VecRestoreArray(v, &res_array);
+  }
+  CHKERR VecDestroy(&v);
+  CHKERR VecRestoreArrayRead(internal, &array);
+  MoFEMFunctionReturn(0);
+}

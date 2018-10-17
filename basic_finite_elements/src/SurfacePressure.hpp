@@ -130,7 +130,10 @@ struct NeummanForcesSurface {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
-  /// Operator for pressure element
+  /**
+   * @brief Operator for pressure element
+   * 
+   */
   struct OpNeumannPressure
       : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
@@ -145,6 +148,26 @@ struct NeummanForcesSurface {
 
     VectorDouble Nf;
 
+    /**
+     * @brief Integrate pressure
+     *
+     * \f[
+     * \begin{split}
+     * \mathbf{t} &= p \mathbf{n} \\
+     * \mathbf{f}^i &= \int_\mathcal{T} {\pmb\phi}^i \mathbf{t}
+     * \textrm{d}\mathcal{T} \end{split}
+     * \f]
+     * where \f$p\f$ is pressure, \f$\mathbf{n}\f$ is normal, \f$\mathbf{t}\f$
+     * is traction, and
+     * \f$\mathbf{f}^i\f$ is local vector of external forces for ith base
+     * function \f${\pmb\phi}^i\f$.
+     *
+     *
+     * @param side
+     * @param type
+     * @param data
+     * @return MoFEMErrorCode
+     */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };

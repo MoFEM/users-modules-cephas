@@ -781,9 +781,9 @@ struct MixTransportElement {
           &invK(0, 0), &invK(0, 1), &invK(0, 2), &invK(1, 0), &invK(1, 1),
           &invK(1, 2), &invK(2, 0), &invK(2, 1), &invK(2, 2));
       // Get base functions
-      auto t_n_hdiv_row = row_data.getFTensor1HdivN<3>();
+      auto t_n_hdiv_row = row_data.getFTensor1N<3>();
       FTensor::Tensor1<double, 3> t_row;
-      int nb_gauss_pts = row_data.getHdivN().size1();
+      int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // get integration weight and multiply by element volume
         double w = getGaussPts()(3, gg) * getVolume();
@@ -799,9 +799,9 @@ struct MixTransportElement {
         CHKERR cTx.getResistivity(fe_ent, x, y, z, invK);
         for (int kk = 0; kk != nb_row; kk++) {
           FTensor::Tensor1<const double *, 3> t_n_hdiv_col(
-              &col_data.getHdivN(gg)(0, HDIV0),
-              &col_data.getHdivN(gg)(0, HDIV1),
-              &col_data.getHdivN(gg)(0, HDIV2), 3);
+              &col_data.getVectorN<3>(gg)(0, HVEC0),
+              &col_data.getVectorN<3>(gg)(0, HVEC1),
+              &col_data.getVectorN<3>(gg)(0, HVEC2), 3);
           t_row(j) = w * t_n_hdiv_row(i) * t_inv_k(i, j);
           for (int ll = 0; ll != nb_col; ll++) {
             NN(kk, ll) += t_row(j) * t_n_hdiv_col(j);
@@ -842,8 +842,6 @@ struct MixTransportElement {
         MoFEMFunctionReturnHot(0);
 
       EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
-      // cerr << data.getIndices() << endl;
-      // cerr << data.getHdivN() << endl;
       Nf.resize(nb_row);
       Nf.clear();
       FTensor::Index<'i', 3> i;
@@ -856,9 +854,9 @@ struct MixTransportElement {
           &invK(0, 0), &invK(0, 1), &invK(0, 2), &invK(1, 0), &invK(1, 1),
           &invK(1, 2), &invK(2, 0), &invK(2, 1), &invK(2, 2));
       // get base functions
-      auto t_n_hdiv = data.getFTensor1HdivN<3>();
+      auto t_n_hdiv = data.getFTensor1N<3>();
       auto t_flux = getFTensor1FromMat<3>(cTx.fluxesAtGaussPts);
-      int nb_gauss_pts = data.getHdivN().size1();
+      int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         if (getHoGaussPtsDetJac().size() > 0) {
@@ -910,7 +908,7 @@ struct MixTransportElement {
       int nb_row = data.getIndices().size();
       Nf.resize(nb_row);
       Nf.clear();
-      divVec.resize(data.getHdivN().size2() / 3, 0);
+      divVec.resize(data.getN().size2() / 3, 0);
       if (divVec.size() != data.getIndices().size()) {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                 "data inconsistency");
@@ -990,7 +988,7 @@ struct MixTransportElement {
       NN.resize(nb_row, nb_col);
       NN.clear();
       divVec.resize(nb_col, false);
-      int nb_gauss_pts = row_data.getHdivN().size1();
+      int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         if (getHoGaussPtsDetJac().size() > 0) {
@@ -1060,7 +1058,7 @@ struct MixTransportElement {
       int nb_row = data.getFieldData().size();
       Nf.resize(nb_row, false);
       Nf.clear();
-      int nb_gauss_pts = data.getHdivN().size1();
+      int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         if (getHoGaussPtsDetJac().size() > 0) {
@@ -1127,7 +1125,7 @@ struct MixTransportElement {
       EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
       nF.resize(data.getIndices().size());
       nF.clear();
-      int nb_gauss_pts = data.getHdivN().size1();
+      int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double x, y, z;
         if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
@@ -1145,9 +1143,9 @@ struct MixTransportElement {
         double w = getGaussPts()(2, gg) * 0.5;
         if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
           noalias(nF) +=
-              w * prod(data.getHdivN(gg), getNormalsAtGaussPts(gg)) * value;
+              w * prod(data.getVectorN<3>(gg), getNormalsAtGaussPts(gg)) * value;
         } else {
-          noalias(nF) += w * prod(data.getHdivN(gg), getNormal()) * value;
+          noalias(nF) += w * prod(data.getVectorN<3>(gg), getNormal()) * value;
         }
       }
       Vec f = (F != PETSC_NULL) ? F : getFEMethod()->ts_F;
@@ -1190,8 +1188,8 @@ struct MixTransportElement {
         MoFEMFunctionReturnHot(0);
       EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
       int nb_dofs = data.getFieldData().size();
-      int nb_gauss_pts = data.getHdivN().size1();
-      if (3 * nb_dofs != static_cast<int>(data.getHdivN().size2())) {
+      int nb_gauss_pts = data.getN().size1();
+      if (3 * nb_dofs != static_cast<int>(data.getN().size2())) {
         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                 "wrong number of dofs");
       }
@@ -1215,7 +1213,7 @@ struct MixTransportElement {
       FTensor::Tensor1<const double *, 3> t_normal(normal_ptr, &normal_ptr[1],
                                                    &normal_ptr[2], 3);
       // get base functions
-      auto t_n_hdiv_row = data.getFTensor1HdivN<3>();
+      auto t_n_hdiv_row = data.getFTensor1N<3>();
 
       double nrm2 = 0;
 
@@ -1249,8 +1247,9 @@ struct MixTransportElement {
         for (int ll = 0; ll != nb_dofs; ll++) {
           // get column on shape functions
           FTensor::Tensor1<const double *, 3> t_n_hdiv_col(
-              &data.getHdivN(gg)(0, HDIV0), &data.getHdivN(gg)(0, HDIV1),
-              &data.getHdivN(gg)(0, HDIV2), 3);
+              &data.getVectorN<3>(gg)(0, HVEC0),
+              &data.getVectorN<3>(gg)(0, HVEC1),
+              &data.getVectorN<3>(gg)(0, HVEC2), 3);
           for (int kk = 0; kk <= ll; kk++) {
             NN(ll, kk) += w * t_n_hdiv_row(i) * t_n_hdiv_col(i);
             ++t_n_hdiv_col;
@@ -1386,7 +1385,8 @@ struct MixTransportElement {
         cTx.divergenceAtGaussPts[gg] += inner_prod(divVec, data.getFieldData());
         ublas::matrix_column<MatrixDouble> flux_at_gauss_pt(
             cTx.fluxesAtGaussPts, gg);
-        flux_at_gauss_pt += prod(trans(data.getHdivN(gg)), data.getFieldData());
+        flux_at_gauss_pt +=
+            prod(trans(data.getVectorN<3>(gg)), data.getFieldData());
       }
       MoFEMFunctionReturn(0);
     }
@@ -1587,7 +1587,7 @@ struct MixTransportElement {
         CHKERR loopSideVolumes("MIX", volSideFe);
         ;
 
-        int nb_gauss_pts = data.getHdivN().size1();
+        int nb_gauss_pts = data.getN().size1();
 
         // it is only one face, so it has to be bc natural boundary condition
         if (valMap.size() == 1) {
