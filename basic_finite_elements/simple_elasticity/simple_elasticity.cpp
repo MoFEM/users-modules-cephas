@@ -44,8 +44,7 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
       : VolumeElementForcesAndSourcesCore::UserDataOperator("U", "U", OPROWCOL,
                                                             symm) {
 
-    // Evaluation of the elastic stiffness tensor, D, in the Voigt notation is
-    // done in the constructor
+    // Evaluation of the elastic stiffness tensor, D
 
     // hardcoded choice of elastic parameters
     pOisson = 0.1;
