@@ -231,11 +231,6 @@ MoFEMErrorCode NonlinearElasticElement::OpGetDataAtGaussPts::doWork(
     }
   }
 
-  // std::cerr << row_field_name << " " << col_field_name << std::endl;
-  // std::cerr << side << " " << type << std::endl;
-  // std::cerr << values << std::endl;
-  // std::cerr << valuesAtGaussPts[0] << std::endl;
-
   MoFEMFunctionReturn(0);
 }
 
