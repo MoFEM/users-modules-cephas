@@ -64,6 +64,7 @@ extern "C" {
 #include <VolumeCalculation.hpp>
 #include <AnalyticalDirichlet.hpp>
 #include <SaveVertexDofOnTag.hpp>
+#include <HookeElement.hpp>
 
 using namespace BasicFiniteElements;
 

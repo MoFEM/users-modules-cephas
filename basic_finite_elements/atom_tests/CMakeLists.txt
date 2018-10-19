@@ -330,3 +330,21 @@ if(ADOL-C_LIBRARY)
   )
 
 endif(ADOL-C_LIBRARY)
+
+# Elastic element
+
+bfe_add_executable(testing_jacobian_of_hook_element
+${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_hook_element.cpp
+)
+
+target_link_libraries(testing_jacobian_of_hook_element
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  mofem_cblas
+  ${MoFEM_PROJECT_LIBS}
+)

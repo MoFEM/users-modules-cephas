@@ -322,9 +322,8 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::recordTag(
       }
     }
 
-    ierr = dAta.materialAdoublePtr->dEterminant(dAta.materialAdoublePtr->H,
+    CHKERR dAta.materialAdoublePtr->dEterminant(dAta.materialAdoublePtr->H,
                                                 dAta.materialAdoublePtr->detH);
-    CHKERRG(ierr);
     dAta.materialAdoublePtr->invH.resize(3, 3, false);
     CHKERR dAta.materialAdoublePtr->iNvert(dAta.materialAdoublePtr->detH,
                                            dAta.materialAdoublePtr->H,
