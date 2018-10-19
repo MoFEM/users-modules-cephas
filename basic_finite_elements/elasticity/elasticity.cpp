@@ -263,7 +263,6 @@ int main(int argc, char *argv[]) {
           Range block_ents;
           CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
                                              true);
-          CHKERRG(rval);
           Range ents_to_set_order;
           CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
                                       moab::Interface::UNION);
