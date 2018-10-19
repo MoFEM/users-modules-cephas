@@ -31,7 +31,20 @@ using namespace MoFEM;
 
 NonlinearElasticElement::MyVolumeFE::MyVolumeFE(MoFEM::Interface &m_field)
     : VolumeElementForcesAndSourcesCore(m_field), A(PETSC_NULL), F(PETSC_NULL),
-      addToRule(1) {}
+      addToRule(1) {
+  int ghosts[] = {0};
+  if (mField.get_comm_rank() == 0) {
+    ierr = VecCreateGhost(mField.get_comm(), 1, 1, 0, ghosts, &V);
+  } else {
+    ierr = VecCreateGhost(mField.get_comm(), 0, 1, 1, ghosts, &V);
+  }
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+}
+
+NonlinearElasticElement::MyVolumeFE::~MyVolumeFE() { 
+  ierr = VecDestroy(&V);
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+}
 
 int NonlinearElasticElement::MyVolumeFE::getRule(int order) {
   return 2 * (order - 1) + addToRule;
@@ -69,17 +82,9 @@ MoFEMErrorCode NonlinearElasticElement::MyVolumeFE::preProcess() {
     break;
   }
 
-  int ghosts[] = {0};
-  int rank;
-  MPI_Comm_rank(mField.get_comm(), &rank);
-
+ 
   switch (snes_ctx) {
   case CTX_SNESNONE:
-    if (rank == 0) {
-      CHKERR VecCreateGhost(mField.get_comm(), 1, 1, 1, ghosts, &V);
-    } else {
-      CHKERR VecCreateGhost(mField.get_comm(), 0, 1, 1, ghosts, &V);
-    }
     CHKERR VecZeroEntries(V);
     CHKERR VecGhostUpdateBegin(V, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(V, INSERT_VALUES, SCATTER_FORWARD);
@@ -107,7 +112,6 @@ MoFEMErrorCode NonlinearElasticElement::MyVolumeFE::postProcess() {
     CHKERR VecGetArray(V, &array);
     eNergy = array[0];
     CHKERR VecRestoreArray(V, &array);
-    CHKERR VecDestroy(&V);
     break;
   default:
     break;
@@ -215,7 +219,6 @@ MoFEMErrorCode NonlinearElasticElement::OpGetDataAtGaussPts::doWork(
   } else {
     // FIXME: THat part is inefficient
     VectorDouble &values = data.getFieldData();
-    // std::cerr << valuesAtGaussPts[0] << " : ";
     for (int gg = 0; gg < nb_gauss_pts; gg++) {
       VectorAdaptor N = data.getN(gg, nb_dofs / rank);
       MatrixAdaptor diffN = data.getDiffN(gg, nb_dofs / rank);
@@ -407,7 +410,7 @@ MoFEMErrorCode NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::doWork(
 
     dAta.materialAdoublePtr->gG = gg;
 
-    // Record tag and calualte stress
+    // Record tag and calculate stress
     if (recordTagForIntegrationPoint(gg)) {
       CHKERR recordTag(gg);
     }
@@ -706,7 +709,6 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
     }
   }
 
-  // std::cerr << "nf : " << nf << std::endl;
   CHKERR aSemble(row_side, row_type, row_data);
 
   MoFEMFunctionReturn(0);
@@ -714,11 +716,19 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
 
 NonlinearElasticElement::OpEnergy::OpEnergy(const std::string field_name,
                                             BlockData &data,
-                                            CommonData &common_data, Vec *v_ptr,
+                                            CommonData &common_data, Vec v,
                                             bool field_disp)
     : VolumeElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
-      dAta(data), commonData(common_data), Vptr(v_ptr), fieldDisp(field_disp) {}
+      dAta(data), commonData(common_data), V(v), fieldDisp(field_disp) {
+  ierr = PetscObjectReference((PetscObject)V);
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+}
+
+NonlinearElasticElement::OpEnergy::~OpEnergy() { 
+  ierr = VecDestroy(&V);
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+}
 
 MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
     int row_side, EntityType row_type,
@@ -729,12 +739,13 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
     MoFEMFunctionReturnHot(0);
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
       dAta.tEts.end()) {
-    MoFEMFunctionReturnHot(0);
   }
 
   std::vector<MatrixDouble> &F =
       (commonData.gradAtGaussPts[commonData.spatialPositions]);
 
+  double *energy_ptr;
+  CHKERR VecGetArray(V, &energy_ptr);
   for (unsigned int gg = 0; gg != row_data.getN().size1(); ++gg) {
     double val = getVolume() * getGaussPts()(3, gg);
     if (getHoGaussPtsDetJac().size() > 0) {
@@ -749,13 +760,14 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
       }
     }
 
+
     int nb_active_variables = 0;
     CHKERR dAta.materialDoublePtr->setUserActiveVariables(nb_active_variables);
     CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
         dAta, getNumeredEntFiniteElementPtr());
-    CHKERR VecSetValue(*Vptr, 0, val * dAta.materialDoublePtr->eNergy,
-                       ADD_VALUES);
+    energy_ptr[0] += val * dAta.materialDoublePtr->eNergy;
   }
+  CHKERR VecRestoreArray(V, &energy_ptr);
 
   MoFEMFunctionReturn(0);
 }
@@ -1010,8 +1022,6 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::doWork(
     }
   }
 
-  // std::cerr << "N " << getNumeredEntFiniteElementPtr()->getRefEnt() <<
-  // std::endl << k << std::endl;
   CHKERR aSemble(row_side, col_side, row_type, col_type, row_data, col_data);
 
   MoFEMFunctionReturn(0);
@@ -1154,19 +1164,16 @@ MoFEMErrorCode NonlinearElasticElement::setBlocks(
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
            mField, BLOCKSET | MAT_ELASTICSET, it)) {
     Mat_Elastic mydata;
-    ierr = it->getAttributeDataStructure(mydata);
-    CHKERRG(ierr);
+    CHKERR it->getAttributeDataStructure(mydata);
     int id = it->getMeshsetId();
     EntityHandle meshset = it->getMeshset();
-    rval = mField.get_moab().get_entities_by_type(meshset, MBTET,
+    CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET,
                                                   setOfBlocks[id].tEts, true);
-    CHKERRG(rval);
     setOfBlocks[id].iD = id;
     setOfBlocks[id].E = mydata.data.Young;
     setOfBlocks[id].PoissonRatio = mydata.data.Poisson;
     setOfBlocks[id].materialDoublePtr = materialDoublePtr;
     setOfBlocks[id].materialAdoublePtr = materialAdoublePtr;
-    // std::cerr << setOfBlocks[id].tEts << std::endl;
   }
 
   MoFEMFunctionReturn(0);
@@ -1242,7 +1249,7 @@ NonlinearElasticElement::setOperators(string spatial_position_field_name,
   for (; sit != setOfBlocks.end(); sit++) {
     feEnergy.getOpPtrVector().push_back(
         new OpEnergy(spatial_position_field_name, sit->second, commonData,
-                     &feEnergy.V, field_disp));
+                     feEnergy.V, field_disp));
   }
 
   // Lhs
