@@ -22,14 +22,17 @@ if(ADOL-C_LIBRARY)
 
   #testing
   add_test(ElasticityTest
-   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
    -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m
    -ksp_type cg -pc_type asm -sub_pc_type lu
    -ksp_monitor -log_view)
 
   add_test(MultiGridViaOrderSolver
-    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/elasticity
-    -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape2Parts.h5m -my_is_partitioned
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+    ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+    -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape2Parts.h5m 
+    -my_is_partitioned
     -ksp_type fgmres -ksp_monitor
     -my_order 4
     -pc_type mg

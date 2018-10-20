@@ -263,7 +263,6 @@ int main(int argc, char *argv[]) {
           Range block_ents;
           CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
                                              true);
-          CHKERRG(rval);
           Range ents_to_set_order;
           CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
                                       moab::Interface::UNION);
@@ -500,10 +499,14 @@ int main(int argc, char *argv[]) {
     // in that case. We run NonlinearElasticElement with hook material.
     // Calculate right hand side vector
     elastic.getLoopFeRhs().snes_f = F;
+    PetscPrintf(PETSC_COMM_WORLD, "Assemble external force vector  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeRhs());
+    PetscPrintf(PETSC_COMM_WORLD, " done\n");
     // Assemble matrix
     elastic.getLoopFeLhs().snes_B = Aij;
+    PetscPrintf(PETSC_COMM_WORLD, "Calculate stiffness matrix  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeLhs());
+    PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
@@ -760,7 +763,9 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
         CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
         // Save results to file
+        PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
         CHKERR post_proc.writeFile("out.h5m");
+        PetscPrintf(PETSC_COMM_WORLD, " done\n");
       }
 
       // Destroy vector, no needed any more
@@ -780,13 +785,17 @@ int main(int argc, char *argv[]) {
       // Post-process results
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
+      PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
       CHKERR post_proc.writeFile("out.h5m");
+      PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
 
     // Calculate elastic energy
     elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
     elastic.getLoopFeEnergy().eNergy = 0;
+    PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
+    PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
     // Print elastic energy
     PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",

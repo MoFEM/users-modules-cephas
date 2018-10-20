@@ -49,6 +49,7 @@ struct NonlinearElasticElement {
     int addToRule;
 
     MyVolumeFE(MoFEM::Interface &m_field);
+    ~MyVolumeFE();
 
     /** \brief it is used to calculate nb. of Gauss integration points
      *
@@ -561,11 +562,12 @@ struct NonlinearElasticElement {
 
     BlockData &dAta;
     CommonData &commonData;
-    Vec *Vptr;
+    Vec ghostVec;
     bool fieldDisp;
 
     OpEnergy(const std::string field_name, BlockData &data,
-             CommonData &common_data, Vec *v_ptr, bool field_disp);
+             CommonData &common_data, Vec ghost_vec, bool field_disp);
+    ~OpEnergy();
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           DataForcesAndSourcesCore::EntData &row_data);
