@@ -716,17 +716,17 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::doWork(
 
 NonlinearElasticElement::OpEnergy::OpEnergy(const std::string field_name,
                                             BlockData &data,
-                                            CommonData &common_data, Vec v,
+                                            CommonData &common_data, Vec ghost_vec,
                                             bool field_disp)
     : VolumeElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
-      dAta(data), commonData(common_data), V(v), fieldDisp(field_disp) {
-  ierr = PetscObjectReference((PetscObject)V);
+      dAta(data), commonData(common_data), ghostVec(ghost_vec), fieldDisp(field_disp) {
+  ierr = PetscObjectReference((PetscObject)ghostVec);
   CHKERRABORT(PETSC_COMM_SELF, ierr);
 }
 
 NonlinearElasticElement::OpEnergy::~OpEnergy() { 
-  ierr = VecDestroy(&V);
+  ierr = VecDestroy(&ghostVec);
   CHKERRABORT(PETSC_COMM_SELF, ierr);
 }
 
@@ -743,16 +743,17 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
 
   std::vector<MatrixDouble> &F =
       (commonData.gradAtGaussPts[commonData.spatialPositions]);
+  dAta.materialDoublePtr->F.resize(3, 3, false);
 
   double *energy_ptr;
-  CHKERR VecGetArray(V, &energy_ptr);
+  CHKERR VecGetArray(ghostVec, &energy_ptr);
+
   for (unsigned int gg = 0; gg != row_data.getN().size1(); ++gg) {
     double val = getVolume() * getGaussPts()(3, gg);
     if (getHoGaussPtsDetJac().size() > 0) {
       val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    dAta.materialDoublePtr->F.resize(3, 3, false);
     noalias(dAta.materialDoublePtr->F) = F[gg];
     if (fieldDisp) {
       for (int dd = 0; dd < 3; dd++) {
@@ -760,14 +761,13 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
       }
     }
 
-
     int nb_active_variables = 0;
     CHKERR dAta.materialDoublePtr->setUserActiveVariables(nb_active_variables);
     CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
         dAta, getNumeredEntFiniteElementPtr());
     energy_ptr[0] += val * dAta.materialDoublePtr->eNergy;
   }
-  CHKERR VecRestoreArray(V, &energy_ptr);
+  CHKERR VecRestoreArray(ghostVec, &energy_ptr);
 
   MoFEMFunctionReturn(0);
 }

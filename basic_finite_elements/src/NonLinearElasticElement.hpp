@@ -562,11 +562,11 @@ struct NonlinearElasticElement {
 
     BlockData &dAta;
     CommonData &commonData;
-    Vec V;
+    Vec ghostVec;
     bool fieldDisp;
 
     OpEnergy(const std::string field_name, BlockData &data,
-             CommonData &common_data, Vec v, bool field_disp);
+             CommonData &common_data, Vec ghost_vec, bool field_disp);
     ~OpEnergy();
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
