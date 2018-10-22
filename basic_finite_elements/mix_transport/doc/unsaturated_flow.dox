@@ -100,7 +100,7 @@ sCale=1e6       # Scale mass conservation equation
 ePsilon1=1e-5   # Minimal capacity when removing spurious oscillations in time
 
 Ah=-9 # head suction at z = 0
-AhZ=1 #Â gradient of initial head suction
+AhZ=1 # gradient of initial head suction
 AhZZ=0 # initial head suction is calculated from equation h = Ah + AhZZ*z + AhZZ*zz
 
 [mat_block_2]
@@ -137,7 +137,7 @@ h(z,t=0) = -0.09+z&\textrm{for silt}
 \subsubsection mix_us_flow_example_1_model_runing Analysis
 
 The analysis is run using script
-\include sers_modules/basic_finite_elements/mix_transport/run_uf.sh
+\include users_modules/basic_finite_elements/mix_transport/run_uf.sh
 
 Editing that file you can set range of parameters, control time solve,
 tolerances, stop criteria, line-searcher. For details look to PETSc manual
@@ -252,7 +252,7 @@ sCale=1e6       # Scale mass conservation equation
 ePsilon1=1e-5   # Minimal capacity when removing spurious oscillations in time
 
 Ah=-9 # head suction at z = 0
-AhZ=1 #Â gradient of initial head suction
+AhZ=1 # gradient of initial head suction
 AhZZ=0 # initial head suction is calculated from equation h = Ah + AhZZ*z + AhZZ*zz
 
 [mat_block_2]
@@ -856,7 +856,7 @@ by linear function, hence
 \f[
 \frac{\partial \boldsymbol\xi}{\partial t} = (shift).
 \f]
-For example, iterative change of capillary pressure head, when backwards Eulerâ€™s
+For example, iterative change of capillary pressure head, when backwards Euler’s
 method is applied, \f$(shift) = 1/\Delta t\f$, what can be derived as follows
 \f[
 \left(\frac{\partial \delta h}{\partial t}\right)^{i+1}_{n+1} =
