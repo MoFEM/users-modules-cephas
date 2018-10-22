@@ -181,7 +181,7 @@ Build Finite Elements sFE
 id 00000000000000000000000000000100 name sFE f_id_row 00000000000000000000000000000111 f_id_col 00000000000000000000000000000111 BitFEId_data 00000000000000000000000000000111 Nb. FEs 30
 \endverbatim
 
-- Finally, problem is constructed and indexed DOFs are enabling to build matrices and vectors
+- Finally, the problem is constructed and the indexed DOFs are used to build the matrices and vectors
 \verbatim
 Nb. entFEAdjacencies 918
 partition_problem: rank = 0 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name SimpleProblem Nb. local dof 903 nb global row dofs 903
