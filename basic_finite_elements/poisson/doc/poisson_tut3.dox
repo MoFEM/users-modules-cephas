@@ -71,7 +71,7 @@ and create finite element class instance itself
 \code
 boundary_penalty_lhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(new FaceElementForcesAndSourcesCore(m_field));
 \endcode
-with that at hand we can add appropriate users data operators
+with that at hand we can add appropriate user data operators
 \code
 boundary_penalty_lhs_fe->getOpPtrVector().push_back(new PoissonExample::OpS(beta));
 \endcode
@@ -93,7 +93,7 @@ Vector of \e IS (Index Set) is used to store global indices of block matrices.
 
 \subsection poisson_tut3_diagonal Assembly of K and S matrices
 
-- We create sub DM form DM
+- We create sub DM from DM
 \code
 CHKERR DMCreate(PETSC_COMM_WORLD,&dm_sub_KK);
 CHKERR DMSetType(dm_sub_KK,"DMMOFEM");
@@ -223,24 +223,11 @@ CHKERR KSPSolve(solver,F,D);
 
 \section poisson_tut3_running_program Running the program
 
-The easiest installation is with Docker containers; please see youtube video how
-to run installation <a href=https://www.youtube.com/watch?v=6opfKER7JHA>link</a>. You can also look
-here \ref install_docker. Open terminal and run Docker container
-\code
-docker run --rm=true -it --volumes-from mofem_build  -v $HOME/mofem-cephas/mofem:/mofem -v $HOME:$HOME -e HOSTHOME=$HOME mofem_build /bin/bash
-\endcode
+In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. Typically, this can be done as follows
 
-You are now in Docker container, go to directory where Poisson problem is
-located, and compile code
 \code
-cd /mofem_build/um/basic_finite_elements/poisson/
+cd mofem_install/um/build/basic_finite_elements/poisson
 make -j2
-\endcode
-It can take some time when you compile it first time since all essential
-functionality is compiled
-
-Once code is compiled, we can run test
-\code
 mpirun -np 2  ./analytical_poisson_field_split -file_name cube_2part.h5m -order 3 -pc_type fieldsplit
 \endcode
 where options in .petscrc file are

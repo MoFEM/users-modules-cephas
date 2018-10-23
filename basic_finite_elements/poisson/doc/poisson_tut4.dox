@@ -195,7 +195,7 @@ integration is implemented in the following methods
 
 - Constrains residual \f$\mathbf{r}_g\f$ is implemented in \ref PoissonExample::OpRes_g::iNtegrate
 
-Finite element instances and setup of finite element operators, following figure 1, is implanted
+Finite element instances and setup of finite element operators, following \ref figure_1_operator_volume_element "Figure 1", is implanted
 in \ref PoissonExample::CreateFiniteElements::createFEToAssembleMatrixAndVectorForNonlinearProblem,
 in particular we find there the following code
 \code
@@ -213,7 +213,8 @@ Operator constructor takes arguments of pointers of previously created instances
 of vector and matrix. The same procedure is applied to evaluate residuals by
 integration over domain and boundary.
 
-\image html poisson_tut4_fig1.png "Figure 2. Operators of volume finite element" width=700px
+\anchor figure_1_operator_volume_element
+\image html poisson_tut4_fig1.png "Figure 1. Operators of volume finite element" width=700px
 
 \subsection poisson_tut4_main_code Nonlinear Poisson code
 
@@ -244,29 +245,18 @@ SNES solver can be configured from a command line, <a href=http://www.mcs.anl.go
 
 \subsection poisson_tut4_main_running_code Running code
 
-The easiest installation is with Docker containers; please see youtube video how
-to run installation <a href=https://www.youtube.com/watch?v=6opfKER7JHA>link</a>. You can also look
-here \ref install_docker. Open terminal and run Docker container
-\code
-docker run --rm=true -it --volumes-from mofem_build  -v $HOME/mofem-cephas/mofem:/mofem -v $HOME:$HOME -e HOSTHOME=$HOME mofem_build /bin/bash
-\endcode
+In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. Typically, this can be done as follows
 
-You are now in Docker container, go to directory where Poisson problem is
-located, and compile code
 \code
-cd /mofem_build/um/basic_finite_elements/poisson/
+cd mofem_install/um/build/basic_finite_elements/poisson
 make -j2
-\endcode
-
-Once code is compiled, we can run test
-\code
 mpirun -np 2 ./analytical_nonlinear_poisson -file_name cube_2part.h5m -order 3 \
 -snes_monitor -snes_converged_reason  -snes_type newtonls \
 -snes_linesearch_type cp -snes_linesearch_monitor
 \endcode
 where SNES options are explained <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/SNESSetFromOptions.html>here</a>.
 
-As result of above command we get
+As a result of above command, we get
 \verbatim
 0 SNES Function norm 6.585598470492e-01
   0 KSP Residual norm 6.585598470492e-01

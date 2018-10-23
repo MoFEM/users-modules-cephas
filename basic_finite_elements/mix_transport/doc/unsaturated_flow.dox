@@ -2,16 +2,16 @@
 
 In this tutorial, we show how to solve a strongly nonlinear time dependent equation
 using mix-finite-elements. We focus attention on construction of finite elements,
-finite elements users data operators (UDO), setting up discrete manager (DM) and
+finite elements user data operators (UDO), setting up discrete manager (DM) and
 time solver (TS). Issues related to the nonlinear solver and line searchers are briefly
 discussed. Also, we show how to use automatic differentiation
 (<a href=https://projects.coin-or.org/ADOL-C>ADOL-C</a>) to calculate
-derivatives of constitutive model.
+derivatives of a constitutive model.
 
 Problem solved here is similar to the solution of nonlinear Poisson's equation
 described in \ref poisson_tut4 and is a generalization of the problem described in
 \ref mix_transport. You might look to those tutorials if some implementation aspects
-of presented methodology are unclear. Also, you are encouraged to pose
+of presented methodology are unclear. Also, you are encouraged to post
 questions on our
 <a href=https://groups.google.com/forum/#!forum/mofem-group>Q&A forum</a>.
 
@@ -26,12 +26,12 @@ hp-adaptivity, we offer our guidance and help.
 
 The application for unsaturated flow is implemented in \ref
 unsaturated_transport.cpp, material models are implemented in
-MaterialUnsaturatedFlow.hpp, problem definition and implementation is
+MaterialUnsaturatedFlow.hpp, problem definition and implementation are
 implemented in UnsaturatedFlow.hpp.
 
 The tutorial is organized as follows. First, we explain how to run the
-application. Next, we show how to material model is implemented, after that we
-explain the mathematical and numerical model. Finally, we explain implementation
+application. Next, we show how the material model is implemented, after that we
+explain the mathematical and numerical models. Finally, we explain implementation
 details.
 
 \note Not all information presented here is essential, some parts you can skip and
@@ -40,24 +40,9 @@ have to focus attention on section \ref mix_us_flow_physical_equation.
 
 \tableofcontents
 
-\section mix_us_flow_running_code Running code
-
-The easiest installation is with Docker containers; please see youtube video how
-to run installation <a href=https://www.youtube.com/watch?v=6opfKER7JHA>link</a>. You can also look
-here \ref install_docker. Open terminal and run Docker container
-\code
-docker run --rm=true -it --volumes-from mofem_build  -v $HOME/mofem-cephas/mofem:/mofem -v $HOME:$HOME -e HOSTHOME=$HOME mofem_build /bin/bash
-\endcode
+\section mix_us_flow_numerical_examples Numerical examples
 
 
-You are now in Docker container, go to directory where users modules are located
-and compile code
-\code
-cd /mofem_build/um
-make -j2
-\endcode
-It can take some time when you compile it the first time since all parts of the
-code are compiled.
 
 \subsection mix_us_flow_example_1 Numerical example 1
 
@@ -69,7 +54,7 @@ pressure for two days, that is long enough to approach equilibrium.
 
 \subsubsection mix_us_flow_example_1_mesh Mesh
 
-First, we create a mesh; we can make it in Salome, gMesh, Tetgen, or any other
+First, we create a mesh which can be made in Salome, gMesh, Tetgen, or any other
 code. MoFEM uses MOAB for mesh database with can read various mesh file formats.
 Here we using Cubit to make mesh, journal file this problem is as follows
 \verbatim
@@ -115,7 +100,7 @@ sCale=1e6       # Scale mass conservation equation
 ePsilon1=1e-5   # Minimal capacity when removing spurious oscillations in time
 
 Ah=-9 # head suction at z = 0
-AhZ=1 #Â gradient of initial head suction
+AhZ=1 # gradient of initial head suction
 AhZZ=0 # initial head suction is calculated from equation h = Ah + AhZZ*z + AhZZ*zz
 
 [mat_block_2]
@@ -149,12 +134,13 @@ h(z,t=0) = -0.09+z&\textrm{for silt}
 \right.
 \f]
 
-\subsubsection mix_us_flow_example_1_model_runig Analysis
+\subsubsection mix_us_flow_example_1_model_runing Analysis
 
 The analysis is run using script
-\include sers_modules/basic_finite_elements/mix_transport/run_uf.sh.
-Editing that file you can set range of parameters, controlling time solve,
-tolerances, stopping criteria, line-searcher. For details look to PETSc manual
+\include users_modules/basic_finite_elements/mix_transport/run_uf.sh
+
+Editing that file you can set range of parameters, control time solve,
+tolerances, stop criteria, line-searcher. For details look to PETSc manual
 <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>link</a>.
 
 - Options controlling time solver (TS) see <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/TSSetFromOptions.html>link</a>.
@@ -164,7 +150,7 @@ tolerances, stopping criteria, line-searcher. For details look to PETSc manual
 
 Note solved problem is strongly nonlinear, and we use here secant line-search in
 the L2 norm (see <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/SNESLINESEARCHL2.html>link</a>).
-For stability of results at each Newton iteration, we execute three
+For stability of the result at each Newton iteration, we execute three
 sub-iterations with line searcher. Also, you have option controlling time step
 adaptively and linear solver pre-conditioner. All command line options, both
 PETSc and MoFEM are printed if you add switch \e -help when you run MoFEM
@@ -193,19 +179,21 @@ where
 - third parameter number of processors which you like to use to run analysis
 - the fourth parameter set the time step size
 - the fifth parameter set the time of simulation
-- the six parameter is approximation order
+- the sixth parameter is approximation order
 
 \subsubsection mix_us_flow_example_1_model_results Results
 
-For problem set-up like above, results are shown in figure 1, where the
+For problem set-up like above, results are shown in \ref figure_1_unsaturated_flow_result_example1 "Figure 1", where the
 evolution of various parameters over time until equilibrium is reached is shown.
 You can note that initially, clay is relatively dry, whereas silt is wet. Over
 time clay suck the water from silt. On the left-hand side observed the
 distribution of saturation. Initially, high gradients of pressure head are
 created on the interface between two materials. Those are captured very well,
 despite coarse mesh, showing capabilities of presented problem formulation. For
-creating of this figure we used the 2nd order of polynomial to approximate
-pressure head and 3rd order polynomial to approximate fluxes.
+creating of this figure we used the 2nd order of polynomial to approximate the
+pressure head and 3rd order polynomial to approximate the fluxes.
+
+\anchor figure_1_unsaturated_flow_result_example1
 \image html unsaturated_flow_example_fig3.gif "Figure 1. On the bottom axis is depth, on the left axis is pressure head, right axis is water content. Red line is water head, green line is water content. Colormap on the left hand side is for saturation." width=900px
 
 \subsection mix_us_flow_example_2 Numerical example 2
@@ -264,7 +252,7 @@ sCale=1e6       # Scale mass conservation equation
 ePsilon1=1e-5   # Minimal capacity when removing spurious oscillations in time
 
 Ah=-9 # head suction at z = 0
-AhZ=1 #Â gradient of initial head suction
+AhZ=1 # gradient of initial head suction
 AhZZ=0 # initial head suction is calculated from equation h = Ah + AhZZ*z + AhZZ*zz
 
 [mat_block_2]
@@ -309,8 +297,8 @@ We run script as before
 
 \subsubsection mix_us_flow_example_2_model_results Results
 
-For this example we observe an influx of water into the column of solid, we can
-plot how it is changing over time. At every time step solver monitor
+For this example, we observe an influx of water into the column of solid, we can
+plot how it is changing over time. At every time step, solver monitor
 printing on the screen following lines
 \verbatim
 63 TS dt 0.00242774 time 0.0710581
@@ -361,20 +349,24 @@ awk '/Flux at/ {print $4,$5/(0.01*0.002)}' log | tee gp
 \endcode
 
 This shell command line takes all lines which have the phrase "Flux at", takes
-fourth and the fifth column from those lines, whereas fifth column is divided by
+the fourth and the fifth columns from those lines, whereas fifth column is divided by
 area of the surface where the head is applied. Finally, results are stored in
-file \e gp. You can plot results in Excel or any other software; we choose to
-use gnuplot. As results, we get figure below.
-\image html unsaturated_flow_example_fig5.png  "Figure 3. Influx of water for upward infiltration." width=600px
+file \e gp. You can plot results in MS Excel or any other software, we choose to
+use gnuplot. As a result, we get \ref figure_2_influx_of_water "Figure 2" below.
 
-On figure below, we can observe how wetting front is moving downwards. Note how
-the gradient of head differ between clay and silt, and how it moves through the
+\anchor figure_2_influx_of_water
+\image html unsaturated_flow_example_fig5.png  "Figure 2. Influx of water for upward infiltration." width=600px
+
+On \ref figure_3_unsaturated_flow_result_example2 "Figure 3" below, we can observe how wetting front is moving downwards. Note how
+the gradient of head differs between clay and silt, and how it moves through the
 interface between materials.
-\image html unsaturated_flow_example_fig4.gif "Figure 2. On the bottom axis is depth, on the left axis is pressure head, right axis is water content. Red line is water head, green line is water content. Colormap on the left hand side is for saturation." width=900px
+
+\anchor figure_3_unsaturated_flow_result_example2
+\image html unsaturated_flow_example_fig4.gif "Figure 3. On the bottom axis is depth, on the left axis is pressure head, right axis is water content. Red line is water head, green line is water content. Colormap on the left hand side is for saturation." width=900px
 
 \section mix_us_flow_model Mathematical model
 
-W considered porous material partially filled with water. In this tutorial, we
+We consider porous material partially filled with water. In this tutorial, we are
 going to simulate water transport in such system. The primary behaviour of the
 system depends on the material structure, capillary forces and wetting angle,
 taken into count by experimentally estimated material parameters. Darcy's law
@@ -405,10 +397,10 @@ c(\theta)\frac{\partial h}{\partial t} - \nabla \cdot \boldsymbol\sigma = 0
 \end{array}
 \right.
 \f]
-where \f$\boldsymbol\sigma\f$ is flux. First equation expresses constitutive
-equation; second is conservation law. The second equation is called as well
+where \f$\boldsymbol\sigma\f$ is flux. The first equation expresses constitutive
+relation while the second is conservation law. The second equation is called as well
 continuity equation, and it does not allow for creation or annihilation of mass.
-The capacity term \f$c\f$ in the second question is given by
+The capacity term \f$c\f$ in the second equation is given by
 \f[
 c = \frac{\partial \theta}{\partial h}
 \f]
@@ -430,8 +422,8 @@ K = K(\theta)
 \f]
 
 Generic material model is implemented in MixTransport::GenericMaterial, which is
-an abstract class, thus it instance can not be created. This class sets methods
-and data used by finite element instances. The is not modified when new material
+an abstract class, thus its instance cannot be created. This class sets methods
+and data used by finite element instances. It is not modified when new material
 is implemented. This class is located in \ref UnsaturatedFlow.hpp. To
 implement new material model user need to implement method
 
@@ -446,22 +438,22 @@ implement new material model user need to implement method
 - \ref MixTransport::GenericMaterial::calSe to calculate water saturation
   (this function is used for post-processing)
 
-Form MixTransport::GenericMaterial, the MixTransport::CommonMaterialData is
+From MixTransport::GenericMaterial, the MixTransport::CommonMaterialData is
 derived. This class is unchanged if new material is implemented unless new
 material parameters need to be added to the model. Material parameters are read
 from text file given with command line option \e -configure \e unsaturated.cfg.
 Example of such fill looks as follows,
 \verbinclude users_modules/basic_finite_elements/mix_transport/unsaturated.cfg
 
-Note that we have to blocks, which are sets of elements on the mesh. To each
+Note that we have two blocks, which are sets of elements on the mesh. To each
 block, we can attach material and set material parameters. A user can add more
-material parameters, by declaring them in MixTransport::CommonMaterialData and
-add them to method MixTransport::CommonMaterialData::addOptions, such that added
+material parameters by declaring them in MixTransport::CommonMaterialData and
+adding them to method MixTransport::CommonMaterialData::addOptions, such that added
 material parameter are read from the configuration file.
 
 For proposes of this tutorial we have implemented two material models, i.e.
 MixTransport::MaterialDarcy and MixTransport::MaterialVanGenuchten, both
-classes derived from MixTransport::CommonMaterialData.
+classes are derived from MixTransport::CommonMaterialData.
 
 \subsection mix_us_flow_physical_equation_adding_material Adding new material
 
@@ -470,17 +462,17 @@ MixTransport::MaterialWithAutomaticDifferentiation, and add it to file \ref
 MaterialUnsaturatedFlow.cpp. MixTransport::MaterialWithAutomaticDifferentiation
 is a class to simplify implementation of the material model by utilizing
 advantages of automatic differentiation. Comprehensive description of library
-ADOL-C for animatic differentiation can be found here (<a
+ADOL-C for automatic differentiation can be found here (<a
 href=https://projects.coin-or.org/ADOL-C/browser/stable/2.1/ADOL-C/doc/adolc-manual.pdf?format=raw>link</a>).
 
-In principle automatic differentiation record mathematical operations in the
+In principle automatic differentiation records mathematical operations in the
 function. Recorded mathematical operations are represented algorithmically in
 the tree, where each tree leaf is expanded into Taylor series, with sufficient
-order to calculate derivatives exactly. Automatic differential is different from
+order to calculate derivatives exactly. Automatic differentiation is different from
 symbolic differentiation, such that it can calculate derivatives of algorithm,
 so you can have loops and other commands in your differentiated function.
 
-In consequence, user need to build a tree to calculate water content density
+In consequence, user needs to build a tree to calculate water content density
 \f$\theta=\theta(h)\f$ and relative hydraulic conductivity \f$K_r=K_r(h)\f$.
 Using terminology from ADOL-C, one has to \e record \e tape with differentiated
 function. This is done by overloading two functions,
@@ -536,7 +528,7 @@ struct MyMaterialForUnsaturatedFlow: public MaterialWithAutomaticDifferentiation
 
 };
 \endcode
-where method \e recordTheta, represents equation
+where method \e recordTheta represents equation
 \f[
 \theta = \theta_r + \frac{\theta_s-\theta_r}{(1+(-\alpha h)^n)^m}
 \f]
@@ -586,13 +578,13 @@ struct RegisterMaterials {
 
 \section mix_us_flow_numerical_model Numerical model
 
-In following we apply mix-formulation, building on tutorial \ref mix_transport.
+In the following, we apply mix-formulation, building on tutorial \ref mix_transport.
 We will show below that such approximation enables to solve Richards equation
-efficiently. This enables to address some issue of the regularity of equation
-difficult to approximate for classical formulation of finite elements.
+efficiently. This enables to address some issues of the regularity of equation
+that are difficult to approximate for classical formulation of finite elements.
 
-Mix-formulations allows converging to the solution faster than classical single
-filed finite element formulation. Mix-elements have built in error estimators
+Mix-formulations allow converging to the solution faster than classical single
+filed finite element formulation. Mix-elements have built-in error estimators
 into formulation letting for efficient hp-adaptation and least not least
 separation of nonlinearities, driving the development of effect solvers for
 strongly nonlinear problems.
@@ -600,7 +592,7 @@ strongly nonlinear problems.
 \subsection mix_us_flow_numerical_mass Conservation of mass
 
 Our PDE is system of two equations. The second equation is universal law
-of conservation of mass, which enforce continuity of fluxes, such that for
+of conservation of mass, which enforces continuity of fluxes, such that for
 arbitrary surface \f$\Gamma\f$ dividing body on two parts, that is
 \f$\Omega = \Omega^1 \cup \Omega^2\f$
 \f[
@@ -609,13 +601,13 @@ arbitrary surface \f$\Gamma\f$ dividing body on two parts, that is
 \boldsymbol\sigma^2(\mathbf{x})
 \right) = 0,\;\forall\mathbf{x}\in\Gamma
 \f]
-Utilizing this observation we choose approximation base which \e a \e priori
-satisfy such continuity on element faces. However, it not enforce continuity of
+Utilizing this observation, we choose approximation base which \e a \e priori
+satisfies such continuity on element faces. However, it does not enforce continuity of
 tangential components on the element face, since those do not contribute to mass
 exchange on element faces. Such approximation base is constructed for Raviart
 Thomas elements. Here we are using the recipe from \cite fuentes2015orientation to
 construct arbitrary polynomial base order on elements, which \e a \e priori
-enforce continuity of fluxes.
+enforces continuity of fluxes.
 
 The mass conservation in discrete form can be expressed as follows
 \f[
@@ -624,7 +616,7 @@ The mass conservation in discrete form can be expressed as follows
 We obtain this equation by multiplying mass conservation by test function
 \f$v\f$ and integrating both sides. Tested and test base functions are \f$h,v \in
 L^2(\Omega)\f$, whereas \f$\boldsymbol\sigma \in H(\nabla\cdot,\Omega)\f$ are
-divergence integrable functions which property explained in above paragraph.
+divergence integrable functions which have been properly explained in the above paragraph.
 Here, we use notation, suitable for problems with many terms in the variational
 formulations, requires some explanation. First, we use the shorthand notation
 \f[
@@ -641,7 +633,7 @@ continuity of capillary head (capillary pressure) is not derived from
 conservation law, but dictated by the regularity of hydraulic conductivity
 \f$K=K(\theta)\f$.
 
-The philosophy of finite element formulation presented here is to use
+The philosophy of the finite element formulation presented here is to use
 approximation base having \e a \e priory continuity demanded by conservation
 law, whereas not to enforce continuity of capillary pressure head, which is
 controlled by the regularity of a constitutive law. That allows developing a
@@ -667,15 +659,15 @@ where \f$\overline{h}\f$ is prescribed capillary pressure on the boundary. Note 
 - Boundary conditions on the capillary head are natural boundary conditions,
   enforced \e posterior, i.e. once a system of equation is solved.
 
-- We do not calculated derivatives over \f$h\f$ and \f$v\f$, and those functions
+- We do not calculate derivatives over \f$h\f$ and \f$v\f$, and those functions
   can  belong to \f$L^2(\Omega)\f$ space.
 
 - The regularity of solution is controlled by \f$K(\theta)\f$, that for most
   real materials will imply continuity of capillary head, in particular at the
   interface between them. However, in some cases, changes of the head
-  is so sharp that is beneficial to use mix-formulation.
+  are so sharp that are beneficial to use mix-formulation.
 
-\note This equation is irregular, hydraulic conductivity can changes sharply, as
+\note This equation is irregular, hydraulic conductivity can change sharply, as
 a function of the capillary head. The problem can be regularized by applying
 Kirchhoff transform, see details here \cite radu2004order.  However such
 approach is limited, and can be applied for special cases, in particular when no
@@ -705,7 +697,7 @@ Above we put physical justification for using particular spaces for fluxes, whic
 capillary pressure head \f$u,h \in L^2(\Omega)\f$. One can show that selection
 of such approximation spaces, once the problem is discretized (i.e. finite
 element approximation spaces are used), numerical solution is stable since the
-choice of approximation spaces comply with De Rham diagram.
+choice of approximation spaces complies with De Rham diagram.
 
 To solve problem we define residuals
 \f[
@@ -737,12 +729,12 @@ r_v^i +
 \right.
 \f]
 where \f$i\f$ is Newton iteration number. Note that tangent matrices and residuals are
-evaluetd at known iteration \f$i\f$ and unknowns are solved for iteration
+evaluated at known iteration \f$i\f$ and unknowns are solved for iteration
 \f$i+1\f$. Iterations are repeated until residuals are small in the absolute or
-relative norm. Once we achieve equilibrium we move to next time step.
+relative norm. Once we achieve equilibrium we move to the next time step.
 
 Expressing test and tested function by vectors of basis functions and vectors of
-degrees of freedoms we have
+degrees of freedom, we have
 \f[
 \boldsymbol\sigma^i_n(\mathbf{x}) = \boldsymbol \phi^\textrm{T}(\mathbf{x}) \mathbf{q}^i_n,\;
 h^i_n(\mathbf{x},t_n) = \boldsymbol \psi^\textrm{T}(\mathbf{x},t_n) \mathbf{p}^i_n
@@ -778,7 +770,7 @@ where vectors of unknowns are updated as follows
 
 Tangent matrices and vectors are implemented in following operators
 
-- In operator MixTransport::UnsaturatedFlowElement::OpResidualFlux and  MixTransport::UnsaturatedFlowElement::OpRhsBcOnValues
+- In operators MixTransport::UnsaturatedFlowElement::OpResidualFlux and  MixTransport::UnsaturatedFlowElement::OpRhsBcOnValues,
   we implemented \f$\mathbf{r}^\textrm{internal}_\tau\f$ and \f$\mathbf{f}^\textrm{external}_\tau\f$, respectively.
   \f[
   \mathbf{r}_\tau = \mathbf{r}^\textrm{internal}_\tau + \mathbf{f}^\textrm{external}_\tau =
@@ -787,7 +779,7 @@ Tangent matrices and vectors are implemented in following operators
   (\mathbf{n} \cdot \boldsymbol\phi^\textrm{T},(\overline{h}-z))_{\partial\Omega}
   \f]
 
-- In operator we implemented MixTransport::UnsaturatedFlowElement::OpResidualMass
+- In operator, we implemented MixTransport::UnsaturatedFlowElement::OpResidualMass
   \f[
   \mathbf{r}_v =
   (\boldsymbol\psi^\textrm{T},c(\theta) \frac{\partial h}{\partial t}|^i)_\Omega - (\boldsymbol\psi^\textrm{T},\boldsymbol\sigma^i)_\Omega
@@ -816,7 +808,7 @@ Tangent matrices and vectors are implemented in following operators
 
 \subsection mix_us_flow_time_discretistion Time discretization
 
-In MoFEM we do not implement time discretization algorithms unless we like to do
+In MoFEM, we do not implement time discretization algorithms unless we like to do
 something novel and non-standard, and we would rather recommend implementing
 such an algorithm using PETSc time solver shell rather directly in MoFEM.
 Detailed description of how to use time solver (TS) in PETSc can be found in <a
@@ -832,7 +824,7 @@ which is linked to time solver.
 In the previous section, we transform PDE, by applying space discretization,
 into the system of linearized ordinary differential equations (ODE). In the
 following description, we transform the system of ODEs into a system of linear
-equations. In our the particular problem we need to calculate the rate of
+equations. In our particular problem, we need to calculate the rate of
 capillary head, which is discretized in time and space by
 \f[
 h(\mathbf{x},t) =
@@ -847,8 +839,8 @@ vectors. With that at hand we can calculate rate of hydraulic head
 \frac{\textrm{d}\boldsymbol\xi}{\textrm{d}t} (t).\boldsymbol{\tilde{\psi}}(\mathbf{x})
 \right]^\textrm{T} \mathbf{p}
 \f]
-With above at hand, matrix \f$\mathbf{C}\f$ where time derivative is present, have
-following form
+With above at hand, matrix \f$\mathbf{C}\f$ where time derivative is present has
+the following form
 \f[
 \mathbf{C} =
 \left(\boldsymbol\psi^\textrm{T},
@@ -859,12 +851,12 @@ c^i
 \right)
 \boldsymbol{\tilde\psi}\right)_\Omega
 \f]
-Note for any ODE integration method the approximation of \f$\frac{\partial h}{\partial t}\f$ is
+Note for any ODE integration method, the approximation of \f$\frac{\partial h}{\partial t}\f$ is
 by linear function, hence
 \f[
 \frac{\partial \boldsymbol\xi}{\partial t} = (shift).
 \f]
-For example, iterative change of capillary pressure head, when backwards Eulerâ€™s
+For example, iterative change of capillary pressure head, when backwards Euler’s
 method is applied, \f$(shift) = 1/\Delta t\f$, what can be derived as follows
 \f[
 \left(\frac{\partial \delta h}{\partial t}\right)^{i+1}_{n+1} =
@@ -922,13 +914,13 @@ for(int gg = 0;gg!=nb_gauss_pts;gg++) {
 \endcode
 where \f$\textrm{ts_a} = (shift)\f$. Note that evaluation of capillary head
 DOFs, i.e. \f$\frac{\partial \mathbf{p}}{\partial t}\f$ is managed exclusively
-by PETSc and depend on used time integration shame.
+by PETSc and depends on used time integration shame.
 
 \section mix_us_flow_implemntation Implementation
 
 \subsection mix_us_flow_declarations Declaration of fields, finite elements and problem
 
-In method MixTransport::UnsaturatedFlowElement::addFields we declare,
+In method MixTransport::UnsaturatedFlowElement::addFields, we declare and
 define fields on entities and set order of approximation as follows
 \code
 //Fields
@@ -959,10 +951,10 @@ and \cite fuentes2015orientation. Note, to get solvable system of linear
 equations, pressure head approximation has one order lower that approximation
 for fluxes. Here for simplicity, we set homogeneous approximation order,
 however, implementation can be easily extended to the case where approximation
-order is locally increased near interfaces or boundary were pressure head is
+order is locally increased near interfaces or boundary where pressure head is
 applied.
 
-In similar way we declare and define finite elements in
+In similar way, we declare and define finite elements in
 MixTransport::UnsaturatedFlowElement::addFiniteElements, as follows
 \code
 // Define element "MIX". Note that this element will work with fluxes_name and
@@ -1008,24 +1000,24 @@ for(_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField,BLOCKSET,it)) {
   ); CHKERRG(ierr);
 }
 \endcode
-Note that we create three elements "MIX", "MIX_BCVALUE" and "MIX_BCFLUX", to
+Note that we create three elements including "MIX", "MIX_BCVALUE" and "MIX_BCFLUX", to
 evaluate fields in volume, on the boundary where natural conditions are
 applied and where essential conditions are applied, respectively.
 
 Both fields and finite elements are defined on part of the mesh, i.e. entities
 set, where mesh block name starts with first four letters "SOIL". In case of
 "MIX_BCVALUE" and "MIX_BCFLUX" where blocks name having first for letters "HEAD"
-and "FLUX", respectively. The user can define multiple blocks and attach
-material model, material parameters, initial conditions independently to each of
+and "FLUX", respectively. A user can define multiple blocks and attach
+material model, material parameters and initial conditions independently to each of
 them independently.
 
 In a similar way, other types of elements can be added to the formulation, for
-example, we can create evaporation element on some part of the boundary, or one
+example, we can create evaporation element on some parts of the boundary, or one
 can extend formulation with other mechanical and non-mechanical fields. For
 example, one can add heat conduction and solve coupled problem with
 freezing and thawing processes.
 
-In method MixTransport::UnsaturatedFlowElement::buildProblem we create problem
+In method MixTransport::UnsaturatedFlowElement::buildProblem, we create problem
 and Discrete Manager operating on that problem
 \code
 //  create DM instance
@@ -1054,31 +1046,33 @@ operates.
 
 Definition of the problem enables to construct a matrix since matrix
 connectivity is derived from problem definition. To fill the matrix with the
-numbers you need implement finite element. In fact, you can have more than one
+numbers, you need to implement finite element. In fact, you can have more than one
 implementation of the same problem.
 
 Once you have problem defined, the developer is released from the need managing
 complexities related to management of DOFs, iteration over elements, matrix
-assembly, etc. It can focus on the integration of local entity matrices, as is
+assembly, etc. It can focus on the integration of local entity matrices, as 
 shown in \ref mix_us_flow_numerical_discretisation.
 
 MoFEM provides technology with simplifies implementation of the element,
 enabling the developer to break a complex problem into smaller tasks, which are
 easier to implement, debug and reuse in different contexts, that has been
 discussed in several tutorials already. Assembly of residual vectors and tangent
-matrices is made with the use so called users data operators (UDO), for example,
-the sequence of users data operators of finite element instance to assemble
-tangent matrix is shown in figure 3.
-\image html unsaturated_flow_fig1.png "Figure 3. Sequence of operators on instance of MIX element" width=700px
+matrices is made with the use of so called user data operators (UDO). For example,
+the sequence of user data operators of finite element instance to assemble
+tangent matrix is shown in \ref figure_4_operators_mix_element "Figure 4".
 
-We have already discuss last four operators in sequence for \e feVolLhs finite
+\anchor figure_4_operators_mix_element
+\image html unsaturated_flow_fig1.png "Figure 4. Sequence of operators on instance of MIX element" width=700px
+
+We have already discussed last four operators in sequence for \e feVolLhs finite
 element instance, those are used to assemble tangent matrix blocks, i.e.
 \f$\mathbf{C}\f$, \f$\mathbf{G}\f$, \f$\mathbf{H}\f$ and \f$\mathbf{A}\f$.
 First, three operators are used to evaluate fields at integration points, i.e.
 capillary head, flux and rate of capillary head. Note first three operators
-has been are reused from other tutorials.
+have been reused from other tutorials.
 
-In this problem, we using two generic implementations of finite element,
+In this problem, we use two generic implementations of finite element,
 MoFEM::VolumeElementForcesAndSourcesCore and
 MoFEM::FaceElementForcesAndSourcesCore, for integrating fields on volumes and
 faces. Finite element instances are iterated over a particular element in the
@@ -1106,7 +1100,7 @@ feVolRhs->getRuleHook = vol_rule;
 \endcode
 In addition, we add hooks to functions which are run at the beginning and the
 end of the loop over a particular element. Those functions are used to
-perProcess, and postProcess matrix assemble. Those pre-processing and
+preprocess, and postprocess matrix assemble. Those pre-processing and
 post-processing hooks are added as follows
 \code
 feVolRhs->preProcessHook = preProcessVol(*this,feVolRhs);
@@ -1137,7 +1131,7 @@ Capillary head DOFs are sub-vector of \e fePtr->ts_u_t.
 
 \subsubsection mix_us_flow_fe_instances_op Adding operators to elements
 
-Users data operators are added to finite element calculating tangent
+User data operators are added to finite element calculating tangent
 matrix as follows
 \code
 // set tangent matrix finite element operators
@@ -1154,7 +1148,7 @@ feVolLhs->getOpPtrVector().push_back(new OpDivTauU_HdivL2(*this,"FLUXES","VALUES
 and similarly for other elements, evaluating boundary conditions and vector
 of residuals. For more details we refer to tutorial \ref hello_world_tut1.
 
-In addition finite element instances are created to post-process results and to
+In addition, finite element instances are created to post-process results and to
 run time stepping monitor, see code in
 \ref MixTransport::UnsaturatedFlowElement::setFiniteElements.
 
@@ -1169,14 +1163,14 @@ ierr = DMMoFEMTSSetIFunction(dM,"MIX_BCVALUE",feFaceRhs,null,null); CHKERRG(ierr
 ierr = DMMoFEMTSSetIFunction(dM,"MIX",feVolRhs,null,null); CHKERRG(ierr);
 ierr = DMMoFEMTSSetIJacobian(dM,"MIX",feVolLhs,null,null); CHKERRG(ierr);
 \endcode
-Those functions are specific to MoFEM implementation, there were implemented
+Those functions are specific to MoFEM implementation, they have been implemented
 based on PETSc documentation,
 <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>link</a>,
 see Chapter 6.
 
 \subsection mix_us_flow_solving_problem Solving problem using TS
 
-Finally we can solve problem, by creating TS solver and link it to DM, as follows
+Finally, we can solve problem, by creating TS solver and link it to DM, as follows
 \code
 // Create time solver
 TS ts;

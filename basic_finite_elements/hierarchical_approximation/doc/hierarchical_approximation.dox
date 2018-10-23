@@ -117,9 +117,9 @@ Usefulness of the separation will become apparent later and it is intrinsic to t
 
 These concepts can be extended to 2D and 3D elements.
 In 1D the two entities that were presented were vertex and edge.
-The extra entities that emerge in the 2D and 3D domains are phases and volumes, respectively.
+The extra entities that emerge in the 2D and 3D domains are faces and volumes, respectively.
 
-Shape functions that can be found implemented in MoFEM now are associated with vertices, edges, triangular phases and tetrahedral volumes.
+Shape functions that can be found implemented in MoFEM now are associated with vertices, edges, triangular faces and tetrahedral volumes.
 The shape functions for edges that are part of triangular faces and the shape functions of triangular faces are presented in \ref Figure_4 "Figure 4" and \ref Figure_5 "Figure 5", respectively.
 The values of the shape functions along the 2D space of a face can be thought as the varying height or depth of the nonlinear surfaces from the planar triangular face.
 When the curved surface is below or above the planar face, the shape function takes negative or positive values, respectively.
