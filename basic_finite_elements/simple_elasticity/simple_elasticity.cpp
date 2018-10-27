@@ -1,5 +1,4 @@
 /** \file simple_elasticity.cpp
- * \ingroup nonlinear_elastic_elem
  * \example simple_elasticity.cpp
 
  The example shows how to solve the linear elastic problem.
@@ -407,10 +406,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR simple_interface->getOptions();
     CHKERR simple_interface->loadFile();
-    CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE,
-                                            3);
-    CHKERR simple_interface->setFieldOrder("U", order);
-
+    
     Range fix_faces, pressure_faces, fix_nodes, fix_second_node;
 
     enum MyBcTypes {
@@ -457,7 +453,6 @@ int main(int argc, char *argv[]) {
 
     CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE,
                                             3);
-
     CHKERR simple_interface->setFieldOrder("U", order);
 
     CHKERR simple_interface->defineFiniteElements();
