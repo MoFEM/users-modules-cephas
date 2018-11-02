@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
 
     if(ale == PETSC_FALSE) {
       fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomenousStiffness<true>(
+          new HookeElement::OpCalculateHomogeneousStiffness<true>(
               "x", "x", block_data_ptr, data_at_pts));
       fe_lhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpLhs_dx_dx<0>("x", "x", data_at_pts));
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("X", data_at_pts->HMat));
       fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomenousStiffness<true>(
+          new HookeElement::OpCalculateHomogeneousStiffness<true>(
               "x", "x", block_data_ptr, data_at_pts));
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomenousStiffness<true>(
+          new HookeElement::OpCalculateHomogeneousStiffness<true>(
               "x", "x", block_data_ptr, data_at_pts));
       fe_rhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpCalculateStrain<false>("x", "x", data_at_pts));
@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("X", data_at_pts->HMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomenousStiffness<true>(
+          new HookeElement::OpCalculateHomogeneousStiffness<true>(
               "x", "x", block_data_ptr, data_at_pts));
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));

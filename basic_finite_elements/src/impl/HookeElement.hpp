@@ -229,9 +229,9 @@ struct HookeElement {
   };
 
   template <int S = 0>
-  struct OpCalculateHomenousStiffness : public VolUserDataOperator {
+  struct OpCalculateHomogeneousStiffness : public VolUserDataOperator {
 
-    OpCalculateHomenousStiffness(
+    OpCalculateHomogeneousStiffness(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<BlockData> &block_data_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
