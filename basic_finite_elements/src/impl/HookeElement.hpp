@@ -1,10 +1,10 @@
-/** 
- * \file HookElement.hpp 
+/**
+ * \file HookElement.hpp
  * \example HookElement.hpp
- * 
+ *
  * \brief Operators and data structures for linear elastic
  * analysis
- * 
+ *
  * Implemention of operators for Hooke material. Implementation is extended to
  * the case when the mesh is moving as results of topological changes, also the
  * calculation of material forces and associated tangent matrices are added to
@@ -338,7 +338,7 @@ struct HookeElement {
     virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
     virtual MoFEMErrorCode iNtegrate(EntData &row_data);
- 
+
     /**
      * \brief Assemble local entity block matrix
      * @param  row_data row data (consist base functions on row entity)
@@ -356,7 +356,6 @@ struct HookeElement {
      * @return          error code
      */
     MoFEMErrorCode aSsemble(EntData &row_data);
-    
   };
 
   struct OpRhs_dx : public OpAssemble {
@@ -372,8 +371,7 @@ struct HookeElement {
 
     OpLhs_dx_dx(const std::string row_field, const std::string col_field,
                 boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {
-    }
+        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
 
   protected:
     /**
@@ -480,8 +478,7 @@ struct HookeElement {
 
     OpAleLhs_dx_dx(const std::string row_field, const std::string col_field,
                    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {
-    }
+        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
 
   protected:
     /**
@@ -591,7 +588,6 @@ struct HookeElement {
         : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
 
   protected:
-
     /**
      * \brief Integrate tangent stiffness for spatial momentum
      * @param  row_data row data (consist base functions on row entity)
@@ -660,7 +656,7 @@ struct HookeElement {
           auto t_m = get_tensor2(K, 3 * rr, 0);
 
           FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) =  t_row_diff_base(j) * t_invH(j, i);
+          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
 
           FTensor::Tensor1<double, 3> t_row_stress;
           t_row_stress(i) =
@@ -918,8 +914,7 @@ struct HookeElement {
 
     OpAleLhs_dX_dx(const std::string row_field, const std::string col_field,
                    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {
-    }
+        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
 
   protected:
     /**

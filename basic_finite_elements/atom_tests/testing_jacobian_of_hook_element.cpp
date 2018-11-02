@@ -71,14 +71,14 @@ int main(int argc, char *argv[]) {
     {
       Projection10NodeCoordsOnField ent_method(m_field, "x");
       CHKERR m_field.loop_dofs("x", ent_method);
-    //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "x");
+      //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "x");
     }
 
     // Project coordinates on "X" field
     if (ale == PETSC_TRUE) {
       Projection10NodeCoordsOnField ent_method(m_field, "X");
       CHKERR m_field.loop_dofs("X", ent_method);
-    //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
+      //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
     }
 
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
         new DataAtIntegrationPts());
 
-    if(ale == PETSC_FALSE) {
+    if (ale == PETSC_FALSE) {
       fe_lhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpCalculateHomogeneousStiffness<true>(
               "x", "x", block_data_ptr, data_at_pts));
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpAleLhs_dX_dx<0>("X", "x", data_at_pts));
     }
 
-    if(ale == PETSC_FALSE) {
+    if (ale == PETSC_FALSE) {
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -175,7 +175,7 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpAleRhs_dX("X", "X", data_at_pts));
     }
 
-    Vec x,f;
+    Vec x, f;
     CHKERR DMCreateGlobalVector(dm, &x);
     CHKERR VecDuplicate(x, &f);
     CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
@@ -240,7 +240,6 @@ int main(int argc, char *argv[]) {
                 "Difference between hand-calculated tangent matrix and finite "
                 "difference matrix is too big");
       }
-      
     }
 
     CHKERR VecDestroy(&x);
@@ -251,7 +250,6 @@ int main(int argc, char *argv[]) {
 
     // destroy DM
     CHKERR DMDestroy(&dm);
- 
   }
   CATCH_ERRORS;
 
