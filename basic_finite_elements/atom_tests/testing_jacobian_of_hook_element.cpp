@@ -1,4 +1,4 @@
-/** \file te.cpp
+/** \file testing_jacobian_of_hook_element.cpp
  * \example testing_jacobian_of_hook_element.cpp
 
 Testing implementation of Hook element by verifying tangent stiffness matrix.
@@ -42,6 +42,9 @@ int main(int argc, char *argv[]) {
 
     PetscBool ale = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
+    PetscBool test_jacobian = PETSC_FALSE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
+                               PETSC_NULL);
 
     CHKERR DMRegister_MoFEM("DMMOFEM");
 
@@ -83,7 +86,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
     struct VolRule {
-      int operator()(int, int, int) const { return 3 * order; }
+      int operator()(int, int, int) const { return 2 * (order - 1); }
     };
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
@@ -172,12 +175,6 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpAleRhs_dX("X", "X", data_at_pts));
     }
 
-    char testing_options[] =
-        "-snes_test_jacobian \ -snes_test_jacobian_display "
-        "\ -snes_no_convergence_test \ -snes_atol 0 \ -snes_rtol 0 "
-        "\ -snes_max_it 1 \ -pc_type none";
-    CHKERR PetscOptionsInsertString(NULL, testing_options);
-
     Vec x,f;
     CHKERR DMCreateGlobalVector(dm, &x);
     CHKERR VecDuplicate(x, &f);
@@ -190,8 +187,22 @@ int main(int argc, char *argv[]) {
     // PetscRandomDestroy(&rctx);
     // CHKERR DMoFEMMeshToGlobalVector(dm, x, INSERT_VALUES, SCATTER_REVERSE);
 
-    Mat A;
+    Mat A, fdA;
     CHKERR DMCreateMatrix(dm, &A);
+    CHKERR MatDuplicate(A, MAT_DO_NOT_COPY_VALUES, &fdA);
+
+    if (test_jacobian == PETSC_TRUE) {
+      char testing_options[] =
+          "-snes_test_jacobian \ -snes_test_jacobian_display "
+          "\ -snes_no_convergence_test \ -snes_atol 0 \ -snes_rtol 0 "
+          "\ -snes_max_it 1 \ -pc_type none";
+      CHKERR PetscOptionsInsertString(NULL, testing_options);
+    } else {
+      char testing_options[] =
+          "\ -snes_no_convergence_test \ -snes_atol 0 \ -snes_rtol 0 "
+          "\ -snes_max_it 1 \ -pc_type none";
+      CHKERR PetscOptionsInsertString(NULL, testing_options);
+    }
 
     SNES snes;
     CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
@@ -203,9 +214,39 @@ int main(int argc, char *argv[]) {
 
     CHKERR SNESSolve(snes, NULL, x);
 
+    if (test_jacobian == PETSC_FALSE) {
+      double nrm_A0;
+      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
+
+      char testing_options_fd[] = "-snes_fd";
+      CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
+
+      CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+      CHKERR SNESSetFromOptions(snes);
+
+      CHKERR SNESSolve(snes, NULL, x);
+      CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
+
+      double nrm_A;
+      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
+      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+                  nrm_A / nrm_A0);
+      nrm_A /= nrm_A0;
+
+      const double tol = 1e-5;
+      if (nrm_A > tol) {
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                "Difference between hand-calculated tangent matrix and finite "
+                "difference matrix is too big");
+      }
+      
+    }
+
     CHKERR VecDestroy(&x);
     CHKERR VecDestroy(&f);
     CHKERR MatDestroy(&A);
+    CHKERR MatDestroy(&fdA);
     CHKERR SNESDestroy(&snes);
 
     // destroy DM
