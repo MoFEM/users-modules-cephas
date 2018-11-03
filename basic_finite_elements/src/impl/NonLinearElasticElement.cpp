@@ -1183,8 +1183,6 @@ MoFEMErrorCode NonlinearElasticElement::addElement(
     string material_position_field_name, bool ale) {
   MoFEMFunctionBegin;
 
-  //
-
   CHKERR mField.add_finite_element(element_name, MF_ZERO);
   CHKERR mField.modify_finite_element_add_field_row(
       element_name, spatial_position_field_name);
