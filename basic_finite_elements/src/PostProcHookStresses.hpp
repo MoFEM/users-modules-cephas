@@ -299,7 +299,6 @@ struct PostProcHookStress
       CHKERR postProcMesh.tag_set_data(th_prin_stress_vals, &mapGaussPts[gg], 1,
                                        &prin_vals_vect[0]);
     }
-    
 
     MoFEMFunctionReturn(0);
   }
