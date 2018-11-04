@@ -662,9 +662,9 @@ struct NonlinearElasticElement {
                 materialAdoublePtr);
 
   MoFEMErrorCode
-  addElement(string element_name, string spatial_position_field_name,
-             string material_position_field_name = "MESH_NODE_POSITIONS",
-             bool ale = false);
+  addElement(const std::string element_name, const std::string spatial_position_field_name,
+             const std::string material_position_field_name = "MESH_NODE_POSITIONS",
+             const bool ale = false);
 
   /** \brief Set operators to calculate left hand tangent matrix and right hand
    * residual
@@ -676,10 +676,10 @@ struct NonlinearElasticElement {
    * \param field_disp true if approximation field represents displacements
    * otherwise it is field of spatial positions
    */
-  MoFEMErrorCode
-  setOperators(string spatial_position_field_name,
-               string material_position_field_name = "MESH_NODE_POSITIONS",
-               bool ale = false, bool field_disp = false);
+  MoFEMErrorCode setOperators(
+      const std::string spatial_position_field_name,
+      const std::string material_position_field_name = "MESH_NODE_POSITIONS",
+      const bool ale = false, const bool field_disp = false);
 };
 
 #endif //__NONLINEAR_ELASTIC_HPP

@@ -1179,8 +1179,9 @@ MoFEMErrorCode NonlinearElasticElement::setBlocks(
 }
 
 MoFEMErrorCode NonlinearElasticElement::addElement(
-    string element_name, string spatial_position_field_name,
-    string material_position_field_name, bool ale) {
+    const std::string element_name,
+    const std::string spatial_position_field_name,
+    const std::string material_position_field_name, const bool ale) {
   MoFEMFunctionBegin;
 
   CHKERR mField.add_finite_element(element_name, MF_ZERO);
@@ -1210,10 +1211,10 @@ MoFEMErrorCode NonlinearElasticElement::addElement(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-NonlinearElasticElement::setOperators(string spatial_position_field_name,
-                                      string material_position_field_name,
-                                      bool ale, bool field_disp) {
+MoFEMErrorCode NonlinearElasticElement::setOperators(
+    const std::string spatial_position_field_name,
+    const std::string material_position_field_name, const bool ale,
+    const bool field_disp) {
   MoFEMFunctionBegin;
 
   commonData.spatialPositions = spatial_position_field_name;
