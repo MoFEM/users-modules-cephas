@@ -466,7 +466,7 @@ struct HookeElement {
             // integrate block local stiffens matrix
             t_m(i, k) +=
                 a * t_D(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l));
-
+                
             // move to next column base function
             ++t_col_diff_base;
 
@@ -1091,6 +1091,10 @@ struct HookeElement {
                const std::string x_field, const std::string X_field,
                const bool ale, const bool field_disp);
 
+  static MoFEMErrorCode
+  calculateEnergy(DM dm, boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+                  const std::string x_field, const std::string X_field,
+                  const bool ale, const bool field_disp, Vec *v_energy_ptr);
 };
 
 #endif // __HOOKE_ELEMENT_HPP

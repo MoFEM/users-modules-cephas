@@ -659,3 +659,79 @@ MoFEMErrorCode HookeElement::setOperators(
 
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode HookeElement::calculateEnergy(
+    DM dm, boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+    const std::string x_field, const std::string X_field, const bool ale,
+    const bool field_disp, Vec *v_energy_ptr) {
+  MoFEMFunctionBegin;
+
+  MoFEM::Interface *m_field_ptr;
+  CHKERR DMoFEMGetInterfacePtr(dm, &m_field_ptr);
+
+  int ghosts[] = {0};
+  if (m_field_ptr->get_comm_rank() == 0) {
+    CHKERR VecCreateGhost(m_field_ptr->get_comm(), 1, 1, 0, ghosts,
+                          v_energy_ptr);
+  } else {
+    CHKERR VecCreateGhost(m_field_ptr->get_comm(), 0, 1, 1, ghosts,
+                          v_energy_ptr);
+  }
+
+  boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
+      new DataAtIntegrationPts());
+
+  boost::shared_ptr<ForcesAndSourcesCore> fe_ptr(
+      new VolumeElementForcesAndSourcesCore(*m_field_ptr));
+
+  if (ale == PETSC_FALSE) {
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateHomogeneousStiffness<true>(x_field, x_field,
+                                                  block_sets_ptr, data_at_pts));
+    if (field_disp) {
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
+    } else {
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateStrain<false>(x_field, x_field, data_at_pts));
+    }
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
+  } else {
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateHomogeneousStiffness<true>(x_field, x_field,
+                                                  block_sets_ptr, data_at_pts));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateStrainAle(x_field, x_field, data_at_pts));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+    fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
+  }
+
+  CHKERR VecZeroEntries(*v_energy_ptr);
+  CHKERR VecGhostUpdateBegin(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+
+  fe_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
+  PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
+  CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_ptr);
+  PetscPrintf(PETSC_COMM_WORLD, " done\n");
+
+  CHKERR VecAssemblyBegin(*v_energy_ptr);
+  CHKERR VecAssemblyEnd(*v_energy_ptr);
+  CHKERR VecGhostUpdateBegin(*v_energy_ptr, ADD_VALUES, SCATTER_REVERSE);
+  CHKERR VecGhostUpdateEnd(*v_energy_ptr, ADD_VALUES, SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+
+  MoFEMFunctionReturn(0);
+}
