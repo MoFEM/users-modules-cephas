@@ -194,27 +194,36 @@ int main(int argc, char *argv[]) {
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in in whole body)
-    {
-      Skinner skin(&m_field.get_moab());
-      Range faces, tets;
+    auto setting_second_order_geometry = [&m_field]() {
+      MoFEMFunctionBegin;
+      // Setting geometry order everywhere
+      Range tets, edges;
       CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
-      // CHKERR skin.find_skin(0,tets,false,faces); CHKERRG(rval);
-      Range edges;
       CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
                                                 moab::Interface::UNION);
+
+      // Setting 2nd geometry order only on skin
+      // Range tets, faces, edges;
+      // Skinner skin(&m_field.get_moab());
+      // CHKERR skin.find_skin(0,tets,false,faces);
       // CHKERR m_field.get_moab().get_adjacencies(
       //   faces,1,false,edges,moab::Interface::UNION
-      // ); CHKERRG(rval);
+      // );
       // CHKERR m_field.synchronise_entities(edges);
+
       CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
-    }
-    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR setting_second_order_geometry();
 
     // Configure blocks by parsing config file. It allows setting approximation
     // order for each block independently.
-    std::map<int, BlockOptionData> block_data;
-    if (flg_block_config) {
-      try {
+    auto setting_blocks_data_and_order_from_config_file = [&m_field,
+                                                           flg_block_config]() {
+      MoFEMFunctionBegin;
+      std::map<int, BlockOptionData> block_data;
+      if (flg_block_config) {
         ifstream ini_file(block_config_file);
         // std::cerr << block_config_file << std::endl;
         po::variables_map vm;
@@ -286,12 +295,10 @@ int main(int argc, char *argv[]) {
                              "** WARNING Unrecognized option %s\n",
                              vit->c_str());
         }
-      } catch (const std::exception &ex) {
-        std::ostringstream ss;
-        ss << ex.what() << std::endl;
-        SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
       }
-    }
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR setting_blocks_data_and_order_from_config_file();
 
     // Add elastic element
     boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
