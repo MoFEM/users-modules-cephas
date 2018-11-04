@@ -1075,6 +1075,10 @@ struct HookeElement {
   };
 
   static MoFEMErrorCode
+  setBlocks(MoFEM::Interface &m_field,
+            boost::shared_ptr<map<int, BlockData>> &block_sets_ptr);
+
+  static MoFEMErrorCode
   addElasticElement(MoFEM::Interface &m_field,
                     boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
                     const std::string element_name, const std::string x_field,
@@ -1086,6 +1090,7 @@ struct HookeElement {
                boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
                const std::string x_field, const std::string X_field,
                const bool ale, const bool field_disp);
+
 };
 
 #endif // __HOOKE_ELEMENT_HPP

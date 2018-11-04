@@ -509,6 +509,32 @@ MoFEMErrorCode HookeElement::OpAleRhs_dX::iNtegrate(EntData &row_data) {
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode HookeElement::setBlocks(
+    MoFEM::Interface &m_field,
+    boost::shared_ptr<map<int, BlockData>> &block_sets_ptr) {
+  MoFEMFunctionBegin;
+
+  if (!block_sets_ptr)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Pointer to block of sets is null");
+
+  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+           m_field, BLOCKSET | MAT_ELASTICSET, it)) {
+    Mat_Elastic mydata;
+    CHKERR it->getAttributeDataStructure(mydata);
+    int id = it->getMeshsetId();
+    auto &block_data = (*block_sets_ptr)[id];
+    EntityHandle meshset = it->getMeshset();
+    CHKERR m_field.get_moab().get_entities_by_type(meshset, MBTET,
+                                                   block_data.tEts, true);
+    block_data.iD = id;
+    block_data.E = mydata.data.Young;
+    block_data.PoissonRatio = mydata.data.Poisson;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode HookeElement::addElasticElement(
     MoFEM::Interface &m_field,
     boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
@@ -547,6 +573,10 @@ MoFEMErrorCode HookeElement::setOperators(
     const std::string x_field, const std::string X_field, const bool ale,
     const bool field_disp) {
   MoFEMFunctionBegin;
+
+  if (!block_sets_ptr)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Pointer to block of sets is null");
 
   boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
       new DataAtIntegrationPts());
