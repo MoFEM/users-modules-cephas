@@ -252,10 +252,10 @@ struct HookeElement {
 
     OpCalculateHomogeneousStiffness(
         const std::string row_field, const std::string col_field,
-        boost::shared_ptr<BlockData> &block_data_ptr,
+        boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
         : VolUserDataOperator(row_field, col_field, OPROW, true),
-          blockDataPtr(block_data_ptr), dataAtPts(data_at_pts),
+          blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
           lastEvaluatedId(-1) {
       doEdges = false;
       doQuads = false;
@@ -268,52 +268,58 @@ struct HookeElement {
                           EntData &row_data) {
       MoFEMFunctionBegin;
 
-      if (lastEvaluatedId == blockDataPtr->iD)
-        MoFEMFunctionReturnHot(0);
+      for (auto &m : (*blockSetsPtr)) {
 
-      if (blockDataPtr->tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-          blockDataPtr->tEts.end())
-        MoFEMFunctionReturnHot(0);
+        if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
+            m.second.tEts.end())
+          if (lastEvaluatedId != m.second.iD) {
 
-      dataAtPts->stiffnessMat->resize(36, 1, false);
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-      const double young = blockDataPtr->E;
-      const double poisson = blockDataPtr->PoissonRatio;
+            lastEvaluatedId = m.second.iD;
 
-      // coefficient used in intermediate calculation
-      const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+            dataAtPts->stiffnessMat->resize(36, 1, false);
+            FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+                MAT_TO_DDG(dataAtPts->stiffnessMat));
+            const double young = m.second.E;
+            const double poisson = m.second.PoissonRatio;
 
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
+            // coefficient used in intermediate calculation
+            const double coefficient =
+                young / ((1 + poisson) * (1 - 2 * poisson));
 
-      t_D(i, j, k, l) = 0.;
+            FTensor::Index<'i', 3> i;
+            FTensor::Index<'j', 3> j;
+            FTensor::Index<'k', 3> k;
+            FTensor::Index<'l', 3> l;
 
-      t_D(0, 0, 0, 0) = 1 - poisson;
-      t_D(1, 1, 1, 1) = 1 - poisson;
-      t_D(2, 2, 2, 2) = 1 - poisson;
+            t_D(i, j, k, l) = 0.;
 
-      t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-      t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-      t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+            t_D(0, 0, 0, 0) = 1 - poisson;
+            t_D(1, 1, 1, 1) = 1 - poisson;
+            t_D(2, 2, 2, 2) = 1 - poisson;
 
-      t_D(0, 0, 1, 1) = poisson;
-      t_D(1, 1, 0, 0) = poisson;
-      t_D(0, 0, 2, 2) = poisson;
-      t_D(2, 2, 0, 0) = poisson;
-      t_D(1, 1, 2, 2) = poisson;
-      t_D(2, 2, 1, 1) = poisson;
+            t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+            t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+            t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
 
-      t_D(i, j, k, l) *= coefficient;
+            t_D(0, 0, 1, 1) = poisson;
+            t_D(1, 1, 0, 0) = poisson;
+            t_D(0, 0, 2, 2) = poisson;
+            t_D(2, 2, 0, 0) = poisson;
+            t_D(1, 1, 2, 2) = poisson;
+            t_D(2, 2, 1, 1) = poisson;
+
+            t_D(i, j, k, l) *= coefficient;
+
+            break;
+          }
+      }
 
       MoFEMFunctionReturn(0);
     }
 
   protected:
-    boost::shared_ptr<BlockData>
-        blockDataPtr; ///< Structure keeping data about problem, like
+    boost::shared_ptr<map<int,BlockData>>
+        blockSetsPtr; ///< Structure keeping data about problem, like
                       ///< material parameters
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
     int lastEvaluatedId;
@@ -1067,6 +1073,19 @@ struct HookeElement {
       MoFEMFunctionReturn(0);
     }
   };
+
+  static MoFEMErrorCode
+  addElasticElement(MoFEM::Interface &m_field,
+                    boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+                    const std::string element_name, const std::string x_field,
+                    const std::string X_field, const bool ale);
+
+  static MoFEMErrorCode
+  setOperators(boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
+               boost::shared_ptr<ForcesAndSourcesCore> &fe_rhs_ptr,
+               boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+               const std::string x_field, const std::string X_field,
+               const bool ale, const bool field_disp);
 };
 
 #endif // __HOOKE_ELEMENT_HPP

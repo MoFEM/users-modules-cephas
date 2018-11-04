@@ -508,3 +508,124 @@ MoFEMErrorCode HookeElement::OpAleRhs_dX::iNtegrate(EntData &row_data) {
 
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode HookeElement::addElasticElement(
+    MoFEM::Interface &m_field,
+    boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+    const std::string element_name, const std::string x_field,
+    const std::string X_field, const bool ale) {
+  MoFEMFunctionBegin;
+
+  if (!block_sets_ptr)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Pointer to block of sets is null");
+
+  CHKERR m_field.add_finite_element(element_name, MF_ZERO);
+  CHKERR m_field.modify_finite_element_add_field_row(element_name, x_field);
+  CHKERR m_field.modify_finite_element_add_field_col(element_name, x_field);
+  CHKERR m_field.modify_finite_element_add_field_data(element_name, x_field);
+  if (m_field.check_field(X_field)) {
+    if (ale) {
+      CHKERR m_field.modify_finite_element_add_field_row(element_name, X_field);
+      CHKERR m_field.modify_finite_element_add_field_col(element_name, X_field);
+    }
+    CHKERR m_field.modify_finite_element_add_field_data(element_name, X_field);
+  }
+
+  for (auto &m : (*block_sets_ptr)) {
+    CHKERR m_field.add_ents_to_finite_element_by_type(m.second.tEts, MBTET,
+                                                      element_name);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode HookeElement::setOperators(
+    boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
+    boost::shared_ptr<ForcesAndSourcesCore> &fe_rhs_ptr,
+    boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+    const std::string x_field, const std::string X_field, const bool ale,
+    const bool field_disp) {
+  MoFEMFunctionBegin;
+
+  boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
+      new DataAtIntegrationPts());
+
+  if (fe_lhs_ptr) {
+    if (ale == PETSC_FALSE) {
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateHomogeneousStiffness<true>(
+              x_field, x_field, block_sets_ptr, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpLhs_dx_dx<0>(x_field, x_field, data_at_pts));
+    } else {
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateHomogeneousStiffness<true>(
+              x_field, x_field, block_sets_ptr, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateStrainAle(x_field, x_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpAleLhs_dx_dx<0>(x_field, x_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpAleLhs_dx_dX<0>(x_field, X_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateEnergy(X_field, X_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateEshelbyStress(X_field, X_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpAleLhs_dX_dX<0>(X_field, X_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpAleLhs_dX_dx<0>(X_field, x_field, data_at_pts));
+    }
+  }
+
+  if (fe_rhs_ptr) {
+
+    if (ale == PETSC_FALSE) {
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateHomogeneousStiffness<true>(
+              x_field, x_field, block_sets_ptr, data_at_pts));
+      if (field_disp) {
+        fe_rhs_ptr->getOpPtrVector().push_back(
+            new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
+      } else {
+        fe_rhs_ptr->getOpPtrVector().push_back(
+            new OpCalculateStrain<false>(x_field, x_field, data_at_pts));
+      }
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpRhs_dx(x_field, x_field, data_at_pts));
+    } else {
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateHomogeneousStiffness<true>(
+              x_field, x_field, block_sets_ptr, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateStrainAle(x_field, x_field, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpAleRhs_dx(x_field, x_field, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateEnergy(X_field, X_field, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateEshelbyStress(X_field, X_field, data_at_pts));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpAleRhs_dX(X_field, X_field, data_at_pts));
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}

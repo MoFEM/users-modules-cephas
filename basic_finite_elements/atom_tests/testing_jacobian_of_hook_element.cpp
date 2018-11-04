@@ -97,83 +97,16 @@ int main(int argc, char *argv[]) {
                                   nullptr, nullptr);
 
     using BlockData = NonlinearElasticElement::BlockData;
-    using DataAtIntegrationPts = HookeElement::DataAtIntegrationPts;
-
-    boost::shared_ptr<BlockData> block_data_ptr(new BlockData());
-    block_data_ptr->iD = 0;
-    block_data_ptr->E = 1;
-    block_data_ptr->PoissonRatio = 0.25;
+    boost::shared_ptr<map<int, BlockData>> block_sets_ptr =
+        boost::make_shared<map<int, BlockData>>();
+    (*block_sets_ptr)[0].iD = 0;
+    (*block_sets_ptr)[0].E = 1;
+    (*block_sets_ptr)[0].PoissonRatio = 0.25;
     CHKERR m_field.get_finite_element_entities_by_dimension(
-        si->getDomainFEName(), 3, block_data_ptr->tEts);
+        si->getDomainFEName(), 3, (*block_sets_ptr)[0].tEts);
 
-    boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
-        new DataAtIntegrationPts());
-
-    if (ale == PETSC_FALSE) {
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomogeneousStiffness<true>(
-              "x", "x", block_data_ptr, data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpLhs_dx_dx<0>("x", "x", data_at_pts));
-    } else {
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("X", data_at_pts->HMat));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomogeneousStiffness<true>(
-              "x", "x", block_data_ptr, data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateStrainAle("x", "x", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateStress<0>("x", "x", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAleLhs_dx_dx<0>("x", "x", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAleLhs_dx_dX<0>("x", "X", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateEnergy("X", "X", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateEshelbyStress("X", "X", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAleLhs_dX_dX<0>("X", "X", data_at_pts));
-      fe_lhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAleLhs_dX_dx<0>("X", "x", data_at_pts));
-    }
-
-    if (ale == PETSC_FALSE) {
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomogeneousStiffness<true>(
-              "x", "x", block_data_ptr, data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateStrain<false>("x", "x", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateStress<0>("x", "x", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpRhs_dx("x", "x", data_at_pts));
-    } else {
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("X", data_at_pts->HMat));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateHomogeneousStiffness<true>(
-              "x", "x", block_data_ptr, data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("x", data_at_pts->hMat));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateStrainAle("x", "x", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateStress<0>("x", "x", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAleRhs_dx("x", "x", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateEnergy("X", "X", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateEshelbyStress("X", "X", data_at_pts));
-      fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAleRhs_dX("X", "X", data_at_pts));
-    }
+    CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
+                                      "x", "X", ale, false);
 
     Vec x, f;
     CHKERR DMCreateGlobalVector(dm, &x);
