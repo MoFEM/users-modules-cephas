@@ -33,6 +33,25 @@
 #include <BasicFiniteElements.hpp>
 #endif // __BASICFINITEELEMENTS_HPP__
 
+#ifndef __NONLINEAR_ELASTIC_HPP
+
+struct NonlinearElasticElement {
+
+  /** \brief data for calculation het conductivity and heat capacity elements
+   * \ingroup nonlinear_elastic_elem
+   */
+  struct BlockData {
+    int iD;
+    double E;
+    double PoissonRatio;
+    Range tEts; ///< constrains elements in block set
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
+  };
+};
+
+#endif
+
 /** \brief structure grouping operators and data used for calculation of
  * nonlinear elastic element \ingroup nonlinear_elastic_elem
  *
