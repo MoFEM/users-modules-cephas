@@ -460,13 +460,18 @@ struct HookeElement {
           // get derivatives of base functions for columns
           auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
+          FTensor::Christof<double, 3, 3> t_rowD;
+          // I mix up the indices here so that it behaves like a
+          // Dg.  That way I don't have to have a separate wrapper
+          // class Christof_Expr, which simplifies things. 
+          t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base(i));
+
           // iterate column base functions
           for (int cc = 0; cc != nbCols / 3; ++cc) {
 
             // integrate block local stiffens matrix
-            t_m(i, k) +=
-                a * t_D(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l));
-                
+            t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
+
             // move to next column base function
             ++t_col_diff_base;
 
@@ -568,6 +573,12 @@ struct HookeElement {
           FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
           t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
 
+          FTensor::Christof<double, 3, 3> t_rowD;
+          // I mix up the indices here so that it behaves like a
+          // Dg.  That way I don't have to have a separate wrapper
+          // class Christof_Expr, which simplifies things. 
+          t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base_pulled(i));
+
           // get derivatives of base functions for columns
           auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
@@ -578,9 +589,7 @@ struct HookeElement {
             t_col_diff_base_pulled(j) = t_col_diff_base(i) * t_invH(i, j);
 
             // integrate block local stiffens matrix
-            t_m(i, k) +=
-                a * t_D(i, j, k, l) *
-                (t_row_diff_base_pulled(j) * t_col_diff_base_pulled(l));
+            t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base_pulled(k);
 
             // move to next column base function
             ++t_col_diff_base;
