@@ -705,16 +705,7 @@ struct HookeElement {
               a * (t_row_diff_base_pulled_dX(j, k, l) * t_cauchy_stress(j, i));
 
           FTensor::Christof<double, 3, 3> t_row_D;
-          // FIXME: This operator is not implemented, doing operation by hand
-          // t_row_D(i, k, l) = a * t_row_diff_base_pulled(j) * t_D(i, j, k, l);
-          t_row_D(i, m, n) = 0;
-          for (int ii = 0; ii != 3; ++ii)
-            for (int kk = 0; kk != 3; ++kk)
-              for (int ll = kk; ll != 3; ++ll) {
-                auto &v = t_row_D(ii, kk, ll);
-                for (int jj = 0; jj != 3; ++jj)
-                  v += a * t_row_diff_base_pulled(jj) * t_D(ii, jj, kk, ll);
-              }
+          t_row_D(l, j, k) = (a * t_row_diff_base_pulled(i)) * t_D(i, j, k, l);
 
           FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dX;
           // FIXME: This operator is not implemented, doing operation by hand
