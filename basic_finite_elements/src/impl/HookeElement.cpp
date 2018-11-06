@@ -179,7 +179,7 @@ MoFEMErrorCode HookeElement::OpCalculateEshelbyStress::doWork(
   FTensor::Index<'k', 3> k;
 
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
-    t_eshelby_stress(i, j) = t_F(k, i) * t_cauchy_stress(k, j);
+    t_eshelby_stress(i, j) = -t_F(k, i) * t_cauchy_stress(k, j);
     t_eshelby_stress(0, 0) += t_energy;
     t_eshelby_stress(1, 1) += t_energy;
     t_eshelby_stress(2, 2) += t_energy;
@@ -621,7 +621,7 @@ MoFEMErrorCode HookeElement::setOperators(
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateHomogeneousStiffness<true>(
+          new OpCalculateHomogeneousStiffness<0>(
               x_field, x_field, block_sets_ptr, data_at_pts));
       if (field_disp) {
         fe_rhs_ptr->getOpPtrVector().push_back(
@@ -638,7 +638,7 @@ MoFEMErrorCode HookeElement::setOperators(
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateHomogeneousStiffness<true>(
+          new OpCalculateHomogeneousStiffness<0>(
               x_field, x_field, block_sets_ptr, data_at_pts));
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
@@ -688,7 +688,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateHomogeneousStiffness<true>(x_field, x_field,
+        new OpCalculateHomogeneousStiffness<0>(x_field, x_field,
                                                   block_sets_ptr, data_at_pts));
     if (field_disp) {
       fe_ptr->getOpPtrVector().push_back(
@@ -705,7 +705,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
     fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateHomogeneousStiffness<true>(x_field, x_field,
+        new OpCalculateHomogeneousStiffness<0>(x_field, x_field,
                                                   block_sets_ptr, data_at_pts));
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
