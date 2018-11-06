@@ -863,6 +863,8 @@ struct HookeElement {
         FTensor::Tensor2<double, 3, 3> t_energy_dX;
         t_energy_dX(k, l) = t_F_dX(i, j, k, l) * t_cauchy_stress(i, j);
 
+        t_eshelby_stress_dX(i, j, k, l) *= -1;
+
         for (int ii = 0; ii != 3; ++ii)
           for (int kk = 0; kk != 3; ++kk)
             for (int ll = 0; ll != 3; ++ll) {
@@ -1013,6 +1015,7 @@ struct HookeElement {
                 auto &v = t_eshelby_stress_dx(ii, jj, mm, nn);
                 v += t_invH(nn, ii) * t_cauchy_stress(mm, jj);
               }
+        t_eshelby_stress_dx(i, j, k, l) *= -1;
 
         FTensor::Tensor2<double, 3, 3> t_energy_dx;
         t_energy_dx(i, j) = t_invH(k, j) * t_cauchy_stress(i, k);
