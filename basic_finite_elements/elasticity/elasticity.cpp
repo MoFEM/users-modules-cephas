@@ -317,7 +317,7 @@ int main(int argc, char *argv[]) {
           }
 
           // Update material parameters. Set material parameters block by block.
-          for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(
+          for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                    m_field, BLOCKSET | MAT_ELASTICSET, it)) {
             const int id = it->getMeshsetId();
             auto &bd = (*block_sets_ptr)[id];
