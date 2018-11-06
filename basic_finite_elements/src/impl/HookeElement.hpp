@@ -103,6 +103,9 @@ struct HookeElement {
       eshelbyStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
+
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
   };
 
   template <bool D = false>
@@ -354,6 +357,9 @@ struct HookeElement {
     VectorDouble nF;
 
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
+
+    VectorInt rowIndices;
+    VectorInt colIndices;
 
     int nbRows;           ///< number of dofs on rows
     int nbCols;           ///< number if dof on column

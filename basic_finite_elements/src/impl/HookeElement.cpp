@@ -285,10 +285,41 @@ MoFEMErrorCode HookeElement::OpAssemble::iNtegrate(EntData &row_data) {
 MoFEMErrorCode HookeElement::OpAssemble::aSsemble(EntData &row_data,
                                                   EntData &col_data) {
   MoFEMFunctionBegin;
+
   // get pointer to first global index on row
   const int *row_indices = &*row_data.getIndices().data().begin();
   // get pointer to first global index on column
   const int *col_indices = &*col_data.getIndices().data().begin();
+
+  auto &data = *dataAtPts;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(nbRows, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
+  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+    colIndices.resize(nbCols, false);
+    noalias(colIndices) = col_data.getIndices();
+    col_indices = &colIndices[0];
+    VectorDofs &dofs = col_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesCol.end()) {
+        colIndices[ii] = -1;
+      }
+    }
+  }
+
   Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
                                              : getFEMethod()->snes_B;
   // assemble local matrix
@@ -308,8 +339,25 @@ MoFEMErrorCode HookeElement::OpAssemble::aSsemble(EntData &row_data,
 
 MoFEMErrorCode HookeElement::OpAssemble::aSsemble(EntData &row_data) {
   MoFEMFunctionBegin;
+
   // get pointer to first global index on row
   const int *row_indices = &*row_data.getIndices().data().begin();
+
+  auto &data = *dataAtPts;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(nbRows, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
   Vec F = getFEMethod()->snes_f;
   // assemble local matrix
   CHKERR VecSetValues(F, nbRows, row_indices, &*nF.data().begin(), ADD_VALUES);
