@@ -443,18 +443,14 @@ struct HookeElement {
       FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
           MAT_TO_DDG(dataAtPts->stiffnessMat));
 
-      auto &det_H = *dataAtPts->detHVec;
-
       // iterate over integration points
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
         // calculate scalar weight times element volume
         double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size() && det_H.empty()) {
+        if (getHoGaussPtsDetJac().size()) {
           a *= getHoGaussPtsDetJac()[gg];
-        } else if (det_H.size()) {
-          a *= det_H[gg];
-        }
+        } 
 
         // iterate over row base functions
         int rr = 0;
@@ -562,12 +558,7 @@ struct HookeElement {
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
         // calculate scalar weight times element volume
-        double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-          a *= getHoGaussPtsDetJac()[gg];
-        } else if (det_H.size()) {
-          a *= det_H[gg];
-        }
+        double a = t_w * vol * det_H[gg];
 
         // iterate over row base functions
         int rr = 0;
@@ -678,12 +669,7 @@ struct HookeElement {
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
         // calculate scalar weight times element volume
-        double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-          a *= getHoGaussPtsDetJac()[gg];
-        } else if (det_H.size()) {
-          a *= det_H[gg];
-        }
+        double a = t_w * vol * det_H[gg];
 
         FTensor::Tensor4<double, 3, 3, 3, 3> t_F_dX;
         t_F_dX(i, j, k, l) = -(t_h(i, m) * t_invH(m, k)) * t_invH(l, j);
@@ -832,12 +818,7 @@ struct HookeElement {
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
         // calculate scalar weight times element volume
-        double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-          a *= getHoGaussPtsDetJac()[gg];
-        } else if (det_H.size()) {
-          a *= det_H[gg];
-        }
+        double a = t_w * vol * det_H[gg];
 
         FTensor::Tensor4<double, 3, 3, 3, 3> t_F_dX;
         t_F_dX(i, j, k, l) = -(t_h(i, m) * t_invH(m, k)) * t_invH(l, j);
@@ -1004,12 +985,7 @@ struct HookeElement {
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
         // calculate scalar weight times element volume
-        double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-          a *= getHoGaussPtsDetJac()[gg];
-        } else if (det_H.size()) {
-          a *= det_H[gg];
-        }
+        double a = t_w * vol * det_H[gg];
 
         FTensor::Tensor4<double, 3, 3, 3, 3> t_eshelby_stress_dx;
         t_eshelby_stress_dx(i, j, m, n) =

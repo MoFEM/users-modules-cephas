@@ -392,7 +392,6 @@ MoFEMErrorCode HookeElement::OpRhs_dx::iNtegrate(EntData &row_data) {
   const int row_nb_base_fun = row_data.getN().size2();
   auto t_cauchy_stress =
       getFTensor2SymmetricFromMat<3>(*dataAtPts->cauchyStressMat);
-  auto &det_H = *dataAtPts->detHVec;
 
   // iterate over integration points
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
@@ -400,13 +399,10 @@ MoFEMErrorCode HookeElement::OpRhs_dx::iNtegrate(EntData &row_data) {
     // calculate scalar weight times element volume
     double a = t_w * vol;
 
-    if (getHoGaussPtsDetJac().size() && det_H.empty()) {
+    if (getHoGaussPtsDetJac().size()) {
       // If HO geometry
       a *= getHoGaussPtsDetJac()[gg];
-    } else if (det_H.size()) {
-      // If ALE formulation, i.e. mesh nodes are moving
-      a *= det_H[gg];
-    }
+    } 
 
     auto t_nf = get_tensor1(nF, 0);
 
@@ -460,16 +456,7 @@ MoFEMErrorCode HookeElement::OpAleRhs_dx::iNtegrate(EntData &row_data) {
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
     // calculate scalar weight times element volume
-    double a = t_w * vol;
-
-    if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-      // If HO geometry
-      a *= getHoGaussPtsDetJac()[gg];
-    } else if (det_H.size()) {
-      // If ALE formulation, i.e. mesh nodes are moving
-      a *= det_H[gg];
-    }
-
+    double a = t_w * vol * det_H[gg];
     auto t_nf = get_tensor1(nF, 0);
 
     int rr = 0;
@@ -525,16 +512,7 @@ MoFEMErrorCode HookeElement::OpAleRhs_dX::iNtegrate(EntData &row_data) {
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
     // calculate scalar weight times element volume
-    double a = t_w * vol;
-
-    if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-      // If HO geometry
-      a *= getHoGaussPtsDetJac()[gg];
-    } else if (det_H.size()) {
-      // If ALE formulation, i.e. mesh nodes are moving
-      a *= det_H[gg];
-    }
-
+    double a = t_w * vol * det_H[gg];
     auto t_nf = get_tensor1(nF, 0);
 
     int rr = 0;
