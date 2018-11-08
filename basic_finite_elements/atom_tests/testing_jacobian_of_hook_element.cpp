@@ -71,14 +71,14 @@ int main(int argc, char *argv[]) {
     {
       Projection10NodeCoordsOnField ent_method(m_field, "x");
       CHKERR m_field.loop_dofs("x", ent_method);
-      //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "x");
+      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "x");
     }
 
     // Project coordinates on "X" field
     if (ale == PETSC_TRUE) {
       Projection10NodeCoordsOnField ent_method(m_field, "X");
       CHKERR m_field.loop_dofs("X", ent_method);
-      //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
+      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
     }
 
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(

@@ -847,17 +847,20 @@ struct HookeElement {
                   v += t_F_dX(kk, ii, mm, nn) * t_cauchy_stress(kk, jj);
               }
 
-        FTensor::Tensor2<double, 3, 3> t_energy_dX;
-        t_energy_dX(k, l) = t_F_dX(i, j, k, l) * t_cauchy_stress(i, j);
-
         t_eshelby_stress_dX(i, j, k, l) *= -1;
 
-        for (int ii = 0; ii != 3; ++ii)
-          for (int kk = 0; kk != 3; ++kk)
-            for (int ll = 0; ll != 3; ++ll) {
-              auto &v = t_eshelby_stress_dX(ii, ii, kk, ll);
-              v += t_energy_dX(kk, ll);
-            }
+        FTensor::Tensor2<double, 3, 3> t_energy_dX;
+        t_energy_dX(k, l) = t_F_dX(i, j, k, l) * t_cauchy_stress(i, j);
+        t_energy_dX(k, l) +=
+            (t_strain(m, n) * t_D(m, n, i, j)) * t_F_dX(i, j, k, l);
+        t_energy_dX(k, l) /= 2.;
+
+        for (int kk = 0; kk != 3; ++kk)
+          for (int ll = 0; ll != 3; ++ll) {
+            auto v = t_energy_dX(kk, ll);
+            for (int ii = 0; ii != 3; ++ii)
+              t_eshelby_stress_dX(ii, ii, kk, ll) += v;
+          }
 
         // iterate over row base functions
         int rr = 0;
@@ -989,7 +992,7 @@ struct HookeElement {
 
         FTensor::Tensor4<double, 3, 3, 3, 3> t_eshelby_stress_dx;
         t_eshelby_stress_dx(i, j, m, n) =
-            t_F(k, i) * t_D(k, j, m, l) * t_invH(n, l);
+            (t_F(k, i) * t_D(k, j, m, l)) * t_invH(n, l);
         for (int ii = 0; ii != 3; ++ii)
           for (int jj = 0; jj != 3; ++jj)
             for (int mm = 0; mm != 3; ++mm)
@@ -1000,14 +1003,14 @@ struct HookeElement {
         t_eshelby_stress_dx(i, j, k, l) *= -1;
 
         FTensor::Tensor2<double, 3, 3> t_energy_dx;
-        t_energy_dx(i, j) = t_invH(k, j) * t_cauchy_stress(i, k);
+        t_energy_dx(m, n) = t_invH(n, j) * t_cauchy_stress(m, j);
 
-        for (int ii = 0; ii != 3; ++ii)
-          for (int mm = 0; mm != 3; ++mm)
-            for (int nn = 0; nn != 3; ++nn) {
-              auto &v = t_eshelby_stress_dx(ii, ii, mm, nn);
-              v += t_energy_dx(mm, nn);
-            }
+        for (int mm = 0; mm != 3; ++mm)
+          for (int nn = 0; nn != 3; ++nn) {
+            auto v = t_energy_dx(mm, nn);
+            for (int ii = 0; ii != 3; ++ii)
+              t_eshelby_stress_dx(ii, ii, mm, nn) += v;
+          }
 
         // iterate over row base functions
         int rr = 0;
