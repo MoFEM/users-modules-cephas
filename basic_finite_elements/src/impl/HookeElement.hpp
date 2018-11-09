@@ -87,6 +87,8 @@ struct HookeElement {
     boost::shared_ptr<VectorDouble> energyVec;
     boost::shared_ptr<MatrixDouble> eshelbyStressMat;
 
+    boost::shared_ptr<MatrixDouble> eshelbyStress_dx;
+
     DataAtIntegrationPts() {
 
       smallStrainMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
@@ -102,6 +104,8 @@ struct HookeElement {
       energyVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       eshelbyStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      eshelbyStress_dx = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
 
     Range forcesOnlyOnEntitiesRow;
@@ -321,7 +325,7 @@ struct HookeElement {
     }
 
   protected:
-    boost::shared_ptr<map<int,BlockData>>
+    boost::shared_ptr<map<int, BlockData>>
         blockSetsPtr; ///< Structure keeping data about problem, like
                       ///< material parameters
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -450,7 +454,7 @@ struct HookeElement {
         double a = t_w * vol;
         if (getHoGaussPtsDetJac().size()) {
           a *= getHoGaussPtsDetJac()[gg];
-        } 
+        }
 
         // iterate over row base functions
         int rr = 0;
@@ -465,7 +469,7 @@ struct HookeElement {
           FTensor::Christof<double, 3, 3> t_rowD;
           // I mix up the indices here so that it behaves like a
           // Dg.  That way I don't have to have a separate wrapper
-          // class Christof_Expr, which simplifies things. 
+          // class Christof_Expr, which simplifies things.
           t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base(i));
 
           // iterate column base functions
@@ -573,7 +577,7 @@ struct HookeElement {
           FTensor::Christof<double, 3, 3> t_rowD;
           // I mix up the indices here so that it behaves like a
           // Dg.  That way I don't have to have a separate wrapper
-          // class Christof_Expr, which simplifies things. 
+          // class Christof_Expr, which simplifies things.
           t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base_pulled(i));
 
           // get derivatives of base functions for columns
@@ -927,30 +931,40 @@ struct HookeElement {
     }
   };
 
-  template <int S = 0> struct OpAleLhs_dX_dx : public OpAssemble {
+  template <int S = 0> struct OpAleLhsPre_dX_dx : public VolUserDataOperator {
 
-    OpAleLhs_dX_dx(const std::string row_field, const std::string col_field,
-                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+    OpAleLhsPre_dX_dx(const std::string row_field, const std::string col_field,
+                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+        : VolUserDataOperator(row_field, col_field, OPROW, true),
+          dataAtPts(data_at_pts) {
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    }
 
-  protected:
-    /**
-     * \brief Integrate tangent stiffness for material momentum
-     * @param  row_data row data (consist base functions on row entity)
-     * @param  col_data column data (consist base functions on column entity)
-     * @return error code
-     */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+    MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                          EntData &row_data) {
       MoFEMFunctionBegin;
 
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+      const int nb_integration_pts = row_data.getN().size1();
+
+      auto get_eshelby_stress_dx = [this, nb_integration_pts]() {
+        FTensor::Tensor4<FTensor::PackPtr<double *, 1>, 3, 3, 3, 3>
+            t_eshelby_stress_dx;
+        dataAtPts->eshelbyStress_dx->resize(81, nb_integration_pts, false);
+        int mm = 0;
+        for (int ii = 0; ii != 3; ++ii)
+          for (int jj = 0; jj != 3; ++jj)
+            for (int kk = 0; kk != 3; ++kk)
+              for (int ll = 0; ll != 3; ++ll)
+                t_eshelby_stress_dx.ptr(ii, jj, kk, ll) =
+                    &(*dataAtPts->eshelbyStress_dx)(mm++, 0);
+        return t_eshelby_stress_dx;
       };
+
+      auto t_eshelby_stress_dx = get_eshelby_stress_dx();
 
       FTensor::Index<'i', 3> i;
       FTensor::Index<'j', 3> j;
@@ -959,38 +973,17 @@ struct HookeElement {
       FTensor::Index<'m', 3> m;
       FTensor::Index<'n', 3> n;
 
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
       // Elastic stiffness tensor (4th rank tensor with minor and major
       // symmetry)
       FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
           MAT_TO_DDG(dataAtPts->stiffnessMat));
       auto t_cauchy_stress =
           getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-      auto t_strain =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
-      auto t_eshelby_stress =
-          getFTensor2FromMat<3, 3>(*dataAtPts->eshelbyStressMat);
-      auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
       auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
       auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
-      auto &det_H = *dataAtPts->detHVec;
 
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
-        // calculate scalar weight times element volume
-        double a = t_w * vol * det_H[gg];
-
-        FTensor::Tensor4<double, 3, 3, 3, 3> t_eshelby_stress_dx;
         t_eshelby_stress_dx(i, j, m, n) =
             (t_F(k, i) * t_D(k, j, m, l)) * t_invH(n, l);
         for (int ii = 0; ii != 3; ++ii)
@@ -1012,54 +1005,34 @@ struct HookeElement {
               t_eshelby_stress_dx(ii, ii, mm, nn) += v;
           }
 
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dx;
-          t_row_stress_dx(i, k, l) =
-              a * t_row_diff_base_pulled(j) * t_eshelby_stress_dx(i, j, k, l);
-
-          // get derivatives of base functions for columns
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            t_m(i, k) += t_row_stress_dx(i, k, l) * t_col_diff_base(l);
-
-            // move to next column base function
-            ++t_col_diff_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        ++t_w;
         ++t_D;
-        ++t_cauchy_stress;
-        ++t_eshelby_stress;
-        ++t_strain;
-        ++t_h;
         ++t_invH;
+        ++t_cauchy_stress;
+        ++t_eshelby_stress_dx;
         ++t_F;
       }
 
       MoFEMFunctionReturn(0);
     }
+
+  private:
+    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
+  };
+
+  struct OpAleLhs_dX_dx : public OpAssemble {
+
+    OpAleLhs_dX_dx(const std::string row_field, const std::string col_field,
+                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+
+  protected:
+    /**
+     * \brief Integrate tangent stiffness for material momentum
+     * @param  row_data row data (consist base functions on row entity)
+     * @param  col_data column data (consist base functions on column entity)
+     * @return error code
+     */
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   static MoFEMErrorCode

@@ -402,7 +402,7 @@ MoFEMErrorCode HookeElement::OpRhs_dx::iNtegrate(EntData &row_data) {
     if (getHoGaussPtsDetJac().size()) {
       // If HO geometry
       a *= getHoGaussPtsDetJac()[gg];
-    } 
+    }
 
     auto t_nf = get_tensor1(nF, 0);
 
@@ -637,7 +637,9 @@ MoFEMErrorCode HookeElement::setOperators(
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpAleLhs_dX_dX<0>(X_field, X_field, data_at_pts));
       fe_lhs_ptr->getOpPtrVector().push_back(
-          new OpAleLhs_dX_dx<0>(X_field, x_field, data_at_pts));
+          new OpAleLhsPre_dX_dx<0>(X_field, x_field, data_at_pts));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpAleLhs_dX_dx(X_field, x_field, data_at_pts));
     }
   }
 
@@ -647,8 +649,8 @@ MoFEMErrorCode HookeElement::setOperators(
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateHomogeneousStiffness<0>(
-              x_field, x_field, block_sets_ptr, data_at_pts));
+          new OpCalculateHomogeneousStiffness<0>(x_field, x_field,
+                                                 block_sets_ptr, data_at_pts));
       if (field_disp) {
         fe_rhs_ptr->getOpPtrVector().push_back(
             new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
@@ -664,8 +666,8 @@ MoFEMErrorCode HookeElement::setOperators(
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateHomogeneousStiffness<0>(
-              x_field, x_field, block_sets_ptr, data_at_pts));
+          new OpCalculateHomogeneousStiffness<0>(x_field, x_field,
+                                                 block_sets_ptr, data_at_pts));
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -713,9 +715,8 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   if (ale == PETSC_FALSE) {
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateHomogeneousStiffness<0>(x_field, x_field,
-                                                  block_sets_ptr, data_at_pts));
+    fe_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
+        x_field, x_field, block_sets_ptr, data_at_pts));
     if (field_disp) {
       fe_ptr->getOpPtrVector().push_back(
           new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
@@ -730,9 +731,8 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   } else {
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateHomogeneousStiffness<0>(x_field, x_field,
-                                                  block_sets_ptr, data_at_pts));
+    fe_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
+        x_field, x_field, block_sets_ptr, data_at_pts));
     fe_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
     fe_ptr->getOpPtrVector().push_back(
@@ -758,6 +758,104 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   CHKERR VecGhostUpdateEnd(*v_energy_ptr, ADD_VALUES, SCATTER_REVERSE);
   CHKERR VecGhostUpdateBegin(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode HookeElement::OpAleLhs_dX_dx::iNtegrate(EntData &row_data,
+                                                       EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
+  FTensor::Index<'n', 3> n;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto &det_H = *dataAtPts->detHVec;
+
+  auto get_eshelby_stress_dx = [this]() {
+    FTensor::Tensor4<FTensor::PackPtr<double *, 1>, 3, 3, 3, 3>
+        t_eshelby_stress_dx;
+    int mm = 0;
+    for (int ii = 0; ii != 3; ++ii)
+      for (int jj = 0; jj != 3; ++jj)
+        for (int kk = 0; kk != 3; ++kk)
+          for (int ll = 0; ll != 3; ++ll)
+            t_eshelby_stress_dx.ptr(ii, jj, kk, ll) =
+                &(*dataAtPts->eshelbyStress_dx)(mm++, 0);
+    return t_eshelby_stress_dx;
+  };
+
+  auto t_eshelby_stress_dx = get_eshelby_stress_dx();
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol * det_H[gg];
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dx;
+      t_row_stress_dx(i, k, l) =
+          a * t_row_diff_base_pulled(j) * t_eshelby_stress_dx(i, j, k, l);
+
+      // get derivatives of base functions for columns
+      auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        t_m(i, k) += t_row_stress_dx(i, k, l) * t_col_diff_base(l);
+
+        // move to next column base function
+        ++t_col_diff_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    ++t_w;
+    ++t_invH;
+    ++t_eshelby_stress_dx;
+  }
 
   MoFEMFunctionReturn(0);
 }
