@@ -283,7 +283,7 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::recordTag(
     const int gg) {
   MoFEMFunctionBegin;
 
-  trace_on(tAg, 1);
+  trace_on(tAg, 0);
 
   dAta.materialAdoublePtr->F.resize(3, 3, false);
 
@@ -470,7 +470,7 @@ MoFEMErrorCode
 NonlinearElasticElement::OpJacobianEnergy::recordTag(const int gg) {
   MoFEMFunctionBegin;
 
-  trace_on(tAg);
+  trace_on(tAg, 0);
 
   dAta.materialAdoublePtr->F.resize(3, 3, false);
 
