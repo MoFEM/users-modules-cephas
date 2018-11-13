@@ -6,18 +6,21 @@
  file with temperature field, then thermal stresses are included.
 
  What example can do:
- - take into account temperature field, i.e. calculate thermal stresses and deformation
+ - take into account temperature field, i.e. calculate thermal stresses and
+deformation
  - stationary and time depend field is considered
  - take into account gravitational body forces
  - take in account fluid pressure
  - can work with higher order geometry definition
  - works on distributed meshes
  - multi-grid solver where each grid level is approximation order level
- - each mesh block can have different material parameters and approximation order
+ - each mesh block can have different material parameters and approximation
+order
 
 See example how code can be used \cite jordi:2017,
- \image html SquelaDamExampleByJordi.png "Example what you can do with this code. 
- Analysis of the arch dam of Susqueda, located in Catalonia (Spain)" width=800px
+ \image html SquelaDamExampleByJordi.png "Example what you can do with this
+code. Analysis of the arch dam of Susqueda, located in Catalonia (Spain)"
+width=800px
 
  This is an example of application code; it does not show how elements are
 implemented. Example presents how to:
@@ -76,6 +79,14 @@ struct BlockOptionData {
   double pOisson;
   double initTemp;
   BlockOptionData() : oRder(-1), yOung(-1), pOisson(-2), initTemp(0) {}
+};
+
+using BlockData = NonlinearElasticElement::BlockData;
+using VolUserDataOperator = VolumeElementForcesAndSourcesCore::UserDataOperator;
+
+/// Set integration rule
+struct VolRule {
+  int operator()(int, int, int order) const { return 2 * (order - 1); }
 };
 
 int main(int argc, char *argv[]) {
@@ -194,131 +205,156 @@ int main(int argc, char *argv[]) {
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in in whole body)
-    {
-      Skinner skin(&m_field.get_moab());
-      Range faces, tets;
+    auto setting_second_order_geometry = [&m_field]() {
+      MoFEMFunctionBegin;
+      // Setting geometry order everywhere
+      Range tets, edges;
       CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
-      // CHKERR skin.find_skin(0,tets,false,faces); CHKERRG(rval);
-      Range edges;
       CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
                                                 moab::Interface::UNION);
+
+      // Setting 2nd geometry order only on skin
+      // Range tets, faces, edges;
+      // Skinner skin(&m_field.get_moab());
+      // CHKERR skin.find_skin(0,tets,false,faces);
       // CHKERR m_field.get_moab().get_adjacencies(
       //   faces,1,false,edges,moab::Interface::UNION
-      // ); CHKERRG(rval);
+      // );
       // CHKERR m_field.synchronise_entities(edges);
+
       CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
-    }
-    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR setting_second_order_geometry();
 
     // Configure blocks by parsing config file. It allows setting approximation
     // order for each block independently.
     std::map<int, BlockOptionData> block_data;
-    if (flg_block_config) {
-      try {
-        ifstream ini_file(block_config_file);
-        // std::cerr << block_config_file << std::endl;
-        po::variables_map vm;
-        po::options_description config_file_options;
-        for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-          std::ostringstream str_order;
-          str_order << "block_" << it->getMeshsetId() << ".displacement_order";
-          config_file_options.add_options()(
-              str_order.str().c_str(),
-              po::value<int>(&block_data[it->getMeshsetId()].oRder)
-                  ->default_value(order));
+    auto setting_blocks_data_and_order_from_config_file =
+        [&m_field, &moab, &block_data, flg_block_config, block_config_file,
+         order](boost::shared_ptr<std::map<int, BlockData>> &block_sets_ptr) {
+          MoFEMFunctionBegin;
+          if (flg_block_config) {
+            ifstream ini_file(block_config_file);
+            po::variables_map vm;
+            po::options_description config_file_options;
+            for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET,
+                                                         it)) {
+              std::ostringstream str_order;
+              str_order << "block_" << it->getMeshsetId()
+                        << ".displacement_order";
+              config_file_options.add_options()(
+                  str_order.str().c_str(),
+                  po::value<int>(&block_data[it->getMeshsetId()].oRder)
+                      ->default_value(order));
 
-          std::ostringstream str_cond;
-          str_cond << "block_" << it->getMeshsetId() << ".young_modulus";
-          config_file_options.add_options()(
-              str_cond.str().c_str(),
-              po::value<double>(&block_data[it->getMeshsetId()].yOung)
-                  ->default_value(-1));
+              std::ostringstream str_cond;
+              str_cond << "block_" << it->getMeshsetId() << ".young_modulus";
+              config_file_options.add_options()(
+                  str_cond.str().c_str(),
+                  po::value<double>(&block_data[it->getMeshsetId()].yOung)
+                      ->default_value(-1));
 
-          std::ostringstream str_capa;
-          str_capa << "block_" << it->getMeshsetId() << ".poisson_ratio";
-          config_file_options.add_options()(
-              str_capa.str().c_str(),
-              po::value<double>(&block_data[it->getMeshsetId()].pOisson)
-                  ->default_value(-2));
+              std::ostringstream str_capa;
+              str_capa << "block_" << it->getMeshsetId() << ".poisson_ratio";
+              config_file_options.add_options()(
+                  str_capa.str().c_str(),
+                  po::value<double>(&block_data[it->getMeshsetId()].pOisson)
+                      ->default_value(-2));
 
-          std::ostringstream str_init_temp;
-          str_init_temp << "block_" << it->getMeshsetId()
-                        << ".initial_temperature";
-          config_file_options.add_options()(
-              str_init_temp.str().c_str(),
-              po::value<double>(&block_data[it->getMeshsetId()].initTemp)
-                  ->default_value(0));
-        }
-        po::parsed_options parsed =
-            parse_config_file(ini_file, config_file_options, true);
-        store(parsed, vm);
-        po::notify(vm);
-        for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-          if (block_data[it->getMeshsetId()].oRder == -1)
-            continue;
-          if (block_data[it->getMeshsetId()].oRder == order)
-            continue;
-          PetscPrintf(PETSC_COMM_WORLD, "Set block %d order to %d\n",
-                      it->getMeshsetId(), block_data[it->getMeshsetId()].oRder);
-          Range block_ents;
-          CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
-                                             true);
-          Range ents_to_set_order;
-          CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
-                                      moab::Interface::UNION);
-          ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
-          CHKERR moab.get_adjacencies(block_ents, 2, false, ents_to_set_order,
-                                      moab::Interface::UNION);
-          CHKERR moab.get_adjacencies(block_ents, 1, false, ents_to_set_order,
-                                      moab::Interface::UNION);
-          CHKERR m_field.synchronise_entities(ents_to_set_order);
+              std::ostringstream str_init_temp;
+              str_init_temp << "block_" << it->getMeshsetId()
+                            << ".initial_temperature";
+              config_file_options.add_options()(
+                  str_init_temp.str().c_str(),
+                  po::value<double>(&block_data[it->getMeshsetId()].initTemp)
+                      ->default_value(0));
+            }
+            po::parsed_options parsed =
+                parse_config_file(ini_file, config_file_options, true);
+            store(parsed, vm);
+            po::notify(vm);
+            for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET,
+                                                         it)) {
+              if (block_data[it->getMeshsetId()].oRder == -1)
+                continue;
+              if (block_data[it->getMeshsetId()].oRder == order)
+                continue;
+              PetscPrintf(PETSC_COMM_WORLD, "Set block %d order to %d\n",
+                          it->getMeshsetId(),
+                          block_data[it->getMeshsetId()].oRder);
+              Range block_ents;
+              CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
+                                                 true);
+              Range ents_to_set_order;
+              CHKERR moab.get_adjacencies(block_ents, 3, false,
+                                          ents_to_set_order,
+                                          moab::Interface::UNION);
+              ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
+              CHKERR moab.get_adjacencies(block_ents, 2, false,
+                                          ents_to_set_order,
+                                          moab::Interface::UNION);
+              CHKERR moab.get_adjacencies(block_ents, 1, false,
+                                          ents_to_set_order,
+                                          moab::Interface::UNION);
+              CHKERR m_field.synchronise_entities(ents_to_set_order);
 
-          CHKERR m_field.set_field_order(ents_to_set_order, "DISPLACEMENT",
-                                         block_data[it->getMeshsetId()].oRder);
-        }
-        std::vector<std::string> additional_parameters;
-        additional_parameters =
-            collect_unrecognized(parsed.options, po::include_positional);
-        for (std::vector<std::string>::iterator vit =
-                 additional_parameters.begin();
-             vit != additional_parameters.end(); vit++) {
-          CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                             "** WARNING Unrecognized option %s\n",
-                             vit->c_str());
-        }
-      } catch (const std::exception &ex) {
-        std::ostringstream ss;
-        ss << ex.what() << std::endl;
-        SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
-      }
-    }
+              CHKERR m_field.set_field_order(
+                  ents_to_set_order, "DISPLACEMENT",
+                  block_data[it->getMeshsetId()].oRder);
+            }
+            std::vector<std::string> additional_parameters;
+            additional_parameters =
+                collect_unrecognized(parsed.options, po::include_positional);
+            for (std::vector<std::string>::iterator vit =
+                     additional_parameters.begin();
+                 vit != additional_parameters.end(); vit++) {
+              CHKERR PetscPrintf(PETSC_COMM_WORLD,
+                                 "** WARNING Unrecognized option %s\n",
+                                 vit->c_str());
+            }
+          }
+
+          // Update material parameters. Set material parameters block by block.
+          for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+                   m_field, BLOCKSET | MAT_ELASTICSET, it)) {
+            const int id = it->getMeshsetId();
+            auto &bd = (*block_sets_ptr)[id];
+            if (block_data[id].yOung > 0)
+              bd.E = block_data[id].yOung;
+            if (block_data[id].pOisson >= -1)
+              bd.PoissonRatio = block_data[id].pOisson;
+            CHKERR PetscPrintf(PETSC_COMM_WORLD, "Block %d\n", id);
+            CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tYoung modulus %3.4g\n",
+                               bd.E);
+            CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tPoisson ratio %3.4g\n",
+                               bd.PoissonRatio);
+          }
+
+          MoFEMFunctionReturn(0);
+        };
 
     // Add elastic element
-    boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
-    boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
-    NonlinearElasticElement elastic(m_field, 2);
-    CHKERR elastic.setBlocks(hooke_double_ptr, hooke_adouble_ptr);
 
-    CHKERR elastic.addElement("ELASTIC", "DISPLACEMENT");
-    CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
-                                true);
+    boost::shared_ptr<std::map<int, BlockData>> block_sets_ptr =
+        boost::make_shared<std::map<int, BlockData>>();
+    CHKERR HookeElement::setBlocks(m_field, block_sets_ptr);
+    CHKERR setting_blocks_data_and_order_from_config_file(block_sets_ptr);
 
-    // Update material parameters. Set material parameters block by block.
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      int id = it->getMeshsetId();
-      if (block_data[id].yOung > 0) {
-        elastic.setOfBlocks[id].E = block_data[id].yOung;
-        CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                           "Block %d set Young modulus %3.4g\n", id,
-                           elastic.setOfBlocks[id].E);
-      }
-      if (block_data[id].pOisson >= -1) {
-        elastic.setOfBlocks[id].PoissonRatio = block_data[id].pOisson;
-        CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                           "Block %d set Poisson ratio %3.4g\n", id,
-                           elastic.setOfBlocks[id].PoissonRatio);
-      }
-    }
+    boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
+        new VolumeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
+        new VolumeElementForcesAndSourcesCore(m_field));
+    fe_lhs_ptr->getRuleHook = VolRule();
+    fe_rhs_ptr->getRuleHook = VolRule();
+
+    CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
+                                           "DISPLACEMENT",
+                                           "MESH_NODE_POSITIONS", false);
+    CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
+                                      "DISPLACEMENT", "MESH_NODE_POSITIONS",
+                                      false, true);
 
     // Add body force element. This is only declaration of element. not its
     // implementation.
@@ -498,14 +534,14 @@ int main(int argc, char *argv[]) {
     // NonlinearElasticElement is implemented,
     // in that case. We run NonlinearElasticElement with hook material.
     // Calculate right hand side vector
-    elastic.getLoopFeRhs().snes_f = F;
+    fe_rhs_ptr->snes_f = F;
     PetscPrintf(PETSC_COMM_WORLD, "Assemble external force vector  ...");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeRhs());
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_rhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
     // Assemble matrix
-    elastic.getLoopFeLhs().snes_B = Aij;
+    fe_lhs_ptr->snes_B = Aij;
     PetscPrintf(PETSC_COMM_WORLD, "Calculate stiffness matrix  ...");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeLhs());
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_lhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
     // Assemble pressure and traction forces. Run particular implemented for do
@@ -525,8 +561,8 @@ int main(int argc, char *argv[]) {
     }
     // Assemble forces applied to nodes, see implementation in NodalForce
     boost::ptr_map<std::string, NodalForce> nodal_forces;
-    CHKERR
-    MetaNodalForces::setOperators(m_field, nodal_forces, F, "DISPLACEMENT");
+    CHKERR MetaNodalForces::setOperators(m_field, nodal_forces, F,
+                                         "DISPLACEMENT");
 
     {
       boost::ptr_map<std::string, NodalForce>::iterator fit =
@@ -619,7 +655,7 @@ int main(int argc, char *argv[]) {
     // Add problem specific operator on element to post-process stresses
     post_proc.getOpPtrVector().push_back(new PostProcHookStress(
         m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
-        post_proc.commonData, &elastic.setOfBlocks));
+        post_proc.commonData, block_sets_ptr.get()));
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
@@ -791,15 +827,25 @@ int main(int argc, char *argv[]) {
     }
 
     // Calculate elastic energy
-    elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
-    elastic.getLoopFeEnergy().eNergy = 0;
-    PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
-    PetscPrintf(PETSC_COMM_WORLD, " done\n");
+    auto calculate_strain_energy = [dm, &block_sets_ptr]() {
+      MoFEMFunctionBegin;
 
-    // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
-                elastic.getLoopFeEnergy().eNergy);
+      Vec v_energy;
+      CHKERR HookeElement::calculateEnergy(
+          dm, block_sets_ptr, "DISPLACEMENT", "MESH_NODE_POSITIONS", false,
+          true, &v_energy);
+
+      // Print elastic energy
+      const double *eng_ptr;
+      CHKERR VecGetArrayRead(v_energy, &eng_ptr);
+      PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n", *eng_ptr);
+      CHKERR VecRestoreArrayRead(v_energy, &eng_ptr);
+
+      CHKERR VecDestroy(&v_energy);
+
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR calculate_strain_energy();
 
     // Destroy matrices, vecors, solver and DM
     CHKERR VecDestroy(&F);

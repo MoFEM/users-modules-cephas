@@ -283,7 +283,7 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::recordTag(
     const int gg) {
   MoFEMFunctionBegin;
 
-  trace_on(tAg, 1);
+  trace_on(tAg, 0);
 
   dAta.materialAdoublePtr->F.resize(3, 3, false);
 
@@ -322,9 +322,8 @@ NonlinearElasticElement::OpJacobianPiolaKirchhoffStress::recordTag(
       }
     }
 
-    ierr = dAta.materialAdoublePtr->dEterminant(dAta.materialAdoublePtr->H,
+    CHKERR dAta.materialAdoublePtr->dEterminant(dAta.materialAdoublePtr->H,
                                                 dAta.materialAdoublePtr->detH);
-    CHKERRG(ierr);
     dAta.materialAdoublePtr->invH.resize(3, 3, false);
     CHKERR dAta.materialAdoublePtr->iNvert(dAta.materialAdoublePtr->detH,
                                            dAta.materialAdoublePtr->H,
@@ -471,7 +470,7 @@ MoFEMErrorCode
 NonlinearElasticElement::OpJacobianEnergy::recordTag(const int gg) {
   MoFEMFunctionBegin;
 
-  trace_on(tAg);
+  trace_on(tAg, 0);
 
   dAta.materialAdoublePtr->F.resize(3, 3, false);
 
@@ -1180,11 +1179,10 @@ MoFEMErrorCode NonlinearElasticElement::setBlocks(
 }
 
 MoFEMErrorCode NonlinearElasticElement::addElement(
-    string element_name, string spatial_position_field_name,
-    string material_position_field_name, bool ale) {
+    const std::string element_name,
+    const std::string spatial_position_field_name,
+    const std::string material_position_field_name, const bool ale) {
   MoFEMFunctionBegin;
-
-  //
 
   CHKERR mField.add_finite_element(element_name, MF_ZERO);
   CHKERR mField.modify_finite_element_add_field_row(
@@ -1213,10 +1211,10 @@ MoFEMErrorCode NonlinearElasticElement::addElement(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-NonlinearElasticElement::setOperators(string spatial_position_field_name,
-                                      string material_position_field_name,
-                                      bool ale, bool field_disp) {
+MoFEMErrorCode NonlinearElasticElement::setOperators(
+    const std::string spatial_position_field_name,
+    const std::string material_position_field_name, const bool ale,
+    const bool field_disp) {
   MoFEMFunctionBegin;
 
   commonData.spatialPositions = spatial_position_field_name;

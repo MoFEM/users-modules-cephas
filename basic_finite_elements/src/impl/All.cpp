@@ -30,6 +30,7 @@
 #include <FluidPressure.cpp>
 #include <SurfacePressureComplexForLazy.cpp>
 #include <AnalyticalDirichlet.cpp>
+#include <HookeElement.cpp>
 
 #ifdef WITH_ADOL_C
   #include <NonLinearElasticElement.cpp>
