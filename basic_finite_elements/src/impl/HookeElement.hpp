@@ -10,7 +10,7 @@
  * calculation of material forces and associated tangent matrices are added to
  * implementation.
  * 
- * In other words spatial deformation is small but topolohical changes large.
+ * In other words, spatial deformation is small but topological changes large.
  */
 
 /*
