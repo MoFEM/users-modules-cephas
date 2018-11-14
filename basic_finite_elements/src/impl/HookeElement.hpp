@@ -1,6 +1,6 @@
 /**
- * \file HookElement.hpp
- * \example HookElement.hpp
+ * \file HookeElement.hpp
+ * \example HookeElement.hpp
  *
  * \brief Operators and data structures for linear elastic
  * analysis
@@ -9,6 +9,8 @@
  * the case when the mesh is moving as results of topological changes, also the
  * calculation of material forces and associated tangent matrices are added to
  * implementation.
+ * 
+ * In other words spatial deformation is small but topolohical changes large.
  */
 
 /*

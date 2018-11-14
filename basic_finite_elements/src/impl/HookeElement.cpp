@@ -1,7 +1,16 @@
-/** \file HookElement.cpp
+/** \file HookeElement.cpp
+ * \example HookeElement.cpp
  * \brief Operators and data structures for linear elastic analysis
  *
- * Implemention of operators for Hooke material.
+ * See as well header file HookeElement.hpp
+ * 
+ * Implemention of operators for Hooke material. Implementation is extended to
+ * the case when the mesh is moving as results of topological changes, also the
+ * calculation of material forces and associated tangent matrices are added to
+ * implementation.
+ * 
+ * In other words spatial deformation is small but topological changes large. 
+ 
  */
 
 /* This file is part of MoFEM.
