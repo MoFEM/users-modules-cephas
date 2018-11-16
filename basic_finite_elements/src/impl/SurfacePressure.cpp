@@ -490,9 +490,8 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
     Range tris;
     CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
                                                    true);
-    if (intersect_ptr) {
+    if (intersect_ptr)
       tris = intersect(tris, *intersect_ptr);
-    }
     CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI, "FORCE_FE");
   }
 
@@ -511,9 +510,8 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
     Range tris;
     CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
                                                    true);
-    if (intersect_ptr) {
+    if (intersect_ptr)
       tris = intersect(tris, *intersect_ptr);
-    }
     CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                       "PRESSURE_FE");
   }
@@ -525,21 +523,11 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     if (it->getName().compare(0, block_set_force_name.length(),
                               block_set_force_name) == 0) {
-      std::vector<double> mydata;
-      CHKERR it->getAttributes(mydata);
-      VectorDouble force(mydata.size());
-      for (unsigned int ii = 0; ii < mydata.size(); ii++) {
-        force[ii] = mydata[ii];
-      }
-      if (force.empty()) {
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Force not given");
-      }
       Range tris;
       CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
                                                      true);
-      if (intersect_ptr) {
+      if (intersect_ptr)
         tris = intersect(tris, *intersect_ptr);
-      }
       CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                         "FORCE_FE");
     }
@@ -550,23 +538,11 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     if (it->getName().compare(0, block_set_pressure_name.length(),
                               block_set_pressure_name) == 0) {
-      std::vector<double> mydata;
-      CHKERR it->getAttributes(mydata);
-      VectorDouble pressure(mydata.size());
-      for (unsigned int ii = 0; ii < mydata.size(); ii++) {
-        pressure[ii] = mydata[ii];
-      }
-      if (pressure.empty()) {
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "Pressure not given");
-      }
       Range tris;
       CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
                                                      true);
-      if (intersect_ptr) {
+      if (intersect_ptr)
         tris = intersect(tris, *intersect_ptr);
-      }
-      // cerr << tris << endl;
       CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                         "PRESSURE_FE");
     }
