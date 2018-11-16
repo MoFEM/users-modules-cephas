@@ -457,7 +457,7 @@ NeummanForcesSurface::addLinearPressure(const std::string field_name, Vec F,
   CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, BLOCKSET, &cubit_meshset_ptr);
   std::vector<double> mydata;
   CHKERR cubit_meshset_ptr->getAttributes(mydata);
-  if (mydata.size() != 4)
+  if (mydata.size() < 4)
     SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
              "Should be four block attributes but is %d", mydata.size());
   VectorDouble3 pressure_coeffs(3);
