@@ -269,113 +269,7 @@ struct MetaNeummanForces {
   static MoFEMErrorCode addNeumannBCElements(
       MoFEM::Interface &m_field, const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS",
-      Range *intersect_ptr = NULL) {
-    MoFEMFunctionBegin;
-
-    // Define boundary element that operates on rows, columns and data of a
-    // given field
-    CHKERR m_field.add_finite_element("FORCE_FE", MF_ZERO);
-    CHKERR m_field.modify_finite_element_add_field_row("FORCE_FE", field_name);
-    CHKERR m_field.modify_finite_element_add_field_col("FORCE_FE", field_name);
-    CHKERR m_field.modify_finite_element_add_field_data("FORCE_FE", field_name);
-    if (m_field.check_field(mesh_nodals_positions)) {
-      CHKERR m_field.modify_finite_element_add_field_data(
-          "FORCE_FE", mesh_nodals_positions);
-    }
-    // Add entities to that element, here we add all triangles with FORCESET
-    // from cubit
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                    it)) {
-      Range tris;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                     true);
-      if (intersect_ptr) {
-        tris = intersect(tris, *intersect_ptr);
-      }
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "FORCE_FE");
-    }
-
-    CHKERR m_field.add_finite_element("PRESSURE_FE", MF_ZERO);
-    CHKERR m_field.modify_finite_element_add_field_row("PRESSURE_FE",
-                                                       field_name);
-    CHKERR m_field.modify_finite_element_add_field_col("PRESSURE_FE",
-                                                       field_name);
-    CHKERR m_field.modify_finite_element_add_field_data("PRESSURE_FE",
-                                                        field_name);
-    if (m_field.check_field(mesh_nodals_positions)) {
-      ierr = m_field.modify_finite_element_add_field_data(
-          "PRESSURE_FE", mesh_nodals_positions);
-    }
-
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      Range tris;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                     true);
-      if (intersect_ptr) {
-        tris = intersect(tris, *intersect_ptr);
-      }
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "PRESSURE_FE");
-    }
-
-    // Reading forces from BLOCKSET
-
-    const string block_set_force_name("FORCE");
-    // search for block named FORCE and add its attributes to FORCE_FE element
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      if (it->getName().compare(0, block_set_force_name.length(),
-                                block_set_force_name) == 0) {
-        std::vector<double> mydata;
-        CHKERR it->getAttributes(mydata);
-        VectorDouble force(mydata.size());
-        for (unsigned int ii = 0; ii < mydata.size(); ii++) {
-          force[ii] = mydata[ii];
-        }
-        if (force.empty()) {
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Force not given");
-        }
-        Range tris;
-        CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                       true);
-        if (intersect_ptr) {
-          tris = intersect(tris, *intersect_ptr);
-        }
-        CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                          "FORCE_FE");
-      }
-    }
-    // search for block named PRESSURE and add its attributes to PRESSURE_FE
-    // element
-    const string block_set_pressure_name("PRESSURE");
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      if (it->getName().compare(0, block_set_pressure_name.length(),
-                                block_set_pressure_name) == 0) {
-        std::vector<double> mydata;
-        CHKERR it->getAttributes(mydata);
-        VectorDouble pressure(mydata.size());
-        for (unsigned int ii = 0; ii < mydata.size(); ii++) {
-          pressure[ii] = mydata[ii];
-        }
-        if (pressure.empty()) {
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "Pressure not given");
-        }
-        Range tris;
-        CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                       true);
-        if (intersect_ptr) {
-          tris = intersect(tris, *intersect_ptr);
-        }
-        // cerr << tris << endl;
-        CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                          "PRESSURE_FE");
-      }
-    }
-
-    MoFEMFunctionReturn(0);
-  }
+      Range *intersect_ptr = NULL);
 
   /**
    * \brief Set operators to finite elements calculating right hand side vector
@@ -392,96 +286,22 @@ struct MetaNeummanForces {
       MoFEM::Interface &m_field,
       boost::ptr_map<std::string, NeummanForcesSurface> &neumann_forces, Vec F,
       const std::string field_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS") {
-    MoFEMFunctionBegin;
-
-    string fe_name;
-    fe_name = "FORCE_FE";
-    neumann_forces.insert(fe_name, new NeummanForcesSurface(m_field));
-    bool ho_geometry = m_field.check_field(mesh_nodals_positions);
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                    it)) {
-      CHKERR neumann_forces.at(fe_name).addForce(
-          field_name, F, it->getMeshsetId(), ho_geometry, false);
-    }
-    // Reading forces from BLOCKSET
-    const string block_set_force_name("FORCE");
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      if (it->getName().compare(0, block_set_force_name.length(),
-                                block_set_force_name) == 0) {
-        CHKERR neumann_forces.at(fe_name).addForce(
-            field_name, F, it->getMeshsetId(), ho_geometry, true);
-      }
-    }
-
-    fe_name = "PRESSURE_FE";
-    neumann_forces.insert(fe_name, new NeummanForcesSurface(m_field));
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      CHKERR neumann_forces.at(fe_name).addPressure(
-          field_name, F, it->getMeshsetId(), ho_geometry, false);
-    }
-    // Reading pressures from BLOCKSET
-    const string block_set_pressure_name("PRESSURE");
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      if (it->getName().compare(0, block_set_pressure_name.length(),
-                                block_set_pressure_name) == 0) {
-        CHKERR neumann_forces.at(fe_name).addPressure(
-            field_name, F, it->getMeshsetId(), ho_geometry, true);
-      }
-    }
-
-    MoFEMFunctionReturn(0);
-  }
+      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
   static MoFEMErrorCode addNeumannFluxBCElements(
       MoFEM::Interface &m_field, const std::string field_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS") {
-    MoFEMFunctionBegin;
-
-    CHKERR m_field.add_finite_element("FLUX_FE", MF_ZERO);
-    CHKERR m_field.modify_finite_element_add_field_row("FLUX_FE", field_name);
-    CHKERR m_field.modify_finite_element_add_field_col("FLUX_FE", field_name);
-    CHKERR m_field.modify_finite_element_add_field_data("FLUX_FE", field_name);
-    if (m_field.check_field(mesh_nodals_positions)) {
-      ierr = m_field.modify_finite_element_add_field_data(
-          "FLUX_FE", mesh_nodals_positions);
-    }
-
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      Range tris;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                     true);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI, "FLUX_FE");
-    }
-
-    MoFEMFunctionReturn(0);
-  }
+      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
   static MoFEMErrorCode setMassFluxOperators(
       MoFEM::Interface &m_field,
       boost::ptr_map<std::string, NeummanForcesSurface> &neumann_forces, Vec F,
       const std::string field_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS") {
-    MoFEMFunctionBegin;
-
-    string fe_name;
-    fe_name = "FLUX_FE";
-    neumann_forces.insert(fe_name, new NeummanForcesSurface(m_field));
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      bool ho_geometry = m_field.check_field(mesh_nodals_positions);
-      CHKERR neumann_forces.at(fe_name).addFlux(
-          field_name, F, it->getMeshsetId(), ho_geometry);
-    }
-    MoFEMFunctionReturn(0);
-  }
+      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 };
 
 #endif //__SURFACE_PERSSURE_HPP__
 
-/***************************************************************************/ /**
-                                                                               * \defgroup mofem_static_boundary_conditions Pressure and force boundary conditions
-                                                                               * \ingroup user_modules
-                                                                               ******************************************************************************/
+/******************************************************************************
+ * \defgroup mofem_static_boundary_conditions Pressure and force boundary
+ *conditions \ingroup user_modules
+ ******************************************************************************/
