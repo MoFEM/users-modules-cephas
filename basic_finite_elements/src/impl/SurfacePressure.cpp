@@ -501,7 +501,7 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
   CHKERR m_field.modify_finite_element_add_field_data("PRESSURE_FE",
                                                       field_name);
   if (m_field.check_field(mesh_nodals_positions)) {
-    ierr = m_field.modify_finite_element_add_field_data("PRESSURE_FE",
+    CHKERR m_field.modify_finite_element_add_field_data("PRESSURE_FE",
                                                         mesh_nodals_positions);
   }
 
@@ -606,7 +606,7 @@ MoFEMErrorCode MetaNeummanForces::addNeumannFluxBCElements(
   CHKERR m_field.modify_finite_element_add_field_col("FLUX_FE", field_name);
   CHKERR m_field.modify_finite_element_add_field_data("FLUX_FE", field_name);
   if (m_field.check_field(mesh_nodals_positions)) {
-    ierr = m_field.modify_finite_element_add_field_data("FLUX_FE",
+    CHKERR m_field.modify_finite_element_add_field_data("FLUX_FE",
                                                         mesh_nodals_positions);
   }
 
