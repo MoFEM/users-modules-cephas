@@ -52,6 +52,19 @@ struct NeummanForcesSurface {
     }
   };
 
+  struct LinearVaringPresssure : public MethodForAnalyticalForce {
+
+    LinearVaringPresssure(const VectorDouble3 &p, const double c)
+        : MethodForAnalyticalForce(), linearConstants(p), pressureShift(c) {}
+
+    MoFEMErrorCode getForce(const EntityHandle ent, const VectorDouble3 &coords,
+                            const VectorDouble3 &normal, VectorDouble3 &force);
+
+  private:
+    const VectorDouble3 linearConstants;
+    const double pressureShift;
+  };
+
   /**
    * Definition of face element used for integration
    */

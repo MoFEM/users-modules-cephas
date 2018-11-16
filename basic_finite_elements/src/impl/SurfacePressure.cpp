@@ -24,6 +24,15 @@ using namespace MoFEM;
 
 using namespace boost::numeric;
 
+MoFEMErrorCode NeummanForcesSurface::LinearVaringPresssure::getForce(
+    const EntityHandle ent, const VectorDouble3 &coords,
+    const VectorDouble3 &normal, VectorDouble3 &force) {
+  MoFEMFunctionBegin;
+  const double p = inner_prod(coords, linearConstants) + pressureShift;
+  force = normal * p / norm_2(normal);
+  MoFEMFunctionReturn(0);
+}
+
 NeummanForcesSurface::MyTriangleFE::MyTriangleFE(MoFEM::Interface &m_field)
     : FaceElementForcesAndSourcesCore(m_field), addToRule(1) {}
 
