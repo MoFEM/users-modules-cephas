@@ -52,9 +52,6 @@ struct NeummanForcesSurface {
     }
   };
 
-  /// \deprecated fixed spelling mistake
-  DEPRECATED typedef MethodForAnalyticalForce MethodForAnaliticalForce;
-
   /**
    * Definition of face element used for integration
    */
@@ -80,8 +77,6 @@ struct NeummanForcesSurface {
     PressureCubitBcData data;
     Range tRis;
   };
-  DEPRECATED typedef bCPressure
-      bCPreassure; ///< \deprecated Do not use spelling mistake
   std::map<int, bCPressure> mapPressure;
 
   boost::ptr_vector<MethodForForceScaling> methodsOp;
@@ -132,7 +127,7 @@ struct NeummanForcesSurface {
 
   /**
    * @brief Operator for pressure element
-   * 
+   *
    */
   struct OpNeumannPressure
       : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
@@ -171,7 +166,7 @@ struct NeummanForcesSurface {
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
-  DEPRECATED typedef OpNeumannPressure OpNeumannPreassure;
+
   /// Operator for flux element
   struct OpNeumannFlux
       : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
@@ -217,15 +212,23 @@ struct NeummanForcesSurface {
   MoFEMErrorCode addPressure(const std::string field_name, Vec F, int ms_id,
                              bool ho_geometry = false, bool block_set = false);
 
+  /// Add flux element operator (integration on face)
+  MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
+                         bool ho_geometry = false);
+
+  /// \deprecated fixed spelling mistake
+  DEPRECATED typedef MethodForAnalyticalForce MethodForAnaliticalForce;
+
+  DEPRECATED typedef OpNeumannPressure OpNeumannPreassure;
+
+  DEPRECATED typedef bCPressure
+      bCPreassure; ///< \deprecated Do not use spelling mistake
+
   /// \deprecated function is deprecated because spelling mistake, use
   /// addPressure instead
   DEPRECATED MoFEMErrorCode addPreassure(const std::string field_name, Vec F,
                                          int ms_id, bool ho_geometry = false,
                                          bool block_set = false);
-
-  /// Add flux element operator (integration on face)
-  MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
-                         bool ho_geometry = false);
 };
 
 /** \brief Set of high-level function declaring elements and setting operators
@@ -458,15 +461,14 @@ struct MetaNeummanForces {
       bool ho_geometry = m_field.check_field(mesh_nodals_positions);
       CHKERR neumann_forces.at(fe_name).addFlux(
           field_name, F, it->getMeshsetId(), ho_geometry);
-   }
+    }
     MoFEMFunctionReturn(0);
   }
-
 };
 
 #endif //__SURFACE_PERSSURE_HPP__
 
 /***************************************************************************/ /**
- * \defgroup mofem_static_boundary_conditions Pressure and force boundary conditions
- * \ingroup user_modules
- ******************************************************************************/
+                                                                               * \defgroup mofem_static_boundary_conditions Pressure and force boundary conditions
+                                                                               * \ingroup user_modules
+                                                                               ******************************************************************************/
