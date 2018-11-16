@@ -57,8 +57,7 @@ int main(int argc, char *argv[]) {
                                            fit->first, false, time_step);
     }
 
-
-
+    // Add meshsets if config file provided
     MeshsetsManager *meshsets_interface_ptr;
     CHKERR m_field.getInterface(meshsets_interface_ptr);
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
@@ -66,8 +65,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Print all meshsets (old and added from meshsets "
                  "configurational file\n"
               << std::endl;
-    for (CubitMeshSet_multiIndex::iterator cit =
-             meshsets_interface_ptr->getBegin();
+    for (auto cit = meshsets_interface_ptr->getBegin();
          cit != meshsets_interface_ptr->getEnd(); cit++) {
       std::cout << *cit << endl;
     }
