@@ -130,8 +130,9 @@ struct NeummanForcesSurface {
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
 
-  private:
     Vec F;
+    
+  private:
     const Range tRis;
     boost::ptr_vector<MethodForForceScaling> &methodsOp;
     boost::shared_ptr<MethodForAnalyticalForce> analyticalForceOp;
