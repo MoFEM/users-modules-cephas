@@ -90,6 +90,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForce::doWork(
 
   // Scale force using user defined scaling operator
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
+
   {
     Vec my_f;
     // If user vector is not set, use vector from snes or ts solvers
@@ -121,8 +122,8 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForce::doWork(
 NeummanForcesSurface::OpNeumannForceAnalytical::OpNeumannForceAnalytical(
     const std::string field_name, Vec f, const Range tris,
     boost::ptr_vector<MethodForForceScaling> &methods_op,
-    boost::ptr_vector<MethodForAnalyticalForce> &analytical_force_op,
-    bool ho_geometry)
+    boost::shared_ptr<MethodForAnalyticalForce> &analytical_force_op,
+    const bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
       F(f), tRis(tris), methodsOp(methods_op),
@@ -134,21 +135,21 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForceAnalytical::doWork(
 
   if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
-  EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
+  const EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
   if (tRis.find(ent) == tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
-  int nb_row_dofs = data.getIndices().size() / rank;
+  const int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
+  const int nb_row_dofs = data.getIndices().size() / rank;
 
-  Nf.resize(data.getIndices().size(), false);
-  Nf.clear();
+  nF.resize(data.getIndices().size(), false);
+  nF.clear();
 
   VectorDouble3 coords(3);
   VectorDouble3 normal(3);
   VectorDouble3 force(3);
 
-  for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
+  for (unsigned int gg = 0; gg != data.getN().size1(); ++gg) {
 
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2, gg);
@@ -166,19 +167,19 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForceAnalytical::doWork(
       }
     }
 
-    for (boost::ptr_vector<MethodForAnalyticalForce>::iterator vit =
-             analyticalForceOp.begin();
-         vit != analyticalForceOp.end(); vit++) {
-      CHKERR vit->getForce(ent, coords, normal, force);
-      for (int rr = 0; rr != 3; rr++) {
+    if (analyticalForceOp) {
+      CHKERR analyticalForceOp->getForce(ent, coords, normal, force);
+      for (int rr = 0; rr != 3; ++rr) {
         cblas_daxpy(nb_row_dofs, val * force[rr], &data.getN()(gg, 0), 1,
-                    &Nf[rr], rank);
+                    &nF[rr], rank);
       }
+    } else {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "No force to apply");
     }
   }
 
   // Scale force using user defined scaling operator
-  CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
+  CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, nF);
 
   {
     Vec my_f;
@@ -201,8 +202,9 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForceAnalytical::doWork(
     }
 
     // Assemble force into vector
-    CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
-                        &Nf[0], ADD_VALUES);
+    CHKERR VecSetValues(my_f, data.getIndices().size(),
+                        &*data.getIndices().data().begin(), &*nF.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -444,6 +446,37 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(const std::string field_name,
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode
+NeummanForcesSurface::addLinearPressure(const std::string field_name, Vec F,
+                                        int ms_id, bool ho_geometry) {
+
+  const CubitMeshSets *cubit_meshset_ptr;
+  MeshsetsManager *mmanager_ptr;
+  MoFEMFunctionBegin;
+  CHKERR mField.getInterface(mmanager_ptr);
+  CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, BLOCKSET, &cubit_meshset_ptr);
+  std::vector<double> mydata;
+  CHKERR cubit_meshset_ptr->getAttributes(mydata);
+  if (mydata.size() != 4)
+    SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+             "Should be four block attributes but is %d", mydata.size());
+  VectorDouble3 pressure_coeffs(3);
+  for (unsigned int ii = 0; ii != 3; ++ii) {
+    pressure_coeffs[ii] = mydata[ii];
+  }
+  const double pressure_shift = mydata[3];
+
+  Range tris;
+  CHKERR mField.get_moab().get_entities_by_type(cubit_meshset_ptr->meshset,
+                                                MBTRI, tris, true);
+  boost::shared_ptr<MethodForAnalyticalForce> analytical_force_op(
+      new LinearVaringPresssure(pressure_coeffs, pressure_shift));
+  fe.getOpPtrVector().push_back(new OpNeumannForceAnalytical(
+      field_name, F, tris, methodsOp, analytical_force_op, ho_geometry));
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode NeummanForcesSurface::addPreassure(const std::string field_name,
                                                   Vec F, int ms_id,
                                                   bool ho_geometry,
@@ -470,7 +503,7 @@ MoFEMErrorCode NeummanForcesSurface::addFlux(const std::string field_name,
 
 MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
     MoFEM::Interface &m_field, const std::string field_name,
-    const std::string mesh_nodals_positions, Range *intersect_ptr = NULL) {
+    const std::string mesh_nodals_positions, Range *intersect_ptr) {
   MoFEMFunctionBegin;
 
   // Define boundary element that operates on rows, columns and data of a
@@ -548,6 +581,22 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
     }
   }
 
+  // search for block named LINEAR_PRESSURE and add its attributes to
+  // PRESSURE_FE element
+  const string block_set_linear_pressure_name("LINEAR_PRESSURE");
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+    if (it->getName().compare(0, block_set_linear_pressure_name.length(),
+                              block_set_linear_pressure_name) == 0) {
+      Range tris;
+      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
+                                                     true);
+      if (intersect_ptr)
+        tris = intersect(tris, *intersect_ptr);
+      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
+                                                        "PRESSURE_FE");
+    }
+  }
+
   MoFEMFunctionReturn(0);
 }
 
@@ -583,6 +632,7 @@ MoFEMErrorCode MetaNeummanForces::setMomentumFluxOperators(
     CHKERR neumann_forces.at(fe_name).addPressure(
         field_name, F, it->getMeshsetId(), ho_geometry, false);
   }
+
   // Reading pressures from BLOCKSET
   const string block_set_pressure_name("PRESSURE");
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
@@ -590,6 +640,16 @@ MoFEMErrorCode MetaNeummanForces::setMomentumFluxOperators(
                               block_set_pressure_name) == 0) {
       CHKERR neumann_forces.at(fe_name).addPressure(
           field_name, F, it->getMeshsetId(), ho_geometry, true);
+    }
+  }
+
+  // Reading pressures from BLOCKSET
+  const string block_set_linear_pressure_name("LINEAR_PRESSURE");
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+    if (it->getName().compare(0, block_set_linear_pressure_name.length(),
+                              block_set_linear_pressure_name) == 0) {
+      CHKERR neumann_forces.at(fe_name).addLinearPressure(
+          field_name, F, it->getMeshsetId(), ho_geometry);
     }
   }
 

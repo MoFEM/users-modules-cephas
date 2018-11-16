@@ -119,23 +119,23 @@ struct NeummanForcesSurface {
   struct OpNeumannForceAnalytical
       : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-    Vec F;
-    const Range tRis;
-    boost::ptr_vector<MethodForForceScaling> &methodsOp;
-    boost::ptr_vector<MethodForAnalyticalForce> &analyticalForceOp;
-
-    bool hoGeometry;
-
     OpNeumannForceAnalytical(
         const std::string field_name, Vec f, const Range tris,
         boost::ptr_vector<MethodForForceScaling> &methods_op,
-        boost::ptr_vector<MethodForAnalyticalForce> &analytical_force_op,
-        bool ho_geometry = false);
+        boost::shared_ptr<MethodForAnalyticalForce> &analytical_force_op,
+        const bool ho_geometry = false);
 
-    VectorDouble Nf; //< Local force vector
+    VectorDouble nF; //< Local force vector
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    Vec F;
+    const Range tRis;
+    boost::ptr_vector<MethodForForceScaling> &methodsOp;
+    boost::shared_ptr<MethodForAnalyticalForce> analyticalForceOp;
+    const bool hoGeometry;
   };
 
   /**
@@ -224,6 +224,19 @@ struct NeummanForcesSurface {
    */
   MoFEMErrorCode addPressure(const std::string field_name, Vec F, int ms_id,
                              bool ho_geometry = false, bool block_set = false);
+
+  /**
+   * \brief Add operator to calculate pressure on element
+   * @param  field_name  Field name (f.e. TEMPERATURE)
+   * @param  F           Right hand side vector
+   * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
+   * @param  ho_geometry Use higher order shape functions to define curved
+   * geometry
+   * @param  block_set   If tru get data from block set
+   * @return             ErrorCode
+   */
+  MoFEMErrorCode addLinearPressure(const std::string field_name, Vec F,
+                                   int ms_id, bool ho_geometry = false);
 
   /// Add flux element operator (integration on face)
   MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
