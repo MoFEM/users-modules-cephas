@@ -95,9 +95,11 @@ struct NeummanForcesSurface {
   boost::ptr_vector<MethodForForceScaling> methodsOp;
   boost::ptr_vector<MethodForAnalyticalForce> analyticalForceOp;
 
+  using UserDataOperator =
+      MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
+
   /// Operator for force element
-  struct OpNeumannForce
-      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  struct OpNeumannForce : public UserDataOperator {
 
     Vec F;
     bCForce &dAta;
@@ -116,8 +118,7 @@ struct NeummanForcesSurface {
   };
 
   /// Operator for force element
-  struct OpNeumannForceAnalytical
-      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  struct OpNeumannForceAnalytical : public UserDataOperator {
 
     OpNeumannForceAnalytical(
         const std::string field_name, Vec f, const Range tris,
@@ -143,8 +144,7 @@ struct NeummanForcesSurface {
    * @brief Operator for pressure element
    *
    */
-  struct OpNeumannPressure
-      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  struct OpNeumannPressure : public UserDataOperator {
 
     Vec F;
     bCPressure &dAta;
@@ -182,8 +182,7 @@ struct NeummanForcesSurface {
   };
 
   /// Operator for flux element
-  struct OpNeumannFlux
-      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  struct OpNeumannFlux : public UserDataOperator {
 
     Vec F;
     bCPressure &dAta;
