@@ -122,7 +122,6 @@ struct PostProcStress
     nonLinearElementCommonData.dataAtGaussPts = commonData.fieldMap;
     nonLinearElementCommonData.gradAtGaussPts = commonData.gradMap;
 
-    double max_energy = 0;
     MatrixDouble3by3 maxP(3, 3);
     maxP.clear();
 
