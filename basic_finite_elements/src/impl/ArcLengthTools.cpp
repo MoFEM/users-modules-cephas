@@ -208,6 +208,10 @@ MoFEMErrorCode ArcLengthMatMultShellOp(Mat A, Vec x, Vec f) {
 PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij, ArcLengthCtx *arc_ptr)
     : kSP(PETSC_NULL), pC(PETSC_NULL), shellAij(shell_Aij), Aij(aij),
       arcPtrRaw(arc_ptr) {
+  ierr = PetscObjectReference((PetscObject)shellAij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  ierr = PetscObjectReference((PetscObject)Aij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
   ierr = PCCreate(PetscObjectComm((PetscObject)aij), &pC);
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
   ierr = KSPCreate(PetscObjectComm((PetscObject)pC), &kSP);
@@ -220,6 +224,10 @@ PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij,
                                boost::shared_ptr<ArcLengthCtx> &arc_ptr)
     : kSP(PETSC_NULL), shellAij(shell_Aij), Aij(aij), arcPtrRaw(arc_ptr.get()),
       arcPtr(arc_ptr) {
+  ierr = PetscObjectReference((PetscObject)shellAij); 
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  ierr = PetscObjectReference((PetscObject)Aij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);  
   ierr = PCCreate(PetscObjectComm((PetscObject)aij), &pC);
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
   ierr = KSPCreate(PetscObjectComm((PetscObject)pC), &kSP);
@@ -232,6 +240,10 @@ PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
                                boost::shared_ptr<ArcLengthCtx> &arc_ptr)
     : kSP(PETSC_NULL), pC(pc), shellAij(shell_Aij), Aij(aij),
       arcPtrRaw(arc_ptr.get()), arcPtr(arc_ptr) {
+  ierr = PetscObjectReference((PetscObject)shellAij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  ierr = PetscObjectReference((PetscObject)Aij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);  
   ierr = PetscObjectReference((PetscObject)pC);
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
   ierr = KSPCreate(PetscObjectComm((PetscObject)pC), &kSP);
@@ -241,6 +253,10 @@ PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
 }
 
 PCArcLengthCtx::~PCArcLengthCtx() {
+  ierr = MatDestroy(&shellAij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  ierr = MatDestroy(&Aij);
+  CHKERRABORT(PETSC_COMM_WORLD, ierr); 
   if (kSP != PETSC_NULL) {
     ierr = KSPDestroy(&kSP);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);

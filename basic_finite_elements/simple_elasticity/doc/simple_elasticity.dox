@@ -1,6 +1,6 @@
 /*! \page simple_elasticity_1 Simple elasticity
 
-This tutorial motivation to show how finite element is implemented using
+This tutorial's motivation is to show how finite element is implemented using
 basic blocks, like the Lego block where one can combine them in arbitrarily,
 restricted only by his or her imagination. That is not short and compact
 code, where PDE can be in single line, but code which can be modified and
@@ -98,7 +98,31 @@ numbered and characterised as ''Blocks''. As explained earlier, block feature
 exists in Salome, GMsh and Cubit. Therefore, this feature is not restricted
 to the particular choice of mesh generator. MoFEM user module executable will
 read the mesh input file and apply boundary conditions (see Sections \ref
-simple_elasticity_mesh_block and \ref ApplyDirichletBc).
+simple_elasticity_mesh_block and \ref ApplyDirichletBc). 
+As an example, a simple journal script which can be used in Cubit to generate the mesh is found below
+\verbatim
+reset
+
+# Geometry
+brick x 1 y 1 z 4
+
+# Mesh preparation and generation
+volume 1 scheme tetmesh
+volume 1 size auto factor 10
+mesh volume 1
+
+block 1 surface 2
+block 2 vertex 7
+block 3 surface 1
+block 4 vertex 6
+
+# Boundary condition
+# The boundary condition for this problem is defined in the source code
+
+# Save the model to *.cub file which will be used in MoFEM code
+save as "Users/username/mofem_install/um/build/basic_finite_elements/simple_elasticity/cubit.cub" overwrite
+\endverbatim
+
 
 \section simple_elasticity_code_dissection Code dissection
 
@@ -111,7 +135,7 @@ The header file included in the user module are presented below.
 
 \subsection simple_elasticity_initialisation Initialisation
 
-Initially, MOFEM and PETSc has to be initialised through the code line below
+Initially, MoFEM and PETSc has to be initialised through the code line below
 
 \code
   // Initialize MoFEM
@@ -130,7 +154,7 @@ following piece of code is included
   moab::Interface &moab = mb_instance; //create interface to database  
 \endcode
 
-MoFEM data base is created along with an interface object that will be used
+MoFEM database is created along with an interface object that will be used
 as a mean to interact with MoAB database
 \code
     MoFEM::Core core(moab); //MoFEM database
@@ -141,7 +165,7 @@ This interaction is schematically presented as the interaction of level 1 and 2 
  side.
 
 \anchor Figure_7_Elastic
-\image html Interface.png "Figure 7: Data base interaction using interface objects Discrete Manager, m\_field and Simple interface." width = 600px
+\image html Interface.png "Figure 7: Database interaction using interface objects Discrete Manager, m_field and Simple interface." width = 600px
 
 Moreover, the Discrete Manager that is the PETSc implementation within MoFEM
 has to be register to PETSc (schematically presented as interaction of levels
@@ -185,9 +209,9 @@ interface (schematically presented in \ref Figure_7_Elastic "Figure 7" as the
 interaction of levels 2 and 3 by the left hand side arrow).
 
 Interface \e simple\_interface has a number of functions implemented that allows
-the user to build and manipulate PETSc, MoAB core and MoFEM core data bases.
+the user to build and manipulate PETSc, MoAB core and MoFEM core databases.
 For instance, using the code below the mesh file is loaded and information of
-the mesh is passed to MoFEM data base.
+the mesh is passed to MoFEM database.
 \code
   CHKERR simple_interface->getOptions();
   CHKERR simple_interface->loadFile();
@@ -1404,6 +1428,11 @@ on Mac OS X
 \code 
 open out.vtk
 \endcode
+
+\ref Figure_10_displacement_result "Figure 10" shows the ParaView visualisation of the result of the considering problem.
+
+\anchor Figure_10_displacement_result
+\image html simple_elasticity_result.png "Figure 10: Result visualisation in Paraview" width = 600px
 
 \note In the following example solution is homogenous. Thus linear
 approximation is sufficient to get the exact the solution. Thus setting second

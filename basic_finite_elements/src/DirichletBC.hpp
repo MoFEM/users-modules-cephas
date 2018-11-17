@@ -252,6 +252,67 @@ struct DirichletSetFieldFromBlockWithFlags: public DirichletDisplacementBc {
 /// \deprecated use DirichletSetFieldFromBlockWithFlags
 DEPRECATED typedef DirichletSetFieldFromBlockWithFlags DirichletBCFromBlockSetFEMethodPreAndPostProcWithFlags;
 
+/**
+ * @brief calculate reactions from vector of internal forces on meshsets
+ *
+ * example usage
+ *
+ * \code
+      Vec F_int;
+      DMCreateGlobalVector_MoFEM(dm, &F_int);
+
+      feRhs->snes_ctx = FEMethod::CTX_SNESSETFUNCTION;
+      feRhs->snes_f = F_int;
+      DMoFEMLoopFiniteElements(dm, "ELASTIC", feRhs);
+
+      VecAssemblyBegin(F_int);
+      VecAssemblyEnd(F_int);
+      VecGhostUpdateBegin(F_int, INSERT_VALUES, SCATTER_FORWARD);
+      VecGhostUpdateEnd(F_int, INSERT_VALUES, SCATTER_FORWARD);
+
+      Reactions my_react(m_field, "DM_ELASTIC", "U");
+      my_react.calculateReactions(F_int);
+      int fix_nodes_meshset_id = 1;
+      cout << my_react.getReactionsFromSet(fix_nodes_meshset_id) << endl;
+
+* \endcode
+ */
+struct Reactions {
+
+  Reactions(MoFEM::Interface &m_field, string problem_name, string field_name)
+      : mField(m_field), problemName(problem_name), fieldName(field_name) {}
+
+  typedef std::map<int, VectorDouble> ReactionsMap;
+  MoFEM::Interface &mField;
+  /**
+   * @brief Get the Reactions Map
+   *
+   * @return const ReactionsMap&
+   */
+  inline const ReactionsMap &getReactionsMap() const { return reactionsMap; }
+  /**
+   * @brief Get the Reactions at specified meshset id
+   *
+   * @param id meshset id (from Cubit)
+   * @return const VectorDouble&
+   */
+  inline const VectorDouble &getReactionsFromSet(const int &id) const {
+    return reactionsMap.at(id);
+  }
+  /**
+   * @brief calculate reactions from a given vector
+   *
+   * @param internal forces vector
+   * @return MoFEMErrorCode
+   */
+  MoFEMErrorCode calculateReactions(Vec &internal);
+
+private:
+  std::string problemName;
+  std::string fieldName;
+  ReactionsMap reactionsMap;
+};
+
 #endif //__DIRICHLET_HPP__
 
 /***************************************************************************//**

@@ -1,6 +1,6 @@
-/** \file reading_med.cpp
+/** \file add_meshsets.cpp
 
-  \brief Reading med files
+  \brief Add meshsets
 
 */
 
@@ -30,6 +30,20 @@ int main(int argc, char *argv[]) {
 
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
+
+    char mesh_file_name[255];
+    PetscBool flg_file = PETSC_FALSE;
+    ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
+    CHKERRQ(ierr);
+    CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
+                              mesh_file_name, 255, &flg_file);
+    ierr = PetscOptionsEnd();
+    CHKERRQ(ierr);
+
+    const char *option;
+    option = "";
+    CHKERR moab.load_file(mesh_file_name, 0, option);
+
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -38,26 +52,6 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
-    int time_step = 0;
-    CHKERR PetscOptionsBegin(m_field.get_comm(), "", "Read MED tool", "none");
-    CHKERR PetscOptionsInt("-med_time_step", "time step", "", time_step,
-                           &time_step, PETSC_NULL);
-    ierr = PetscOptionsEnd();
-    CHKERRQ(ierr);
-
-    MedInterface *med_interface_ptr;
-    CHKERR m_field.getInterface(med_interface_ptr);
-    CHKERR med_interface_ptr->readMed();
-    CHKERR med_interface_ptr->medGetFieldNames();
-
-    for (std::map<std::string, MedInterface::FieldData>::iterator fit =
-             med_interface_ptr->fieldNames.begin();
-         fit != med_interface_ptr->fieldNames.end(); fit++) {
-      CHKERR med_interface_ptr->readFields(med_interface_ptr->medFileName,
-                                           fit->first, false, time_step);
-    }
-
-    // Add meshsets if config file provided
     MeshsetsManager *meshsets_interface_ptr;
     CHKERR m_field.getInterface(meshsets_interface_ptr);
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();

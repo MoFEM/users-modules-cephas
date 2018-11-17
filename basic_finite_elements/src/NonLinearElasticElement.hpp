@@ -49,6 +49,7 @@ struct NonlinearElasticElement {
     int addToRule;
 
     MyVolumeFE(MoFEM::Interface &m_field);
+    ~MyVolumeFE();
 
     /** \brief it is used to calculate nb. of Gauss integration points
      *
@@ -215,7 +216,7 @@ struct NonlinearElasticElement {
 
     // St. Venant–Kirchhoff Material
     MoFEMErrorCode calculateS_PiolaKirchhoffII() {
-      MoFEMFunctionBeginHot;
+      MoFEMFunctionBegin;
       TYPE trE = 0;
       for (int dd = 0; dd < 3; dd++) {
         trE += E(dd, dd);
@@ -226,7 +227,7 @@ struct NonlinearElasticElement {
         S(dd, dd) = trE * lambda;
       }
       S += 2 * mu * E;
-      MoFEMFunctionReturnHot(0);
+      MoFEMFunctionReturn(0);
     }
 
     /** \brief Function overload to implement user material
@@ -255,20 +256,15 @@ struct NonlinearElasticElement {
     virtual MoFEMErrorCode calculateP_PiolaKirchhoffI(
         const BlockData block_data,
         boost::shared_ptr<const NumeredEntFiniteElement> fe_ptr) {
-      MoFEMFunctionBeginHot;
-
+      MoFEMFunctionBegin;
       lambda = LAMBDA(block_data.E, block_data.PoissonRatio);
       mu = MU(block_data.E, block_data.PoissonRatio);
-      ierr = calculateC_CauchyDeformationTensor();
-      CHKERRG(ierr);
-      ierr = calculateE_GreenStrain();
-      CHKERRG(ierr);
-      ierr = calculateS_PiolaKirchhoffII();
-      CHKERRG(ierr);
+      CHKERR calculateC_CauchyDeformationTensor();
+      CHKERR calculateE_GreenStrain();
+      CHKERR calculateS_PiolaKirchhoffII();
       P.resize(3, 3);
       noalias(P) = prod(F, S);
-      // std::cerr << "P: " << P << std::endl;
-      MoFEMFunctionReturnHot(0);
+      MoFEMFunctionReturn(0);
     }
 
     /**
@@ -316,14 +312,11 @@ struct NonlinearElasticElement {
     virtual MoFEMErrorCode calculateElasticEnergy(
         const BlockData block_data,
         boost::shared_ptr<const NumeredEntFiniteElement> fe_ptr) {
-      MoFEMFunctionBeginHot;
-
+      MoFEMFunctionBegin;
       lambda = LAMBDA(block_data.E, block_data.PoissonRatio);
       mu = MU(block_data.E, block_data.PoissonRatio);
-      ierr = calculateC_CauchyDeformationTensor();
-      CHKERRG(ierr);
-      ierr = calculateE_GreenStrain();
-      CHKERRG(ierr);
+      CHKERR calculateC_CauchyDeformationTensor();
+      CHKERR calculateE_GreenStrain();
       TYPE trace = 0;
       eNergy = 0;
       for (int ii = 0; ii < 3; ii++) {
@@ -334,7 +327,7 @@ struct NonlinearElasticElement {
         }
       }
       eNergy += 0.5 * lambda * trace * trace;
-      MoFEMFunctionReturnHot(0);
+      MoFEMFunctionReturn(0);
     }
 
     /** \brief Calculate Eshelby stress
@@ -342,18 +335,15 @@ struct NonlinearElasticElement {
     virtual MoFEMErrorCode calculateSiGma_EshelbyStress(
         const BlockData block_data,
         boost::shared_ptr<const NumeredEntFiniteElement> fe_ptr) {
-      MoFEMFunctionBeginHot;
-
-      ierr = calculateP_PiolaKirchhoffI(block_data, fe_ptr);
-      CHKERRG(ierr);
-      ierr = calculateElasticEnergy(block_data, fe_ptr);
-      CHKERRG(ierr);
+      MoFEMFunctionBegin;
+      CHKERR calculateP_PiolaKirchhoffI(block_data, fe_ptr);
+      CHKERR calculateElasticEnergy(block_data, fe_ptr);
       SiGma.resize(3, 3, false);
       noalias(SiGma) = -prod(trans(F), P);
       for (int dd = 0; dd < 3; dd++) {
         SiGma(dd, dd) += eNergy;
       }
-      MoFEMFunctionReturnHot(0);
+      MoFEMFunctionReturn(0);
     }
 
     /** \brief Do operations when pre-process
@@ -561,11 +551,12 @@ struct NonlinearElasticElement {
 
     BlockData &dAta;
     CommonData &commonData;
-    Vec *Vptr;
+    Vec ghostVec;
     bool fieldDisp;
 
     OpEnergy(const std::string field_name, BlockData &data,
-             CommonData &common_data, Vec *v_ptr, bool field_disp);
+             CommonData &common_data, Vec ghost_vec, bool field_disp);
+    ~OpEnergy();
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           DataForcesAndSourcesCore::EntData &row_data);
@@ -671,9 +662,9 @@ struct NonlinearElasticElement {
                 materialAdoublePtr);
 
   MoFEMErrorCode
-  addElement(string element_name, string spatial_position_field_name,
-             string material_position_field_name = "MESH_NODE_POSITIONS",
-             bool ale = false);
+  addElement(const std::string element_name, const std::string spatial_position_field_name,
+             const std::string material_position_field_name = "MESH_NODE_POSITIONS",
+             const bool ale = false);
 
   /** \brief Set operators to calculate left hand tangent matrix and right hand
    * residual
@@ -685,19 +676,16 @@ struct NonlinearElasticElement {
    * \param field_disp true if approximation field represents displacements
    * otherwise it is field of spatial positions
    */
-  MoFEMErrorCode
-  setOperators(string spatial_position_field_name,
-               string material_position_field_name = "MESH_NODE_POSITIONS",
-               bool ale = false, bool field_disp = false);
+  MoFEMErrorCode setOperators(
+      const std::string spatial_position_field_name,
+      const std::string material_position_field_name = "MESH_NODE_POSITIONS",
+      const bool ale = false, const bool field_disp = false);
 };
 
 #endif //__NONLINEAR_ELASTIC_HPP
 
 /***************************************************************************/ /**
-                                                                               * \defgroup nonlinear_elastic_elem NonLinear Elastic Element
-                                                                               * \ingroup user_modules
-                                                                               ******************************************************************************/
-
-/***************************************************************************/ /**
-                                                                               * \defgroup user_modules User modules
-                                                                               ******************************************************************************/
+* \defgroup nonlinear_elastic_elem NonLinear Elastic Element
+* \ingroup user_modules
+* \defgroup user_modules User modules
+******************************************************************************/
