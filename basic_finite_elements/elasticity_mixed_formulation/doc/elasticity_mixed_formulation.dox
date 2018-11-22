@@ -200,6 +200,153 @@ residual/error
 
 \subsection elasticity_mixed_formulation_output_dissection Output dissection
 
+\b Initialisation and Setup
+
+
+Cubit mesh being readers
+\verbatim
+read cubit meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
+read cubit meshset 12682136550675316777 type NODESET DISPLACEMENTSET msId 1
+read cubit meshset 12682136550675316778 type NODESET msId 101
+read cubit meshset 12682136550675316779 type SIDESET msId 1
+read cubit meshset 12682136550675316780 type SIDESET msId 2
+read cubit meshset 12682136550675316781 type SIDESET PRESSURESET msId 3
+read cubit meshset 12682136550675316782 type SIDESET msId 100
+read cubit meshset 12682136550675316783 type SIDESET msId 102
+\endverbatim
+
+MoFEM version and commit ID
+\verbatim
+MoFEM version 0.8.15 (MOAB 5.0.2 Petsc Release Version 3.9.3, Jul, 02, 2018 ) 
+git commit id cdfa37ee13d92b014cc527b5ab7b844baf73f98d
+\endverbatim
+
+Boundary conditions from the mesh
+\verbatim
+D i s p l a c e m e n t 
+ 
+Flag for X-Translation (0/1): 1
+Flag for Y-Translation (0/1): 1
+Flag for Z-Translation (0/1): 1
+Flag for X-Rotation (0/1): 0
+Flag for Y-Rotation (0/1): 0
+Flag for Z-Rotation (0/1): 0
+ 
+Displacement magnitude (X-Translation): 0
+Displacement magnitude (Y-Translation): 0
+Displacement magnitude (Z-Translation): 0
+Displacement magnitude (X-Rotation): N/A
+Displacement magnitude (Y-Rotation): N/A
+Displacement magnitude (Z-Rotation): N/A
+\endverbatim
+
+Material used in the mesh
+\verbatim
+meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
+
+Material Properties
+-------------------
+Young's modulus  = 1
+Poisson's ratio  = 0.5
+Thermal expansion = 0
+User attribute 1 = 0
+User attribute 2 = 0
+User attribute 3 = 0
+User attribute 4 = 0
+User attribute 5 = 0
+User attribute 6 = 0
+User attribute 7 = 0
+
+MAT_ELATIC msId 1 nb. tets 471
+\endverbatim
+
+Three fields are added to the database. Fields are then built showing the number
+of active degrees of freedom (DOFs) for entities including vertices, edges, triangles (faces).
+\verbatim
+add: name MESH_NODE_POSITIONS BitFieldId 1 bit number 1 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316786
+add: name U BitFieldId 2 bit number 2 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316787
+add: name P BitFieldId 4 bit number 3 space H1 approximation base
+AINSWORTH_LEGENDRE_BASE rank 1 meshset 12682136550675316788
+
+Build Field MESH_NODE_POSITIONS (rank 0)
+nb added dofs (vertices) 465 (inactive 0)
+nb added dofs 465 (number of inactive dofs 0)
+Build Field U (rank 0)
+nb added dofs (vertices) 465 (inactive 0)
+nb added dofs (edges) 4482 (inactive 0)
+nb added dofs (triangles) 3192 (inactive 0)
+nb added dofs 8139 (number of inactive dofs 0)
+Build Field P (rank 0)
+nb added dofs (vertices) 155 (inactive 0)
+nb added dofs (edges) 747 (inactive 0)
+nb added dofs 902 (number of inactive dofs 0)
+Nb. dofs 9506
+Build Field MESH_NODE_POSITIONS (rank 1)
+nb added dofs (vertices) 465 (inactive 0)
+nb added dofs 465 (number of inactive dofs 0)
+Build Field U (rank 1)
+nb added dofs (vertices) 465 (inactive 0)
+nb added dofs (edges) 4482 (inactive 0)
+nb added dofs (triangles) 3192 (inactive 0)
+nb added dofs 8139 (number of inactive dofs 0)
+Build Field P (rank 1)
+nb added dofs (vertices) 155 (inactive 0)
+nb added dofs (edges) 747 (inactive 0)
+nb added dofs 902 (number of inactive dofs 0)
+Nb. dofs 9506
+\endverbatim
+
+
+Three elements are added to the database. Finite elements are then built.
+\verbatim
+add finite element: FORCE_FE
+add finite element: PRESSURE_FE
+add finite element: ELASTIC
+
+Build Finite Elements FORCE_FE
+Build Finite Elements PRESSURE_FE
+Build Finite Elements ELASTIC
+Nb. FEs 485
+Nb. FEs 485
+id 00000000000000000000000000000001 name FORCE_FE f_id_row 00000000000000000000000000000010 f_id_col 00000000000000000000000000000010 BitFEId_data 00000000000000000000000000000011 Nb. FEs 0
+id 00000000000000000000000000000001 name FORCE_FE f_id_row 00000000000000000000000000000010 f_id_col 00000000000000000000000000000010 BitFEId_data 00000000000000000000000000000011 Nb. FEs 0
+id 00000000000000000000000000000010 name PRESSURE_FE f_id_row 00000000000000000000000000000010 f_id_col 00000000000000000000000000000010 BitFEId_data 00000000000000000000000000000011 Nb. FEs 14
+id 00000000000000000000000000000010 name PRESSURE_FE f_id_row 00000000000000000000000000000010 f_id_col 00000000000000000000000000000010 BitFEId_data 00000000000000000000000000000011 Nb. FEs 14
+id 00000000000000000000000000000100 name ELASTIC f_id_row 00000000000000000000000000000110 f_id_col 00000000000000000000000000000110 BitFEId_data 00000000000000000000000000000111 Nb. FEs 471
+id 00000000000000000000000000000100 name ELASTIC f_id_row 00000000000000000000000000000110 f_id_col 00000000000000000000000000000110 BitFEId_data 00000000000000000000000000000111 Nb. FEs 471
+Nb. entFEAdjacencies 13328
+Nb. entFEAdjacencies 13328
+
+\endverbatim
+
+
+Problem is added and then built
+\verbatim
+add problem: DM_ELASTIC_MIX
+Problem DM_ELASTIC_MIX Nb. rows 9041 Nb. cols 9041
+Problem DM_ELASTIC_MIX Nb. rows 9041 Nb. cols 9041
+Partition problem DM_ELASTIC_MIX
+	create_Mat: row lower 0 row upper 4521
+	create_Mat: row lower 4521 row upper 9041
+partition_problem: rank = 0 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. local dof 4653 nb global row dofs 9041
+partition_problem: rank = 0 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. local dof 4653 nb global col dofs 9041
+partition_problem: rank = 1 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. local dof 4388 nb global row dofs 9041
+partition_problem: rank = 1 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. local dof 4388 nb global col dofs 9041
+problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. elems 244 on proc 0
+problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. elems 241 on proc 1
+partition_ghost_col_dofs: rank = 0 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. col ghost dof 221 Nb. local dof 4653
+partition_ghost_row_dofs: rank = 0 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. row ghost dof 221 Nb. local dof 4653
+partition_ghost_col_dofs: rank = 1 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. col ghost dof 181 Nb. local dof 4388
+partition_ghost_row_dofs: rank = 1 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. row ghost dof 181 Nb. local dof 4388
+\endverbatim
+
+\b Solution
+
+
+\verbatim
+
+\endverbatim
+
 \subsection elasticity_mixed_formulation_visualisation Visualisation
 
 Once we have solution, one can convert the output file which has the extension
