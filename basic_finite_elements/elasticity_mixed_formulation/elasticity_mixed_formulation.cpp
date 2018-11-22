@@ -46,7 +46,8 @@ int main(int argc, char *argv[]) {
     // Get command line options
     char mesh_file_name[255];
     PetscBool flg_file;
-    int order = 1; // default approximation order
+    int order_p = 2; // default approximation order_p
+    int order_u = 3; // default approximation order_p
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool calc_reactions = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
@@ -57,8 +58,10 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
     // Set approximation order
-    CHKERR PetscOptionsInt("-my_order", "approximation order", "", order,
-                           &order, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_order_p", "approximation order_p", "", order_p,
+                           &order_p, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_order_u", "approximation order_u", "", order_u,
+                           &order_u, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-is_partitioned", "is_partitioned?", "",
                             is_partitioned, &is_partitioned, PETSC_NULL);
@@ -134,16 +137,16 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
     CHKERR m_field.set_field_order(0, MBVERTEX, "U", 1);
-    CHKERR m_field.set_field_order(0, MBEDGE, "U", order + 1);
-    CHKERR m_field.set_field_order(0, MBTRI, "U", order + 1);
-    CHKERR m_field.set_field_order(0, MBTET, "U", order + 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
+    CHKERR m_field.set_field_order(0, MBTRI, "U", order_u);
+    CHKERR m_field.set_field_order(0, MBTET, "U", order_u);
 
     CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
     CHKERR m_field.set_field_order(0, MBVERTEX, "P", 1);
-    CHKERR m_field.set_field_order(0, MBEDGE, "P", order);
-    CHKERR m_field.set_field_order(0, MBTRI, "P", order);
-    CHKERR m_field.set_field_order(0, MBTET, "P", order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);
+    CHKERR m_field.set_field_order(0, MBTRI, "P", order_p);
+    CHKERR m_field.set_field_order(0, MBTET, "P", order_p);
 
     CHKERR m_field.build_fields();
 

@@ -50,7 +50,7 @@ if(ADOL-C_LIBRARY)
   #testing
   add_test(MixFormulationTest
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/elasticity_mixed_formulation
-    -my_file LShape.h5m
+    -my_file LShape_incompressible.cub
     -ksp_type gmres -pc_type lu 
     -pc_factor_mat_solver_package mumps
   )

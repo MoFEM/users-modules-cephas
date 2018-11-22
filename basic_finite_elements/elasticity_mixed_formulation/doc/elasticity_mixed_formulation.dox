@@ -1,7 +1,239 @@
-/*! \page elasticity_mixed_formulation Mixed formulation for elasticity problem
+/*! \page elasticity_mixed_formulation Mixed formulation for incompressible elasticity
 
-THIS IS THE TUTORIAL FOR MIXED FORMULATION FOR INCOMPRESSIBLE ELASTICITY PROBLEM
+\tableofcontents
 
-second line of information
+\section elasticity_mixed_formulation_introduction Introduction
+
+In this tutorial, the MoFEM implemenetation of the mixed formulation for
+incompressible elasticity problem will be presented. Interested readers are
+encouraged to have a look at \ref general_data_structure,
+\ref hierarchical_approximation_1, \ref hello_world_tut1, and \ref poisson_tut1
+to have better ideas how MoFEM works and how a specific problem is implemented
+in the platform. They may also find this <a href="https://youtu.be/rO1_j8p9epk">tutorial video</a>  helpful.
+
+The remain of the tutorial is organised as follows. The
+mathematical and finite element formulation is presented in the next section
+before the input mesh of L-shape structure which is used as an example is
+defined. It is followed by explanation of the source code and then how to run
+and visualise the results in normal case. Remarks on choosing approximation order and its consequence will be discussed at the end of the tutorial.
+
+\section elasticity_mixed_formulation_mathematical_fe_formulation Mathematical and finite element formulation
+
+A compressible elasticity problem can be formally defined as follows assuming
+there is no body force. 
+
+For given loading \f$ f \f$, traction \f$ t \f$, and displacement \f$ \bf{\bar
+u} \f$, find \f$ \bf{u} \f$ such that
+\f[ 
+    \begin{align}
+-{\rm{div}} \boldsymbol{\sigma(u)} &= \boldsymbol{f} \quad \text{in} \quad \Omega, \\
+
+\boldsymbol{u} &= \boldsymbol{\bar u} \quad \text{on} \quad \Gamma_u \subset \partial\Omega, \\
+
+\boldsymbol{\sigma n} &= \boldsymbol{t} \quad \text{on} \quad \Gamma_t \subset \partial\Omega. 
+    \end{align}
+\f]
+
+The constitutive equation is given as
+\f[
+    \begin{align}
+\boldsymbol{\sigma} = \lambda \rm{tr}\boldsymbol{(\varepsilon)I} + 2\mu\boldsymbol{\varepsilon},
+    \end{align}
+\f]
+where Lame's constants \f$ \lambda \f$ and \f$ \mu \f$ are related with Young's
+modulus  \f$ E \f$ and Poisson's ratio \f$ \nu \f$ as
+\f[
+    \begin{align}
+        \lambda  &= \frac{{\nu E}}{{\left( {1 + \nu } \right)\left( {1 - 2\nu }
+        \right)}}, \\
+        \mu  &= \frac{E}{{2\left( {1 + \nu } \right)}}.
+    \end{align}
+\f]
+
+The above problem of compressible elasticity can be solved using typical finite
+element procedure. However, in case of \f$ \nu=0.5 \f$, \f$ \lambda \f$ becomes
+infinity implying incompressible state. This causes \e volumetric \e locking
+which makes the approximation converge very slowly or even unable to converge.
+Therefore, an alternative formulation need to be considered to bypass this
+difficulty. This can be done by introducing additional independent unknown
+called \e hydrostatic \e pressure \f$ p \f$ where \f$ p = -\lambda u_{k,k} \f$.
+Therefore, the following equation should be added to the formal problem
+definition presented in Eqs. (1)-(3)
+\f[
+    \begin{align}
+        -{\rm{div}} \boldsymbol{u} + \dfrac{1}{\lambda}p &= 0 \quad \text{in} \quad \Omega.
+    \end{align}
+\f]
+
+With two independent unknowns, \f$ u \f$ and \f$ p \f$, the incompressible
+elasticity problem is discretised as follows
+\f[
+    \begin{align}
+\left[ {\begin{array}{*{20}{c}}
+{\bf{K}}&{\bf{G}}\\
+{{{\bf{G}}^T}}&{\bf{P}}
+\end{array}} \right]\left\{ {\begin{array}{*{20}{c}}
+{{\bf{ u}}}\\
+{{\bf{ p}}}
+\end{array}} \right\} = \left\{ {\begin{array}{*{20}{c}}
+{{\bf{ f}}}\\
+{\bf{0}}
+\end{array}} \right\},
+    \end{align}
+\f]
+where
+
+\f[
+    \begin{align}
+        {\bf{K}} &= \int\limits_\Omega  {{{\bf{B}}^T}2\mu {\bf{B}}d\Omega }, \\
+        {\bf{G}} &=  - \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{N}}_p}d\Omega }, \\
+        {\bf{P}} &=  - \int\limits_\Omega  {{\bf{N}}_p^T\frac{1}{\lambda
+        }{{\bf{N}}_p}d\Omega }, \\
+        {\bf{ f}} &= \int\limits_\Omega  {{\bf{N}}_u^T{\bf{f}}d\Omega }  +
+        \int\limits_\Gamma  {{\bf{N}}_u^T{\bf{t}}d\Gamma }.
+    \end{align}
+\f]
+
+In the platform of MoFEM, while the complete implementation of user data
+operators (UDO) can be found in ElasticityMixedFormulation.hpp, the matrices
+above are implemented in UDO as follows
+- \f$ {\bf K} \f$ is implemented in OpAssembleK
+- \f$ {\bf G} \f$ is implemented in OpAssembleG
+- \f$ {\bf P} \f$ is implemented in OpAssembleP
+
+It is worth noting that, in order to obtain stable results for the problem of
+incompressible elasticity, the approximation order of displacement
+should be higher than that of hydrostatic pressure. The consequences of choosing
+inappropriate approximation order of the two unknowns will be discussed later in
+this tutorial.
+
+\section elasticity_mixed_formulation_input_mesh Input mesh
+
+As an example, a L-shape structure being clamped at the bottom surface and
+pressurised with unit magnitude at the top right surface will be used for the
+analysis of incompressible elasticity. The 3D model and mesh which shown in \ref
+figure_cubit_mesh "Figure 1" are created by Cubit using a simple journal script
+below 
+
+\verbatim
+reset
+set duplicate block elements on
+
+brick x 1 y 2 z 0.5
+brick x 2 y 1 z 0.5
+
+move curve 23 midpoint location curve 11 include_merged
+unite volume all 
+
+Sideset 1 surface 3 
+Sideset 2 surface 12 
+
+Sideset 100 curve all 
+nodeset 101 vertex all 
+Sideset 102 surface all
+
+{young_modulus = 1}
+{poisson_ratio = 0.5}
+block 1 volume all 
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2
+block 1 attribute index 1 {young_modulus}
+block 1 attribute index 2 {poisson_ratio} 
+
+create displacement on surface 3 dof 1 dof 2 dof 3 fix 0
+create pressure on surface 12 magnitude 1 
+
+volume all scheme tetmesh
+volume all size auto factor 7
+mesh volume all
+
+save as "/Users/username/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/LShape_incompressible.cub" overwrite
+\endverbatim
+
+\anchor figure_cubit_mesh
+\image html emf_cubit_mesh.png "Figure 1: Element mesh." width = 600px
+
+
+\section elasticity_mixed_formulation_code_dissection Code dissection
+
+\subsection elasticity_mixed_formulation_header_file Header file
+
+\subsection elasticity_mixed_formulation_solve_problem Solving the problem
+
+\subsection elasticity_mixed_formulation_postproc Postprocessing
+
+\section elasticity_mixed_formulation_running_program Running the program
+
+In order to run the program, one should first go to the directory where the
+problem is located, compile the code and then run the executable file.
+Typically, this can be done as follows
+
+\code
+cd mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation
+make -j2
+mpirun -np 2 ./elasticity_mixed_formulation -my_file LShape_incompressible.cub -my_order_p 2 -my_order_u 3 -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor
+\endcode
+
+The options are explained as follows
+- \e mpirun \e -np \e 2: two processors are used to run the analysis
+
+- \e ./elasticity_mixed_formulation: path and name of the executable file, dot
+means current directory
+
+- \e -my_file \e LShape_incompressible.cub: name of the mesh file
+
+- \e -my_order_p 2: second order approximation for hydrostatic pressure \e p
+
+- \e -my_order_u 3: third order approximation for displacement \e u
+
+- \e -ksp_type \e gmres: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPGMRES.html#KSPGMRES">Generalised Minimal Residual</a> is used as an iterative <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPType.html">Krylov subspace method</a>
+
+- \e -pc_type \e lu: Direct solver based on <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCLU.html#PCLU">LU factorisation</a> as a preconditioner
+
+
+- \e -pc_factor_mat_solver_package \e mumps: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MATSOLVERMUMPS.html">MUMPS</a> is used as matrix solver
+
+
+- \e -ksp_monitor: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPMonitorSet.html">function</a>  to be called at every iteration to monitor the
+residual/error 
+
+
+\subsection elasticity_mixed_formulation_output_dissection Output dissection
+
+\subsection elasticity_mixed_formulation_visualisation Visualisation
+
+Once we have solution, one can convert the output file which has the extension
+of h5m to a vtk one before opening it in <a href="https://www.paraview.org">ParaView</a>. 
+
+\code
+mbconvert out.h5m out.vtk
+open out.vtk
+\endcode
+
+The visualisation of the results can then be viewed as shown in \ref
+figure_ord2_3_displacement "Figure 2" and \ref figure_ord2_3_pressure
+"Figure 3" for displacement and hydrostatic pressure, respectively.
+
+\anchor figure_ord2_3_displacement
+\image html emf_ord2_3_displacement.png "Figure 2: Visualisation of displacement result." width = 600px
+
+\anchor figure_ord2_3_pressure
+\image html emf_ord2_3_pressure.png "Figure 3: Visualisation of hydrostatic pressure result." width = 600px
+
+
+\section Remarks
+
+As mentioned earlier, the choices of approximation order for hydrostatic
+pressure and displacement are important. Practically, the approximation order of
+displacement should be higher than that of hydrostatic pressure. If the same
+order is assigned for displacement and hydrostatic pressure, oscillating results
+are expected as shown in \ref figure_ord2_2_pressure "Figure 4".
+
+\anchor figure_ord2_2_pressure
+\image html emf_ord2_2_pressure.png "Figure 4: Output of hydrostatic pressure when second order approximation is chosen for both variables." width = 600px
+
+
+
+
 
 */
