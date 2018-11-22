@@ -15,15 +15,15 @@ The remain of the tutorial is organised as follows. The
 mathematical and finite element formulation is presented in the next section
 before the input mesh of L-shape structure which is used as an example is
 defined. It is followed by explanation of the source code and then how to run
-and visualise the results in normal case. Remarks on choosing approximation order and its consequence will be discussed at the end of the tutorial.
+and visualise the results. Remark on choosing approximation order and its consequence will be discussed at the end of the tutorial.
 
 \section elasticity_mixed_formulation_mathematical_fe_formulation Mathematical and finite element formulation
 
 A compressible elasticity problem can be formally defined as follows assuming
 there is no body force. 
 
-For given loading \f$ f \f$, traction \f$ t \f$, and displacement \f$ \bf{\bar
-u} \f$, find \f$ \bf{u} \f$ such that
+For given loading \f$ \bf{f} \f$, traction \f$ \bf{t} \f$, and displacement \f$
+\bf{\bar u} \f$, find \f$ \bf{u} \f$ such that
 \f[ 
     \begin{align}
 -{\rm{div}} \boldsymbol{\sigma(u)} &= \boldsymbol{f} \quad \text{in} \quad \Omega, \\
@@ -85,17 +85,16 @@ where
 
 \f[
     \begin{align}
-        {\bf{K}} &= \int\limits_\Omega  {{{\bf{B}}^T}2\mu {\bf{B}}d\Omega }, \\
-        {\bf{G}} &=  - \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{N}}_p}d\Omega }, \\
+        {\bf{K}} &= \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{D}}_d}{\bf{B}}d\Omega } \\
+        {\bf{G}} &=  - \int\limits_\Omega  {{{\bf{B}}^T}{\bf m}{{\bf{N}}_p}d\Omega }, \\
         {\bf{P}} &=  - \int\limits_\Omega  {{\bf{N}}_p^T\frac{1}{\lambda
         }{{\bf{N}}_p}d\Omega }, \\
-        {\bf{ f}} &= \int\limits_\Omega  {{\bf{N}}_u^T{\bf{f}}d\Omega }  +
-        \int\limits_\Gamma  {{\bf{N}}_u^T{\bf{t}}d\Gamma }.
+        {\bf{ f}} &= \int\limits_\Gamma  {{\bf{N}}_u^T{\bf{t}}d\Gamma }.
     \end{align}
 \f]
 
 In the platform of MoFEM, while the complete implementation of user data
-operators (UDO) can be found in ElasticityMixedFormulation.hpp, the matrices
+operators (UDO) can be found in \ref elasticity_mixed_formulation.cpp and ElasticityMixedFormulation.hpp, the matrices
 above are implemented in UDO as follows
 - \f$ {\bf K} \f$ is implemented in OpAssembleK
 - \f$ {\bf G} \f$ is implemented in OpAssembleG
@@ -156,11 +155,381 @@ save as "/Users/username/mofem_install/um/build/basic_finite_elements/elasticity
 
 \section elasticity_mixed_formulation_code_dissection Code dissection
 
-\subsection elasticity_mixed_formulation_header_file Header file
+\subsection elasticity_mixed_formulation_init Initialisation
+
+- Header file
+There are two header files which include the first one for basic finite elements
+and the second one contains the implementation of operators of operators for
+finite elements.
+
+\code
+    #include <BasicFiniteElements.hpp>
+    #include <ElasticityMixedFormulation.hpp>
+\endcode
+
+\medskip
+- Initialise MoFEM
+\code 
+  // Initialise MoFEM
+  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+\endcode
+
+
+\medskip
+- Creat meash database and an interface to interact with it
+\code 
+  // Create mesh database
+  moab::Core mb_instance;              // create database
+  moab::Interface &moab = mb_instance; // create interface to database
+\endcode
+
+
+\medskip
+- Creat MoAB communicator
+\code 
+  MPI_Comm moab_comm_world;
+  MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
+  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  if (pcomm == NULL)
+    pcomm = new ParallelComm(&moab, moab_comm_world);
+\endcode
+
+
+\medskip
+- Declare variables and read arguments from the command line
+\code 
+// Get command line options
+    char mesh_file_name[255];
+    PetscBool flg_file;
+    int order_p = 2; // default approximation order_p
+    int order_u = 3; // default approximation order_u
+    PetscBool is_partitioned = PETSC_FALSE;
+    PetscBool calc_reactions = PETSC_FALSE;
+    PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
+
+    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mix elastic problem",
+                             "none");
+
+    CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
+                              mesh_file_name, 255, &flg_file);
+    // Set approximation order
+    CHKERR PetscOptionsInt("-my_order_p", "approximation order_p", "", order_p,
+                           &order_p, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_order_u", "approximation order_u", "", order_u,
+                           &order_u, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-is_partitioned", "is_partitioned?", "",
+                            is_partitioned, &is_partitioned, PETSC_NULL);
+    CHKERR PetscOptionsBool("-calc_reactions",
+                            "calculate reactions for blocksets", "",
+                            calc_reactions, &calc_reactions, PETSC_NULL);
+    // Set testing (used by CTest)
+    CHKERR PetscOptionsBool("-test", "if true is ctest", "", flg_test,
+                            &flg_test, PETSC_NULL);
+    ierr = PetscOptionsEnd();
+
+    if (flg_file != PETSC_TRUE) {
+      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
+    }
+\endcode
+
+
+\medskip
+- Read the mesh
+\code 
+   // Read whole mesh or part of is if partitioned
+    if (is_partitioned == PETSC_TRUE) {
+      // This is a case of distributed mesh and algebra. In that case each
+      // processor keeps only part of the problem.
+      const char *option;
+      option = "PARALLEL=READ_PART;"
+               "PARALLEL_RESOLVE_SHARED_ENTS;"
+               "PARTITION=PARALLEL_PARTITION;";
+      CHKERR moab.load_file(mesh_file_name, 0, option);
+    } else {
+      // If that case we have distributed algebra, i.e. assembly of vectors and
+      // matrices is in parallel, but whole mesh is stored on all processors.
+      // Solver and matrix scales well, however problem set-up of problem is
+      // not fully parallel.
+      const char *option;
+      option = "";
+      CHKERR moab.load_file(mesh_file_name, 0, option);
+    }
+\endcode
+
+
+\medskip
+- Creat MoFEM database
+\code 
+// Create MoFEM database and link it to MoAB
+    MoFEM::Core core(moab);
+    MoFEM::Interface &m_field = core;
+\endcode
+
+
+\medskip
+- Output boundary condition and material properties from the mesh
+\code 
+    // Print boundary conditions and material parameters
+    MeshsetsManager *meshsets_mng_ptr;
+    CHKERR m_field.getInterface(meshsets_mng_ptr);
+    CHKERR meshsets_mng_ptr->printDisplacementSet();
+    CHKERR meshsets_mng_ptr->printForceSet();
+    CHKERR meshsets_mng_ptr->printMaterialsSet();
+\endcode
+
+
+\medskip
+- Add three fields
+\code 
+    // **** ADD FIELDS **** //
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+                             3);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+
+    CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
+    CHKERR m_field.set_field_order(0, MBVERTEX, "U", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
+    CHKERR m_field.set_field_order(0, MBTRI, "U", order_u);
+    CHKERR m_field.set_field_order(0, MBTET, "U", order_u);
+
+    CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
+    CHKERR m_field.set_field_order(0, MBVERTEX, "P", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);
+    CHKERR m_field.set_field_order(0, MBTRI, "P", order_p);
+    CHKERR m_field.set_field_order(0, MBTET, "P", order_p);
+\endcode
+
+
+\medskip
+- Build fields
+\code 
+    CHKERR m_field.build_fields();
+
+    CHKERR m_field.getInterface<FieldBlas>()->setField(
+        0, MBVERTEX, "P"); // initial p = 0 everywhere
+    {
+      Projection10NodeCoordsOnField ent_method_material(m_field,
+                                                        "MESH_NODE_POSITIONS");
+      CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+    }
+\endcode
+
+
+\medskip
+- Add finite elements
+\code 
+    // **** ADD ELEMENTS **** //
+    // Add finite element (this defines element, declaration comes later)
+    CHKERR m_field.add_finite_element("ELASTIC");
+    CHKERR m_field.modify_finite_element_add_field_row("ELASTIC", "U");
+    CHKERR m_field.modify_finite_element_add_field_col("ELASTIC", "U");
+    CHKERR m_field.modify_finite_element_add_field_data("ELASTIC", "U");
+
+    CHKERR m_field.modify_finite_element_add_field_row("ELASTIC", "P");
+    CHKERR m_field.modify_finite_element_add_field_col("ELASTIC", "P");
+    CHKERR m_field.modify_finite_element_add_field_data("ELASTIC", "P");
+    CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
+                                                        "MESH_NODE_POSITIONS");
+\endcode
+
+
+\medskip
+- Add entities to elements and build them
+\code
+   // Add entities to that element
+    CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET, "ELASTIC");
+    // build finite elements
+    CHKERR m_field.build_finite_elements();
+    // build adjacencies between elements and degrees of freedom
+    CHKERR m_field.build_adjacencies(bit_level0); 
+\endcode
+
+
+\medskip
+- Build and setup discrete manager
+\code 
+    // **** BUILD DM **** //
+    DM dm;
+    DMType dm_name = "DM_ELASTIC_MIX";
+    // Register DM problem
+    CHKERR DMRegister_MoFEM(dm_name);
+    CHKERR DMCreate(PETSC_COMM_WORLD, &dm);
+    CHKERR DMSetType(dm, dm_name);
+    // Create DM instance
+    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, dm_name, bit_level0);
+    // Configure DM form line command options (DM itself, solvers,
+    // pre-conditioners, ... )
+    CHKERR DMSetFromOptions(dm);
+    // Add elements to dm (only one here)
+    CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+    if (m_field.check_finite_element("PRESSURE_FE"))
+      CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
+    if (m_field.check_finite_element("FORCE_FE"))
+      CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
+    CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
+    // setup the DM
+    CHKERR DMSetUp(dm);
+\endcode
+
+
+\medskip
+- Declare share pointers to finit element objects
+\code 
+    boost::shared_ptr<FEMethod> nullFE;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs(
+        new VolumeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs(
+        new VolumeElementForcesAndSourcesCore(m_field));
+\endcode
+
+
+
+
+
 
 \subsection elasticity_mixed_formulation_solve_problem Solving the problem
 
+
+\medskip
+- Stiffness matrix, vector of DOFs, and right-hand-side (RHS) vector are
+declared and associated to the Discrete Manager
+\code 
+    Mat Aij;      // Stiffness matrix
+    Vec d, F_ext; // Vector of DOFs and the RHS
+    
+    {
+      CHKERR DMCreateGlobalVector_MoFEM(dm, &d);
+      CHKERR VecZeroEntries(d);
+      CHKERR VecDuplicate(d, &F_ext);
+      CHKERR DMCreateMatrix_MoFEM(dm, &Aij);
+      CHKERR VecGhostUpdateBegin(d, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(d, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToLocalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
+      CHKERR MatZeroEntries(Aij);
+    }
+\endcode
+
+
+\medskip
+- Finite element instances are pointed to the matrix and vector
+\code 
+    // Assign global matrix/vector
+    feLhs->ksp_B = Aij;
+    feLhs->ksp_f = F_ext;
+\endcode
+
+
+\medskip
+- Loop over element to compute and assemble stiffness matrix, vectors of DOFs
+and RHS
+\code 
+    boost::shared_ptr<DirichletDisplacementBc> dirichlet_bc_ptr(
+        new DirichletDisplacementBc(m_field, "U", Aij, d, F_ext));
+    dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+    dirichlet_bc_ptr->ts_ctx = FEMethod::CTX_TSNONE;
+    CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
+
+    // Assemble pressure and traction forces.
+    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
+    CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
+                                                       F_ext, "U");
+
+    {
+      boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+          neumann_forces.begin();
+      for (; mit != neumann_forces.end(); mit++) {
+        CHKERR DMoFEMLoopFiniteElements(dm, mit->first.c_str(),
+                                        &mit->second->getLoopFe());
+      }
+    }
+    // Assemble forces applied to nodes, see implementation in NodalForce
+    boost::ptr_map<std::string, NodalForce> nodal_forces;
+    CHKERR MetaNodalForces::setOperators(m_field, nodal_forces, F_ext, "U");
+
+    {
+      boost::ptr_map<std::string, NodalForce>::iterator fit =
+          nodal_forces.begin();
+      for (; fit != nodal_forces.end(); fit++) {
+        CHKERR DMoFEMLoopFiniteElements(dm, fit->first.c_str(),
+                                        &fit->second->getLoopFe());
+      }
+    }
+    // Assemble edge forces
+    boost::ptr_map<std::string, EdgeForce> edge_forces;
+    CHKERR MetaEdgeForces::setOperators(m_field, edge_forces, F_ext, "U");
+
+    {
+      boost::ptr_map<std::string, EdgeForce>::iterator fit =
+          edge_forces.begin();
+      for (; fit != edge_forces.end(); fit++) {
+        CHKERR DMoFEMLoopFiniteElements(dm, fit->first.c_str(),
+                                        &fit->second->getLoopFe());
+      }
+    }
+
+    CHKERR DMoFEMPostProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+    CHKERR DMMoFEMKSPSetComputeOperators(dm, "ELASTIC", feLhs, nullFE, nullFE);
+    CHKERR VecAssemblyBegin(F_ext);
+    CHKERR VecAssemblyEnd(F_ext);
+\endcode
+
+
+\medskip
+- The matrix and vectors have been assembled and now the system of equation is
+solved using KSP solver 
+\code 
+    KSP solver;
+
+    CHKERR KSPCreate(PETSC_COMM_WORLD, &solver);
+    CHKERR KSPSetFromOptions(solver);
+    CHKERR KSPSetOperators(solver, Aij, Aij);
+    CHKERR KSPSetUp(solver);
+    CHKERR KSPSolve(solver, F_ext, d);
+\endcode
+
+
+\medskip
+- Map the solutions to mesh entities
+\code 
+    CHKERR DMoFEMMeshToGlobalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
+\endcode
+
+
 \subsection elasticity_mixed_formulation_postproc Postprocessing
+
+
+\medskip
+-  The solutions are passed to the postprocessor and information is written to
+the output file
+\code 
+    CHKERR post_proc.generateReferenceElementMesh();
+    CHKERR post_proc.addFieldValuesPostProc("U");
+    CHKERR post_proc.addFieldValuesPostProc("P");
+
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+    std::ostringstream stm;
+    stm << "out.h5m";
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", stm.str().c_str());
+    CHKERR post_proc.postProcMesh.write_file(stm.str().c_str(), "MOAB",
+                                             "PARALLEL=WRITE_PART");
+\endcode
+
+
+\medskip
+-  Finally, all dynamic objects Aij, d, F_ext, and Discrete Manager are
+destroyed to release memory
+\code 
+    CHKERR MatDestroy(&Aij);
+    CHKERR VecDestroy(&d);
+    CHKERR VecDestroy(&F_ext);
+    CHKERR DMDestroy(&dm);
+\endcode
+
 
 \section elasticity_mixed_formulation_running_program Running the program
 
@@ -200,10 +569,10 @@ residual/error
 
 \subsection elasticity_mixed_formulation_output_dissection Output dissection
 
-\b Initialisation and Setup
+\b Initialisation \b and \b Setup
 
 
-Cubit mesh being readers
+- Cubit mesh being read
 \verbatim
 read cubit meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
 read cubit meshset 12682136550675316777 type NODESET DISPLACEMENTSET msId 1
@@ -215,13 +584,15 @@ read cubit meshset 12682136550675316782 type SIDESET msId 100
 read cubit meshset 12682136550675316783 type SIDESET msId 102
 \endverbatim
 
-MoFEM version and commit ID
+\medskip
+- MoFEM version and commit ID
 \verbatim
 MoFEM version 0.8.15 (MOAB 5.0.2 Petsc Release Version 3.9.3, Jul, 02, 2018 ) 
 git commit id cdfa37ee13d92b014cc527b5ab7b844baf73f98d
 \endverbatim
 
-Boundary conditions from the mesh
+\medskip
+- Boundary conditions from the mesh
 \verbatim
 D i s p l a c e m e n t 
  
@@ -240,7 +611,8 @@ Displacement magnitude (Y-Rotation): N/A
 Displacement magnitude (Z-Rotation): N/A
 \endverbatim
 
-Material used in the mesh
+\medskip
+- Material used in the mesh
 \verbatim
 meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
 
@@ -260,7 +632,8 @@ User attribute 7 = 0
 MAT_ELATIC msId 1 nb. tets 471
 \endverbatim
 
-Three fields are added to the database. Fields are then built showing the number
+\medskip
+- Three fields are added to the database. Fields are then built showing the number
 of active degrees of freedom (DOFs) for entities including vertices, edges, triangles (faces).
 \verbatim
 add: name MESH_NODE_POSITIONS BitFieldId 1 bit number 1 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316786
@@ -296,8 +669,8 @@ nb added dofs 902 (number of inactive dofs 0)
 Nb. dofs 9506
 \endverbatim
 
-
-Three elements are added to the database. Finite elements are then built.
+\medskip
+- Three elements are added to the database. Finite elements are then built.
 \verbatim
 add finite element: FORCE_FE
 add finite element: PRESSURE_FE
@@ -319,8 +692,8 @@ Nb. entFEAdjacencies 13328
 
 \endverbatim
 
-
-Problem is added and then built
+\medskip
+- Problem is added and then built
 \verbatim
 add problem: DM_ELASTIC_MIX
 Problem DM_ELASTIC_MIX Nb. rows 9041 Nb. cols 9041
@@ -342,15 +715,23 @@ partition_ghost_row_dofs: rank = 1 FEs row ghost dofs problem id 000000000000000
 
 \b Solution
 
-
+- KSP solver output
 \verbatim
-
+0 KSP Residual norm 2.422191940287e+02 
+1 KSP Residual norm 3.461359964609e-11
 \endverbatim
+
+\medskip
+- Output file
+\verbatim
+out file out.h5m
+\endverbatim
+
 
 \subsection elasticity_mixed_formulation_visualisation Visualisation
 
-Once we have solution, one can convert the output file which has the extension
-of h5m to a vtk one before opening it in <a href="https://www.paraview.org">ParaView</a>. 
+Once the solution is obtained, one can convert the output file which has the
+extension of h5m to a vtk one before opening it in <a href="https://www.paraview.org">ParaView</a>. 
 
 \code
 mbconvert out.h5m out.vtk
@@ -368,7 +749,7 @@ figure_ord2_3_displacement "Figure 2" and \ref figure_ord2_3_pressure
 \image html emf_ord2_3_pressure.png "Figure 3: Visualisation of hydrostatic pressure result." width = 600px
 
 
-\section Remarks
+\section Remark
 
 As mentioned earlier, the choices of approximation order for hydrostatic
 pressure and displacement are important. Practically, the approximation order of
