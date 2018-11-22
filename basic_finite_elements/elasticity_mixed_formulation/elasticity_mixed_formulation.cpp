@@ -1,4 +1,4 @@
-/** \file elasticity_new.cpp
+/** \file elasticity_mixed_formulation.cpp
  * */
 /* MoFEM is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the
@@ -22,20 +22,23 @@
 using namespace boost::numeric;
 using namespace MoFEM;
 using namespace std;
-namespace po = boost::program_options;
 
 static char help[] = "-my_block_config set block data\n"
                      "\n";
 
 int main(int argc, char *argv[]) {
 
-  // Initialize PETSCc
+  // Initialise MoFEM
   MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
-  // PetscInt nb_sub_steps = 10;
+
   // Create mesh database
   moab::Core mb_instance;              // create database
   moab::Interface &moab = mb_instance; // create interface to database
 
+  // Create moab communicator
+  // Create separate MOAB communicator, it is duplicate of PETSc communicator.
+  // NOTE That this should eliminate potential communication problems between
+  // MOAB and PETSC functions.
   MPI_Comm moab_comm_world;
   MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
   ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
@@ -47,9 +50,8 @@ int main(int argc, char *argv[]) {
     char mesh_file_name[255];
     PetscBool flg_file;
     int order_p = 2; // default approximation order_p
-    int order_u = 3; // default approximation order_p
+    int order_u = 3; // default approximation order_u
     PetscBool is_partitioned = PETSC_FALSE;
-    PetscBool calc_reactions = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mix elastic problem",
@@ -65,9 +67,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-is_partitioned", "is_partitioned?", "",
                             is_partitioned, &is_partitioned, PETSC_NULL);
-    CHKERR PetscOptionsBool("-calc_reactions",
-                            "calculate reactions for blocksets", "",
-                            calc_reactions, &calc_reactions, PETSC_NULL);
+
     // Set testing (used by CTest)
     CHKERR PetscOptionsBool("-test", "if true is ctest", "", flg_test,
                             &flg_test, PETSC_NULL);
@@ -77,25 +77,10 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    // Create mesh database
-    moab::Core mb_instance;
-    moab::Interface &moab = mb_instance;
-
-    // Create moab communicator
-    // Create separate MOAB communicator, it is duplicate of PETSc communicator.
-    // NOTE That this should eliminate potential communication problems between
-    // MOAB and PETSC functions.
-    MPI_Comm moab_comm_world;
-    MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, moab_comm_world);
-
     // Read whole mesh or part of is if partitioned
     if (is_partitioned == PETSC_TRUE) {
       // This is a case of distributed mesh and algebra. In that case each
-      // processor
-      // keep only part of the problem.
+      // processor keeps only part of the problem.
       const char *option;
       option = "PARALLEL=READ_PART;"
                "PARALLEL_RESOLVE_SHARED_ENTS;"
@@ -126,7 +111,6 @@ int main(int argc, char *argv[]) {
     bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
-    EntityHandle root_set = moab.get_root_set();
 
     // **** ADD FIELDS **** //
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
@@ -157,26 +141,25 @@ int main(int argc, char *argv[]) {
                                                         "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
     }
-    // **** ADD MOMENTUM FLUXES **** //
     // setup elements for loading
     CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "U");
-
     CHKERR MetaNodalForces::addElement(m_field, "U");
     CHKERR MetaEdgeForces::addElement(m_field, "U");
 
     // **** ADD ELEMENTS **** //
-    // Add finite element (this defines element declaration comes later)
+
+    // Add finite element (this defines element, declaration comes later)
     CHKERR m_field.add_finite_element("ELASTIC");
     CHKERR m_field.modify_finite_element_add_field_row("ELASTIC", "U");
     CHKERR m_field.modify_finite_element_add_field_col("ELASTIC", "U");
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC", "U");
 
-    // turn off //FIXME:
     CHKERR m_field.modify_finite_element_add_field_row("ELASTIC", "P");
     CHKERR m_field.modify_finite_element_add_field_col("ELASTIC", "P");
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC", "P");
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
                                                         "MESH_NODE_POSITIONS");
+
     // Add entities to that element
     CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET, "ELASTIC");
     // build finite elements
@@ -207,7 +190,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetUp(dm);
 
     CommonData commonData(m_field);
-    commonData.getParameters();
+    CHKERR commonData.getParameters();
 
     boost::shared_ptr<FEMethod> nullFE;
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs(
@@ -220,8 +203,6 @@ int main(int argc, char *argv[]) {
     // loop over blocks
     for (auto &sit : commonData.setOfBlocksData) {
 
-      feLhs->getOpPtrVector().push_back(
-          new OpCalculateScalarFieldValues("P", commonData.pPtr));
       feLhs->getOpPtrVector().push_back(
           new OpAssembleP(commonData, sit.second));
       feLhs->getOpPtrVector().push_back(
@@ -239,8 +220,8 @@ int main(int argc, char *argv[]) {
                                commonData, sit.second));
     }
 
-    Mat Aij;
-    Vec d, F_ext;
+    Mat Aij;      // Stiffness matrix
+    Vec d, F_ext; // Vector of DOFs and the RHS
 
     {
       CHKERR DMCreateGlobalVector_MoFEM(dm, &d);
@@ -264,10 +245,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
 
-
-    // Assemble pressure and traction forces. Run particular implemented for do
-    // this, see
-    // MetaNeummanForces how this is implemented.
+    // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
     CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
                                                        F_ext, "U");
@@ -280,7 +258,7 @@ int main(int argc, char *argv[]) {
                                         &mit->second->getLoopFe());
       }
     }
-    // Assemble forces applied to nodes, see implementation in NodalForce
+    // Assemble forces applied to nodes
     boost::ptr_map<std::string, NodalForce> nodal_forces;
     CHKERR MetaNodalForces::setOperators(m_field, nodal_forces, F_ext, "U");
 
@@ -306,16 +284,11 @@ int main(int argc, char *argv[]) {
     }
 
     CHKERR DMoFEMPostProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    CHKERR DMMoFEMKSPSetComputeOperators(dm, "ELASTIC", feLhs, nullFE,
-                                         nullFE);
+    CHKERR DMMoFEMKSPSetComputeOperators(dm, "ELASTIC", feLhs, nullFE, nullFE);
     CHKERR VecAssemblyBegin(F_ext);
     CHKERR VecAssemblyEnd(F_ext);
-    // CHKERR VecScale(F_ext, -1);
 
     // **** SOLVE **** //
-
-    // Set operators for KSP solver
-    // CHKERR DMMoFEMKSPSetComputeOperators(dm, "ELASTIC", feLhs, nullFE, nullFE);
 
     KSP solver;
 
@@ -324,12 +297,11 @@ int main(int argc, char *argv[]) {
     CHKERR KSPSetOperators(solver, Aij, Aij);
     CHKERR KSPSetUp(solver);
     CHKERR KSPSolve(solver, F_ext, d);
-    //  std::string wait;
 
     // VecView(F_ext, PETSC_VIEWER_STDOUT_WORLD);
-    // cerr << "U vector \n \n \n";
-    // CHKERR VecView(d, PETSC_VIEWER_STDOUT_WORLD);
+    // CHKERR VecView(d, PETSC_VIEWER_STDOUT_WORLD);    // Print out the results
     CHKERR DMoFEMMeshToGlobalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
+
     // Save data on mesh
     CHKERR post_proc.generateReferenceElementMesh();
     CHKERR post_proc.addFieldValuesPostProc("U");

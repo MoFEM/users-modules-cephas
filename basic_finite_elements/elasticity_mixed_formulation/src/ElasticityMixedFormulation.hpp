@@ -15,11 +15,6 @@
 #ifndef __ELASTICITYMIXEDFORMULATION_HPP__
 #define __ELASTICITYMIXEDFORMULATION_HPP__
 
-
-struct CommonData; // that's why header files are important ; )
-// kronecker delta
-const FTensor::Tensor2<int, 3, 3> D_K(1, 0, 0, 0, 1, 0, 0, 0, 1);
-
 struct BlockData {
   int iD;
   int oRder;
@@ -28,17 +23,14 @@ struct BlockData {
   Range tEts;
   BlockData() : oRder(-1), yOung(-1), pOisson(-2) {}
 };
-
-// declaration
 struct CommonData {
 
   boost::shared_ptr<MatrixDouble> gradDispPtr;
-  // boost::shared_ptr<MatrixDouble> sTrainPtr;
   boost::shared_ptr<VectorDouble> pPtr;
-  FTensor::Tensor4<double, 3, 3, 3, 3> D; // FIXME: use Ddg
+  FTensor::Ddg<double, 3, 3> tD;
 
-  double pOisson; //< young modulus
-  double yOung;   //< poisson ration
+  double pOisson;
+  double yOung;
   double lAmbda;
   double mU;
 
@@ -47,10 +39,7 @@ struct CommonData {
   CommonData(MoFEM::Interface &m_field) : mField(m_field) {
 
     // Setting default values for coeffcients
-    // pOisson = 0.0;   // Will be overwritten by data in cubit file
-    // yOung = 1.;      // Will be overwritten by data in cubit file
     gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    // sTrainPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
     CHKERR setBlocks();
@@ -60,9 +49,6 @@ struct CommonData {
   MoFEMErrorCode getParameters() {
     MoFEMFunctionBegin; // They will be overwriten by BlockData
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
-    // some additional parameters can be added here
-    // CHKERR PetscOptionsScalar("-gc", "Fracture energy", "", gC, &gC,
-    //                           PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -76,17 +62,29 @@ struct CommonData {
     pOisson = data.pOisson;
     lAmbda = (yOung * pOisson) / ((1. + pOisson) * (1. - 2. * pOisson));
     mU = yOung / (2. * (1. + pOisson));
-    // std::cout << "Young: " << yOung << " Poisson: " << pOisson
-    //           << " Lambda: " << lAmbda << " mu: " << mU << endl;
 
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
     FTensor::Index<'l', 3> l;
-    // use operators || (instead +) and ^(instead of *)
-    // D(i, j, k, l) = lAmbda * D_K(i, j) * D_K(k, l) +
-    //                 mU * D_K(i, k) * D_K(j, l) + mU * D_K(i, l) * D_K(j, k);
-    D(i, j, k, l) = mU * D_K(i, k) * D_K(j, l) + mU * D_K(i, l) * D_K(j, k);
+
+    tD(i, j, k, l) = 0.;
+
+    tD(0, 0, 0, 0) = 2 * mU;
+    tD(0, 1, 0, 1) = 1 * mU;
+    tD(0, 1, 1, 0) = 1 * mU;
+    tD(0, 2, 0, 2) = 1 * mU;
+    tD(0, 2, 2, 0) = 1 * mU;
+    tD(1, 0, 0, 1) = 1 * mU;
+    tD(1, 0, 1, 0) = 1 * mU;
+    tD(1, 1, 1, 1) = 2 * mU;
+    tD(1, 2, 1, 2) = 1 * mU;
+    tD(1, 2, 2, 1) = 1 * mU;
+    tD(2, 0, 0, 2) = 1 * mU;
+    tD(2, 0, 2, 0) = 1 * mU;
+    tD(2, 1, 1, 2) = 1 * mU;
+    tD(2, 1, 2, 1) = 1 * mU;
+    tD(2, 2, 2, 2) = 2 * mU;
 
     MoFEMFunctionReturn(0);
   }
@@ -104,7 +102,6 @@ struct CommonData {
       setOfBlocksData[id].iD = id;
       setOfBlocksData[id].yOung = mydata.data.Young;
       setOfBlocksData[id].pOisson = mydata.data.Poisson;
-      // std::cerr << setOfBlocksData[id].tEts << std::endl;
     }
     MoFEMFunctionReturn(0);
   }
@@ -113,14 +110,6 @@ private:
   MoFEM::Interface &mField;
 };
 
-/**
- * @brief Assemble K matrix
- *
- * \f[
- * put formula here
- * \f]
- *
- */
 struct OpAssembleP
     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
@@ -141,7 +130,7 @@ struct OpAssembleP
                         DataForcesAndSourcesCore::EntData &row_data,
                         DataForcesAndSourcesCore::EntData &col_data) {
 
-    MoFEMFunctionBegin; 
+    MoFEMFunctionBegin;
     const int row_nb_dofs = row_data.getIndices().size();
     if (!row_nb_dofs)
       MoFEMFunctionReturnHot(0);
@@ -161,7 +150,6 @@ struct OpAssembleP
     const int row_nb_gauss_pts = row_data.getN().size1();
     if (!row_nb_gauss_pts)
       MoFEMFunctionReturnHot(0);
-    // printf("\n\n------->3\n\n");
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_base_functions = row_data.getFTensor0N();
 
@@ -170,10 +158,8 @@ struct OpAssembleP
     FTensor::Index<'j', 3> j;
     const double lambda = commonData.lAmbda;
     const double mu = commonData.mU;
-   
-    double coefficient =  commonData.pOisson == 0.5 ? 0. : 1/lambda;
-    // std::cout << "lambda: " << lambda << endl;
-    // std::cout << "coefficient: " << coefficient << endl;
+
+    double coefficient = commonData.pOisson == 0.5 ? 0. : 1 / lambda;
 
     // integration
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -190,7 +176,6 @@ struct OpAssembleP
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
         for (int col_bb = 0; col_bb != col_nb_dofs; col_bb++) {
 
-          //FIXME: CHECK THIS
           locP(row_bb, col_bb) -=
               w * row_base_functions * col_base_functions * coefficient;
 
@@ -201,8 +186,6 @@ struct OpAssembleP
       for (; row_bb != row_nb_base_functions; row_bb++) {
         ++row_base_functions;
       }
-
-   
     }
 
     CHKERR MatSetValues(
@@ -222,14 +205,6 @@ struct OpAssembleP
     MoFEMFunctionReturn(0);
   }
 };
-/**
- * @brief Assemble G matrix
- *
- * \f[
- * put formula here
- * \f]
- *
- */
 struct OpAssembleG
     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
@@ -272,8 +247,6 @@ struct OpAssembleG
       MoFEMFunctionReturnHot(0);
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
-    // auto col_diff_base_functions = col_data.getFTensor1DiffN<3>();
-    
 
     const double lambda = commonData.lAmbda;
     const double mu = commonData.mU;
@@ -294,7 +267,6 @@ struct OpAssembleG
       int row_bb = 0;
       for (; row_bb != row_nb_dofs / 3; row_bb++) {
 
-        // FIXME: put the right formulas here
         t1(i) = w * row_diff_base_functions(i);
 
         auto base_functions = col_data.getFTensor0N(gg, 0);
@@ -303,8 +275,7 @@ struct OpAssembleG
           FTensor::Tensor1<double *, 3> k(&locG(3 * row_bb + 0, col_bb),
                                           &locG(3 * row_bb + 1, col_bb),
                                           &locG(3 * row_bb + 2, col_bb));
-          // FIXME: put the right formulas here
-          // k(i) += t1(j) * D_K(i,j) * base_functions;
+
           k(i) += t1(i) * base_functions;
           ++base_functions;
         }
@@ -313,8 +284,6 @@ struct OpAssembleG
       for (; row_bb != row_nb_base_functions; row_bb++) {
         ++row_diff_base_functions;
       }
-
-    
     }
 
     CHKERR MatSetValues(getFEMethod()->ksp_B, row_nb_dofs,
@@ -322,7 +291,7 @@ struct OpAssembleG
                         &*col_data.getIndices().begin(), &*locG.data().begin(),
                         ADD_VALUES);
 
-    // ASSEMBLE THE TRANSPOSE //TODO: check this
+    // ASSEMBLE THE TRANSPOSE
     locG = trans(locG);
     CHKERR MatSetValues(getFEMethod()->ksp_B, col_nb_dofs,
                         &*col_data.getIndices().begin(), row_nb_dofs,
@@ -331,14 +300,7 @@ struct OpAssembleG
     MoFEMFunctionReturn(0);
   }
 };
-/**
- * @brief assemble K^uu
- *
- * \f[
- *  put formula here
- * \f]
- *
- */
+
 struct OpAssembleK
     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
@@ -388,7 +350,6 @@ struct OpAssembleK
 
     const int row_nb_gauss_pts = row_data.getN().size1();
     const int row_nb_base_functions = row_data.getN().size2();
-    
 
     auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
 
@@ -419,15 +380,12 @@ struct OpAssembleK
 
           auto t_assemble = get_tensor2(locK, 3 * row_bb, 3 * col_bb);
 
-          // FIXME: use the right formula for K
-
           diffDiff(j, l) =
               w * row_diff_base_functions(j) * col_diff_base_functions(l);
 
-          t_assemble(i, k) += diffDiff(j, l) * commonData.D(i, j, k, l);
+          t_assemble(i, k) += diffDiff(j, l) * commonData.tD(i, j, k, l);
           // Next base function for column
           ++col_diff_base_functions;
-          // ++t_assemble;
         }
 
         ++row_diff_base_functions;
@@ -435,8 +393,6 @@ struct OpAssembleK
       for (; row_bb != row_nb_base_functions; row_bb++) {
         ++row_diff_base_functions;
       }
-
-   
     }
     if (diagonal_block) {
       for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
@@ -530,16 +486,12 @@ struct OpPostProcStress
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       strain(i, j) = 0.5 * (grad(i, j) + grad(j, i));
       double trace = strain(i, i);
-      // FIXME: put the right formulas for the stress/strain/energy
-      double psi =
-          0.5 * p * p + mu * strain(i, j) * strain(i, j);
+      double psi = 0.5 * p * p + mu * strain(i, j) * strain(i, j);
 
-      // stress(i, j) = (- p * D_K(i, j) + 2 * mu * strain(i, j));
-      // or in more efficient way
       stress(i, j) = 2 * mu * strain(i, j);
-      stress(1, 1) += -p ;
-      stress(0, 0) += -p ;
-      stress(2, 2) += -p ;
+      stress(1, 1) -= p;
+      stress(0, 0) -= p;
+      stress(2, 2) -= p;
 
       CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
       CHKERR postProcMesh.tag_set_data(th_strain, &mapGaussPts[gg], 1,
