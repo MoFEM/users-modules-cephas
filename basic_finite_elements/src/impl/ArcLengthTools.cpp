@@ -390,7 +390,9 @@ MoFEMErrorCode ZeroFLmabda::preProcess() {
 
 AssembleFlambda::AssembleFlambda(boost::shared_ptr<ArcLengthCtx> arc_ptr,
                                  boost::shared_ptr<DirichletDisplacementBc> bc)
-    : arcPtr(arc_ptr), bC(bc) {}
+    : arcPtr(arc_ptr) {
+  bCs.push_back(bc);
+}
 
 MoFEMErrorCode AssembleFlambda::preProcess() {
   MoFEMFunctionBeginHot;
@@ -410,13 +412,18 @@ MoFEMErrorCode AssembleFlambda::postProcess() {
     CHKERR VecAssemblyEnd(arcPtr->F_lambda);
     CHKERR VecGhostUpdateBegin(arcPtr->F_lambda, ADD_VALUES, SCATTER_REVERSE);
     CHKERR VecGhostUpdateEnd(arcPtr->F_lambda, ADD_VALUES, SCATTER_REVERSE);
-    if (bC) {
-      for (std::vector<int>::iterator vit = bC->dofsIndices.begin();
-           vit != bC->dofsIndices.end(); vit++) {
-        CHKERR VecSetValue(arcPtr->F_lambda, *vit, 0, INSERT_VALUES);
+    if (!bCs.empty()) {
+      std::vector<double> vals;
+      for (auto &bc : bCs) {
+        vals.resize(bc->dofsIndices.size());
+        vals.clear();
+        CHKERR VecSetValues(arcPtr->F_lambda, bc->dofsIndices.size(),
+                            &*bc->dofsIndices.begin(), &*vals.begin(),
+                            INSERT_VALUES);
       }
       CHKERR VecAssemblyBegin(arcPtr->F_lambda);
       CHKERR VecAssemblyEnd(arcPtr->F_lambda);
+
     }
     CHKERR VecGhostUpdateBegin(arcPtr->F_lambda, INSERT_VALUES,
                                SCATTER_FORWARD);

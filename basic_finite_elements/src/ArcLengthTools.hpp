@@ -329,7 +329,6 @@ struct ZeroFLmabda: public FEMethod {
 struct AssembleFlambda : public FEMethod {
 
   boost::shared_ptr<ArcLengthCtx> arcPtr;
-  boost::shared_ptr<DirichletDisplacementBc> bC;
 
   AssembleFlambda(boost::shared_ptr<ArcLengthCtx> arc_ptr,
                   boost::shared_ptr<DirichletDisplacementBc> bc =
@@ -338,6 +337,13 @@ struct AssembleFlambda : public FEMethod {
   MoFEMErrorCode preProcess();
   MoFEMErrorCode operator()();
   MoFEMErrorCode postProcess();
+
+  inline void pushDirichletBC(boost::shared_ptr<DirichletDisplacementBc> bc) {
+    bCs.push_back(bc);
+  }
+
+private:
+  std::vector<boost::shared_ptr<DirichletDisplacementBc>> bCs;
 };
 
 #endif
