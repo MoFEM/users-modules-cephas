@@ -1,3 +1,10 @@
+/**
+ * \file ElasticityMixedFormulation.hpp
+ * \example ElasticityMixedFormulation.hpp
+ *
+ * \brief Operator implementation of U-P (mixed) finite element.
+ *
+ */
 /* This file is part of MoFEM.
  * MoFEM is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the
@@ -417,7 +424,7 @@ struct OpAssembleK
         ++row_diff_base_functions;
       }
     }
-    
+
     if (diagonal_block) {
       for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
         int col_bb = 0;
