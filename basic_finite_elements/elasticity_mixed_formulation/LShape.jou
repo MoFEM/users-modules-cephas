@@ -1,0 +1,34 @@
+reset
+set duplicate block elements on
+
+brick x 1 y 2 z 0.5
+brick x 2 y 1 z 0.5
+
+move curve 23  midpoint location curve 11  include_merged
+unite volume all 
+
+Sideset 1 surface 3 
+Sideset 2 surface 12 
+
+Sideset 100 curve all 
+nodeset 101 vertex all 
+Sideset 102 surface all
+
+{young_modulus = 1}
+{poisson_ratio = 0.5}
+block 1 volume all 
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2
+block 1 attribute index 1 {young_modulus}
+block 1 attribute index 2 {poisson_ratio} 
+
+create displacement on surface 3 dof 1 dof 2 dof 3 fix 0
+create pressure on surface 12 magnitude 1 
+
+volume all scheme tetmesh
+volume all size auto factor 7
+mesh volume all
+
+save as "/Users/hoangnguyen/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/LShape_incompressible.cub" overwrite
+
+
