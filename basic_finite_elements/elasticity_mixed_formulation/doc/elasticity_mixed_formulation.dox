@@ -108,7 +108,7 @@ this tutorial.
 
 \section elasticity_mixed_formulation_input_mesh Input mesh
 
-As an example, a L-shape structure being clamped at the bottom surface and
+As an example, an L-shape structure being clamped at the bottom surface and
 pressurised with unit magnitude at the top right surface will be used for the
 analysis of incompressible elasticity. The 3D model and mesh which shown in \ref
 figure_cubit_mesh "Figure 1" are created by Cubit using a simple journal script
@@ -158,8 +158,8 @@ save as "/Users/username/mofem_install/um/build/basic_finite_elements/elasticity
 \subsection elasticity_mixed_formulation_init Initialisation
 
 - Header file
-There are two header files which include the first one for basic finite elements
-and the second one contains the implementation of operators of operators for
+There are two header files in which the first one for basic finite elements
+and the second one contains the implementation of operators for
 finite elements.
 
 \code
@@ -176,7 +176,7 @@ finite elements.
 
 
 \medskip
-- Creat meash database and an interface to interact with it
+- Create mesh database and an interface to interact with it
 \code 
   // Create mesh database
   moab::Core mb_instance;              // create database
@@ -237,7 +237,7 @@ finite elements.
 \medskip
 - Read the mesh
 \code 
-   // Read whole mesh or part of is if partitioned
+   // Read whole mesh or part of it if partitioned
     if (is_partitioned == PETSC_TRUE) {
       // This is a case of distributed mesh and algebra. In that case each
       // processor keeps only part of the problem.
@@ -247,7 +247,7 @@ finite elements.
                "PARTITION=PARALLEL_PARTITION;";
       CHKERR moab.load_file(mesh_file_name, 0, option);
     } else {
-      // If that case we have distributed algebra, i.e. assembly of vectors and
+      // In this case, we have distributed algebra, i.e. assembly of vectors and
       // matrices is in parallel, but whole mesh is stored on all processors.
       // Solver and matrix scales well, however problem set-up of problem is
       // not fully parallel.
@@ -309,8 +309,8 @@ finite elements.
 \code 
     CHKERR m_field.build_fields();
 
-    CHKERR m_field.getInterface<FieldBlas>()->setField(
-        0, MBVERTEX, "P"); // initial p = 0 everywhere
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(
+    //     0, MBVERTEX, "P"); // initial p = 0 everywhere
     {
       Projection10NodeCoordsOnField ent_method_material(m_field,
                                                         "MESH_NODE_POSITIONS");
@@ -512,10 +512,8 @@ the output file
     CHKERR post_proc.addFieldValuesPostProc("P");
 
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
-    std::ostringstream stm;
-    stm << "out.h5m";
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", stm.str().c_str());
-    CHKERR post_proc.postProcMesh.write_file(stm.str().c_str(), "MOAB",
+    PetscPrintf(PETSC_COMM_WORLD, "Output file: %s\n", "out.h5m");
+    CHKERR post_proc.postProcMesh.write_file("out.h5m", "MOAB",
                                              "PARALLEL=WRITE_PART");
 \endcode
 
@@ -724,7 +722,7 @@ partition_ghost_row_dofs: rank = 1 FEs row ghost dofs problem id 000000000000000
 \medskip
 - Output file
 \verbatim
-out file out.h5m
+Output file: out.h5m
 \endverbatim
 
 
