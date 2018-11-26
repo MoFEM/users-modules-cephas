@@ -21,6 +21,10 @@
 
 #ifdef WITH_ADOL_C
 
+/**
+ * @brief Implementation of surface sliding constrains
+ * 
+ */
 struct GenericSliding {
 
 
