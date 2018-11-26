@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    // Read whole mesh or part of is if partitioned
+    // Read whole mesh or part of it if partitioned
     if (is_partitioned == PETSC_TRUE) {
       // This is a case of distributed mesh and algebra. In that case each
       // processor keeps only part of the problem.
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
                "PARTITION=PARALLEL_PARTITION;";
       CHKERR moab.load_file(mesh_file_name, 0, option);
     } else {
-      // If that case we have distributed algebra, i.e. assembly of vectors and
+      // In this case, we have distributed algebra, i.e. assembly of vectors and
       // matrices is in parallel, but whole mesh is stored on all processors.
       // Solver and matrix scales well, however problem set-up of problem is
       // not fully parallel.
@@ -134,8 +134,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.build_fields();
 
-    CHKERR m_field.getInterface<FieldBlas>()->setField(
-        0, MBVERTEX, "P"); // initial p = 0 everywhere
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(
+    //     0, MBVERTEX, "P"); // initial p = 0 everywhere
     {
       Projection10NodeCoordsOnField ent_method_material(m_field,
                                                         "MESH_NODE_POSITIONS");
@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
     // setup the DM
     CHKERR DMSetUp(dm);
 
-    CommonData commonData(m_field);
+    DataAtIntegrationPts commonData(m_field);
     CHKERR commonData.getParameters();
 
     boost::shared_ptr<FEMethod> nullFE;
@@ -308,10 +308,8 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.addFieldValuesPostProc("P");
 
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
-    std::ostringstream stm;
-    stm << "out.h5m";
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", stm.str().c_str());
-    CHKERR post_proc.postProcMesh.write_file(stm.str().c_str(), "MOAB",
+    PetscPrintf(PETSC_COMM_WORLD, "Output file: %s\n", "out.h5m");
+    CHKERR post_proc.postProcMesh.write_file("out.h5m", "MOAB",
                                              "PARALLEL=WRITE_PART");
 
     CHKERR MatDestroy(&Aij);

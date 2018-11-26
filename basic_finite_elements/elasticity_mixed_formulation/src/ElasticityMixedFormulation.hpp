@@ -23,7 +23,7 @@ struct BlockData {
   Range tEts;
   BlockData() : oRder(-1), yOung(-1), pOisson(-2) {}
 };
-struct CommonData {
+struct DataAtIntegrationPts {
 
   boost::shared_ptr<MatrixDouble> gradDispPtr;
   boost::shared_ptr<VectorDouble> pPtr;
@@ -36,13 +36,13 @@ struct CommonData {
 
   std::map<int, BlockData> setOfBlocksData;
 
-  CommonData(MoFEM::Interface &m_field) : mField(m_field) {
+  DataAtIntegrationPts(MoFEM::Interface &m_field) : mField(m_field) {
 
     // Setting default values for coeffcients
     gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
-    CHKERR setBlocks();
+    ierr = setBlocks();
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
   }
 
@@ -71,19 +71,19 @@ struct CommonData {
     tD(i, j, k, l) = 0.;
 
     tD(0, 0, 0, 0) = 2 * mU;
-    tD(0, 1, 0, 1) = 1 * mU;
-    tD(0, 1, 1, 0) = 1 * mU;
-    tD(0, 2, 0, 2) = 1 * mU;
-    tD(0, 2, 2, 0) = 1 * mU;
-    tD(1, 0, 0, 1) = 1 * mU;
-    tD(1, 0, 1, 0) = 1 * mU;
+    tD(0, 1, 0, 1) = mU;
+    tD(0, 1, 1, 0) = mU;
+    tD(0, 2, 0, 2) = mU;
+    tD(0, 2, 2, 0) = mU;
+    tD(1, 0, 0, 1) = mU;
+    tD(1, 0, 1, 0) = mU;
     tD(1, 1, 1, 1) = 2 * mU;
-    tD(1, 2, 1, 2) = 1 * mU;
-    tD(1, 2, 2, 1) = 1 * mU;
-    tD(2, 0, 0, 2) = 1 * mU;
-    tD(2, 0, 2, 0) = 1 * mU;
-    tD(2, 1, 1, 2) = 1 * mU;
-    tD(2, 1, 2, 1) = 1 * mU;
+    tD(1, 2, 1, 2) = mU;
+    tD(1, 2, 2, 1) = mU;
+    tD(2, 0, 0, 2) = mU;
+    tD(2, 0, 2, 0) = mU;
+    tD(2, 1, 1, 2) = mU;
+    tD(2, 1, 2, 1) = mU;
     tD(2, 2, 2, 2) = 2 * mU;
 
     MoFEMFunctionReturn(0);
@@ -110,15 +110,22 @@ private:
   MoFEM::Interface &mField;
 };
 
+/** * @brief Assemble P *
+ * \f[
+ * {\bf{P}} =  - \int\limits_\Omega  {{\bf{N}}_p^T\frac{1}{\lambda
+        }{{\bf{N}}_p}d\Omega }
+ * \f]
+ *
+ */
 struct OpAssembleP
     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
-  CommonData &commonData;
+  DataAtIntegrationPts &commonData;
   MatrixDouble locP;
   MatrixDouble translocP;
   BlockData &dAta;
 
-  OpAssembleP(CommonData &common_data, BlockData &data)
+  OpAssembleP(DataAtIntegrationPts &common_data, BlockData &data)
       : VolumeElementForcesAndSourcesCore::UserDataOperator(
             "P", "P", UserDataOperator::OPROWCOL),
         commonData(common_data), dAta(data) {
@@ -142,7 +149,7 @@ struct OpAssembleP
         dAta.tEts.end()) {
       MoFEMFunctionReturnHot(0);
     }
-    commonData.getBlockData(dAta);
+    CHKERR commonData.getBlockData(dAta);
     // Set size can clear local tangent matrix
     locP.resize(row_nb_dofs, col_nb_dofs, false);
     locP.clear();
@@ -162,31 +169,34 @@ struct OpAssembleP
     double coefficient = commonData.pOisson == 0.5 ? 0. : 1 / lambda;
 
     // integration
-    for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+    if (coefficient != 0.) {
+      for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
 
-      // Get volume and integration weight
-      double w = getVolume() * getGaussPts()(3, gg);
-      if (getHoGaussPtsDetJac().size() > 0) {
-        w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-      }
-
-      // INTEGRATION
-      int row_bb = 0;
-      for (; row_bb != row_nb_dofs; row_bb++) {
-        auto col_base_functions = col_data.getFTensor0N(gg, 0);
-        for (int col_bb = 0; col_bb != col_nb_dofs; col_bb++) {
-
-          locP(row_bb, col_bb) -=
-              w * row_base_functions * col_base_functions * coefficient;
-
-          ++col_base_functions;
+        // Get volume and integration weight
+        double w = getVolume() * getGaussPts()(3, gg);
+        if (getHoGaussPtsDetJac().size() > 0) {
+          w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
         }
-        ++row_base_functions;
-      }
-      for (; row_bb != row_nb_base_functions; row_bb++) {
-        ++row_base_functions;
+
+        // INTEGRATION
+        int row_bb = 0;
+        for (; row_bb != row_nb_dofs; row_bb++) {
+          auto col_base_functions = col_data.getFTensor0N(gg, 0);
+          for (int col_bb = 0; col_bb != col_nb_dofs; col_bb++) {
+
+            locP(row_bb, col_bb) -=
+                w * row_base_functions * col_base_functions * coefficient;
+
+            ++col_base_functions;
+          }
+          ++row_base_functions;
+        }
+        for (; row_bb != row_nb_base_functions; row_bb++) {
+          ++row_base_functions;
+        }
       }
     }
+    
 
     CHKERR MatSetValues(
         getFEMethod()->ksp_B, row_nb_dofs, &*row_data.getIndices().begin(),
@@ -205,14 +215,21 @@ struct OpAssembleP
     MoFEMFunctionReturn(0);
   }
 };
+
+/** * @brief Assemble G *
+ * \f[
+ * {\bf{G}} =  - \int\limits_\Omega  {{{\bf{B}}^T}{\bf m}{{\bf{N}}_p}d\Omega }
+ * \f]
+ *
+ */
 struct OpAssembleG
     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
-  CommonData &commonData;
+  DataAtIntegrationPts &commonData;
   MatrixDouble locG;
   BlockData &dAta;
 
-  OpAssembleG(CommonData &common_data, BlockData &data)
+  OpAssembleG(DataAtIntegrationPts &common_data, BlockData &data)
       : VolumeElementForcesAndSourcesCore::UserDataOperator(
             "U", "P", UserDataOperator::OPROWCOL),
         commonData(common_data), dAta(data) {
@@ -301,6 +318,12 @@ struct OpAssembleG
   }
 };
 
+/** * @brief Assemble K *
+ * \f[
+ * {\bf{K}} = \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{D}}_d}{\bf{B}}d\Omega }
+ * \f]
+ *
+ */
 struct OpAssembleK
     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
 
@@ -309,9 +332,9 @@ struct OpAssembleK
   BlockData &dAta;
   FTensor::Tensor2<double, 3, 3> diffDiff;
 
-  CommonData &commonData;
+  DataAtIntegrationPts &commonData;
 
-  OpAssembleK(CommonData &common_data, BlockData &data, bool symm = true)
+  OpAssembleK(DataAtIntegrationPts &common_data, BlockData &data, bool symm = true)
       : VolumeElementForcesAndSourcesCore::UserDataOperator("U", "U", OPROWCOL,
                                                             symm),
         commonData(common_data), dAta(data) {}
@@ -394,6 +417,7 @@ struct OpAssembleK
         ++row_diff_base_functions;
       }
     }
+    
     if (diagonal_block) {
       for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
         int col_bb = 0;
@@ -425,14 +449,14 @@ struct OpAssembleK
 
 struct OpPostProcStress
     : public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
-  CommonData &commonData;
+  DataAtIntegrationPts &commonData;
   moab::Interface &postProcMesh;
   std::vector<EntityHandle> &mapGaussPts;
   BlockData &dAta;
 
   OpPostProcStress(moab::Interface &post_proc_mesh,
                    std::vector<EntityHandle> &map_gauss_pts,
-                   CommonData &common_data, BlockData &data)
+                   DataAtIntegrationPts &common_data, BlockData &data)
       : VolumeElementForcesAndSourcesCore::UserDataOperator(
             "U", UserDataOperator::OPROW),
         commonData(common_data), postProcMesh(post_proc_mesh),
