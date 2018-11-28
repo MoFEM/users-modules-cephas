@@ -126,14 +126,13 @@ int main(int argc, char *argv[]) {
 
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
-          "-snes_test_jacobian \ -snes_test_jacobian_display "
-          "\ -snes_no_convergence_test \ -snes_atol 0 \ -snes_rtol 0 "
-          "\ -snes_max_it 1 \ -pc_type none";
+          "-snes_test_jacobian -snes_test_jacobian_display "
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 "
+          "-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
-      char testing_options[] =
-          "\ -snes_no_convergence_test \ -snes_atol 0 \ -snes_rtol 0 "
-          "\ -snes_max_it 1 \ -pc_type none";
+      char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
+                               "-snes_rtol 0 -snes_max_it 1 -pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
