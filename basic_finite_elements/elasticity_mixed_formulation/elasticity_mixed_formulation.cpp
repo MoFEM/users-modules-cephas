@@ -1,9 +1,10 @@
 /** \file elasticity_mixed_formulation.cpp
- * \example elasticity_mixed_formulation.hpp
+ * \example elasticity_mixed_formulation.cpp
  *
  * \brief Main implementation of U-P (mixed) finite element.
  * 
- * */
+ */
+
 /* MoFEM is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your

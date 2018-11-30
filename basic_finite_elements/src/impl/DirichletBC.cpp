@@ -524,7 +524,7 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
       CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
       CHKERR MatZeroRowsColumns(snes_B, dofsIndices.size(),
                                 dofsIndices.empty() ? PETSC_NULL
-                                                    : &dofsIndices[0],
+                                                    : &*dofsIndices.begin(),
                                 dIag, PETSC_NULL, PETSC_NULL);
     }
     if (snes_f) {
