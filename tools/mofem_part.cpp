@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-my_nparts", "number of parts", "", 1, &n_partas,
                            &flg_n_part);
     ierr = PetscOptionsBool(
-        "-my_create_lower_dim_ents", "if tru create lower dimension entitities",
+        "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
         "", creare_lower_dim_ents, &creare_lower_dim_ents, NULL);
     CHKERRQ(ierr);
 
