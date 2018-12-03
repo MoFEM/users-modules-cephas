@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
     PetscBool flg_file = PETSC_FALSE;
     PetscBool flg_n_part = PETSC_FALSE;
     PetscInt n_partas = 1;
-    PetscBool creare_lower_dim_ents = PETSC_TRUE;
+    PetscBool create_lower_dim_ents = PETSC_TRUE;
 
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
                            &flg_n_part);
     ierr = PetscOptionsBool(
         "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
-        "", creare_lower_dim_ents, &creare_lower_dim_ents, NULL);
+        "", create_lower_dim_ents, &create_lower_dim_ents, NULL);
     CHKERRQ(ierr);
 
     ierr = PetscOptionsEnd();
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
     {
       Range ents3d;
       rval = moab.get_entities_by_dimension(0, 3, ents3d, false);
-      if (creare_lower_dim_ents) {
+      if (create_lower_dim_ents) {
         Range faces;
         CHKERR moab.get_adjacencies(ents3d, 2, true, faces,
                                     moab::Interface::UNION);
