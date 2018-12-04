@@ -183,11 +183,11 @@ int main(int argc, char *argv[]) {
 
     // Declare approximation fields
     CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LOBATTO_BASE, 3,
-                             MB_TAG_SPARSE, MF_ZERO);
+                             MB_TAG_DENSE, MF_ZERO);
 
     // We can use higher oder geometry to define body
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
-                             3, MB_TAG_SPARSE, MF_ZERO);
+                             3, MB_TAG_DENSE, MF_ZERO);
 
     // Declare problem
 
