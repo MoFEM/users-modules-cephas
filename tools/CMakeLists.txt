@@ -123,5 +123,28 @@ if(ADOL-C_LIBRARY)
     ${MoFEM_PROJECT_LIBS}
   )
   install(TARGETS mesh_smoothing DESTINATION bin)
-
-endif(ADOL-C_LIBRARY)
+  
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+  
+  # add_library(cut_inter
+  #   ${CMAKE_CURRENT_SOURCE_DIR}/src/impl/mesh_cut_interface.cpp)
+  add_executable(ga_optim 
+  ${CMAKE_CURRENT_SOURCE_DIR}/ga_optim.cpp
+  # ${CMAKE_CURRENT_SOURCE_DIR}/src/impl/mesh_cut_interface.cpp
+  )
+  
+  target_link_libraries(ga_optim
+  # cut_inter
+    users_modules
+    mofem_finite_elements
+    mofem_interfaces
+    mofem_multi_indices
+    mofem_petsc
+    mofem_approx
+    mofem_cblas
+    mofem_third_party
+    ${MoFEM_PROJECT_LIBS}
+    )
+    install(TARGETS ga_optim DESTINATION bin)
+    
+    endif(ADOL-C_LIBRARY)

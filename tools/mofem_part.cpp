@@ -34,23 +34,18 @@ int main(int argc, char *argv[]) {
     PetscBool flg_file = PETSC_FALSE;
     PetscBool flg_n_part = PETSC_FALSE;
     PetscInt n_partas = 1;
-    PetscBool create_lower_dim_ents = PETSC_TRUE;
-    PetscInt dim = 3;
-    PetscInt adj_dim = 2;
+    PetscBool creare_lower_dim_ents = PETSC_TRUE;
 
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);
-
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
-    CHKERR PetscOptionsInt("-my_nparts", "number of parts", "", n_partas,
-                           &n_partas, &flg_n_part);
-    CHKERR PetscOptionsInt("-dim", "adjacency dim", "", dim, &dim, PETSC_NULL);
-    CHKERR PetscOptionsInt("-adj_dim", "adjacency dim", "", adj_dim, &adj_dim,
-                           PETSC_NULL);
-    CHKERR PetscOptionsBool(
-        "-my_create_lower_dim_ents", "if tru create lower dimension entireties",
-        "", create_lower_dim_ents, &create_lower_dim_ents, NULL);
+    CHKERR PetscOptionsInt("-my_nparts", "number of parts", "", 1, &n_partas,
+                           &flg_n_part);
+    ierr = PetscOptionsBool(
+        "-my_create_lower_dim_ents", "if tru create lower dimension entitities",
+        "", creare_lower_dim_ents, &creare_lower_dim_ents, NULL);
+    CHKERRQ(ierr);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -90,7 +85,7 @@ int main(int argc, char *argv[]) {
     {
       Range ents3d;
       rval = moab.get_entities_by_dimension(0, 3, ents3d, false);
-      if (create_lower_dim_ents) {
+      if (creare_lower_dim_ents) {
         Range faces;
         CHKERR moab.get_adjacencies(ents3d, 2, true, faces,
                                     moab::Interface::UNION);
@@ -100,7 +95,7 @@ int main(int argc, char *argv[]) {
       }
       ProblemsManager *prb_mng_ptr;
       CHKERR m_field.getInterface(prb_mng_ptr);
-      CHKERR prb_mng_ptr->partitionMesh(ents3d, dim, adj_dim, n_partas);
+      CHKERR prb_mng_ptr->partitionMesh(ents3d, 3, 2, n_partas);
     }
 
     CHKERR moab.write_file("out.h5m");
