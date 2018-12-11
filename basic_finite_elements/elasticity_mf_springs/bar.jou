@@ -1,0 +1,42 @@
+reset
+
+# Geometry
+brick x 1 y 1 z 2
+
+#sideset 1 surface 2
+#sideset 2 surface 1
+
+#sideset 100 curve all
+#sideset 101 vertex all
+#sideset 102 surface all
+
+# Material properties
+{young_modulus = 1}
+{poisson_ratio = 0.5}
+block 1 volume 1
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2
+block 1 attribute index 1 {young_modulus}
+block 1 attribute index 2 {poisson_ratio}
+
+# Boundary conditions
+create displacement on surface 2 dof all fix
+create force on surface 1 force value 1 direction z
+#create pressure on surface 1 magnitude 1
+
+
+# Mesh
+volume all scheme tetmesh
+volume all size auto factor 9
+mesh volume all
+
+# Save file
+save as "/Users/hoangnguyen/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/bar_incompressible.cub" overwrite
+
+
+
+
+
+
+
+
