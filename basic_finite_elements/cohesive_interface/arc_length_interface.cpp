@@ -415,7 +415,6 @@ int main(int argc, char *argv[]) {
         {
           const double coords[] = {0, 0, 0};
           CHKERR m_field.get_moab().create_vertex(coords, no_field_vertex);
-          CHKERRG(rval);
           Range range_no_field_vertex;
           range_no_field_vertex.insert(no_field_vertex);
           CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevel(
@@ -424,7 +423,6 @@ int main(int argc, char *argv[]) {
           EntityHandle lambda_meshset = m_field.get_field_meshset("LAMBDA");
           CHKERR m_field.get_moab().add_entities(lambda_meshset,
                                                  range_no_field_vertex);
-          CHKERRG(rval);
         }
         // this entity will carray data for this finite element
         EntityHandle meshset_fe_arc_length;
