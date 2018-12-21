@@ -1,0 +1,158 @@
+/*! \page using_Gmsh_tut Using Gmsh
+
+In this tutorial, the use of <a href="http://gmsh.info/">Gmsh</a> is explained
+as an alternative pre-processor. The version of the Gmsh used for this tutorial
+is 4.0.6 (MacOSX). A step-by-step procedure is given here to solve a
+linear-elastic cantilever beam problem subjected to uniform pressure.
+
+\tableofcontents
+
+\section using_Gmsh_tut_geometry Creating geometry
+A new geometry file is created in Gmsh using the following procedure:
+
+\code
+File -> New -> Chose location -> chose name, e.g. beam.geo -> Save -> OpenCASCADE
+\endcode
+
+Subsequently, the beam geometry is created using the following steps:
+\code
+Module -> Gemetry -> Elementary entities -> Add -> Box
+\endcode
+
+and use, e.g. the following inputs:
+X=0, Y=0, Z=0, DX=10, DY=1, DZ=1 then click "add" and subsequently press "q"
+to abort. The output beam geometry is shown in following Figure:
+
+\image html gmsh_geo_fig1.png "Beam geometry" width=700px
+
+\section using_Gmsh_physical_groups Creating physical groups
+
+Physical groups, i.e. physical volumes and physical surfaces are used to
+define material blocks and boundary conditions. For the beam problem, "Volume 1"
+is used for assigning material properties including Young's modulus and Poisson's
+ratio. Similarly, surfaces "Plane 1" and "Plane 4" are used to define
+displacement and pressure boundary conditions. The following procedure are used
+to define the physical volume:
+
+\code
+Module -> Physical groups -> Add -> Volume
+\endcode
+
+give it a name, e.g. ElasticBlock and select "Volume 1" and press "e" to end
+and "q" to abort. Similarly, for the displacement boundary condition use the
+following procedure:
+
+\code
+Module -> Geometry -> Physical groups -> Add -> Surface
+\endcode
+
+give it a name, e.g. DispBC and select "Plane 1" and press "e" to end "q" to
+abort. Finally, for the pressure boundary conditions use the following
+procedure:
+
+\code
+Module -> Physical groups -> Add -> Surface
+\endcode
+
+give it a name, e.g. PressureBC and select "Plane 4" and press "e" to end "q" to
+abort. These physical group can be seen in the Visibility dialog box by using:
+
+\code
+Tools -> Visibility -> Physical groups
+\endcode
+
+For the beam problem, "Visibility" dialog box with three physical groups are shown
+in the following figure.
+
+\image html gmsh_geo_fig2.png "Physical groups view in the Visibility dialog box" width=700px
+
+Alternatively, these physical groups can also be seen by switching on
+"Surface labels" and "Volume labels" in the "Option" dialog box, which can be
+open using:
+
+\code
+Tools -> Option -> Geometry
+\endcode
+
+For the beam problem, the "Option" dialog box is shown as follows figure:
+
+\image html gmsh_geo_fig3.png "Physical groups view using Option dialog box" width=700px
+
+These beam.geo file can be open in any text editor and provide alternative way
+to change the geometry. The beam.geo file is shown as follows:
+
+\include users_modules/basic_finite_elements/elasticity/doc/figures/beam.geo
+
+\section using_Gmsh_tut_meshing Meshing
+The beam geometry can be meshed using the following procedure
+
+\code
+Module -> Mesh -> 1D -> 2D -> 3D
+\endcode
+
+The generated tetrahedral mesh is shown in the following Figure:
+
+\image html gmsh_beam_mesh.png "Gmsh beam geometry" width=700px
+
+The generated mesh file need to be saved in a specific format by following
+the this procedure:
+
+\code
+File -> Eport... -> select name, e.g. beam.msh and select Mesh - Gmsh MSH (*.msh) -> select format as Version 2 ASCII -> OK
+\endcode
+
+The beam.msh file, consisting of 86 nodes and 247 elements are given as follows:
+
+\include users_modules/basic_finite_elements/elasticity/doc/figures/beam.msh
+
+
+\section using_Gmsh_tut_solution Solution
+The beam.msh file is ready to be used with MoFEM. The next step is to convert
+the beam.msh file to out.h5m file using configuration file beam.cfg with the
+following command:
+
+\code
+../../tools/add_meshsets -my_file beam.msh -meshsets_config beam.cfg
+\endcode
+
+The associated beam.cfg file is given as:
+
+\include users_modules/basic_finite_elements/elasticity/doc/figures/beam.cfg
+
+The use of beam.cfg file with the above command will convert the physical groups
+in beam.msh in to associated BLOCKSET, NODESET and SIDESET, understandable to
+MoFEM. The first block, i.e. block_1 will convert to BLOCKSET with id=1001.
+Which is used as MAT_ELASTIC with assigned material properties. Similarly,
+block_2 and block_3 are converted to NODESET (id=1002) and SIDESET (id=1003)
+and are used for displacement and pressure boundary conditions. Subsequently,
+the following command is used to run the elastic analysis on the beam problem:
+
+\code
+mpirun -np 1 ./elasticity -my_file out.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 1
+\endcode
+
+This will create out.h5m file, which is then converted to out.vtk file using
+
+\code
+mbconvert out.h5m out.vtk
+\endcode
+
+\section using_Gmsh_tut_post_process Post-processing
+
+The out.vtk file can be viewed in <a href="https://www.paraview.org/">Paraview</a>.
+For the beam problem, the output is shown in the following figure.
+
+\image html gmsh_post_process.png "Beam post-process result" width=700px
+
+
+
+
+
+
+
+
+
+
+
+
+*/

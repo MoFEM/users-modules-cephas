@@ -9,7 +9,7 @@ multi-physics problems. We designed MoFEM to enable decomposition of the complex
 problem into small sub-problems, wherein each individual sub-problem can be
 independently tested and debugged or used in different context. That is achieved
 by pipelines of user data operators (UDO), see \ref figure_1_users_data_operators "Figure 1".
-In this figure, there are operators in green, finite element instances which are presented in blue, and red shows finite element objects. 
+In this figure, there are operators in green, finite element instances which are presented in blue, and red shows finite element objects.
 Typical operators including OpRow, OpRowCol and OpVolume are mainly used to construct the force vector (the right hand side) and the stiffness matrix and to assemble the system, respectively.
 Meanwhile, the finite element instances include \e domain_fe, \e boundary_fe, and \e skeleton_fe. Operators can be set to volume or face elements on one of the finite element instances.
 
@@ -181,7 +181,7 @@ Build Finite Elements sFE
 id 00000000000000000000000000000100 name sFE f_id_row 00000000000000000000000000000111 f_id_col 00000000000000000000000000000111 BitFEId_data 00000000000000000000000000000111 Nb. FEs 30
 \endverbatim
 
-- Finally, the problem data structure are constructed, in particular knowing finite element DOFs adjacencies 
+- Finally, the problem data structure are constructed, in particular knowing finite element DOFs adjacencies
 and enumeration of DOFs, matrices and vectors can be created.
 \verbatim
 Nb. entFEAdjacencies 918
@@ -207,13 +207,13 @@ boost::shared_ptr<ForcesAndSourcesCore> boundary_fe(new FaceElementForcesAndSour
 boost::shared_ptr<ForcesAndSourcesCore> skeleton_fe(new FaceElementForcesAndSourcesCore(m_field));
 \endcode
 
-Once finite element objects are created, we add operators to them as shown in \ref figure_1_users_data_operators "Figure 1". Starting from \e domain_fe, 
+Once finite element objects are created, we add operators to them as shown in \ref figure_1_users_data_operators "Figure 1". Starting from \e domain_fe,
 \code
 domain_fe->getOpPtrVector().push_back(new OpRow("U"));
 domain_fe->getOpPtrVector().push_back(new OpRowCol("U","U",true));
 domain_fe->getOpPtrVector().push_back(new OpVolume("U"));
 \endcode
-next \e boundary_fe, 
+next \e boundary_fe,
 \code
 boundary_fe->getOpPtrVector().push_back(new OpRow("L"));
 boundary_fe->getOpPtrVector().push_back(new OpRowCol("U","L",false));
@@ -240,7 +240,7 @@ We have to discuss integration over the skeleton. This functionality is used for
 a class of Petrov-Discontinuous Galerkin methods, or when Nitsche method is
 applied. Those methods involve of integration of traces of approximation
 functions on faces. That enforces the evaluation of derivatives of base functions
-on finite elements adjacent to the face. In MoFEM it is realised in a way 
+on finite elements adjacent to the face. In MoFEM it is realised in a way
 that the generic element instance is iterated over adjacent entities to faces. We
 start with allocation memory for "side" finite element as before
 \code
