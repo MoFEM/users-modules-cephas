@@ -407,7 +407,6 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data) {
       MoFEMFunctionBegin;
-      MoFEMFunctionBegin;
       const int nb_dofs = data.getIndices().size();
       if (nb_dofs == 0)
         MoFEMFunctionReturnHot(0);
