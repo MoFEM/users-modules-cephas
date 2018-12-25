@@ -16,3 +16,5 @@
 !CMakeLists.txt
 !CTestConfig.cmake
 !ModulesList.cmake
+
+.DS_Store
