@@ -31,7 +31,7 @@
  * \ingroup nitsche_method
 
   This implementation have been used to enforce periodic constrains, see \ref
-  nitsche_periodic. For theoretical founding of the method explanations see
+  nitsche_periodic. For theoretical foundations of the method explanations see
   \cite nitsche_method_hal and \cite juntunen2009nitsche. For scratch book derivations
   see <a href="nitsche_bc_for_ch.pdf" target="_blank"><b>link</b></a>.
 
