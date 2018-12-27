@@ -1,6 +1,12 @@
 /** \file NitscheMethod.hpp
  * \ingroup nitsche_method
  * \brief Basic implementation of Nitsche method
+ * 
+ * \note This is quite an old implementation, kept here for compatibility with
+ * older users modules. Currently, MoFEM has a generic implementation for
+ * integration over the skeleton, and that one should be used, instead one
+ * presented below.
+ * 
  */
 
 /*
