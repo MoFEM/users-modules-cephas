@@ -238,9 +238,9 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
     double val = getGaussPts()(2, gg);
     double flux;
     if (hoGeometry) {
-      double area = norm_2(getNormalsAtGaussPts(gg)) *flux =
-          dAta.dAta.data.value1 *
-          area; // FluxData.HeatFluxCubitBcData.data.value1 * area
+      const double area = norm_2(getNormalsAtGaussPts(gg));
+      flux = flux = dAta.dAta.data.value1 *
+                    area; // FluxData.HeatFluxCubitBcData.data.value1 * area
     } else {
       flux = dAta.dAta.data.value1 * getArea();
     }
@@ -413,443 +413,440 @@ MoFEMErrorCode ThermalElement::OpConvectionLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+if (row_data.getIndices().size() == 0)
+    MoFEMFunctionReturnHot(0);
+  if (col_data.getIndices().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  int nb_row = row_data.getN().size2();
+  int nb_col = col_data.getN().size2();
+  K.resize(nb_row, nb_col);
+  K.clear();
+
+  for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
+
+    double convectionConst;
+    if (hoGeometry) {
+      double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
+      convectionConst = dAta.cOnvection * area;
+    } else {
+      convectionConst = dAta.cOnvection * getArea();
+    }
+    double val = getGaussPts()(2, gg) * convectionConst;
+    noalias(K) +=
+        val * outer_prod(row_data.getN(gg, nb_row), col_data.getN(gg, nb_col));
+  }
+
+  if (!useTsB) {
+    const_cast<FEMethod *>(getFEMethod())->ts_B = A;
+  }
+  CHKERR MatSetValues((getFEMethod()->ts_B), nb_row, &row_data.getIndices()[0],
+                      nb_col, &col_data.getIndices()[0], &K(0, 0), ADD_VALUES);
+  if (row_side != col_side || row_type != col_type) {
+    transK.resize(nb_col, nb_row);
+    noalias(transK) = trans(K);
+    CHKERR MatSetValues((getFEMethod()->ts_B), nb_col,
+                        &col_data.getIndices()[0], nb_row,
+                        &row_data.getIndices()[0], &transK(0, 0), ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode ThermalElement::UpdateAndControl::preProcess() {
+  MoFEMFunctionBegin;
+  CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
+      problemPtr, tempName, rateName, ROW, ts_u_t, INSERT_VALUES,
+      SCATTER_REVERSE);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode ThermalElement::UpdateAndControl::postProcess() {
+  MoFEMFunctionBeginHot;
+  MoFEMFunctionReturnHot(0);
+}
+
+MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
   MoFEMFunctionBegin;
 
-  try {
+  CHKERR mField.getInterface<VecManager>()->setGlobalGhostVector(
+      problemPtr, ROW, ts_u, INSERT_VALUES, SCATTER_REVERSE);
 
-    if (row_data.getIndices().size() == 0)
-      MoFEMFunctionReturnHot(0);
-    if (col_data.getIndices().size() == 0)
-      MoFEMFunctionReturnHot(0);
+  BitRefLevel proble_bit_level = problemPtr->getBitRefLevel();
 
-    int nb_row = row_data.getN().size2();
-    int nb_col = col_data.getN().size2();
-    K.resize(nb_row, nb_col);
-    K.clear();
+  SeriesRecorder *recorder_ptr = NULL;
+  CHKERR mField.getInterface(recorder_ptr);
+  CHKERR recorder_ptr->record_begin(seriesName);
+  CHKERR recorder_ptr->record_field(seriesName, tempName, proble_bit_level,
+                                    mask);
+  CHKERR recorder_ptr->record_end(seriesName, ts_t);
 
-    for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
+  MoFEMFunctionReturn(0);
+}
 
-      double convectionConst;
-      if (hoGeometry) {
-        double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
-        convectionConst = dAta.cOnvection * area;
-      } else {
-        convectionConst = dAta.cOnvection * getArea();
-      }
-      double val = getGaussPts()(2, gg) * convectionConst;
-      noalias(K) += val * outer_prod(row_data.getN(gg, nb_row),
-                                     col_data.getN(gg, nb_col));
-    }
+MoFEMErrorCode
+ThermalElement::addThermalElements(const std::string field_name,
+                                   const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
 
-    if (!useTsB) {
-      const_cast<FEMethod *>(getFEMethod())->ts_B = A;
-    }
-    CHKERR MatSetValues((getFEMethod()->ts_B), nb_row,
-                        &row_data.getIndices()[0], nb_col,
-                        &col_data.getIndices()[0], &K(0, 0), ADD_VALUES);
-    if (row_side != col_side || row_type != col_type) {
-      transK.resize(nb_col, nb_row);
-      noalias(transK) = trans(K);
-      CHKERR MatSetValues((getFEMethod()->ts_B), nb_col,
-                          &col_data.getIndices()[0], nb_row,
-                          &row_data.getIndices()[0], &transK(0, 0), ADD_VALUES);
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode ThermalElement::UpdateAndControl::preProcess() {
-    MoFEMFunctionBegin;
-    CHKERR mField.getInterface<VecManager>()->setOtherLocalGhostVector(
-        problemPtr, tempName, rateName, ROW, ts_u_t, INSERT_VALUES,
-        SCATTER_REVERSE);
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode ThermalElement::UpdateAndControl::postProcess() {
-    MoFEMFunctionBeginHot;
-    MoFEMFunctionReturnHot(0);
-  }
-
-  MoFEMErrorCode ThermalElement::TimeSeriesMonitor::postProcess() {
-    MoFEMFunctionBegin;
-
-    CHKERR mField.getInterface<VecManager>()->setGlobalGhostVector(
-        problemPtr, ROW, ts_u, INSERT_VALUES, SCATTER_REVERSE);
-
-    BitRefLevel proble_bit_level = problemPtr->getBitRefLevel();
-
-    SeriesRecorder *recorder_ptr = NULL;
-    CHKERR mField.getInterface(recorder_ptr);
-    CHKERR recorder_ptr->record_begin(seriesName);
-    CHKERR recorder_ptr->record_field(seriesName, tempName, proble_bit_level,
-                                      mask);
-    CHKERR recorder_ptr->record_end(seriesName, ts_t);
-
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode ThermalElement::addThermalElements(
-      const std::string field_name, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
-
-    CHKERR mField.add_finite_element("THERMAL_FE", MF_ZERO);
-    CHKERR mField.modify_finite_element_add_field_row("THERMAL_FE", field_name);
-    CHKERR mField.modify_finite_element_add_field_col("THERMAL_FE", field_name);
+  CHKERR mField.add_finite_element("THERMAL_FE", MF_ZERO);
+  CHKERR mField.modify_finite_element_add_field_row("THERMAL_FE", field_name);
+  CHKERR mField.modify_finite_element_add_field_col("THERMAL_FE", field_name);
+  CHKERR mField.modify_finite_element_add_field_data("THERMAL_FE", field_name);
+  if (mField.check_field(mesh_nodals_positions)) {
     CHKERR mField.modify_finite_element_add_field_data("THERMAL_FE",
-                                                       field_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("THERMAL_FE",
-                                                         mesh_nodals_positions);
-    }
-
-    // takes skin of block of entities
-    // Skinner skin(&mField.get_moab());
-    // loop over all blocksets and get data which name is FluidPressure
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, BLOCKSET | MAT_THERMALSET, it)) {
-
-      Mat_Thermal temp_data;
-      ierr = it->getAttributeDataStructure(temp_data);
-
-      setOfBlocks[it->getMeshsetId()].cOnductivity_mat.resize(
-          3, 3); //(3X3) conductivity matrix
-      setOfBlocks[it->getMeshsetId()].cOnductivity_mat.clear();
-      setOfBlocks[it->getMeshsetId()].cOnductivity_mat(0, 0) =
-          temp_data.data.Conductivity;
-      setOfBlocks[it->getMeshsetId()].cOnductivity_mat(1, 1) =
-          temp_data.data.Conductivity;
-      setOfBlocks[it->getMeshsetId()].cOnductivity_mat(2, 2) =
-          temp_data.data.Conductivity;
-      // setOfBlocks[it->getMeshsetId()].cOnductivity =
-      // temp_data.data.Conductivity;
-
-      setOfBlocks[it->getMeshsetId()].cApacity = temp_data.data.HeatCapacity;
-      CHKERR mField.get_moab().get_entities_by_type(
-          it->meshset, MBTET, setOfBlocks[it->getMeshsetId()].tEts, true);
-      CHKERR mField.add_ents_to_finite_element_by_type(
-          setOfBlocks[it->getMeshsetId()].tEts, MBTET, "THERMAL_FE");
-    }
-
-    MoFEMFunctionReturn(0);
+                                                       mesh_nodals_positions);
   }
 
-  MoFEMErrorCode ThermalElement::addThermalFluxElement(
-      const std::string field_name, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
+  // takes skin of block of entities
+  // Skinner skin(&mField.get_moab());
+  // loop over all blocksets and get data which name is FluidPressure
+  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+           mField, BLOCKSET | MAT_THERMALSET, it)) {
 
-    CHKERR mField.add_finite_element("THERMAL_FLUX_FE", MF_ZERO);
-    CHKERR mField.modify_finite_element_add_field_row("THERMAL_FLUX_FE",
-                                                      field_name);
-    CHKERR mField.modify_finite_element_add_field_col("THERMAL_FLUX_FE",
-                                                      field_name);
+    Mat_Thermal temp_data;
+    ierr = it->getAttributeDataStructure(temp_data);
+
+    setOfBlocks[it->getMeshsetId()].cOnductivity_mat.resize(
+        3, 3); //(3X3) conductivity matrix
+    setOfBlocks[it->getMeshsetId()].cOnductivity_mat.clear();
+    setOfBlocks[it->getMeshsetId()].cOnductivity_mat(0, 0) =
+        temp_data.data.Conductivity;
+    setOfBlocks[it->getMeshsetId()].cOnductivity_mat(1, 1) =
+        temp_data.data.Conductivity;
+    setOfBlocks[it->getMeshsetId()].cOnductivity_mat(2, 2) =
+        temp_data.data.Conductivity;
+    // setOfBlocks[it->getMeshsetId()].cOnductivity =
+    // temp_data.data.Conductivity;
+
+    setOfBlocks[it->getMeshsetId()].cApacity = temp_data.data.HeatCapacity;
+    CHKERR mField.get_moab().get_entities_by_type(
+        it->meshset, MBTET, setOfBlocks[it->getMeshsetId()].tEts, true);
+    CHKERR mField.add_ents_to_finite_element_by_type(
+        setOfBlocks[it->getMeshsetId()].tEts, MBTET, "THERMAL_FE");
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+ThermalElement::addThermalFluxElement(const std::string field_name,
+                                      const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+
+  CHKERR mField.add_finite_element("THERMAL_FLUX_FE", MF_ZERO);
+  CHKERR mField.modify_finite_element_add_field_row("THERMAL_FLUX_FE",
+                                                    field_name);
+  CHKERR mField.modify_finite_element_add_field_col("THERMAL_FLUX_FE",
+                                                    field_name);
+  CHKERR mField.modify_finite_element_add_field_data("THERMAL_FLUX_FE",
+                                                     field_name);
+  if (mField.check_field(mesh_nodals_positions)) {
     CHKERR mField.modify_finite_element_add_field_data("THERMAL_FLUX_FE",
-                                                       field_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("THERMAL_FLUX_FE",
-                                                         mesh_nodals_positions);
-    }
+                                                       mesh_nodals_positions);
+  }
 
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, SIDESET | HEATFLUXSET, it)) {
-      CHKERR it->getBcDataStructure(setOfFluxes[it->getMeshsetId()].dAta);
+  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(mField, SIDESET | HEATFLUXSET,
+                                                  it)) {
+    CHKERR it->getBcDataStructure(setOfFluxes[it->getMeshsetId()].dAta);
+    CHKERR mField.get_moab().get_entities_by_type(
+        it->meshset, MBTRI, setOfFluxes[it->getMeshsetId()].tRis, true);
+    CHKERR mField.add_ents_to_finite_element_by_type(
+        setOfFluxes[it->getMeshsetId()].tRis, MBTRI, "THERMAL_FLUX_FE");
+  }
+
+  // this is alternative method for setting boundary conditions, to bypass bu
+  // in cubit file reader. not elegant, but good enough
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+    if (it->getName().compare(0, 9, "HEAT_FLUX") == 0) {
+      std::vector<double> data;
+      CHKERR it->getAttributes(data);
+      if (data.size() != 1) {
+        SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
+      }
+      strcpy(setOfFluxes[it->getMeshsetId()].dAta.data.name, "HeatFlu");
+      setOfFluxes[it->getMeshsetId()].dAta.data.flag1 = 1;
+      setOfFluxes[it->getMeshsetId()].dAta.data.value1 = data[0];
       CHKERR mField.get_moab().get_entities_by_type(
           it->meshset, MBTRI, setOfFluxes[it->getMeshsetId()].tRis, true);
       CHKERR mField.add_ents_to_finite_element_by_type(
           setOfFluxes[it->getMeshsetId()].tRis, MBTRI, "THERMAL_FLUX_FE");
     }
-
-    // this is alternative method for setting boundary conditions, to bypass bu
-    // in cubit file reader. not elegant, but good enough
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 9, "HEAT_FLUX") == 0) {
-        std::vector<double> data;
-        CHKERR it->getAttributes(data);
-        if (data.size() != 1) {
-          SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
-        }
-        strcpy(setOfFluxes[it->getMeshsetId()].dAta.data.name, "HeatFlu");
-        setOfFluxes[it->getMeshsetId()].dAta.data.flag1 = 1;
-        setOfFluxes[it->getMeshsetId()].dAta.data.value1 = data[0];
-        CHKERR mField.get_moab().get_entities_by_type(
-            it->meshset, MBTRI, setOfFluxes[it->getMeshsetId()].tRis, true);
-        CHKERR mField.add_ents_to_finite_element_by_type(
-            setOfFluxes[it->getMeshsetId()].tRis, MBTRI, "THERMAL_FLUX_FE");
-      }
-    }
-
-    MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode ThermalElement::addThermalConvectionElement(
-      const std::string field_name, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBeginHot;
+  MoFEMFunctionReturn(0);
+}
 
-    CHKERR mField.add_finite_element("THERMAL_CONVECTION_FE", MF_ZERO);
-    CHKERR mField.modify_finite_element_add_field_row("THERMAL_CONVECTION_FE",
-                                                      field_name);
-    CHKERR mField.modify_finite_element_add_field_col("THERMAL_CONVECTION_FE",
-                                                      field_name);
+MoFEMErrorCode ThermalElement::addThermalConvectionElement(
+    const std::string field_name, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBeginHot;
+
+  CHKERR mField.add_finite_element("THERMAL_CONVECTION_FE", MF_ZERO);
+  CHKERR mField.modify_finite_element_add_field_row("THERMAL_CONVECTION_FE",
+                                                    field_name);
+  CHKERR mField.modify_finite_element_add_field_col("THERMAL_CONVECTION_FE",
+                                                    field_name);
+  CHKERR mField.modify_finite_element_add_field_data("THERMAL_CONVECTION_FE",
+                                                     field_name);
+  if (mField.check_field(mesh_nodals_positions)) {
     CHKERR mField.modify_finite_element_add_field_data("THERMAL_CONVECTION_FE",
-                                                       field_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data(
-          "THERMAL_CONVECTION_FE", mesh_nodals_positions);
-    }
-
-    // this is alternative method for setting boundary conditions, to bypass bu
-    // in cubit file reader. not elegant, but good enough
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 10, "CONVECTION") == 0) {
-
-        std::vector<double> data;
-        CHKERR it->getAttributes(data);
-        if (data.size() != 2) {
-          SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
-        }
-        setOfConvection[it->getMeshsetId()].cOnvection = data[0];
-        setOfConvection[it->getMeshsetId()].tEmperature = data[1];
-        CHKERR mField.get_moab().get_entities_by_type(
-            it->meshset, MBTRI, setOfConvection[it->getMeshsetId()].tRis, true);
-        CHKERR mField.add_ents_to_finite_element_by_type(
-            setOfConvection[it->getMeshsetId()].tRis, MBTRI,
-            "THERMAL_CONVECTION_FE");
-      }
-    }
-
-    MoFEMFunctionReturnHot(0);
+                                                       mesh_nodals_positions);
   }
 
-  MoFEMErrorCode ThermalElement::addThermalRadiationElement(
-      const std::string field_name, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
+  // this is alternative method for setting boundary conditions, to bypass bu
+  // in cubit file reader. not elegant, but good enough
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+    if (it->getName().compare(0, 10, "CONVECTION") == 0) {
 
-    CHKERR mField.add_finite_element("THERMAL_RADIATION_FE", MF_ZERO);
-    CHKERR mField.modify_finite_element_add_field_row("THERMAL_RADIATION_FE",
-                                                      field_name);
-    CHKERR mField.modify_finite_element_add_field_col("THERMAL_RADIATION_FE",
-                                                      field_name);
+      std::vector<double> data;
+      CHKERR it->getAttributes(data);
+      if (data.size() != 2) {
+        SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
+      }
+      setOfConvection[it->getMeshsetId()].cOnvection = data[0];
+      setOfConvection[it->getMeshsetId()].tEmperature = data[1];
+      CHKERR mField.get_moab().get_entities_by_type(
+          it->meshset, MBTRI, setOfConvection[it->getMeshsetId()].tRis, true);
+      CHKERR mField.add_ents_to_finite_element_by_type(
+          setOfConvection[it->getMeshsetId()].tRis, MBTRI,
+          "THERMAL_CONVECTION_FE");
+    }
+  }
+
+  MoFEMFunctionReturnHot(0);
+}
+
+MoFEMErrorCode ThermalElement::addThermalRadiationElement(
+    const std::string field_name, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+
+  CHKERR mField.add_finite_element("THERMAL_RADIATION_FE", MF_ZERO);
+  CHKERR mField.modify_finite_element_add_field_row("THERMAL_RADIATION_FE",
+                                                    field_name);
+  CHKERR mField.modify_finite_element_add_field_col("THERMAL_RADIATION_FE",
+                                                    field_name);
+  CHKERR mField.modify_finite_element_add_field_data("THERMAL_RADIATION_FE",
+                                                     field_name);
+  if (mField.check_field(mesh_nodals_positions)) {
     CHKERR mField.modify_finite_element_add_field_data("THERMAL_RADIATION_FE",
-                                                       field_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("THERMAL_RADIATION_FE",
-                                                         mesh_nodals_positions);
-    }
-
-    // this is alternative method for setting boundary conditions, to bypass bu
-    // in cubit file reader. not elegant, but good enough
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, 9, "RADIATION") == 0) {
-        std::vector<double> data;
-        ierr = it->getAttributes(data);
-        if (data.size() != 3) {
-          SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
-        }
-        setOfRadiation[it->getMeshsetId()].sIgma = data[0];
-        setOfRadiation[it->getMeshsetId()].eMissivity = data[1];
-        setOfRadiation[it->getMeshsetId()].aMbienttEmp = data[2];
-        CHKERR mField.get_moab().get_entities_by_type(
-            it->meshset, MBTRI, setOfRadiation[it->getMeshsetId()].tRis, true);
-        CHKERR mField.add_ents_to_finite_element_by_type(
-            setOfRadiation[it->getMeshsetId()].tRis, MBTRI,
-            "THERMAL_RADIATION_FE");
-      }
-    }
-
-    MoFEMFunctionReturn(0);
+                                                       mesh_nodals_positions);
   }
 
-  MoFEMErrorCode ThermalElement::setThermalFiniteElementRhsOperators(
-      string field_name, Vec & F) {
-    MoFEMFunctionBegin;
-    std::map<int, BlockData>::iterator sit = setOfBlocks.begin();
+  // this is alternative method for setting boundary conditions, to bypass bu
+  // in cubit file reader. not elegant, but good enough
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+    if (it->getName().compare(0, 9, "RADIATION") == 0) {
+      std::vector<double> data;
+      ierr = it->getAttributes(data);
+      if (data.size() != 3) {
+        SETERRQ(PETSC_COMM_SELF, 1, "Data inconsistency");
+      }
+      setOfRadiation[it->getMeshsetId()].sIgma = data[0];
+      setOfRadiation[it->getMeshsetId()].eMissivity = data[1];
+      setOfRadiation[it->getMeshsetId()].aMbienttEmp = data[2];
+      CHKERR mField.get_moab().get_entities_by_type(
+          it->meshset, MBTRI, setOfRadiation[it->getMeshsetId()].tRis, true);
+      CHKERR mField.add_ents_to_finite_element_by_type(
+          setOfRadiation[it->getMeshsetId()].tRis, MBTRI,
+          "THERMAL_RADIATION_FE");
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+ThermalElement::setThermalFiniteElementRhsOperators(string field_name, Vec &F) {
+  MoFEMFunctionBegin;
+  std::map<int, BlockData>::iterator sit = setOfBlocks.begin();
+  feRhs.getOpPtrVector().push_back(
+      new OpGetGradAtGaussPts(field_name, commonData));
+  for (; sit != setOfBlocks.end(); sit++) {
+    // add finite element
     feRhs.getOpPtrVector().push_back(
-        new OpGetGradAtGaussPts(field_name, commonData));
+        new OpThermalRhs(field_name, F, sit->second, commonData));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+ThermalElement::setThermalFiniteElementLhsOperators(string field_name, Mat A) {
+  MoFEMFunctionBegin;
+  std::map<int, BlockData>::iterator sit = setOfBlocks.begin();
+  for (; sit != setOfBlocks.end(); sit++) {
+    // add finite elemen
+    feLhs.getOpPtrVector().push_back(
+        new OpThermalLhs(field_name, A, sit->second, commonData));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode ThermalElement::setThermalFluxFiniteElementRhsOperators(
+    string field_name, Vec &F, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+  bool hoGeometry = false;
+  if (mField.check_field(mesh_nodals_positions)) {
+    hoGeometry = true;
+  }
+  std::map<int, FluxData>::iterator sit = setOfFluxes.begin();
+  for (; sit != setOfFluxes.end(); sit++) {
+    // add finite element
+    feFlux.getOpPtrVector().push_back(
+        new OpHeatFlux(field_name, F, sit->second, hoGeometry));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode ThermalElement::setThermalConvectionFiniteElementRhsOperators(
+    string field_name, Vec &F, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+  bool hoGeometry = false;
+  if (mField.check_field(mesh_nodals_positions)) {
+    hoGeometry = true;
+  }
+  std::map<int, ConvectionData>::iterator sit = setOfConvection.begin();
+  for (; sit != setOfConvection.end(); sit++) {
+    // add finite element
+    feConvectionRhs.getOpPtrVector().push_back(
+        new OpGetTriTemperatureAtGaussPts(field_name, commonData));
+    feConvectionRhs.getOpPtrVector().push_back(new OpConvectionRhs(
+        field_name, F, sit->second, commonData, hoGeometry));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode ThermalElement::setThermalConvectionFiniteElementLhsOperators(
+    string field_name, Mat A, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+  bool hoGeometry = false;
+  if (mField.check_field(mesh_nodals_positions)) {
+    hoGeometry = true;
+  }
+  std::map<int, ConvectionData>::iterator sit = setOfConvection.begin();
+  for (; sit != setOfConvection.end(); sit++) {
+    // add finite element
+    feConvectionLhs.getOpPtrVector().push_back(
+        new OpConvectionLhs(field_name, A, sit->second, hoGeometry));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode ThermalElement::setTimeSteppingProblem(
+    string field_name, string rate_name,
+    const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+
+  bool hoGeometry = false;
+  if (mField.check_field(mesh_nodals_positions)) {
+    hoGeometry = true;
+  }
+
+  {
+    std::map<int, BlockData>::iterator sit = setOfBlocks.begin();
     for (; sit != setOfBlocks.end(); sit++) {
       // add finite element
-      feRhs.getOpPtrVector().push_back(
-          new OpThermalRhs(field_name, F, sit->second, commonData));
-    }
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode ThermalElement::setThermalFiniteElementLhsOperators(
-      string field_name, Mat A) {
-    MoFEMFunctionBegin;
-    std::map<int, BlockData>::iterator sit = setOfBlocks.begin();
-    for (; sit != setOfBlocks.end(); sit++) {
-      // add finite elemen
+      // those methods are to calculate matrices on Lhs
+      //  feLhs.getOpPtrVector().push_back(new
+      //  OpGetTetTemperatureAtGaussPts(field_name,commonData));
       feLhs.getOpPtrVector().push_back(
-          new OpThermalLhs(field_name, A, sit->second, commonData));
+          new OpThermalLhs(field_name, sit->second, commonData));
+      feLhs.getOpPtrVector().push_back(
+          new OpHeatCapacityLhs(field_name, sit->second, commonData));
+      // those methods are to calculate vectors on Rhs
+      feRhs.getOpPtrVector().push_back(
+          new OpGetTetTemperatureAtGaussPts(field_name, commonData));
+      feRhs.getOpPtrVector().push_back(
+          new OpGetTetRateAtGaussPts(rate_name, commonData));
+      feRhs.getOpPtrVector().push_back(
+          new OpGetGradAtGaussPts(field_name, commonData));
+      feRhs.getOpPtrVector().push_back(
+          new OpThermalRhs(field_name, sit->second, commonData));
+      feRhs.getOpPtrVector().push_back(
+          new OpHeatCapacityRhs(field_name, sit->second, commonData));
     }
-    MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode ThermalElement::setThermalFluxFiniteElementRhsOperators(
-      string field_name, Vec & F, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
-    bool hoGeometry = false;
-    if (mField.check_field(mesh_nodals_positions)) {
-      hoGeometry = true;
-    }
+  // Flux
+  {
     std::map<int, FluxData>::iterator sit = setOfFluxes.begin();
     for (; sit != setOfFluxes.end(); sit++) {
-      // add finite element
       feFlux.getOpPtrVector().push_back(
-          new OpHeatFlux(field_name, F, sit->second, hoGeometry));
+          new OpHeatFlux(field_name, sit->second, hoGeometry));
     }
-    MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode ThermalElement::setThermalConvectionFiniteElementRhsOperators(
-      string field_name, Vec & F, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
-    bool hoGeometry = false;
-    if (mField.check_field(mesh_nodals_positions)) {
-      hoGeometry = true;
-    }
+  // Convection
+  {
     std::map<int, ConvectionData>::iterator sit = setOfConvection.begin();
     for (; sit != setOfConvection.end(); sit++) {
-      // add finite element
       feConvectionRhs.getOpPtrVector().push_back(
           new OpGetTriTemperatureAtGaussPts(field_name, commonData));
-      feConvectionRhs.getOpPtrVector().push_back(new OpConvectionRhs(
-          field_name, F, sit->second, commonData, hoGeometry));
+      feConvectionRhs.getOpPtrVector().push_back(
+          new OpConvectionRhs(field_name, sit->second, commonData, hoGeometry));
     }
-    MoFEMFunctionReturn(0);
   }
-
-  MoFEMErrorCode ThermalElement::setThermalConvectionFiniteElementLhsOperators(
-      string field_name, Mat A, const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
-    bool hoGeometry = false;
-    if (mField.check_field(mesh_nodals_positions)) {
-      hoGeometry = true;
-    }
+  {
     std::map<int, ConvectionData>::iterator sit = setOfConvection.begin();
     for (; sit != setOfConvection.end(); sit++) {
-      // add finite element
       feConvectionLhs.getOpPtrVector().push_back(
-          new OpConvectionLhs(field_name, A, sit->second, hoGeometry));
+          new OpConvectionLhs(field_name, sit->second, hoGeometry));
     }
-    MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode ThermalElement::setTimeSteppingProblem(
-      string field_name, string rate_name,
-      const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
-
-    bool hoGeometry = false;
-    if (mField.check_field(mesh_nodals_positions)) {
-      hoGeometry = true;
+  // Radiation
+  {
+    std::map<int, RadiationData>::iterator sit = setOfRadiation.begin();
+    for (; sit != setOfRadiation.end(); sit++) {
+      feRadiationRhs.getOpPtrVector().push_back(
+          new OpGetTriTemperatureAtGaussPts(field_name, commonData));
+      feRadiationRhs.getOpPtrVector().push_back(
+          new OpRadiationRhs(field_name, sit->second, commonData, hoGeometry));
     }
-
-    {
-      std::map<int, BlockData>::iterator sit = setOfBlocks.begin();
-      for (; sit != setOfBlocks.end(); sit++) {
-        // add finite element
-        // those methods are to calculate matrices on Lhs
-        //  feLhs.getOpPtrVector().push_back(new
-        //  OpGetTetTemperatureAtGaussPts(field_name,commonData));
-        feLhs.getOpPtrVector().push_back(
-            new OpThermalLhs(field_name, sit->second, commonData));
-        feLhs.getOpPtrVector().push_back(
-            new OpHeatCapacityLhs(field_name, sit->second, commonData));
-        // those methods are to calculate vectors on Rhs
-        feRhs.getOpPtrVector().push_back(
-            new OpGetTetTemperatureAtGaussPts(field_name, commonData));
-        feRhs.getOpPtrVector().push_back(
-            new OpGetTetRateAtGaussPts(rate_name, commonData));
-        feRhs.getOpPtrVector().push_back(
-            new OpGetGradAtGaussPts(field_name, commonData));
-        feRhs.getOpPtrVector().push_back(
-            new OpThermalRhs(field_name, sit->second, commonData));
-        feRhs.getOpPtrVector().push_back(
-            new OpHeatCapacityRhs(field_name, sit->second, commonData));
-      }
+  }
+  {
+    std::map<int, RadiationData>::iterator sit = setOfRadiation.begin();
+    for (; sit != setOfRadiation.end(); sit++) {
+      feRadiationLhs.getOpPtrVector().push_back(
+          new OpGetTriTemperatureAtGaussPts(field_name, commonData));
+      feRadiationLhs.getOpPtrVector().push_back(
+          new OpRadiationLhs(field_name, sit->second, commonData, hoGeometry));
     }
-
-    // Flux
-    {
-      std::map<int, FluxData>::iterator sit = setOfFluxes.begin();
-      for (; sit != setOfFluxes.end(); sit++) {
-        feFlux.getOpPtrVector().push_back(
-            new OpHeatFlux(field_name, sit->second, hoGeometry));
-      }
-    }
-
-    // Convection
-    {
-      std::map<int, ConvectionData>::iterator sit = setOfConvection.begin();
-      for (; sit != setOfConvection.end(); sit++) {
-        feConvectionRhs.getOpPtrVector().push_back(
-            new OpGetTriTemperatureAtGaussPts(field_name, commonData));
-        feConvectionRhs.getOpPtrVector().push_back(new OpConvectionRhs(
-            field_name, sit->second, commonData, hoGeometry));
-      }
-    }
-    {
-      std::map<int, ConvectionData>::iterator sit = setOfConvection.begin();
-      for (; sit != setOfConvection.end(); sit++) {
-        feConvectionLhs.getOpPtrVector().push_back(
-            new OpConvectionLhs(field_name, sit->second, hoGeometry));
-      }
-    }
-
-    // Radiation
-    {
-      std::map<int, RadiationData>::iterator sit = setOfRadiation.begin();
-      for (; sit != setOfRadiation.end(); sit++) {
-        feRadiationRhs.getOpPtrVector().push_back(
-            new OpGetTriTemperatureAtGaussPts(field_name, commonData));
-        feRadiationRhs.getOpPtrVector().push_back(new OpRadiationRhs(
-            field_name, sit->second, commonData, hoGeometry));
-      }
-    }
-    {
-      std::map<int, RadiationData>::iterator sit = setOfRadiation.begin();
-      for (; sit != setOfRadiation.end(); sit++) {
-        feRadiationLhs.getOpPtrVector().push_back(
-            new OpGetTriTemperatureAtGaussPts(field_name, commonData));
-        feRadiationLhs.getOpPtrVector().push_back(new OpRadiationLhs(
-            field_name, sit->second, commonData, hoGeometry));
-      }
-    }
-
-    MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode ThermalElement::setTimeSteppingProblem(
-      TsCtx & ts_ctx, string field_name, string rate_name,
-      const std::string mesh_nodals_positions) {
-    MoFEMFunctionBegin;
+  MoFEMFunctionReturn(0);
+}
 
-    CHKERR setTimeSteppingProblem(field_name, rate_name, mesh_nodals_positions);
+MoFEMErrorCode ThermalElement::setTimeSteppingProblem(
+    TsCtx &ts_ctx, string field_name, string rate_name,
+    const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
 
-    // rhs
-    TsCtx::FEMethodsSequence &loops_to_do_Rhs =
-        ts_ctx.get_loops_to_do_IFunction();
-    loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr("THERMAL_FE", &feRhs));
+  CHKERR setTimeSteppingProblem(field_name, rate_name, mesh_nodals_positions);
+
+  // rhs
+  TsCtx::FEMethodsSequence &loops_to_do_Rhs =
+      ts_ctx.get_loops_to_do_IFunction();
+  loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr("THERMAL_FE", &feRhs));
+  loops_to_do_Rhs.push_back(
+      TsCtx::PairNameFEMethodPtr("THERMAL_FLUX_FE", &feFlux));
+  if (mField.check_finite_element("THERMAL_CONVECTION_FE"))
     loops_to_do_Rhs.push_back(
-        TsCtx::PairNameFEMethodPtr("THERMAL_FLUX_FE", &feFlux));
-    if (mField.check_finite_element("THERMAL_CONVECTION_FE"))
-      loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr(
-          "THERMAL_CONVECTION_FE", &feConvectionRhs));
-    if (mField.check_finite_element("THERMAL_RADIATION_FE"))
-      loops_to_do_Rhs.push_back(
-          TsCtx::PairNameFEMethodPtr("THERMAL_RADIATION_FE", &feRadiationRhs));
+        TsCtx::PairNameFEMethodPtr("THERMAL_CONVECTION_FE", &feConvectionRhs));
+  if (mField.check_finite_element("THERMAL_RADIATION_FE"))
+    loops_to_do_Rhs.push_back(
+        TsCtx::PairNameFEMethodPtr("THERMAL_RADIATION_FE", &feRadiationRhs));
 
-    // lhs
-    TsCtx::FEMethodsSequence &loops_to_do_Mat =
-        ts_ctx.get_loops_to_do_IJacobian();
-    loops_to_do_Mat.push_back(TsCtx::PairNameFEMethodPtr("THERMAL_FE", &feLhs));
-    if (mField.check_finite_element("THERMAL_CONVECTION_FE"))
-      loops_to_do_Mat.push_back(TsCtx::PairNameFEMethodPtr(
-          "THERMAL_CONVECTION_FE", &feConvectionLhs));
-    if (mField.check_finite_element("THERMAL_RADIATION_FE"))
-      loops_to_do_Mat.push_back(
-          TsCtx::PairNameFEMethodPtr("THERMAL_RADIATION_FE", &feRadiationLhs));
+  // lhs
+  TsCtx::FEMethodsSequence &loops_to_do_Mat =
+      ts_ctx.get_loops_to_do_IJacobian();
+  loops_to_do_Mat.push_back(TsCtx::PairNameFEMethodPtr("THERMAL_FE", &feLhs));
+  if (mField.check_finite_element("THERMAL_CONVECTION_FE"))
+    loops_to_do_Mat.push_back(
+        TsCtx::PairNameFEMethodPtr("THERMAL_CONVECTION_FE", &feConvectionLhs));
+  if (mField.check_finite_element("THERMAL_RADIATION_FE"))
+    loops_to_do_Mat.push_back(
+        TsCtx::PairNameFEMethodPtr("THERMAL_RADIATION_FE", &feRadiationLhs));
 
-    MoFEMFunctionReturn(0);
-  }
+  MoFEMFunctionReturn(0);
+}
