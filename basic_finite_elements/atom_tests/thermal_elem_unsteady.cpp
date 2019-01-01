@@ -16,229 +16,237 @@
 using namespace MoFEM;
 
 namespace bio = boost::iostreams;
-using bio::tee_device;
 using bio::stream;
+using bio::tee_device;
 
 static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc,&argv,(char *)0,help);
+  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
 
   try {
 
     moab::Core mb_instance;
-    moab::Interface& moab = mb_instance;
+    moab::Interface &moab = mb_instance;
     int rank;
-    MPI_Comm_rank(PETSC_COMM_WORLD,&rank);
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
 
     PetscBool flg = PETSC_TRUE;
     char mesh_file_name[255];
-    ierr = PetscOptionsGetString(PETSC_NULL,PETSC_NULL,"-my_file",mesh_file_name,255,&flg); CHKERRG(ierr);
-    if(flg != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF,1,"*** ERROR -my_file (MESH FILE NEEDED)");
+    CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
+                                 mesh_file_name, 255, &flg);
+    if (flg != PETSC_TRUE) {
+      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    ParallelComm* pcomm = ParallelComm::get_pcomm(&moab,MYPCOMM_INDEX);
-    if(pcomm == NULL) pcomm =  new ParallelComm(&moab,PETSC_COMM_WORLD);
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    if (pcomm == NULL)
+      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     const char *option;
-    option = "";//"PARALLEL=BCAST;";//;DEBUG_IO";
+    option = ""; //"PARALLEL=BCAST;";//;DEBUG_IO";
     BARRIER_PCOMM_RANK_START(pcomm)
-    rval = moab.load_file(mesh_file_name, 0, option); CHKERRG(rval);
+    rval = moab.load_file(mesh_file_name, 0, option);
     BARRIER_PCOMM_RANK_END(pcomm)
 
-    //Create MoFEM (Joseph) database
+    // Create MoFEM (Joseph) database
     MoFEM::Core core(moab);
-    MoFEM::Interface& m_field = core;
+    MoFEM::Interface &m_field = core;
 
-    //set entitities bit level
+    // set entitities bit level
     BitRefLevel bit_level0;
     bit_level0.set(0);
     EntityHandle meshset_level0;
-    rval = moab.create_meshset(MESHSET_SET,meshset_level0); CHKERRG(rval);
-    ierr = m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(0,3,bit_level0); CHKERRG(ierr);
+    rval = moab.create_meshset(MESHSET_SET, meshset_level0);
+    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        0, 3, bit_level0);
 
-    //Fields
-    ierr = m_field.add_field("TEMP",H1,AINSWORTH_LEGENDRE_BASE,1); CHKERRG(ierr);
-    ierr = m_field.add_field("TEMP_RATE",H1,AINSWORTH_LEGENDRE_BASE,1); CHKERRG(ierr);
+    // Fields
+    CHKERR m_field.add_field("TEMP", H1, AINSWORTH_LEGENDRE_BASE, 1);
+    CHKERR m_field.add_field("TEMP_RATE", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-    //Problem
-    ierr = m_field.add_problem("TEST_PROBLEM"); CHKERRG(ierr);
+    // Problem
+    CHKERR m_field.add_problem("TEST_PROBLEM");
 
-    //set refinement level for problem
-    ierr = m_field.modify_problem_ref_level_add_bit("TEST_PROBLEM",bit_level0); CHKERRG(ierr);
+    // set refinement level for problem
+    CHKERR m_field.modify_problem_ref_level_add_bit("TEST_PROBLEM", bit_level0);
 
-    //meshset consisting all entities in mesh
+    // meshset consisting all entities in mesh
     EntityHandle root_set = moab.get_root_set();
-    //add entities to field
-    ierr = m_field.add_ents_to_field_by_type(root_set,MBTET,"TEMP"); CHKERRG(ierr);
-    ierr = m_field.add_ents_to_field_by_type(root_set,MBTET,"TEMP_RATE"); CHKERRG(ierr);
+    // add entities to field
+    CHKERR m_field.add_ents_to_field_by_type(root_set, MBTET, "TEMP");
+    CHKERR m_field.add_ents_to_field_by_type(root_set, MBTET, "TEMP_RATE");
 
-    //set app. order
-    //see Hierarchic Finite Element Bases on Unstructured Tetrahedral Meshes (Mark Ainsworth & Joe Coyle)
+    // set app. order
+    // see Hierarchic Finite Element Bases on Unstructured Tetrahedral Meshes
+    // (Mark Ainsworth & Joe Coyle)
     int order = 2;
-    ierr = m_field.set_field_order(root_set,MBTET,"TEMP",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTRI,"TEMP",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBEDGE,"TEMP",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBVERTEX,"TEMP",1); CHKERRG(ierr);
+    CHKERR m_field.set_field_order(root_set, MBTET, "TEMP", order);
+    CHKERR m_field.set_field_order(root_set, MBTRI, "TEMP", order);
+    CHKERR m_field.set_field_order(root_set, MBEDGE, "TEMP", order);
+    CHKERR m_field.set_field_order(root_set, MBVERTEX, "TEMP", 1);
 
-    ierr = m_field.set_field_order(root_set,MBTET,"TEMP_RATE",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTRI,"TEMP_RATE",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBEDGE,"TEMP_RATE",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBVERTEX,"TEMP_RATE",1); CHKERRG(ierr);
+    CHKERR m_field.set_field_order(root_set, MBTET, "TEMP_RATE", order);
+    CHKERR m_field.set_field_order(root_set, MBTRI, "TEMP_RATE", order);
+    CHKERR m_field.set_field_order(root_set, MBEDGE, "TEMP_RATE", order);
+    CHKERR m_field.set_field_order(root_set, MBVERTEX, "TEMP_RATE", 1);
 
     ThermalElement thermal_elements(m_field);
-    ierr = thermal_elements.addThermalElements("TEMP"); CHKERRG(ierr);
-    ierr = thermal_elements.addThermalFluxElement("TEMP"); CHKERRG(ierr);
-    //add rate of temerature to data field of finite element
-    ierr = m_field.modify_finite_element_add_field_data("THERMAL_FE","TEMP_RATE"); CHKERRG(ierr);
+    CHKERR thermal_elements.addThermalElements("TEMP");
+    CHKERR thermal_elements.addThermalFluxElement("TEMP");
+    // add rate of temerature to data field of finite element
+    CHKERR m_field.modify_finite_element_add_field_data("THERMAL_FE",
+                                                        "TEMP_RATE");
 
-    ierr = m_field.modify_problem_add_finite_element("TEST_PROBLEM","THERMAL_FE"); CHKERRG(ierr);
-    ierr = m_field.modify_problem_add_finite_element("TEST_PROBLEM","THERMAL_FLUX_FE"); CHKERRG(ierr);
+    CHKERR m_field.modify_problem_add_finite_element("TEST_PROBLEM",
+                                                     "THERMAL_FE");
+    CHKERR m_field.modify_problem_add_finite_element("TEST_PROBLEM",
+                                                     "THERMAL_FLUX_FE");
 
     /****/
-    //build database
-    //build field
-    ierr = m_field.build_fields(); CHKERRG(ierr);
-    //build finite elemnts
-    ierr = m_field.build_finite_elements(); CHKERRG(ierr);
-    //build adjacencies
-    ierr = m_field.build_adjacencies(bit_level0); CHKERRG(ierr);
-    //build problem
+    // build database
+    // build field
+    CHKERR m_field.build_fields();
+    // build finite elemnts
+    CHKERR m_field.build_finite_elements();
+    // build adjacencies
+    CHKERR m_field.build_adjacencies(bit_level0);
+    // build problem
     ProblemsManager *prb_mng_ptr;
-    ierr = m_field.getInterface(prb_mng_ptr); CHKERRG(ierr);
-    ierr = prb_mng_ptr->buildProblem("TEST_PROBLEM",true); CHKERRG(ierr);
+    CHKERR m_field.getInterface(prb_mng_ptr);
+    CHKERR prb_mng_ptr->buildProblem("TEST_PROBLEM", true);
 
     /****/
-    //mesh partitioning
-    //partition
-    ierr = prb_mng_ptr->partitionSimpleProblem("TEST_PROBLEM"); CHKERRG(ierr);
-    ierr = prb_mng_ptr->partitionFiniteElements("TEST_PROBLEM"); CHKERRG(ierr);
-    //what are ghost nodes, see Petsc Manual
-    ierr = prb_mng_ptr->partitionGhostDofs("TEST_PROBLEM"); CHKERRG(ierr);
+    // mesh partitioning
+    // partition
+    CHKERR prb_mng_ptr->partitionSimpleProblem("TEST_PROBLEM");
+    CHKERR prb_mng_ptr->partitionFiniteElements("TEST_PROBLEM");
+    // what are ghost nodes, see Petsc Manual
+    CHKERR prb_mng_ptr->partitionGhostDofs("TEST_PROBLEM");
 
     Vec F;
-    ierr = m_field.getInterface<VecManager>()->vecCreateGhost("TEST_PROBLEM",ROW,&F); CHKERRG(ierr);
+    CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("TEST_PROBLEM",
+                                                              ROW, &F);
     Vec T;
-    ierr = VecDuplicate(F,&T); CHKERRG(ierr);
+    CHKERR VecDuplicate(F, &T);
     Mat A;
-    ierr = m_field.MatCreateMPIAIJWithArrays("TEST_PROBLEM",&A); CHKERRG(ierr);
+    CHKERR m_field.MatCreateMPIAIJWithArrays("TEST_PROBLEM", &A);
 
-    //TS
-    TsCtx ts_ctx(m_field,"TEST_PROBLEM");
+    // TS
+    TsCtx ts_ctx(m_field, "TEST_PROBLEM");
     TS ts;
-    ierr = TSCreate(PETSC_COMM_WORLD,&ts); CHKERRG(ierr);
-    ierr = TSSetType(ts,TSBEULER); CHKERRG(ierr);
+    CHKERR TSCreate(PETSC_COMM_WORLD, &ts);
+    CHKERR TSSetType(ts, TSBEULER);
 
-    DirichletTemperatureBc my_dirichlet_bc(m_field,"TEMP",A,T,F);
-    ThermalElement::UpdateAndControl update_velocities(m_field,"TEMP","TEMP_RATE");
-    ThermalElement::TimeSeriesMonitor monitor(m_field,"THEMP_SERIES","TEMP");
+    DirichletTemperatureBc my_dirichlet_bc(m_field, "TEMP", A, T, F);
+    ThermalElement::UpdateAndControl update_velocities(m_field, "TEMP",
+                                                       "TEMP_RATE");
+    ThermalElement::TimeSeriesMonitor monitor(m_field, "THEMP_SERIES", "TEMP");
 
-    //preprocess
+    // preprocess
     ts_ctx.get_preProcess_to_do_IFunction().push_back(&update_velocities);
     ts_ctx.get_preProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
     ts_ctx.get_preProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
 
-    //and temperature element functions
-    ierr = thermal_elements.setTimeSteppingProblem(ts_ctx,"TEMP","TEMP_RATE"); CHKERRG(ierr);
+    // and temperature element functions
+    CHKERR thermal_elements.setTimeSteppingProblem(ts_ctx, "TEMP", "TEMP_RATE");
 
-    //postprocess
+    // postprocess
     ts_ctx.get_postProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
     ts_ctx.get_postProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
     ts_ctx.get_postProcess_to_do_Monitor().push_back(&monitor);
 
-    ierr = TSSetIFunction(ts,F,TsSetIFunction,&ts_ctx); CHKERRG(ierr);
-    ierr = TSSetIJacobian(ts,A,A,TsSetIJacobian,&ts_ctx); CHKERRG(ierr);
-    ierr = TSMonitorSet(ts,TsMonitorSet,&ts_ctx,PETSC_NULL); CHKERRG(ierr);
+    CHKERR TSSetIFunction(ts, F, TsSetIFunction, &ts_ctx);
+    CHKERR TSSetIJacobian(ts, A, A, TsSetIJacobian, &ts_ctx);
+    CHKERR TSMonitorSet(ts, TsMonitorSet, &ts_ctx, PETSC_NULL);
 
     double ftime = 1;
-    ierr = TSSetDuration(ts,PETSC_DEFAULT,ftime); CHKERRG(ierr);
-    ierr = TSSetSolution(ts,T); CHKERRG(ierr);
-    ierr = TSSetFromOptions(ts); CHKERRG(ierr);
+    CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
+    CHKERR TSSetSolution(ts, T);
+    CHKERR TSSetFromOptions(ts);
 
     SeriesRecorder *recorder_ptr;
-    ierr = m_field.getInterface(recorder_ptr); CHKERRG(ierr);
-    ierr = recorder_ptr->add_series_recorder("THEMP_SERIES"); CHKERRG(ierr);
-    ierr = recorder_ptr->initialize_series_recorder("THEMP_SERIES"); CHKERRG(ierr);
+    CHKERR m_field.getInterface(recorder_ptr);
+    CHKERR recorder_ptr->add_series_recorder("THEMP_SERIES");
+    CHKERR recorder_ptr->initialize_series_recorder("THEMP_SERIES");
 
-    #if PETSC_VERSION_GE(3,7,0)
-    ierr = TSSetExactFinalTime(ts,TS_EXACTFINALTIME_STEPOVER); CHKERRG(ierr);
-    #endif
-    ierr = TSSolve(ts,T); CHKERRG(ierr);
-    ierr = TSGetTime(ts,&ftime); CHKERRG(ierr);
+#if PETSC_VERSION_GE(3, 7, 0)
+    CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_STEPOVER);
+#endif
+    CHKERR TSSolve(ts, T);
+    CHKERR TSGetTime(ts, &ftime);
 
-    ierr = recorder_ptr->finalize_series_recorder("THEMP_SERIES"); CHKERRG(ierr);
+    CHKERR recorder_ptr->finalize_series_recorder("THEMP_SERIES");
 
-    PetscInt steps,snesfails,rejects,nonlinits,linits;
-    ierr = TSGetTimeStepNumber(ts,&steps); CHKERRG(ierr);
-    ierr = TSGetSNESFailures(ts,&snesfails); CHKERRG(ierr);
-    ierr = TSGetStepRejections(ts,&rejects); CHKERRG(ierr);
-    ierr = TSGetSNESIterations(ts,&nonlinits); CHKERRG(ierr);
-    ierr = TSGetKSPIterations(ts,&linits); CHKERRG(ierr);
+    PetscInt steps, snesfails, rejects, nonlinits, linits;
+    CHKERR TSGetTimeStepNumber(ts, &steps);
+    CHKERR TSGetSNESFailures(ts, &snesfails);
+    CHKERR TSGetStepRejections(ts, &rejects);
+    CHKERR TSGetSNESIterations(ts, &nonlinits);
+    CHKERR TSGetKSPIterations(ts, &linits);
     PetscPrintf(PETSC_COMM_WORLD,
-      "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits %D, linits %D\n",
-      steps,rejects,snesfails,ftime,nonlinits,linits);
+                "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
+                "%D, linits %D\n",
+                steps, rejects, snesfails, ftime, nonlinits, linits);
 
-      // PetscViewer viewer;
-      // PetscViewerASCIIOpen(PETSC_COMM_WORLD,"thermal_elem_unsteady.txt",&viewer);
+    // PetscViewer viewer;
+    // PetscViewerASCIIOpen(PETSC_COMM_WORLD,"thermal_elem_unsteady.txt",&viewer);
 
-      double sum = 0;
-      double fnorm = 0;
+    double sum = 0;
+    double fnorm = 0;
 
-      for(_IT_SERIES_STEPS_BY_NAME_FOR_LOOP_(recorder_ptr,"THEMP_SERIES",sit)) {
+    for (_IT_SERIES_STEPS_BY_NAME_FOR_LOOP_(recorder_ptr, "THEMP_SERIES",
+                                            sit)) {
 
-        ierr = recorder_ptr->load_series_data("THEMP_SERIES",sit->get_step_number()); CHKERRG(ierr);
-        ierr = m_field.getInterface<VecManager>()->setLocalGhostVector("TEST_PROBLEM",ROW,T,INSERT_VALUES,SCATTER_FORWARD); CHKERRG(ierr);
+      CHKERR recorder_ptr->load_series_data("THEMP_SERIES",
+                                            sit->get_step_number());
+      CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
+          "TEST_PROBLEM", ROW, T, INSERT_VALUES, SCATTER_FORWARD);
 
-        double sum0;
-        ierr = VecSum(T,&sum0); CHKERRG(ierr);
-        ierr = PetscPrintf(PETSC_COMM_WORLD,"sum0  = %9.8e\n",sum0); CHKERRG(ierr);
-        double fnorm0;
-        ierr = VecNorm(T,NORM_2,&fnorm0); CHKERRG(ierr);
-        ierr = PetscPrintf(PETSC_COMM_WORLD,"fnorm0  = %9.8e\n",fnorm0); CHKERRG(ierr);
+      double sum0;
+      CHKERR VecSum(T, &sum0);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "sum0  = %9.8e\n", sum0);
+      double fnorm0;
+      CHKERR VecNorm(T, NORM_2, &fnorm0);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "fnorm0  = %9.8e\n", fnorm0);
 
-        sum += sum0;
-        fnorm += fnorm0;
+      sum += sum0;
+      fnorm += fnorm0;
 
-        // ierr = VecChop(T,1e-4); CHKERRG(ierr);
-        // ierr = VecView(T,viewer); CHKERRG(ierr);
+      // CHKERR VecChop(T,1e-4);
+      // CHKERR VecView(T,viewer);
+    }
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "sum  = %9.8e\n", sum);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "fnorm  = %9.8e\n", fnorm);
+    if (fabs(sum + 1.32314077e+01) > 1e-7) {
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "Failed to pass test");
+    }
+    if (fabs(fnorm - 4.59664623e+00) > 1e-6) {
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "Failed to pass test");
+    }
 
-      }
-      ierr = PetscPrintf(PETSC_COMM_WORLD,"sum  = %9.8e\n",sum); CHKERRG(ierr);
-      ierr = PetscPrintf(PETSC_COMM_WORLD,"fnorm  = %9.8e\n",fnorm); CHKERRG(ierr);
-      if(fabs(sum+1.32314077e+01)>1e-7) {
-        SETERRQ(PETSC_COMM_WORLD,MOFEM_ATOM_TEST_INVALID,"Failed to pass test");
-      }
-      if(fabs(fnorm-4.59664623e+00)>1e-6) {
-        SETERRQ(PETSC_COMM_WORLD,MOFEM_ATOM_TEST_INVALID,"Failed to pass test");
-      }
+    // CHKERR PetscViewerDestroy(&viewer);
 
+    /*PostProcVertexMethod ent_method(moab,"TEMP");
+    CHKERR m_field.loop_dofs("TEST_PROBLEM","TEMP",ROW,ent_method);
+    if(pcomm->rank()==0) {
+    EntityHandle out_meshset;
+    rval = moab.create_meshset(MESHSET_SET,out_meshset);
+    CHKERR
+  m_field.get_problem_finite_elements_entities("TEST_PROBLEM","THERMAL_FE",out_meshset);
+    rval = moab.write_file("out.vtk","VTK","",&out_meshset,1);
+    rval = moab.delete_entities(&out_meshset,1);
+  }*/
 
-      // ierr = PetscViewerDestroy(&viewer); CHKERRG(ierr);
-
-
-      /*PostProcVertexMethod ent_method(moab,"TEMP");
-      ierr = m_field.loop_dofs("TEST_PROBLEM","TEMP",ROW,ent_method); CHKERRG(ierr);
-      if(pcomm->rank()==0) {
-      EntityHandle out_meshset;
-      rval = moab.create_meshset(MESHSET_SET,out_meshset); CHKERRG(rval);
-      ierr = m_field.get_problem_finite_elements_entities("TEST_PROBLEM","THERMAL_FE",out_meshset); CHKERRG(ierr);
-      rval = moab.write_file("out.vtk","VTK","",&out_meshset,1); CHKERRG(rval);
-      rval = moab.delete_entities(&out_meshset,1); CHKERRG(rval);
-    }*/
-
-    ierr = TSDestroy(&ts);CHKERRG(ierr);
-    ierr = MatDestroy(&A); CHKERRG(ierr);
-    ierr = VecDestroy(&F); CHKERRG(ierr);
-    ierr = VecDestroy(&T); CHKERRG(ierr);
-
-
-  } 
+    CHKERR TSDestroy(&ts);
+    CHKERR MatDestroy(&A);
+    CHKERR VecDestroy(&F);
+    CHKERR VecDestroy(&T);
+  }
   CATCH_ERRORS;
 
-  MoFEM::Core::Finalize(); 
+  MoFEM::Core::Finalize();
 
   return 0;
-
 }
