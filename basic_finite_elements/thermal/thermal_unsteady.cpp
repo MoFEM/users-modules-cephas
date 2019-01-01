@@ -498,7 +498,7 @@ int main(int argc, char *argv[]) {
   CHKERR TSSetIFunction(ts,F,PETSC_NULL,PETSC_NULL); 
   CHKERR TSSetIJacobian(ts,A,A,PETSC_NULL,PETSC_NULL); 
   //add monitor to TS solver
-  CHKERR TSMonitorSet(ts,f_TSMonitorSet,ts_ctx,PETSC_NULL);  // !!!
+  CHKERR TSMonitorSet(ts,TsMonitorSet,ts_ctx,PETSC_NULL);  // !!!
 
   CHKERR recorder_ptr->add_series_recorder("THEMP_SERIES"); 
   //start to record

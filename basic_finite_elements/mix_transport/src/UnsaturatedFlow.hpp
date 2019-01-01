@@ -1676,7 +1676,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     // Set-up monitor
     TsCtx *ts_ctx;
     DMMoFEMGetTsCtx(dM, &ts_ctx);
-    CHKERR TSMonitorSet(ts, f_TSMonitorSet, ts_ctx, PETSC_NULL);
+    CHKERR TSMonitorSet(ts, TsMonitorSet, ts_ctx, PETSC_NULL);
 
     // This add SNES monitor, to show error by fields. It is dirty trick
     // to add monitor, so code is hidden from doxygen

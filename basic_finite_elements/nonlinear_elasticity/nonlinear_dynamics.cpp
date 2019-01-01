@@ -757,14 +757,14 @@ int main(int argc, char *argv[]) {
     loops_to_do_Monitor.push_back(
         TsCtx::PairNameFEMethodPtr("MASS_ELEMENT", &monitor_restart));
 
-    CHKERR TSSetIFunction(ts, F, f_TSSetIFunction, &ts_ctx);
+    CHKERR TSSetIFunction(ts, F, TsSetIFunction, &ts_ctx);
 #ifdef BLOCKED_PROBLEM
-    CHKERR TSSetIJacobian(ts, shell_Aij, shell_Aij, f_TSSetIJacobian, &ts_ctx);
+    CHKERR TSSetIJacobian(ts, shell_Aij, shell_Aij, TsSetIJacobian, &ts_ctx);
 #else
-    CHKERR TSSetIJacobian(ts, Aij, Aij, f_TSSetIJacobian, &ts_ctx);
+    CHKERR TSSetIJacobian(ts, Aij, Aij, TsSetIJacobian, &ts_ctx);
 #endif
 
-    CHKERR TSMonitorSet(ts, f_TSMonitorSet, &ts_ctx, PETSC_NULL);
+    CHKERR TSMonitorSet(ts, TsMonitorSet, &ts_ctx, PETSC_NULL);
 
     double ftime = 1;
     CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);

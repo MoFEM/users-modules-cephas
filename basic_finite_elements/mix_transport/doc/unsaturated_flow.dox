@@ -817,8 +817,8 @@ chapter 6.
 
 The constructions of time discretized problem are managed transparently for the
 user.  If you are interested in details, see MoFEM::TsCtx class and auxiliary
-functions like MoFEM::f_TSSetIFunction, MoFEM::f_TSSetIJacobian and
-MoFEM::f_TSMonitorSet. Those functions are called by the discrete manager (DM)
+functions like MoFEM::TsSetIFunction, MoFEM::TsSetIJacobian and
+MoFEM::TsMonitorSet. Those functions are called by the discrete manager (DM)
 which is linked to time solver.
 
 In the previous section, we transform PDE, by applying space discretization,
@@ -1194,7 +1194,7 @@ CHKERR TSSetExactFinalTime(ts,TS_EXACTFINALTIME_STEPOVER);
 // Set-up monitor
 TsCtx *ts_ctx;
 DMMoFEMGetTsCtx(dM,&ts_ctx);
-CHKERR TSMonitorSet(ts,f_TSMonitorSet,ts_ctx,PETSC_NULL); 
+CHKERR TSMonitorSet(ts,TsMonitorSet,ts_ctx,PETSC_NULL); 
 CHKERR TSSolve(ts,D); 
 \endcode
 Note that TS calls finite elements instance by DM, similarly how SNES (Newton

@@ -148,9 +148,9 @@ int main(int argc, char *argv[]) {
     ts_ctx.get_postProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
     ts_ctx.get_postProcess_to_do_Monitor().push_back(&monitor);
 
-    ierr = TSSetIFunction(ts,F,f_TSSetIFunction,&ts_ctx); CHKERRG(ierr);
-    ierr = TSSetIJacobian(ts,A,A,f_TSSetIJacobian,&ts_ctx); CHKERRG(ierr);
-    ierr = TSMonitorSet(ts,f_TSMonitorSet,&ts_ctx,PETSC_NULL); CHKERRG(ierr);
+    ierr = TSSetIFunction(ts,F,TsSetIFunction,&ts_ctx); CHKERRG(ierr);
+    ierr = TSSetIJacobian(ts,A,A,TsSetIJacobian,&ts_ctx); CHKERRG(ierr);
+    ierr = TSMonitorSet(ts,TsMonitorSet,&ts_ctx,PETSC_NULL); CHKERRG(ierr);
 
     double ftime = 1;
     ierr = TSSetDuration(ts,PETSC_DEFAULT,ftime); CHKERRG(ierr);
