@@ -513,7 +513,6 @@ int main(int argc, char *argv[]) {
         CHKERR prb_mng_ptr->partitionFiniteElements("Kuu");
       }
       CHKERR prb_mng_ptr->partitionGhostDofs("Kuu");
-      // CHKERR m_field.partition_check_matrix_fill_in("Kuu",-1,-1,0);
     }
 #endif
 
