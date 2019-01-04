@@ -103,20 +103,6 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
     CHKERR elastic.setOperators("SPATIAL_POSITION");
 
-    /*struct MyMat: public FunctionsToCalculatePiolaKirchhoffI {
-    Interface& moAB;
-    MyMat(Interface& moab): moAB(moab) {};
-    MoFEMErrorCode calculateP_PiolaKirchhoffI(
-    const BlockData block_data,
-    const NumeredEntFiniteElement *fe_ptr) {
-    MoFEMFunctionBeginHot;
-    //my stuff
-    MoFEMFunctionReturnHot(0);
-  }
-};
-MyMat mymat(moab);
-CHKERR elastic.setOperators(mymat,"SPATIAL_POSITION"); */
-
     // define problems
     CHKERR m_field.add_problem("ELASTIC_MECHANICS");
     // set refinement level for problem
@@ -167,10 +153,10 @@ CHKERR elastic.setOperators(mymat,"SPATIAL_POSITION"); */
     Vec F;
     CHKERR m_field.getInterface<VecManager>()->vecCreateGhost(
         "ELASTIC_MECHANICS", COL, &F);
-    // Vec D;
-    // CHKERR VecDuplicate(F,&D);
     Mat Aij;
-    CHKERR m_field.MatCreateMPIAIJWithArrays("ELASTIC_MECHANICS", &Aij);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("ELASTIC_MECHANICS",
+                                                        &Aij);
 
     elastic.getLoopFeRhs().snes_f = F;
     elastic.getLoopFeLhs().snes_B = Aij;
@@ -186,22 +172,6 @@ CHKERR elastic.setOperators(mymat,"SPATIAL_POSITION"); */
                                         elastic.getLoopFeLhs());
     CHKERR MatAssemblyBegin(Aij, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(Aij, MAT_FINAL_ASSEMBLY);
-
-    // PetscViewer viewer;
-    // CHKERR
-    // PetscViewerASCIIOpen(PETSC_COMM_WORLD,"nonlinear_elastic.txt",&viewer);
-
-    // CHKERR VecChop(F,1e-4);
-    // //CHKERR VecView(F,PETSC_VIEWER_STDOUT_WORLD);
-    // CHKERR VecView(F,viewer);
-    //
-    // //MatView(Aij,PETSC_VIEWER_DRAW_WORLD);
-    // MatChop(Aij,1e-4);
-    // //MatView(Aij,PETSC_VIEWER_STDOUT_WORLD);
-    // MatView(Aij,viewer);
-    // //std::string wait;
-    // //std::cin >> wait;
-    // CHKERR PetscViewerDestroy(&viewer);
 
     double sum = 0;
     CHKERR VecSum(F, &sum);
@@ -225,7 +195,6 @@ CHKERR elastic.setOperators(mymat,"SPATIAL_POSITION"); */
     }
 
     CHKERR VecDestroy(&F);
-    // CHKERR VecDestroy(&D);
     CHKERR MatDestroy(&Aij);
   }
   CATCH_ERRORS;
