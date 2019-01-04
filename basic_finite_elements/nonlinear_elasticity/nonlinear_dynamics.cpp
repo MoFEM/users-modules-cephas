@@ -34,18 +34,17 @@ namespace po = boost::program_options;
 
 #define BLOCKED_PROBLEM
 
-
-
-
 static char help[] = "...\n\n";
 
-struct MonitorPostProc: public FEMethod {
+struct MonitorPostProc : public FEMethod {
 
   MoFEM::Interface &mField;
   PostProcVolumeOnRefinedMesh postProc;
   std::map<int, NonlinearElasticElement::BlockData> &setOfBlocks;
-  NonlinearElasticElement::MyVolumeFE &feElasticEnergy;   ///< calculate elastic energy
-  ConvectiveMassElement::MyVolumeFE &feKineticEnergy;     ///< calculate elastic energy
+  NonlinearElasticElement::MyVolumeFE
+      &feElasticEnergy; ///< calculate elastic energy
+  ConvectiveMassElement::MyVolumeFE
+      &feKineticEnergy; ///< calculate elastic energy
 
   bool iNit;
 
@@ -61,7 +60,7 @@ struct MonitorPostProc: public FEMethod {
         setOfBlocks(set_of_blocks), feElasticEnergy(fe_elastic_energy),
         feKineticEnergy(fe_kinetic_energy), iNit(false) {
 
-    double def_t_val                = 0;
+    double def_t_val = 0;
     const EntityHandle root_meshset = mField.get_moab().get_root_set();
 
     Tag th_step;
@@ -142,10 +141,9 @@ struct MonitorPostProc: public FEMethod {
     MoFEMFunctionBeginHot;
     MoFEMFunctionReturnHot(0);
   }
-
 };
 
-struct MonitorRestart: public FEMethod {
+struct MonitorRestart : public FEMethod {
 
   double *time;
   int *step;
@@ -209,7 +207,9 @@ struct MonitorRestart: public FEMethod {
     //   if((*step)%pRT==0) {
     //     std::ostringstream ss;
     //     ss << "restart_" << (*step) << ".h5m";
-    //     CHKERR mField.get_moab().write_file(ss.str().c_str()/*,"MOAB","PARALLEL=WRITE_PART"*/); CHKERRG(rval);
+    //     CHKERR
+    //     mField.get_moab().write_file(ss.str().c_str()/*,"MOAB","PARALLEL=WRITE_PART"*/);
+    //     CHKERRG(rval);
     //   }
     // }
     (*step)++;
@@ -225,10 +225,9 @@ struct MonitorRestart: public FEMethod {
     MoFEMFunctionBeginHot;
     MoFEMFunctionReturnHot(0);
   }
-
 };
 
-//See file users_modules/elasticity/TimeForceScale.hpp
+// See file users_modules/elasticity/TimeForceScale.hpp
 #include <TimeForceScale.hpp>
 
 int main(int argc, char *argv[]) {
@@ -239,7 +238,7 @@ int main(int argc, char *argv[]) {
 
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
-    ParallelComm *pcomm   = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
@@ -426,8 +425,8 @@ int main(int argc, char *argv[]) {
     CHKERR elastic_materials.setBlocks(damper.blockMaterialDataMap);
     {
       KelvinVoigtDamper::CommonData &common_data = damper.commonData;
-      common_data.spatialPositionName            = "SPATIAL_POSITION";
-      common_data.spatialPositionNameDot         = "DOT_SPATIAL_POSITION";
+      common_data.spatialPositionName = "SPATIAL_POSITION";
+      common_data.spatialPositionNameDot = "DOT_SPATIAL_POSITION";
       CHKERR m_field.add_finite_element("DAMPER", MF_ZERO);
       CHKERR m_field.modify_finite_element_add_field_row("DAMPER",
                                                          "SPATIAL_POSITION");
@@ -444,8 +443,8 @@ int main(int argc, char *argv[]) {
       std::map<int, KelvinVoigtDamper::BlockMaterialData>::iterator bit =
           damper.blockMaterialDataMap.begin();
       for (; bit != damper.blockMaterialDataMap.end(); bit++) {
-        bit->second.lInear                                  = linear;
-        int id                                              = bit->first;
+        bit->second.lInear = linear;
+        int id = bit->first;
         KelvinVoigtDamper::BlockMaterialData &material_data = bit->second;
         damper.constitutiveEquationMap.insert(
             id, new KelvinVoigtDamper::ConstitutiveEquation<adouble>(
@@ -559,7 +558,9 @@ int main(int argc, char *argv[]) {
     // shell matrix
     ConvectiveMassElement::MatShellCtx *shellAij_ctx =
         new ConvectiveMassElement::MatShellCtx();
-    CHKERR m_field.MatCreateMPIAIJWithArrays("Kuu", &shellAij_ctx->K);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("Kuu",
+                                                          &shellAij_ctx->K);
     CHKERR MatDuplicate(shellAij_ctx->K, MAT_DO_NOT_COPY_VALUES,
                         &shellAij_ctx->M);
     CHKERR shellAij_ctx->iNit();
@@ -588,8 +589,8 @@ int main(int argc, char *argv[]) {
                                                    PETSC_NULL, PETSC_NULL);
     DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "SPATIAL_POSITION",
                                                 PETSC_NULL, D, F);
-    shell_matrix_element.problemName    = "Kuu";
-    shell_matrix_element.shellMatCtx    = shellAij_ctx;
+    shell_matrix_element.problemName = "Kuu";
+    shell_matrix_element.shellMatCtx = shellAij_ctx;
     shell_matrix_element.DirichletBcPtr = &shell_dirichlet_bc;
     shell_matrix_element.loopK.push_back(
         ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
@@ -641,7 +642,8 @@ int main(int argc, char *argv[]) {
 
 #else
     Mat Aij;
-    CHKERR m_field.MatCreateMPIAIJWithArrays("DYNAMICS", &Aij);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("DYNAMICS", &Aij);
     DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "SPATIAL_POSITION",
                                                 Aij, D, F);
     // my_dirichlet_bc.fixFields.push_back("SPATIAL_VELOCITY");

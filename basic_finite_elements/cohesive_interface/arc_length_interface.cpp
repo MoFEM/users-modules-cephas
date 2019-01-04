@@ -40,7 +40,7 @@ struct ArcLengthElement : public ArcLengthIntElemFEMethod {
   MoFEM::Interface &mField;
   Range postProcNodes;
   ArcLengthElement(MoFEM::Interface &m_field,
-                   boost::shared_ptr<ArcLengthCtx>& arc_ptr)
+                   boost::shared_ptr<ArcLengthCtx> &arc_ptr)
       : ArcLengthIntElemFEMethod(m_field.get_moab(), arc_ptr), mField(m_field) {
 
     for (_IT_CUBITMESHSETS_BY_NAME_FOR_LOOP_(mField, "LoadPath", cit)) {
@@ -530,7 +530,9 @@ int main(int argc, char *argv[]) {
     CHKERR VecDuplicate(F, &D);
     CHKERR VecDuplicate(F, &F_body_force);
     Mat Aij;
-    CHKERR m_field.MatCreateMPIAIJWithArrays("ELASTIC_MECHANICS", &Aij);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("ELASTIC_MECHANICS",
+                                                        &Aij);
 
     // Assemble F and Aij
     double young_modulus = 1;
@@ -597,8 +599,8 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.get_problem("ELASTIC_MECHANICS",
                                &my_dirichlet_bc.problemPtr);
     CHKERR my_dirichlet_bc.iNitalize();
-    boost::shared_ptr<Hooke<adouble> > hooke_adouble_ptr(new Hooke<adouble>);
-    boost::shared_ptr<Hooke<double> > hooke_double_ptr(new Hooke<double>);
+    boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>);
+    boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>);
     NonlinearElasticElement elastic(m_field, 2);
     {
       int id = 0;
@@ -872,12 +874,6 @@ int main(int argc, char *argv[]) {
       }
 
       if (step % 1 == 0) {
-
-        // if(pcomm->rank()==0) {
-        //   std::ostringstream sss;
-        //   sss << "restart_" << step << ".h5m";
-        //   rval = moab.write_file(sss.str().c_str()); CHKERRG(rval);
-        // }
 
         CHKERR m_field.loop_finite_elements("ELASTIC_MECHANICS", "ELASTIC",
                                             post_proc);

@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
- static char help[] = "\
+static char help[] = "\
  -my_file mesh file name\n\
  -my_sr reduction of step size\n\
  -my_ms maximal number of steps\n\n";
@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
-    ParallelComm *pcomm   = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
                        step_size);
 
     MoFEM::Core core(moab);
-    MoFEM::Interface& m_field = core;
+    MoFEM::Interface &m_field = core;
 
     // ref meshset ref level 0
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
@@ -251,10 +251,10 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
                                &linear);
 
-    NonlinearElasticElement elastic(m_field,2);
+    NonlinearElasticElement elastic(m_field, 2);
     ElasticMaterials elastic_materials(m_field);
-    CHKERR elastic_materials.setBlocks(elastic.setOfBlocks); 
-    CHKERR elastic.addElement("ELASTIC","SPATIAL_POSITION"); 
+    CHKERR elastic_materials.setBlocks(elastic.setOfBlocks);
+    CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
     CHKERR elastic.setOperators("SPATIAL_POSITION");
 
     // post_processing
@@ -324,18 +324,19 @@ int main(int argc, char *argv[]) {
     Vec D;
     CHKERR VecDuplicate(F, &D);
     Mat Aij;
-    CHKERR m_field.MatCreateMPIAIJWithArrays("ELASTIC_MECHANICS", &Aij);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("ELASTIC_MECHANICS",
+                                                        &Aij);
 
-    boost::shared_ptr<ArcLengthCtx> arc_ctx =
-        boost::shared_ptr<ArcLengthCtx>(new ArcLengthCtx(m_field,
-                                                         "ELASTIC_MECHANICS"));
+    boost::shared_ptr<ArcLengthCtx> arc_ctx = boost::shared_ptr<ArcLengthCtx>(
+        new ArcLengthCtx(m_field, "ELASTIC_MECHANICS"));
 
     PetscInt M, N;
     CHKERR MatGetSize(Aij, &M, &N);
     PetscInt m, n;
     CHKERR MatGetLocalSize(Aij, &m, &n);
     boost::scoped_ptr<ArcLengthMatShell> mat_ctx(
-            new ArcLengthMatShell(Aij, arc_ctx, "ELASTIC_MECHANICS"));
+        new ArcLengthMatShell(Aij, arc_ctx, "ELASTIC_MECHANICS"));
 
     Mat ShellAij;
     CHKERR MatCreateShell(PETSC_COMM_WORLD, m, n, M, N, mat_ctx.get(),
@@ -361,8 +362,8 @@ int main(int argc, char *argv[]) {
     SphericalArcLengthControl arc_method(arc_ctx);
 
     double scaled_reference_load = 1;
-    double *scale_lhs            = &(arc_ctx->getFieldData());
-    double *scale_rhs            = &(scaled_reference_load);
+    double *scale_lhs = &(arc_ctx->getFieldData());
+    double *scale_rhs = &(scaled_reference_load);
     NeummanForcesSurfaceComplexForLazy neumann_forces(
         m_field, Aij, arc_ctx->F_lambda, scale_lhs, scale_rhs);
     NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE &fe_neumann =
@@ -443,7 +444,7 @@ int main(int argc, char *argv[]) {
         Range::iterator nit = nodeSet.begin();
         for (; nit != nodeSet.end(); nit++) {
           NumeredDofEntityByEnt::iterator dit, hi_dit;
-          dit    = numered_dofs_rows->get<Ent_mi_tag>().lower_bound(*nit);
+          dit = numered_dofs_rows->get<Ent_mi_tag>().lower_bound(*nit);
           hi_dit = numered_dofs_rows->get<Ent_mi_tag>().upper_bound(*nit);
           for (; dit != hi_dit; dit++) {
             PetscPrintf(PETSC_COMM_WORLD, "%s [ %d ] %6.4e -> ", "LAMBDA", 0,
@@ -697,7 +698,7 @@ int main(int argc, char *argv[]) {
 
         CHKERR arc_ctx->setAlphaBeta(1, 0);
         CHKERR arc_method.calculateDxAndDlambda(D);
-        step_size  = sqrt(arc_method.calculateLambdaInt());
+        step_size = sqrt(arc_method.calculateLambdaInt());
         step_size0 = step_size;
         CHKERR arc_ctx->setS(step_size);
         double dlambda = arc_ctx->dLambda;
@@ -758,7 +759,7 @@ int main(int argc, char *argv[]) {
                            arc_ctx->dLambda);
         CHKERR arc_ctx->setAlphaBeta(1, 0);
 
-        reduction       = 0.1;
+        reduction = 0.1;
         converged_state = false;
 
         continue;
@@ -816,12 +817,10 @@ int main(int argc, char *argv[]) {
     CHKERR MatDestroy(&Aij);
     CHKERR MatDestroy(&ShellAij);
     CHKERR SNESDestroy(&snes);
-
   }
   CATCH_ERRORS;
 
   MoFEM::Core::Finalize();
 
   return 0;
-
 }

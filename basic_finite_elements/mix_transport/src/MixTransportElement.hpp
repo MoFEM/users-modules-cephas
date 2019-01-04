@@ -487,8 +487,8 @@ struct MixTransportElement {
   /// \brief create matrices
   MoFEMErrorCode createMatrices() {
     MoFEMFunctionBegin;
-    CHKERR mField.MatCreateMPIAIJWithArrays("MIX", &Aij);
-    ;
+    CHKERR mField.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("MIX", &Aij);
     CHKERR mField.getInterface<VecManager>()->vecCreateGhost("MIX", COL, &D);
     CHKERR mField.getInterface<VecManager>()->vecCreateGhost("MIX", COL, &D0);
     CHKERR mField.getInterface<VecManager>()->vecCreateGhost("MIX", ROW, &F);
@@ -1143,7 +1143,8 @@ struct MixTransportElement {
         double w = getGaussPts()(2, gg) * 0.5;
         if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
           noalias(nF) +=
-              w * prod(data.getVectorN<3>(gg), getNormalsAtGaussPts(gg)) * value;
+              w * prod(data.getVectorN<3>(gg), getNormalsAtGaussPts(gg)) *
+              value;
         } else {
           noalias(nF) += w * prod(data.getVectorN<3>(gg), getNormal()) * value;
         }
