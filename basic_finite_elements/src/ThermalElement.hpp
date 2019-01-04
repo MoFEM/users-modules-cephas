@@ -30,7 +30,7 @@
  * \ingroup mofem_thermal_elem
  *
  * In order to assemble matrices and right hand vectors, the loops over
- * elements, entities over that elements and finally loop over integration
+ * elements, entities within the element and finally loop over integration
  * points are executed.
  *
  * Following implementation separate those three types of loops and to each
