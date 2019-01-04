@@ -242,7 +242,9 @@ int main(int argc, char *argv[]) {
     Vec D;
     CHKERR VecDuplicate(F, &D);
     Mat Aij;
-    CHKERR m_field.MatCreateMPIAIJWithArrays("ELASTIC_MECHANICS", &Aij);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("ELASTIC_MECHANICS",
+                                                        &Aij);
 
     CHKERR inertia.setConvectiveMassOperators("SPATIAL_VELOCITY",
                                               "SPATIAL_POSITION");
@@ -273,7 +275,7 @@ int main(int argc, char *argv[]) {
                                         inertia.getLoopFeVelLhs());
     CHKERR MatAssemblyBegin(Aij, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(Aij, MAT_FINAL_ASSEMBLY);
-    
+
     double sum = 0;
     CHKERR VecSum(F, &sum);
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "sum  = %9.8e\n", sum);

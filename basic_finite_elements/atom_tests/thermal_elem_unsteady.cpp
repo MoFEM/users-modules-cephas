@@ -131,7 +131,8 @@ int main(int argc, char *argv[]) {
     Vec T;
     CHKERR VecDuplicate(F, &T);
     Mat A;
-    CHKERR m_field.MatCreateMPIAIJWithArrays("TEST_PROBLEM", &A);
+    CHKERR m_field.getInterface<MatrixManager>()
+        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("TEST_PROBLEM", &A);
 
     // TS
     TsCtx ts_ctx(m_field, "TEST_PROBLEM");
