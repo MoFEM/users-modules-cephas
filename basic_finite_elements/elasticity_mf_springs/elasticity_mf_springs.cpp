@@ -1,5 +1,5 @@
 /** \file elasticity_mf_springs.cpp
- * \example elasticity_mf_springs.hpp
+ * \example elasticity_mf_springs.cpp
  *
  * \brief Main implementation of U-P (mixed) finite element with springs.
  *
@@ -203,20 +203,36 @@ int main(int argc, char *argv[]) {
         new VolumeElementForcesAndSourcesCore(m_field));
 
     // *** Springs: Create new instance of face element for Springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSprg(
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpring(
         new FaceElementForcesAndSourcesCore(m_field));
 
     PostProcVolumeOnRefinedMesh post_proc(m_field);
 
     // loop over blocks
-    for (auto &sit : commonData.setOfBlocksData) {
+    for (auto &sitSpring : commonData.springMap) {
+
+      //   std::vector<double> attributes;
+      //   bit->getAttributes(attributes);
+      //   if (attributes.size() != 3) {
+      // to add to K (K = K + Ks), Fs on specific blockset
+      // if (sit.second->getName().compare(0, 9, "SPRING_BC") == 0) {
+      printf("Spring block\n");
 
       feLhs->getOpPtrVector().push_back(
-          new OpAssembleP(commonData, sit.second));
+          new OpSpringKs(commonData, sitSpring.second));
+      feRhs->getOpPtrVector().push_back(
+          new OpSpringFs(commonData, sitSpring.second));
+    }
+
+    for (auto &sitElastic : commonData.elasticMap) {
+      //} else {
+      printf("Elastic block\n");
       feLhs->getOpPtrVector().push_back(
-          new OpAssembleK(commonData, sit.second));
+          new OpAssembleP(commonData, sitElastic.second));
       feLhs->getOpPtrVector().push_back(
-          new OpAssembleG(commonData, sit.second));
+          new OpAssembleK(commonData, sitElastic.second));
+      feLhs->getOpPtrVector().push_back(
+          new OpAssembleG(commonData, sitElastic.second));
 
       post_proc.getOpPtrVector().push_back(
           new OpCalculateScalarFieldValues("P", commonData.pPtr));
@@ -225,7 +241,8 @@ int main(int argc, char *argv[]) {
                                                    commonData.gradDispPtr));
       post_proc.getOpPtrVector().push_back(
           new OpPostProcStress(post_proc.postProcMesh, post_proc.mapGaussPts,
-                               commonData, sit.second));
+                               commonData, sitElastic.second));
+      //}
     }
 
     Mat Aij;      // Stiffness matrix
@@ -244,7 +261,7 @@ int main(int argc, char *argv[]) {
 
     // Assign global matrix/vector
     feLhs->ksp_B = Aij;
-    feLhs->ksp_f = F_ext;
+    feRhs->ksp_f = F_ext;
 
     boost::shared_ptr<DirichletDisplacementBc> dirichlet_bc_ptr(
         new DirichletDisplacementBc(m_field, "U", Aij, d, F_ext));
@@ -252,6 +269,7 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->ts_ctx = FEMethod::CTX_TSNONE;
     CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feRhs);
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
