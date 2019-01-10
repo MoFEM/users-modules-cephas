@@ -164,8 +164,24 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
                                                         "MESH_NODE_POSITIONS");
 
+    // Add spring element, just depends on displacement "U"
+    CHKERR m_field.add_finite_element("SPRING");
+    CHKERR m_field.modify_finite_element_add_field_row("SPRING", "U");
+    CHKERR m_field.modify_finite_element_add_field_col("SPRING", "U");
+    CHKERR m_field.modify_finite_element_add_field_data("SPRING", "U");
+
     // Add entities to that element
     CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET, "ELASTIC");
+
+    // Add entities to spring element, TODO: mField?
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
+        CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
+                                                          MBTRI, "SPRING");
+      }
+        
+    }
+
     // build finite elements
     CHKERR m_field.build_finite_elements();
     // build adjacencies between elements and degrees of freedom
@@ -183,49 +199,37 @@ int main(int argc, char *argv[]) {
     // Configure DM form line command options (DM itself, solvers,
     // pre-conditioners, ... )
     CHKERR DMSetFromOptions(dm);
-    // Add elements to dm (only one here)
+
+    // Add elements to DM
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+    CHKERR DMMoFEMAddElement(dm, "SPRING");
     if (m_field.check_finite_element("PRESSURE_FE"))
       CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     if (m_field.check_finite_element("FORCE_FE"))
       CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
+
     // setup the DM
     CHKERR DMSetUp(dm);
 
     DataAtIntegrationPts commonData(m_field);
     CHKERR commonData.getParameters();
 
+    // Create new instances
     boost::shared_ptr<FEMethod> nullFE;
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs(
         new VolumeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs(
-        new VolumeElementForcesAndSourcesCore(m_field));
-
-    // *** Springs: Create new instance of face element for Springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpring(
+    // *** Springs: Create new instances of face elements for Springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringLhs(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringRhs(
         new FaceElementForcesAndSourcesCore(m_field));
 
     PostProcVolumeOnRefinedMesh post_proc(m_field);
 
+    // Push operators to instances
     // loop over blocks
-    for (auto &sitSpring : commonData.springMap) {
-
-      //   std::vector<double> attributes;
-      //   bit->getAttributes(attributes);
-      //   if (attributes.size() != 3) {
-      // to add to K (K = K + Ks), Fs on specific blockset
-      // if (sit.second->getName().compare(0, 9, "SPRING_BC") == 0) {
-      printf("Spring block\n");
-
-      feLhs->getOpPtrVector().push_back(
-          new OpSpringKs(commonData, sitSpring.second));
-      feRhs->getOpPtrVector().push_back(
-          new OpSpringFs(commonData, sitSpring.second));
-    }
-
-    for (auto &sitElastic : commonData.elasticMap) {
-      //} else {
+    for (auto &sitElastic : commonData.mapElastic) {
       printf("Elastic block\n");
       feLhs->getOpPtrVector().push_back(
           new OpAssembleP(commonData, sitElastic.second));
@@ -242,7 +246,38 @@ int main(int argc, char *argv[]) {
       post_proc.getOpPtrVector().push_back(
           new OpPostProcStress(post_proc.postProcMesh, post_proc.mapGaussPts,
                                commonData, sitElastic.second));
-      //}
+    }
+
+    for (auto &sitSpring : commonData.mapSpring) {
+      printf("Spring block\n");
+
+      // MatrixDouble inv_jac;
+      // feSpringLhs->getOpPtrVector().push_back(
+      //     new OpCalculateInvJacForFace(inv_jac));
+      // feSpringLhs->getOpPtrVector().push_back(
+      //     new OpSetInvJacH1ForFace(inv_jac));
+      feSpringLhs->getOpPtrVector().push_back(
+          new OpSpringKs(commonData, sitSpring.second));
+
+
+      // feSpringRhs->getOpPtrVector().push_back(
+      //     new OpCalculateInvJacForFace(inv_jac));
+      // feSpringRhs->getOpPtrVector().push_back(
+      //     new OpSetInvJacH1ForFace(inv_jac));
+
+      // FIXME: Disp at Gauss points
+      // MatrixDouble values1_at_gauss_pts_ptr;
+      // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr =
+      //     boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr;
+      feSpringRhs->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("U", values1_at_gauss_pts_ptr));
+      // MatrixDouble values2_at_gauss_pts_ptr;
+      // feSpringRhs->getOpPtrVector().push_back(
+      //     new OpCalculateScalarFieldValues("U", values2_at_gauss_pts_ptr));
+      
+      feSpringRhs->getOpPtrVector().push_back(
+          new OpSpringFs(commonData, sitSpring.second));
     }
 
     Mat Aij;      // Stiffness matrix
@@ -261,7 +296,8 @@ int main(int argc, char *argv[]) {
 
     // Assign global matrix/vector
     feLhs->ksp_B = Aij;
-    feRhs->ksp_f = F_ext;
+    feSpringLhs->ksp_B = Aij;
+    feSpringRhs->ksp_f = F_ext;
 
     boost::shared_ptr<DirichletDisplacementBc> dirichlet_bc_ptr(
         new DirichletDisplacementBc(m_field, "U", Aij, d, F_ext));
@@ -269,7 +305,8 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->ts_ctx = FEMethod::CTX_TSNONE;
     CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feRhs);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringLhs);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringRhs);
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
@@ -311,6 +348,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMoFEMPostProcessFiniteElements(dm, dirichlet_bc_ptr.get());
     CHKERR DMMoFEMKSPSetComputeOperators(dm, "ELASTIC", feLhs, nullFE, nullFE);
+    // CHKERR DMMoFEMKSPSetComputeOperators(dm, "SPRING", feSpringLhs, nullFE,
+                                        //  nullFE);  //TODO: Need for spring?
     CHKERR VecAssemblyBegin(F_ext);
     CHKERR VecAssemblyEnd(F_ext);
 
@@ -325,7 +364,8 @@ int main(int argc, char *argv[]) {
     CHKERR KSPSolve(solver, F_ext, d);
 
     // VecView(F_ext, PETSC_VIEWER_STDOUT_WORLD);
-    // CHKERR VecView(d, PETSC_VIEWER_STDOUT_WORLD);    // Print out the results
+    // CHKERR VecView(d, PETSC_VIEWER_STDOUT_WORLD);    // Print out the
+    // results
     CHKERR DMoFEMMeshToGlobalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
 
     // Save data on mesh
@@ -334,6 +374,7 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.addFieldValuesPostProc("P");
 
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+    // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
     PetscPrintf(PETSC_COMM_WORLD, "Output file: %s\n", "out.h5m");
     CHKERR post_proc.postProcMesh.write_file("out.h5m", "MOAB",
                                              "PARALLEL=WRITE_PART");

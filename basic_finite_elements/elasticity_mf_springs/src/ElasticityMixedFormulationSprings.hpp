@@ -33,7 +33,7 @@ struct BlockData {
   double springStiffness2;
 
   Range tEts;
-  Range tRis;
+  Range tRis;   //TODO: Should generalise for edges and vertices
   BlockData()
       : oRder(-1), yOung(-1), pOisson(-2), springStiffness0(-1),
         springStiffness1(-1), springStiffness2(-1) {}
@@ -53,8 +53,8 @@ struct DataAtIntegrationPts {
   double springStiffness1;
   double springStiffness2;
 
-  std::map<int, BlockData> elasticMap;
-  std::map<int, BlockData> springMap;
+  std::map<int, BlockData> mapElastic;
+  std::map<int, BlockData> mapSpring;
 
   DataAtIntegrationPts(MoFEM::Interface &m_field) : mField(m_field) {
 
@@ -123,22 +123,25 @@ struct DataAtIntegrationPts {
       int id = it->getMeshsetId();
       EntityHandle meshset = it->getMeshset();
       CHKERR mField.get_moab().get_entities_by_type(
-          meshset, MBTET, elasticMap[id].tEts, true);
-      elasticMap[id].iD = id;
-      elasticMap[id].yOung = mydata.data.Young;
-      elasticMap[id].pOisson = mydata.data.Poisson;
+          meshset, MBTET, mapElastic[id].tEts, true);
+      mapElastic[id].iD = id;
+      mapElastic[id].yOung = mydata.data.Young;
+      mapElastic[id].pOisson = mydata.data.Poisson;
     }
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
+      
         //CHKERR bit->getAttributeDataStructure(mydata);
         const int id = bit->getMeshsetId();
         CHKERR mField.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBTRI, springMap[id].tRis, true);
-        // springMap[id - 1].iD = id;
-        // springMap[id - 1].springStiffness0 = mydata.data.SpringStiffness0;
-        // springMap[id - 1].springStiffness1 = mydata.data.SpringStiffness1;
-        // springMap[id - 1].springStiffness2 = mydata.data.SpringStiffness2;
+            bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+        
+        EntityHandle out_meshset;
+        CHKERR mField.get_moab().create_meshset(MESHSET_SET, out_meshset);
+        CHKERR mField.get_moab().add_entities(out_meshset, mapSpring[id].tRis);
+        CHKERR mField.get_moab().write_file("error.vtk", "VTK", "",
+                                            &out_meshset, 1);
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
@@ -146,26 +149,13 @@ struct DataAtIntegrationPts {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
                    "should be 3 attributes but is %d", attributes.size());
         }
-        springMap[id].iD = id;
-        springMap[id].springStiffness0 = attributes[0];
-        springMap[id].springStiffness1 = attributes[1];
-        springMap[id].springStiffness2 = attributes[2];
+        mapSpring[id].iD = id;
+        mapSpring[id].springStiffness0 = attributes[0];
+        mapSpring[id].springStiffness1 = attributes[1];
+        mapSpring[id].springStiffness2 = attributes[2];
       }
     }
 
-    // for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-    //          mField, BLOCKSET | SPRING_BCSET, it)) {
-    //   Spring_Bc mydata;
-    //   CHKERR it->getAttributeDataStructure(mydata);
-    //   int id = it->getMeshsetId();
-    //   EntityHandle meshset = it->getMeshset();
-    //   CHKERR mField.get_moab().get_entities_by_type(
-    //       meshset, MBTRI, setOfBlocksData[id].tRis, true);
-    //   setOfBlocksData[id - 1].iD = id;
-    //   setOfBlocksData[id - 1].springStiffness0 = mydata.data.SpringStiffness0;
-    //   setOfBlocksData[id - 1].springStiffness1 = mydata.data.SpringStiffness1;
-    //   setOfBlocksData[id - 1].springStiffness2 = mydata.data.SpringStiffness2;
-    // }
     MoFEMFunctionReturn(0);
   }
 
@@ -515,7 +505,7 @@ struct OpAssembleK
   }
 };
 
-struct OpSpringKs : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
   DataAtIntegrationPts &commonData;
   MatrixDouble locKs;
@@ -523,7 +513,7 @@ struct OpSpringKs : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
   BlockData &dAta;
 
   OpSpringKs(DataAtIntegrationPts &common_data, BlockData &data)
-      : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
+      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             "U", "U", OPROWCOL),
         commonData(common_data), dAta(data) {
     sYmm = true;
@@ -544,10 +534,12 @@ struct OpSpringKs : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
     if (!col_nb_dofs)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tEts.end()) {
-      MoFEMFunctionReturnHot(0);
+    std::cout << dAta.tRis << endl;
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
+      MoFEMFunctionReturnHot(0);  // TODO:This never gets executed
     }
+    // std::cout << "End: " << dAta.tRis.end() << endl;
 
     CHKERR commonData.getBlockData(dAta);
     // size associated to the entity
@@ -572,17 +564,16 @@ struct OpSpringKs : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
     // spring_stiffness(2) = commonData.springStiffness2;
 
 
-    FTensor::Tensor1<double, 3> t1;
+    // FTensor::Tensor1<double, 3> t1;
     FTensor::Index<'i', 3> i;
+    // FieldSpace space;
 
     // loop over all Gauss point of the volume
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
-      // get volume and integration weight
-      double w = getVolume() * getGaussPts()(3, gg);
-      if (getHoGaussPtsDetJac().size() > 0) {
-        w *= getHoGaussPtsDetJac()[gg]; // higher order geometry
-      }
-
+      // get area and integration weight
+      double w = getArea() * getGaussPts()(2, gg);
+      // TODO: w includes Jacobian due to OpSetInvJacH1ForFace(inv_jac)?
+      
       for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
         // t1(i) = w * row_base_functions(i) * spring_stiffness(i);
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
@@ -639,6 +630,12 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (nb_dofs == 0)
       MoFEMFunctionReturnHot(0);
 
+    std::cout << dAta.tRis << endl;
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
     // size of force vector associated to the entity
     // set equal to the number of degrees of freedom of associated with the
     // entity
@@ -670,6 +667,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
       double w = 0.5 * t_w;
+      // FIXME: w includes Jacobian due to OpCalculateInvJacForFace()?
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
@@ -679,6 +677,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         // scale the three components of t_normal and pass them to the t_nf
         // (hence to nF)
         // Here: *u
+    // FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[3]);
+    // FIXME: Operator for shape functions at Gauss point & nodal solutions
         t_nf(i) += (w * spring_stiffness[col_index % 3] * base_functions) *
                    t_normal(i);
         // move the pointer to next element of t_nf
