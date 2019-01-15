@@ -43,6 +43,9 @@ struct DataAtIntegrationPts {
   boost::shared_ptr<MatrixDouble> gradDispPtr;
   boost::shared_ptr<VectorDouble> pPtr;
   FTensor::Ddg<double, 3, 3> tD;
+  // boost::shared_ptr<MatrixDouble> xAtPts;
+  boost::shared_ptr<MatrixDouble> xAtPts =
+      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
   double pOisson;
   double yOung;
@@ -60,11 +63,13 @@ struct DataAtIntegrationPts {
 
     // Setting default values for coeffcients
     gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    xAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
     ierr = setBlocks();
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
   }
+
 
   MoFEMErrorCode getParameters() {
     MoFEMFunctionBegin; // They will be overwriten by BlockData
@@ -534,7 +539,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (!col_nb_dofs)
       MoFEMFunctionReturnHot(0);
 
-    std::cout << dAta.tRis << endl;
+    // std::cout << dAta.tRis << endl;
     if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
         dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);  // TODO:This never gets executed
@@ -572,7 +577,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
       // get area and integration weight
       double w = getArea() * getGaussPts()(2, gg);
-      // TODO: w includes Jacobian due to OpSetInvJacH1ForFace(inv_jac)?
       
       for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
         // t1(i) = w * row_base_functions(i) * spring_stiffness(i);
@@ -630,7 +634,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (nb_dofs == 0)
       MoFEMFunctionReturnHot(0);
 
-    std::cout << dAta.tRis << endl;
+    // std::cout << dAta.tRis << endl;
     if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
         dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
@@ -647,7 +651,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    auto t_normal = getFTensor1Normal();
+    // auto t_normal = getFTensor1Normal();
 
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
@@ -656,10 +660,22 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     auto base_functions = data.getFTensor0N();
 
     // get spring stiffness
-    vector<double> spring_stiffness; // spring_stiffness[0]
-    spring_stiffness.push_back(commonData.springStiffness0);
-    spring_stiffness.push_back(commonData.springStiffness1);
-    spring_stiffness.push_back(commonData.springStiffness2);
+    // vector<double> spring_stiffness; // spring_stiffness[0]
+    // spring_stiffness.push_back(commonData.springStiffness0);
+    // spring_stiffness.push_back(commonData.springStiffness1);
+    // spring_stiffness.push_back(commonData.springStiffness2);
+
+    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
+                                                 commonData.springStiffness1,
+                                                 commonData.springStiffness2);
+
+    // FTensor::Tensor2<double, 3, 3>(
+    //     &commonData.springStiffness0, &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+    //     &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+    //     &m(r + 2, c + 2));
+
+    auto disp_at_gauss_point = getFTensor1FromMat<3>(*commonData.xAtPts);
+    // auto disp_at_gauss_point = getFTensor1FromMat<3>(values1_at_gauss_pts_ptr);
 
     // ***** double val = data.getFieldData()[dd];
 
@@ -667,28 +683,42 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
       double w = 0.5 * t_w;
-      // FIXME: w includes Jacobian due to OpCalculateInvJacForFace()?
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
                                                               &nF[2]);
-      for (int col_index = 0; col_index != nb_dofs / 3; ++col_index) {
+      for (int col_index = 0; col_index != nb_dofs / 3; ++col_index) {    // loop over the nodes
         // scale the three components of t_normal and pass them to the t_nf
         // (hence to nF)
         // Here: *u
-    // FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[3]);
-    // FIXME: Operator for shape functions at Gauss point & nodal solutions
-        t_nf(i) += (w * spring_stiffness[col_index % 3] * base_functions) *
-                   t_normal(i);
-        // move the pointer to next element of t_nf
-        ++t_nf;
+        // FTensor::Tensor0<double *>
+        // t_field_data_slave(&data.getFieldData()[3]);
+        // FIXME: Operator for shape functions at Gauss point & nodal solutions:
+        // MoFEM::OpCalculateVectorFieldValues
+        for (int ii = 0; ii != 3; ++ii) {
+          t_nf(ii) +=
+              (w * spring_stiffness(ii) * base_functions) * disp_at_gauss_point(ii);
+        }
+        // t_nf(0) +=
+        //     (w * spring_stiffness(0) * base_functions) * disp_at_gauss_point(0);
+        // t_nf(0) += (w * commonData.springStiffness0 * base_functions) *
+        //            disp_at_gauss_point(0);
+        // t_nf(1) += (w * commonData.springStiffness1 * base_functions) *
+        //            disp_at_gauss_point(1);
+        // t_nf(2) += (w * commonData.springStiffness2 * base_functions) *
+        //            disp_at_gauss_point(2);
+
         // move to next base function
         ++base_functions;
+        // move the pointer to next element of t_nf
+        ++t_nf;
       }
-
+      
       // move to next integration weight
       ++t_w;
+      //
+      ++disp_at_gauss_point;
     }
 
     // add computed values of pressure in the global right hand side vector

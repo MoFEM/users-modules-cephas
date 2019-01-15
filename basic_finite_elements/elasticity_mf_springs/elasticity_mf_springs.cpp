@@ -251,15 +251,8 @@ int main(int argc, char *argv[]) {
     for (auto &sitSpring : commonData.mapSpring) {
       printf("Spring block\n");
 
-      // MatrixDouble inv_jac;
-      // feSpringLhs->getOpPtrVector().push_back(
-      //     new OpCalculateInvJacForFace(inv_jac));
-      // feSpringLhs->getOpPtrVector().push_back(
-      //     new OpSetInvJacH1ForFace(inv_jac));
       feSpringLhs->getOpPtrVector().push_back(
           new OpSpringKs(commonData, sitSpring.second));
-
-
       // feSpringRhs->getOpPtrVector().push_back(
       //     new OpCalculateInvJacForFace(inv_jac));
       // feSpringRhs->getOpPtrVector().push_back(
@@ -267,15 +260,21 @@ int main(int argc, char *argv[]) {
 
       // FIXME: Disp at Gauss points
       // MatrixDouble values1_at_gauss_pts_ptr;
+      // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr;
+      
       // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr =
       //     boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr;
-      feSpringRhs->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldValues<3>("U", values1_at_gauss_pts_ptr));
-      // MatrixDouble values2_at_gauss_pts_ptr;
+
       // feSpringRhs->getOpPtrVector().push_back(
-      //     new OpCalculateScalarFieldValues("U", values2_at_gauss_pts_ptr));
-      
+      //     new OpCalculateVectorFieldValues<3>("U", values1_at_gauss_pts_ptr));
+
+      // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr =
+      //     boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      // feSpringRhs->getOpPtrVector().push_back(
+      //     new OpCalculateVectorFieldValues<3>("U", commonData.xAtPts, MBTRI));
+      feSpringRhs->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("U", commonData.xAtPts));
+          
       feSpringRhs->getOpPtrVector().push_back(
           new OpSpringFs(commonData, sitSpring.second));
     }
@@ -307,6 +306,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringLhs);
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringRhs);
+    // DMoFEMLoopFiniteElements(dm, "SPRING", feSpringRhs);
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
