@@ -33,7 +33,7 @@ struct BlockData {
   double springStiffness2;
 
   Range tEts;
-  Range tRis;   //TODO: Should generalise for edges and vertices
+  Range tRis;
   BlockData()
       : oRder(-1), yOung(-1), pOisson(-2), springStiffness0(-1),
         springStiffness1(-1), springStiffness2(-1) {}
@@ -43,7 +43,6 @@ struct DataAtIntegrationPts {
   boost::shared_ptr<MatrixDouble> gradDispPtr;
   boost::shared_ptr<VectorDouble> pPtr;
   FTensor::Ddg<double, 3, 3> tD;
-  // boost::shared_ptr<MatrixDouble> xAtPts;
   boost::shared_ptr<MatrixDouble> xAtPts =
       boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
@@ -137,16 +136,15 @@ struct DataAtIntegrationPts {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
       
-        //CHKERR bit->getAttributeDataStructure(mydata);
         const int id = bit->getMeshsetId();
         CHKERR mField.get_moab().get_entities_by_type(
             bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
         
-        EntityHandle out_meshset;
-        CHKERR mField.get_moab().create_meshset(MESHSET_SET, out_meshset);
-        CHKERR mField.get_moab().add_entities(out_meshset, mapSpring[id].tRis);
-        CHKERR mField.get_moab().write_file("error.vtk", "VTK", "",
-                                            &out_meshset, 1);
+        // EntityHandle out_meshset;
+        // CHKERR mField.get_moab().create_meshset(MESHSET_SET, out_meshset);
+        // CHKERR mField.get_moab().add_entities(out_meshset, mapSpring[id].tRis);
+        // CHKERR mField.get_moab().write_file("error.vtk", "VTK", "",
+        //                                     &out_meshset, 1);
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
@@ -223,13 +221,8 @@ struct OpAssembleP
     FTensor::Index<'j', 3> j;
     const double lambda = commonData.lAmbda;
     const double mu = commonData.mU;
-    // const double st1 = commonData.springStiffness0;
-    // const double st2 = commonData.springStiffness1;
 
     double coefficient = commonData.pOisson == 0.5 ? 0. : 1 / lambda;
-
-    // Print test
-    // std::cout << "Value of string stiffness: " << st1 + st2 << endl;
 
     // integration
     if (coefficient != 0.) {
@@ -510,6 +503,12 @@ struct OpAssembleK
   }
 };
 
+/** * @brief Assemble contribution of spring to RHS *
+ * \f[
+ * {K^s} = \int\limits_\Omega ^{} {{\psi ^T}{k_s}\psi d\Omega }
+ * \f]
+ *
+ */
 struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
   DataAtIntegrationPts &commonData;
@@ -542,9 +541,8 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // std::cout << dAta.tRis << endl;
     if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
         dAta.tRis.end()) {
-      MoFEMFunctionReturnHot(0);  // TODO:This never gets executed
+      MoFEMFunctionReturnHot(0);
     }
-    // std::cout << "End: " << dAta.tRis.end() << endl;
 
     CHKERR commonData.getBlockData(dAta);
     // size associated to the entity
@@ -563,15 +561,8 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     spring_stiffness.push_back(commonData.springStiffness0);
     spring_stiffness.push_back(commonData.springStiffness1);
     spring_stiffness.push_back(commonData.springStiffness2);
-    // FTensor::Tensor1<double, 3> spring_stiffness;   //spring_stiffness(0)
-    // spring_stiffness(0) = commonData.springStiffness0;
-    // spring_stiffness(1) = commonData.springStiffness1;
-    // spring_stiffness(2) = commonData.springStiffness2;
 
-
-    // FTensor::Tensor1<double, 3> t1;
     FTensor::Index<'i', 3> i;
-    // FieldSpace space;
 
     // loop over all Gauss point of the volume
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -579,7 +570,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       double w = getArea() * getGaussPts()(2, gg);
       
       for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
-        // t1(i) = w * row_base_functions(i) * spring_stiffness(i);
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
         for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
           locKs(row_index, col_index) += w * row_base_functions *
@@ -610,6 +600,14 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   }
 };
 
+/** * @brief Assemble contribution of springs to LHS *
+ * \f[
+ * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
+ * \right)d\partial \Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
+ * ^T}{k_s}ud\partial \Omega } 
+ * \f]
+ *
+ */
 struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
   DataAtIntegrationPts &commonData;
@@ -649,35 +647,17 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // get number of gauss points
     const int nb_gauss_pts = data.getN().size1();
 
-    // create a 3d vector to be used as the normal to the face with length equal
-    // to the face area
-    // auto t_normal = getFTensor1Normal();
-
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // vector of base functions
     auto base_functions = data.getFTensor0N();
 
-    // get spring stiffness
-    // vector<double> spring_stiffness; // spring_stiffness[0]
-    // spring_stiffness.push_back(commonData.springStiffness0);
-    // spring_stiffness.push_back(commonData.springStiffness1);
-    // spring_stiffness.push_back(commonData.springStiffness2);
-
     FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
                                                  commonData.springStiffness1,
                                                  commonData.springStiffness2);
 
-    // FTensor::Tensor2<double, 3, 3>(
-    //     &commonData.springStiffness0, &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
-    //     &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
-    //     &m(r + 2, c + 2));
-
     auto disp_at_gauss_point = getFTensor1FromMat<3>(*commonData.xAtPts);
-    // auto disp_at_gauss_point = getFTensor1FromMat<3>(values1_at_gauss_pts_ptr);
-
-    // ***** double val = data.getFieldData()[dd];
 
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -689,42 +669,23 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
                                                               &nF[2]);
       for (int col_index = 0; col_index != nb_dofs / 3; ++col_index) {    // loop over the nodes
-        // scale the three components of t_normal and pass them to the t_nf
-        // (hence to nF)
-        // Here: *u
-        // FTensor::Tensor0<double *>
-        // t_field_data_slave(&data.getFieldData()[3]);
-        // FIXME: Operator for shape functions at Gauss point & nodal solutions:
-        // MoFEM::OpCalculateVectorFieldValues
         for (int ii = 0; ii != 3; ++ii) {
           t_nf(ii) +=
               (w * spring_stiffness(ii) * base_functions) * disp_at_gauss_point(ii);
         }
-        // t_nf(0) +=
-        //     (w * spring_stiffness(0) * base_functions) * disp_at_gauss_point(0);
-        // t_nf(0) += (w * commonData.springStiffness0 * base_functions) *
-        //            disp_at_gauss_point(0);
-        // t_nf(1) += (w * commonData.springStiffness1 * base_functions) *
-        //            disp_at_gauss_point(1);
-        // t_nf(2) += (w * commonData.springStiffness2 * base_functions) *
-        //            disp_at_gauss_point(2);
-
         // move to next base function
         ++base_functions;
         // move the pointer to next element of t_nf
         ++t_nf;
       }
-      
       // move to next integration weight
       ++t_w;
       //
       ++disp_at_gauss_point;
     }
-
     // add computed values of pressure in the global right hand side vector
     CHKERR VecSetValues(getFEMethod()->ksp_f, nb_dofs, &data.getIndices()[0],
                         &nF[0], ADD_VALUES);
-
     MoFEMFunctionReturn(0);
   }
 };

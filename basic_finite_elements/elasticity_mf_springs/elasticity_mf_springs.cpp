@@ -230,7 +230,6 @@ int main(int argc, char *argv[]) {
     // Push operators to instances
     // loop over blocks
     for (auto &sitElastic : commonData.mapElastic) {
-      printf("Elastic block\n");
       feLhs->getOpPtrVector().push_back(
           new OpAssembleP(commonData, sitElastic.second));
       feLhs->getOpPtrVector().push_back(
@@ -249,32 +248,11 @@ int main(int argc, char *argv[]) {
     }
 
     for (auto &sitSpring : commonData.mapSpring) {
-      printf("Spring block\n");
-
       feSpringLhs->getOpPtrVector().push_back(
           new OpSpringKs(commonData, sitSpring.second));
-      // feSpringRhs->getOpPtrVector().push_back(
-      //     new OpCalculateInvJacForFace(inv_jac));
-      // feSpringRhs->getOpPtrVector().push_back(
-      //     new OpSetInvJacH1ForFace(inv_jac));
-
-      // FIXME: Disp at Gauss points
-      // MatrixDouble values1_at_gauss_pts_ptr;
-      // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr;
-      
-      // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr =
-      //     boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-
-      // feSpringRhs->getOpPtrVector().push_back(
-      //     new OpCalculateVectorFieldValues<3>("U", values1_at_gauss_pts_ptr));
-
-      // boost::shared_ptr<MatrixDouble> values1_at_gauss_pts_ptr =
-      //     boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      // feSpringRhs->getOpPtrVector().push_back(
-      //     new OpCalculateVectorFieldValues<3>("U", commonData.xAtPts, MBTRI));
+          
       feSpringRhs->getOpPtrVector().push_back(
           new OpCalculateVectorFieldValues<3>("U", commonData.xAtPts));
-          
       feSpringRhs->getOpPtrVector().push_back(
           new OpSpringFs(commonData, sitSpring.second));
     }
