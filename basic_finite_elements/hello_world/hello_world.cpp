@@ -55,10 +55,10 @@ struct OpRowCol : public ForcesAndSourcesCore::UserDataOperator {
            const bool symm)
       : ForcesAndSourcesCore::UserDataOperator(row_field, col_field, OPROWCOL,
                                                symm) {}
-  virtual MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                                EntityType col_type,
-                                DataForcesAndSourcesCore::EntData &row_data,
-                                DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
     MoFEMFunctionBegin;
     std::cout << "Hello Operator OpRowCol:"
               << " row field name " << rowFieldName << " row side " << row_side
