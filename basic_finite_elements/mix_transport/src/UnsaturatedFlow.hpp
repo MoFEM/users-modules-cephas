@@ -1343,9 +1343,6 @@ struct UnsaturatedFlowElement : public MixTransportElement {
                               &*cTx.bcVecIds.begin(),
                               &*cTx.vecValsOnBc.begin());
           cTx.bcVecVals *= scale;
-          // cerr << mArk << endl;
-          // cerr << "v " << cTx.vecValsOnBc << endl;
-          // cerr << "v " << cTx.bcVecVals << endl;
           VectorDouble::iterator vit = cTx.bcVecVals.begin();
           const NumeredDofEntity *dof_ptr;
           for (std::vector<int>::iterator it = cTx.bcVecIds.begin();
