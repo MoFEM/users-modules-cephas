@@ -72,10 +72,8 @@ MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
   if (col_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
 
-  const FENumeredDofEntity *dof_ptr;
-  CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-      row_data.getIndices()[0], &dof_ptr);
-  int rank = dof_ptr->getNbOfCoeffs();
+  const auto &dof_ptr = row_data.getFieldDofs()[0];
+  const int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_row_dofs = row_data.getIndices().size() / rank;
   int nb_col_dofs = col_data.getIndices().size() / rank;
