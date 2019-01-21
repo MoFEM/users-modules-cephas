@@ -417,8 +417,14 @@ int random(int min, int max) // range : [min, max)
 
 double random_d() // range : [min, max)
 {
+
+  //   tolCut = 1e-4;
+  // tolCutClose = 1e-2;
+  // tolTrim = 1e-3;
+  // tolTrimClose = 1e-3;
+
   // uniform_real_distribution<double> uni(0.0001, 0.1); // guaranteed unbiased
-  vector<double> poss{0.1, 0.01, 0.001};
+  vector<double> poss{0.01, 0.001, 0.0001};
 
   int mult = random(1, 4);
   int idx = random(0, poss.size() - 1);
