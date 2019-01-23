@@ -391,10 +391,10 @@ struct VolRule {
  *
  * This rule is used to integrate the work of external forces on a face, 
  * i.e. \f$f \cdot v\f$, where f is the traction vector and v is the test
- * vector function. In the current problem the pre-defined constant pressure is 
- * used for the Neumann boundary condition. Therefore, if the test field is 
+ * vector function. The current problem features a Neumann bc with 
+ * a pre-defined constant pressure. Therefore, if the test field is 
  * represented by polynomials of order "p", then the rule for the exact 
- * integration is also.
+ * integration is also p.
  *
  * Integration rule is order of polynomial which is calculated exactly. Finite
  * element selects integration method based on return of this function.
@@ -511,13 +511,6 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->buildFields();
     CHKERR simple_interface->buildFiniteElements();
 
-<<<<<<< HEAD
-    /*CHKERR m_field.add_ents_to_finite_element_by_dim(
-        0, simple_interface->getDim(), simple_interface->getDomainFEName(),
-        true);
-    CHKERR m_field.build_finite_elements(simple_interface->getDomainFEName());*/
-=======
->>>>>>> develop
     CHKERR m_field.add_ents_to_finite_element_by_dim(pressure_faces, 2,
                                                      "PRESSURE");
     CHKERR m_field.build_finite_elements("PRESSURE", &pressure_faces);
