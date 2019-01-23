@@ -166,7 +166,7 @@ protected:
     // get element volume
     double vol = getVolume();
 
-    // get intergrayion weights
+    // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // get derivatives of base functions on rows
@@ -276,7 +276,7 @@ struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // to the face area
     auto t_normal = getFTensor1Normal();
 
-    // get intergrayion weights
+    // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // vector of base functions
@@ -366,6 +366,43 @@ struct ApplyDirichletBc : public MoFEM::FEMethod {
     CHKERR VecDestroy(&x);
 
     MoFEMFunctionReturn(0);
+  }
+};
+
+/**
+ * \brief Set integration rule to volume elements
+ *
+ * This rule is used to integrate \f$\nabla v \cdot \nabla u\f$, thus
+ * if the approximation field and the testing field are polynomials of order "p",
+ * then the rule for the exact integration is 2*(p-1).
+ *
+ * Integration rule is order of polynomial which is calculated exactly. Finite
+ * element selects integration method based on return of this function.
+ *
+ */
+struct VolRule {
+  int operator()(int, int, int p) const {
+     return 2 * (p - 1); 
+  }
+};
+
+/**
+ * \brief Set integration rule to boundary elements
+ *
+ * This rule is used to integrate the work of external forces on a face, 
+ * i.e. \f$f \cdot v\f$, where f is the traction vector and v is the test
+ * vector function. In the current problem the pre-defined constant pressure is 
+ * used for the Neumann boundary condition. Therefore, if the test field is 
+ * represented by polynomials of order "p", then the rule for the exact 
+ * integration is also.
+ *
+ * Integration rule is order of polynomial which is calculated exactly. Finite
+ * element selects integration method based on return of this function.
+ *
+ */
+struct FaceRule {
+  int operator()(int, int, int p) const {
+    return p;
   }
 };
 
@@ -474,24 +511,30 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->buildFields();
     CHKERR simple_interface->buildFiniteElements();
 
-    CHKERR m_field.add_ents_to_finite_element_by_dim(
+    /*CHKERR m_field.add_ents_to_finite_element_by_dim(
         0, simple_interface->getDim(), simple_interface->getDomainFEName(),
         true);
-    CHKERR m_field.build_finite_elements(simple_interface->getDomainFEName());
+    CHKERR m_field.build_finite_elements(simple_interface->getDomainFEName());*/
     CHKERR m_field.add_ents_to_finite_element_by_dim(pressure_faces, 2,
                                                      "PRESSURE");
     CHKERR m_field.build_finite_elements("PRESSURE", &pressure_faces);
 
     CHKERR simple_interface->buildProblem();
 
+    // Create elements instances
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> elastic_fe(
         new VolumeElementForcesAndSourcesCore(m_field));
-
-    elastic_fe->getOpPtrVector().push_back(new OpK());
-
-    // push operators to elastic_fe
     boost::shared_ptr<FaceElementForcesAndSourcesCore> pressure_fe(
         new FaceElementForcesAndSourcesCore(m_field));
+
+    // Set integration rule to elements instances
+    elastic_fe->getRuleHook = VolRule();
+    pressure_fe->getRuleHook = FaceRule();
+
+    // Add operators to element instances
+    // push operators to elastic_fe
+    elastic_fe->getOpPtrVector().push_back(new OpK());
+    // push operators to pressure_fe
     pressure_fe->getOpPtrVector().push_back(new OpPressure());
 
     boost::shared_ptr<FEMethod> fix_dofs_fe(
