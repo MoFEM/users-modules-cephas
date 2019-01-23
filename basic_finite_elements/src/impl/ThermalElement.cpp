@@ -223,9 +223,7 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
       dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const FENumeredDofEntity *dof_ptr;
-  CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-      data.getIndices()[0], &dof_ptr);
+  const auto &dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_dofs = data.getIndices().size() / rank;
@@ -317,17 +315,12 @@ MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(
       dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const FENumeredDofEntity *dof_ptr;
-  CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-      data.getIndices()[0], &dof_ptr);
-
+  const auto &dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
   int nb_row_dofs = data.getIndices().size() / rank;
 
   Nf.resize(data.getIndices().size());
   Nf.clear();
-  // std::cerr << getNormal() << std::endl;
-  // std::cerr << getNormalsAtGaussPts() << std::endl;
 
   for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
 
@@ -372,9 +365,7 @@ MoFEMErrorCode ThermalElement::OpConvectionRhs::doWork(
       dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const FENumeredDofEntity *dof_ptr;
-  CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-      data.getIndices()[0], &dof_ptr);
+  const auto &dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_row_dofs = data.getIndices().size() / rank;

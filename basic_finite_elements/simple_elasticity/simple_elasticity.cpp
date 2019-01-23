@@ -511,10 +511,13 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->buildFields();
     CHKERR simple_interface->buildFiniteElements();
 
+<<<<<<< HEAD
     /*CHKERR m_field.add_ents_to_finite_element_by_dim(
         0, simple_interface->getDim(), simple_interface->getDomainFEName(),
         true);
     CHKERR m_field.build_finite_elements(simple_interface->getDomainFEName());*/
+=======
+>>>>>>> develop
     CHKERR m_field.add_ents_to_finite_element_by_dim(pressure_faces, 2,
                                                      "PRESSURE");
     CHKERR m_field.build_finite_elements("PRESSURE", &pressure_faces);

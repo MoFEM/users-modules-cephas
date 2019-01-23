@@ -139,7 +139,7 @@ Furthermore, volume shape functions are identically zero on vertices and along e
 \image html Figure4.png "Figure 4: Hierarchical shape functions for edges on a 2D face: (a) second order, (b) third order and (c) fourth order. Each shape functions is generally non zero on its corresponding edge and zero on all other edges." width=700px
 
 \anchor Figure_5
-\image html Figure5.png "Figure 5: Hierarchical shape functions for faces on a 2D face: (a) third order, (b) fourth order, (c) fifth order and sixth order. Each shape functions is generally non zero on edges and vertices." width=700px
+\image html Figure5.png "Figure 5: Hierarchical shape functions for faces on a 2D face: (a) third order, (b) fourth order, (c) fifth order and sixth order. Each shape functions is zero on edges and vertices." width=700px
 
 Now the concept of decomposition of elemental degrees of freedom described by the equation \f$\eqref {eq:ElementDOF1D}\f$ can be taken further from a 1D element to the 3D tetrahedron element.
 In fact, it will be evident that this decomposition applies to any type of 3D element under consideration.
@@ -375,7 +375,7 @@ functions are overloaded and have many variants for developer convenience,
 and derivatives of them for H-div and H-curl spaces.
 
 Assembling contribution from finite element, for each entity on finite
-element MoFEM calls the developer overloaded implementation of \e User \e
+element MoFEM calls the developer overridden implementation of \e User \e
 Data \e Operator, i.e. method MoFEM::DataOperator::doWork. You can see how
 such operator is implemented for example in \ref simple_elasticity_1.
 

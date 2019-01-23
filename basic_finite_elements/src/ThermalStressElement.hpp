@@ -110,9 +110,7 @@ struct ThermalStressElement {
           dAta.tEts.end())
         MoFEMFunctionReturnHot(0);
 
-      const FENumeredDofEntity *dof_ptr;
-      CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-          data.getIndices()[0], &dof_ptr);
+      const auto &dof_ptr = data.getFieldDofs()[0];
       int rank = dof_ptr->getNbOfCoeffs();
       if (rank != 3) {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,

@@ -775,16 +775,18 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
       res_array[dd] = reaction_vec[dd];
     CHKERR VecRestoreArray(v, &res_array);
 
-    CHKERR VecGhostUpdateBegin(v, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateEnd(v, ADD_VALUES, SCATTER_REVERSE);
-    CHKERR VecGhostUpdateBegin(v, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(v, INSERT_VALUES, SCATTER_FORWARD);
 
     CHKERR VecGetArray(v, &res_array);
     for (int dd = 0; dd != reaction_vec.size(); ++dd)
       reaction_vec[dd] = res_array[dd];
     CHKERR VecRestoreArray(v, &res_array);
   }
+
+  CHKERR VecGhostUpdateBegin(v, ADD_VALUES, SCATTER_REVERSE);
+  CHKERR VecGhostUpdateEnd(v, ADD_VALUES, SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(v, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(v, INSERT_VALUES, SCATTER_FORWARD);
+
   CHKERR VecDestroy(&v);
   CHKERR VecRestoreArrayRead(internal, &array);
   MoFEMFunctionReturn(0);

@@ -24,106 +24,97 @@ using namespace MoFEM;
 #include <EdgeForce.hpp>
 
 EdgeForce::OpEdgeForce::OpEdgeForce(
-  const std::string field_name,Vec f,bCForce &data,
-  boost::ptr_vector<MethodForForceScaling> &methods_op,
-  bool use_snes_f
-):
-EdgeElementForcesAndSourcesCore::UserDataOperator(field_name,OPROW),
-F(f),
-dAta(data),
-methodsOp(methods_op),
-useSnesF(use_snes_f) {
-}
+    const std::string field_name, Vec f, bCForce &data,
+    boost::ptr_vector<MethodForForceScaling> &methods_op, bool use_snes_f)
+    : EdgeElementForcesAndSourcesCore::UserDataOperator(field_name, OPROW),
+      F(f), dAta(data), methodsOp(methods_op), useSnesF(use_snes_f) {}
 
-MoFEMErrorCode EdgeForce::OpEdgeForce::doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
-  MoFEMFunctionBeginHot;
+MoFEMErrorCode
+EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
+                               DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
 
-  if(data.getIndices().size()==0) {
+  if (data.getIndices().size() == 0) {
     MoFEMFunctionReturnHot(0);
   }
   EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
-  if(dAta.eDges.find(ent)==dAta.eDges.end()) {
+  if (dAta.eDges.find(ent) == dAta.eDges.end()) {
     MoFEMFunctionReturnHot(0);
   }
 
-  
-
   // Get pointer to DOF and its rank
-  const FENumeredDofEntity *dof_ptr;
-  ierr = getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(data.getIndices()[0],&dof_ptr); CHKERRG(ierr);
+  const auto &dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
-  int nb_dofs =  data.getIndices().size();
+  int nb_dofs = data.getIndices().size();
 
-  Nf.resize(nb_dofs,false);
+  Nf.resize(nb_dofs, false);
   Nf.clear();
 
   int nb_gauss_pts = data.getN().size1();
-  wEights.resize(nb_gauss_pts,false);
+  wEights.resize(nb_gauss_pts, false);
 
   // This will work for fluxes and other fields with rank other than 3.
-  for(int rr = 0;rr<rank;rr++) {
+  for (int rr = 0; rr < rank; rr++) {
 
     // Get force value for each vector element from blockset data.
     double force;
-    if(rr == 0) {
-      force = dAta.data.data.value3*dAta.data.data.value1;
-    } else if(rr == 1) {
-      force= dAta.data.data.value4*dAta.data.data.value1;
-    } else if(rr == 2) {
-      force = dAta.data.data.value5*dAta.data.data.value1;
+    if (rr == 0) {
+      force = dAta.data.data.value3 * dAta.data.data.value1;
+    } else if (rr == 1) {
+      force = dAta.data.data.value4 * dAta.data.data.value1;
+    } else if (rr == 2) {
+      force = dAta.data.data.value5 * dAta.data.data.value1;
     } else {
-      SETERRQ(PETSC_COMM_SELF,MOFEM_DATA_INCONSISTENCY,"data inconsistency");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
     }
 
     // Integrate force on the line
-    for(int gg = 0;gg<nb_gauss_pts;gg++) {
+    for (int gg = 0; gg < nb_gauss_pts; gg++) {
 
-      if(!rr) {
+      if (!rr) {
         wEights[gg] = 0;
-        if(getTangetAtGaussPts().size1()>0) {
+        if (getTangetAtGaussPts().size1() > 0) {
           // This is if edge is curved, i.e. HO geometry
-          for(int dd = 0;dd<3;dd++) {
-            wEights[gg] += pow(getTangetAtGaussPts()(gg,dd),2);
+          for (int dd = 0; dd < 3; dd++) {
+            wEights[gg] += pow(getTangetAtGaussPts()(gg, dd), 2);
           }
           wEights[gg] = sqrt(wEights[gg]);
         } else {
           wEights[gg] = getLength();
         }
-        wEights[gg] *= getGaussPts()(1,gg);
+        wEights[gg] *= getGaussPts()(1, gg);
       }
 
-      cblas_daxpy(nb_dofs/rank,wEights[gg]*force,&data.getN()(gg,0),1,&Nf[rr],rank);
-
+      cblas_daxpy(nb_dofs / rank, wEights[gg] * force, &data.getN()(gg, 0), 1,
+                  &Nf[rr], rank);
     }
-
   }
 
   // I time/step varying force or calculate in arc-length control. This hack
   // scale force appropriately, and is controlled for user
-  ierr = MethodForForceScaling::applyScale(getFEMethod(),methodsOp,Nf); CHKERRG(ierr);
+  CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   // Assemble force into right-hand vector
   Vec myF = F;
-  if(useSnesF || F == PETSC_NULL) {
+  if (useSnesF || F == PETSC_NULL) {
     switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod*>(getFEMethod())->snes_ctx = FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod*>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod*>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
+    case FEMethod::CTX_TSSETIFUNCTION: {
+      const_cast<FEMethod *>(getFEMethod())->snes_ctx =
+          FEMethod::CTX_SNESSETFUNCTION;
+      const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
+      const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
+      break;
+    }
+    default:
       break;
     }
     myF = getFEMethod()->snes_f;
   }
-  ierr = VecSetValues(
-    myF,data.getIndices().size(),
-    &data.getIndices()[0],&Nf[0],ADD_VALUES
-  ); CHKERRG(ierr);
+  CHKERR VecSetValues(myF, data.getIndices().size(), &data.getIndices()[0],
+                      &Nf[0], ADD_VALUES);
 
-  MoFEMFunctionReturnHot(0);
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode EdgeForce::addForce(const std::string field_name, Vec F,

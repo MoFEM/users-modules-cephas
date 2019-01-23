@@ -69,9 +69,7 @@ struct PostProcStress
       MoFEMFunctionReturnHot(0);
     }
 
-    const FENumeredDofEntity *dof_ptr;
-    CHKERR getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-        data.getIndices()[0], &dof_ptr);
+    const auto &dof_ptr = data.getFieldDofs()[0];
 
     int id = dAta.iD;
 

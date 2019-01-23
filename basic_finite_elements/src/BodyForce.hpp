@@ -1,5 +1,5 @@
 /** \file BodyForce.hpp
-*/
+ */
 
 /* This file is part of MoFEM.
  * MoFEM is free software: you can redistribute it and/or modify it under
@@ -15,126 +15,115 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-
 #ifndef __BODY_FORCE_HPP
 #define __BODY_FORCE_HPP
 
 /** \brief Body forces elements
-  * \ingroup mofem_body_forces
-  */
+ * \ingroup mofem_body_forces
+ */
 struct BodyForceConstantField {
 
   MoFEM::Interface &mField;
 
-  struct MyVolumeFE: public MoFEM::VolumeElementForcesAndSourcesCore {
-    MyVolumeFE(MoFEM::Interface &m_field): MoFEM::VolumeElementForcesAndSourcesCore(m_field) {}
+  struct MyVolumeFE : public MoFEM::VolumeElementForcesAndSourcesCore {
+    MyVolumeFE(MoFEM::Interface &m_field)
+        : MoFEM::VolumeElementForcesAndSourcesCore(m_field) {}
     int getRule(int order) { return order; };
   };
 
   MyVolumeFE fe;
-  MyVolumeFE& getLoopFe() { return fe; }
+  MyVolumeFE &getLoopFe() { return fe; }
 
-  BodyForceConstantField(
-    MoFEM::Interface &m_field):
-    mField(m_field),fe(m_field) {}
+  BodyForceConstantField(MoFEM::Interface &m_field)
+      : mField(m_field), fe(m_field) {}
 
-  struct OpBodyForce: public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+  struct OpBodyForce
+      : public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
 
     Vec F;
     Block_BodyForces &dAta;
     Range blockTets;
-    OpBodyForce(const std::string field_name,Vec _F,Block_BodyForces &data,Range block_tets):
-      MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(field_name,UserDataOperator::OPROW),
-      F(_F),dAta(data),blockTets(block_tets) {}
+    OpBodyForce(const std::string field_name, Vec _F, Block_BodyForces &data,
+                Range block_tets)
+        : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW),
+          F(_F), dAta(data), blockTets(block_tets) {}
 
     VectorDouble Nf;
 
-    MoFEMErrorCode doWork(
-      int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBeginHot;
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
 
-      if(data.getIndices().size()==0) MoFEMFunctionReturnHot(0);
-      if(blockTets.find(getNumeredEntFiniteElementPtr()->getEnt())==blockTets.end()) MoFEMFunctionReturnHot(0);
+      if (data.getIndices().size() == 0)
+        MoFEMFunctionReturnHot(0);
+      if (blockTets.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+          blockTets.end())
+        MoFEMFunctionReturnHot(0);
 
-      
-
-      const FENumeredDofEntity *dof_ptr;
-      ierr = getNumeredEntFiniteElementPtr()->getRowDofsByPetscGlobalDofIdx(
-        data.getIndices()[0],&dof_ptr
-      ); CHKERRG(ierr);
+      const auto &dof_ptr = data.getFieldDofs()[0];
       int rank = dof_ptr->getNbOfCoeffs();
-
-      int nb_row_dofs = data.getIndices().size()/rank;
+      int nb_row_dofs = data.getIndices().size() / rank;
 
       Nf.resize(data.getIndices().size());
-      bzero(&*Nf.data().begin(),data.getIndices().size()*sizeof(FieldData));
+      bzero(&*Nf.data().begin(), data.getIndices().size() * sizeof(FieldData));
 
-      for(unsigned int gg = 0;gg<data.getN().size1();gg++) {
-        double val = getVolume()*getGaussPts()(3,gg);
-        if(getHoGaussPtsDetJac().size()>0) {
+      for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
+        double val = getVolume() * getGaussPts()(3, gg);
+        if (getHoGaussPtsDetJac().size() > 0) {
           val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
         }
-        for(int rr = 0;rr<rank;rr++) {
+        for (int rr = 0; rr < rank; rr++) {
 
           double acc;
-          if(rr == 0) {
+          if (rr == 0) {
             acc = -dAta.data.acceleration_x;
-          } else if(rr == 1) {
+          } else if (rr == 1) {
             acc = -dAta.data.acceleration_y;
-          } else if(rr == 2) {
+          } else if (rr == 2) {
             acc = -dAta.data.acceleration_z;
           } else {
-            SETERRQ(PETSC_COMM_SELF,1,"data inconsistency");
+            SETERRQ(PETSC_COMM_SELF, 1, "data inconsistency");
           }
           acc *= dAta.data.density;
-          cblas_daxpy(nb_row_dofs,val*acc,&data.getN()(gg,0),1,&Nf[rr],rank);
-
+          cblas_daxpy(nb_row_dofs, val * acc, &data.getN()(gg, 0), 1, &Nf[rr],
+                      rank);
         }
       }
-      // std::cerr << dAta.data.acceleration_x << std::endl;
-      // std::cerr << dAta.data.acceleration_y << std::endl;
-      // std::cerr << dAta.data.acceleration_z << std::endl;
-      // std::cerr << dAta.data.density << std::endl;
-      // std::cerr << Nf << std::endl;
 
-      ierr = VecSetValues(F,data.getIndices().size(),
-        &data.getIndices()[0],&Nf[0],ADD_VALUES
-      ); CHKERRG(ierr);
+      CHKERR VecSetValues(F, data.getIndices().size(), &data.getIndices()[0],
+                           &Nf[0], ADD_VALUES);
 
-      MoFEMFunctionReturnHot(0);
+      MoFEMFunctionReturn(0);
     }
-
-
   };
 
-  MoFEMErrorCode addBlock(const std::string field_name,Vec &F,int ms_id) {
-    
-    
+  MoFEMErrorCode addBlock(const std::string field_name, Vec &F, int ms_id) {
     const CubitMeshSets *cubit_meshset_ptr;
     MeshsetsManager *mmanager_ptr;
-    MoFEMFunctionBeginHot;
-    ierr = mField.getInterface(mmanager_ptr); CHKERRG(ierr);
-    ierr = mmanager_ptr->getCubitMeshsetPtr(ms_id,BLOCKSET,&cubit_meshset_ptr); CHKERRG(ierr);
-    ierr = cubit_meshset_ptr->getAttributeDataStructure(mapData[ms_id]); CHKERRG(ierr);
+    MoFEMFunctionBegin;
+    CHKERR mField.getInterface(mmanager_ptr);
+    CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, BLOCKSET,
+                                            &cubit_meshset_ptr);
+    CHKERR cubit_meshset_ptr->getAttributeDataStructure(mapData[ms_id]);
     EntityHandle meshset = cubit_meshset_ptr->getMeshset();
     Range tets;
-    rval = mField.get_moab().get_entities_by_type(meshset,MBTET,tets,true); CHKERRG(rval);
-    fe.getOpPtrVector().push_back(new OpBodyForce(field_name,F,mapData[ms_id],tets));
-    MoFEMFunctionReturnHot(0);
+    CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET, tets, true);
+    fe.getOpPtrVector().push_back(
+        new OpBodyForce(field_name, F, mapData[ms_id], tets));
+    MoFEMFunctionReturn(0);
   }
 
-
-  private:
-
-  std::map<int,Block_BodyForces> mapData;
-
+private:
+  std::map<int, Block_BodyForces> mapData;
 };
+
 /// \brief USe BodyForceConstantField
-DEPRECATED typedef  BodyForceConstantField  BodyFroceConstantField;
+DEPRECATED typedef BodyForceConstantField BodyFroceConstantField;
 
 #endif //__BODY_FORCE_HPP
 
-/***************************************************************************//**
+/**
  * \defgroup mofem_body_forces Body forces elements
  * \ingroup user_modules
- ******************************************************************************/
+ */
