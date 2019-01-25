@@ -10,6 +10,48 @@ if(NOT DASHBOARDTEST)
   set(DASHBOARDTEST "Continuous")
 endif(NOT DASHBOARDTEST)
 
+# modules check out
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/fracture_mechanics"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/obsolete"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/homogenisation"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/gels"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/small_strain_plasticity"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/solid_shell_prism_element"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/minimal_surface_equation"
+  ARGS checkout CDashTesting
+)
+exec_program(
+  ${CTEST_GIT_COMMAND}
+  "${CTEST_SOURCE_DIRECTORY}/users_modules/bone_remodelling"
+  ARGS checkout CDashTesting
+)
+
 # modules - moisture_transport
 if(NOT EXISTS "${CTEST_SOURCE_DIRECTORY}/users_modules/moisture_transport")
   exec_program(
