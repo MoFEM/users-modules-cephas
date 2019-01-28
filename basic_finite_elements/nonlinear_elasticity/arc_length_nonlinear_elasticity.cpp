@@ -53,8 +53,12 @@ struct BlockOptionDataSprings {
 
 struct DataAtIntegrationPtsSprings {
 
-  boost::shared_ptr<MatrixDouble> gradDispPtr;
-  boost::shared_ptr<MatrixDouble> xAtPts;
+  boost::shared_ptr<MatrixDouble> gradDispPtr =
+      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+  boost::shared_ptr<MatrixDouble> xAtPts =
+      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+  boost::shared_ptr<MatrixDouble> xInitAtPts =
+      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
   double springStiffness0; // Spring stiffness
   double springStiffness1;
@@ -65,8 +69,8 @@ struct DataAtIntegrationPtsSprings {
   DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
 
     // Setting default values for coeffcients
-    gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    xAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    // gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    // xAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
     ierr = setBlocks();
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
@@ -136,17 +140,26 @@ private:
  */
 struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-  boost::shared_ptr<BlockOptionDataSprings> dataPtr;
+  // boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+  // boost::shared_ptr<BlockOptionDataSprings> dataPtr;
+  DataAtIntegrationPtsSprings &commonData;
+  BlockOptionDataSprings &dAta;
 
   MatrixDouble locKs;
   MatrixDouble transLocKs;
 
-  OpSpringKs(boost::shared_ptr<DataAtIntegrationPtsSprings> common_data_ptr,
-             boost::shared_ptr<BlockOptionDataSprings> &data_ptr)
+  // OpSpringKs(boost::shared_ptr<DataAtIntegrationPtsSprings> common_data_ptr,
+  //            boost::shared_ptr<BlockOptionDataSprings> &data_ptr)
+  // : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+  //           "SPATIAL_POSITION", "SPATIAL_POSITION", OPROWCOL),
+  //       commonDataPtr(common_data), dataPtr(data) {
+  //   sYmm = true;
+  // }
+  OpSpringKs(DataAtIntegrationPtsSprings &common_data,
+             BlockOptionDataSprings &data)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             "SPATIAL_POSITION", "SPATIAL_POSITION", OPROWCOL),
-        commonDataPtr(common_data_ptr), dataPtr(data_ptr) {
+        commonData(common_data), dAta(data) {
     sYmm = true;
   }
 
@@ -166,12 +179,17 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       MoFEMFunctionReturnHot(0);
 
     // std::cout << dAta.tRis << endl;
-    if (dataPtr->tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dataPtr->tRis.end()) {
+    // if (dataPtr->tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+    //     dataPtr->tRis.end()) {
+    //   MoFEMFunctionReturnHot(0);
+    // }
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
     }
 
-    CHKERR commonDataPtr->getBlockData(*dataPtr);
+    // CHKERR commonDataPtr->getBlockData(*dataPtr);
+    CHKERR commonData.getBlockData(dAta);
     // size associated to the entity
     locKs.resize(row_nb_dofs, col_nb_dofs, false);
     locKs.clear();
@@ -184,9 +202,13 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_base_functions = row_data.getFTensor0N();
 
-    FTensor::Tensor1<double, 3> spring_stiffness(
-        commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
-        commonDataPtr->springStiffness2);
+    // FTensor::Tensor1<double, 3> spring_stiffness(
+    //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
+    //     commonDataPtr->springStiffness2);
+
+    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
+                                                 commonData.springStiffness1,
+                                                 commonData.springStiffness2);
 
     // loop over all Gauss point of the volume
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -234,14 +256,20 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
  */
 struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-  boost::shared_ptr<BlockOptionDataSprings> dataPtr;
+  // boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+  // boost::shared_ptr<BlockOptionDataSprings> dataPtr;
 
-  OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             boost::shared_ptr<BlockOptionDataSprings> &data_ptr)
+  DataAtIntegrationPtsSprings &commonData;
+  BlockOptionDataSprings &dAta;
+
+  // OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
+  //            boost::shared_ptr<BlockOptionDataSprings> &data_ptr)
+  OpSpringFs(DataAtIntegrationPtsSprings &common_data,
+             BlockOptionDataSprings &data)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             "SPATIAL_POSITION", OPROW),
-        commonDataPtr(common_data_ptr), dataPtr(data_ptr) {}
+        commonData(common_data), dAta(data) {}
+  // commonDataPtr(common_data_ptr), dataPtr(data_ptr) {}
 
   // vector used to store force vector for each degree of freedom
   VectorDouble nF;
@@ -258,10 +286,16 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       MoFEMFunctionReturnHot(0);
 
     // std::cout << dAta.tRis << endl;
-    if (dataPtr->tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dataPtr->tRis.end()) {
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
     }
+    // if (dataPtr->tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+    //     dataPtr->tRis.end()) {
+    //   MoFEMFunctionReturnHot(0);
+    // }
+
+    CHKERR commonData.getBlockData(dAta);
 
     // size of force vector associated to the entity
     // set equal to the number of degrees of freedom of associated with the
@@ -278,11 +312,20 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // vector of base functions
     auto base_functions = data.getFTensor0N();
 
-    FTensor::Tensor1<double, 3> spring_stiffness(
-        commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
-        commonDataPtr->springStiffness2);
+    // FTensor::Tensor1<double, 3> spring_stiffness(
+    //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
+    //     commonDataPtr->springStiffness2);
+    // auto spatial_position_at_gauss_points = getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
 
-    auto disp_at_gauss_point = getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
+    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
+                                                 commonData.springStiffness1,
+                                                 commonData.springStiffness2);
+
+    auto init_spatial_position_at_gauss_points =
+        getFTensor1FromMat<3>(*commonData.xInitAtPts);
+    auto spatial_position_at_gauss_points =
+        getFTensor1FromMat<3>(*commonData.xAtPts);
+    // for nonlinear elasticity, solution is spatial position
 
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -297,7 +340,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
            ++col_index) { // loop over the nodes
         for (int ii = 0; ii != 3; ++ii) {
           t_nf(ii) += (w * spring_stiffness(ii) * base_functions) *
-                      disp_at_gauss_point(ii);
+                      (spatial_position_at_gauss_points(ii) -
+                       init_spatial_position_at_gauss_points(ii));
         }
         // move to next base function
         ++base_functions;
@@ -307,7 +351,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // move to next integration weight
       ++t_w;
       //
-      ++disp_at_gauss_point;
+      ++spatial_position_at_gauss_points;
+      ++init_spatial_position_at_gauss_points;
     }
     // add computed values of pressure in the global right hand side vector
     CHKERR VecSetValues(getFEMethod()->snes_f, nb_dofs, &data.getIndices()[0],
@@ -397,11 +442,6 @@ int main(int argc, char *argv[]) {
     bit_levels.push_back(BitRefLevel().set(0));
     BitRefLevel problem_bit_level;
 
-    // Create new instances of face elements for springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringLhs(
-        new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringRhs(
-        new FaceElementForcesAndSourcesCore(m_field));
 
     if (step == 1) {
 
@@ -432,6 +472,9 @@ int main(int argc, char *argv[]) {
                                                          "SPATIAL_POSITION");
       CHKERR m_field.modify_finite_element_add_field_data("SPRING",
                                                           "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_data(
+          "SPRING", "MESH_NODE_POSITIONS");
+
       // Add entities to spring element,
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
         if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
@@ -483,21 +526,21 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
-      // Push operators to instances for springs
-      // loop over blocks
-      boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-      CHKERR commonDataPtr->getParameters();
+      // // Push operators to instances for springs
+      // // loop over blocks
+      // boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+      // CHKERR commonDataPtr->getParameters();
 
-      for (auto &sitSpring : commonDataPtr->mapSpring) {
-        feSpringLhs->getOpPtrVector().push_back(
-            new OpSpringKs(&commonDataPtr, sitSpring.second));
+      // for (auto &sitSpring : commonDataPtr->mapSpring) {
+      //   feSpringLhs->getOpPtrVector().push_back(
+      //       new OpSpringKs(&commonDataPtr, sitSpring.second));
 
-        feSpringRhs->getOpPtrVector().push_back(
-            new OpCalculateVectorFieldValues<3>("SPATIAL_POSITION",
-                                                commonDataPtr->xAtPts));
-        feSpringRhs->getOpPtrVector().push_back(
-            new OpSpringFs(&commonDataPtr, sitSpring.second));
-      }
+      //   feSpringRhs->getOpPtrVector().push_back(
+      //       new OpCalculateVectorFieldValues<3>("SPATIAL_POSITION",
+      //                                           commonDataPtr->xAtPts));
+      //   feSpringRhs->getOpPtrVector().push_back(
+      //       new OpSpringFs(&commonDataPtr, sitSpring.second));
+      // }
 
       // Setting up LAMBDA field and ARC_LENGTH interface
       {
@@ -568,6 +611,31 @@ int main(int argc, char *argv[]) {
       CHKERR MetaNodalForces::addElement(m_field, "SPATIAL_POSITION");
       CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
                                                        "FORCE_FE");
+    }
+
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringLhs(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringRhs(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    // Push operators to instances for springs
+    // loop over blocks
+    DataAtIntegrationPtsSprings commonData(m_field);
+    CHKERR commonData.getParameters();
+
+    for (auto &sitSpring : commonData.mapSpring) {
+      feSpringLhs->getOpPtrVector().push_back(
+          new OpSpringKs(commonData, sitSpring.second));
+
+      feSpringRhs->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("SPATIAL_POSITION",
+                                              commonData.xAtPts));
+      feSpringRhs->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS",
+                                              commonData.xInitAtPts));
+      feSpringRhs->getOpPtrVector().push_back(
+          new OpSpringFs(commonData, sitSpring.second));
     }
 
     PetscBool linear;
