@@ -557,10 +557,13 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_base_functions = row_data.getFTensor0N();
 
-    vector <double> spring_stiffness;    // spring_stiffness[0]
-    spring_stiffness.push_back(commonData.springStiffness0);
-    spring_stiffness.push_back(commonData.springStiffness1);
-    spring_stiffness.push_back(commonData.springStiffness2);
+    // vector <double> spring_stiffness;    // spring_stiffness[0]
+    // spring_stiffness.push_back(commonData.springStiffness0);
+    // spring_stiffness.push_back(commonData.springStiffness1);
+    // spring_stiffness.push_back(commonData.springStiffness2);
+    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
+                                                 commonData.springStiffness1,
+                                                 commonData.springStiffness2);
 
     FTensor::Index<'i', 3> i;
 
@@ -573,7 +576,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
         for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
           locKs(row_index, col_index) += w * row_base_functions *
-                                         spring_stiffness[col_index % 3] *
+                                         spring_stiffness(col_index % 3) *
                                          col_base_functions;
           ++col_base_functions;
         }
@@ -662,7 +665,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
-      double w = 0.5 * t_w;
+      double w = t_w * getArea();
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components

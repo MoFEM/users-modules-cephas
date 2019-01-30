@@ -83,7 +83,6 @@ struct BlockOptionData {
   double springStiffness1;
   double springStiffness2;
 
-  Range tEts;
   Range tRis;
 
   BlockOptionData()
@@ -103,7 +102,6 @@ struct DataAtIntegrationPtsSprings {
   double springStiffness1;
   double springStiffness2;
 
-  // std::map<int, BlockOptionData> mapElastic;
   std::map<int, BlockOptionData> mapSpring;
 
   DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
@@ -139,19 +137,6 @@ struct DataAtIntegrationPtsSprings {
 
   MoFEMErrorCode setBlocks() {
     MoFEMFunctionBegin;
-
-    // for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-    //          mField, BLOCKSET | MAT_ELASTICSET, it)) {
-    //   Mat_Elastic mydata;
-    //   CHKERR it->getAttributeDataStructure(mydata);
-    //   int id = it->getMeshsetId();
-    //   EntityHandle meshset = it->getMeshset();
-    //   CHKERR mField.get_moab().get_entities_by_type(meshset, MBTET,
-    //                                                 mapElastic[id].tEts, true);
-    //   mapElastic[id].iD = id;
-    //   mapElastic[id].yOung = mydata.data.Young;
-    //   mapElastic[id].pOisson = mydata.data.Poisson;
-    // }
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
@@ -241,16 +226,9 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_base_functions = row_data.getFTensor0N();
 
-    // vector<double> spring_stiffness; // spring_stiffness[0]
-    // spring_stiffness.push_back(commonData.springStiffness0);
-    // spring_stiffness.push_back(commonData.springStiffness1);
-    // spring_stiffness.push_back(commonData.springStiffness2);
-
     FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
                                                  commonData.springStiffness1,
                                                  commonData.springStiffness2);
-
-    // FTensor::Index<'i', 3> i;
 
     // loop over all Gauss point of the volume
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -350,7 +328,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
-      double w = 0.5 * t_w;
+      double w = t_w * getArea();
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
