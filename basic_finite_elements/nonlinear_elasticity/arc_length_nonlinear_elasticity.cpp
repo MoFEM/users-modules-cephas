@@ -206,6 +206,9 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
     //     commonDataPtr->springStiffness2);
 
+    // get intergration weights
+    auto t_w = getFTensor0IntegrationWeight();
+
     FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
                                                  commonData.springStiffness1,
                                                  commonData.springStiffness2);
@@ -213,7 +216,8 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // loop over all Gauss point of the volume
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
       // get area and integration weight
-      double w = getArea() * getGaussPts()(2, gg);
+      // double w = getGaussPts()(2, gg) * getArea();
+      double w = t_w * getArea();
 
       for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
@@ -225,6 +229,8 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         }
         ++row_base_functions;
       }
+      // move to next integration weight
+      ++t_w;
     }
 
     // Add computed values of spring stiffness to the global LHS matrix
@@ -321,16 +327,17 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
                                                  commonData.springStiffness1,
                                                  commonData.springStiffness2);
 
-    auto init_spatial_position_at_gauss_points =
-        getFTensor1FromMat<3>(*commonData.xInitAtPts);
+    // This should be a tensor and name start with t_spatial_position_...
     auto spatial_position_at_gauss_points =
         getFTensor1FromMat<3>(*commonData.xAtPts);
+    auto init_spatial_position_at_gauss_points =
+        getFTensor1FromMat<3>(*commonData.xInitAtPts);
     // for nonlinear elasticity, solution is spatial position
 
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
-      double w = 0.5 * t_w;
+      double w = t_w * getArea();
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
