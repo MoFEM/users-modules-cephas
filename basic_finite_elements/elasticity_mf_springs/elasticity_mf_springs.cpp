@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
 
-    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mix elastic problem",
+    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mixed elastic problem",
                              "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
@@ -83,8 +83,8 @@ int main(int argc, char *argv[]) {
 
     // Read whole mesh or part of it if partitioned
     if (is_partitioned == PETSC_TRUE) {
-      // This is a case of distributed mesh and algebra. In that case each
-      // processor keeps only part of the problem.
+      // This is a case of distributed mesh and algebra. In this case each
+      // processor keeps only one part of the problem.
       const char *option;
       option = "PARALLEL=READ_PART;"
                "PARALLEL_RESOLVE_SHARED_ENTS;"
@@ -173,13 +173,12 @@ int main(int argc, char *argv[]) {
     // Add entities to that element
     CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET, "ELASTIC");
 
-    // Add entities to spring element, TODO: mField?
+    // Add entities to spring element,
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
         CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
                                                           MBTRI, "SPRING");
-      }
-        
+      } 
     }
 
     // build finite elements
@@ -284,7 +283,6 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringLhs);
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringRhs);
-    // DMoFEMLoopFiniteElements(dm, "SPRING", feSpringRhs);
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
