@@ -1,0 +1,82 @@
+reset
+set duplicate block elements on
+
+brick x 1 y 2 z 0.5
+brick x 2 y 1 z 0.5
+
+move Curve 23  midpoint location curve 11  include_merged
+unite volume all 
+
+Sideset 1 surface 3 
+Sideset 2 surface 12 
+
+Sideset 100  curve all 
+nodeset 101 vertex all 
+Sideset 102  surface all
+
+block 1 volume all 
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2
+block 1 attribute index 1 100
+block 1 attribute index 2 0 
+
+create Displacement  on surface 3 dof 1 dof 2 dof 3 fix 0
+#create force  on surface 12  vector 1 0 0 0 0 0 
+create pressure  on surface 12 magnitude 1 
+
+#create force  on curve 24  force value 1 direction   x 
+#create force  on vertex 13 10  force value 0.001 direction   x
+
+block 2 volume 1
+block 2 name "BODY_FORCES")
+block 2 attribute count 4
+block 2 attribute index 1 0.001.
+block 2 attribute index 2 0.
+block 2 attribute inde x 3 0
+block 2 attribute index 4 0.
+
+block 3 volume 1 
+block 3 name "DAMPER") 
+block 3 attribute count 2 
+block 3 attribute index 1 1 
+block 3 attribute index 2 -1 
+
+# Spring
+block 4 surface 15
+block 4 name 'SPRING_BC'
+block 4 attribute count 3
+block 4 attribute index 1 0
+block 4 attribute index 2 0
+block 4 attribute index 3 0
+
+###Apply Water Pressure inside  
+#block 4 surface 14    
+#block 4 name 'FLUID_PRESSURE'    
+#block 4 attribute count 7     
+#block 4 attribute index 1 0.01	      
+#block 4 attribute index 2 0 		#acceleration x-direction     
+#block 4 attribute index 3 -1 		#acceleration y-direction     
+#block 4 attribute index 4 0	 	#acceleration z-direction     
+##zero pressure point - water level at which water pressure is zero     
+#block 4 attribute index 5 0 		#pressure point x-direction     
+#block 4 attribute index 6 1.0 		#pressure point y-direction     
+#block 4 attribute index 7 0 		#pressure point z-direction    
+
+volume all scheme Tetmesh
+volume all size auto factor 9
+mesh volume all
+
+save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/nonlinear_elasticity/spring_LShape.cub" overwrite
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -31,7 +31,8 @@ volume all size auto factor 9
 mesh volume all
 
 # Save file
-save as "/Users/hoangnguyen/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/bar_incompressible.cub" overwrite
+#save as "/Users/hoangnguyen/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/bar_incompressible.cub" overwrite
+
 
 
 
