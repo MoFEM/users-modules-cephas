@@ -200,7 +200,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       MoFEMFunctionReturnHot(0);
 
     const int row_nb_base_functions = row_data.getN().size2();
-    auto row_base_functions = row_data.getFTensor0N();
+    // auto row_base_functions = row_data.getFTensor0N();
 
     // FTensor::Tensor1<double, 3> spring_stiffness(
     //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
@@ -213,18 +213,36 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
                                                  commonData.springStiffness1,
                                                  commonData.springStiffness2);
 
-    // loop over all Gauss point of the volume
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+        return FTensor::Tensor2<double *, 3, 3>(
+            &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1), &m(3 * r + 0, 3 * c + 2),
+            &m(3 * r + 1, 3 * c + 0), &m(3 * r + 1, 3 * c + 1), &m(3 * r + 1, 3 * c + 2),
+            &m(3 * r + 2, 3 * c + 0), &m(3 * r + 2, 3 * c + 1), &m(3 * r + 2, 3 * c + 2));
+      };
+
+    FTensor::Tensor2<double, 3, 3> spring_diag(
+        commonData.springStiffness0, 0., 0., 
+        0., commonData.springStiffness1, 0., 
+        0., 0., commonData.springStiffness2);
+
+    // loop over the Gauss points
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
       // get area and integration weight
       // double w = getGaussPts()(2, gg) * getArea();
       double w = t_w * getArea();
 
+      auto row_base_functions = row_data.getFTensor0N(gg,0);
+
       for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
         for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
-          locKs(row_index, col_index) += w * row_base_functions *
-                                         spring_stiffness(col_index % 3) *
-                                         col_base_functions;
+
+          auto assemble_m = get_tensor2(locKs, row_index, col_index);
+
+          assemble_m(i, j) +=
+              w * row_base_functions * col_base_functions * spring_diag(i, j);
           ++col_base_functions;
         }
         ++row_base_functions;
@@ -232,6 +250,34 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // move to next integration weight
       ++t_w;
     }
+
+    // // loop over all Gauss point of the volume
+    // for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+    //   // get area and integration weight
+    //   // double w = getGaussPts()(2, gg) * getArea();
+    //   double w = t_w * getArea();
+
+    //   auto row_base_functions = row_data.getFTensor0N(gg,0);
+
+    //   for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
+    //     auto col_base_functions = col_data.getFTensor0N(gg, 0);
+    //     for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
+    //       locKs(3*row_index, 3* col_index) += w * row_base_functions *
+    //                                      spring_stiffness(0) *
+    //                                      col_base_functions;
+    //       locKs(3*row_index + 1 , 3 * col_index + 1) += w * row_base_functions *
+    //                                      spring_stiffness(1) *
+    //                                      col_base_functions;
+    //       locKs(3*row_index +2 , 3* col_index + 2) += w * row_base_functions *
+    //                                      spring_stiffness(2) *
+    //                                      col_base_functions;
+    //       ++col_base_functions;
+    //     }
+    //     ++row_base_functions;
+    //   }
+    //   // move to next integration weight
+    //   ++t_w;
+    // }
 
     // Add computed values of spring stiffness to the global LHS matrix
     CHKERR MatSetValues(
@@ -316,7 +362,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     auto t_w = getFTensor0IntegrationWeight();
 
     // vector of base functions
-    auto base_functions = data.getFTensor0N();
+    // auto base_functions = data.getFTensor0N();
 
     // FTensor::Tensor1<double, 3> spring_stiffness(
     //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
@@ -338,6 +384,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       // weight of gg gauss point
       double w = t_w * getArea();
+
+      auto base_functions = data.getFTensor0N(gg,0);
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
