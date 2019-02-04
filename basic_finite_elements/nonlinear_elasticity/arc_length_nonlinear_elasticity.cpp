@@ -202,14 +202,14 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     const int row_nb_base_functions = row_data.getN().size2();
     // auto row_base_functions = row_data.getFTensor0N();
 
-    // FTensor::Tensor1<double, 3> spring_stiffness(
+    // FTensor::Tensor1<double, 3> t_spring_stiffness(
     //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
     //     commonDataPtr->springStiffness2);
 
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 
-    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
+    FTensor::Tensor1<double, 3> t_spring_stiffness(commonData.springStiffness0,
                                                  commonData.springStiffness1,
                                                  commonData.springStiffness2);
 
@@ -263,13 +263,13 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     //     auto col_base_functions = col_data.getFTensor0N(gg, 0);
     //     for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
     //       locKs(3*row_index, 3* col_index) += w * row_base_functions *
-    //                                      spring_stiffness(0) *
+    //                                      t_spring_stiffness(0) *
     //                                      col_base_functions;
     //       locKs(3*row_index + 1 , 3 * col_index + 1) += w * row_base_functions *
-    //                                      spring_stiffness(1) *
+    //                                      t_spring_stiffness(1) *
     //                                      col_base_functions;
     //       locKs(3*row_index +2 , 3* col_index + 2) += w * row_base_functions *
-    //                                      spring_stiffness(2) *
+    //                                      t_spring_stiffness(2) *
     //                                      col_base_functions;
     //       ++col_base_functions;
     //     }
@@ -326,8 +326,6 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   // vector used to store force vector for each degree of freedom
   VectorDouble nF;
 
-  FTensor::Index<'i', 3> i;
-
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
 
@@ -364,51 +362,70 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // vector of base functions
     // auto base_functions = data.getFTensor0N();
 
-    // FTensor::Tensor1<double, 3> spring_stiffness(
+    // FTensor::Tensor1<double, 3> t_spring_stiffness(
     //     commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
     //     commonDataPtr->springStiffness2);
-    // auto spatial_position_at_gauss_points = getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
+    // auto t_spatial_position_at_gauss_points = getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
 
-    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
-                                                 commonData.springStiffness1,
-                                                 commonData.springStiffness2);
+    FTensor::Tensor1<double, 3> t_spring_stiffness(commonData.springStiffness0,
+                                                   commonData.springStiffness1,
+                                                   commonData.springStiffness2);
 
-    // This should be a tensor and name start with t_spatial_position_...
-    auto spatial_position_at_gauss_points =
-        getFTensor1FromMat<3>(*commonData.xAtPts);
-    auto init_spatial_position_at_gauss_points =
-        getFTensor1FromMat<3>(*commonData.xInitAtPts);
     // for nonlinear elasticity, solution is spatial position
+    auto t_spatial_position_at_gauss_points = 
+        getFTensor1FromMat<3>(*commonData.xAtPts);
+    auto t_init_spatial_position_at_gauss_points =
+        getFTensor1FromMat<3>(*commonData.xInitAtPts);
+
+    FTensor::Index<'i', 3> i;
+    auto get_tensor1 = [](VectorDouble &v, const int r) {
+      return FTensor::Tensor1<double *, 3>(
+          &v(3 * r + 0), &v(3 * r + 1), &v(3 * r + 2));
+    };
 
     // loop over all gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      // weight of gg gauss point
+      
       double w = t_w * getArea();
 
       auto base_functions = data.getFTensor0N(gg,0);
 
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
+
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
                                                               &nF[2]);
-      for (int col_index = 0; col_index != nb_dofs / 3;
-           ++col_index) { // loop over the nodes
-        for (int ii = 0; ii != 3; ++ii) {
-          t_nf(ii) += (w * spring_stiffness(ii) * base_functions) *
-                      (spatial_position_at_gauss_points(ii) -
-                       init_spatial_position_at_gauss_points(ii));
-        }
+      for (int row_index = 0; row_index != nb_dofs / 3;
+           ++row_index) { // loop over the nodes
+        // for (int ii = 0; ii != 3; ++ii) {
+        //   t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
+        //               (t_spatial_position_at_gauss_points(ii) -
+        //                t_init_spatial_position_at_gauss_points(ii));
+        // }
+        // Or do this in not an elegant way with tensor
+        auto assemble_v = get_tensor1(nF, row_index);
+        assemble_v(0) += w * base_functions * t_spring_stiffness(0) *
+                         (t_spatial_position_at_gauss_points(0) -
+                          t_init_spatial_position_at_gauss_points(0));
+        assemble_v(1) += w * base_functions * t_spring_stiffness(1) *
+                         (t_spatial_position_at_gauss_points(1) -
+                          t_init_spatial_position_at_gauss_points(1));
+        assemble_v(2) += w * base_functions * t_spring_stiffness(2) *
+                         (t_spatial_position_at_gauss_points(2) -
+                          t_init_spatial_position_at_gauss_points(2));
+
         // move to next base function
         ++base_functions;
         // move the pointer to next element of t_nf
-        ++t_nf;
+        // ++t_nf;
       }
       // move to next integration weight
       ++t_w;
-      //
-      ++spatial_position_at_gauss_points;
-      ++init_spatial_position_at_gauss_points;
+      // move to the solutions at the next Gauss point
+      ++t_spatial_position_at_gauss_points;
+      ++t_init_spatial_position_at_gauss_points;
     }
+
     // add computed values of pressure in the global right hand side vector
     CHKERR VecSetValues(getFEMethod()->snes_f, nb_dofs, &data.getIndices()[0],
                         &nF[0], ADD_VALUES);
