@@ -16,8 +16,8 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef __SPRINGELEMENTS_HPP__
-#define __SPRINGELEMENTS_HPP__
+#ifndef __SPRINGELEMENT_HPP__
+#define __SPRINGELEMENT_HPP__
 
 struct BlockOptionDataSprings {
   int iD;
@@ -169,10 +169,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 
-    FTensor::Tensor1<double, 3> t_spring_stiffness(commonData.springStiffness0,
-                                                   commonData.springStiffness1,
-                                                   commonData.springStiffness2);
-
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
@@ -184,7 +180,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
           &m(3 * r + 2, 3 * c + 2));
     };
 
-    FTensor::Tensor2<double, 3, 3> spring_diag(
+    FTensor::Tensor2<double, 3, 3> linear_spring(
         commonData.springStiffness0, 0., 0., 0., commonData.springStiffness1,
         0., 0., 0., commonData.springStiffness2);
 
@@ -200,7 +196,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
           auto assemble_m = get_tensor2(locKs, row_index, col_index);
           assemble_m(i, j) +=
-              w * row_base_functions * col_base_functions * spring_diag(i, j);
+              w * row_base_functions * col_base_functions * linear_spring(i, j);
           ++col_base_functions;
         }
         ++row_base_functions;
@@ -325,4 +321,30 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   }
 };
 
-#endif //__SPRINGELEMENTS_HPP__
+/** \brief Set of high-level function declaring elements and setting operators
+ * to apply spring boundary condition
+ */
+struct MetaSpringBC{
+
+  /**
+   * \brief Declare finite element
+   *
+   * Search cubit sidesets and blocksets with spring bc and declare surface
+   * element
+
+   * Blockset has to have name “SPRING_BC”. The first three attributes of the
+   * blockset are spring stiffness value.
+
+   *
+   * @param  m_field               Interface insurance
+   * @param  field_name            Field name (e.g. DISPLACEMENT)
+   * @param  mesh_nodals_positions Name of field on which ho-geometry is defined
+   * @param  intersect_ptr         Pointer to range to interect meshset entities
+   * @return                       Error code
+   */
+   static MoFEMErrorCode addSpringElements(
+      MoFEM::Interface &m_field, const std::string field_name,
+      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
+};
+
+#endif //__SPRINGELEMENT_HPP__

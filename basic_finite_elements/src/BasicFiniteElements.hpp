@@ -65,6 +65,7 @@ extern "C" {
 #include <AnalyticalDirichlet.hpp>
 #include <SaveVertexDofOnTag.hpp>
 #include <HookeElement.hpp>
+#include <SpringElement.hpp>
 
 using namespace BasicFiniteElements;
 

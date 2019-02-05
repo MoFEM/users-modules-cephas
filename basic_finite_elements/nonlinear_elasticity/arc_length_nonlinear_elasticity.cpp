@@ -34,7 +34,6 @@ namespace po = boost::program_options;
 #include <NeoHookean.hpp>
 
 #include <SurfacePressureComplexForLazy.hpp>
-#include <SpringElements.hpp>
 
 int main(int argc, char *argv[]) {
 
@@ -137,25 +136,10 @@ int main(int argc, char *argv[]) {
       // FE
       CHKERR m_field.add_finite_element("ELASTIC");
       CHKERR m_field.add_finite_element("ARC_LENGTH");
-      CHKERR m_field.add_finite_element("SPRING");
 
-      // Define rows/cols and element data, just depends on "SPATIAL_POSITION"
-      CHKERR m_field.modify_finite_element_add_field_row("SPRING",
-                                                         "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_col("SPRING",
-                                                         "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_data("SPRING",
-                                                          "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_data(
-          "SPRING", "MESH_NODE_POSITIONS");
-
-      // Add entities to spring element,
-      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-        if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
-          CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
-                                                            MBTRI, "SPRING");
-        }
-      }
+      // Add spring boundary condition applied on surfaces. 
+      // This is only declaration not implementation.
+      CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION");
 
       // Define rows/cols and element data
       CHKERR m_field.modify_finite_element_add_field_row("ELASTIC",
@@ -379,8 +363,8 @@ int main(int argc, char *argv[]) {
         new ArcLengthCtx(m_field, "ELASTIC_MECHANICS"));
 
     // Assign global matrix/vector contributed by springs
-    feSpringLhs->snes_B = Aij;
-    feSpringRhs->snes_f = F;
+    // feSpringLhs->snes_B = Aij;
+    // feSpringRhs->snes_f = F;
 
     PetscInt M, N;
     CHKERR MatGetSize(Aij, &M, &N);
