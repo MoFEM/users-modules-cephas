@@ -116,7 +116,6 @@ int main(int argc, char *argv[]) {
     bit_levels.push_back(BitRefLevel().set(0));
     BitRefLevel problem_bit_level;
 
-
     if (step == 1) {
 
       problem_bit_level = bit_levels.back();
@@ -137,7 +136,7 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_finite_element("ELASTIC");
       CHKERR m_field.add_finite_element("ARC_LENGTH");
 
-      // Add spring boundary condition applied on surfaces. 
+      // Add spring boundary condition applied on surfaces.
       // This is only declaration not implementation.
       CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
                                              "MESH_NODE_POSITIONS");
@@ -256,32 +255,13 @@ int main(int argc, char *argv[]) {
                                                        "FORCE_FE");
     }
 
+    // Implementation of spring elements
     // Create new instances of face elements for springs
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
 
-    // // Push operators to instances for springs
-    // // loop over blocks
-    // DataAtIntegrationPtsSprings commonData(m_field);
-    // CHKERR commonData.getParameters();
-
-    // for (auto &sitSpring : commonData.mapSpring) {
-    //   fe_spring_lhs_ptr->getOpPtrVector().push_back(
-    //       new OpSpringKs(commonData, sitSpring.second));
-
-    //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
-    //       new OpCalculateVectorFieldValues<3>("SPATIAL_POSITION",
-    //                                           commonData.xAtPts));
-    //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
-    //       new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS",
-    //                                           commonData.xInitAtPts));
-    //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
-    //       new OpSpringFs(commonData, sitSpring.second));
-    // }
-
-    // Implementation of spring elements
     CHKERR MetaSpringBC::setSpringOperators(
         m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
         "MESH_NODE_POSITIONS");
@@ -367,10 +347,6 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<ArcLengthCtx> arc_ctx = boost::shared_ptr<ArcLengthCtx>(
         new ArcLengthCtx(m_field, "ELASTIC_MECHANICS"));
-
-    // Assign global matrix/vector contributed by springs
-    // fe_spring_lhs_ptr->snes_B = Aij;
-    // fe_spring_rhs_ptr->snes_f = F;
 
     PetscInt M, N;
     CHKERR MatGetSize(Aij, &M, &N);

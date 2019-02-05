@@ -58,31 +58,25 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
     const std::string field_name, const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
 
-  //   Create new instances of face elements for springs
-  // boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
-  //     new FaceElementForcesAndSourcesCore(m_field));
-  // boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
-  //     new FaceElementForcesAndSourcesCore(m_field));
-
   // Push operators to instances for springs
   // loop over blocks
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonData =
+  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr =
       boost::make_shared<DataAtIntegrationPtsSprings>(m_field);
-  CHKERR commonData->getParameters();
+  CHKERR commonDataPtr->getParameters();
 
-  for (auto &sitSpring : commonData->mapSpring) {
+  for (auto &sitSpring : commonDataPtr->mapSpring) {
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
-        new OpSpringKs(*commonData, sitSpring.second));
+        new OpSpringKs(commonDataPtr, sitSpring.second));
 
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<3>(field_name, commonData->xAtPts));
+        new OpCalculateVectorFieldValues<3>(field_name, commonDataPtr->xAtPts));
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
-                                            commonData->xInitAtPts));
+                                            commonDataPtr->xInitAtPts));
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
-        new OpSpringFs(commonData, sitSpring.second));
+        new OpSpringFs(commonDataPtr, sitSpring.second));
   }
-  cerr << "CommonData has been used!!! " << commonData.use_count() << "times" << endl;
-
+  //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
+  //   " times" << endl;
   MoFEMFunctionReturn(0);
 }
