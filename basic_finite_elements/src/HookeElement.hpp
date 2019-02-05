@@ -278,7 +278,8 @@ struct HookeElement {
       MoFEMFunctionBegin;
 
       for (auto &m : (*blockSetsPtr)) {
-
+        // FIXME: This can be confusing. The stiffness Matrix is calculated only
+        // once!
         if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
             m.second.tEts.end())
           if (lastEvaluatedId != m.second.iD) {
