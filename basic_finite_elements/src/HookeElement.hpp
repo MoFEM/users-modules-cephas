@@ -278,10 +278,10 @@ struct HookeElement {
       MoFEMFunctionBegin;
 
       for (auto &m : (*blockSetsPtr)) {
-        // FIXME: This can be confusing. The stiffness Matrix is calculated only
-        // once!
         if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
             m.second.tEts.end())
+          //NOTE: The stiffness Matrix is calculated only once, since is constant for
+          // all integration points and all elements in the block.
           if (lastEvaluatedId != m.second.iD) {
 
             lastEvaluatedId = m.second.iD;
@@ -335,13 +335,13 @@ struct HookeElement {
     int lastEvaluatedId;
   };
 
-  struct OpCalculateHeterogeneousStiffness : public VolUserDataOperator {
+  struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPts;
     const double rhoN;
     const double rHo0;
 
-    OpCalculateHeterogeneousStiffness(
+    OpCalculateStiffnessScaledByDensityField(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
