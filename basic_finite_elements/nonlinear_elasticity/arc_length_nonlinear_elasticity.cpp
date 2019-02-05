@@ -139,7 +139,8 @@ int main(int argc, char *argv[]) {
 
       // Add spring boundary condition applied on surfaces. 
       // This is only declaration not implementation.
-      CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION");
+      CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
+                                             "MESH_NODE_POSITIONS");
 
       // Define rows/cols and element data
       CHKERR m_field.modify_finite_element_add_field_row("ELASTIC",
@@ -256,29 +257,34 @@ int main(int argc, char *argv[]) {
     }
 
     // Create new instances of face elements for springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringLhs(
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringRhs(
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
 
-    // Push operators to instances for springs
-    // loop over blocks
-    DataAtIntegrationPtsSprings commonData(m_field);
-    CHKERR commonData.getParameters();
+    // // Push operators to instances for springs
+    // // loop over blocks
+    // DataAtIntegrationPtsSprings commonData(m_field);
+    // CHKERR commonData.getParameters();
 
-    for (auto &sitSpring : commonData.mapSpring) {
-      feSpringLhs->getOpPtrVector().push_back(
-          new OpSpringKs(commonData, sitSpring.second));
+    // for (auto &sitSpring : commonData.mapSpring) {
+    //   fe_spring_lhs_ptr->getOpPtrVector().push_back(
+    //       new OpSpringKs(commonData, sitSpring.second));
 
-      feSpringRhs->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldValues<3>("SPATIAL_POSITION",
-                                              commonData.xAtPts));
-      feSpringRhs->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS",
-                                              commonData.xInitAtPts));
-      feSpringRhs->getOpPtrVector().push_back(
-          new OpSpringFs(commonData, sitSpring.second));
-    }
+    //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
+    //       new OpCalculateVectorFieldValues<3>("SPATIAL_POSITION",
+    //                                           commonData.xAtPts));
+    //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
+    //       new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS",
+    //                                           commonData.xInitAtPts));
+    //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
+    //       new OpSpringFs(commonData, sitSpring.second));
+    // }
+
+    // Implementation of spring elements
+    CHKERR MetaSpringBC::setSpringOperators(
+        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS");
 
     PetscBool linear;
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
@@ -363,8 +369,8 @@ int main(int argc, char *argv[]) {
         new ArcLengthCtx(m_field, "ELASTIC_MECHANICS"));
 
     // Assign global matrix/vector contributed by springs
-    // feSpringLhs->snes_B = Aij;
-    // feSpringRhs->snes_f = F;
+    // fe_spring_lhs_ptr->snes_B = Aij;
+    // fe_spring_rhs_ptr->snes_f = F;
 
     PetscInt M, N;
     CHKERR MatGetSize(Aij, &M, &N);
@@ -598,7 +604,7 @@ int main(int argc, char *argv[]) {
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
 
     loops_to_do_Rhs.push_back(
-        SnesCtx::PairNameFEMethodPtr("SPRING", feSpringRhs.get()));
+        SnesCtx::PairNameFEMethodPtr("SPRING", fe_spring_rhs_ptr.get()));
 
     // surface forces and pressures
     loops_to_do_Rhs.push_back(
@@ -651,7 +657,7 @@ int main(int argc, char *argv[]) {
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
 
     loops_to_do_Mat.push_back(
-        SnesCtx::PairNameFEMethodPtr("SPRING", feSpringLhs.get()));
+        SnesCtx::PairNameFEMethodPtr("SPRING", fe_spring_lhs_ptr.get()));
 
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("NEUMANN_FE", &fe_neumann));

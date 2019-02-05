@@ -31,7 +31,7 @@ MetaSpringBC::addSpringElements(MoFEM::Interface &m_field,
 
   // Define boundary element that operates on rows, columns and data of a
   // given field
-  CHKERR m_field.add_finite_element("SPRING", MF_ZERO);
+  CHKERR m_field.add_finite_element("SPRING");
   CHKERR m_field.modify_finite_element_add_field_row("SPRING", field_name);
   CHKERR m_field.modify_finite_element_add_field_col("SPRING", field_name);
   CHKERR m_field.modify_finite_element_add_field_data("SPRING", field_name);
@@ -47,6 +47,42 @@ MetaSpringBC::addSpringElements(MoFEM::Interface &m_field,
                                                         MBTRI, "SPRING");
     }
   }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode MetaSpringBC::setSpringOperators(
+    MoFEM::Interface &m_field,
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
+    const std::string field_name, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+
+  //   Create new instances of face elements for springs
+  // boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+  //     new FaceElementForcesAndSourcesCore(m_field));
+  // boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+  //     new FaceElementForcesAndSourcesCore(m_field));
+
+  // Push operators to instances for springs
+  // loop over blocks
+  boost::shared_ptr<DataAtIntegrationPtsSprings> commonData =
+      boost::make_shared<DataAtIntegrationPtsSprings>(m_field);
+  CHKERR commonData->getParameters();
+
+  for (auto &sitSpring : commonData->mapSpring) {
+    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+        new OpSpringKs(*commonData, sitSpring.second));
+
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(field_name, commonData->xAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
+                                            commonData->xInitAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpSpringFs(commonData, sitSpring.second));
+  }
+  cerr << "CommonData has been used!!! " << commonData.use_count() << "times" << endl;
 
   MoFEMFunctionReturn(0);
 }
