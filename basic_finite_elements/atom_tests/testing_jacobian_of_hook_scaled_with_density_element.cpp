@@ -158,7 +158,6 @@ int main(int argc, char *argv[]) {
               fe_lhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpLhs_dx_dx<1>(x_field, x_field, data_at_pts));
             } else {
-                SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
                 fe_lhs_ptr->getOpPtrVector().push_back(
                     new OpCalculateVectorFieldGradient<3, 3>(
                         X_field, data_at_pts->HMat));
@@ -173,20 +172,20 @@ int main(int argc, char *argv[]) {
                 fe_lhs_ptr->getOpPtrVector().push_back(
                     new HookeElement::OpCalculateStrainAle(x_field, x_field, data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStress<0>(x_field, x_field, data_at_pts));
+                    new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts)); //FIXME:
                 fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dx_dx<0>(x_field, x_field, data_at_pts));
+                    new HookeElement::OpAleLhs_dx_dx<1>(x_field, x_field, data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dx_dX<0>(x_field, X_field, data_at_pts));
+                    new HookeElement::OpAleLhs_dx_dX<1>(x_field, X_field, data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
                     new HookeElement::OpCalculateEnergy(X_field, X_field, data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
                     new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
                                                  data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dX_dX<0>(X_field, X_field, data_at_pts));
+                    new HookeElement::OpAleLhs_dX_dX<1>(X_field, X_field, data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhsPre_dX_dx<0>(X_field, x_field, data_at_pts));
+                    new HookeElement::OpAleLhsPre_dX_dx<1>(X_field, x_field, data_at_pts));
                 fe_lhs_ptr->getOpPtrVector().push_back(
                     new HookeElement::OpAleLhs_dX_dx(X_field, x_field, data_at_pts));
             }
@@ -216,7 +215,6 @@ int main(int argc, char *argv[]) {
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpRhs_dx(x_field, x_field, data_at_pts));
             } else {
-              SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Not implemented");
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new OpCalculateVectorFieldGradient<3, 3>(X_field,
                                                            data_at_pts->HMat));
