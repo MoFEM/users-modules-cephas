@@ -49,7 +49,7 @@ struct DataAtIntegrationPtsSprings {
   double springStiffness2;
 
   std::map<int, BlockOptionDataSprings> mapSpring;
-//   ~DataAtIntegrationPtsSprings() {}
+  //   ~DataAtIntegrationPtsSprings() {}
   DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
 
     ierr = setBlocks();
@@ -127,12 +127,10 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   MatrixDouble transLocKs;
 
   OpSpringKs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             BlockOptionDataSprings &data)
+             BlockOptionDataSprings &data, const std::string field_name)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
-            "SPATIAL_POSITION", "SPATIAL_POSITION", OPROWCOL),
-        commonDataPtr(common_data_ptr), dAta(data) {
-    sYmm = true;
-  }
+            field_name.c_str(), field_name.c_str(), OPROWCOL),
+        commonDataPtr(common_data_ptr), dAta(data) {}
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type,
@@ -237,12 +235,16 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
   boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
   BlockOptionDataSprings &dAta;
+  bool is_spatial_position = true;
 
   OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             BlockOptionDataSprings &data)
+             BlockOptionDataSprings &data, const std::string field_name)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
-            "SPATIAL_POSITION", OPROW),
-        commonDataPtr(common_data_ptr), dAta(data) {}
+            field_name.c_str(), OPROW),
+        commonDataPtr(common_data_ptr), dAta(data) {
+    if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
+      is_spatial_position = false;
+  }
 
   // vector used to store force vector for each degree of freedom
   VectorDouble nF;
@@ -251,6 +253,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
                         DataForcesAndSourcesCore::EntData &data) {
 
     MoFEMFunctionBegin;
+
     // check that the faces have associated degrees of freedom
     const int nb_dofs = data.getIndices().size();
     if (nb_dofs == 0)
@@ -279,10 +282,10 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
         commonDataPtr->springStiffness2);
 
-    // for nonlinear elasticity, solution is spatial position
-    auto t_spatial_position_at_gauss_points =
+    // Extract solution at Gauss points
+    auto t_solution_at_gauss_points =
         getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
-    auto t_init_spatial_position_at_gauss_points =
+    auto t_init_solution_at_gauss_points =
         getFTensor1FromMat<3>(*commonDataPtr->xInitAtPts);
 
     // loop over all gauss points of the face
@@ -299,9 +302,14 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       for (int row_index = 0; row_index != nb_dofs / 3;
            ++row_index) { // loop over the nodes
         for (int ii = 0; ii != 3; ++ii) {
-          t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
-                      (t_spatial_position_at_gauss_points(ii) -
-                       t_init_spatial_position_at_gauss_points(ii));
+          if (is_spatial_position) { // "SPATIAL_POSITION"
+            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
+                        (t_solution_at_gauss_points(ii) -
+                         t_init_solution_at_gauss_points(ii));
+          } else { // e.g. "DISPLACEMENT"
+            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
+                        t_solution_at_gauss_points(ii);
+          }
         }
         // move to next base function
         ++base_functions;
@@ -311,8 +319,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // move to next integration weight
       ++t_w;
       // move to the solutions at the next Gauss point
-      ++t_spatial_position_at_gauss_points;
-      ++t_init_spatial_position_at_gauss_points;
+      ++t_solution_at_gauss_points;
+      ++t_init_solution_at_gauss_points;
     }
 
     // add computed values of spring in the global right hand side vector
@@ -365,7 +373,7 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
 
   for (auto &sitSpring : commonDataPtr->mapSpring) {
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
-        new OpSpringKs(commonDataPtr, sitSpring.second));
+        new OpSpringKs(commonDataPtr, sitSpring.second, field_name));
 
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(field_name, commonDataPtr->xAtPts));
@@ -373,7 +381,7 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
         new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
                                             commonDataPtr->xInitAtPts));
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
-        new OpSpringFs(commonDataPtr, sitSpring.second));
+        new OpSpringFs(commonDataPtr, sitSpring.second, field_name));
   }
   //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
   //   " times" << endl;
