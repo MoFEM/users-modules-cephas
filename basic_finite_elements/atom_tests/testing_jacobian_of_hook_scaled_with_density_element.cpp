@@ -128,7 +128,12 @@ int main(int argc, char *argv[]) {
           getFTensor0FromVec(*rhoAtGaussPtsPtr);
 
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        t_rho = getGaussPts()(1, gg) * 2.; //density is equal to y_coord * 2
+
+        const double x = getCoordsAtGaussPts()(0, gg);
+        const double y = getCoordsAtGaussPts()(1, gg);
+        const double z = getCoordsAtGaussPts()(2, gg);
+        t_rho = 1 + x * x + y * y + z * z; // density is equal to
+                                           // 1+x^2+y^2+z^2 (x,y,z coordines)
         ++t_rho;
       }
       MoFEMFunctionReturn(0);
