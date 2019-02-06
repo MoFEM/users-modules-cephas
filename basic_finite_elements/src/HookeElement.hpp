@@ -338,7 +338,7 @@ struct HookeElement {
 
   struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
 
-    boost::shared_ptr<VectorDouble> rhoAtGaussPts;
+    boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
     const double rhoN; ///< exponent n in E(p) = E * (p / p_0)^n
     const double rHo0; ///< p_0 reference density in E(p) = E * (p / p_0)^n
                        // // where p is density, E - youngs modulus
@@ -352,7 +352,7 @@ struct HookeElement {
 
         : VolUserDataOperator(row_field, col_field, OPROW, true),
           blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-          rhoAtGaussPts(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
+          rhoAtGaussPtsPtr(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
       doEdges = false;
       doQuads = false;
       doTris = false;
@@ -364,7 +364,7 @@ struct HookeElement {
                           EntData &row_data) {
       MoFEMFunctionBegin;
 
-      if (!rhoAtGaussPts)
+      if (!rhoAtGaussPtsPtr)
         SETERRQ(PETSC_COMM_SELF, 1, "Calculate density with MWLS first.");
 
       for (auto &m : (*blockSetsPtr)) {
@@ -382,7 +382,7 @@ struct HookeElement {
         const double young = m.second.E;
         const double poisson = m.second.PoissonRatio;
 
-        auto rho = getFTensor0FromVec(*rhoAtGaussPts);
+        auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
 
         // coefficient used in intermediate calculation
         const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));

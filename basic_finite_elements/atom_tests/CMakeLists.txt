@@ -355,11 +355,36 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_hook_element
   -file_name mesh_for_testing_elastic_jacobian.h5m
-)
+  )
+
 add_test(
   testing_jacobian_of_hook_element_ale
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_hook_element
   -file_name mesh_for_testing_elastic_jacobian.h5m -ale
 )
+
+
+bfe_add_executable(testing_jacobian_of_hook_scaled_with_density_element
+  ${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_hook_scaled_with_density_element.cpp
+)
+
+target_link_libraries(testing_jacobian_of_hook_scaled_with_density_element
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  mofem_cblas
+  ${MoFEM_PROJECT_LIBS}
+)
+
+add_test(
+  testing_jacobian_of_hook_scaled_with_density_element
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_hook_scaled_with_density_element
+  -file_name mesh_for_testing_elastic_jacobian.h5m 
+  )
 
