@@ -9,7 +9,7 @@
  * the case when the mesh is moving as results of topological changes, also the
  * calculation of material forces and associated tangent matrices are added to
  * implementation.
- * 
+ *
  * In other words, spatial deformation is small but topological changes large.
  */
 
@@ -280,7 +280,8 @@ struct HookeElement {
       for (auto &m : (*blockSetsPtr)) {
         if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
             m.second.tEts.end())
-          //NOTE: The stiffness Matrix is calculated only once, since is constant for
+          // NOTE: The stiffness Matrix is calculated only once, since is
+          // constant for
           // all integration points and all elements in the block.
           if (lastEvaluatedId != m.second.iD) {
 
@@ -338,8 +339,9 @@ struct HookeElement {
   struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPts;
-    const double rhoN;
-    const double rHo0;
+    const double rhoN; ///< exponent n in E(p) = E * (p / p_0)^n
+    const double rHo0; ///< p_0 reference density in E(p) = E * (p / p_0)^n
+                       // // where p is density, E - youngs modulus
 
     OpCalculateStiffnessScaledByDensityField(
         const std::string row_field, const std::string col_field,
@@ -408,7 +410,8 @@ struct HookeElement {
           t_D(2, 2, 0, 0) = poisson;
           t_D(1, 1, 2, 2) = poisson;
           t_D(2, 2, 1, 1) = poisson;
-
+          // here the coefficient is modified to take density into account for
+          // porous materials: E(p) = E * (p / p_0)^n
           t_D(i, j, k, l) *= coefficient * pow(rho / rHo0, rhoN);
 
           ++t_D;
