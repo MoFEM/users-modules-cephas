@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
                                                        "FORCE_FE");
     }
 
-    // Implementation of spring elements
+    // Implementation of spring element
     // Create new instances of face elements for springs
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
         new FaceElementForcesAndSourcesCore(m_field));

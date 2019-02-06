@@ -1,5 +1,5 @@
 /** \file SpringElements.hpp
-  \brief Header file for spring elements implementation
+  \brief Header file for spring element implementation
 */
 
 /* This file is part of MoFEM.

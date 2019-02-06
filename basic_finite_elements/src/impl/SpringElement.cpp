@@ -49,7 +49,7 @@ struct DataAtIntegrationPtsSprings {
   double springStiffness2;
 
   std::map<int, BlockOptionDataSprings> mapSpring;
-  ~DataAtIntegrationPtsSprings() {}
+//   ~DataAtIntegrationPtsSprings() {}
   DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
 
     ierr = setBlocks();
@@ -112,7 +112,7 @@ private:
   MoFEM::Interface &mField;
 };
 
-/** * @brief Assemble contribution of spring to RHS *
+/** * @brief Assemble contribution of spring to LHS *
  * \f[
  * {K^s} = \int\limits_\Omega ^{} {{\psi ^T}{k_s}\psi d\Omega }
  * \f]
@@ -225,7 +225,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   }
 };
 
-/** * @brief Assemble contribution of springs to LHS *
+/** * @brief Assemble contribution of springs to RHS *
  * \f[
  * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
  * \right)d\partial \Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
@@ -315,7 +315,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       ++t_init_spatial_position_at_gauss_points;
     }
 
-    // add computed values of pressure in the global right hand side vector
+    // add computed values of spring in the global right hand side vector
     CHKERR VecSetValues(getFEMethod()->snes_f, nb_dofs, &data.getIndices()[0],
                         &nF[0], ADD_VALUES);
     MoFEMFunctionReturn(0);
