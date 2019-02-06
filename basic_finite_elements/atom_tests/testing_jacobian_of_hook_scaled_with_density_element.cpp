@@ -105,40 +105,38 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.get_finite_element_entities_by_dimension(
         si->getDomainFEName(), 3, (*block_sets_ptr)[0].tEts);
 
-
     struct OpGetDensityField : public HookeElement::VolUserDataOperator {
 
-    boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
-    OpGetDensityField(const std::string row_field,
-                      boost::shared_ptr<VectorDouble> density_at_pts)
-        : HookeElement::VolUserDataOperator(row_field, OPROW),
-          rhoAtGaussPtsPtr(density_at_pts) {
-    }
+      boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
+      OpGetDensityField(const std::string row_field,
+                        boost::shared_ptr<VectorDouble> density_at_pts)
+          : HookeElement::VolUserDataOperator(row_field, OPROW),
+            rhoAtGaussPtsPtr(density_at_pts) {}
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          HookeElement::EntData &row_data) {
-      MoFEMFunctionBegin;
-      if (row_type != MBVERTEX)
-        MoFEMFunctionReturnHot(0);
-      // get number of integration points
-      const int nb_integration_pts = getGaussPts().size2();
-      rhoAtGaussPtsPtr->resize(nb_integration_pts,false);
-      rhoAtGaussPtsPtr->clear();
-      auto t_rho =
-          getFTensor0FromVec(*rhoAtGaussPtsPtr);
+      MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                            HookeElement::EntData &row_data) {
+        MoFEMFunctionBegin;
+        if (row_type != MBVERTEX)
+          MoFEMFunctionReturnHot(0);
+        // get number of integration points
+        const int nb_integration_pts = getGaussPts().size2();
+        rhoAtGaussPtsPtr->resize(nb_integration_pts, false);
+        rhoAtGaussPtsPtr->clear();
+        auto t_rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
 
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+        FTensor::Index<'i', 3> i;
+        auto t_coords = getFTensor1CoordsAtGaussPts();
+        for (int gg = 0; gg != nb_integration_pts; ++gg) {
+          t_rho =
+              1 + t_coords(i) * t_coords(i); // density is equal to
+                                             // 1+x^2+y^2+z^2 (x,y,z coordines)
+          ++t_rho;
+          ++t_coords;
+        }
 
-        const double x = getCoordsAtGaussPts()(0, gg);
-        const double y = getCoordsAtGaussPts()(1, gg);
-        const double z = getCoordsAtGaussPts()(2, gg);
-        t_rho = 1 + x * x + y * y + z * z; // density is equal to
-                                           // 1+x^2+y^2+z^2 (x,y,z coordines)
-        ++t_rho;
+        MoFEMFunctionReturn(0);
       }
-      MoFEMFunctionReturn(0);
-    }
-  };
+    };
 
     auto my_operators =
         [&](boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
