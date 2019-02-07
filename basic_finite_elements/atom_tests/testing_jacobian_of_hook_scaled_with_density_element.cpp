@@ -157,40 +157,51 @@ int main(int argc, char *argv[]) {
                   new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
               fe_lhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                      x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
+                      x_field, x_field, block_sets_ptr, data_at_pts,
+                      rho_at_gauss_pts_ptr, 1, 1));
               fe_lhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpLhs_dx_dx<1>(x_field, x_field, data_at_pts));
+                  new HookeElement::OpLhs_dx_dx<1>(x_field, x_field,
+                                                   data_at_pts));
             } else {
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new OpCalculateVectorFieldGradient<3, 3>(
-                        X_field, data_at_pts->HMat));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                        x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new OpCalculateVectorFieldGradient<3, 3>(
-                        x_field, data_at_pts->hMat));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStrainAle(x_field, x_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts)); //FIXME:
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dx_dx<1>(x_field, x_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dx_dX<1>(x_field, X_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateEnergy(X_field, X_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
-                                                 data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dX_dX<1>(X_field, X_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhsPre_dX_dx<1>(X_field, x_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dX_dx(X_field, x_field, data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new OpCalculateVectorFieldGradient<3, 3>(X_field,
+                                                           data_at_pts->HMat));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpCalculateStiffnessScaledByDensityField(
+                      x_field, x_field, block_sets_ptr, data_at_pts,
+                      rho_at_gauss_pts_ptr, 1, 1));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new OpCalculateVectorFieldGradient<3, 3>(x_field,
+                                                           data_at_pts->hMat));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpCalculateStrainAle(x_field, x_field,
+                                                         data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpCalculateStress<1>(
+                      x_field, x_field, data_at_pts)); // FIXME:
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpAleLhs_dx_dx<1>(x_field, x_field,
+                                                      data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpAleLhs_dx_dX<1>(x_field, X_field,
+                                                      data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpCalculateEnergy(X_field, X_field,
+                                                      data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
+                                                             data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpAleLhs_dX_dX<1>(X_field, X_field,
+                                                      data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpAleLhsPre_dX_dx<1>(X_field, x_field,
+                                                         data_at_pts));
+              fe_lhs_ptr->getOpPtrVector().push_back(
+                  new HookeElement::OpAleLhs_dX_dx(X_field, x_field,
+                                                   data_at_pts));
             }
           }
 
@@ -204,17 +215,20 @@ int main(int argc, char *argv[]) {
                   new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                      x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
+                      x_field, x_field, block_sets_ptr, data_at_pts,
+                      rho_at_gauss_pts_ptr, 1, 1));
               if (field_disp) {
                 fe_rhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStrain<1>(x_field, x_field, data_at_pts));
+                    new HookeElement::OpCalculateStrain<1>(x_field, x_field,
+                                                           data_at_pts));
               } else {
                 fe_rhs_ptr->getOpPtrVector().push_back(
                     new HookeElement::OpCalculateStrain<1>(x_field, x_field,
-                                                 data_at_pts));
+                                                           data_at_pts));
               }
               fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts));
+                  new HookeElement::OpCalculateStress<1>(x_field, x_field,
+                                                         data_at_pts));
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpRhs_dx(x_field, x_field, data_at_pts));
             } else {
@@ -222,24 +236,28 @@ int main(int argc, char *argv[]) {
                   new OpCalculateVectorFieldGradient<3, 3>(X_field,
                                                            data_at_pts->HMat));
               fe_rhs_ptr->getOpPtrVector().push_back(
-                  new OpGetDensityField(
-                      x_field, rho_at_gauss_pts_ptr));
+                  new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                      x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
+                      x_field, x_field, block_sets_ptr, data_at_pts,
+                      rho_at_gauss_pts_ptr, 1, 1));
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new OpCalculateVectorFieldGradient<3, 3>(x_field,
                                                            data_at_pts->hMat));
               fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStrainAle(x_field, x_field, data_at_pts));
+                  new HookeElement::OpCalculateStrainAle(x_field, x_field,
+                                                         data_at_pts));
               fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts));
+                  new HookeElement::OpCalculateStress<1>(x_field, x_field,
+                                                         data_at_pts));
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpAleRhs_dx(x_field, x_field, data_at_pts));
               fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateEnergy(X_field, X_field, data_at_pts));
+                  new HookeElement::OpCalculateEnergy(X_field, X_field,
+                                                      data_at_pts));
               fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateEshelbyStress(X_field, X_field, data_at_pts));
+                  new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
+                                                             data_at_pts));
               fe_rhs_ptr->getOpPtrVector().push_back(
                   new HookeElement::OpAleRhs_dX(X_field, X_field, data_at_pts));
             }
