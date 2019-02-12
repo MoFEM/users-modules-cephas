@@ -4,17 +4,351 @@
 
 \section spring_element_introduction Introduction
 
-This tutorial presents the implementation of spring elements in MoFEM
+This tutorial presents the implementation of spring elements in MoFEM. The
+spring elements are used to model the interaction between the structure being
+considered and other structures in surrounding environment. In contrast to other
+type of boundary conditions where the displacements/rotations at the surface of
+contact are fixed, the spring boundary condition allows the surface to move
+during the analysis which in turn creates reaction forces that impose on the 
+boundary surface. The manitude of this force is changed propotionally to the
+spring stiffness and the extension or contraction in its length.
 
-\section spring_fe_formulation Finite element formulation
+The remaining of this tutorial is as follows. The next section describes the
+finite element formulation of the spring element where its contribution to the
+left-hand side (LHS) and the right-hand side (RHS). It is followed by the
+description of the implementation of spring element in the platform of MoFEM.
+The following section closes this tutorial by presenting a sample application of
+spring elements to the problem of nonlinear elasticity.
+
+\section spring_fe_formulation Formulation
+
+The finite element formulation of the spring element contributing to LHS and RHS
+can be respectively derived as follows
+ \f[
+    \begin{align}
+        {K^s} &= \int\limits_\Omega ^{} {{\psi ^T}{k_s}\psi d\Omega }, \\
+        f_s &=  \int\limits_{\Omega }^{} {{\psi ^T}{F^s}\left( u
+        \right)d\Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
+        ^T}{k_s} u d \Omega }.
+    \end{align}
+ \f]
+ where \f$ \psi \f$ is approximation function, \f$ k_s \f$ denotes spring
+ stiffness, and \f$ u \f$ is the extension/contraction of the spring which can
+ be calculated by the displacement of the point on the surface where spring is applied.
 
 \section spring_implementation Implementation
 
 In the platform of MoFEM, the implementation of user data operators (UDO) for
 spring boundary conditions can be found in \ref SpringElement.cpp and
 SpringElement.hpp. Particularly, the operators OpSpringKs and OpSpringFs are
-developed to calculate the contribution of springs to the left-hand side (LHS)
-and right-hand side (RHS) of the system of equations.
+developed to calculate the contribution of springs to the LHS and RHS of the
+system of equations, respectively. 
+ 
+
+\subsection spring_opspringfs Operator OpSpringFs for the RHS
+- The operator OpSpringFs is a class that inherits from another class of
+MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator. It is worth noting
+that, in the current implementation, springs are applied on face elements only.
+\code
+  struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+  };
+\endcode
+
+\medskip
+- Public members include (1) \e nF is a sub-vector that stores force at each
+degree of freedom, (2) \e commonDataPtr pointing to spring data associated with
+Gauss points, (3) \e dAta contains block data, and (4) \e is_spatial_position
+being a flag to check the field name, e.g. SPATIAL_POSITION or DISPLACEMENT,
+which later be used to determine the displacements at Gauss points. 
+\code
+// vector used to store force vector for each degree of freedom
+  VectorDouble nF;
+  
+  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+  BlockOptionDataSprings &dAta;
+  bool is_spatial_position = true;
+\endcode
+
+\medskip
+- Then, the OpSpringFs constructor is implemented
+\code
+  OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
+             BlockOptionDataSprings &data, const std::string field_name)
+      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+            field_name.c_str(), OPROW),
+        commonDataPtr(common_data_ptr), dAta(data) {
+    if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
+      is_spatial_position = false;
+  }
+\endcode
+
+\medskip
+- Finally, the OpSpringFs::doWork method of the OpSpringFs operator is
+implemented as follows  
+\code
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+
+    MoFEMFunctionBegin;
+
+    // check that the faces have associated degrees of freedom
+    const int nb_dofs = data.getIndices().size();
+    if (nb_dofs == 0)
+      MoFEMFunctionReturnHot(0);
+
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
+    CHKERR commonDataPtr->getBlockData(dAta);
+
+    // size of force vector associated to the entity
+    // set equal to the number of degrees of freedom of associated with the
+    // entity
+    nF.resize(nb_dofs, false);
+    nF.clear();
+
+    // get number of gauss points
+    const int nb_gauss_pts = data.getN().size1();
+
+    // get intergration weights
+    auto t_w = getFTensor0IntegrationWeight();
+
+    FTensor::Tensor1<double, 3> t_spring_stiffness(
+        commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
+        commonDataPtr->springStiffness2);
+
+    // Extract solution at Gauss points
+    auto t_solution_at_gauss_points =
+        getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
+    auto t_init_solution_at_gauss_points =
+        getFTensor1FromMat<3>(*commonDataPtr->xInitAtPts);
+
+    // loop over all gauss points of the face
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      double w = t_w * getArea();
+
+      auto base_functions = data.getFTensor0N(gg, 0);
+
+      // create a vector t_nf whose pointer points an array of 3 pointers
+      // pointing to nF  memory location of components
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
+                                                              &nF[2]);
+      for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
+        for (int ii = 0; ii != 3; ++ii) {
+          if (is_spatial_position) { // "SPATIAL_POSITION"
+            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
+                        (t_solution_at_gauss_points(ii) -
+                         t_init_solution_at_gauss_points(ii));
+          } else { // e.g. "DISPLACEMENT"
+            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
+                        t_solution_at_gauss_points(ii);
+          }
+        }
+        // move to next base function
+        ++base_functions;
+        // move the pointer to next element of t_nf
+        ++t_nf;
+      }
+      // move to next integration weight
+      ++t_w;
+      // move to the solutions at the next Gauss point
+      ++t_solution_at_gauss_points;
+      ++t_init_solution_at_gauss_points;
+    }
+
+    // add computed values of spring in the global right hand side vector
+    CHKERR VecSetValues(getFEMethod()->snes_f, nb_dofs, &data.getIndices()[0],
+                        &nF[0], ADD_VALUES);
+    MoFEMFunctionReturn(0);
+  }
+\endcode
+
+
+\subsection spring_opspringks Operator OpSpringKs for the LHS
+
+Similarly to the previous part, the operator OpSpringKs to calculate the
+contribution of the spring elements to the LHS is implemented as follows
+\code
+struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+  BlockOptionDataSprings &dAta;
+
+  MatrixDouble locKs;
+  MatrixDouble transLocKs;
+
+  OpSpringKs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
+             BlockOptionDataSprings &data, const std::string field_name)
+      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+            field_name.c_str(), field_name.c_str(), OPROWCOL),
+        commonDataPtr(common_data_ptr), dAta(data) {}
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    // check if the volumes have associated degrees of freedom
+    const int row_nb_dofs = row_data.getIndices().size();
+    if (!row_nb_dofs)
+      MoFEMFunctionReturnHot(0);
+
+    const int col_nb_dofs = col_data.getIndices().size();
+    if (!col_nb_dofs)
+      MoFEMFunctionReturnHot(0);
+
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
+    CHKERR commonDataPtr->getBlockData(dAta);
+    // size associated to the entity
+    locKs.resize(row_nb_dofs, col_nb_dofs, false);
+    locKs.clear();
+
+    // get number of Gauss points
+    const int row_nb_gauss_pts = row_data.getN().size1();
+    if (!row_nb_gauss_pts) // check if number of Gauss point <> 0
+      MoFEMFunctionReturnHot(0);
+
+    const int row_nb_base_functions = row_data.getN().size2();
+
+    // get intergration weights
+    auto t_w = getFTensor0IntegrationWeight();
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor2<double *, 3, 3>(
+          &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1),
+          &m(3 * r + 0, 3 * c + 2), &m(3 * r + 1, 3 * c + 0),
+          &m(3 * r + 1, 3 * c + 1), &m(3 * r + 1, 3 * c + 2),
+          &m(3 * r + 2, 3 * c + 0), &m(3 * r + 2, 3 * c + 1),
+          &m(3 * r + 2, 3 * c + 2));
+    };
+
+    FTensor::Tensor2<double, 3, 3> t_spring_mat(
+        commonDataPtr->springStiffness0, 0., 0., 0.,
+        commonDataPtr->springStiffness1, 0., 0., 0.,
+        commonDataPtr->springStiffness2);
+
+    // loop over the Gauss points
+    for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+      // get area and integration weight
+      double w = t_w * getArea();
+
+      auto row_base_functions = row_data.getFTensor0N(gg, 0);
+
+      for (int rr = 0; rr != row_nb_dofs / 3; rr++) {
+        auto col_base_functions = col_data.getFTensor0N(gg, 0);
+        for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
+          auto assemble_m = get_tensor2(locKs, rr, cc);
+          assemble_m(i, j) +=
+              w * row_base_functions * col_base_functions * t_spring_mat(i, j);
+          ++col_base_functions;
+        }
+        ++row_base_functions;
+      }
+      // move to next integration weight
+      ++t_w;
+    }
+
+    // Add computed values of spring stiffness to the global LHS matrix
+    CHKERR MatSetValues(
+        getFEMethod()->snes_B, row_nb_dofs, &*row_data.getIndices().begin(),
+        col_nb_dofs, &*col_data.getIndices().begin(), &locKs(0, 0), ADD_VALUES);
+
+    // is symmetric
+    if (row_side != col_side || row_type != col_type) {
+      transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
+      noalias(transLocKs) = trans(locKs);
+      CHKERR MatSetValues(getFEMethod()->snes_B, col_nb_dofs,
+                          &*col_data.getIndices().begin(), row_nb_dofs,
+                          &*row_data.getIndices().begin(), &transLocKs(0, 0),
+                          ADD_VALUES);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+};
+\endcode
+
+
+\subsection spring_declaration_function Declaration of spring elements
+
+
+\code
+MoFEMErrorCode
+MetaSpringBC::addSpringElements(MoFEM::Interface &m_field,
+                                const std::string field_name,
+                                const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+
+  // Define boundary element that operates on rows, columns and data of a
+  // given field
+  CHKERR m_field.add_finite_element("SPRING");
+  CHKERR m_field.modify_finite_element_add_field_row("SPRING", field_name);
+  CHKERR m_field.modify_finite_element_add_field_col("SPRING", field_name);
+  CHKERR m_field.modify_finite_element_add_field_data("SPRING", field_name);
+  if (m_field.check_field(mesh_nodals_positions)) {
+    CHKERR m_field.modify_finite_element_add_field_data("SPRING",
+                                                        mesh_nodals_positions);
+  }
+  // Add entities to that element, here we add all triangles with SPRING_BC
+  // from cubit
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+    if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
+      CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
+                                                        MBTRI, "SPRING");
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+
+\subsection spring_set_operator_function Pushing operators to FE instances
+
+
+\code
+  MoFEMErrorCode MetaSpringBC::setSpringOperators(
+    MoFEM::Interface &m_field,
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
+    const std::string field_name, const std::string mesh_nodals_positions) {
+  MoFEMFunctionBegin;
+
+  // Push operators to instances for springs
+  // loop over blocks
+  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr =
+      boost::make_shared<DataAtIntegrationPtsSprings>(m_field);
+  CHKERR commonDataPtr->getParameters();
+
+  for (auto &sitSpring : commonDataPtr->mapSpring) {
+    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+        new OpSpringKs(commonDataPtr, sitSpring.second, field_name));
+
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(field_name, commonDataPtr->xAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
+                                            commonDataPtr->xInitAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpSpringFs(commonDataPtr, sitSpring.second, field_name));
+  }
+  //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
+  //   " times" << endl;
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
 
 \section spring_sample_application Sample application
 
@@ -26,17 +360,20 @@ nonlinear elasticity problem, i.e. \ref arc_length_nonlinear_elasticity.cpp, and
 how the inclusion of spring boundary condition affects the responses of
 the structure bearing external loads. 
 
-\subsection spring_code_dissection Code dissection
+\subsection spring_nonlinear_elasticity_implementation Implementation in the
+main program
+
 In order to include spring element in the nonlinear elesticity problem
-arc_length_nonlinear_elasticity.cpp, only following lines of code are needed to add
-to the main program.
+arc_length_nonlinear_elasticity.cpp, the following lines of code are needed in
+the main program.
 
 - The header files for spring element implementation are embedded in
-BasicFiniteElements.hpp (directly included) and All.cpp (via CMake)
+BasicFiniteElements.hpp (directly included) and \ref All.cpp (via CMake)
 \code
     #include <BasicFiniteElements.hpp>
 \endcode
 
+\medskip
 - Declaration of the spring element
 \code 
     // Add spring boundary condition applied on surfaces.
@@ -45,12 +382,14 @@ BasicFiniteElements.hpp (directly included) and All.cpp (via CMake)
                                              "MESH_NODE_POSITIONS");
 \endcode
 
+\medskip
 - Set finite element for spring boundary condition
 \code
     CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
                                                        "SPRING");
 \endcode
 
+\medskip
 - Implementation of spring element by creating new instances and calling
 function MetaSpringBC::setSpringOperators to push operators to them
 \code
@@ -66,6 +405,7 @@ function MetaSpringBC::setSpringOperators to push operators to them
         "MESH_NODE_POSITIONS");
 \endcode
 
+\medskip
 - Loop over the elements to calculate the contribution of the
 spring boundary condition to the RHS and LHS
 \code
@@ -83,7 +423,7 @@ spring boundary condition to the RHS and LHS
 The 3D model and mesh of an L-shaped structure shown in \ref
 figure_spring_LShape_mesh "Figure 1" is created by Cubit using the journal
 script below 
-\verbatim
+\code
 reset
 set duplicate block elements on
 
@@ -117,7 +457,7 @@ block 2 name "BODY_FORCES")
 block 2 attribute count 4
 block 2 attribute index 1 0.001.
 block 2 attribute index 2 0.
-block 2 attribute inde x 3 0
+block 2 attribute index 3 0
 block 2 attribute index 4 0.
 
 block 3 volume 1 
@@ -143,19 +483,85 @@ mesh volume all
 
 save as "/Users/username/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/nonlinear_elasticity/spring_LShape.cub" overwrite
 
-\endverbatim
+\endcode
 
 \anchor figure_spring_LShape_mesh
-\image html spring_LShape_mesh.png "Figure 1: Mesh of L-shaped structure." width = 400px
-
-In this model, the boundary condition (clamp or spring) is imposed at the
-highlighted surface while pressure is applied on another surface on the right.
+\image html spring_LShape_mesh.png "Figure 1: Mesh of L-shaped structure with the boundary condition imposed on the highlighted surface." width = 400px
 
 
-Comparison shown in \ref figure_nonlinear_elasticity_spring "Figure 2".
+
+In this model, the boundary condition (clamp or spring) is imposed on the
+highlighted surface while pressure is applied on another surface on the top
+right.
+
+
+The analysis can be run using command line as follows
+\code
+./arc_length_nonlinear_elasticity \
+-my_file spring_LShape.cub \
+-ksp_type fgmres -pc_type asm -sub_pc_type lu -ksp_atol 1e-10 -ksp_rtol 1e-10 \
+-snes_monitor -snes_type newtonls -snes_linesearch_type basic \
+-snes_linesearch_monitor -snes_max_it 16 -snes_atol 1e-8 -snes_rtol 1e-8 \
+-my_sr 1e-6 -my_ms 5 -snes_converged_reason -my_order 2
+\endcode
+
+
+
+And the output results for the first two load steps can be read below
+
+\code
+Load Step 1 step_size = 1.0000e-06
+	Set s = 1.0000e-06
+	Set alpha = 0.0000e+00 beta = 1.0000e+00
+	lambda = 0.0000e+00, 4.1621e-06 (4.1621e-06)
+	Flambda2 = 5.7726e-02
+	lambda = 4.1621e-06
+	fnorm = 1.0000e-06
+	dlambda = 4.1621e-06 dx2 = 0.0000e+00
+	res_lambda = 0.0000e+00
+	lambda = 4.1621e-06
+  0 SNES Function norm 1.000000000016e-06 
+	diag = 4.8052e-07
+	Flambda2 = 5.7726e-02
+	lambda = 4.1621e-06
+	fnorm = 5.8729e-09
+	dlambda = 4.1621e-06 dx2 = 8.7429e-06
+	res_lambda = 5.3342e-19
+	lambda = 4.1621e-06
+  1 SNES Function norm 5.872878768813e-09 
+Nonlinear solve converged due to CONVERGED_FNORM_ABS iterations 1
+number of Newton iterations = 1
+	Set alpha = 1.0000e+00 beta = 0.0000e+00
+	dlambda = 4.1621e-06 dx2 = 8.7429e-06
+	Set s = 2.9568e-03
+Load Step 2 step_size = 2.9568e-03 dlambda0 = 4.1621e-06 dx_nrm = 2.9568e-03 dx2 = 8.7429e-06
+	lambda = 4.1621e-06, 8.3243e-06 (4.1621e-06)
+	Flambda2 = 5.7726e-02
+	lambda = 8.3243e-06
+	fnorm = 2.3490e-08
+	dlambda = 4.1621e-06 dx2 = 8.7429e-06
+	res_lambda = 0.0000e+00
+	lambda = 8.3243e-06
+  0 SNES Function norm 2.348977046175e-08 
+	diag = 0.0000e+00
+	Flambda2 = 5.7726e-02
+	lambda = 8.3247e-06
+	fnorm = 2.0628e-15
+	dlambda = 4.1626e-06 dx2 = 8.7429e-06
+	res_lambda = 7.0090e-14
+	lambda = 8.3247e-06
+  1 SNES Function norm 7.011997760271e-14 
+Nonlinear solve converged due to CONVERGED_FNORM_ABS iterations 1
+\endcode
+
+\ref figure_nonlinear_elasticity_spring "Figure 2" presents the comparison of
+the results for different boundary conditions applied at a face of the L-shaped
+structure. There are two analyses where springs with different stiffness
+magnitude in x, y, and z directions are applied. Additionally, another case in
+which clamp boundary condition is use is also presented.
 
 \anchor figure_nonlinear_elasticity_spring
-\image html spring_comparison.png "Figure 2: Comparison of different boundary conditions." width = 600px
+\image html spring_comparison.png "Figure 2: Comparison of different boundary conditions." width = 500px
 
 
 */

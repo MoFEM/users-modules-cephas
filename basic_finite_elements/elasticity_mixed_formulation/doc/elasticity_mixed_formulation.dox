@@ -114,7 +114,7 @@ analysis of incompressible elasticity. The 3D model and mesh which shown in \ref
 figure_cubit_mesh "Figure 1" are created by Cubit using a simple journal script
 below 
 
-\verbatim
+\code
 reset
 set duplicate block elements on
 
@@ -147,7 +147,7 @@ volume all size auto factor 7
 mesh volume all
 
 save as "/Users/username/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/LShape_incompressible.cub" overwrite
-\endverbatim
+\endcode
 
 \anchor figure_cubit_mesh
 \image html emf_cubit_mesh.png "Figure 1: Element mesh." width = 600px
@@ -157,8 +157,7 @@ save as "/Users/username/mofem_install/um/build/basic_finite_elements/elasticity
 
 \subsection elasticity_mixed_formulation_init Initialisation
 
-- Header file
-There are two header files in which the first one for basic finite elements
+- There are two header files in which the first one for basic finite elements
 and the second one contains the implementation of operators for
 finite elements.
 
@@ -571,7 +570,7 @@ residual/error
 
 
 - Cubit mesh being read
-\verbatim
+\code
 read cubit meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
 read cubit meshset 12682136550675316777 type NODESET DISPLACEMENTSET msId 1
 read cubit meshset 12682136550675316778 type NODESET msId 101
@@ -580,18 +579,18 @@ read cubit meshset 12682136550675316780 type SIDESET msId 2
 read cubit meshset 12682136550675316781 type SIDESET PRESSURESET msId 3
 read cubit meshset 12682136550675316782 type SIDESET msId 100
 read cubit meshset 12682136550675316783 type SIDESET msId 102
-\endverbatim
+\endcode
 
 \medskip
 - MoFEM version and commit ID
-\verbatim
+\code
 MoFEM version 0.8.15 (MOAB 5.0.2 Petsc Release Version 3.9.3, Jul, 02, 2018 ) 
 git commit id cdfa37ee13d92b014cc527b5ab7b844baf73f98d
-\endverbatim
+\endcode
 
 \medskip
 - Boundary conditions from the mesh
-\verbatim
+\code
 D i s p l a c e m e n t 
  
 Flag for X-Translation (0/1): 1
@@ -607,11 +606,11 @@ Displacement magnitude (Z-Translation): 0
 Displacement magnitude (X-Rotation): N/A
 Displacement magnitude (Y-Rotation): N/A
 Displacement magnitude (Z-Rotation): N/A
-\endverbatim
+\endcode
 
 \medskip
 - Material used in the mesh
-\verbatim
+\code
 meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
 
 Material Properties
@@ -628,12 +627,12 @@ User attribute 6 = 0
 User attribute 7 = 0
 
 MAT_ELATIC msId 1 nb. tets 471
-\endverbatim
+\endcode
 
 \medskip
 - Three fields are added to the database. Fields are then built showing the number
 of active degrees of freedom (DOFs) for entities including vertices, edges, triangles (faces).
-\verbatim
+\code
 add: name MESH_NODE_POSITIONS BitFieldId 1 bit number 1 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316786
 add: name U BitFieldId 2 bit number 2 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316787
 add: name P BitFieldId 4 bit number 3 space H1 approximation base
@@ -665,11 +664,11 @@ nb added dofs (vertices) 155 (inactive 0)
 nb added dofs (edges) 747 (inactive 0)
 nb added dofs 902 (number of inactive dofs 0)
 Nb. dofs 9506
-\endverbatim
+\endcode
 
 \medskip
 - Three elements are added to the database. Finite elements are then built.
-\verbatim
+\code
 add finite element: FORCE_FE
 add finite element: PRESSURE_FE
 add finite element: ELASTIC
@@ -688,11 +687,11 @@ id 00000000000000000000000000000100 name ELASTIC f_id_row 0000000000000000000000
 Nb. entFEAdjacencies 13328
 Nb. entFEAdjacencies 13328
 
-\endverbatim
+\endcode
 
 \medskip
 - Problem is added and then built
-\verbatim
+\code
 add problem: DM_ELASTIC_MIX
 Problem DM_ELASTIC_MIX Nb. rows 9041 Nb. cols 9041
 Problem DM_ELASTIC_MIX Nb. rows 9041 Nb. cols 9041
@@ -709,21 +708,21 @@ partition_ghost_col_dofs: rank = 0 FEs col ghost dofs problem id 000000000000000
 partition_ghost_row_dofs: rank = 0 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. row ghost dof 221 Nb. local dof 4653
 partition_ghost_col_dofs: rank = 1 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. col ghost dof 181 Nb. local dof 4388
 partition_ghost_row_dofs: rank = 1 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name DM_ELASTIC_MIX Nb. row ghost dof 181 Nb. local dof 4388
-\endverbatim
+\endcode
 
 \b Solution
 
 - KSP solver output
-\verbatim
+\code
 0 KSP Residual norm 2.422191940287e+02 
 1 KSP Residual norm 3.461359964609e-11
-\endverbatim
+\endcode
 
 \medskip
 - Output file
-\verbatim
+\code
 Output file: out.h5m
-\endverbatim
+\endcode
 
 
 \subsection elasticity_mixed_formulation_visualisation Visualisation
