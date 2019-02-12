@@ -305,7 +305,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
         for (int ii = 0; ii != 3; ++ii) {
           if (is_spatial_position) { // "SPATIAL_POSITION"
-            t_nf(ii) -= (w * base_functions * t_spring_stiffness(ii)) *
+            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
                         (t_solution_at_gauss_points(ii) -
                          t_init_solution_at_gauss_points(ii));
           } else { // e.g. "DISPLACEMENT"
