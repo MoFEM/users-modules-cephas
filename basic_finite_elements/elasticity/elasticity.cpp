@@ -79,282 +79,10 @@ struct BlockOptionData {
   double pOisson;
   double initTemp;
 
-  double springStiffness0; // Spring stiffness
-  double springStiffness1;
-  double springStiffness2;
-
   Range tRis;
 
   BlockOptionData()
-      : oRder(-1), yOung(-1), pOisson(-2), springStiffness0(-1),
-        springStiffness1(-1), springStiffness2(-1), initTemp(0) {}
-};
-
-struct DataAtIntegrationPtsSprings {
-
-  boost::shared_ptr<MatrixDouble> gradDispPtr;
-  boost::shared_ptr<VectorDouble> pPtr;
-  FTensor::Ddg<double, 3, 3> tD;
-  boost::shared_ptr<MatrixDouble> xAtPts =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-
-  double springStiffness0; // Spring stiffness
-  double springStiffness1;
-  double springStiffness2;
-
-  std::map<int, BlockOptionData> mapSpring;
-
-  DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
-
-    // Setting default values for coeffcients
-    gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    xAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
-
-    ierr = setBlocks();
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  }
-
-  MoFEMErrorCode getParameters() {
-    MoFEMFunctionBegin; // They will be overwriten by BlockData
-    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
-
-    ierr = PetscOptionsEnd();
-    CHKERRQ(ierr);
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode getBlockData(BlockOptionData &data) {
-    MoFEMFunctionBegin;
-
-    springStiffness0 = data.springStiffness0;
-    springStiffness1 = data.springStiffness1;
-    springStiffness2 = data.springStiffness2;
-
-
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode setBlocks() {
-    MoFEMFunctionBegin;
-
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
-
-        const int id = bit->getMeshsetId();
-        CHKERR mField.get_moab().get_entities_by_type(bit->getMeshset(), MBTRI,
-                                                      mapSpring[id].tRis, true);
-
-        // EntityHandle out_meshset;
-        // CHKERR mField.get_moab().create_meshset(MESHSET_SET, out_meshset);
-        // CHKERR mField.get_moab().add_entities(out_meshset,
-        // mapSpring[id].tRis); CHKERR mField.get_moab().write_file("error.vtk",
-        // "VTK", "",
-        //                                     &out_meshset, 1);
-
-        std::vector<double> attributes;
-        bit->getAttributes(attributes);
-        if (attributes.size() != 3) {
-          SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                   "should be 3 attributes but is %d", attributes.size());
-        }
-        mapSpring[id].iD = id;
-        mapSpring[id].springStiffness0 = attributes[0];
-        mapSpring[id].springStiffness1 = attributes[1];
-        mapSpring[id].springStiffness2 = attributes[2];
-      }
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  MoFEM::Interface &mField;
-};
-
-/** * @brief Assemble contribution of spring to RHS *
- * \f[
- * {K^s} = \int\limits_\Omega ^{} {{\psi ^T}{k_s}\psi d\Omega }
- * \f]
- *
- */
-struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
-
-  DataAtIntegrationPtsSprings &commonData;
-  MatrixDouble locKs;
-  MatrixDouble transLocKs;
-  BlockOptionData &dAta;
-
-  OpSpringKs(DataAtIntegrationPtsSprings &common_data, BlockOptionData &data)
-      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
-            "DISPLACEMENT", "DISPLACEMENT", OPROWCOL),
-        commonData(common_data), dAta(data) {
-    sYmm = true;
-  }
-
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data) {
-    MoFEMFunctionBegin;
-
-    // check if the volumes have associated degrees of freedom
-    const int row_nb_dofs = row_data.getIndices().size();
-    if (!row_nb_dofs)
-      MoFEMFunctionReturnHot(0);
-
-    const int col_nb_dofs = col_data.getIndices().size();
-    if (!col_nb_dofs)
-      MoFEMFunctionReturnHot(0);
-
-    // std::cout << dAta.tRis << endl;
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
-      MoFEMFunctionReturnHot(0);
-    }
-
-    CHKERR commonData.getBlockData(dAta);
-    // size associated to the entity
-    locKs.resize(row_nb_dofs, col_nb_dofs, false);
-    locKs.clear();
-
-    // get number of Gauss points
-    const int row_nb_gauss_pts = row_data.getN().size1();
-    if (!row_nb_gauss_pts) // check if number of Gauss point <> 0
-      MoFEMFunctionReturnHot(0);
-
-    const int row_nb_base_functions = row_data.getN().size2();
-    auto row_base_functions = row_data.getFTensor0N();
-
-    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
-                                                 commonData.springStiffness1,
-                                                 commonData.springStiffness2);
-
-    // loop over all Gauss point of the volume
-    for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
-      // get area and integration weight
-      double w = getArea() * getGaussPts()(2, gg);
-
-      for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
-        auto col_base_functions = col_data.getFTensor0N(gg, 0);
-        for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
-          locKs(row_index, col_index) += w * row_base_functions *
-                                         spring_stiffness(col_index % 3) *
-                                         col_base_functions;
-          ++col_base_functions;
-        }
-        ++row_base_functions;
-      }
-    }
-
-    // Add computed values of spring stiffness to the global LHS matrix
-    CHKERR MatSetValues(
-        getFEMethod()->ksp_B, row_nb_dofs, &*row_data.getIndices().begin(),
-        col_nb_dofs, &*col_data.getIndices().begin(), &locKs(0, 0), ADD_VALUES);
-
-    // is symmetric
-    if (row_side != col_side || row_type != col_type) {
-      transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
-      noalias(transLocKs) = trans(locKs);
-      CHKERR MatSetValues(getFEMethod()->ksp_B, col_nb_dofs,
-                          &*col_data.getIndices().begin(), row_nb_dofs,
-                          &*row_data.getIndices().begin(), &transLocKs(0, 0),
-                          ADD_VALUES);
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-};
-
-/** * @brief Assemble contribution of springs to LHS *
- * \f[
- * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
- * \right)d\partial \Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
- * ^T}{k_s}ud\partial \Omega }
- * \f]
- *
- */
-struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
-
-  DataAtIntegrationPtsSprings &commonData;
-  BlockOptionData &dAta;
-
-  OpSpringFs(DataAtIntegrationPtsSprings &common_data, BlockOptionData &data)
-      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator("DISPLACEMENT",
-                                                                 OPROW),
-        commonData(common_data), dAta(data) {}
-
-  // vector used to store force vector for each degree of freedom
-  VectorDouble nF;
-
-  FTensor::Index<'i', 3> i;
-
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-
-    MoFEMFunctionBegin;
-    // check that the faces have associated degrees of freedom
-    const int nb_dofs = data.getIndices().size();
-    if (nb_dofs == 0)
-      MoFEMFunctionReturnHot(0);
-
-    // std::cout << dAta.tRis << endl;
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
-      MoFEMFunctionReturnHot(0);
-    }
-
-    // size of force vector associated to the entity
-    // set equal to the number of degrees of freedom of associated with the
-    // entity
-    nF.resize(nb_dofs, false);
-    nF.clear();
-
-    // get number of gauss points
-    const int nb_gauss_pts = data.getN().size1();
-
-    // get intergration weights
-    auto t_w = getFTensor0IntegrationWeight();
-
-    // vector of base functions
-    auto base_functions = data.getFTensor0N();
-
-    FTensor::Tensor1<double, 3> spring_stiffness(commonData.springStiffness0,
-                                                 commonData.springStiffness1,
-                                                 commonData.springStiffness2);
-
-    auto disp_at_gauss_point = getFTensor1FromMat<3>(*commonData.xAtPts);
-
-    // loop over all gauss points of the face
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      // weight of gg gauss point
-      double w = t_w * getArea();
-
-      // create a vector t_nf whose pointer points an array of 3 pointers
-      // pointing to nF  memory location of components
-      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
-                                                              &nF[2]);
-      for (int col_index = 0; col_index != nb_dofs / 3;
-           ++col_index) { // loop over the nodes
-        for (int ii = 0; ii != 3; ++ii) {
-          t_nf(ii) += (w * spring_stiffness(ii) * base_functions) *
-                      disp_at_gauss_point(ii);
-        }
-        // move to next base function
-        ++base_functions;
-        // move the pointer to next element of t_nf
-        ++t_nf;
-      }
-      // move to next integration weight
-      ++t_w;
-      //
-      ++disp_at_gauss_point;
-    }
-    // add computed values of pressure in the global right hand side vector
-    CHKERR VecSetValues(getFEMethod()->ksp_f, nb_dofs, &data.getIndices()[0],
-                        &nF[0], ADD_VALUES);
-    MoFEMFunctionReturn(0);
-  }
+      : oRder(-1), yOung(-1), pOisson(-2), initTemp(0) {}
 };
 
 using BlockData = NonlinearElasticElement::BlockData;
@@ -498,6 +226,7 @@ int main(int argc, char *argv[]) {
 
       CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+
       MoFEMFunctionReturn(0);
     };
     CHKERR setting_second_order_geometry();
@@ -623,28 +352,6 @@ int main(int argc, char *argv[]) {
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
 
-    // Create new instances of face elements for springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringLhs(
-        new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> feSpringRhs(
-        new FaceElementForcesAndSourcesCore(m_field));
-
-    // Push operators to instances for springs
-    // loop over blocks
-    DataAtIntegrationPtsSprings commonData(m_field);
-    CHKERR commonData.getParameters();
-
-    for (auto &sitSpring : commonData.mapSpring) {
-      feSpringLhs->getOpPtrVector().push_back(
-          new OpSpringKs(commonData, sitSpring.second));
-
-      feSpringRhs->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldValues<3>("DISPLACEMENT",
-                                              commonData.xAtPts));
-      feSpringRhs->getOpPtrVector().push_back(
-          new OpSpringFs(commonData, sitSpring.second));
-    }
-
     CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
                                            "DISPLACEMENT",
                                            "MESH_NODE_POSITIONS", false);
@@ -652,21 +359,21 @@ int main(int argc, char *argv[]) {
                                       "DISPLACEMENT", "MESH_NODE_POSITIONS",
                                       false, true);
 
-    // Add spring element, just depends on "DISPLACEMENT"
-    CHKERR m_field.add_finite_element("SPRING");
-    CHKERR m_field.modify_finite_element_add_field_row("SPRING",
-                                                       "DISPLACEMENT");
-    CHKERR m_field.modify_finite_element_add_field_col("SPRING",
-                                                       "DISPLACEMENT");
-    CHKERR m_field.modify_finite_element_add_field_data("SPRING",
-                                                        "DISPLACEMENT");
-    // Add entities to spring elements
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
-        CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
-                                                          MBTRI, "SPRING");
-      }
-    }
+    // Add spring boundary condition applied on surfaces.
+    // This is only declaration not implementation.
+    CHKERR MetaSpringBC::addSpringElements(m_field, "DISPLACEMENT",
+                                           "MESH_NODE_POSITIONS");
+
+    // Implementation of spring element
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    CHKERR MetaSpringBC::setSpringOperators(m_field, fe_spring_lhs_ptr,
+                                            fe_spring_rhs_ptr, "DISPLACEMENT",
+                                            "MESH_NODE_POSITIONS");
 
     // Add body force element. This is only declaration of element. not its
     // implementation.
@@ -787,8 +494,8 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
     // Assign global matrix/vector contributed by springs
-    feSpringLhs->ksp_B = Aij;
-    feSpringRhs->ksp_f = F;
+    fe_spring_lhs_ptr->ksp_B = Aij;
+    fe_spring_rhs_ptr->ksp_f = F;
 
     // Zero vectors and matrices
     CHKERR VecZeroEntries(F);
@@ -861,8 +568,8 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
     // Assemble springs
-    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringLhs);
-    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", feSpringRhs);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_lhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_rhs_ptr);
 
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see

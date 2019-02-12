@@ -190,10 +190,10 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
       auto row_base_functions = row_data.getFTensor0N(gg, 0);
 
-      for (int row_index = 0; row_index != row_nb_dofs / 3; row_index++) {
+      for (int rr = 0; rr != row_nb_dofs / 3; rr++) {
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
-        for (int col_index = 0; col_index != col_nb_dofs / 3; col_index++) {
-          auto assemble_m = get_tensor2(locKs, row_index, col_index);
+        for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
+          auto assemble_m = get_tensor2(locKs, rr, cc);
           assemble_m(i, j) +=
               w * row_base_functions * col_base_functions * linear_spring(i, j);
           ++col_base_functions;
@@ -205,15 +205,18 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     }
 
     // Add computed values of spring stiffness to the global LHS matrix
+    Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
+                                               : getFEMethod()->snes_B;
     CHKERR MatSetValues(
-        getFEMethod()->snes_B, row_nb_dofs, &*row_data.getIndices().begin(),
+        B, row_nb_dofs, &*row_data.getIndices().begin(),
         col_nb_dofs, &*col_data.getIndices().begin(), &locKs(0, 0), ADD_VALUES);
 
     // is symmetric
     if (row_side != col_side || row_type != col_type) {
       transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
       noalias(transLocKs) = trans(locKs);
-      CHKERR MatSetValues(getFEMethod()->snes_B, col_nb_dofs,
+   
+      CHKERR MatSetValues(B, col_nb_dofs,
                           &*col_data.getIndices().begin(), row_nb_dofs,
                           &*row_data.getIndices().begin(), &transLocKs(0, 0),
                           ADD_VALUES);
@@ -233,6 +236,9 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
  */
 struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
+  // vector used to store force vector for each degree of freedom
+  VectorDouble nF;
+
   boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
   BlockOptionDataSprings &dAta;
   bool is_spatial_position = true;
@@ -245,9 +251,6 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
       is_spatial_position = false;
   }
-
-  // vector used to store force vector for each degree of freedom
-  VectorDouble nF;
 
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
@@ -299,11 +302,10 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // pointing to nF  memory location of components
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
                                                               &nF[2]);
-      for (int row_index = 0; row_index != nb_dofs / 3;
-           ++row_index) { // loop over the nodes
+      for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
         for (int ii = 0; ii != 3; ++ii) {
           if (is_spatial_position) { // "SPATIAL_POSITION"
-            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
+            t_nf(ii) -= (w * base_functions * t_spring_stiffness(ii)) *
                         (t_solution_at_gauss_points(ii) -
                          t_init_solution_at_gauss_points(ii));
           } else { // e.g. "DISPLACEMENT"
@@ -322,9 +324,10 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       ++t_solution_at_gauss_points;
       ++t_init_solution_at_gauss_points;
     }
-
+    Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
+                                               : getFEMethod()->snes_f;
     // add computed values of spring in the global right hand side vector
-    CHKERR VecSetValues(getFEMethod()->snes_f, nb_dofs, &data.getIndices()[0],
+    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0],
                         &nF[0], ADD_VALUES);
     MoFEMFunctionReturn(0);
   }

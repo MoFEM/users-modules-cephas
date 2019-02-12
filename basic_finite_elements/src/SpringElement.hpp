@@ -19,7 +19,6 @@
 #ifndef __SPRINGELEMENT_HPP__
 #define __SPRINGELEMENT_HPP__
 
-
 /** \brief Set of functions declaring elements and setting operators
  * to apply spring boundary condition
  */
