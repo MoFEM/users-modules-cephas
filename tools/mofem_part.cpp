@@ -31,9 +31,8 @@ int main(int argc, char *argv[]) {
 
     // global variables
     char mesh_file_name[255];
-    char mesh_out_file[255];
+    char mesh_out_file[255] = "out.h5m";
     PetscBool flg_file = PETSC_FALSE;
-    PetscBool flg_out_file = PETSC_FALSE;
     PetscBool flg_n_part = PETSC_FALSE;
     PetscInt n_partas = 1;
     PetscBool create_lower_dim_ents = PETSC_TRUE;
@@ -46,7 +45,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "", "mesh.h5m",
-                              mesh_out_file, 255, &flg_out_file);
+                              mesh_out_file, 255, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_nparts", "number of parts", "", n_partas,
                            &n_partas, &flg_n_part);
     CHKERR PetscOptionsInt("-dim", "adjacency dim", "", dim, &dim, PETSC_NULL);
@@ -107,11 +106,7 @@ int main(int argc, char *argv[]) {
       CHKERR prb_mng_ptr->partitionMesh(ents3d, dim, adj_dim, n_partas);
     }
 
-    if (flg_out_file = PETSC_TRUE) {
-      CHKERR moab.write_file(mesh_out_file);
-    } else {
-    CHKERR moab.write_file("out.h5m");
-    }
+    CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
 
