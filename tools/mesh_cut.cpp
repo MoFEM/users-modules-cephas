@@ -47,6 +47,12 @@ int main(int argc, char *argv[]) {
     PetscBool output_vtk = PETSC_TRUE;
     int create_surface_side_set = 201;
     PetscBool flg_create_surface_side_set;
+    int nb_ref_before = 0;
+    int nb_ref_after = 0;
+    PetscBool flg_tol;
+    double tol[] = {1e-4, 2e-1, 2e-1, 1e-4};
+    int nmax_tol = 4;
+    PetscBool with_tetgen = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mesh cut options", "none");
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
@@ -72,17 +78,28 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-create_side_set", "crete side set", "",
                            create_surface_side_set, &create_surface_side_set,
                            &flg_create_surface_side_set);
+    CHKERR PetscOptionsInt("-nb_ref_before", "nb refinements befor cut", "",
+                           nb_ref_before, &nb_ref_before, PETSC_NULL);
+    CHKERR PetscOptionsInt("-nb_ref_after", "nb refinements befor trim", "",
+                           nb_ref_after, &nb_ref_after, PETSC_NULL);
+    CHKERR PetscOptionsRealArray(
+        "-tol", "tolerances tolCut, tolCutClose, tolTrim, tolTrimClose", "",
+        tol, &nmax_tol, &flg_tol);
+    CHKERR PetscOptionsBool("-with_tetgen", "run tetgen", "", with_tetgen,
+                            &with_tetgen, PETSC_NULL);
     ierr = PetscOptionsEnd(); CHKERRG(ierr);
 
     if (flg_myfile != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+      SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
               "*** ERROR -my_file (MESH FILE NEEDED)");
     }
     if (flg_shift && nmax != 3) {
-      SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+      SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
               "three values expected");
     }
- 
+
+    if (flg_tol && nmax_tol != 4)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "four values expected");
 
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
@@ -91,7 +108,7 @@ int main(int argc, char *argv[]) {
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     const char *option;
-    option = ""; //"PARALLEL=BCAST";//;DEBUG_IO";
+    option = ""; 
     CHKERR moab.load_file(mesh_file_name, 0, option);
 
     MoFEM::Core core(moab);
@@ -155,15 +172,6 @@ int main(int argc, char *argv[]) {
     // cut or trim.
     CHKERR cut_mesh->buildTree();
 
-    BitRefLevel bit_level1; // Cut level
-    bit_level1.set(1);
-    BitRefLevel bit_level2; // Trim level
-    bit_level2.set(2);
-    BitRefLevel bit_level3; // Merge level
-    bit_level3.set(3);
-    BitRefLevel bit_level4; // TetGen level
-    bit_level4.set(4);
-
     // Create tag storing nodal positions
     double def_position[] = {0, 0, 0};
     Tag th;
@@ -184,42 +192,45 @@ int main(int argc, char *argv[]) {
     }
 
     // Cut mesh, trim surface and merge bad edges
-    CHKERR cut_mesh->cutTrimAndMerge(fraction_level, bit_level1, bit_level2,
-                                     bit_level3, th, 1e-2, 1e-1, 1e-1, 1e-2,
-                                     fixed_edges, corner_nodes, true, true);
+    int first_bit = 1;
+    CHKERR cut_mesh->refCutTrimAndMerge(
+        first_bit, 1, nb_ref_before, nb_ref_after, th, tol[0], tol[1], tol[2],
+        tol[3], fixed_edges, corner_nodes, true, false);
+
 
     // Improve mesh with tetgen
+    int bit_tetgen = first_bit;
+    if (with_tetgen) {
 #ifdef WITH_TETGEN
-    // Switches controling TetGen
-    vector<string> switches;
-    switches.push_back("rp180YsqORJS0VV");
-    CHKERR cut_mesh->rebuildMeshWithTetGen(switches, bit_level3, bit_level4,
-                                           cut_mesh->getMergedSurfaces(),
-                                           fixed_edges, corner_nodes, th);
+      // Switches controling TetGen
+      vector<string> switches;
+      switches.push_back("YrqOJMS0VV");
+      CHKERR cut_mesh->rebuildMeshWithTetGen(
+          switches, BitRefLevel().set(bit_tetgen),
+          BitRefLevel().set(bit_tetgen + 1), cut_mesh->getMergedSurfaces(),
+          fixed_edges, corner_nodes, th, true);
+      ++bit_tetgen;
 #else
-    bit_level4 = bit_level3;
-    const_cast<Range &>(cut_mesh->getTetgenSurfaces()) =
-        cut_mesh->getMergedSurfaces();
-#endif // WITH_TETGEN
+      SETERRQ(m_field.get_comm(), MOFEM_NOT_IMPLEMENTED,
+              "Tetgen not installed with MoFEM");
+#endif
+    } 
 
     // Add tets from last level to block
     if(flg_vol_block_set) {
       EntityHandle meshset;
       CHKERR meshset_manager->getMeshset(vol_block_set, BLOCKSET, meshset);
       CHKERR bit_ref_manager->getEntitiesByTypeAndRefLevel(
-          bit_level4, BitRefLevel().set(), MBTET, meshset);
+          BitRefLevel().set(bit_tetgen), BitRefLevel().set(), MBTET, meshset);
     }
 
     // Shift bits
     if (squash_bits) {
       BitRefLevel shift_mask;
-      shift_mask.set(0);
-      shift_mask.set(1);
-      shift_mask.set(2);
-      shift_mask.set(3);
-      shift_mask.set(4);
-      CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(4, shift_mask,
-                                                                  VERY_VERBOSE);
+      for (int ll = 0; ll != bit_tetgen; ++ll)
+        shift_mask.set(ll);
+      CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(
+          bit_tetgen, shift_mask, VERBOSE);
     }
 
     if (set_coords) {
@@ -229,10 +240,14 @@ int main(int argc, char *argv[]) {
 
     Range surface_verts;
     CHKERR moab.get_connectivity(cut_mesh->getSurface(), surface_verts);
+    Range surface_edges;
+    CHKERR moab.get_adjacencies(cut_mesh->getSurface(), 1, false, surface_edges,
+                                moab::Interface::UNION);
     CHKERR moab.delete_entities(cut_mesh->getSurface());
+    CHKERR moab.delete_entities(surface_edges);
     CHKERR moab.delete_entities(surface_verts);
 
-    if(flg_create_surface_side_set) {
+    if (flg_create_surface_side_set) {
       // Check is meshset is there
       if (!core.getInterface<MeshsetsManager>()->checkMeshset(
               create_surface_side_set, SIDESET)) {
@@ -242,8 +257,12 @@ int main(int argc, char *argv[]) {
                     "<<< Warring >>> sideset %d is on the mesh\n",
                     create_surface_side_set);
       }
-      CHKERR meshset_manager->addEntitiesToMeshset(
-          SIDESET, create_surface_side_set, cut_mesh->getTetgenSurfaces());
+      if (with_tetgen)
+        CHKERR meshset_manager->addEntitiesToMeshset(
+            SIDESET, create_surface_side_set, cut_mesh->getTetgenSurfaces());
+      else
+        CHKERR meshset_manager->addEntitiesToMeshset(
+            SIDESET, create_surface_side_set, cut_mesh->getMergedSurfaces());
     }
 
     CHKERR moab.write_file("out.h5m"); 
@@ -259,14 +278,18 @@ int main(int argc, char *argv[]) {
       } else {
         BitRefLevel bit;
         if (squash_bits)
-          bit = bit_level0;
+          bit = BitRefLevel().set(0);
         else
-          bit = bit_level4;
+          bit = BitRefLevel().set(bit_tetgen);
+
         CHKERR bit_ref_manager->getEntitiesByTypeAndRefLevel(
-            bit_level4, BitRefLevel().set(), MBTET, meshset);
+            bit, BitRefLevel().set(), MBTET, meshset);
       }
-      CHKERR moab.add_entities(meshset, cut_mesh->getTetgenSurfaces());
-      CHKERR moab.write_file("out.vtk","VTK","",&meshset,1); 
+      if (with_tetgen)
+        CHKERR moab.add_entities(meshset, cut_mesh->getTetgenSurfaces());
+      else
+        CHKERR moab.add_entities(meshset, cut_mesh->getMergedSurfaces());
+      CHKERR moab.write_file("out.vtk", "VTK", "", &meshset, 1);
       CHKERR moab.delete_entities(&meshset,1); 
     }
 
