@@ -33,7 +33,6 @@ int main(int argc, char *argv[]) {
     char mesh_file_name[255];
     char mesh_out_file[255] = "out.h5m";
     PetscBool flg_file = PETSC_FALSE;
-    PetscBool flg_out_file = PETSC_FALSE;
     PetscBool flg_n_part = PETSC_FALSE;
     PetscInt n_partas = 1;
     PetscBool create_lower_dim_ents = PETSC_TRUE;
