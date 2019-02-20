@@ -53,6 +53,7 @@ int main(int argc, char *argv[]) {
     double tol[] = {1e-4, 2e-1, 2e-1, 1e-4};
     int nmax_tol = 4;
     PetscBool with_tetgen = PETSC_FALSE;
+    PetscBool debug = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mesh cut options", "none");
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
@@ -87,6 +88,8 @@ int main(int argc, char *argv[]) {
         tol, &nmax_tol, &flg_tol);
     CHKERR PetscOptionsBool("-with_tetgen", "run tetgen", "", with_tetgen,
                             &with_tetgen, PETSC_NULL);
+    CHKERR PetscOptionsBool("-debug", "debug (produces many VTK files)", "",
+                            debug, &debug, PETSC_NULL);
     ierr = PetscOptionsEnd(); CHKERRG(ierr);
 
     if (flg_myfile != PETSC_TRUE) {
@@ -195,7 +198,7 @@ int main(int argc, char *argv[]) {
     int first_bit = 1;
     CHKERR cut_mesh->refCutTrimAndMerge(
         first_bit, 1, nb_ref_before, nb_ref_after, th, tol[0], tol[1], tol[2],
-        tol[3], fixed_edges, corner_nodes, true, false);
+        tol[3], fixed_edges, corner_nodes, true, debug);
 
 
     // Improve mesh with tetgen
