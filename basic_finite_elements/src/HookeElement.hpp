@@ -983,7 +983,7 @@ struct HookeElement {
         const double rho_n, const double rho_0)
         : rhoAtGaussPtsPtr(rho_at_gauss_pts),
           rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0),
-          OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+          OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
 
   protected:
     /**

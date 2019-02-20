@@ -26,6 +26,58 @@ using namespace MoFEM;
 
 static char help[] = "\n";
 
+template <bool ALE>
+struct OpGetDensityField : public HookeElement::VolUserDataOperator {
+
+  boost::shared_ptr<MatrixDouble> matCoordsPtr;
+  boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
+  boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
+  OpGetDensityField(const std::string row_field,
+                    boost::shared_ptr<MatrixDouble> mat_coords_ptr,
+                    boost::shared_ptr<VectorDouble> density_at_pts,
+                    boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts_ptr)
+      : HookeElement::VolUserDataOperator(row_field, OPROW),
+        matCoordsPtr(mat_coords_ptr), rhoAtGaussPtsPtr(density_at_pts),
+        rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts_ptr) {}
+
+  MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                        HookeElement::EntData &row_data) {
+    MoFEMFunctionBegin;
+    if (row_type != MBVERTEX)
+      MoFEMFunctionReturnHot(0);
+    // get number of integration points
+    const int nb_integration_pts = getGaussPts().size2();
+    rhoAtGaussPtsPtr->resize(nb_integration_pts, false);
+    rhoAtGaussPtsPtr->clear();
+    rhoGradAtGaussPtsPtr->resize(3, nb_integration_pts, false);
+    rhoGradAtGaussPtsPtr->clear();
+
+    auto t_rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+    auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
+
+    MatrixDouble coords;
+    if (ALE)
+      coords = *matCoordsPtr;
+    else
+      coords = trans(getCoordsAtGaussPts()); // because the size is (nb_gg,3)
+
+    FTensor::Index<'i', 3> i;
+    auto t_coords = getFTensor1FromMat<3>(coords);
+
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+      t_rho = 1 + t_coords(i) * t_coords(i); // density is equal to
+                                             // 1+x^2+y^2+z^2 (x,y,z coordines)
+      t_grad_rho(i) = 2 * t_coords(i);
+
+      ++t_rho;
+      ++t_coords;
+      ++t_grad_rho;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
 int main(int argc, char *argv[]) {
 
   // Initialize MoFEM
@@ -60,7 +112,6 @@ int main(int argc, char *argv[]) {
       CHKERR si->addDomainField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
       CHKERR si->setFieldOrder("X", 2);
     }
-
     CHKERR si->setUp();
 
     // create DM
@@ -71,14 +122,16 @@ int main(int argc, char *argv[]) {
     {
       Projection10NodeCoordsOnField ent_method(m_field, "x");
       CHKERR m_field.loop_dofs("x", ent_method);
-      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "x");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0.9, "x"); //FIXME:
+      // why is this turned off?
     }
 
     // Project coordinates on "X" field
     if (ale == PETSC_TRUE) {
       Projection10NodeCoordsOnField ent_method(m_field, "X");
       CHKERR m_field.loop_dofs("X", ent_method);
-      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0.9, "X"); //FIXME:
+      // why is this turned off?
     }
 
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
@@ -105,147 +158,159 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.get_finite_element_entities_by_dimension(
         si->getDomainFEName(), 3, (*block_sets_ptr)[0].tEts);
 
-    struct OpGetDensityField : public HookeElement::VolUserDataOperator {
+    // Parameters for density
+    const double rho_n = 3.0;
+    const double rho_0 = 0.5;
 
-      boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
-      OpGetDensityField(const std::string row_field,
-                        boost::shared_ptr<VectorDouble> density_at_pts)
-          : HookeElement::VolUserDataOperator(row_field, OPROW),
-            rhoAtGaussPtsPtr(density_at_pts) {}
+    auto my_operators = [&](boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
+                            boost::shared_ptr<ForcesAndSourcesCore> &fe_rhs_ptr,
+                            boost::shared_ptr<map<int, BlockData>>
+                                &block_sets_ptr,
+                            const std::string x_field,
+                            const std::string X_field, const bool ale,
+                            const bool field_disp) {
+      MoFEMFunctionBeginHot;
 
-      MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                            HookeElement::EntData &row_data) {
-        MoFEMFunctionBegin;
-        if (row_type != MBVERTEX)
-          MoFEMFunctionReturnHot(0);
-        // get number of integration points
-        const int nb_integration_pts = getGaussPts().size2();
-        rhoAtGaussPtsPtr->resize(nb_integration_pts, false);
-        rhoAtGaussPtsPtr->clear();
-        auto t_rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+      boost::shared_ptr<HookeElement::DataAtIntegrationPts> data_at_pts(
+          new HookeElement::DataAtIntegrationPts());
+      boost::shared_ptr<MatrixDouble> mat_coords_ptr =
+          boost::make_shared<MatrixDouble>();
+      boost::shared_ptr<VectorDouble> rho_at_gauss_pts_ptr =
+          boost::make_shared<VectorDouble>();
+      boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts_ptr =
+          boost::make_shared<MatrixDouble>();
 
-        FTensor::Index<'i', 3> i;
-        auto t_coords = getFTensor1CoordsAtGaussPts();
-        for (int gg = 0; gg != nb_integration_pts; ++gg) {
-          t_rho =
-              1 + t_coords(i) * t_coords(i); // density is equal to
-                                             // 1+x^2+y^2+z^2 (x,y,z coordines)
-          ++t_rho;
-          ++t_coords;
+      if (fe_lhs_ptr) {
+        if (ale == PETSC_FALSE) {
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldValues<3>(x_field, mat_coords_ptr));
+          fe_lhs_ptr->getOpPtrVector().push_back(new OpGetDensityField<false>(
+              x_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
+              rho_grad_at_gauss_pts_ptr));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStiffnessScaledByDensityField(
+                  x_field, x_field, block_sets_ptr, data_at_pts,
+                  rho_at_gauss_pts_ptr, rho_n, rho_0));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpLhs_dx_dx<1>(x_field, x_field, data_at_pts));
+        } else {
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldGradient<3, 3>(X_field,
+                                                       data_at_pts->HMat));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldValues<3>(x_field, mat_coords_ptr));
+          fe_lhs_ptr->getOpPtrVector().push_back(new OpGetDensityField<true>(
+              x_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
+              rho_grad_at_gauss_pts_ptr));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStiffnessScaledByDensityField(
+                  x_field, x_field, block_sets_ptr, data_at_pts,
+                  rho_at_gauss_pts_ptr, rho_n, rho_0));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldGradient<3, 3>(x_field,
+                                                       data_at_pts->hMat));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStrainAle(x_field, x_field,
+                                                     data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStress<1>(x_field, x_field,
+                                                     data_at_pts)); // FIXME:
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhs_dx_dx<1>(x_field, x_field,
+                                                  data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhs_dx_dX<1>(x_field, X_field,
+                                                  data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateEnergy(X_field, X_field,
+                                                  data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
+                                                         data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhs_dX_dX<1>(X_field, X_field,
+                                                  data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhsPre_dX_dx<1>(X_field, x_field,
+                                                     data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhs_dX_dx(X_field, x_field, data_at_pts));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhsWithDensity_dx_dX(
+                  x_field, X_field, data_at_pts, rho_at_gauss_pts_ptr,
+                  rho_grad_at_gauss_pts_ptr, rho_n, rho_0));
+          fe_lhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleLhsWithDensity_dX_dX(
+                  X_field, X_field, data_at_pts, rho_at_gauss_pts_ptr,
+                  rho_grad_at_gauss_pts_ptr, rho_n, rho_0));
         }
-
-        MoFEMFunctionReturn(0);
       }
+
+      if (fe_rhs_ptr) {
+
+        if (ale == PETSC_FALSE) {
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldGradient<3, 3>(x_field,
+                                                       data_at_pts->hMat));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldValues<3>(x_field, mat_coords_ptr));
+          fe_rhs_ptr->getOpPtrVector().push_back(new OpGetDensityField<false>(
+              x_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
+              rho_grad_at_gauss_pts_ptr));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStiffnessScaledByDensityField(
+                  x_field, x_field, block_sets_ptr, data_at_pts,
+                  rho_at_gauss_pts_ptr, rho_n, rho_0));
+          if (field_disp) {
+            fe_rhs_ptr->getOpPtrVector().push_back(
+                new HookeElement::OpCalculateStrain<1>(x_field, x_field,
+                                                       data_at_pts));
+          } else {
+            fe_rhs_ptr->getOpPtrVector().push_back(
+                new HookeElement::OpCalculateStrain<0>(x_field, x_field,
+                                                       data_at_pts));
+          }
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStress<1>(x_field, x_field,
+                                                     data_at_pts));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpRhs_dx(x_field, x_field, data_at_pts));
+        } else {
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldGradient<3, 3>(X_field,
+                                                       data_at_pts->HMat));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldValues<3>(x_field, mat_coords_ptr));
+          fe_rhs_ptr->getOpPtrVector().push_back(new OpGetDensityField<true>(
+              x_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
+              rho_grad_at_gauss_pts_ptr));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStiffnessScaledByDensityField(
+                  x_field, x_field, block_sets_ptr, data_at_pts,
+                  rho_at_gauss_pts_ptr, rho_n, rho_0));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new OpCalculateVectorFieldGradient<3, 3>(x_field,
+                                                       data_at_pts->hMat));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStrainAle(x_field, x_field,
+                                                     data_at_pts));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateStress<1>(x_field, x_field,
+                                                     data_at_pts));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleRhs_dx(x_field, x_field, data_at_pts));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateEnergy(X_field, X_field,
+                                                  data_at_pts));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
+                                                         data_at_pts));
+          fe_rhs_ptr->getOpPtrVector().push_back(
+              new HookeElement::OpAleRhs_dX(X_field, X_field, data_at_pts));
+        }
+      }
+      MoFEMFunctionReturnHot(0);
     };
-
-    auto my_operators =
-        [&](boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
-            boost::shared_ptr<ForcesAndSourcesCore> &fe_rhs_ptr,
-            boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
-            const std::string x_field, const std::string X_field,
-            const bool ale, const bool field_disp) {
-          MoFEMFunctionBeginHot;
-
-          boost::shared_ptr<HookeElement::DataAtIntegrationPts> data_at_pts(
-              new HookeElement::DataAtIntegrationPts());
-          boost::shared_ptr<VectorDouble> rho_at_gauss_pts_ptr =
-              boost::make_shared<VectorDouble>();
-
-          if (fe_lhs_ptr) {
-            if (ale == PETSC_FALSE) {
-              fe_lhs_ptr->getOpPtrVector().push_back(
-                  new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
-              fe_lhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                      x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
-              fe_lhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpLhs_dx_dx<1>(x_field, x_field, data_at_pts));
-            } else {
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new OpCalculateVectorFieldGradient<3, 3>(
-                        X_field, data_at_pts->HMat));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                        x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new OpCalculateVectorFieldGradient<3, 3>(
-                        x_field, data_at_pts->hMat));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStrainAle(x_field, x_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts)); //FIXME:
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dx_dx<1>(x_field, x_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dx_dX<1>(x_field, X_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateEnergy(X_field, X_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateEshelbyStress(X_field, X_field,
-                                                 data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dX_dX<1>(X_field, X_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhsPre_dX_dx<1>(X_field, x_field, data_at_pts));
-                fe_lhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpAleLhs_dX_dx(X_field, x_field, data_at_pts));
-            }
-          }
-
-          if (fe_rhs_ptr) {
-
-            if (ale == PETSC_FALSE) {
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new OpCalculateVectorFieldGradient<3, 3>(x_field,
-                                                           data_at_pts->hMat));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new OpGetDensityField(x_field, rho_at_gauss_pts_ptr));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                      x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
-              if (field_disp) {
-                fe_rhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStrain<1>(x_field, x_field, data_at_pts));
-              } else {
-                fe_rhs_ptr->getOpPtrVector().push_back(
-                    new HookeElement::OpCalculateStrain<1>(x_field, x_field,
-                                                 data_at_pts));
-              }
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpRhs_dx(x_field, x_field, data_at_pts));
-            } else {
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new OpCalculateVectorFieldGradient<3, 3>(X_field,
-                                                           data_at_pts->HMat));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new OpGetDensityField(
-                      x_field, rho_at_gauss_pts_ptr));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStiffnessScaledByDensityField(
-                      x_field, x_field, block_sets_ptr, data_at_pts, rho_at_gauss_pts_ptr, 1, 1));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new OpCalculateVectorFieldGradient<3, 3>(x_field,
-                                                           data_at_pts->hMat));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStrainAle(x_field, x_field, data_at_pts));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateStress<1>(x_field, x_field, data_at_pts));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpAleRhs_dx(x_field, x_field, data_at_pts));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateEnergy(X_field, X_field, data_at_pts));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpCalculateEshelbyStress(X_field, X_field, data_at_pts));
-              fe_rhs_ptr->getOpPtrVector().push_back(
-                  new HookeElement::OpAleRhs_dX(X_field, X_field, data_at_pts));
-            }
-          }
-          MoFEMFunctionReturnHot(0);
-        };
     CHKERR my_operators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr, "x", "X", ale,
                         false);
     Vec x, f;
