@@ -68,14 +68,14 @@ struct MetaSpringBC {
    * @param t_tangent1      First local tangent vector
    * @param t_tangent2      Second local tangent vector
    * @param t_normal        Local normal vector
-   * @param spring_local    Spring stiffness in local coords
-   * @return spring_global  Spring stiffness in global coords
+   * @param t_spring_local    Spring stiffness in local coords
+   * @return t_spring_global  Spring stiffness in global coords
   //  */
-  static FTensor::Tensor1<double, 3>
-  transformLocalToGlobal(FTensor::Tensor1<double, 3> t_tangent1,
+  static FTensor::Tensor2<double, 3, 3>
+  transformLocalToGlobal(FTensor::Tensor1<double, 3> t_normal,
+                         FTensor::Tensor1<double, 3> t_tangent1,
                          FTensor::Tensor1<double, 3> t_tangent2,
-                         FTensor::Tensor1<double, 3> t_normal,
-                         FTensor::Tensor1<double, 3> spring_local);
+                         FTensor::Tensor2<double, 3, 3> t_spring_local);
 };
 
 #endif //__SPRINGELEMENT_HPP__

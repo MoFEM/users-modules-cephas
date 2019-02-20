@@ -179,9 +179,10 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
           &m(3 * r + 2, 3 * c + 2));
     };
 
-    FTensor::Tensor1<double, 3> t_spring_local(commonDataPtr->springStiffness0,
-                                               commonDataPtr->springStiffness1,
-                                               commonDataPtr->springStiffness2);
+    FTensor::Tensor2<double, 3, 3> t_spring_local(
+        commonDataPtr->springStiffness0, 0., 0., 0.,
+        commonDataPtr->springStiffness1, 0., 0., 0.,
+        commonDataPtr->springStiffness2);
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
     auto t_normal_ptr = getFTensor1Normal();
@@ -199,16 +200,12 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
 
     // Spring stiffness in global coordinate
-    FTensor::Tensor1<double, 3> t_spring_global;
+    FTensor::Tensor2<double, 3, 3> t_spring_global;
     t_spring_global = MetaSpringBC::transformLocalToGlobal(
-        t_tangent1, t_tangent2, t_normal, t_spring_local);
+        t_normal, t_tangent1, t_tangent2, t_spring_local);
 
-    FTensor::Tensor2<double, 3, 3> linear_spring(t_spring_global(0), 0., 0., 0.,
-                                                 t_spring_global(1), 0., 0., 0.,
-                                                 t_spring_global(2));
-    // FTensor::Tensor2<double, 3, 3> linear_spring(t_spring_local(0), 0., 0., 0.,
-    //                                              t_spring_local(1), 0., 0., 0.,
-    //                                              t_spring_local(2));
+    FTensor::Tensor2<double, 3, 3> linear_spring;
+    linear_spring = t_spring_global;
 
     // loop over the Gauss points
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -312,9 +309,10 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
 
-    FTensor::Tensor1<double, 3> t_spring_local(commonDataPtr->springStiffness0,
-                                               commonDataPtr->springStiffness1,
-                                               commonDataPtr->springStiffness2);
+    FTensor::Tensor2<double, 3, 3> t_spring_local(
+        commonDataPtr->springStiffness0, 0., 0., 0.,
+        commonDataPtr->springStiffness1, 0., 0., 0.,
+        commonDataPtr->springStiffness2);
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
     auto t_normal_ptr = getFTensor1Normal();
@@ -332,12 +330,13 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
 
     // Spring stiffness in global coordinate
-    FTensor::Tensor1<double, 3> t_spring_global;
+    FTensor::Tensor2<double, 3, 3> t_spring_global;
     t_spring_global = MetaSpringBC::transformLocalToGlobal(
         t_tangent1, t_tangent2, t_normal, t_spring_local);
 
-    FTensor::Tensor1<double, 3> t_spring_stiffness;
-    t_spring_stiffness(i) = t_spring_global(i);
+    FTensor::Tensor1<double, 3> t_spring_stiffness(
+        t_spring_global(0, 0), t_spring_global(1, 1), t_spring_global(2, 2));
+    // t_spring_stiffness(i) = t_spring_global(i);
     // t_spring_stiffness(i) = t_spring_local(i);
 
     // Extract solution at Gauss points
@@ -352,7 +351,6 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       double w = t_w * getArea();
 
       auto base_functions = data.getFTensor0N(gg, 0);
-
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
@@ -445,15 +443,17 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
   MoFEMFunctionReturn(0);
 }
 
-FTensor::Tensor1<double, 3> MetaSpringBC::transformLocalToGlobal(
-    FTensor::Tensor1<double, 3> t_local_tangent1,
-    FTensor::Tensor1<double, 3> t_local_tangent2,
-    FTensor::Tensor1<double, 3> t_local_normal,
-    FTensor::Tensor1<double, 3> t_local_vector) {
+FTensor::Tensor2<double, 3, 3> MetaSpringBC::transformLocalToGlobal(
+    FTensor::Tensor1<double, 3> t_normal_local,
+    FTensor::Tensor1<double, 3> t_tangent1_local,
+    FTensor::Tensor1<double, 3> t_tangent2_local,
+    FTensor::Tensor2<double, 3, 3> t_spring_local) {
 
   // FTensor indices
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
 
   // Global base vectors
   FTensor::Tensor1<double, 3> t_e1(1., 0., 0.);
@@ -467,15 +467,16 @@ FTensor::Tensor1<double, 3> MetaSpringBC::transformLocalToGlobal(
 
   // Transformation matrix (tensor)
   FTensor::Tensor2<double, 3, 3> transformation_matrix(
-      get_cosine(t_e1, t_local_tangent1), get_cosine(t_e1, t_local_tangent2),
-      get_cosine(t_e1, t_local_normal), get_cosine(t_e2, t_local_tangent1),
-      get_cosine(t_e2, t_local_tangent2), get_cosine(t_e2, t_local_normal),
-      get_cosine(t_e3, t_local_tangent1), get_cosine(t_e3, t_local_tangent2),
-      get_cosine(t_e3, t_local_normal));
+      get_cosine(t_e1, t_normal_local), get_cosine(t_e1, t_tangent1_local),
+      get_cosine(t_e1, t_tangent2_local), get_cosine(t_e2, t_normal_local),
+      get_cosine(t_e2, t_tangent1_local), get_cosine(t_e2, t_tangent2_local),
+      get_cosine(t_e3, t_normal_local), get_cosine(t_e3, t_tangent1_local),
+      get_cosine(t_e3, t_tangent2_local));
 
-  // Spring stiffness in global coordinate
-  FTensor::Tensor1<double, 3> t_global_vector;
-  t_global_vector(i) = transformation_matrix(i, j) * t_local_vector(j);
+  // Spring stiffness in global coordinate, Q*ls*Q^T
+  FTensor::Tensor2<double, 3, 3> t_spring_global;
+  t_spring_global(i, j) = transformation_matrix(i, k) * t_spring_local(k, l) *
+                          transformation_matrix(j, l);
 
-  return t_global_vector;
+  return t_spring_global;
 };
