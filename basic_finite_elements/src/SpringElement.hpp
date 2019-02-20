@@ -60,6 +60,22 @@ struct MetaSpringBC {
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
       const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
+
+  /**
+   * \brief Implementation of spring element. Set operators to calculate LHS and
+   * RHS
+   *
+   * @param t_tangent1      First local tangent vector
+   * @param t_tangent2      Second local tangent vector
+   * @param t_normal        Local normal vector
+   * @param spring_local    Spring stiffness in local coords
+   * @return spring_global  Spring stiffness in global coords
+  //  */
+  static FTensor::Tensor1<double, 3>
+  transformLocalToGlobal(FTensor::Tensor1<double, 3> t_tangent1,
+                         FTensor::Tensor1<double, 3> t_tangent2,
+                         FTensor::Tensor1<double, 3> t_normal,
+                         FTensor::Tensor1<double, 3> spring_local);
 };
 
 #endif //__SPRINGELEMENT_HPP__

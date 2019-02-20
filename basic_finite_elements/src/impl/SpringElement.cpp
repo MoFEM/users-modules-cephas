@@ -169,6 +169,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
     auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
       return FTensor::Tensor2<double *, 3, 3>(
           &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1),
@@ -178,10 +179,36 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
           &m(3 * r + 2, 3 * c + 2));
     };
 
-    FTensor::Tensor2<double, 3, 3> linear_spring(
-        commonDataPtr->springStiffness0, 0., 0., 0.,
-        commonDataPtr->springStiffness1, 0., 0., 0.,
-        commonDataPtr->springStiffness2);
+    FTensor::Tensor1<double, 3> t_spring_local(commonDataPtr->springStiffness0,
+                                               commonDataPtr->springStiffness1,
+                                               commonDataPtr->springStiffness2);
+    // create a 3d vector to be used as the normal to the face with length equal
+    // to the face area
+    auto t_normal_ptr = getFTensor1Normal();
+
+    FTensor::Tensor1<double, 3> t_normal;
+    t_normal(i) = t_normal_ptr(i);
+
+    // First tangent vector
+    auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
+    FTensor::Tensor1<double, 3> t_tangent1;
+    t_tangent1(i) = t_tangent1_ptr(i);
+
+    // Second tangent vector, such that t_n = t_t1 x t_t2 | t_t2 = t_n x t_t1
+    FTensor::Tensor1<double, 3> t_tangent2;
+    t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
+
+    // Spring stiffness in global coordinate
+    FTensor::Tensor1<double, 3> t_spring_global;
+    t_spring_global = MetaSpringBC::transformLocalToGlobal(
+        t_tangent1, t_tangent2, t_normal, t_spring_local);
+
+    FTensor::Tensor2<double, 3, 3> linear_spring(t_spring_global(0), 0., 0., 0.,
+                                                 t_spring_global(1), 0., 0., 0.,
+                                                 t_spring_global(2));
+    // FTensor::Tensor2<double, 3, 3> linear_spring(t_spring_local(0), 0., 0., 0.,
+    //                                              t_spring_local(1), 0., 0., 0.,
+    //                                              t_spring_local(2));
 
     // loop over the Gauss points
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -207,19 +234,18 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // Add computed values of spring stiffness to the global LHS matrix
     Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
                                                : getFEMethod()->snes_B;
-    CHKERR MatSetValues(
-        B, row_nb_dofs, &*row_data.getIndices().begin(),
-        col_nb_dofs, &*col_data.getIndices().begin(), &locKs(0, 0), ADD_VALUES);
+    CHKERR MatSetValues(B, row_nb_dofs, &*row_data.getIndices().begin(),
+                        col_nb_dofs, &*col_data.getIndices().begin(),
+                        &locKs(0, 0), ADD_VALUES);
 
     // is symmetric
     if (row_side != col_side || row_type != col_type) {
       transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
       noalias(transLocKs) = trans(locKs);
-   
-      CHKERR MatSetValues(B, col_nb_dofs,
-                          &*col_data.getIndices().begin(), row_nb_dofs,
-                          &*row_data.getIndices().begin(), &transLocKs(0, 0),
-                          ADD_VALUES);
+
+      CHKERR MatSetValues(B, col_nb_dofs, &*col_data.getIndices().begin(),
+                          row_nb_dofs, &*row_data.getIndices().begin(),
+                          &transLocKs(0, 0), ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
@@ -281,9 +307,38 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 
-    FTensor::Tensor1<double, 3> t_spring_stiffness(
-        commonDataPtr->springStiffness0, commonDataPtr->springStiffness1,
-        commonDataPtr->springStiffness2);
+    // FTensor indices
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+
+    FTensor::Tensor1<double, 3> t_spring_local(commonDataPtr->springStiffness0,
+                                               commonDataPtr->springStiffness1,
+                                               commonDataPtr->springStiffness2);
+    // create a 3d vector to be used as the normal to the face with length equal
+    // to the face area
+    auto t_normal_ptr = getFTensor1Normal();
+
+    FTensor::Tensor1<double, 3> t_normal;
+    t_normal(i) = t_normal_ptr(i);
+
+    // First tangent vector
+    auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
+    FTensor::Tensor1<double, 3> t_tangent1;
+    t_tangent1(i) = t_tangent1_ptr(i);
+
+    // Second tangent vector, such that t_n = t_t1 x t_t2 | t_t2 = t_n x t_t1
+    FTensor::Tensor1<double, 3> t_tangent2;
+    t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
+
+    // Spring stiffness in global coordinate
+    FTensor::Tensor1<double, 3> t_spring_global;
+    t_spring_global = MetaSpringBC::transformLocalToGlobal(
+        t_tangent1, t_tangent2, t_normal, t_spring_local);
+
+    FTensor::Tensor1<double, 3> t_spring_stiffness;
+    t_spring_stiffness(i) = t_spring_global(i);
+    // t_spring_stiffness(i) = t_spring_local(i);
 
     // Extract solution at Gauss points
     auto t_solution_at_gauss_points =
@@ -324,11 +379,10 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       ++t_solution_at_gauss_points;
       ++t_init_solution_at_gauss_points;
     }
+    // add computed values of spring in the global right hand side vector
     Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
                                                : getFEMethod()->snes_f;
-    // add computed values of spring in the global right hand side vector
-    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0],
-                        &nF[0], ADD_VALUES);
+    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0], &nF[0], ADD_VALUES);
     MoFEMFunctionReturn(0);
   }
 };
@@ -390,3 +444,38 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
   //   " times" << endl;
   MoFEMFunctionReturn(0);
 }
+
+FTensor::Tensor1<double, 3> MetaSpringBC::transformLocalToGlobal(
+    FTensor::Tensor1<double, 3> t_local_tangent1,
+    FTensor::Tensor1<double, 3> t_local_tangent2,
+    FTensor::Tensor1<double, 3> t_local_normal,
+    FTensor::Tensor1<double, 3> t_local_vector) {
+
+  // FTensor indices
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  // Global base vectors
+  FTensor::Tensor1<double, 3> t_e1(1., 0., 0.);
+  FTensor::Tensor1<double, 3> t_e2(0., 1., 0.);
+  FTensor::Tensor1<double, 3> t_e3(0., 0., 1.);
+
+  // Direction cosines
+  auto get_cosine = [&](auto x, auto xp) {
+    return (x(i) * xp(i)) / (sqrt(x(i) * x(i)) * sqrt(xp(i) * xp(i)));
+  };
+
+  // Transformation matrix (tensor)
+  FTensor::Tensor2<double, 3, 3> transformation_matrix(
+      get_cosine(t_e1, t_local_tangent1), get_cosine(t_e1, t_local_tangent2),
+      get_cosine(t_e1, t_local_normal), get_cosine(t_e2, t_local_tangent1),
+      get_cosine(t_e2, t_local_tangent2), get_cosine(t_e2, t_local_normal),
+      get_cosine(t_e3, t_local_tangent1), get_cosine(t_e3, t_local_tangent2),
+      get_cosine(t_e3, t_local_normal));
+
+  // Spring stiffness in global coordinate
+  FTensor::Tensor1<double, 3> t_global_vector;
+  t_global_vector(i) = transformation_matrix(i, j) * t_local_vector(j);
+
+  return t_global_vector;
+};
