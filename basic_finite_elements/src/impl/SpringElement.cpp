@@ -25,14 +25,13 @@ using namespace boost::numeric;
 struct BlockOptionDataSprings {
   int iD;
 
-  double springStiffness0; // Spring stiffness
-  double springStiffness1;
-  double springStiffness2;
+  double springStiffnessNormal;
+  double springStiffnessTangent;
 
   Range tRis;
 
   BlockOptionDataSprings()
-      : springStiffness0(-1), springStiffness1(-1), springStiffness2(-1) {}
+      : springStiffnessNormal(-1), springStiffnessTangent(-1) {}
 };
 
 struct DataAtIntegrationPtsSprings {
@@ -44,9 +43,8 @@ struct DataAtIntegrationPtsSprings {
   boost::shared_ptr<MatrixDouble> xInitAtPts =
       boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
-  double springStiffness0; // Spring stiffness
-  double springStiffness1;
-  double springStiffness2;
+  double springStiffnessNormal;
+  double springStiffnessTangent;
 
   std::map<int, BlockOptionDataSprings> mapSpring;
   //   ~DataAtIntegrationPtsSprings() {}
@@ -68,9 +66,8 @@ struct DataAtIntegrationPtsSprings {
   MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
     MoFEMFunctionBegin;
 
-    springStiffness0 = data.springStiffness0;
-    springStiffness1 = data.springStiffness1;
-    springStiffness2 = data.springStiffness2;
+    springStiffnessNormal = data.springStiffnessNormal;
+    springStiffnessTangent = data.springStiffnessTangent;
 
     MoFEMFunctionReturn(0);
   }
@@ -85,23 +82,15 @@ struct DataAtIntegrationPtsSprings {
         CHKERR mField.get_moab().get_entities_by_type(bit->getMeshset(), MBTRI,
                                                       mapSpring[id].tRis, true);
 
-        // EntityHandle out_meshset;
-        // CHKERR mField.get_moab().create_meshset(MESHSET_SET, out_meshset);
-        // CHKERR mField.get_moab().add_entities(out_meshset,
-        // mapSpring[id].tRis); CHKERR mField.get_moab().write_file("error.vtk",
-        // "VTK", "",
-        //                                     &out_meshset, 1);
-
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 3) {
+        if (attributes.size() != 2) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                   "should be 3 attributes but is %d", attributes.size());
+                   "should be 2 attributes but is %d", attributes.size());
         }
         mapSpring[id].iD = id;
-        mapSpring[id].springStiffness0 = attributes[0];
-        mapSpring[id].springStiffness1 = attributes[1];
-        mapSpring[id].springStiffness2 = attributes[2];
+        mapSpring[id].springStiffnessNormal = attributes[0];
+        mapSpring[id].springStiffnessTangent = attributes[1];
       }
     }
 
@@ -180,9 +169,9 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     };
 
     FTensor::Tensor2<double, 3, 3> t_spring_local(
-        commonDataPtr->springStiffness0, 0., 0., 0.,
-        commonDataPtr->springStiffness1, 0., 0., 0.,
-        commonDataPtr->springStiffness2);
+        commonDataPtr->springStiffnessNormal, 0., 0., 0.,
+        commonDataPtr->springStiffnessTangent, 0., 0., 0.,
+        commonDataPtr->springStiffnessTangent);
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
     auto t_normal_ptr = getFTensor1Normal();
@@ -204,9 +193,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     t_spring_global = MetaSpringBC::transformLocalToGlobal(
         t_normal, t_tangent1, t_tangent2, t_spring_local);
 
-    FTensor::Tensor2<double, 3, 3> linear_spring;
-    linear_spring = t_spring_global;
-
     // loop over the Gauss points
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
       // get area and integration weight
@@ -218,8 +204,8 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         auto col_base_functions = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
           auto assemble_m = get_tensor2(locKs, rr, cc);
-          assemble_m(i, j) +=
-              w * row_base_functions * col_base_functions * linear_spring(i, j);
+          assemble_m(i, j) += w * row_base_functions * col_base_functions *
+                              t_spring_global(i, j);
           ++col_base_functions;
         }
         ++row_base_functions;
@@ -298,7 +284,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     nF.resize(nb_dofs, false);
     nF.clear();
 
-    // get number of gauss points
+    // get number of Gauss points
     const int nb_gauss_pts = data.getN().size1();
 
     // get intergration weights
@@ -310,9 +296,9 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     FTensor::Index<'k', 3> k;
 
     FTensor::Tensor2<double, 3, 3> t_spring_local(
-        commonDataPtr->springStiffness0, 0., 0., 0.,
-        commonDataPtr->springStiffness1, 0., 0., 0.,
-        commonDataPtr->springStiffness2);
+        commonDataPtr->springStiffnessNormal, 0., 0., 0.,
+        commonDataPtr->springStiffnessTangent, 0., 0., 0.,
+        commonDataPtr->springStiffnessTangent);
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
     auto t_normal_ptr = getFTensor1Normal();
@@ -332,40 +318,40 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // Spring stiffness in global coordinate
     FTensor::Tensor2<double, 3, 3> t_spring_global;
     t_spring_global = MetaSpringBC::transformLocalToGlobal(
-        t_tangent1, t_tangent2, t_normal, t_spring_local);
-
-    FTensor::Tensor1<double, 3> t_spring_stiffness(
-        t_spring_global(0, 0), t_spring_global(1, 1), t_spring_global(2, 2));
-    // t_spring_stiffness(i) = t_spring_global(i);
-    // t_spring_stiffness(i) = t_spring_local(i);
+        t_normal, t_tangent1, t_tangent2, t_spring_local);
 
     // Extract solution at Gauss points
-    auto t_solution_at_gauss_points =
+    auto t_solution_at_gauss_point =
         getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
-    auto t_init_solution_at_gauss_points =
+    auto t_init_solution_at_gauss_point =
         getFTensor1FromMat<3>(*commonDataPtr->xInitAtPts);
+    FTensor::Tensor1<double, 3> t_displacement_at_gauss_point;
 
-    // loop over all gauss points of the face
+    
+    // loop over all Gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      // Calculate the displacement at the Gauss point
+      if (is_spatial_position) { // "SPATIAL_POSITION"
+        t_displacement_at_gauss_point(i) =
+            t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
+      } else { // e.g. "DISPLACEMENT" or "U"
+        t_displacement_at_gauss_point(i) = t_solution_at_gauss_point(i);
+      }
 
       double w = t_w * getArea();
 
       auto base_functions = data.getFTensor0N(gg, 0);
+      
       // create a vector t_nf whose pointer points an array of 3 pointers
       // pointing to nF  memory location of components
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
                                                               &nF[2]);
+      
       for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
-        for (int ii = 0; ii != 3; ++ii) {
-          if (is_spatial_position) { // "SPATIAL_POSITION"
-            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
-                        (t_solution_at_gauss_points(ii) -
-                         t_init_solution_at_gauss_points(ii));
-          } else { // e.g. "DISPLACEMENT"
-            t_nf(ii) += (w * base_functions * t_spring_stiffness(ii)) *
-                        t_solution_at_gauss_points(ii);
-          }
-        }
+        t_nf(i) += w * base_functions * t_spring_global(i, j) *
+                   t_displacement_at_gauss_point(j);
+
         // move to next base function
         ++base_functions;
         // move the pointer to next element of t_nf
@@ -374,8 +360,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // move to next integration weight
       ++t_w;
       // move to the solutions at the next Gauss point
-      ++t_solution_at_gauss_points;
-      ++t_init_solution_at_gauss_points;
+      ++t_solution_at_gauss_point;
+      ++t_init_solution_at_gauss_point;
     }
     // add computed values of spring in the global right hand side vector
     Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
