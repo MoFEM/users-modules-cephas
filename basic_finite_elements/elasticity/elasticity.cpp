@@ -81,8 +81,7 @@ struct BlockOptionData {
 
   Range tRis;
 
-  BlockOptionData()
-      : oRder(-1), yOung(-1), pOisson(-2), initTemp(0) {}
+  BlockOptionData() : oRder(-1), yOung(-1), pOisson(-2), initTemp(0) {}
 };
 
 using BlockData = NonlinearElasticElement::BlockData;
