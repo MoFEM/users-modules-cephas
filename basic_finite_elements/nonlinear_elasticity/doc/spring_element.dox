@@ -10,7 +10,7 @@ considered and other structures in surrounding environment. In contrast to other
 type of boundary conditions where the displacements/rotations at the surface of
 contact are fixed, the spring boundary condition allows the surface to move
 during the analysis which in turn creates reaction forces acting on the
-structure at the boundary surface. The manitude of this force is changed
+structure at the boundary surface. The magnitude of this force is changed
 propotionally to the spring stiffness and the extension or contraction in its
 length. \ref figure_spring_elastic_foundation "Figure 1" illustrates a plate
 bearing load \f$ q \f$ sits on elastic foundation which is modelled by springs with stiffness \f$ k_s \f$.
@@ -18,13 +18,13 @@ bearing load \f$ q \f$ sits on elastic foundation which is modelled by springs w
 \anchor figure_spring_elastic_foundation
 \image html elastic_foundation.png "Figure 1: Plate on elastic foundation modelled by springs" width = 400px
 
-The remaining of this tutorial is as follows. The next section describes the
-finite element formulation of the spring element where its contribution to the
-right-hand side (RHS) and the left-hand side (LHS). It is followed by the
-description of the implementation of spring element in the platform of MoFEM.
-The following section closes this tutorial by presenting a sample application of
-spring elements to the problem of nonlinear elasticity.
-
+The remaining of this tutorial is organised as follows. The next section
+describes the finite element formulation of the spring element where its
+contributions to the right-hand side (RHS) and the left-hand side (LHS) are
+presented. It is followed by the description of the implementation of spring
+element in the platform of MoFEM. The following section closes this tutorial by
+showing sample implementations of spring elements to the elasticity and
+nonlinear elasticity modules.
 
 \section spring_fe_formulation Formulation
 
@@ -38,11 +38,9 @@ can be respectively derived as follows
         {K^s} &= \int\limits_\Gamma ^{} {{\psi ^T}{k_s}\psi d\Gamma }.
     \end{align}
  \f]
- where \f$ \Gamma \f$ is the domain occupied by the surface where spring is
- applied, \f$ \psi \f$ is approximation function, \f$ k_s \f$ denotes spring
- stiffness, and \f$ u \f$ is the extension/contraction of the spring which can
- be calculated by the displacement of the point on the surface where spring is
- applied. Physically, \f$ k_s \f$ can be considered as spring density on the surface.
+ where \f$ \Gamma \f$ is the domain occupied by the surface with springs, \f$
+ \psi \f$ is approximation function, \f$ k_s \f$ denotes spring stiffness, and
+ \f$ u \f$ is the extension/contraction of the spring which can be calculated by the displacement of the point on the surface where spring is applied. Physically, \f$ k_s \f$ can be considered as spring density on the surface.
  
  
 
@@ -209,7 +207,7 @@ implemented as follows
 
 \subsection spring_opspringks Operator OpSpringKs for the LHS
 
-Similarly to the previous part, the operator OpSpringKs to calculate the
+Similarly to the previous part, the operator OpSpringKs which calculates the
 contribution of the spring elements to the LHS is implemented as follows
 \code
 struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
@@ -415,7 +413,8 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
 }
 \endcode
 
-\subsubsection spring_transformation_function Transformation of the spring stiffnesses between coordinates
+\subsubsection spring_transformation_function Transformation of the spring
+stiffnesses between local and global coordinates
 
 This functions allows the transformation of the spring stiffnesses from local
 coordinate associated with the element face, where normal (\f$k_n\f$) and
@@ -470,7 +469,7 @@ With the spring element developed, the boundary condition employing elastic
 spring to model the interaction between the structure of interest and
 surrounding environment can be applied to any existing solid problems. For
 demonstration purposes, the following part presents how spring elements are
-added to the linear and nonlinear elasticity problem, i.e. elasticity.cpp and
+added to the linear and nonlinear elasticity problems, i.e. elasticity.cpp and
 \ref arc_length_nonlinear_elasticity.cpp, and how the inclusion of spring
 boundary condition affects the responses of the structure bearing external
 loads. 
@@ -519,8 +518,7 @@ save as "/Users/username/mofem_install/mofem-cephas/mofem/users_modules/basic_fi
 \medskip
 - The mesh of the rod can be found in \ref figure_spring_rod_mesh "Figure 2"
 where the translation in x and y directions of two vertices at the bottom
-surface are fixed to avoid body rotation and the spring acting in z direction is
-applied at the bottom surface.
+surface are fixed to avoid rigid body rotation and the spring is applied at the bottom surface.
 
 \anchor figure_spring_rod_mesh
 \image html spring_rod_mesh.png "Figure 2: Mesh of a rod with pressure on the top surface and the boundary condition imposed on the bottom surface." width = 400px
@@ -596,10 +594,8 @@ u = \frac{{F\left( {{A_F}} \right)}}{{k_s\left( {{A_k}} \right)}} = \frac{{p \ti
 \f]
 where \f$ p \f$ and \f$ k_z \f$ are the pressure and spring stiffness in z
 direction, respectively. Meanwhile, \f$ A_F \f$ and \f$ A_k \f$ represent the
-areas when pressure and spring are applied, respectively. It is worth noting 
-that, in this test example, the spring stiffness in x and y directions are
-identiacally zeros. As expected, the hand calculated result is consistent with
-that shown in \ref figure_spring_result_linear "Figure 3".
+areas where pressure and spring are applied, respectively. As expected, the hand
+calculated result is consistent with that shown in \ref  figure_spring_result_linear "Figure 3".
 
 \subsection spring_nonlinear_elasticity Nonlinear elasticity problem
 
@@ -719,9 +715,10 @@ conducted. \ref figure_nonlinear_elasticity_spring "Figure 5" shows the geometry
 and the mesh while \ref figure_nonlinear_elasticity_spring "Figure 6" presents
 the comparison of the results for different boundary conditions applied at a
 face of the L-shaped structure. There are two analyses where springs with
-different stiffness magnitude in x, y, and z directions are applied.
-Additionally, another case in which clamp boundary condition is use is also
-presented.
+different stiffness magnitude in normal and in-plane local direction are
+applied. Additionally, another case in which clamp boundary condition is used is
+also presented. It is worth commenting that the deformed shapes of the structure
+get bigger are due to the small strain assumption and the solution scaling.
 
 
 \anchor figure_spring_LShape_mesh
