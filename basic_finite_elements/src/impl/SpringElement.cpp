@@ -101,6 +101,141 @@ private:
   MoFEM::Interface &mField;
 };
 
+/** * @brief Assemble contribution of springs to RHS *
+ * \f[
+ * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
+ * \right)d\partial \Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
+ * ^T}{k_s}ud\partial \Omega }
+ * \f]
+ *
+ */
+struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+  // vector used to store force vector for each degree of freedom
+  VectorDouble nF;
+
+  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+  BlockOptionDataSprings &dAta;
+  bool is_spatial_position = true;
+
+  OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
+             BlockOptionDataSprings &data, const std::string field_name)
+      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+            field_name.c_str(), OPROW),
+        commonDataPtr(common_data_ptr), dAta(data) {
+    if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
+      is_spatial_position = false;
+  }
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+
+    MoFEMFunctionBegin;
+
+    // check that the faces have associated degrees of freedom
+    const int nb_dofs = data.getIndices().size();
+    if (nb_dofs == 0)
+      MoFEMFunctionReturnHot(0);
+
+    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.tRis.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
+    CHKERR commonDataPtr->getBlockData(dAta);
+
+    // size of force vector associated to the entity
+    // set equal to the number of degrees of freedom of associated with the
+    // entity
+    nF.resize(nb_dofs, false);
+    nF.clear();
+
+    // get number of Gauss points
+    const int nb_gauss_pts = data.getN().size1();
+
+    // get intergration weights
+    auto t_w = getFTensor0IntegrationWeight();
+
+    // FTensor indices
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+
+    FTensor::Tensor2<double, 3, 3> t_spring_local(
+        commonDataPtr->springStiffnessNormal, 0., 0., 0.,
+        commonDataPtr->springStiffnessTangent, 0., 0., 0.,
+        commonDataPtr->springStiffnessTangent);
+    // create a 3d vector to be used as the normal to the face with length equal
+    // to the face area
+    auto t_normal_ptr = getFTensor1Normal();
+
+    FTensor::Tensor1<double, 3> t_normal;
+    t_normal(i) = t_normal_ptr(i);
+
+    // First tangent vector
+    auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
+    FTensor::Tensor1<double, 3> t_tangent1;
+    t_tangent1(i) = t_tangent1_ptr(i);
+
+    // Second tangent vector, such that t_n = t_t1 x t_t2 | t_t2 = t_n x t_t1
+    FTensor::Tensor1<double, 3> t_tangent2;
+    t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
+
+    // Spring stiffness in global coordinate
+    FTensor::Tensor2<double, 3, 3> t_spring_global;
+    t_spring_global = MetaSpringBC::transformLocalToGlobal(
+        t_normal, t_tangent1, t_tangent2, t_spring_local);
+
+    // Extract solution at Gauss points
+    auto t_solution_at_gauss_point =
+        getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
+    auto t_init_solution_at_gauss_point =
+        getFTensor1FromMat<3>(*commonDataPtr->xInitAtPts);
+    FTensor::Tensor1<double, 3> t_displacement_at_gauss_point;
+
+    // loop over all Gauss points of the face
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      // Calculate the displacement at the Gauss point
+      if (is_spatial_position) { // "SPATIAL_POSITION"
+        t_displacement_at_gauss_point(i) =
+            t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
+      } else { // e.g. "DISPLACEMENT" or "U"
+        t_displacement_at_gauss_point(i) = t_solution_at_gauss_point(i);
+      }
+
+      double w = t_w * getArea();
+
+      auto t_base_func = data.getFTensor0N(gg, 0);
+
+      // create a vector t_nf whose pointer points an array of 3 pointers
+      // pointing to nF  memory location of components
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
+                                                              &nF[2]);
+
+      for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
+        t_nf(i) += w * t_base_func * t_spring_global(i, j) *
+                   t_displacement_at_gauss_point(j);
+
+        // move to next base function
+        ++t_base_func;
+        // move the pointer to next element of t_nf
+        ++t_nf;
+      }
+      // move to next integration weight
+      ++t_w;
+      // move to the solutions at the next Gauss point
+      ++t_solution_at_gauss_point;
+      ++t_init_solution_at_gauss_point;
+    }
+    // add computed values of spring in the global right hand side vector
+    Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
+                                               : getFEMethod()->snes_f;
+    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0], &nF[0], ADD_VALUES);
+    MoFEMFunctionReturn(0);
+  }
+};
+
 /** * @brief Assemble contribution of spring to LHS *
  * \f[
  * {K^s} = \int\limits_\Omega ^{} {{\psi ^T}{k_s}\psi d\Omega }
@@ -198,17 +333,17 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // get area and integration weight
       double w = t_w * getArea();
 
-      auto row_base_functions = row_data.getFTensor0N(gg, 0);
+      auto t_row_base_func = row_data.getFTensor0N(gg, 0);
 
       for (int rr = 0; rr != row_nb_dofs / 3; rr++) {
-        auto col_base_functions = col_data.getFTensor0N(gg, 0);
+        auto t_col_base_func = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
           auto assemble_m = get_tensor2(locKs, rr, cc);
-          assemble_m(i, j) += w * row_base_functions * col_base_functions *
-                              t_spring_global(i, j);
-          ++col_base_functions;
+          assemble_m(i, j) +=
+              w * t_row_base_func * t_col_base_func * t_spring_global(i, j);
+          ++t_col_base_func;
         }
-        ++row_base_functions;
+        ++t_row_base_func;
       }
       // move to next integration weight
       ++t_w;
@@ -231,142 +366,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
                           &transLocKs(0, 0), ADD_VALUES);
     }
 
-    MoFEMFunctionReturn(0);
-  }
-};
-
-/** * @brief Assemble contribution of springs to RHS *
- * \f[
- * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
- * \right)d\partial \Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
- * ^T}{k_s}ud\partial \Omega }
- * \f]
- *
- */
-struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
-
-  // vector used to store force vector for each degree of freedom
-  VectorDouble nF;
-
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-  BlockOptionDataSprings &dAta;
-  bool is_spatial_position = true;
-
-  OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             BlockOptionDataSprings &data, const std::string field_name)
-      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
-            field_name.c_str(), OPROW),
-        commonDataPtr(common_data_ptr), dAta(data) {
-    if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
-      is_spatial_position = false;
-  }
-
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-
-    MoFEMFunctionBegin;
-
-    // check that the faces have associated degrees of freedom
-    const int nb_dofs = data.getIndices().size();
-    if (nb_dofs == 0)
-      MoFEMFunctionReturnHot(0);
-
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
-      MoFEMFunctionReturnHot(0);
-    }
-
-    CHKERR commonDataPtr->getBlockData(dAta);
-
-    // size of force vector associated to the entity
-    // set equal to the number of degrees of freedom of associated with the
-    // entity
-    nF.resize(nb_dofs, false);
-    nF.clear();
-
-    // get number of Gauss points
-    const int nb_gauss_pts = data.getN().size1();
-
-    // get intergration weights
-    auto t_w = getFTensor0IntegrationWeight();
-
-    // FTensor indices
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
-
-    FTensor::Tensor2<double, 3, 3> t_spring_local(
-        commonDataPtr->springStiffnessNormal, 0., 0., 0.,
-        commonDataPtr->springStiffnessTangent, 0., 0., 0.,
-        commonDataPtr->springStiffnessTangent);
-    // create a 3d vector to be used as the normal to the face with length equal
-    // to the face area
-    auto t_normal_ptr = getFTensor1Normal();
-
-    FTensor::Tensor1<double, 3> t_normal;
-    t_normal(i) = t_normal_ptr(i);
-
-    // First tangent vector
-    auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
-    FTensor::Tensor1<double, 3> t_tangent1;
-    t_tangent1(i) = t_tangent1_ptr(i);
-
-    // Second tangent vector, such that t_n = t_t1 x t_t2 | t_t2 = t_n x t_t1
-    FTensor::Tensor1<double, 3> t_tangent2;
-    t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
-
-    // Spring stiffness in global coordinate
-    FTensor::Tensor2<double, 3, 3> t_spring_global;
-    t_spring_global = MetaSpringBC::transformLocalToGlobal(
-        t_normal, t_tangent1, t_tangent2, t_spring_local);
-
-    // Extract solution at Gauss points
-    auto t_solution_at_gauss_point =
-        getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
-    auto t_init_solution_at_gauss_point =
-        getFTensor1FromMat<3>(*commonDataPtr->xInitAtPts);
-    FTensor::Tensor1<double, 3> t_displacement_at_gauss_point;
-
-    
-    // loop over all Gauss points of the face
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      // Calculate the displacement at the Gauss point
-      if (is_spatial_position) { // "SPATIAL_POSITION"
-        t_displacement_at_gauss_point(i) =
-            t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
-      } else { // e.g. "DISPLACEMENT" or "U"
-        t_displacement_at_gauss_point(i) = t_solution_at_gauss_point(i);
-      }
-
-      double w = t_w * getArea();
-
-      auto base_functions = data.getFTensor0N(gg, 0);
-      
-      // create a vector t_nf whose pointer points an array of 3 pointers
-      // pointing to nF  memory location of components
-      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
-                                                              &nF[2]);
-      
-      for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
-        t_nf(i) += w * base_functions * t_spring_global(i, j) *
-                   t_displacement_at_gauss_point(j);
-
-        // move to next base function
-        ++base_functions;
-        // move the pointer to next element of t_nf
-        ++t_nf;
-      }
-      // move to next integration weight
-      ++t_w;
-      // move to the solutions at the next Gauss point
-      ++t_solution_at_gauss_point;
-      ++t_init_solution_at_gauss_point;
-    }
-    // add computed values of spring in the global right hand side vector
-    Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
-                                               : getFEMethod()->snes_f;
-    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0], &nF[0], ADD_VALUES);
     MoFEMFunctionReturn(0);
   }
 };
@@ -452,7 +451,7 @@ FTensor::Tensor2<double, 3, 3> MetaSpringBC::transformLocalToGlobal(
   };
 
   // Transformation matrix (tensor)
-  FTensor::Tensor2<double, 3, 3> transformation_matrix(
+  FTensor::Tensor2<double, 3, 3> t_transformation_matrix(
       get_cosine(t_e1, t_normal_local), get_cosine(t_e1, t_tangent1_local),
       get_cosine(t_e1, t_tangent2_local), get_cosine(t_e2, t_normal_local),
       get_cosine(t_e2, t_tangent1_local), get_cosine(t_e2, t_tangent2_local),
@@ -461,8 +460,8 @@ FTensor::Tensor2<double, 3, 3> MetaSpringBC::transformLocalToGlobal(
 
   // Spring stiffness in global coordinate, Q*ls*Q^T
   FTensor::Tensor2<double, 3, 3> t_spring_global;
-  t_spring_global(i, j) = transformation_matrix(i, k) * t_spring_local(k, l) *
-                          transformation_matrix(j, l);
+  t_spring_global(i, j) = t_transformation_matrix(i, k) * t_spring_local(k, l) *
+                          t_transformation_matrix(j, l);
 
   return t_spring_global;
 };
