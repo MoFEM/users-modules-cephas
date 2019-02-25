@@ -849,14 +849,14 @@ struct HookeElement {
     }
   };
 
-  struct OpAleLhsWithDensity_dX_dX : public OpAssemble {
+  struct OpAleLhsWithDensity_dx_dX : public OpAssemble {
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
     boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
     const double rhoN;
     const double rHo0;
 
-    OpAleLhsWithDensity_dX_dX(
+    OpAleLhsWithDensity_dx_dX(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
@@ -914,8 +914,8 @@ struct HookeElement {
         // calculate scalar weight times element volume
         double a = t_w * vol * det_H[gg];
 
-        const double stress_dho_coef =
-            (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.);
+        const double stress_dho_coef = (rhoN / rho); 
+        // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0, rhoN));
         // iterate over row base functions
         int rr = 0;
         for (; rr != nbRows / 3; ++rr) {
@@ -931,16 +931,13 @@ struct HookeElement {
               a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
 
           // get derivatives of base functions for columns
-          // auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
           auto t_col_base = col_data.getFTensor0N(gg, 0);
           // iterate column base functions
           for (int cc = 0; cc != nbCols / 3; ++cc) {
-            // FIXME: ??
 
             t_m(i, k) +=
                 t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
-
-            // move to next column base function
+                
             ++t_col_base;
 
             // move to next block of local stiffens matrix
@@ -968,14 +965,14 @@ struct HookeElement {
     }
   };
 
-  struct OpAleLhsWithDensity_dx_dX : public OpAssemble {
+  struct OpAleLhsWithDensity_dX_dX : public OpAssemble {
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
     boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
     const double rhoN;
     const double rHo0;
 
-    OpAleLhsWithDensity_dx_dX(
+    OpAleLhsWithDensity_dX_dX(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
@@ -1036,8 +1033,10 @@ struct HookeElement {
         // calculate scalar weight times element volume
         double a = t_w * vol * det_H[gg];
 
-        const double stress_dho_coef =
-            (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.);
+        const double stress_dho_coef = (rhoN / rho);
+        // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0,
+        // rhoN));
+
         // iterate over row base functions
         int rr = 0;
         for (; rr != nbRows / 3; ++rr) {
@@ -1058,7 +1057,7 @@ struct HookeElement {
 
           // iterate column base functions
           for (int cc = 0; cc != nbCols / 3; ++cc) {
-                //FIXME: ??
+
             t_m(i, k) +=
                 t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
             // move to next column base function

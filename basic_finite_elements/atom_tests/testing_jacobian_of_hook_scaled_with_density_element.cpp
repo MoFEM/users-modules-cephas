@@ -122,16 +122,14 @@ int main(int argc, char *argv[]) {
     {
       Projection10NodeCoordsOnField ent_method(m_field, "x");
       CHKERR m_field.loop_dofs("x", ent_method);
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0.9, "x"); //FIXME:
-      // why is this turned off?
+      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.5, "x"); 
     }
 
     // Project coordinates on "X" field
     if (ale == PETSC_TRUE) {
       Projection10NodeCoordsOnField ent_method(m_field, "X");
       CHKERR m_field.loop_dofs("X", ent_method);
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0.9, "X"); //FIXME:
-      // why is this turned off?
+    //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.5, "X"); 
     }
 
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
@@ -159,7 +157,7 @@ int main(int argc, char *argv[]) {
         si->getDomainFEName(), 3, (*block_sets_ptr)[0].tEts);
 
     // Parameters for density
-    const double rho_n = 3.0;
+    const double rho_n = 2.0;
     const double rho_0 = 0.5;
 
     auto my_operators = [&](boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
@@ -198,9 +196,9 @@ int main(int argc, char *argv[]) {
               new OpCalculateVectorFieldGradient<3, 3>(X_field,
                                                        data_at_pts->HMat));
           fe_lhs_ptr->getOpPtrVector().push_back(
-              new OpCalculateVectorFieldValues<3>(x_field, mat_coords_ptr));
+              new OpCalculateVectorFieldValues<3>(X_field, mat_coords_ptr));
           fe_lhs_ptr->getOpPtrVector().push_back(new OpGetDensityField<true>(
-              x_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
+              X_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
               rho_grad_at_gauss_pts_ptr));
           fe_lhs_ptr->getOpPtrVector().push_back(
               new HookeElement::OpCalculateStiffnessScaledByDensityField(
@@ -280,9 +278,9 @@ int main(int argc, char *argv[]) {
               new OpCalculateVectorFieldGradient<3, 3>(X_field,
                                                        data_at_pts->HMat));
           fe_rhs_ptr->getOpPtrVector().push_back(
-              new OpCalculateVectorFieldValues<3>(x_field, mat_coords_ptr));
+              new OpCalculateVectorFieldValues<3>(X_field, mat_coords_ptr));
           fe_rhs_ptr->getOpPtrVector().push_back(new OpGetDensityField<true>(
-              x_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
+              X_field, mat_coords_ptr, rho_at_gauss_pts_ptr,
               rho_grad_at_gauss_pts_ptr));
           fe_rhs_ptr->getOpPtrVector().push_back(
               new HookeElement::OpCalculateStiffnessScaledByDensityField(
