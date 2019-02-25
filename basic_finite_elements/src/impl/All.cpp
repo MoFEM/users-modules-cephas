@@ -31,6 +31,7 @@
 #include <SurfacePressureComplexForLazy.cpp>
 #include <AnalyticalDirichlet.cpp>
 #include <HookeElement.cpp>
+#include <SpringElement.cpp>
 
 #ifdef WITH_ADOL_C
   #include <NonLinearElasticElement.cpp>
