@@ -1,0 +1,29 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug_stokes",
+      "program": "/Users/ashvarts/mofem_install/users_modules_debug/build/basic_finite_elements/navier_stokes/stokes",
+      "args": ["-my_file",
+        "/Users/ashvarts/mofem_install/users_modules_debug/build/basic_finite_elements/navier_stokes/Tube_quad.cub",
+        "-my_order_p",
+        "1",
+        "-my_order_u",
+        "2",
+        "-ksp_type",
+        "gmres",
+        "-pc_type",
+        "lu",
+        "-pc_factor_mat_solver_package",
+        "mumps",
+        "-ksp_monitor"],
+      "cwd": "/Users/ashvarts/mofem_install/users_modules_debug/build/basic_finite_elements/navier_stokes",
+      "stopOnEntry": false
+    }
+  ]
+}

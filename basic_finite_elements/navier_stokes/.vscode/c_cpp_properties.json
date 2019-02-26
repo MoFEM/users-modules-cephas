@@ -1,0 +1,46 @@
+{
+  "configurations": [
+    {
+        "name": "Mac",
+        "includePath": [
+            "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1",
+            "/usr/local/include",
+            "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include",
+            "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include",
+            "/usr/include",
+            "${workspaceRoot}/**",
+            "/Users/ashvarts/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/src",
+            "/Users/ashvarts/mofem_install/tetgen1.5.0/include",
+            "/Users/ashvarts/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/nonlinear_elastic_materials/src"
+        ],
+        "defines": [
+            "WITH_ADOL_C",
+            "WITH_TETGEN",
+            "WITH_METAIO"
+        ],
+        "intelliSenseMode": "clang-x64",
+        "compileCommands":  "/Users/ashvarts/mofem_install/users_modules_debug/build/compile_commands.json",
+        "cStandard": "c11",
+        "cppStandard": "c++14",
+        "browse": {
+            "path": [
+                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1",
+                "/usr/local/include",
+                "/Applications/Xcode.app/Contents/eveloper/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include",
+                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include",
+                "/usr/include",
+                "${workspaceRoot}/**",
+                "/Users/ashvarts/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/src",
+                "/Users/ashvarts/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/nonlinear_elastic_materials/src"
+            ],
+            "limitSymbolsToIncludedHeaders": true,
+            "databaseFilename": "/Users/ashvarts/mofem_install/mofem-cephas/mofem/users_modules/.vscode/browse.vc.db"
+        },
+        "macFrameworkPath": [
+            "/System/Library/Frameworks",
+            "/Library/Frameworks"
+        ]
+    }
+],
+"version": 4
+}
