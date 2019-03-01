@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
 
     // analytical Dirichlet bc
     AnalyticalDirichletBC::DirichletBC analytical_dirichlet_bc(m_field, "TEMP",
-                                                              A, T, F);
+                                                               A, T, F);
 
     // solve for dirichlet bc dofs
     CHKERR analytical_bc.setUpProblem(m_field, "BC_PROBLEM");
