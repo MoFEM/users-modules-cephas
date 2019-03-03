@@ -548,6 +548,9 @@ int main(int argc, char *argv[]) {
     // of particular dirichlet_bc.
     CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
     // Set values from D0 on the field (on the mesh)
+
+    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToLocalVector(dm, D0, INSERT_VALUES, SCATTER_REVERSE);
 
     // Calculate residual forces as result of applied kinematic constrains. Run
