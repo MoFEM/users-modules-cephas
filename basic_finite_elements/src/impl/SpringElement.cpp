@@ -378,7 +378,7 @@ MetaSpringBC::addSpringElements(MoFEM::Interface &m_field,
 
   // Define boundary element that operates on rows, columns and data of a
   // given field
-  CHKERR m_field.add_finite_element("SPRING");
+  CHKERR m_field.add_finite_element("SPRING", MF_ZERO);
   CHKERR m_field.modify_finite_element_add_field_row("SPRING", field_name);
   CHKERR m_field.modify_finite_element_add_field_col("SPRING", field_name);
   CHKERR m_field.modify_finite_element_add_field_data("SPRING", field_name);
