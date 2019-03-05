@@ -26,22 +26,19 @@
 struct BlockData {
   int iD;
   int oRder;
-  double yOung;
-  double pOisson;
+  double fluidViscosity;
+  double fluidDensity;
   Range tEts;
-  BlockData() : oRder(-1), yOung(-1), pOisson(-2) {}
+  BlockData() : oRder(-1), fluidViscosity(-1), fluidDensity(-2) {}
 };
 
 struct DataAtIntegrationPts {
 
   boost::shared_ptr<MatrixDouble> gradDispPtr;
   boost::shared_ptr<VectorDouble> pPtr;
-  FTensor::Ddg<double, 3, 3> tD;
 
-  double pOisson;
-  double yOung;
-  double lAmbda;
-  double mU;
+  double fluidViscosity;
+  double fluidDensity;
 
   std::map<int, BlockData> setOfBlocksData;
 
@@ -67,164 +64,40 @@ struct DataAtIntegrationPts {
   MoFEMErrorCode getBlockData(BlockData &data) {
     MoFEMFunctionBegin;
 
-    yOung = data.yOung;
-    pOisson = data.pOisson;
-    lAmbda = (yOung * pOisson) / ((1. + pOisson) * (1. - 2. * pOisson));
-    mU = yOung / (2. * (1. + pOisson));
-
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
-    FTensor::Index<'l', 3> l;
-
-    tD(i, j, k, l) = 0.;
-
-    tD(0, 0, 0, 0) = 2 * mU;
-    tD(0, 1, 0, 1) = mU;
-    tD(0, 1, 1, 0) = mU;
-    tD(0, 2, 0, 2) = mU;
-    tD(0, 2, 2, 0) = mU;
-    tD(1, 0, 0, 1) = mU;
-    tD(1, 0, 1, 0) = mU;
-    tD(1, 1, 1, 1) = 2 * mU;
-    tD(1, 2, 1, 2) = mU;
-    tD(1, 2, 2, 1) = mU;
-    tD(2, 0, 0, 2) = mU;
-    tD(2, 0, 2, 0) = mU;
-    tD(2, 1, 1, 2) = mU;
-    tD(2, 1, 2, 1) = mU;
-    tD(2, 2, 2, 2) = 2 * mU;
+    fluidViscosity = data.fluidViscosity;
+    fluidDensity = data.fluidDensity;
 
     MoFEMFunctionReturn(0);
   }
 
   MoFEMErrorCode setBlocks() {
     MoFEMFunctionBegin;
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, BLOCKSET | MAT_ELASTICSET, it)) {
-      Mat_Elastic mydata;
-      CHKERR it->getAttributeDataStructure(mydata);
-      int id = it->getMeshsetId();
-      EntityHandle meshset = it->getMeshset();
-      CHKERR mField.get_moab().get_entities_by_type(
-          meshset, MBTET, setOfBlocksData[id].tEts, true);
-      setOfBlocksData[id].iD = id;
-      setOfBlocksData[id].yOung = mydata.data.Young;
-      setOfBlocksData[id].pOisson = mydata.data.Poisson;
-    }
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 5, "FLUID") == 0) { 
+          const int id = bit->getMeshsetId();
+          CHKERR mField.get_moab().get_entities_by_type(
+              bit->getMeshset(), MBTET, setOfBlocksData[id].tEts, true);
+
+          std::vector<double> attributes;
+          bit->getAttributes(attributes);
+          if (attributes.size() != 2) {
+            SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                      "should be 2 attributes but is %d", attributes.size());
+          }
+          setOfBlocksData[id].iD = id;
+          setOfBlocksData[id].fluidViscosity = attributes[0];
+          setOfBlocksData[id].fluidDensity = attributes[1];
+        }
+      }
+   
+
+
     MoFEMFunctionReturn(0);
   }
 
 private:
   MoFEM::Interface &mField;
 };
-
-/** * @brief Assemble P *
- * \f[
- * {\bf{P}} =  - \int\limits_\Omega  {{\bf{N}}_p^T\frac{1}{\lambda
-        }{{\bf{N}}_p}d\Omega }
- * \f]
- *
- */
-// struct OpAssembleP
-//     : public VolumeElementForcesAndSourcesCore::UserDataOperator {
-
-//   DataAtIntegrationPts &commonData;
-//   MatrixDouble locP;
-//   MatrixDouble translocP;
-//   BlockData &dAta;
-
-//   OpAssembleP(DataAtIntegrationPts &common_data, BlockData &data)
-//       : VolumeElementForcesAndSourcesCore::UserDataOperator(
-//             "P", "P", UserDataOperator::OPROWCOL),
-//         commonData(common_data), dAta(data) {
-//     sYmm = true;
-//   }
-
-//   PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
-//                         EntityType col_type,
-//                         DataForcesAndSourcesCore::EntData &row_data,
-//                         DataForcesAndSourcesCore::EntData &col_data) {
-
-//     MoFEMFunctionBegin;
-//     const int row_nb_dofs = row_data.getIndices().size();
-//     if (!row_nb_dofs)
-//       MoFEMFunctionReturnHot(0);
-//     const int col_nb_dofs = col_data.getIndices().size();
-//     if (!col_nb_dofs)
-//       MoFEMFunctionReturnHot(0);
-
-//     if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-//         dAta.tEts.end()) {
-//       MoFEMFunctionReturnHot(0);
-//     }
-//     CHKERR commonData.getBlockData(dAta);
-//     // Set size can clear local tangent matrix
-//     locP.resize(row_nb_dofs, col_nb_dofs, false);
-//     locP.clear();
-
-//     const int row_nb_gauss_pts = row_data.getN().size1();
-//     if (!row_nb_gauss_pts)
-//       MoFEMFunctionReturnHot(0);
-//     const int row_nb_base_functions = row_data.getN().size2();
-//     auto row_base_functions = row_data.getFTensor0N();
-
-//     // get data
-//     FTensor::Index<'i', 3> i;
-//     FTensor::Index<'j', 3> j;
-//     const double lambda = commonData.lAmbda;
-//     const double mu = commonData.mU;
-
-//     double coefficient = commonData.pOisson == 0.5 ? 0. : 1 / lambda;
-
-//     // integration
-//     if (coefficient != 0.) {
-//       for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
-
-//         // Get volume and integration weight
-//         double w = getVolume() * getGaussPts()(3, gg);
-//         if (getHoGaussPtsDetJac().size() > 0) {
-//           w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-//         }
-
-//         // INTEGRATION
-//         int row_bb = 0;
-//         for (; row_bb != row_nb_dofs; row_bb++) {
-//           auto col_base_functions = col_data.getFTensor0N(gg, 0);
-//           for (int col_bb = 0; col_bb != col_nb_dofs; col_bb++) {
-
-//             locP(row_bb, col_bb) -=
-//                 w * row_base_functions * col_base_functions * coefficient;
-
-//             ++col_base_functions;
-//           }
-//           ++row_base_functions;
-//         }
-//         for (; row_bb != row_nb_base_functions; row_bb++) {
-//           ++row_base_functions;
-//         }
-//       }
-//     }
-    
-
-//     CHKERR MatSetValues(
-//         getFEMethod()->ksp_B, row_nb_dofs, &*row_data.getIndices().begin(),
-//         col_nb_dofs, &*col_data.getIndices().begin(), &locP(0, 0), ADD_VALUES);
-
-//     // is symmetric
-//     if (row_side != col_side || row_type != col_type) {
-//       translocP.resize(col_nb_dofs, row_nb_dofs, false);
-//       noalias(translocP) = trans(locP);
-//       CHKERR MatSetValues(getFEMethod()->ksp_B, col_nb_dofs,
-//                           &*col_data.getIndices().begin(), row_nb_dofs,
-//                           &*row_data.getIndices().begin(), &translocP(0, 0),
-//                           ADD_VALUES);
-//     }
-
-//     MoFEMFunctionReturn(0);
-//   }
-// };
-
 
 /**
  * \brief Set integration rule to volume elements
@@ -238,28 +111,10 @@ private:
  *
  */
 struct VolRule {
-  int operator()(int, int, int p) const {
-     return 2 * (p - 1)+2; 
-  }
-};
-
-/**
- * \brief Set integration rule to boundary elements
- *
- * This rule is used to integrate the work of external forces on a face, 
- * i.e. \f$f \cdot v\f$, where f is the traction vector and v is the test
- * vector function. The current problem features a Neumann bc with 
- * a pre-defined constant pressure. Therefore, if the test field is 
- * represented by polynomials of order "p", then the rule for the exact 
- * integration is also p.
- *
- * Integration rule is order of polynomial which is calculated exactly. Finite
- * element selects integration method based on return of this function.
- *
- */
-struct FaceRule {
-  int operator()(int, int, int p) const {
-    return p+2;
+  int operator()(int order_row, int order_col, int order_data) const {
+     return order_row < order_col ? 2 * (order_col - 1) 
+                       : 2 * (order_row - 1);
+     //return 2 * (p - 1); 
   }
 };
 
@@ -312,8 +167,8 @@ struct OpAssembleG
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
 
-    const double lambda = commonData.lAmbda;
-    const double mu = commonData.mU;
+    //const double lambda = commonData.lAmbda;
+    //const double mu = commonData.mU;
 
     FTensor::Tensor1<double, 3> t1;
     FTensor::Index<'i', 3> i;
@@ -340,7 +195,7 @@ struct OpAssembleG
                                           &locG(3 * row_bb + 1, col_bb),
                                           &locG(3 * row_bb + 2, col_bb));
 
-          k(i) += t1(i) * base_functions;
+          k(i) -= t1(i) * base_functions;
           ++base_functions;
         }
         ++row_diff_base_functions;
@@ -407,6 +262,7 @@ struct OpAssembleK
       MoFEMFunctionReturnHot(0);
     if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
         dAta.tEts.end()) {
+      PetscPrintf(PETSC_COMM_WORLD, "PROBLEM");
       MoFEMFunctionReturnHot(0);
     }
     commonData.getBlockData(dAta);
@@ -423,8 +279,8 @@ struct OpAssembleK
 
     auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
 
-    const double mu = commonData.mU;
-    const double lambda = commonData.lAmbda;
+    //const double mu = commonData.mU;
+    //const double lambda = commonData.lAmbda;
 
     // integrate local matrix for entity block
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -432,9 +288,11 @@ struct OpAssembleK
       //const MatrixAdaptor &diffN = row_data.getDiffN(gg,nb_dofs/3);
          
       // Get volume and integration weight
-      double w = getVolume() * getGaussPts()(3, gg);
+      double w = getVolume() * getGaussPts()(3, gg) * commonData.fluidViscosity;
+      //int itest = getHoGaussPtsDetJac().size();
       if (getHoGaussPtsDetJac().size() > 0) {
-        w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+         //double test = getHoGaussPtsDetJac()[gg];
+         w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
       }
 
       int row_bb = 0;
@@ -502,87 +360,87 @@ struct OpAssembleK
   }
 };
 
-struct OpPostProcStress
-    : public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
-  DataAtIntegrationPts &commonData;
-  moab::Interface &postProcMesh;
-  std::vector<EntityHandle> &mapGaussPts;
-  BlockData &dAta;
+// struct OpPostProcStress
+//     : public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+//   DataAtIntegrationPts &commonData;
+//   moab::Interface &postProcMesh;
+//   std::vector<EntityHandle> &mapGaussPts;
+//   BlockData &dAta;
 
-  OpPostProcStress(moab::Interface &post_proc_mesh,
-                   std::vector<EntityHandle> &map_gauss_pts,
-                   DataAtIntegrationPts &common_data, BlockData &data)
-      : VolumeElementForcesAndSourcesCore::UserDataOperator(
-            "U", UserDataOperator::OPROW),
-        commonData(common_data), postProcMesh(post_proc_mesh),
-        mapGaussPts(map_gauss_pts), dAta(data) {
-    doVertices = true;
-    doEdges = false;
-    doQuads = false;
-    doTris = false;
-    doTets = false;
-    doPrisms = false;
-  }
+//   OpPostProcStress(moab::Interface &post_proc_mesh,
+//                    std::vector<EntityHandle> &map_gauss_pts,
+//                    DataAtIntegrationPts &common_data, BlockData &data)
+//       : VolumeElementForcesAndSourcesCore::UserDataOperator(
+//             "U", UserDataOperator::OPROW),
+//         commonData(common_data), postProcMesh(post_proc_mesh),
+//         mapGaussPts(map_gauss_pts), dAta(data) {
+//     doVertices = true;
+//     doEdges = false;
+//     doQuads = false;
+//     doTris = false;
+//     doTets = false;
+//     doPrisms = false;
+//   }
 
-  PetscErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
-    if (type != MBVERTEX)
-      PetscFunctionReturn(9);
-    double def_VAL[9];
-    bzero(def_VAL, 9 * sizeof(double));
+//   PetscErrorCode doWork(int side, EntityType type,
+//                         DataForcesAndSourcesCore::EntData &data) {
+//     MoFEMFunctionBegin;
+//     if (type != MBVERTEX)
+//       PetscFunctionReturn(9);
+//     double def_VAL[9];
+//     bzero(def_VAL, 9 * sizeof(double));
 
-    if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tEts.end()) {
-      MoFEMFunctionReturnHot(0);
-    }
-    commonData.getBlockData(dAta);
+//     if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+//         dAta.tEts.end()) {
+//       MoFEMFunctionReturnHot(0);
+//     }
+//     commonData.getBlockData(dAta);
 
-    Tag th_stress;
-    CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-    Tag th_strain;
-    CHKERR postProcMesh.tag_get_handle("STRAIN", 9, MB_TYPE_DOUBLE, th_strain,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-    Tag th_psi;
-    CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+//     Tag th_stress;
+//     CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
+//                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+//     Tag th_strain;
+//     CHKERR postProcMesh.tag_get_handle("STRAIN", 9, MB_TYPE_DOUBLE, th_strain,
+//                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+//     Tag th_psi;
+//     CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
+//                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
-    auto grad = getFTensor2FromMat<3, 3>(*commonData.gradDispPtr);
-    auto p = getFTensor0FromVec(*commonData.pPtr);
+//     auto grad = getFTensor2FromMat<3, 3>(*commonData.gradDispPtr);
+//     auto p = getFTensor0FromVec(*commonData.pPtr);
 
-    const int nb_gauss_pts = commonData.gradDispPtr->size2();
-    const int nb_gauss_pts2 = commonData.pPtr->size();
+//     const int nb_gauss_pts = commonData.gradDispPtr->size2();
+//     const int nb_gauss_pts2 = commonData.pPtr->size();
 
-    const double lambda = commonData.lAmbda;
-    const double mu = commonData.mU;
+//     //const double lambda = commonData.lAmbda;
+//     //const double mu = commonData.mU;
 
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Tensor2<double, 3, 3> strain;
-    FTensor::Tensor2<double, 3, 3> stress;
+//     FTensor::Index<'i', 3> i;
+//     FTensor::Index<'j', 3> j;
+//     FTensor::Tensor2<double, 3, 3> strain;
+//     FTensor::Tensor2<double, 3, 3> stress;
 
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-      strain(i, j) = 0.5 * (grad(i, j) + grad(j, i));
-      double trace = strain(i, i);
-      double psi = 0.5 * p * p + mu * strain(i, j) * strain(i, j);
+//     for (int gg = 0; gg != nb_gauss_pts; gg++) {
+//       strain(i, j) = 0.5 * (grad(i, j) + grad(j, i));
+//       double trace = strain(i, i);
+//       double psi = 0.5 * p * p + mu * strain(i, j) * strain(i, j);
 
-      stress(i, j) = 2 * mu * strain(i, j);
-      stress(1, 1) -= p;
-      stress(0, 0) -= p;
-      stress(2, 2) -= p;
+//       stress(i, j) = 2 * mu * strain(i, j);
+//       stress(1, 1) -= p;
+//       stress(0, 0) -= p;
+//       stress(2, 2) -= p;
 
-      CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
-      CHKERR postProcMesh.tag_set_data(th_strain, &mapGaussPts[gg], 1,
-                                       &strain(0, 0));
-      CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
-                                       &stress(0, 0));
-      ++p;
-      ++grad;
-    }
+//       CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
+//       CHKERR postProcMesh.tag_set_data(th_strain, &mapGaussPts[gg], 1,
+//                                        &strain(0, 0));
+//       CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
+//                                        &stress(0, 0));
+//       ++p;
+//       ++grad;
+//     }
 
-    MoFEMFunctionReturn(0);
-  }
-};
+//     MoFEMFunctionReturn(0);
+//   }
+// };
 
 #endif //__NAVIERSTOKESOPERATORS_HPP__

@@ -303,6 +303,8 @@ int main(int argc, char *argv[]) {
     CHKERR KSPSetUp(solver);
     CHKERR KSPSolve(solver, F_ext, d);
 
+    CHKERR VecAXPY(d, 1., d0);
+
     // VecView(F_ext, PETSC_VIEWER_STDOUT_WORLD);
     // CHKERR VecView(d, PETSC_VIEWER_STDOUT_WORLD);    // Print out the results
     CHKERR DMoFEMMeshToGlobalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
@@ -319,6 +321,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR MatDestroy(&Aij);
     CHKERR VecDestroy(&d);
+    CHKERR VecDestroy(&d0);
     CHKERR VecDestroy(&F_ext);
     CHKERR DMDestroy(&dm);
   }

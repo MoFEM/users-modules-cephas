@@ -9,7 +9,7 @@
  * the case when the mesh is moving as results of topological changes, also the
  * calculation of material forces and associated tangent matrices are added to
  * implementation.
- * 
+ *
  * In other words, spatial deformation is small but topological changes large.
  */
 
@@ -278,9 +278,11 @@ struct HookeElement {
       MoFEMFunctionBegin;
 
       for (auto &m : (*blockSetsPtr)) {
-
         if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
             m.second.tEts.end())
+          // NOTE: The stiffness Matrix is calculated only once, since is
+          // constant for
+          // all integration points and all elements in the block.
           if (lastEvaluatedId != m.second.iD) {
 
             lastEvaluatedId = m.second.iD;
@@ -332,6 +334,99 @@ struct HookeElement {
                       ///< material parameters
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
     int lastEvaluatedId;
+  };
+
+  struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
+
+    boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
+    const double rhoN; ///< exponent n in E(p) = E * (p / p_0)^n
+    const double rHo0; ///< p_0 reference density in E(p) = E * (p / p_0)^n
+                       // // where p is density, E - youngs modulus
+
+    OpCalculateStiffnessScaledByDensityField(
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+        boost::shared_ptr<VectorDouble> rho_at_gauss_pts, const double rho_n,
+        const double rho_0)
+
+        : VolUserDataOperator(row_field, col_field, OPROW, true),
+          blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
+          rhoAtGaussPtsPtr(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    }
+
+    MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                          EntData &row_data) {
+      MoFEMFunctionBegin;
+
+      if (!rhoAtGaussPtsPtr)
+        SETERRQ(PETSC_COMM_SELF, 1, "Calculate density with MWLS first.");
+
+      for (auto &m : (*blockSetsPtr)) {
+
+        if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+            m.second.tEts.end()) {
+          continue;
+        }
+
+        const int nb_integration_pts = getGaussPts().size2();
+        dataAtPts->stiffnessMat->resize(36, nb_integration_pts, false);
+
+        FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
+            MAT_TO_DDG(dataAtPts->stiffnessMat));
+        const double young = m.second.E;
+        const double poisson = m.second.PoissonRatio;
+
+        auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+
+        // coefficient used in intermediate calculation
+        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+        FTensor::Index<'l', 3> l;
+
+        for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+          t_D(i, j, k, l) = 0.;
+
+          t_D(0, 0, 0, 0) = 1 - poisson;
+          t_D(1, 1, 1, 1) = 1 - poisson;
+          t_D(2, 2, 2, 2) = 1 - poisson;
+
+          t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+          t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+          t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+
+          t_D(0, 0, 1, 1) = poisson;
+          t_D(1, 1, 0, 0) = poisson;
+          t_D(0, 0, 2, 2) = poisson;
+          t_D(2, 2, 0, 0) = poisson;
+          t_D(1, 1, 2, 2) = poisson;
+          t_D(2, 2, 1, 1) = poisson;
+          // here the coefficient is modified to take density into account for
+          // porous materials: E(p) = E * (p / p_0)^n
+          t_D(i, j, k, l) *= coefficient * pow(rho / rHo0, rhoN);
+
+          ++t_D;
+          ++rho;
+        }
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  protected:
+    boost::shared_ptr<map<int, BlockData>>
+        blockSetsPtr; ///< Structure keeping data about problem, like
+                      ///< material parameters
+    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
   };
 
   struct OpAssemble : public VolUserDataOperator {
@@ -748,6 +843,243 @@ struct HookeElement {
         ++t_cauchy_stress;
         ++t_invH;
         ++t_h;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+  struct OpAleLhsWithDensity_dx_dX : public OpAssemble {
+
+    boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
+    const double rhoN;
+    const double rHo0;
+
+    OpAleLhsWithDensity_dx_dX(
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
+        boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
+        const double rho_n, const double rho_0)
+        : rhoAtGaussPtsPtr(rho_at_gauss_pts),
+          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0),
+          OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+
+  protected:
+    /**
+     * \brief Integrate tangent stiffness for spatial momentum
+     * @param  row_data row data (consist base functions on row entity)
+     * @param  col_data column data (consist base functions on column entity)
+     * @return error code
+     */
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+      MoFEMFunctionBegin;
+
+      // get sub-block (3x3) of local stiffens matrix, here represented by
+      // second order tensor
+      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+      };
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
+
+      // get element volume
+      double vol = getVolume();
+
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get derivatives of base functions on rows
+      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+      const int row_nb_base_fun = row_data.getN().size2();
+
+      auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+      auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
+      auto t_cauchy_stress =
+          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+      // auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+      auto &det_H = *dataAtPts->detHVec;
+
+      // iterate over integration points
+      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+        // calculate scalar weight times element volume
+        double a = t_w * vol * det_H[gg];
+
+        const double stress_dho_coef = (rhoN / rho); 
+        // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0, rhoN));
+        // iterate over row base functions
+        int rr = 0;
+        for (; rr != nbRows / 3; ++rr) {
+
+          // get sub matrix for the row
+          auto t_m = get_tensor2(K, 3 * rr, 0);
+
+          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+          FTensor::Tensor1<double, 3> t_row_stress;
+          t_row_stress(i) =
+              a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
+
+          // get derivatives of base functions for columns
+          auto t_col_base = col_data.getFTensor0N(gg, 0);
+          // iterate column base functions
+          for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+            t_m(i, k) +=
+                t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
+                
+            ++t_col_base;
+
+            // move to next block of local stiffens matrix
+            ++t_m;
+          }
+
+          // move to next row base function
+          ++t_row_diff_base;
+        }
+
+        for (; rr != row_nb_base_fun; ++rr)
+          ++t_row_diff_base;
+
+        // move to next integration weight
+        ++t_w;
+        // ++t_D;
+        ++t_cauchy_stress;
+        ++t_invH;
+        // ++t_h;
+        ++rho;
+        ++t_grad_rho;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+  struct OpAleLhsWithDensity_dX_dX : public OpAssemble {
+
+    boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
+    const double rhoN;
+    const double rHo0;
+
+    OpAleLhsWithDensity_dX_dX(
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
+        boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
+        const double rho_n, const double rho_0)
+        : rhoAtGaussPtsPtr(rho_at_gauss_pts),
+          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0),
+          OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+
+  protected:
+    /**
+     * \brief Integrate tangent stiffness for material momentum
+     * @param  row_data row data (consist base functions on row entity)
+     * @param  col_data column data (consist base functions on column entity)
+     * @return error code
+     */
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+      MoFEMFunctionBegin;
+
+      // get sub-block (3x3) of local stiffens matrix, here represented by
+      // second order tensor
+      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+      };
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
+
+      // get element volume
+      double vol = getVolume();
+
+      // get intergrayion weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get derivatives of base functions on rows
+      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+      const int row_nb_base_fun = row_data.getN().size2();
+
+      // Elastic stiffness tensor (4th rank tensor with minor and major
+      // symmetry)
+      auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+      auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
+
+      auto t_eshelby_stress =
+          getFTensor2FromMat<3, 3>(*dataAtPts->eshelbyStressMat);
+      // auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+      auto &det_H = *dataAtPts->detHVec;
+
+      // iterate over integration points
+      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+        // calculate scalar weight times element volume
+        double a = t_w * vol * det_H[gg];
+
+        const double stress_dho_coef = (rhoN / rho);
+        // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0,
+        // rhoN));
+
+        // iterate over row base functions
+        int rr = 0;
+        for (; rr != nbRows / 3; ++rr) {
+
+          // get sub matrix for the row
+          auto t_m = get_tensor2(K, 3 * rr, 0);
+
+          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+          FTensor::Tensor1<double, 3> t_row_stress;
+          t_row_stress(i) =
+              a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
+
+          // get derivatives of base functions for columns
+          // auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+          auto t_col_base = col_data.getFTensor0N(gg, 0);
+
+          // iterate column base functions
+          for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+            t_m(i, k) +=
+                t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
+            // move to next column base function
+            ++t_col_base;
+
+            // move to next block of local stiffens matrix
+            ++t_m;
+          }
+
+          // move to next row base function
+          ++t_row_diff_base;
+        }
+
+        for (; rr != row_nb_base_fun; ++rr)
+          ++t_row_diff_base;
+
+        // move to next integration weight
+        ++t_w;
+        ++t_eshelby_stress;
+        ++t_invH;
+        ++rho;
+        ++t_grad_rho;
       }
 
       MoFEMFunctionReturn(0);

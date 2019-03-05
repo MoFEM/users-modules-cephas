@@ -1,5 +1,11 @@
 /*! \page poisson_tut1 Solving the Poisson equation
 
+\note The purpose of this tutorial is to show in detail
+how the most basic PDE, the Poisson equation, can be solved using MoFEM. 
+If the reader would prefer, instead, to start from an application to a
+solid mechanics problem, he/she might leave this tutorial for later and 
+proceed directly to \ref simple_elasticity_1 and \ref elasticity_mixed_formulation.
+
 This tutorial shows how to solve Poisson equation. We introduce the basic
 concepts in MoFEM and exploiting MoFEM::Simple interface to set-up problem. A
 procedure is applied to the Poisson problem but easily can be modified to other

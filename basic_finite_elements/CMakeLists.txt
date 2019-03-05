@@ -25,10 +25,7 @@ set(BFE_DIRS
   hierarchical_approximation)
 
 function(bfe_install bfe_mod_dir)
-  install(
-    DIRECTORY
-    ${PROJECT_SOURCE_DIR}/basic_finite_elements/${bfe_mod_dir} 
-    DESTINATION
+§    DESTINATION
     ${CMAKE_INSTALL_PREFIX}
     FILES_MATCHING
     PATTERN "README"

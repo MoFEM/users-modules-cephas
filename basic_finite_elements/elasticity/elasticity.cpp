@@ -67,7 +67,6 @@ using namespace std;
 namespace po = boost::program_options;
 
 #include <Hooke.hpp>
-
 using namespace boost::numeric;
 
 static char help[] = "-my_block_config set block data\n"
@@ -75,9 +74,13 @@ static char help[] = "-my_block_config set block data\n"
 
 struct BlockOptionData {
   int oRder;
+  int iD;
   double yOung;
   double pOisson;
   double initTemp;
+
+  Range tRis;
+
   BlockOptionData() : oRder(-1), yOung(-1), pOisson(-2), initTemp(0) {}
 };
 
@@ -108,13 +111,13 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
 
-    CHKERR PetscOptionsInt("-my_order", "default approximation order", "", 2,
-                           &order, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_order", "default approximation order", "",
+                           order, &order, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
-                            "", PETSC_FALSE, &is_partitioned, PETSC_NULL);
+                            "process keeps only one part of the mesh)",
+                            "", is_partitioned, &is_partitioned, PETSC_NULL);
 
     CHKERR PetscOptionsString("-my_block_config", "elastic configure file name",
                               "", "block_conf.in", block_config_file, 255,
@@ -123,7 +126,7 @@ int main(int argc, char *argv[]) {
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
 
-    // Throw error if file with mesh is not give
+    // Throw error if file with mesh is not provided
     if (flg_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
@@ -142,11 +145,10 @@ int main(int argc, char *argv[]) {
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, moab_comm_world);
 
-    // Read whole mesh or part of is if partitioned
+    // Read whole mesh or part of it if partitioned
     if (is_partitioned == PETSC_TRUE) {
-      // This is a case of distributed mesh and algebra. In that case each
-      // processor
-      // keep only part of the problem.
+      // This is a case of distributed mesh and algebra. In this case each
+      // processor keeps only one part of the problem.
       const char *option;
       option = "PARALLEL=READ_PART;"
                "PARALLEL_RESOLVE_SHARED_ENTS;"
@@ -174,8 +176,7 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_mng_ptr->printMaterialsSet();
 
     // Set bit refinement level to all entities (we do not refine mesh in this
-    // example
-    // so all entities have the same bit refinement level)
+    // example so all entities have the same bit refinement level)
     BitRefLevel bit_level0;
     bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
@@ -191,20 +192,20 @@ int main(int argc, char *argv[]) {
 
     // Declare problem
 
-    // Add entities (by tets) to the field ( all entities in the mesh, root_set
+    // Add entities (by tets) to the field (all entities in the mesh, root_set
     // = 0 )
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
-    // Set apportion order.
-    // See Hierarchic Finite Element Bases on Unstructured Tetrahedral Meshes.
+    // Set approximation order.
+    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral Meshes.
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
 
     // Set order of approximation of geometry.
-    // Apply 2nd order only on skin (or in in whole body)
+    // Apply 2nd order only on skin (or in whole body)
     auto setting_second_order_geometry = [&m_field]() {
       MoFEMFunctionBegin;
       // Setting geometry order everywhere
@@ -224,6 +225,7 @@ int main(int argc, char *argv[]) {
 
       CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+
       MoFEMFunctionReturn(0);
     };
     CHKERR setting_second_order_geometry();
@@ -356,6 +358,22 @@ int main(int argc, char *argv[]) {
                                       "DISPLACEMENT", "MESH_NODE_POSITIONS",
                                       false, true);
 
+    // Add spring boundary condition applied on surfaces.
+    // This is only declaration not implementation.
+    CHKERR MetaSpringBC::addSpringElements(m_field, "DISPLACEMENT",
+                                           "MESH_NODE_POSITIONS");
+
+    // Implementation of spring element
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    CHKERR MetaSpringBC::setSpringOperators(m_field, fe_spring_lhs_ptr,
+                                            fe_spring_rhs_ptr, "DISPLACEMENT",
+                                            "MESH_NODE_POSITIONS");
+
     // Add body force element. This is only declaration of element. not its
     // implementation.
     CHKERR m_field.add_finite_element("BODY_FORCE");
@@ -414,7 +432,7 @@ int main(int argc, char *argv[]) {
           "ELASTIC", "DISPLACEMENT", "TEMP");
     }
 
-    // All is declared, at that point build fields first,
+    // All is declared, at this point build fields first,
     CHKERR m_field.build_fields();
     // If 10-node test are on the mesh, use mid nodes to set HO-geometry. Class
     // Projection10NodeCoordsOnField
@@ -457,6 +475,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // Add elements to DM manager
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+    CHKERR DMMoFEMAddElement(dm, "SPRING");
     CHKERR DMMoFEMAddElement(dm, "BODY_FORCE");
     CHKERR DMMoFEMAddElement(dm, "FLUID_PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
@@ -473,6 +492,10 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix(dm, &Aij);
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
+    // Assign global matrix/vector contributed by springs
+    fe_spring_lhs_ptr->ksp_B = Aij;
+    fe_spring_rhs_ptr->ksp_f = F;
+
     // Zero vectors and matrices
     CHKERR VecZeroEntries(F);
     CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
@@ -484,8 +507,7 @@ int main(int argc, char *argv[]) {
     CHKERR MatZeroEntries(Aij);
 
     // This controls how kinematic constrains are set, by blockset or nodeset.
-    // Cubit
-    // sets kinetic boundary conditions by blockset.
+    // Cubit sets kinetic boundary conditions by blockset.
     bool flag_cubit_disp = false;
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, NODESET | DISPLACEMENTSET, it)) {
@@ -526,6 +548,9 @@ int main(int argc, char *argv[]) {
     // of particular dirichlet_bc.
     CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
     // Set values from D0 on the field (on the mesh)
+
+    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToLocalVector(dm, D0, INSERT_VALUES, SCATTER_REVERSE);
 
     // Calculate residual forces as result of applied kinematic constrains. Run
@@ -543,6 +568,10 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Calculate stiffness matrix  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_lhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
+
+    // Assemble springs
+    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_lhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_rhs_ptr);
 
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
@@ -820,6 +849,7 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
       // Post-process results
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
       CHKERR post_proc.writeFile("out.h5m");
@@ -831,9 +861,9 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
 
       Vec v_energy;
-      CHKERR HookeElement::calculateEnergy(
-          dm, block_sets_ptr, "DISPLACEMENT", "MESH_NODE_POSITIONS", false,
-          true, &v_energy);
+      CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "DISPLACEMENT",
+                                           "MESH_NODE_POSITIONS", false, true,
+                                           &v_energy);
 
       // Print elastic energy
       const double *eng_ptr;

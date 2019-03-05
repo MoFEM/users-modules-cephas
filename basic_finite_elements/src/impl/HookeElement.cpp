@@ -149,6 +149,7 @@ MoFEMErrorCode HookeElement::OpCalculateEnergy::doWork(int row_side,
         a *= det_H[gg];
       }
       energy_ptr[0] += a * t_energy;
+      ++t_energy;
       ++t_w;
     }
     CHKERR VecRestoreArray(ghostVec, &energy_ptr);

@@ -136,6 +136,11 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_finite_element("ELASTIC");
       CHKERR m_field.add_finite_element("ARC_LENGTH");
 
+      // Add spring boundary condition applied on surfaces.
+      // This is only declaration not implementation.
+      CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
+                                             "MESH_NODE_POSITIONS");
+
       // Define rows/cols and element data
       CHKERR m_field.modify_finite_element_add_field_row("ELASTIC",
                                                          "SPATIAL_POSITION");
@@ -168,6 +173,9 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
                                                        "ARC_LENGTH");
 
+      CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
+                                                       "SPRING");
+
       // set refinement level for problem
       CHKERR m_field.modify_problem_ref_level_add_bit("ELASTIC_MECHANICS",
                                                       problem_bit_level);
@@ -191,7 +199,7 @@ int main(int argc, char *argv[]) {
           CHKERR m_field.get_moab().add_entities(lambda_meshset,
                                                  range_no_field_vertex);
         }
-        // this entity will carray data for this finite element
+        // this entity will carry data for this finite element
         EntityHandle meshset_fe_arc_length;
         {
           CHKERR moab.create_meshset(MESHSET_SET, meshset_fe_arc_length);
@@ -246,6 +254,17 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
                                                        "FORCE_FE");
     }
+
+    // Implementation of spring element
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    CHKERR MetaSpringBC::setSpringOperators(
+        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS");
 
     PetscBool linear;
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
@@ -561,6 +580,10 @@ int main(int argc, char *argv[]) {
     snes_ctx.get_preProcess_to_do_Rhs().push_back(&pre_post_method);
     loops_to_do_Rhs.push_back(
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
+
+    loops_to_do_Rhs.push_back(
+        SnesCtx::PairNameFEMethodPtr("SPRING", fe_spring_rhs_ptr.get()));
+
     // surface forces and pressures
     loops_to_do_Rhs.push_back(
         SnesCtx::PairNameFEMethodPtr("NEUMANN_FE", &fe_neumann));
@@ -610,6 +633,10 @@ int main(int argc, char *argv[]) {
     snes_ctx.get_preProcess_to_do_Mat().push_back(my_dirichlet_bc);
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
+
+    loops_to_do_Mat.push_back(
+        SnesCtx::PairNameFEMethodPtr("SPRING", fe_spring_lhs_ptr.get()));
+
     loops_to_do_Mat.push_back(
         SnesCtx::PairNameFEMethodPtr("NEUMANN_FE", &fe_neumann));
     loops_to_do_Mat.push_back(
@@ -671,6 +698,7 @@ int main(int argc, char *argv[]) {
       CHKERR arc_ctx->setS(step_size);
       CHKERR arc_ctx->setAlphaBeta(0, 1);
     }
+
     CHKERR SnesRhs(snes, D, F, &snes_ctx);
 
     Vec D0, x00;
