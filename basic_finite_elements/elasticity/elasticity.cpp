@@ -102,6 +102,7 @@ int main(int argc, char *argv[]) {
     PetscBool flg_block_config, flg_file;
     char mesh_file_name[255];
     char block_config_file[255];
+    PetscInt test_nb = 0;
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
 
@@ -113,6 +114,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsInt("-my_order", "default approximation order", "",
                            order, &order, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "",
+                           test_nb, &test_nb, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -857,7 +861,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Calculate elastic energy
-    auto calculate_strain_energy = [dm, &block_sets_ptr]() {
+    auto calculate_strain_energy = [dm, &block_sets_ptr, test_nb]() {
       MoFEMFunctionBegin;
 
       Vec v_energy;
@@ -869,10 +873,25 @@ int main(int argc, char *argv[]) {
       const double *eng_ptr;
       CHKERR VecGetArrayRead(v_energy, &eng_ptr);
       PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n", *eng_ptr);
+
+      switch (test_nb) {
+      case 1:
+        if (fabs(*eng_ptr - 17.129) > 1e-3)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+        break;
+      case 2:
+        if (fabs(*eng_ptr - 5.6475e-03) > 1e-3)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+        break;
+
+      default:
+        break;
+      }
+
       CHKERR VecRestoreArrayRead(v_energy, &eng_ptr);
-
       CHKERR VecDestroy(&v_energy);
-
       MoFEMFunctionReturn(0);
     };
     CHKERR calculate_strain_energy();
