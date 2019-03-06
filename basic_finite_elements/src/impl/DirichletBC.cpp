@@ -21,12 +21,10 @@ using namespace MoFEM;
 using namespace boost::numeric;
 
 auto set_numered_dofs_on_ents =
-    [](const string &field_name, const Problem *problem_ptr, Range &ents,
+    [](const Problem *problem_ptr, const string &field_name, Range &ents,
        boost::function<MoFEMErrorCode(
-           const boost::shared_ptr<MoFEM::NumeredDofEntity> dof,
-           map<DofIdx, FieldData> &mapZeroRows)>
-           for_each_dof,
-       auto &mapZeroRows) {
+           const boost::shared_ptr<MoFEM::NumeredDofEntity> &dof)>
+           for_each_dof) {
       MoFEMFunctionBegin;
 
       for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit) {
@@ -40,7 +38,7 @@ auto set_numered_dofs_on_ents =
                               field_name, eit->second, MAX_DOFS_ON_ENTITY));
         for (; lo_dit != hi_dit; ++lo_dit) {
           auto &dof = *lo_dit;
-          CHKERR for_each_dof(dof, mapZeroRows);
+          CHKERR for_each_dof(dof);
         }
       }
 
@@ -100,7 +98,7 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
           ents.insert(_nodes.begin(), _nodes.end());
         }
 
-        auto for_each_dof = [&](auto dof, auto mapZeroRows) {
+        auto for_each_dof = [&](auto &dof) {
           MoFEMFunctionBeginHot;
 
           if (dof->getEntType() == MBVERTEX) {
@@ -126,8 +124,8 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
           }
           MoFEMFunctionReturnHot(0);
         };
-        CHKERR set_numered_dofs_on_ents(fieldName, problemPtr, ents,
-                                        for_each_dof, mapZeroRows);
+        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                        for_each_dof);
       }
     }
     dofsIndices.resize(mapZeroRows.size());
@@ -470,7 +468,7 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
           ents.insert(_nodes.begin(), _nodes.end());
         }
 
-        auto for_each_dof = [&](auto dof, auto mapZeroRows) {
+        auto for_each_dof = [&](auto &dof) {
           MoFEMFunctionBeginHot;
 
           if (dof->getEntType() == MBVERTEX) {
@@ -481,8 +479,8 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
           MoFEMFunctionReturnHot(0);
         };
 
-        CHKERR set_numered_dofs_on_ents(fieldName, problemPtr, ents,
-                                        for_each_dof, mapZeroRows);
+        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                        for_each_dof);
       }
     }
     dofsIndices.resize(mapZeroRows.size());
@@ -628,7 +626,7 @@ MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
             CHKERR mField.get_moab().get_connectivity(ents, nodes, true);
             ents.insert(nodes.begin(), nodes.end());
           }
-          auto for_each_dof = [&](auto dof, auto mapZeroRows) {
+          auto for_each_dof = [&](auto &dof) {
             MoFEMFunctionBeginHot;
             if (dof->getEntType() == MBVERTEX) {
               if (dof->getDofCoeffIdx() == 0) {
@@ -653,8 +651,8 @@ MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
             }
             MoFEMFunctionReturnHot(0);
           };
-          CHKERR set_numered_dofs_on_ents(fieldName, problemPtr, ents,
-                                          for_each_dof, mapZeroRows);
+          CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                          for_each_dof);
         }
       }
     }
@@ -701,35 +699,36 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
             CHKERR mField.get_moab().get_connectivity(ents, nodes, true);
             ents.insert(nodes.begin(), nodes.end());
           }
-  
-          auto for_each_dof = [&](auto dof, auto mapZeroRows) {
-              MoFEMFunctionBeginHot;
-                    if (dof->getEntType() == MBVERTEX) {
-                if (dof->getDofCoeffIdx() == 0 && mydata[3]) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-                }
-                if (dof->getDofCoeffIdx() == 1 && mydata[4]) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[1];
-                }
-                if (dof->getDofCoeffIdx() == 2 && mydata[5]) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[2];
-                }
-              } else {
-                if (dof->getDofCoeffIdx() == 0 && mydata[3]) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-                }
-                if (dof->getDofCoeffIdx() == 1 && mydata[4]) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-                }
-                if (dof->getDofCoeffIdx() == 2 && mydata[5]) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-                }
+
+          auto for_each_dof = [&](auto &dof) {
+            MoFEMFunctionBeginHot;
+            if (dof->getEntType() == MBVERTEX) {
+
+              if (dof->getDofCoeffIdx() == 0 && mydata[3]) {
+                mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
               }
-              MoFEMFunctionReturnHot(0);
+              if (dof->getDofCoeffIdx() == 1 && mydata[4]) {
+                mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[1];
+              }
+              if (dof->getDofCoeffIdx() == 2 && mydata[5]) {
+                mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[2];
+              }
+            } else {
+              if (dof->getDofCoeffIdx() == 0 && mydata[3]) {
+                mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              }
+              if (dof->getDofCoeffIdx() == 1 && mydata[4]) {
+                mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              }
+              if (dof->getDofCoeffIdx() == 2 && mydata[5]) {
+                mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              }
+            }
+            MoFEMFunctionReturnHot(0);
           };
 
-          CHKERR set_numered_dofs_on_ents(fieldName, problemPtr, ents,
-                                          for_each_dof, mapZeroRows);
+          CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                          for_each_dof);
         }
       }
     }
@@ -785,14 +784,14 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
       verts.insert(nodes.begin(), nodes.end());
     }
 
-    auto for_each_dof = [&](auto dof, auto mapZeroRows) {
+    auto for_each_dof = [&](auto &dof) {
       MoFEMFunctionBeginHot;
       reaction_vec[dof->getDofCoeffIdx()] += array[dof->getPetscLocalDofIdx()];
       MoFEMFunctionReturnHot(0);
     };
-    map<DofIdx, FieldData> full_map;
-    CHKERR set_numered_dofs_on_ents(fieldName, problem_ptr, verts,
-                                    for_each_dof, full_map);
+
+    CHKERR set_numered_dofs_on_ents(problem_ptr, fieldName, verts,
+                                    for_each_dof);
 
     double *res_array;
 
