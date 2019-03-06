@@ -131,11 +131,10 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
     int ii = 0;
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
+    auto mit = mapZeroRows.begin();
     for (; mit != mapZeroRows.end(); mit++, ii++) {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
-      // std::cerr << dofsIndices[ii] << " " << dofsValues[ii] << std::endl;
     }
   }
   MoFEMFunctionReturn(0);
@@ -220,10 +219,21 @@ MoFEMErrorCode DirichletDisplacementBc::postProcess() {
   case CTX_SNESSETFUNCTION: {
     if (!dofsIndices.empty()) {
       dofsXValues.resize(dofsIndices.size());
-      CHKERR VecGetValues(
-          snes_x, dofsIndices.size(),
-          dofsIndices.empty() ? PETSC_NULL : &*dofsIndices.begin(),
-          dofsXValues.empty() ? PETSC_NULL : &*dofsXValues.begin());
+      const double *a_snes_x;
+      CHKERR VecGetArrayRead(snes_x, &a_snes_x);
+      auto &dofs_by_glob_idx =
+          problemPtr->getNumeredDofsCols()->get<PetscGlobalIdx_mi_tag>();
+      int idx = 0;
+      for (auto git : dofsIndices) {
+        auto dof_it = dofs_by_glob_idx.find(git);
+        if (dof_it != dofs_by_glob_idx.end()) {
+          dofsXValues[idx] = a_snes_x[dof_it->get()->getPetscLocalDofIdx()];
+          ++idx;
+        } else
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                   "Dof with global %d id not found", git);
+      }
+      CHKERR VecRestoreArrayRead(snes_x, &a_snes_x);
     }
     CHKERR VecAssemblyBegin(snes_f);
     CHKERR VecAssemblyEnd(snes_f);
@@ -362,76 +372,80 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
       CHKERR MethodForForceScaling::applyScale(this, methodsOp,
                                                bc_it.scaled_values);
       for (int dim = 0; dim < 3; dim++) {
-        for (Range::iterator eit = bc_it.bc_ents[dim].begin();
-             eit != bc_it.bc_ents[dim].end(); eit++) {
-          for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-                   problemPtr, fieldName, *eit, mField.get_comm_rank(),
-                   dof_ptr)) {
-            const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
-            if (dof->getEntType() == MBVERTEX) {
-              EntityHandle node = dof->getEnt();
-              cOords.resize(3);
-              // find material nodal positions,
-              DofEntity_multiIndex::index<
-                  Composite_Name_And_Ent_mi_tag>::type::iterator mdit,
-                  hi_mdit;
-              mdit = dofs_ptr->get<Composite_Name_And_Ent_mi_tag>().lower_bound(
-                  boost::make_tuple(materialPositions, *eit));
-              hi_mdit =
-                  dofs_ptr->get<Composite_Name_And_Ent_mi_tag>().upper_bound(
-                      boost::make_tuple(materialPositions, *eit));
-              if (mdit == hi_mdit) {
-                // set coordinates form coords in MoAB
-                CHKERR mField.get_moab().get_coords(&node, 1,
-                                                    &*cOords.data().begin());
-              } else {
-                // set coordinates from field values
-                for (; mdit != hi_mdit; mdit++) {
-                  cOords[mdit->get()->getDofCoeffIdx()] =
-                      mdit->get()->getFieldData();
-                }
-              }
-              if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] =
-                    cOords[0] + bc_it.scaled_values[0];
-              }
-              if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] =
-                    cOords[1] + bc_it.scaled_values[1];
-              }
-              if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] =
-                    cOords[2] + bc_it.scaled_values[2];
-              }
+
+        auto for_each_dof = [&](auto &dof) {
+          MoFEMFunctionBeginHot;
+
+          if (dof->getEntType() == MBVERTEX) {
+            EntityHandle node = dof->getEnt();
+            cOords.resize(3);
+            // find material nodal positions,
+            DofEntity_multiIndex::index<
+                Composite_Name_And_Ent_mi_tag>::type::iterator mdit,
+                hi_mdit;
+            mdit = dofs_ptr->get<Composite_Name_And_Ent_mi_tag>().lower_bound(
+                boost::make_tuple(materialPositions, node));
+            hi_mdit =
+                dofs_ptr->get<Composite_Name_And_Ent_mi_tag>().upper_bound(
+                    boost::make_tuple(materialPositions, node));
+            if (mdit == hi_mdit) {
+              // set coordinates form coords in MoAB
+              CHKERR mField.get_moab().get_coords(&node, 1,
+                                                  &*cOords.data().begin());
             } else {
-              if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
-              }
-              if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
-              }
-              if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+              // set coordinates from field values
+              for (; mdit != hi_mdit; mdit++) {
+                cOords[mdit->get()->getDofCoeffIdx()] =
+                    mdit->get()->getFieldData();
               }
             }
-          }
-          // set boundary values to field data
-          for (std::vector<std::string>::iterator fit = fixFields.begin();
-               fit != fixFields.end(); fit++) {
-            for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-                     problemPtr, *fit, *eit, mField.get_comm_rank(), dof_ptr)) {
-              const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
+
+            if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
+              mapZeroRows[dof->getPetscGlobalDofIdx()] =
+                  cOords[0] + bc_it.scaled_values[0];
+            }
+            if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
+              mapZeroRows[dof->getPetscGlobalDofIdx()] =
+                  cOords[1] + bc_it.scaled_values[1];
+            }
+            if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
+              mapZeroRows[dof->getPetscGlobalDofIdx()] =
+                  cOords[2] + bc_it.scaled_values[2];
+            }
+          } else {
+            if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
+              mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+            }
+            if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
+              mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+            }
+            if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
             }
           }
+
+          MoFEMFunctionReturnHot(0);
+        };
+        // set boundary values to field data
+        auto set_boundary_values_to_field = [&](auto &dof) {
+          MoFEMFunctionBeginHot;
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+          MoFEMFunctionReturnHot(0);
+        };
+
+        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName,
+                                        bc_it.bc_ents[dim], for_each_dof);
+
+        for (auto &fit : fixFields) {
+          CHKERR set_numered_dofs_on_ents(problemPtr, fit, bc_it.bc_ents[dim],
+                                          set_boundary_values_to_field);
         }
       }
     }
-
     // set vector of values and indices
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
+    auto mit = mapZeroRows.begin();
     for (int ii = 0; mit != mapZeroRows.end(); mit++, ii++) {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
@@ -511,8 +525,7 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
     int ii = 0;
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-    for (; mit != mapZeroRows.end(); mit++, ii++) {
+    for (auto mit = mapZeroRows.begin(); mit != mapZeroRows.end(); ++mit, ++ii) {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
     }
@@ -659,8 +672,8 @@ MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
     int ii = 0;
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-    for (; mit != mapZeroRows.end(); mit++, ii++) {
+    for (auto mit = mapZeroRows.begin(); mit != mapZeroRows.end();
+         mit++, ii++) {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
     }
@@ -735,8 +748,8 @@ MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
     int ii = 0;
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-    for (; mit != mapZeroRows.end(); mit++, ii++) {
+    for (auto mit = mapZeroRows.begin(); mit != mapZeroRows.end();
+         mit++, ii++) {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
     }
