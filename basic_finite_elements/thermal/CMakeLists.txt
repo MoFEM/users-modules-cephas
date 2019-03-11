@@ -13,6 +13,12 @@
 
 bfe_build_and_install(thermal_steady ${CMAKE_CURRENT_SOURCE_DIR}/thermal_steady.cpp)
 
+file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+
 if(${GROUND_SURFACE_TEMPERATURE})
   # FIXME: That will not always work if is installed in external directory
   include_directories("${PROJECT_SOURCE_DIR}/ground_surface_temperature/src")
