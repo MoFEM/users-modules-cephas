@@ -525,7 +525,8 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
     int ii = 0;
-    for (auto mit = mapZeroRows.begin(); mit != mapZeroRows.end(); ++mit, ++ii) {
+    for (auto mit = mapZeroRows.begin(); mit != mapZeroRows.end();
+         ++mit, ++ii) {
       dofsIndices[ii] = mit->first;
       dofsValues[ii] = mit->second;
     }
@@ -812,7 +813,6 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
     for (int dd = 0; dd != reaction_vec.size(); ++dd)
       res_array[dd] = reaction_vec[dd];
     CHKERR VecRestoreArray(v, &res_array);
-
 
     CHKERR VecGetArray(v, &res_array);
     for (int dd = 0; dd != reaction_vec.size(); ++dd)
