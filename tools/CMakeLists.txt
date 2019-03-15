@@ -104,6 +104,19 @@ target_link_libraries(delete_ho_nodes
 )
 install(TARGETS delete_ho_nodes DESTINATION bin)
 
+add_executable(meshset_to_vtk ${CMAKE_CURRENT_SOURCE_DIR}/meshset_to_vtk.cpp)
+target_link_libraries(meshset_to_vtk
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS meshset_to_vtk DESTINATION bin)
+
 if(ADOL-C_LIBRARY)
 
   include_directories(

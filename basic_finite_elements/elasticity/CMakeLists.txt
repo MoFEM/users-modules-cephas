@@ -15,6 +15,12 @@
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elastic_materials/src)
 
+file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+
 bfe_build_and_install(elasticity
   ${CMAKE_CURRENT_SOURCE_DIR}/elasticity.cpp)
 
