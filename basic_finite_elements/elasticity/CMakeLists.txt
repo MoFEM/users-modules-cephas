@@ -30,7 +30,14 @@ add_test(ElasticityTest
  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m
  -ksp_type cg -pc_type asm -sub_pc_type lu
- -ksp_monitor -log_view)
+ -ksp_monitor -log_view -is_atom_test 1)
+
+add_test(ElasticityDirichletOnPartition
+ ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+ ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+ -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape2PartsDirich.h5m
+ -ksp_type cg -pc_type asm -sub_pc_type lu
+ -ksp_monitor -log_view -my_is_partitioned -is_atom_test 2)
 
 add_test(MultiGridViaOrderSolver
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
