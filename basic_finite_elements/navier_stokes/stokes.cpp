@@ -22,7 +22,7 @@
  *
  * */
 #include <BasicFiniteElements.hpp>
-#include <NavierStokesOperators.hpp>
+#include <NavierStokesElement.hpp>
 
 using namespace boost::numeric;
 using namespace MoFEM;
@@ -209,7 +209,7 @@ int main(int argc, char *argv[]) {
     // setup the DM
     CHKERR DMSetUp(dm);
 
-    DataAtIntegrationPts commonData(m_field);
+    NavierStokesElement::DataAtIntegrationPts commonData(m_field);
     CHKERR commonData.getParameters();
 
     boost::shared_ptr<FEMethod> nullFE;
@@ -218,8 +218,10 @@ int main(int argc, char *argv[]) {
     //boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs(
     //    new VolumeElementForcesAndSourcesCore(m_field));
 
-    feLhs->getRuleHook = VolRule();
+    feLhs->getRuleHook = NavierStokesElement::VolRule();
     //feRhs->getRuleHook = FaceRule();
+
+    //CHKERR NavierStokesElement::setOperators(feLhs, feRhs, commonData);
 
     PostProcVolumeOnRefinedMesh post_proc(m_field);
 
@@ -229,9 +231,9 @@ int main(int argc, char *argv[]) {
       // feLhs->getOpPtrVector().push_back(
       //     new OpAssembleP(commonData, sit.second));
       feLhs->getOpPtrVector().push_back(
-          new OpAssembleK(commonData, sit.second));
+          new NavierStokesElement::OpAssembleK(commonData, sit.second));
       feLhs->getOpPtrVector().push_back(
-          new OpAssembleG(commonData, sit.second));
+          new NavierStokesElement::OpAssembleG(commonData, sit.second));
 
       post_proc.getOpPtrVector().push_back(
           new OpCalculateScalarFieldValues("P", commonData.pPtr));
