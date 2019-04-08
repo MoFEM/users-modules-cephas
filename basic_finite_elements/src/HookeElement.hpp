@@ -337,12 +337,17 @@ struct HookeElement {
   };
 
   struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
+  protected:
+    boost::shared_ptr<map<int, BlockData>>
+        blockSetsPtr; ///< Structure keeping data about problem, like
+                      ///< material parameters
+    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
     const double rhoN; ///< exponent n in E(p) = E * (p / p_0)^n
     const double rHo0; ///< p_0 reference density in E(p) = E * (p / p_0)^n
                        // // where p is density, E - youngs modulus
-
+  public:
     OpCalculateStiffnessScaledByDensityField(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
@@ -422,11 +427,6 @@ struct HookeElement {
       MoFEMFunctionReturn(0);
     }
 
-  protected:
-    boost::shared_ptr<map<int, BlockData>>
-        blockSetsPtr; ///< Structure keeping data about problem, like
-                      ///< material parameters
-    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
   };
 
   struct OpAssemble : public VolUserDataOperator {
@@ -862,9 +862,10 @@ struct HookeElement {
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
         boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
         const double rho_n, const double rho_0)
-        : rhoAtGaussPtsPtr(rho_at_gauss_pts),
-          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0),
-          OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
+          rhoAtGaussPtsPtr(rho_at_gauss_pts),
+          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n),
+          rHo0(rho_0) {}
 
   protected:
     /**
@@ -978,9 +979,10 @@ struct HookeElement {
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
         boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
         const double rho_n, const double rho_0)
-        : rhoAtGaussPtsPtr(rho_at_gauss_pts),
-          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0),
-          OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
+          rhoAtGaussPtsPtr(rho_at_gauss_pts),
+          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n),
+          rHo0(rho_0) {}
 
   protected:
     /**
