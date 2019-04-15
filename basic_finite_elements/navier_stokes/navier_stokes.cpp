@@ -61,6 +61,7 @@ int main(int argc, char *argv[]) {
     PetscBool flg_load_file;
     int order_p = 2; // default approximation order_p
     int order_u = 3; // default approximation order_u
+    int nb_ho_levels = 0;
 
     int nbSubSteps = 1;        // default number of steps
     double lAmbda0 = 1.0;          // default step size
@@ -82,6 +83,8 @@ int main(int argc, char *argv[]) {
                            &order_p, PETSC_NULL);
     CHKERR PetscOptionsInt("-order_u", "approximation order_u", "", order_u,
                            &order_u, PETSC_NULL);
+    CHKERR PetscOptionsInt("-ho_levels", "number of ho levels", "", nb_ho_levels,
+                           &nb_ho_levels, PETSC_NULL);
     
     CHKERR PetscOptionsInt("-output_prt",
                          "frequncy how often results are dumped on hard disk",
@@ -142,9 +145,9 @@ int main(int argc, char *argv[]) {
     // Print boundary conditions and material parameters
     MeshsetsManager *meshsets_mng_ptr;
     CHKERR m_field.getInterface(meshsets_mng_ptr);
-    CHKERR meshsets_mng_ptr->printDisplacementSet();
-    CHKERR meshsets_mng_ptr->printForceSet();
-    CHKERR meshsets_mng_ptr->printMaterialsSet();
+    //CHKERR meshsets_mng_ptr->printDisplacementSet();
+    //CHKERR meshsets_mng_ptr->printForceSet();
+    //CHKERR meshsets_mng_ptr->printMaterialsSet();
 
     BitRefLevel bit_level0;
     bit_level0.set(0);
@@ -152,7 +155,6 @@ int main(int argc, char *argv[]) {
         0, 3, bit_level0);
 
     // **** ADD FIELDS **** //
-    
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
@@ -172,6 +174,38 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);
     CHKERR m_field.set_field_order(0, MBTRI, "P", order_p);
     CHKERR m_field.set_field_order(0, MBTET, "P", order_p);
+
+    
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 5, "SOLID") == 0) { 
+        Range ents;
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTRI, ents, true);
+
+        std::vector<Range> levels(nb_ho_levels);
+        for (int ll = 0; ll!= nb_ho_levels; ll++) {
+          Range verts;
+          CHKERR m_field.get_moab().get_connectivity(ents, verts, true);
+          for (auto d : {1,2,3}) {
+            CHKERR m_field.get_moab().get_adjacencies(verts, d, false, ents, moab::Interface::UNION);
+          }
+          levels[ll] = subtract(ents, ents.subset_by_type(MBVERTEX));
+        }
+
+        for (int ll = nb_ho_levels-1; ll>=1; ll--) {
+          levels[ll] = subtract(levels[ll], levels[ll-1]);
+        }
+
+        int add_order = 1;
+        for (int ll = nb_ho_levels-1; ll>=0; ll--) {
+          CHKERR m_field.set_field_order(levels[ll], "U", order_u + add_order);
+          CHKERR m_field.set_field_order(levels[ll], "P", order_p + add_order);
+          ++add_order;
+        }
+
+      }
+    }
+
 
     // Set 2nd order of approximation of geometry
     auto setting_second_order_geometry = [&m_field]() {
@@ -472,6 +506,9 @@ int main(int argc, char *argv[]) {
         dirichlet_bc_ptr->ts_t = ss;       
       } else 
         NavierStokesElement::LoadScale::lambda += step_size;
+
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Step: %d | Lambda: %6.4e  \n", ss,
+                          NavierStokesElement::LoadScale::lambda);
       
       dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
       dirichlet_vel_bc_ptr->snes_x = D;
@@ -490,9 +527,9 @@ int main(int argc, char *argv[]) {
       CHKERR SNESGetConvergedReason(snes, &snes_reason);
       int its;
       CHKERR SNESGetIterationNumber(snes, &its);
-      CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                        "%s Number of nonlinear iterations = %D\n",
-                        SNESConvergedReasons[snes_reason], its);
+      //CHKERR PetscPrintf(PETSC_COMM_WORLD,
+      //                  "%s Number of nonlinear iterations = %D\n",
+      //                    SNESConvergedReasons[snes_reason], its);
       // adaptivity
 
       if (snes_reason < 0) {
@@ -585,8 +622,7 @@ int main(int argc, char *argv[]) {
         cout << "total drag: " << totalDrag << endl;                             
       }
 
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Step: %d | Lambda: %6.4e  \n", ss,
-                          NavierStokesElement::LoadScale::lambda);
+      
     }
 
     // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);

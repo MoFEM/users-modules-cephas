@@ -197,9 +197,9 @@ struct NavierStokesElement {
     int operator()(int order_row, int order_col, int order_data) const {
       // return order_row < order_col ? 2 * order_col - 1
       //                   : 2 * order_row - 1;
-      //return 2 * (p - 1); 
-      return order_row < order_col ? 3 * order_col 
-                         : 3 * order_row;
+      return 2 * order_data; 
+      //return order_row < order_col ? 3 * order_col - 1
+      //                   : 3 * order_row - 1;
     }
   };
 
@@ -1044,8 +1044,15 @@ struct OpPostProcVorticity
       commonData.getBlockData(dAta);
 
       Tag th_vorticity;
+      Tag th_q;
+      Tag th_l2;
       CHKERR postProcMesh.tag_get_handle("VORTICITY", 3, MB_TYPE_DOUBLE, th_vorticity,
                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+      CHKERR postProcMesh.tag_get_handle("Q", 1, MB_TYPE_DOUBLE, th_q,
+                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+      CHKERR postProcMesh.tag_get_handle("L2", 1, MB_TYPE_DOUBLE, th_l2,
+                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+                            
 
       auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData.gradDispPtr);
       //auto p = getFTensor0FromVec(*commonData.pPtr);
@@ -1056,32 +1063,107 @@ struct OpPostProcVorticity
       //const double lambda = commonData.lAmbda;
       //const double mu = commonData.mU;
 
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'j', 3> k;
+      //FTensor::Index<'i', 3> i;
+      //FTensor::Index<'j', 3> j;
+      //FTensor::Index<'j', 3> k;
       FTensor::Tensor1<double, 3> vorticity;
+      //FTensor::Tensor2<double,3,3> t_s;
+      double q;
+      double l2;
       //FTensor::Tensor2<double, 3, 3> stress;
+      MatrixDouble S;
+      MatrixDouble Omega;
+      MatrixDouble M;
+
+      S.resize(3, 3);
+      Omega.resize(3, 3);
+      M.resize(3, 3);
+
 
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        //strain(i, j) = 0.5 * (grad(i, j) + grad(j, i));
-        //double trace = strain(i, i);
-        //double psi = 0.5 * p * p + mu * strain(i, j) * strain(i, j);
 
-        //stress(i, j) = 2 * mu * strain(i, j);
-        //stress(1, 1) -= p;
-        //stress(0, 0) -= p;
-        //stress(2, 2) -= p;
-
-        //vorticity(j) = FTensor::levi_civita(i, j, k) * t_u_grad(k, i);
         vorticity(0) = t_u_grad(2, 1) - t_u_grad(1, 2);
         vorticity(1) = t_u_grad(0, 2) - t_u_grad(2, 0);
         vorticity(2) = t_u_grad(1, 0) - t_u_grad(0, 1);
+
+        q = 0;
+        for (int i = 0; i != 3; i++) {
+          for (int j = 0; j != 3; j++) {
+            q += -0.5 * t_u_grad(i, j) * t_u_grad(j, i);
+          }
+        }
+        for (int i = 0; i != 3; i++) {
+          for (int j = 0; j != 3; j++) {
+            S(i, j)     = 0.5 * (t_u_grad(i, j) + t_u_grad(j, i));
+            Omega(i, j) = 0.5 * (t_u_grad(i, j) - t_u_grad(j, i));
+            M(i,j) = 0.0;
+          }
+        }
+
+        for (int i = 0; i != 3; i++) {
+          for (int j = 0; j != 3; j++) {
+            for (int k = 0; k != 3; k++) {
+              M(i, j) += S(i, k) * S(k, j) + Omega(i, k) * Omega(k, j);
+            }
+          }
+        }
+
+        MatrixDouble eigen_vectors = M;
+        VectorDouble eigen_values(3);
+
+        // LAPACK - eigenvalues and vectors. Applied twice for initial creates
+        // memory space
+        int n = 3, lda = 3, info, lwork = -1;
+        double wkopt;
+        info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
+                            &(eigen_values.data()[0]), &wkopt, lwork);
+        if (info != 0)
+          SETERRQ1(PETSC_COMM_SELF, 1,
+                  "is something wrong with lapack_dsyev info = %d", info);
+        lwork = (int)wkopt;
+        double work[lwork];
+        info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
+                            &(eigen_values.data()[0]), work, lwork);
+        if (info != 0)
+          SETERRQ1(PETSC_COMM_SELF, 1,
+                  "is something wrong with lapack_dsyev info = %d", info);
+
+        map<double, int> eigen_sort;
+        eigen_sort[eigen_values[0]] = 0;
+        eigen_sort[eigen_values[1]] = 1;
+        eigen_sort[eigen_values[2]] = 2;
+
+        //prin_stress_vect.clear();
+        VectorDouble prin_vals_vect(3);
+        prin_vals_vect.clear();
+
+        int ii = 0;
+        for (map<double, int>::reverse_iterator mit = eigen_sort.rbegin();
+            mit != eigen_sort.rend(); mit++) {
+          prin_vals_vect[ii] = eigen_values[mit->second];
+          // for (int dd = 0; dd != 3; dd++) {
+          //   prin_stress_vect(ii, dd) = eigen_vectors.data()[3 * mit->second + dd];
+          // }
+          ii++;
+        }
+
+        l2 = prin_vals_vect[1];
+        //cout << prin_vals_vect << endl;
+        //cout << "-0.5 sum: " << -0.5 * (prin_vals_vect[0] + prin_vals_vect[1] + prin_vals_vect[2]) << endl;
+        //cout << "q: " << q << endl;
+
+        //t_s(i,j) = 0.5*(t)
+
         // vorticity(0) = t_u_grad(1, 2) - t_u_grad(2, 1);
         // vorticity(1) = t_u_grad(2, 0) - t_u_grad(0, 2);
         // vorticity(2) = t_u_grad(0, 1) - t_u_grad(1, 0);
 
         CHKERR postProcMesh.tag_set_data(th_vorticity, &mapGaussPts[gg], 1,
                                         &vorticity(0));
+        CHKERR postProcMesh.tag_set_data(th_q, &mapGaussPts[gg], 1,
+                                        &q);
+        CHKERR postProcMesh.tag_set_data(th_l2, &mapGaussPts[gg], 1,
+                                        &l2);
         ++t_u_grad;
       }
 
