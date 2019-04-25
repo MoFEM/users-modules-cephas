@@ -198,10 +198,10 @@ int main(int argc, char *argv[]) {
     CHKERR MatZeroEntries(A);
 
     // analytical Dirichlet bc
-    AnalyticalDirichletBC::DirichletBC analytical_ditihlet_bc(m_field, "TEMP",
-                                                              A, T, F);
+    AnalyticalDirichletBC::DirichletBC analytical_dirichlet_bc(m_field, "TEMP",
+                                                               A, T, F);
 
-    // solve for ditihlet bc dofs
+    // solve for dirichlet bc dofs
     CHKERR analytical_bc.setUpProblem(m_field, "BC_PROBLEM");
 
     boost::shared_ptr<AnalyticalFunction> testing_function =
@@ -209,13 +209,13 @@ int main(int argc, char *argv[]) {
 
     CHKERR analytical_bc.setApproxOps(m_field, "TEMP", testing_function, 0);
     CHKERR analytical_bc.solveProblem(m_field, "BC_PROBLEM", "BC_FE",
-                                      analytical_ditihlet_bc);
+                                      analytical_dirichlet_bc);
 
     CHKERR analytical_bc.destroyProblem();
 
     // preproc
     CHKERR m_field.problem_basic_method_preProcess("TEST_PROBLEM",
-                                                   analytical_ditihlet_bc);
+                                                   analytical_dirichlet_bc);
 
     CHKERR m_field.loop_finite_elements("TEST_PROBLEM", "THERMAL_FE",
                                         thermal_elements.getLoopFeRhs());
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
 
     // postproc
     CHKERR m_field.problem_basic_method_postProcess("TEST_PROBLEM",
-                                                    analytical_ditihlet_bc);
+                                                    analytical_dirichlet_bc);
 
     CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
     CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
 
     // Save data on mesh
     // CHKERR
-    // m_field.problem_basic_method_preProcess("TEST_PROBLEM",analytical_ditihlet_bc);
+    // m_field.problem_basic_method_preProcess("TEST_PROBLEM",analytical_dirichlet_bc);
     CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector(
         "TEST_PROBLEM", ROW, T, ADD_VALUES, SCATTER_REVERSE);
     CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
