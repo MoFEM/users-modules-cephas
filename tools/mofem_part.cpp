@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
 
     {
       Range ents3d;
-      rval = moab.get_entities_by_dimension(0, 3, ents3d, false);
+      CHKERR moab.get_entities_by_dimension(0, 3, ents3d, false);
       if (create_lower_dim_ents) {
         Range faces;
         CHKERR moab.get_adjacencies(ents3d, 2, true, faces,

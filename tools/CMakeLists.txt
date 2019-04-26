@@ -117,6 +117,20 @@ target_link_libraries(meshset_to_vtk
 )
 install(TARGETS meshset_to_vtk DESTINATION bin)
 
+add_executable(uniform_mesh_refinement 
+  ${CMAKE_CURRENT_SOURCE_DIR}/uniform_mesh_refinement.cpp)
+target_link_libraries(uniform_mesh_refinement
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS uniform_mesh_refinement DESTINATION bin)
+
 if(ADOL-C_LIBRARY)
 
   include_directories(
