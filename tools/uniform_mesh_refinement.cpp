@@ -21,7 +21,14 @@
 #include <MoFEM.hpp>
 using namespace MoFEM;
 
-static char help[] = "Uniform mesh refinement\n\n";
+static char help[] =
+    "Uniform mesh refinement\n\n"
+
+    "Usage example:\n"
+
+    "$ ./uniform_mesh_refinement -my_file mesh.h5m -output_file refined_mesh.h5m"
+    
+    "\n\n";
 
 int main(int argc, char *argv[]) {
 
