@@ -23,6 +23,7 @@ add_test(MagnetostaticTest
   -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps 
   -ksp_monitor -my_max_post_proc_ref_level 0 -regression_test 1)
 
+cm_export_file("magnetic_coil.jou" export_files_magenotstatic)
 cm_export_file("magnetic_coil.cub" export_files_magenotstatic)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.cub
   DESTINATION ${BFE_MOD_DIR}
