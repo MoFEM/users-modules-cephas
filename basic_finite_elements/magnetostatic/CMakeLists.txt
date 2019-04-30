@@ -28,3 +28,7 @@ cm_export_file("magnetic_coil.cub" export_files_magenotstatic)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.cub
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
+install(
+  FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.jou
+  DESTINATION ${BFE_MOD_DIR}
+  PERMISSIONS OWNER_READ OWNER_WRITE)  
