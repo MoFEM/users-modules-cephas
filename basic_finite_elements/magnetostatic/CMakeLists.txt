@@ -15,6 +15,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 bfe_build_and_install(
   magnetostatic ${CMAKE_CURRENT_SOURCE_DIR}/magnetostatic.cpp)
+bfe_build_and_install(
+  lorentz_force ${CMAKE_CURRENT_SOURCE_DIR}/lorentz_force.cpp)
 
 add_test(MagnetostaticTest
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
