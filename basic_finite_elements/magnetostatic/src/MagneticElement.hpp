@@ -287,11 +287,10 @@ struct MagneticElement {
   MoFEMErrorCode createProblem() {
     MoFEMFunctionBegin;
     // set up DM
-    DMType dm_name = "MAGNETIC_PROBLEM";
-    CHKERR DMRegister_MoFEM(dm_name);
+    CHKERR DMRegister_MoFEM("DMMOFEM");
     CHKERR DMCreate(PETSC_COMM_WORLD, &blockData.dM);
-    CHKERR DMSetType(blockData.dM, dm_name);
-    CHKERR DMMoFEMCreateMoFEM(blockData.dM, &mField, dm_name,
+    CHKERR DMSetType(blockData.dM, "DMMOFEM");
+    CHKERR DMMoFEMCreateMoFEM(blockData.dM, &mField, "MAGNETIC_PROBLEM",
                               BitRefLevel().set(0));
     CHKERR DMSetFromOptions(blockData.dM);
     // add elements to blockData.dM

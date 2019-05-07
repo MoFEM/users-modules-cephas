@@ -278,7 +278,6 @@ int main(int argc, char *argv[]) {
                     it->getMeshsetId(), block_data[it->getMeshsetId()].oRder);
         Range block_ents;
         CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
-        CHKERRG(rval);
         Range ents_to_set_order;
         CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
                                     moab::Interface::UNION);
@@ -366,10 +365,8 @@ int main(int argc, char *argv[]) {
     if (block_data[it->getMeshsetId()].initTemp != 0) {
       Range block_ents;
       CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
-      CHKERRG(rval);
       Range vertices;
       CHKERR moab.get_connectivity(block_ents, vertices, true);
-      CHKERRG(rval);
       CHKERR m_field.getInterface<FieldBlas>()->setField(
           block_data[it->getMeshsetId()].initTemp, MBVERTEX, vertices, "TEMP");
     }
@@ -534,11 +531,9 @@ int main(int argc, char *argv[]) {
                              &is_partitioned, PETSC_NULL);
   if (is_partitioned) {
     CHKERR moab.write_file("solution.h5m");
-    CHKERRG(rval);
   } else {
     if (pcomm->rank() == 0) {
       CHKERR moab.write_file("solution.h5m");
-      CHKERRG(rval);
     }
   }
 

@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool regression_test = PETSC_FALSE;
 
-    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Shell prism configure",
+    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Magnetostatics options",
                              "none");
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
@@ -63,6 +63,7 @@ int main(int argc, char *argv[]) {
         PETSC_FALSE, &regression_test, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
+    CHKERRG(ierr);
 
     if (is_partitioned == PETSC_TRUE) {
       // Read mesh to MOAB
@@ -91,6 +92,9 @@ int main(int argc, char *argv[]) {
     CHKERR magnetic.solveProblem(regression_test == PETSC_TRUE);
     CHKERR magnetic.postProcessResults();
     CHKERR magnetic.destroyProblem();
+
+    // write solution to file (can be used by lorentz_force example)
+    CHKERR moab.write_file("solution.h5m", "MOAB", "PARALLEL=WRITE_PART");
   }
   CATCH_ERRORS;
 
