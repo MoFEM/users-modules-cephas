@@ -144,13 +144,13 @@ int main(int argc, char *argv[]) {
     const MoFEM::Problem *prb_ptr;
     CHKERR DMMoFEMGetProblemPtr(dm, &prb_ptr);
 
-    CHKERR m_field.getInterface<FieldEvaluatorInterface>()->buildTree3D(
-        "MAGNETIC");
+    FieldEvaluatorInterface *field_eval_ptr;
+    CHKERR m_field.getInterface(field_eval_ptr);
+
+    CHKERR field_eval_ptr->buildTree3D("MAGNETIC");
 
     BoundBox box;
-    CHKERR m_field.getInterface<FieldEvaluatorInterface>()
-        ->getTree()
-        ->get_bounding_box(box);
+    CHKERR m_field.field_eval_ptr->getTree()->get_bounding_box(box);
 
     const double bMin = box.bMin[0];
     const double bMax = box.bMax[0];
@@ -278,16 +278,13 @@ int main(int argc, char *argv[]) {
         std::array<double, 3> point = {t_p(0), t_p(1), t_p(2)};
         data_at_pts->setEvalPoints(point.data(), 1);
 
-        CHKERR m_field.getInterface<FieldEvaluatorInterface>()
-            ->evalFEAtThePoint3D(point.data(), dist, prb_ptr->getName(),
-                                 "MAGNETIC", data_at_pts,
-                                 m_field.get_comm_rank(),
-                                 m_field.get_comm_rank(), MF_EXIST, QUIET);
+        CHKERR field_eval_ptr->evalFEAtThePoint3D(
+            point.data(), dist, prb_ptr->getName(), "MAGNETIC", data_at_pts,
+            m_field.get_comm_rank(), m_field.get_comm_rank(), MF_EXIST, QUIET);
 
 #ifdef DEBUG_TREE
         {
-          auto tree =
-              m_field.getInterface<FieldEvaluatorInterface>()->getTree();
+          auto tree = field_eval_ptr->getTree();
           std::vector<EntityHandle> leafs_out;
           CHKERR tree->distance_search(point.data(), 1e-12, leafs_out);
           Range tree_ents;
