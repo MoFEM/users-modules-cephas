@@ -339,9 +339,8 @@ struct ElasticMaterials {
       Mat_Elastic mydata;
       CHKERR it->getAttributeDataStructure(mydata);
       EntityHandle meshset = it->getMeshset();
-      rval = mField.get_moab().get_entities_by_type(
+      CHKERR mField.get_moab().get_entities_by_type(
           meshset, MBTET, set_of_blocks[id].tEts, true);
-      CHKERRG(rval);
       set_of_blocks[id].iD = id;
       set_of_blocks[id].E = mydata.data.Young;
       set_of_blocks[id].PoissonRatio = mydata.data.Poisson;
@@ -349,11 +348,18 @@ struct ElasticMaterials {
         set_of_blocks[id].E = blockData[id].yOung;
       if (blockData[id].pOisson >= -1)
         set_of_blocks[id].PoissonRatio = blockData[id].pOisson;
+
+      blockData[id].mAterial = defMaterial;
+      set_of_blocks[id].materialDoublePtr = doubleMaterialModel.at(defMaterial);
+      set_of_blocks[id].materialAdoublePtr =
+          aDoubleMaterialModel.at(defMaterial);
+
       PetscPrintf(mField.get_comm(),
                   "Block Id %d Young Modulus %3.2g Poisson Ration %3.2f "
                   "Material model %s\n",
                   id, set_of_blocks[id].E, set_of_blocks[id].PoissonRatio,
                   blockData[id].mAterial.c_str());
+
       if (blockData[id].mAterial.compare(MAT_KIRCHHOFF) == 0) {
         set_of_blocks[id].materialDoublePtr =
             doubleMaterialModel.at(MAT_KIRCHHOFF);

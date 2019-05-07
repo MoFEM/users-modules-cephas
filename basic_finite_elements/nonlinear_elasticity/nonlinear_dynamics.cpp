@@ -209,7 +209,7 @@ struct MonitorRestart : public FEMethod {
     //     ss << "restart_" << (*step) << ".h5m";
     //     CHKERR
     //     mField.get_moab().write_file(ss.str().c_str()/*,"MOAB","PARALLEL=WRITE_PART"*/);
-    //     CHKERRG(rval);
+    //    
     //   }
     // }
     (*step)++;
@@ -256,9 +256,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_is_partitioned",
                                &is_partitioned, &flg);
 
-    PetscBool linear;
+    PetscBool linear = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
-                               &linear);
+                               PETSC_NULL);
 
     if (is_partitioned == PETSC_TRUE) {
       // Read mesh to MOAB
@@ -267,12 +267,10 @@ int main(int argc, char *argv[]) {
                "PARALLEL_RESOLVE_SHARED_ENTS;"
                "PARTITION=PARALLEL_PARTITION;";
       CHKERR moab.load_file(mesh_file_name, 0, option);
-      CHKERRG(rval);
     } else {
       const char *option;
       option = "";
       CHKERR moab.load_file(mesh_file_name, 0, option);
-      CHKERRG(rval);
     }
 
     MoFEM::Core core(moab);
@@ -283,7 +281,7 @@ int main(int argc, char *argv[]) {
     bit_level0.set(0);
     EntityHandle meshset_level0;
     CHKERR moab.create_meshset(MESHSET_SET, meshset_level0);
-    CHKERRG(rval);
+   
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByRefLevel(
@@ -336,7 +334,7 @@ int main(int argc, char *argv[]) {
                                                     it)) {
       Range tris;
       CHKERR moab.get_entities_by_type(it->meshset, MBTRI, tris, true);
-      CHKERRG(rval);
+     
       CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                         "NEUMANN_FE");
     }
@@ -344,7 +342,7 @@ int main(int argc, char *argv[]) {
              m_field, SIDESET | PRESSURESET, it)) {
       Range tris;
       CHKERR moab.get_entities_by_type(it->meshset, MBTRI, tris, true);
-      CHKERRG(rval);
+     
       CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                         "NEUMANN_FE");
     }
