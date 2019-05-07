@@ -284,10 +284,10 @@ int main(int argc, char *argv[]) {
                                  m_field.get_comm_rank(),
                                  m_field.get_comm_rank(), MF_EXIST, QUIET);
 
-        auto tree = m_field.getInterface<FieldEvaluatorInterface>()->getTree();
-
 #ifdef DEBUG_TREE
         {
+          auto tree =
+              m_field.getInterface<FieldEvaluatorInterface>()->getTree();
           std::vector<EntityHandle> leafs_out;
           CHKERR tree->distance_search(point.data(), 1e-12, leafs_out);
           Range tree_ents;
