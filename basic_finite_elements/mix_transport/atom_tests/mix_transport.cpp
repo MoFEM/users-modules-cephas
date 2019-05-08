@@ -26,7 +26,7 @@ static char help[] = "...\n\n";
 /** define sources and other stuff
  *
  * MixTransportElement is a class collecting functions, operators and
- * data for ultra week implementation of transport element. See there to
+ * data for mix implementation of transport element. See there to
  * learn how elements are created or how operators look like.
  *
  * Some methods in MixTransportElement are abstract, f.e. user need to

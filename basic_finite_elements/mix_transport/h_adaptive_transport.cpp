@@ -1,5 +1,5 @@
 /** \file h_adaptive_transport.cpp
-\brief Example implementation of transport problem using ultra-week formulation
+\brief Example implementation of transport problem using mixed formulation
 
 \todo Should be implemented and tested problem from this article
 Demkowicz, Leszek, and Jayadeep Gopalakrishnan. "Analysis of the DPG method for
@@ -45,7 +45,7 @@ typedef map<int, BcFluxData> BcFluxMap;
 /** \brief Application of mix transport data structure
   *
   * MixTransportElement is a class collecting functions, operators and
-  * data for ultra week implementation of transport element. See there to
+  * data for mix implementation of transport element. See there to
   * learn how elements are created or how operators look like.
   *
   * Some methods in MixTransportElement are abstract, f.e. user need to
