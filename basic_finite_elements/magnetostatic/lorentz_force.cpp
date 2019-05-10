@@ -150,7 +150,7 @@ int main(int argc, char *argv[]) {
     CHKERR field_eval_ptr->buildTree3D("MAGNETIC");
 
     BoundBox box;
-    CHKERR m_field.field_eval_ptr->getTree()->get_bounding_box(box);
+    CHKERR field_eval_ptr->getTree()->get_bounding_box(box);
 
     const double bMin = box.bMin[0];
     const double bMax = box.bMax[0];
