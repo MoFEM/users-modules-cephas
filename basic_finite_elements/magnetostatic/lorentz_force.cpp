@@ -1,25 +1,28 @@
 /**
- * \file lorentz_force.cpp 
- * \example lorentz_force.cpp 
+ * \file lorentz_force.cpp
+ * \example lorentz_force.cpp
  * \brief Calculate Lorentz fore from magnetic field.
- * 
+ *
  * It is not attemt to have accurate or realistic model of moving particles in
  * magnetic field. This example was create to show how field evaluator works
  * with precalculated magnetic field.
- * 
+ *
  * \todo use physical quantities
  * \todo take in account higher order geometry
- * \todo code panellisation, works serial only  
- * 
+ * \todo code panellisation, works serial only
+ *
  * Exaltation
  * \f[
  *  v_i = (p_{i+1} - p_{i-1}) / (2 \delta t) \\
  *  (p_{i-1} - 2 p_i + p_{i+1}) / \delta t^2 = \frac{q}{m} v_i \times B_i \\
- *  (p_{i-1} - 2 p_i + p_{i+1}) / \delta t^2 = \frac{q}{m} (p_{i+1} - p_{i-1}) / (2 \delta t)  \times B_i \\
- *  (p_{i-1} - 2 p_i + p_{i+1}) / \delta t = \frac{q}{m} (p_{i+1} - p_{i-1}) \times B_i / 2  \\
- *  p_{i+1} / \delta t - p_{i+1} \times B_i / 2= (2 p_i - p_{i-1}) / \delta t - p_{i-1} \times B_i / 2 \\
- *  p_{i+1} (\mathbf{1} / \delta t - \frac{q}{m} \mathbf{1} \times B_i / 2 )= (2 p_i - p_{i-1}) / \delta t - \frac{q}{m} p_{i-1} \times B_i / 2 
- * \f]
+ *  (p_{i-1} - 2 p_i + p_{i+1}) / \delta t^2 = \frac{q}{m} (p_{i+1} - p_{i-1}) /
+ * (2 \delta t)  \times B_i \\
+ *  (p_{i-1} - 2 p_i + p_{i+1}) / \delta t = \frac{q}{m} (p_{i+1} - p_{i-1})
+ * \times B_i / 2  \\
+ *  p_{i+1} / \delta t - p_{i+1} \times B_i / 2= (2 p_i - p_{i-1}) / \delta t -
+ * p_{i-1} \times B_i / 2 \\ p_{i+1} (\mathbf{1} / \delta t - \frac{q}{m}
+ * \mathbf{1} \times B_i / 2 )= (2 p_i - p_{i-1}) / \delta t - \frac{q}{m}
+ * p_{i-1} \times B_i / 2 \f]
  *
  * \ingroup maxwell_element
  */
@@ -97,28 +100,12 @@ int main(int argc, char *argv[]) {
 
     using VolEle = VolumeElementForcesAndSourcesCore;
     using VolOp = VolumeElementForcesAndSourcesCore::UserDataOperator;
+    using SetPtsData = FieldEvaluatorInterface::SetPtsData;
+    using SetPts = FieldEvaluatorInterface::SetPts;
 
-    const double dist = 1e-12;             // Distance for tree search
-    const int nb_random_points = 100;      // number of points
-    const int nb_steps = 10000;            // number of time steps
-    const int mod_step = 10;               // save every step
-    const double dt = 1e-5;                // Time step size
-    const double velocity_scale = 0.1;     // scale velocity vector
-    const double magnetic_field_scale = 1; // scale magnetic field vector
-    const double scale_box = 0.5; // scale box where partices are placed
-
-    boost::shared_ptr<VolEle> vol_ele(new VolEle(m_field));
-    auto get_rule = [&](int order_row, int order_col, int order_data) {
-      return -1;
-    };
-    vol_ele->getRuleHook = get_rule;
-
-    // Make aliased shared pointer
-    boost::shared_ptr<FieldEvaluatorInterface::SetPtsData> data_at_pts(
-        vol_ele, new FieldEvaluatorInterface::SetPtsData(*vol_ele, nullptr, 0,
-                                                         1e-12, QUIET));
-    vol_ele->setRuleHook = FieldEvaluatorInterface::SetPts(data_at_pts);
-
+    /**
+     * @brief Only for debuging
+     */
     struct MyOpDebug : public VolOp {
 
       boost::shared_ptr<MatrixDouble> B;
@@ -136,6 +123,29 @@ int main(int argc, char *argv[]) {
       }
     };
 
+    const double dist = 1e-12;             // Distance for tree search
+    const int nb_random_points = 100;      // number of points
+    const int nb_steps = 10000;            // number of time steps
+    const int mod_step = 10;               // save every step
+    const double dt = 1e-5;                // Time step size
+    const double velocity_scale = 0.1;     // scale velocity vector
+    const double magnetic_field_scale = 1; // scale magnetic field vector
+    const double scale_box = 0.5; // scale box where partices are placed
+
+    FieldEvaluatorInterface *field_eval_ptr;
+    CHKERR m_field.getInterface(field_eval_ptr);
+
+    // Get access to data
+    auto data_at_pts = field_eval_ptr->getData<VolEle>();
+    auto vol_ele = data_at_pts->feMethodPtr.lock();
+    if (!vol_ele)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Pointer to element does not exists");
+    auto get_rule = [&](int order_row, int order_col, int order_data) {
+      return -1;
+    };
+    vol_ele->getRuleHook = get_rule;
+
     boost::shared_ptr<MatrixDouble> B(new MatrixDouble());
     vol_ele->getOpPtrVector().push_back(
         new OpCalculateHcurlVectorCurl<3>("MAGNETIC_POTENTIAL", B));
@@ -144,13 +154,9 @@ int main(int argc, char *argv[]) {
     const MoFEM::Problem *prb_ptr;
     CHKERR DMMoFEMGetProblemPtr(dm, &prb_ptr);
 
-    FieldEvaluatorInterface *field_eval_ptr;
-    CHKERR m_field.getInterface(field_eval_ptr);
-
-    CHKERR field_eval_ptr->buildTree3D("MAGNETIC");
-
+    CHKERR field_eval_ptr->buildTree3D(data_at_pts, "MAGNETIC");
     BoundBox box;
-    CHKERR field_eval_ptr->getTree()->get_bounding_box(box);
+    CHKERR data_at_pts->treePtr->get_bounding_box(box);
 
     const double bMin = box.bMin[0];
     const double bMax = box.bMax[0];
@@ -258,7 +264,7 @@ int main(int argc, char *argv[]) {
         } else if (t_p(i) < bMin) {
           return true;
         }
-      return false;    
+      return false;
     };
 
     auto calc_position = [&]() {
@@ -269,7 +275,7 @@ int main(int argc, char *argv[]) {
 
       for (int n = 0; n != nb_random_points; ++n) {
 
-        if(is_out(t_p)) {
+        if (is_out(t_p)) {
           ++t_p;
           ++t_init_p;
           continue;
@@ -281,35 +287,6 @@ int main(int argc, char *argv[]) {
         CHKERR field_eval_ptr->evalFEAtThePoint3D(
             point.data(), dist, prb_ptr->getName(), "MAGNETIC", data_at_pts,
             m_field.get_comm_rank(), m_field.get_comm_rank(), MF_EXIST, QUIET);
-
-#ifdef DEBUG_TREE
-        {
-          auto tree = field_eval_ptr->getTree();
-          std::vector<EntityHandle> leafs_out;
-          CHKERR tree->distance_search(point.data(), 1e-12, leafs_out);
-          Range tree_ents;
-          for (auto lit : leafs_out)
-            CHKERR m_field.get_moab().get_entities_by_dimension(
-                lit, 3, tree_ents, true);
-          EntityHandle meshset;
-          CHKERR moab.create_meshset(MESHSET_SET, meshset);
-          CHKERR moab.add_entities(meshset, tree_ents);
-          std::string name =
-              "m_" + boost::lexical_cast<std::string>((n)) + ".vtk";
-          CHKERR moab.write_file(name.c_str(), "VTK", "", &meshset, 1);
-        }
-
-        {
-          EntityHandle meshset;
-          CHKERR moab_charged_partices.create_meshset(MESHSET_SET, meshset);
-          EntityHandle v = verts[n];
-          CHKERR moab_charged_partices.add_entities(meshset, &v, 1);
-          std::string name =
-              "v_" + boost::lexical_cast<std::string>((n)) + ".vtk";
-          CHKERR moab_charged_partices.write_file(name.c_str(), "VTK", "",
-                                                  &meshset, 1);
-        }
-#endif // DEBUG_TREE
 
         FTensor::Tensor1<double, 3> t_B;
 
