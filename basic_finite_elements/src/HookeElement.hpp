@@ -853,6 +853,8 @@ struct HookeElement {
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
     boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> singularDisplacement;
+
     const double rhoN;
     const double rHo0;
 
@@ -861,10 +863,12 @@ struct HookeElement {
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
         boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
-        const double rho_n, const double rho_0)
+        const double rho_n, const double rho_0,
+        boost::shared_ptr<MatrixDouble> singular_displacement = nullptr)
         : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
           rhoAtGaussPtsPtr(rho_at_gauss_pts),
-          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n),
+          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts),
+          singularDisplacement(singular_displacement), rhoN(rho_n),
           rHo0(rho_0) {}
 
   protected:
@@ -909,6 +913,18 @@ struct HookeElement {
       auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
       auto &det_H = *dataAtPts->detHVec;
 
+      boost::shared_ptr<MatrixDouble> dummy_singular_disp;
+      if (singularDisplacement) {
+        dummy_singular_disp = singularDisplacement;
+      } else {
+        dummy_singular_disp = boost::make_shared<MatrixDouble>();
+        dummy_singular_disp->resize(3, nbIntegrationPts, false);
+        dummy_singular_disp->clear();
+      }
+
+      auto t_initial_singular_displacement =
+          getFTensor1FromMat<3>(*dummy_singular_disp);
+
       // iterate over integration points
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
@@ -932,15 +948,18 @@ struct HookeElement {
               a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
 
           // get derivatives of base functions for columns
+          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
           auto t_col_base = col_data.getFTensor0N(gg, 0);
           // iterate column base functions
           for (int cc = 0; cc != nbCols / 3; ++cc) {
 
             t_m(i, k) +=
                 t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
-                
+            t_m(i, k) += t_row_stress(i) * stress_dho_coef * t_grad_rho(k) *
+                         t_col_diff_base(l) *
+                         t_initial_singular_displacement(l);
             ++t_col_base;
-
+            ++t_col_diff_base;
             // move to next block of local stiffens matrix
             ++t_m;
           }
@@ -953,6 +972,7 @@ struct HookeElement {
           ++t_row_diff_base;
 
         // move to next integration weight
+        ++t_initial_singular_displacement;
         ++t_w;
         // ++t_D;
         ++t_cauchy_stress;
@@ -970,6 +990,8 @@ struct HookeElement {
 
     boost::shared_ptr<VectorDouble> rhoAtGaussPtsPtr;
     boost::shared_ptr<MatrixDouble> rhoGradAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> singularDisplacement;
+
     const double rhoN;
     const double rHo0;
 
@@ -978,10 +1000,12 @@ struct HookeElement {
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
         boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
-        const double rho_n, const double rho_0)
+        const double rho_n, const double rho_0,
+        boost::shared_ptr<MatrixDouble> singular_displacement = nullptr)
         : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
           rhoAtGaussPtsPtr(rho_at_gauss_pts),
-          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n),
+          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts),
+          singularDisplacement(singular_displacement), rhoN(rho_n),
           rHo0(rho_0) {}
 
   protected:
@@ -1029,6 +1053,18 @@ struct HookeElement {
       auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
       auto &det_H = *dataAtPts->detHVec;
 
+      boost::shared_ptr<MatrixDouble> dummy_singular_disp;
+      if (singularDisplacement) {
+        dummy_singular_disp = singularDisplacement;
+      } else {
+        dummy_singular_disp = boost::make_shared<MatrixDouble>();
+        dummy_singular_disp->resize(3, nbIntegrationPts, false);
+        dummy_singular_disp->clear();
+      }
+
+      auto t_initial_singular_displacement =
+          getFTensor1FromMat<3>(*dummy_singular_disp);
+
       // iterate over integration points
       for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
@@ -1054,17 +1090,19 @@ struct HookeElement {
               a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
 
           // get derivatives of base functions for columns
-          // auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
           auto t_col_base = col_data.getFTensor0N(gg, 0);
-
           // iterate column base functions
           for (int cc = 0; cc != nbCols / 3; ++cc) {
 
             t_m(i, k) +=
                 t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
+            t_m(i, k) += t_row_stress(i) * stress_dho_coef * t_grad_rho(k) *
+                         t_col_diff_base(l) * t_initial_singular_displacement(l);
+
             // move to next column base function
             ++t_col_base;
-
+            ++t_col_diff_base;
             // move to next block of local stiffens matrix
             ++t_m;
           }
@@ -1077,6 +1115,7 @@ struct HookeElement {
           ++t_row_diff_base;
 
         // move to next integration weight
+        ++t_initial_singular_displacement;
         ++t_w;
         ++t_eshelby_stress;
         ++t_invH;
