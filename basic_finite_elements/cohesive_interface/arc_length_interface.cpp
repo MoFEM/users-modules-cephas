@@ -400,6 +400,7 @@ int main(int argc, char *argv[]) {
 
       // add entities (by tets) to the field
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "X0_DISPLACEMENT");
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
       // add finite elements entities
@@ -444,6 +445,11 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
       CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+
+      CHKERR m_field.set_field_order(0, MBTET, "X0_DISPLACEMENT", order);
+      CHKERR m_field.set_field_order(0, MBTRI, "X0_DISPLACEMENT", order);
+      CHKERR m_field.set_field_order(0, MBEDGE, "X0_DISPLACEMENT", order);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "X0_DISPLACEMENT", 1);
 
       CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 2);
       CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 2);

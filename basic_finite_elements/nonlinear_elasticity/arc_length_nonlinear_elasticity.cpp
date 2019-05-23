@@ -182,6 +182,7 @@ int main(int argc, char *argv[]) {
 
       // add entities (by tets) to the field
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "X0_SPATIAL_POSITION");
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
       // Setting up LAMBDA field and ARC_LENGTH interface
@@ -217,7 +218,12 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
       CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
       CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
-      //
+
+      CHKERR m_field.set_field_order(0, MBTET, "X0_SPATIAL_POSITION", order);
+      CHKERR m_field.set_field_order(0, MBTRI, "X0_SPATIAL_POSITION", order);
+      CHKERR m_field.set_field_order(0, MBEDGE, "X0_SPATIAL_POSITION", order);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "X0_SPATIAL_POSITION", 1);
+
       CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 2);
       CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 2);
       CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 2);
