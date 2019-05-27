@@ -343,7 +343,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
         // refine mesh
         MeshRefinement *m_ref;
         CHKERR m_field_ref.getInterface(m_ref);
-        CHKERR m_ref->add_verices_in_the_middel_of_edges(
+        CHKERR m_ref->add_vertices_in_the_middel_of_edges(
             edges, BitRefLevel().set(ll + 1));
         CHKERR m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
       }
