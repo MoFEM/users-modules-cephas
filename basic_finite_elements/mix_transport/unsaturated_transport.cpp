@@ -192,8 +192,10 @@ int main(int argc, char *argv[]) {
       if (it->getName().compare(0, 4, "SOIL") != 0)
         continue;
       const int block_id = it->getMeshsetId();
+      
       uf.dMatMap[block_id] = RegisterMaterials::mapOfRegistredMaterials.at(
           material_blocks[block_id].matName)(material_blocks.at(block_id));
+      uf.dMatMap.at(block_id)->evaluateThetaM();
       if (!uf.dMatMap.at(block_id)) {
         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                 "Material block not set");
@@ -202,8 +204,9 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.get_moab().get_entities_by_type(
           it->meshset, MBTET, uf.dMatMap.at(block_id)->tEts, true);
       domain_ents.merge(uf.dMatMap.at(block_id)->tEts);
+            
       uf.dMatMap.at(block_id)->printMatParameters(block_id, "Read material");
-    }
+      }
     std::vector<std::string> additional_parameters;
     additional_parameters =
         collect_unrecognized(parsed.options, po::include_positional);

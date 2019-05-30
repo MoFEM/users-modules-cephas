@@ -62,6 +62,7 @@ struct GenericMaterial {
   virtual double initalPcEval() const = 0;
   virtual void printMatParameters(const int id,
                                   const std::string &prefix) const = 0;
+  virtual void evaluateThetaM() = 0;
 
   virtual MoFEMErrorCode calK() {
     MoFEMFunctionBegin;
@@ -295,7 +296,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         // get value of boundary condition
         CHKERR cTx.getBcOnValues(fe_ent, gg, x, y, z, value);
         const double w = getGaussPts()(2, gg) * 0.5;
-        const double beta = w * (value - z);
+        const double beta = w * (value /*- z*/);
         noalias(nF) += beta * prod(data.getVectorN<3>(gg), getNormal());
       }
       // Scale vector if history  evaluating method is given
@@ -368,7 +369,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         const double K = block_data->K;
         const double z = t_coords(2); /// z-coordinate at Gauss pt
         // Calculate pressure gradient
-        noalias(nF) -= alpha * (t_h - z) * divVec;
+        noalias(nF) -= alpha * (t_h /*- z*/) * divVec;
         // Calculate presure gradient from flux
         FTensor::Tensor0<double *> t_nf(&*nF.begin());
         for (int rr = 0; rr != nb_dofs; rr++) {

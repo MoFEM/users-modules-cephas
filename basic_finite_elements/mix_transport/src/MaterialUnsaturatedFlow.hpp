@@ -17,8 +17,8 @@ struct CommonMaterialData : public GenericMaterial {
     matName = "SimpleDarcy";
     sCale = 1;
     thetaS = 0.38;
-    thetaM = 0.38;
     thetaR = 0.068;
+    thetaM = 0.068;
     alpha = 0.8;
     n = 1.09;
     Ks = 0.048;
@@ -91,6 +91,11 @@ struct CommonMaterialData : public GenericMaterial {
     PetscPrintf(PETSC_COMM_WORLD, "ePsilon1=%6.4g\n", ePsilon1);
     PetscPrintf(PETSC_COMM_WORLD, "sCale=%6.4g\n", sCale);
   }
+
+  void evaluateThetaM() {
+    // thetaM =  thetaR + (thetaS - thetaR) *
+    //                               pow(1 + pow(-alpha * hS, n), (1. - 1. / n));
+}
 
   typedef boost::function<boost::shared_ptr<CommonMaterialData>(
       const CommonMaterialData &data)>
@@ -197,7 +202,7 @@ struct MaterialWithAutomaticDifferentiation : public CommonMaterialData {
         SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
                 "ADOL-C function evaluation with error");
       }
-    } else {
+      } else {
       C = 0;
     }
     C += ePsilon1;
@@ -244,6 +249,7 @@ struct MaterialWithAutomaticDifferentiation : public CommonMaterialData {
       }
     } else {
       tHeta = thetaS;
+      Se = 1.;
     }
     MoFEMFunctionReturnHot(0);
   }
@@ -275,7 +281,7 @@ struct MaterialVanGenuchten : public MaterialWithAutomaticDifferentiation {
 
   template <typename TYPE>
   inline TYPE funFunSeStar(TYPE &SeStar, const double m) {
-    return pow(1 - pow(SeStar, 1 / m), m);
+    return pow(1 - pow(SeStar, 1. / m), m);
   }
 
   inline adouble funKr(adouble &ah) {
@@ -290,7 +296,7 @@ struct MaterialVanGenuchten : public MaterialWithAutomaticDifferentiation {
   }
 
   virtual void recordTheta() {
-    h = -1 - hS;
+    h = -1-hS;
     trace_on(2 * blockId + 0, true);
     ah <<= h;
     const double m = 1 - 1 / n;
@@ -301,7 +307,192 @@ struct MaterialVanGenuchten : public MaterialWithAutomaticDifferentiation {
   }
 
   virtual void recordKr() {
-    h = -1 - hS;
+    h = -1-hS;
+    trace_on(2 * blockId + 1, true);
+    ah <<= h;
+    aKr = funKr(ah);
+    double r_Kr;
+    aKr >>= r_Kr;
+    trace_off();
+  }
+
+  void printTheta(const double b, const double e, double s,
+                  const std::string &prefix) {
+    const double m = 1 - 1 / n;
+    h = b;
+    for (; h >= e; h += s) {
+      s = -pow(-s, 0.9);
+      double theta = funTheta(h, m);
+      double Se = (theta - thetaR) / (thetaS - thetaR);
+      PetscPrintf(PETSC_COMM_SELF, "%s %6.4e %6.4e %6.4e\n", prefix.c_str(), h,
+                  theta, Se);
+    }
+  }
+
+  void printKappa(const double b, const double e, double s,
+                  const std::string &prefix) {
+    h = b;
+    for (; h >= e; h += s) {
+      s = -pow(-s, 0.9);
+      calK();
+      PetscPrintf(PETSC_COMM_SELF, "%s %6.4e %6.4e %6.4e\n", prefix.c_str(), h,
+                  Kr, K);
+    }
+  }
+
+  void printC(const double b, const double e, double s,
+              const std::string &prefix) {
+    h = b;
+    for (; h >= e; h += s) {
+      s = -pow(-s, 0.9);
+      calC();
+      PetscPrintf(PETSC_COMM_SELF, "%s %6.4e %6.4e\n", prefix.c_str(), h, C);
+    }
+  }
+};
+
+struct MaterialModifiedVanG : public MaterialWithAutomaticDifferentiation {
+
+  static boost::shared_ptr<CommonMaterialData>
+  createMatPtr(const CommonMaterialData &data) {
+    return boost::shared_ptr<CommonMaterialData>(
+        new MaterialModifiedVanG(data));
+  }
+
+  MaterialModifiedVanG(const CommonMaterialData &data)
+      : MaterialWithAutomaticDifferentiation(data) {
+    thetaM = thetaR +
+             (thetaS - thetaR) * pow(1 + pow(-alpha * hS, n), (1. - 1. / n));
+    recordTheta();
+    recordKr();
+  }
+
+  adouble ah;
+  adouble aTheta;
+  adouble aKr;
+  adouble aSe;
+  adouble aSeStar;
+
+  double Kr;
+  MoFEMErrorCode calK() {
+    MoFEMFunctionBeginHot;
+    if (h < hS) {
+      double m = 1. - 1. / n;
+      double p = 1. / (pow(-alpha * h, n) + 1) ;
+      double ratio = pow((thetaS - thetaR) / (thetaM - thetaR), 1. / m);
+      double num1 = 1 - pow( 1 - ratio * p , m);
+      double num2 = 1 - pow(1 - ratio, m);
+      Kr = pow(p, 0.5 * m) * pow(num1 / num2, 2.);
+      K = Ks * Kr;
+      if (Kr < 1.e-6){
+        Kr = 1.e-6;
+        }
+    } else {
+      K = Ks;
+    }
+    //K += Ks * ePsilon0;
+    MoFEMFunctionReturnHot(0);
+  };
+
+  double diffKr;
+  MoFEMErrorCode calDiffK() {
+    MoFEMFunctionBeginHot;
+    if (h < hS) {
+
+      double m = 1. - 1. / n;
+      double p = pow(-alpha * h, n);
+      double ratio = pow( (thetaS - thetaR) / (thetaM - thetaR), 1./m );
+      double denom = 2. * h * (p - ratio + 1) * pow( pow(1 - ratio, m) -1. , 2.);
+      double mult1 = - m*n*p*pow(p+1., -0.5*m - 1. );
+      double mult2 = pow(1 - ratio / (p+1), m) - 1.;
+      double mult3_1 = (p - 5.*ratio + 1) * pow( 1 - ratio / (p +1.), m );
+      double mult3_2 = - p + ratio - 1.;
+      double mult3 = mult3_1 + mult3_2;
+      diffKr = mult1 * mult2 * mult3 / denom;
+      
+        // if (Kr < 1.e-6) {
+        //   diffKr = 1.e-6;
+        // }
+      //printf("See???  h is: %e   and diffK is: %e\n", h, diffK);
+      diffK = Ks * diffKr;
+    } else {
+      diffK = 0;
+    }
+    MoFEMFunctionReturnHot(0);
+  };
+
+  MoFEMErrorCode calC() {
+    MoFEMFunctionBeginHot;
+    if (h < hS) {
+      double m = 1. - 1. / n;
+      double p = pow(-alpha * h, n);
+      C = -m * n * (thetaS - thetaR) * p * pow(p + 1., -m - 1.) / h;
+      //printf(">>>>>>>>>>>>>>>>calC<<<<<<<<<<---------  %e\n", C);
+      // if (r < 0) {
+      //   SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
+      //           "ADOL-C function evaluation with error");
+      // }
+    } else {
+      C = 0;
+    }
+    //C += ePsilon1;
+    MoFEMFunctionReturnHot(0);
+  }
+
+  MoFEMErrorCode calDiffC() {
+    MoFEMFunctionBeginHot;
+    if (h < hS) {
+      double m = 1. - 1. / n;
+      double p = pow(-alpha * h, n);
+      diffC = m * n * (thetaS - thetaR) * p * pow(p + 1., -m - 2.) *
+              ((m * n + 1) * p - n + 1) / pow(h, 2.);
+      //printf(">>>>>>>>>>>>>>>>calDiffC<<<<<<<<<<--------- %e\n", diffC);
+      // if (r < 0) {
+      //   SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
+      //           "ADOL-C function evaluation with error");
+      // }
+    } else {
+      diffC = 0;
+    }
+    MoFEMFunctionReturnHot(0);
+  }
+
+  template <typename TYPE> inline TYPE funTheta(TYPE &h, const double m) {
+    std::cout << "thetaM now is:" << thetaM << "\n";
+      return thetaR + (thetaM - thetaR) / pow(1 + pow(-alpha * h, n), m);
+  }
+
+  template <typename TYPE>
+  inline TYPE funFunSeStar(TYPE &SeStar, const double m) {
+    return pow(1 - pow(SeStar, 1. / m), m);
+  }
+
+  inline adouble funKr(adouble &ah) {
+    const double m = 1 - 1 / n;
+    std::cout << "thetaM now is 2:" << thetaM << "\n";
+    aTheta = funTheta(ah, m);
+    aSe = funSe(aTheta);
+    aSeStar = aSe * (thetaS - thetaR) / (thetaM - thetaR);
+    double one = 1;
+    const double c = funFunSeStar<double>(one, m);
+    return sqrt(aSe) *
+           pow((1 - funFunSeStar<adouble>(aSeStar, m)) / (1. - c), 2);
+  }
+
+  virtual void recordTheta() {
+    
+    h = -1-hS;
+    trace_on(2 * blockId + 0, true);
+    ah <<= h;
+    const double m = 1 - 1 / n;
+    aTheta = funTheta(ah, m);
+    double r_theta;
+    aTheta >>= r_theta;
+    trace_off();
+  }
+
+  virtual void recordKr() {
+    h = -1-hS;
     trace_on(2 * blockId + 1, true);
     ah <<= h;
     aKr = funKr(ah);
@@ -353,6 +544,8 @@ struct RegisterMaterials {
     mapOfRegistredMaterials["SimpleDarcy"] = MaterialDarcy::createMatPtr;
     mapOfRegistredMaterials["VanGenuchten"] =
         MaterialVanGenuchten::createMatPtr;
+    mapOfRegistredMaterials["ModifiedVanG"] =
+        MaterialModifiedVanG::createMatPtr;
     MoFEMFunctionReturnHot(0);
   }
 };
