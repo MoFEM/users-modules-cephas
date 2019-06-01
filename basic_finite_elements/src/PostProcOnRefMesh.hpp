@@ -770,6 +770,76 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
     return commonData;
   }
+
+  struct OpGetFieldGradientValuesOnSkin
+      : public FaceElementForcesAndSourcesCore::UserDataOperator {
+
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    CommonData &commonData;
+    const std::string tagName;
+    Vec V;
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+    const std::string feVolName;
+    boost::shared_ptr<MatrixDouble> gradMatPtr;
+
+    OpGetFieldGradientValuesOnSkin(
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts, const std::string field_name,
+        const std::string tag_name, CommonData &common_data,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        const std::string vol_fe_name,
+        boost::shared_ptr<MatrixDouble> grad_mat_ptr, Vec v = PETSC_NULL)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+          tagName(tag_name), commonData(common_data), sideFe(side_fe),
+          feVolName(vol_fe_name), gradMatPtr(grad_mat_ptr), V(v) {}
+
+    VectorDouble vAlues;
+    VectorDouble *vAluesPtr;
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  MoFEMErrorCode addFieldValuesGradientPostProcOnSkin(
+      const std::string field_name, const std::string vol_fe_name,
+      boost::shared_ptr<MatrixDouble> grad_mat_ptr = nullptr,
+      Vec v = PETSC_NULL) {
+    MoFEMFunctionBeginHot;
+
+    if (!grad_mat_ptr)
+      grad_mat_ptr = boost::make_shared<MatrixDouble>();
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe(
+        new VolumeElementForcesAndSourcesCoreOnSide(mField));
+
+    // check number of coefficients
+    auto field_ptr = mField.get_field_structure(field_name);
+    const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+    switch (nb_coefficients) {
+    case 1:
+      side_fe->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<3>(field_name, grad_mat_ptr));
+      break;
+    case 3:
+      side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+
+    FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+        new OpGetFieldGradientValuesOnSkin(
+            postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+            commonData, side_fe, vol_fe_name, grad_mat_ptr, v));
+    MoFEMFunctionReturnHot(0);
+  }
 };
 
 #endif //__POSTPROC_ON_REF_MESH_HPP
