@@ -21,7 +21,8 @@ set(BFE_DIRS
   magnetostatic
   poisson
   hello_world
-  hierarchical_approximation)
+  hierarchical_approximation
+  level_set)
 
 function(bfe_install bfe_mod_dir)
   install(
