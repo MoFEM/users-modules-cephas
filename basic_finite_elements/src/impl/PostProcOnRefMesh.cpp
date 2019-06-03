@@ -729,13 +729,14 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
 
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
-
-    // FIXME: this is very inefficient
+    
+    // FIXME: this is not very efficient
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       for (int rr = 0; rr != rank; ++rr) {
         for (int dd = 0; dd != 3; ++dd) {
-          ((double *)tags_ptr[gg])[rank * rr + dd] =
-              (*gradMatPtr)(rank * rr + dd, gg);
+          const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
+          double *my_ptr = const_cast<double *>(my_ptr2);
+          my_ptr[rank * rr + dd] = (*gradMatPtr)(rank * rr + dd, gg);
         }
       }
     }

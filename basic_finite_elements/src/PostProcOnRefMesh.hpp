@@ -807,7 +807,7 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   MoFEMErrorCode addFieldValuesGradientPostProcOnSkin(
       const std::string field_name, const std::string vol_fe_name,
       boost::shared_ptr<MatrixDouble> grad_mat_ptr = nullptr,
-      Vec v = PETSC_NULL) {
+      bool save_on_tag = true, Vec v = PETSC_NULL) {
     MoFEMFunctionBeginHot;
 
     if (!grad_mat_ptr)
@@ -834,10 +834,12 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
               "field with that number of coefficients is not implemented");
     }
 
-    FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-        new OpGetFieldGradientValuesOnSkin(
-            postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
-            commonData, side_fe, vol_fe_name, grad_mat_ptr, v));
+    if (save_on_tag)
+      FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+          new OpGetFieldGradientValuesOnSkin(
+              postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+              commonData, side_fe, vol_fe_name, grad_mat_ptr, v));
+
     MoFEMFunctionReturnHot(0);
   }
 };
