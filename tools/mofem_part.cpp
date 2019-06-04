@@ -91,19 +91,23 @@ int main(int argc, char *argv[]) {
     }
 
     {
-      Range ents3d;
-      CHKERR moab.get_entities_by_dimension(0, 3, ents3d, false);
+      Range ents_dim;
+      CHKERR moab.get_entities_by_dimension(0, dim, ents_dim, false);
       if (create_lower_dim_ents) {
-        Range faces;
-        CHKERR moab.get_adjacencies(ents3d, 2, true, faces,
-                                    moab::Interface::UNION);
-        Range edges;
-        CHKERR moab.get_adjacencies(ents3d, 1, true, edges,
-                                    moab::Interface::UNION);
+        if (dim == 3) {
+          Range faces;
+          CHKERR moab.get_adjacencies(ents_dim, 2, true, faces,
+                                      moab::Interface::UNION);
+        }
+        if (dim > 2) {
+          Range edges;
+          CHKERR moab.get_adjacencies(ents_dim, 1, true, edges,
+                                      moab::Interface::UNION);
+        }
       }
       ProblemsManager *prb_mng_ptr;
       CHKERR m_field.getInterface(prb_mng_ptr);
-      CHKERR prb_mng_ptr->partitionMesh(ents3d, dim, adj_dim, n_partas);
+      CHKERR prb_mng_ptr->partitionMesh(ents_dim, dim, adj_dim, n_partas);
     }
 
     CHKERR moab.write_file(mesh_out_file);
