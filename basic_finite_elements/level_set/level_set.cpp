@@ -15,6 +15,13 @@ using FaceEle = FaceElementForcesAndSourcesCore;
 using OpFaceEle = FaceElementForcesAndSourcesCore::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
+const double D = 1e-3; ///< diffusivity
+const double r = 1;    ///< rate factor
+const double k = 1;    ///< caring capacity
+
+const int order = 2; ///< approximation order
+const int save_every_nth_step = 4;
+
 struct CommonData {
 
   MatrixDouble grad;
@@ -26,8 +33,8 @@ struct CommonData {
   SmartPetscObj<KSP> ksp;
 };
 
-struct OpCalMass : OpFaceEle {
-  OpCalMass(boost::shared_ptr<CommonData> &data)
+struct OpAssembleMass : OpFaceEle {
+  OpAssembleMass(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", "u", OpFaceEle::OPROWCOL), commonData(data) {
     sYmm = true;
   }
@@ -56,15 +63,13 @@ struct OpCalMass : OpFaceEle {
         }
         ++t_w;
       }
-      CHKERR MatSetValues(
-          commonData->M, nb_row_dofs, &*row_data.getIndices().begin(),
-          nb_col_dofs, &*col_data.getIndices().begin(), &mat(0, 0), ADD_VALUES);
+
+      CHKERR MatSetValues(commonData->M, row_data, col_data, &mat(0, 0),
+                          ADD_VALUES);
       if (row_side != col_side || row_type != col_type) {
         transMat.resize(nb_col_dofs, nb_row_dofs, false);
         noalias(transMat) = trans(mat);
-        CHKERR MatSetValues(commonData->M, nb_col_dofs,
-                            &*col_data.getIndices().begin(), nb_row_dofs,
-                            &*row_data.getIndices().begin(), &transMat(0, 0),
+        CHKERR MatSetValues(commonData->M, col_data, row_data, &transMat(0, 0),
                             ADD_VALUES);
       }
     }
@@ -79,7 +84,6 @@ private:
 struct OpAssembleSlowRhs : OpFaceEle {
   OpAssembleSlowRhs(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", OpFaceEle::OPROW), commonData(data) {}
-  VectorDouble vecF;
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
     const int nb_dofs = data.getIndices().size();
@@ -95,7 +99,7 @@ struct OpAssembleSlowRhs : OpFaceEle {
       const double vol = getMeasure();
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        const double f = a * t_val * (1 - t_val);
+        const double f = a * r * t_val * (1 - t_val / k);
         for (int rr = 0; rr != nb_dofs; ++rr) {
           const double b = f * t_base;
           vecF[rr] += b;
@@ -115,14 +119,13 @@ struct OpAssembleSlowRhs : OpFaceEle {
   }
 
 private:
-  MatrixDouble mat, transMat;
   boost::shared_ptr<CommonData> commonData;
+  VectorDouble vecF;
 };
 
 template <int DIM> struct OpAssembleStiffRhs : OpFaceEle {
   OpAssembleStiffRhs(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", OpFaceEle::OPROW), commonData(data) {}
-  VectorDouble vecF;
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
     const int nb_dofs = data.getIndices().size();
@@ -142,12 +145,11 @@ template <int DIM> struct OpAssembleStiffRhs : OpFaceEle {
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
         for (int rr = 0; rr != nb_dofs; ++rr) {
-          const double b =
-              t_base * t_dot_val + 1e-3 * (a * t_diff_base(i) * t_grad(i));
-          vecF[rr] += b;
+          vecF[rr] += a * (t_base * t_dot_val + D * t_diff_base(i) * t_grad(i));
           ++t_diff_base;
           ++t_base;
         }
+        ++t_dot_val;
         ++t_grad;
         ++t_w;
       }
@@ -162,12 +164,14 @@ template <int DIM> struct OpAssembleStiffRhs : OpFaceEle {
 
 private:
   boost::shared_ptr<CommonData> commonData;
+  VectorDouble vecF;
 };
 
 template <int DIM> struct OpAssembleStiffLhs : OpFaceEle {
   OpAssembleStiffLhs(boost::shared_ptr<CommonData> &data)
-      : OpFaceEle("u", "u", OpFaceEle::OPROWCOL), commonData(data) {}
-  MatrixDouble mat;
+      : OpFaceEle("u", "u", OpFaceEle::OPROWCOL), commonData(data) {
+    sYmm = true;
+  }
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
@@ -194,8 +198,8 @@ template <int DIM> struct OpAssembleStiffLhs : OpFaceEle {
           auto t_col_diff_base = col_data.getFTensor1DiffN<DIM>(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; ++cc) {
-            mat(rr, cc) += a * t_row_base * t_col_base * ts_a +
-                           1e-3 * t_row_diff_base(i) * t_col_diff_base(i);
+            mat(rr, cc) += a * (t_row_base * t_col_base * ts_a +
+                                D * t_row_diff_base(i) * t_col_diff_base(i));
             ++t_col_base;
             ++t_col_diff_base;
           }
@@ -208,12 +212,43 @@ template <int DIM> struct OpAssembleStiffLhs : OpFaceEle {
 
       CHKERR MatSetValues(getFEMethod()->ts_B, row_data, col_data, &mat(0, 0),
                           ADD_VALUES);
+      if (row_side != col_side || row_type != col_type) {
+        transMat.resize(nb_col_dofs, nb_row_dofs, false);
+        noalias(transMat) = trans(mat);
+        CHKERR MatSetValues(getFEMethod()->ts_B, col_data, row_data,
+                            &transMat(0, 0), ADD_VALUES);
+      }
     }
     MoFEMFunctionReturn(0);
   }
 
 private:
   boost::shared_ptr<CommonData> commonData;
+  MatrixDouble mat, transMat;
+};
+
+struct Monitor : public FEMethod {
+
+  Monitor(SmartPetscObj<DM> &dm,
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
+      : dM(dm), postProc(post_proc){};
+
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode operator()() { return 0; }
+
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBegin;
+    if (ts_step % save_every_nth_step == 0) {
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+      CHKERR postProc->writeFile(
+          "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
 };
 
 int main(int argc, char *argv[]) {
@@ -242,7 +277,7 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->addDomainField("u", H1, AINSWORTH_LEGENDRE_BASE,
                                             1);
     // set fields order
-    CHKERR simple_interface->setFieldOrder("u", 1);
+    CHKERR simple_interface->setFieldOrder("u", order);
     // setup problem
     CHKERR simple_interface->setUp();
 
@@ -261,9 +296,24 @@ int main(int argc, char *argv[]) {
         new OpSetInvJacH1ForFace(data->invJac));
     vol_ele_slow_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("u", val_ptr));
-    vol_ele_slow_rhs->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldGradient<2>("u", grad_ptr));
     vol_ele_slow_rhs->getOpPtrVector().push_back(new OpAssembleSlowRhs(data));
+
+    auto solve_mass = [&]() {
+      MoFEMFunctionBegin;
+      if (vol_ele_slow_rhs->vecAssembleSwitch) {
+        CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+                                   SCATTER_REVERSE);
+        CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+                                 SCATTER_REVERSE);
+        CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F);
+        CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F);
+        *vol_ele_slow_rhs->vecAssembleSwitch = false;
+      }
+      CHKERR KSPSolve(data->ksp, vol_ele_slow_rhs->ts_F,
+                      vol_ele_slow_rhs->ts_F);
+      MoFEMFunctionReturn(0);
+    };
+    vol_ele_slow_rhs->postProcessHook = solve_mass;
 
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(data->invJac));
@@ -285,14 +335,10 @@ int main(int argc, char *argv[]) {
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleStiffLhs<2>(data));
 
-    boost::shared_ptr<FaceEle> vol_mass_ele(new FaceEle(m_field));
-    vol_mass_ele->getOpPtrVector().push_back(new OpCalMass(data));
-
     auto vol_rule = [](int, int, int p) -> int { return 2 * p; };
     vol_ele_slow_rhs->getRuleHook = vol_rule;
     vol_ele_stiff_rhs->getRuleHook = vol_rule;
     vol_ele_stiff_lhs->getRuleHook = vol_rule;
-    vol_mass_ele->getRuleHook = vol_rule;
 
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc =
         boost::shared_ptr<PostProcFaceOnRefinedMesh>(
@@ -323,31 +369,18 @@ int main(int argc, char *argv[]) {
     CHKERR skin.find_skin(0, surface, false, edges);
     Range edges_part;
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    CHKERR pcomm->filter_pstatus(edges_part,
-                                 PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                 PSTATUS_NOT, -1, &edges);
+    CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &edges_part);
     Range edges_verts;
     CHKERR moab.get_connectivity(edges_part, edges_verts, false);
     CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
         simple_interface->getProblemName(), "u",
         unite(edges_verts, edges_part));
 
-    auto ts = createTS(m_field.get_comm());
-    CHKERR TSSetType(ts, TSEIMEX);
-    // CHKERR TSSetType(ts, TSRK);
-    // CHKERR TSSetType(ts, TSEULER);
-    CHKERR DMMoFEMTSSetIJacobian(dm, simple_interface->getDomainFEName(),
-                                 vol_ele_stiff_lhs, null, null);
-    CHKERR DMMoFEMTSSetIFunction(dm, simple_interface->getDomainFEName(),
-                                 vol_ele_stiff_rhs, null, null);
-    CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(),
-                                   vol_ele_slow_rhs, null, null);
-
-    SmartPetscObj<Vec> X;
-    CHKERR DMCreateGlobalVector_MoFEM(dm, X);
     CHKERR DMCreateMatrix_MoFEM(dm, data->M);
-
     CHKERR MatZeroEntries(data->M);
+    boost::shared_ptr<FaceEle> vol_mass_ele(new FaceEle(m_field));
+    vol_mass_ele->getOpPtrVector().push_back(new OpAssembleMass(data));
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
                                     vol_mass_ele);
     CHKERR MatAssemblyBegin(data->M, MAT_FINAL_ASSEMBLY);
@@ -358,25 +391,27 @@ int main(int argc, char *argv[]) {
     CHKERR KSPSetFromOptions(data->ksp);
     CHKERR KSPSetUp(data->ksp);
 
-    // auto solve_mass = [&]() {
-    //   MoFEMFunctionBegin;
+    auto ts = createTS(m_field.get_comm());
+    CHKERR TSSetType(ts, TSARKIMEX);
+    CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
+    // CHKERR TSSetType(ts, TSBEULER);
 
-    //   if (vol_ele_slow->vecAssembleSwitch) {
-    //     CHKERR VecGhostUpdateBegin(vol_ele_slow->ts_F, ADD_VALUES,
-    //                                SCATTER_REVERSE);
-    //     CHKERR VecGhostUpdateEnd(vol_ele_slow->ts_F, ADD_VALUES,
-    //                              SCATTER_REVERSE);
-    //     CHKERR VecAssemblyBegin(vol_ele_slow->ts_F);
-    //     CHKERR VecAssemblyEnd(vol_ele_slow->ts_F);
-    //     *vol_ele_slow->vecAssembleSwitch = false;
-    //   }
+    CHKERR DMMoFEMTSSetIJacobian(dm, simple_interface->getDomainFEName(),
+                                 vol_ele_stiff_lhs, null, null);
+    CHKERR DMMoFEMTSSetIFunction(dm, simple_interface->getDomainFEName(),
+                                 vol_ele_stiff_rhs, null, null);
+    CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(),
+                                   vol_ele_slow_rhs, null, null);
 
-    //   CHKERR KSPSolve(data->ksp, vol_ele_slow->ts_F, vol_ele_slow->ts_F);
+    boost::shared_ptr<TsCtx> ts_ctx;
+    CHKERR DMMoFEMGetTsCtx(dm, ts_ctx);
+    CHKERR TSMonitorSet(ts, TsMonitorSet, ts_ctx.get(), PETSC_NULL);
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dm, post_proc));
+    ts_ctx->get_loops_to_do_Monitor().push_back(TsCtx::PairNameFEMethodPtr(
+        simple_interface->getDomainFEName(), monitor_ptr));
 
-    //   MoFEMFunctionReturn(0);
-    // };
-    // vol_ele_slow->postProcessHook = solve_mass;
-
+    SmartPetscObj<Vec> X;
+    CHKERR DMCreateGlobalVector_MoFEM(dm, X);
     CHKERR DMoFEMMeshToLocalVector(dm, X, INSERT_VALUES, SCATTER_FORWARD);
 
     double ftime = 1;
@@ -385,13 +420,6 @@ int main(int argc, char *argv[]) {
     CHKERR TSSetSolution(ts, X);
     CHKERR TSSetFromOptions(ts);
     CHKERR TSSolve(ts, X);
-
-    CHKERR VecGhostUpdateBegin(X, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(X, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToGlobalVector(dm, X, INSERT_VALUES, SCATTER_REVERSE);
-    CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
-                                    post_proc);
-    CHKERR post_proc->writeFile("out_level.h5m");
   }
   CATCH_ERRORS;
 
