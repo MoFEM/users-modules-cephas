@@ -431,7 +431,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs::doWork(
 
   //scale matrix NN,
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, NN);
-  
+
   CHKERR MatSetValues(
       getFEMethod()->snes_B, row_nb_dofs, &row_data.getIndices()[0],
       col_nb_dofs, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
@@ -641,10 +641,10 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(
     fe.getOpPtrVector().push_back(new OpNeumannPressure(
         field_name_1, F, mapPressure[ms_id], methodsOp, ho_geometry));
 
-    fe.getOpPtrVector().push_back(
+    feLhs.getOpPtrVector().push_back(
         new OpGetTangent(field_name_2, dataAtIntegrationPts));
 
-    fe.getOpPtrVector().push_back(new OpNeumannPressureLhs(
+    feLhs.getOpPtrVector().push_back(new OpNeumannPressureLhs(
         field_name_1, field_name_2, dataAtIntegrationPts, aij,
         mapPressure[ms_id], methodsOp, ho_geometry));
   } else {
@@ -656,10 +656,10 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(
     fe.getOpPtrVector().push_back(new OpNeumannPressure(
         field_name_1, F, mapPressure[ms_id], methodsOp, ho_geometry));
 
-    fe.getOpPtrVector().push_back(
+    feLhs.getOpPtrVector().push_back(
         new OpGetTangent(field_name_2, dataAtIntegrationPts));
 
-    fe.getOpPtrVector().push_back(new OpNeumannPressureLhs(
+    feLhs.getOpPtrVector().push_back(new OpNeumannPressureLhs(
         field_name_1, field_name_2, dataAtIntegrationPts, aij,
         mapPressure[ms_id], methodsOp, ho_geometry));
   }
