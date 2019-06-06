@@ -17,7 +17,7 @@ using FaceEle = FaceElementForcesAndSourcesCore;
 using OpFaceEle = FaceElementForcesAndSourcesCore::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
-const double D = 1e-3; ///< diffusivity
+const double D = 1e-2; ///< diffusivity
 const double r = 1;    ///< rate factor
 const double k = 1;    ///< caring capacity
 
@@ -343,17 +343,13 @@ int main(int argc, char *argv[]) {
 
     // Push operators to integrate the slow right-hand side vector
     vol_ele_slow_rhs->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(data->invJac));
-    vol_ele_slow_rhs->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(data->invJac));
-    vol_ele_slow_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues("u", val_ptr));
     vol_ele_slow_rhs->getOpPtrVector().push_back(new OpAssembleSlowRhs(data));
 
     // PETSc IMAX and Explicit solver demans that g = M^-1 G is provided. So
     // when the slow right-hand side vector (G) is assembled is solved for g
     // vector.
-    auto solve_mass = [&]() {
+    auto solve_for_g = [&]() {
       MoFEMFunctionBegin;
       if (vol_ele_slow_rhs->vecAssembleSwitch) {
         CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
@@ -369,15 +365,13 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
     // Add hook to the element to calculate g.
-    vol_ele_slow_rhs->postProcessHook = solve_mass;
+    vol_ele_slow_rhs->postProcessHook = solve_for_g;
 
     // Add operators to calculate the stiff right-hand side
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(data->invJac));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(data->invJac));
-    vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues("u", val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateVectorScalarValuesDot("u", dot_val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
