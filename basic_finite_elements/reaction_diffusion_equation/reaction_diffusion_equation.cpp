@@ -1,6 +1,6 @@
 /**
- * \file level_set.cpp
- * \example level_set.cpp
+ * \file reaction_diffusion_equation.cpp
+ * \example reaction_diffusion_equation.cpp
  *
  *
  * Calculate level set for initally given surface
@@ -254,7 +254,8 @@ private:
 int main(int argc, char *argv[]) {
 
   // initialize petsc
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
   try {
 

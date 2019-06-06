@@ -12,5 +12,16 @@
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 bfe_build_and_install(
-  level_set ${CMAKE_CURRENT_SOURCE_DIR}/level_set.cpp)
+  level_set ${CMAKE_CURRENT_SOURCE_DIR}/reaction_diffusion_equation.cpp)
 
+ cm_export_file(".petscrc" export_reaction_diffusion_equation)
+ cm_export_file("README" export_reaction_diffusion_equation)
+ cm_export_file("mesh.jou" export_reaction_diffusion_equation)
+ cm_export_file("mesh.cub" export_reaction_diffusion_equation)
+ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc 
+  DESTINATION ${BFE_MOD_DIR})
+ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.jou
+   DESTINATION ${BFE_MOD_DIR})
+ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.h5m
+   DESTINATION ${BFE_MOD_DIR})
+    

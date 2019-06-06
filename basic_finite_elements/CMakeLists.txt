@@ -22,7 +22,7 @@ set(BFE_DIRS
   poisson
   hello_world
   hierarchical_approximation
-  level_set)
+  reaction_diffusion_equation)
 
 function(bfe_install bfe_mod_dir)
   install(
