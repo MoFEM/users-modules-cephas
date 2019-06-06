@@ -1,0 +1,14 @@
+How to run
+
+1) Partition mesh
+ 
+NBPROC=6 && ../../tools/mofem_part \
+-my_file mesh.cub -output_file mesh.h5m -my_nparts $NBPROC -dim 2 -adj_dim 1
+
+2) Run analysis
+
+time mpirun -np $NBPROC ./reaction_diffusion_equation -file_name mesh.h5m 2>&1 | tee log 
+
+3) Convert output to VTK files
+
+../../basic_finite_elements/nonlinear_elasticity/do_vtk.sh out_level_*.h5m

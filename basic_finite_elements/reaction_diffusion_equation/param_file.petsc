@@ -1,7 +1,9 @@
  -file_name mesh.h5m 
  
- -ts_monitor -ts_exact_final_time stepover 
- -ts_dt 0.1 -ts_final_time 40 
+ -ts_monitor 
+ -ts_exact_final_time stepover 
+ -ts_dt 0.1 
+ -ts_final_time 20
  -ts_adapt_type none 
  
  -ksp_type gmres 
@@ -9,4 +11,4 @@
  -pc_factor_mat_solver_type mumps 
  
  -snes_monitor 
- -snes_lag_jacobian 2 
+ -snes_lag_jacobian -2 
