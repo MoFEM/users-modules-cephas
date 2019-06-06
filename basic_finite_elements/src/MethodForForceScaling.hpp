@@ -23,6 +23,7 @@
 struct MethodForForceScaling {
 
   virtual MoFEMErrorCode scaleNf(const FEMethod *fe, VectorDouble &Nf) = 0;
+  virtual MoFEMErrorCode scaleMat(const FEMethod *fe, MatrixDouble &A) {};
   virtual MoFEMErrorCode getForceScale(const double ts_t, double &scale) {
     MoFEMFunctionBeginHot;
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "not implemented");
@@ -36,6 +37,16 @@ struct MethodForForceScaling {
     MoFEMFunctionBegin;
     for (auto vit = methods_op.begin(); vit != methods_op.end(); vit++)
       CHKERR vit->scaleNf(fe, nf);
+    MoFEMFunctionReturn(0);
+  }
+  
+  static MoFEMErrorCode
+  applyScale(const FEMethod *fe,
+             boost::ptr_vector<MethodForForceScaling> &methods_op,
+             MatrixDouble &A) {
+    MoFEMFunctionBegin;
+    for (auto vit = methods_op.begin(); vit != methods_op.end(); vit++)
+      CHKERR vit->scaleMat(fe, A);
     MoFEMFunctionReturn(0);
   }
 

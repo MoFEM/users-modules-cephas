@@ -429,9 +429,9 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs::doWork(
     }
   }
 
-  // TODO: scale matrix NN, e.g:
-  // CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, NN);
-  // needs to be implemented in MethodForForceScaling
+  //scale matrix NN,
+  CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, NN);
+  
   CHKERR MatSetValues(
       getFEMethod()->snes_B, row_nb_dofs, &row_data.getIndices()[0],
       col_nb_dofs, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
