@@ -19,7 +19,7 @@ const double D = 1e-3; ///< diffusivity
 const double r = 1;    ///< rate factor
 const double k = 1;    ///< caring capacity
 
-const int order = 2; ///< approximation order
+const int order = 1; ///< approximation order
 const int save_every_nth_step = 4;
 
 struct CommonData {
