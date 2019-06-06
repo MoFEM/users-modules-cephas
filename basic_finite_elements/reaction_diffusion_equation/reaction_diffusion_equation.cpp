@@ -11,6 +11,8 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
+namespace ReactionDiffusionEquation {
+
 using FaceEle = FaceElementForcesAndSourcesCore;
 using OpFaceEle = FaceElementForcesAndSourcesCore::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
@@ -18,6 +20,8 @@ using EntData = DataForcesAndSourcesCore::EntData;
 const double D = 1e-3; ///< diffusivity
 const double r = 1;    ///< rate factor
 const double k = 1;    ///< caring capacity
+
+const double u0 = 0.1; ///< inital vale on blocksets
 
 const int order = 1; ///< approximation order
 const int save_every_nth_step = 4;
@@ -28,7 +32,7 @@ const int save_every_nth_step = 4;
  * Common data are used to keep and pass data between elements
  *
  */
-* / struct CommonData {
+struct CommonData {
 
   MatrixDouble grad;
   VectorDouble val;
@@ -42,7 +46,7 @@ const int save_every_nth_step = 4;
 /**
  * @brief Assemble mass matrix
  */
-* / struct OpAssembleMass : OpFaceEle {
+struct OpAssembleMass : OpFaceEle {
   OpAssembleMass(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", "u", OpFaceEle::OPROWCOL), commonData(data) {
     sYmm = true;
@@ -260,7 +264,7 @@ private:
 
 /**
  * @brief Monitor solution
- * 
+ *
  * This functions is called by TS solver at the end of each step. It is used
  * to output results to the hard drive.
  */
@@ -288,6 +292,10 @@ private:
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
 };
 
+}; // namespace ReactionDiffusionEquation
+
+using namespace ReactionDiffusionEquation;
+
 int main(int argc, char *argv[]) {
 
   // initialize petsc
@@ -296,6 +304,7 @@ int main(int argc, char *argv[]) {
 
   try {
 
+    // Create moab and mofem instances
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
     MoFEM::Core core(moab);
@@ -319,15 +328,20 @@ int main(int argc, char *argv[]) {
     // setup problem
     CHKERR simple_interface->setUp();
 
+    // Create common data structure
     boost::shared_ptr<CommonData> data(new CommonData());
+    /// Alias pointers to data in common data structure
     auto val_ptr = boost::shared_ptr<VectorDouble>(data, &data->val);
     auto dot_val_ptr = boost::shared_ptr<VectorDouble>(data, &data->dot_val);
     auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad);
 
+    // Create finite element instances to integrate the right-hand side of slow
+    // and stiff vector, and the tangent left-hand side for stiff part.
     boost::shared_ptr<FaceEle> vol_ele_slow_rhs(new FaceEle(m_field));
     boost::shared_ptr<FaceEle> vol_ele_stiff_rhs(new FaceEle(m_field));
     boost::shared_ptr<FaceEle> vol_ele_stiff_lhs(new FaceEle(m_field));
 
+    // Push operators to integrate the slow right-hand side vector
     vol_ele_slow_rhs->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(data->invJac));
     vol_ele_slow_rhs->getOpPtrVector().push_back(
@@ -336,6 +350,9 @@ int main(int argc, char *argv[]) {
         new OpCalculateScalarFieldValues("u", val_ptr));
     vol_ele_slow_rhs->getOpPtrVector().push_back(new OpAssembleSlowRhs(data));
 
+    // PETSc IMAX and Explicit solver demans that g = M^-1 G is provided. So
+    // when the slow right-hand side vector (G) is assembled is solved for g
+    // vector.
     auto solve_mass = [&]() {
       MoFEMFunctionBegin;
       if (vol_ele_slow_rhs->vecAssembleSwitch) {
@@ -351,8 +368,10 @@ int main(int argc, char *argv[]) {
                       vol_ele_slow_rhs->ts_F);
       MoFEMFunctionReturn(0);
     };
+    // Add hook to the element to calculate g.
     vol_ele_slow_rhs->postProcessHook = solve_mass;
 
+    // Add operators to calculate the stiff right-hand side
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(data->invJac));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
@@ -366,6 +385,7 @@ int main(int argc, char *argv[]) {
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpAssembleStiffRhs<2>(data));
 
+    // Add operators to calculate the stiff left-hand side
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(data->invJac));
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
@@ -373,33 +393,42 @@ int main(int argc, char *argv[]) {
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleStiffLhs<2>(data));
 
+    // Set integration rules
     auto vol_rule = [](int, int, int p) -> int { return 2 * p; };
     vol_ele_slow_rhs->getRuleHook = vol_rule;
     vol_ele_stiff_rhs->getRuleHook = vol_rule;
     vol_ele_stiff_lhs->getRuleHook = vol_rule;
 
+    // Crate element for post-processing
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc =
         boost::shared_ptr<PostProcFaceOnRefinedMesh>(
             new PostProcFaceOnRefinedMesh(m_field));
     boost::shared_ptr<ForcesAndSourcesCore> null;
-
+    // Genarte post-processing mesh
     post_proc->generateReferenceElementMesh();
+    // Postprocess only field values
     post_proc->addFieldValuesPostProc("u");
 
+    // Get PETSc discrete manager
     auto dm = simple_interface->getDM();
 
-    // get surface entities form side set
-    Range inner_surface;
-    if (m_field.getInterface<MeshsetsManager>()->checkMeshset(1, BLOCKSET))
+    // Get surface entities form blockset, set initial values in those
+    // blocksets. To keep it simple is assumed that inital values are on
+    // blockset 1
+    if (m_field.getInterface<MeshsetsManager>()->checkMeshset(1, BLOCKSET)) {
+      Range inner_surface;
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           1, BLOCKSET, 2, inner_surface, true);
-    if (!inner_surface.empty()) {
-      Range inner_surface_verts;
-      CHKERR moab.get_connectivity(inner_surface, inner_surface_verts, false);
-      CHKERR m_field.getInterface<FieldBlas>()->setField(
-          0.1, MBVERTEX, inner_surface_verts, "u");
-    }
+      if (!inner_surface.empty()) {
+        Range inner_surface_verts;
+        CHKERR moab.get_connectivity(inner_surface, inner_surface_verts, false);
+        CHKERR m_field.getInterface<FieldBlas>()->setField(
+            u0, MBVERTEX, inner_surface_verts, "u");
+      }
+    } 
 
+    // Get skin on the body, i.e. body boundary, and apply homogenous Dirichlet
+    // conditions on that boundary.
     Range surface;
     CHKERR moab.get_entities_by_type(0, MBTRI, surface, false);
     Skinner skin(&m_field.get_moab());
@@ -411,10 +440,13 @@ int main(int argc, char *argv[]) {
                                  PSTATUS_NOT, -1, &edges_part);
     Range edges_verts;
     CHKERR moab.get_connectivity(edges_part, edges_verts, false);
+    // Since Dirichlet b.c. are essential boundary conditions, remove DOFs from
+    // the problem.
     CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
         simple_interface->getProblemName(), "u",
         unite(edges_verts, edges_part));
 
+    // Create mass matrix, calculate and assemble
     CHKERR DMCreateMatrix_MoFEM(dm, data->M);
     CHKERR MatZeroEntries(data->M);
     boost::shared_ptr<FaceEle> vol_mass_ele(new FaceEle(m_field));
@@ -424,23 +456,30 @@ int main(int argc, char *argv[]) {
     CHKERR MatAssemblyBegin(data->M, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(data->M, MAT_FINAL_ASSEMBLY);
 
+    // Create and septup KSP (linear solver), we need this to calculate g(t,u) =
+    // M^-1G(t,u)
     data->ksp = createKSP(m_field.get_comm());
     CHKERR KSPSetOperators(data->ksp, data->M, data->M);
     CHKERR KSPSetFromOptions(data->ksp);
     CHKERR KSPSetUp(data->ksp);
 
+    // Create and setup TS solver
     auto ts = createTS(m_field.get_comm());
+    // Use IMEX solver, i.e. implicit/explicit solver
     CHKERR TSSetType(ts, TSARKIMEX);
     CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
-    // CHKERR TSSetType(ts, TSBEULER);
 
+    // Add element to calculate lhs of stiff part
     CHKERR DMMoFEMTSSetIJacobian(dm, simple_interface->getDomainFEName(),
                                  vol_ele_stiff_lhs, null, null);
+    // Add element to calculate rhs of stiff part
     CHKERR DMMoFEMTSSetIFunction(dm, simple_interface->getDomainFEName(),
                                  vol_ele_stiff_rhs, null, null);
+    // Add element to calculate rhs of slow (nonlinear) part
     CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(),
                                    vol_ele_slow_rhs, null, null);
 
+    // Add monitor to time solver
     boost::shared_ptr<TsCtx> ts_ctx;
     CHKERR DMMoFEMGetTsCtx(dm, ts_ctx);
     CHKERR TSMonitorSet(ts, TsMonitorSet, ts_ctx.get(), PETSC_NULL);
@@ -448,10 +487,12 @@ int main(int argc, char *argv[]) {
     ts_ctx->get_loops_to_do_Monitor().push_back(TsCtx::PairNameFEMethodPtr(
         simple_interface->getDomainFEName(), monitor_ptr));
 
+    // Create solution vector
     SmartPetscObj<Vec> X;
     CHKERR DMCreateGlobalVector_MoFEM(dm, X);
     CHKERR DMoFEMMeshToLocalVector(dm, X, INSERT_VALUES, SCATTER_FORWARD);
 
+    // Solve problem
     double ftime = 1;
     CHKERR TSSetDM(ts, dm);
     CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
