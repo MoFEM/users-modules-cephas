@@ -22,7 +22,13 @@ const double k = 1;    ///< caring capacity
 const int order = 1; ///< approximation order
 const int save_every_nth_step = 4;
 
-struct CommonData {
+/**
+ * @brief Common data
+ *
+ * Common data are used to keep and pass data between elements
+ *
+ */
+* / struct CommonData {
 
   MatrixDouble grad;
   VectorDouble val;
@@ -33,7 +39,10 @@ struct CommonData {
   SmartPetscObj<KSP> ksp;
 };
 
-struct OpAssembleMass : OpFaceEle {
+/**
+ * @brief Assemble mass matrix
+ */
+* / struct OpAssembleMass : OpFaceEle {
   OpAssembleMass(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", "u", OpFaceEle::OPROWCOL), commonData(data) {
     sYmm = true;
@@ -81,6 +90,13 @@ private:
   boost::shared_ptr<CommonData> commonData;
 };
 
+/**
+ * @brief Assemble slow part
+ *
+ * Solve problem \f$ F(t,u,\dot{u}) = G(t,u) \f$ where here the right hand side
+ * \f$ G(t,u) \f$ is implemented.
+ *
+ */
 struct OpAssembleSlowRhs : OpFaceEle {
   OpAssembleSlowRhs(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", OpFaceEle::OPROW), commonData(data) {}
@@ -123,6 +139,13 @@ private:
   VectorDouble vecF;
 };
 
+/**
+ * @brief Assemble stiff part
+ *
+ * Solve problem \f$ F(t,u,\dot{u}) = G(t,u) \f$ where here the right hand side
+ * \f$ F(t,u,\dot{u}) \f$ is implemented.
+ *
+ */
 template <int DIM> struct OpAssembleStiffRhs : OpFaceEle {
   OpAssembleStiffRhs(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", OpFaceEle::OPROW), commonData(data) {}
@@ -167,6 +190,14 @@ private:
   VectorDouble vecF;
 };
 
+/**
+ * @brief Assemble stiff part tangent
+ *
+ * Solve problem \f$ F(t,u,\dot{u}) = G(t,u) \f$ where here the right hand side
+ * \f$ \frac{\textrm{d} F}{\textrm{d} u^n} = a F_{\dot{u}}(t,u,\textrm{u}) +
+ * F_{u}(t,u,\textrm{u}) \f$ is implemented.
+ *
+ */
 template <int DIM> struct OpAssembleStiffLhs : OpFaceEle {
   OpAssembleStiffLhs(boost::shared_ptr<CommonData> &data)
       : OpFaceEle("u", "u", OpFaceEle::OPROWCOL), commonData(data) {
@@ -227,6 +258,12 @@ private:
   MatrixDouble mat, transMat;
 };
 
+/**
+ * @brief Monitor solution
+ * 
+ * This functions is called by TS solver at the end of each step. It is used
+ * to output results to the hard drive.
+ */
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
