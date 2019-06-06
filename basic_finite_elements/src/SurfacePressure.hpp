@@ -77,8 +77,11 @@ struct NeummanForcesSurface {
   MyTriangleFE fe;
   MyTriangleFE &getLoopFe() { return fe; }
 
+  MyTriangleFE feLhs;
+  MyTriangleFE &getLoopFeLhs() { return feLhs; }
+
   NeummanForcesSurface(MoFEM::Interface &m_field)
-      : mField(m_field), fe(m_field) {}
+      : mField(m_field), fe(m_field), feLhs(m_field) {}
 
   struct bCForce {
     ForceCubitBcData data;
@@ -181,6 +184,55 @@ struct NeummanForcesSurface {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  struct DataAtIntegrationPts {
+    vector<vector<VectorDouble>> tangent;
+  };
+
+  struct OpGetTangent : public UserDataOperator {
+
+    boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
+    OpGetTangent(const string field_name,
+                 boost::shared_ptr<DataAtIntegrationPts> &dataAtIntegrationPts)
+        : UserDataOperator(field_name, UserDataOperator::OPCOL),
+          dataAtIntegrationPts(dataAtIntegrationPts) {}
+
+    int ngp;
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpNeumannPressureLhs : public UserDataOperator {
+
+    // Vec F;
+    bCPressure &dAta;
+    boost::ptr_vector<MethodForForceScaling> &methodsOp;
+    bool hoGeometry;
+    // VectorDouble Nf;
+    /*  MoFEMErrorCode doWork(int side, EntityType type,
+                           DataForcesAndSourcesCore::EntData &data);  */
+
+    Mat Aij;
+    boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
+    MatrixDouble NN;
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    OpNeumannPressureLhs(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPts> &dataAtIntegrationPts, Mat aij,
+        bCPressure &data, boost::ptr_vector<MethodForForceScaling> &methods_op,
+        bool ho_geometry = false)
+        : UserDataOperator(field_name_1, field_name_2,
+                           UserDataOperator::OPROWCOL),
+          dataAtIntegrationPts(dataAtIntegrationPts), Aij(aij), dAta(data),
+          methodsOp(methods_op), hoGeometry(ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
   /// Operator for flux element
   struct OpNeumannFlux : public UserDataOperator {
 
@@ -197,64 +249,87 @@ struct NeummanForcesSurface {
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
-  };
+      };
 
-  /**
-   * \brief Add operator to calculate forces on element
-   * @param  field_name  Field name (f.e. TEMPERATURE)
-   * @param  F           Right hand side vector
-   * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
-   * @param  ho_geometry Use higher order shape functions to define curved
-   * geometry
-   * @param  block_set   If tru get data from block set
-   * @return             ErrorCode
-   */
-  MoFEMErrorCode addForce(const std::string field_name, Vec F, int ms_id,
-                          bool ho_geometry = false, bool block_set = false);
+      /**
+       * \brief Add operator to calculate forces on element
+       * @param  field_name  Field name (f.e. TEMPERATURE)
+       * @param  F           Right hand side vector
+       * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
+       * @param  ho_geometry Use higher order shape functions to define curved
+       * geometry
+       * @param  block_set   If tru get data from block set
+       * @return             ErrorCode
+       */
+      MoFEMErrorCode addForce(const std::string field_name, Vec F, int ms_id,
+                              bool ho_geometry = false, bool block_set = false);
 
-  /**
-   * \brief Add operator to calculate pressure on element
-   * @param  field_name  Field name (f.e. TEMPERATURE)
-   * @param  F           Right hand side vector
-   * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
-   * @param  ho_geometry Use higher order shape functions to define curved
-   * geometry
-   * @param  block_set   If tru get data from block set
-   * @return             ErrorCode
-   */
-  MoFEMErrorCode addPressure(const std::string field_name, Vec F, int ms_id,
-                             bool ho_geometry = false, bool block_set = false);
+      /**
+       * \brief Add operator to calculate pressure on element
+       * @param  field_name  Field name (f.e. TEMPERATURE)
+       * @param  F           Right hand side vector
+       * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
+       * @param  ho_geometry Use higher order shape functions to define curved
+       * geometry
+       * @param  block_set   If tru get data from block set
+       * @return             ErrorCode
+       */
+      MoFEMErrorCode addPressure(const std::string field_name, Vec F, int ms_id,
+                                 bool ho_geometry = false,
+                                 bool block_set = false);
 
-  /**
-   * \brief Add operator to calculate pressure on element
-   * @param  field_name  Field name (f.e. TEMPERATURE)
-   * @param  F           Right hand side vector
-   * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
-   * @param  ho_geometry Use higher order shape functions to define curved
-   * geometry
-   * @param  block_set   If tru get data from block set
-   * @return             ErrorCode
-   */
-  MoFEMErrorCode addLinearPressure(const std::string field_name, Vec F,
-                                   int ms_id, bool ho_geometry = false);
+      /**
+       * \brief Add operator to calculate pressure on element (to be used when
+       * computation of the left hand side matrix is necessary)
+       * @param  field_name_1  Field name for data on rows (e.g.
+       * SPATIAL_POSITION)
+       * @param  field_name_2  Field name for data on cols (e.g.
+       * MESH_NODE_POSITIONS)
+       * @param  dataAtIntegrationPts common data at integration points
+       * @param  F             Right hand side vector
+       * @param  aij           Left hand side matrix
+       * @param  ms_id         Set id (SideSet or BlockSet if block_set = true)
+       * @param  ho_geometry   Use higher order shape functions to define curved
+       * geometry
+       * @param  block_set     If tru get data from block set
+       * @return               ErrorCode
+       */
+      MoFEMErrorCode addPressure(
+          const std::string field_name_1, const std::string field_name_2,
+          boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts, Vec F,
+          Mat aij, int ms_id, bool ho_geometry = false, bool block_set = false);
 
-  /// Add flux element operator (integration on face)
-  MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
-                         bool ho_geometry = false);
+      /**
+       * \brief Add operator to calculate pressure on element
+       * @param  field_name  Field name (f.e. TEMPERATURE)
+       * @param  F           Right hand side vector
+       * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
+       * @param  ho_geometry Use higher order shape functions to define curved
+       * geometry
+       * @param  block_set   If tru get data from block set
+       * @return             ErrorCode
+       */
+      MoFEMErrorCode addLinearPressure(const std::string field_name, Vec F,
+                                       int ms_id, bool ho_geometry = false);
 
-  /// \deprecated fixed spelling mistake
-  DEPRECATED typedef MethodForAnalyticalForce MethodForAnaliticalForce;
+      /// Add flux element operator (integration on face)
+      MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
+                             bool ho_geometry = false);
 
-  DEPRECATED typedef OpNeumannPressure OpNeumannPreassure;
+      /// \deprecated fixed spelling mistake
+      DEPRECATED typedef MethodForAnalyticalForce MethodForAnaliticalForce;
 
-  DEPRECATED typedef bCPressure
-      bCPreassure; ///< \deprecated Do not use spelling mistake
+      DEPRECATED typedef OpNeumannPressure OpNeumannPreassure;
 
-  /// \deprecated function is deprecated because spelling mistake, use
-  /// addPressure instead
-  DEPRECATED MoFEMErrorCode addPreassure(const std::string field_name, Vec F,
-                                         int ms_id, bool ho_geometry = false,
-                                         bool block_set = false);
+      DEPRECATED typedef bCPressure
+          bCPreassure; ///< \deprecated Do not use spelling mistake
+
+      /// \deprecated function is deprecated because spelling mistake, use
+      /// addPressure instead
+      DEPRECATED MoFEMErrorCode addPreassure(const std::string field_name,
+                                             Vec F, int ms_id,
+                                             bool ho_geometry = false,
+                                             bool block_set = false);
 };
 
 /** \brief Set of high-level function declaring elements and setting operators
