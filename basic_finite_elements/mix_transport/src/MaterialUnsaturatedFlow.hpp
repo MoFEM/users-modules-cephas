@@ -146,6 +146,12 @@ struct MaterialDarcy : public CommonMaterialData {
     Se = 1;
     MoFEMFunctionReturnHot(0);
   }
+
+  MoFEMErrorCode calDiffDiffK() {
+    MoFEMFunctionBeginHot;
+    diffDiffK = 0;
+    MoFEMFunctionReturnHot(0);
+  };
 };
 
 struct MaterialWithAutomaticDifferentiation : public CommonMaterialData {
@@ -384,9 +390,6 @@ struct MaterialModifiedVanG : public MaterialWithAutomaticDifferentiation {
       double num2 = 1 - pow(1 - ratio, m);
       Kr = pow(p, 0.5 * m) * pow(num1 / num2, 2.);
       K = Ks * Kr;
-      if (Kr < 1.e-6){
-        Kr = 1.e-6;
-        }
     } else {
       K = Ks;
     }
@@ -416,10 +419,105 @@ struct MaterialModifiedVanG : public MaterialWithAutomaticDifferentiation {
       //printf("See???  h is: %e   and diffK is: %e\n", h, diffK);
       diffK = Ks * diffKr;
     } else {
-      diffK = 0;
+      diffK = 0.;
     }
     MoFEMFunctionReturnHot(0);
   };
+
+  //double diffDiffK;
+  MoFEMErrorCode calDiffDiffK() {
+    
+    double m = 1. - 1. / n;
+    double f1 = (thetaS - thetaR) / (thetaM - thetaR);
+
+    const double diff_diff =
+        (pow(-(alpha * h), n) * m * n *
+         (-2 * (1 + pow(-(alpha * h), n)) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m) *
+              pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m),
+                    -1 + m) *
+              (1 - pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m),
+                                   1 / m),
+                         m)) *
+              (-1 + n) -
+          0.5 * pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              (1. + pow(-(alpha * h), n)) *
+              pow(-1. + pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n),
+                                                     m),
+                                          1 / m),
+                                m),
+                    2) *
+              (-1. + n) -
+          2 * pow(-(alpha * h), n) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m) *
+              pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m),
+                    -1 + m) *
+              (1 - pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m),
+                                   1 / m),
+                         m)) *
+              (-1 - m) * n +
+          2 * pow(-(alpha * h), n) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m) *
+              pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m),
+                    -1 + m) *
+              (1 - pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m),
+                                   1 / m),
+                         m)) *
+              (1 - m) * n -
+          2 * pow(-(alpha * h), n) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(f1 / pow(1 + pow(-(alpha * h), n), m), 2 / m) *
+              pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m),
+                    -2 + m) *
+              (1 - pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m),
+                                   1 / m),
+                         m)) *
+              (-1 + m) * n +
+          2 * pow(-(alpha * h), n) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(f1 / pow(1 + pow(-(alpha * h), n), m), 2 / m) *
+              pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m),
+                    2 * (-1 + m)) *
+              m * n +
+          2. * pow(-(alpha * h), n) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m) *
+              pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m), 1 / m),
+                    -1 + m) *
+              (1 - pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m),
+                                   1 / m),
+                         m)) *
+              m * n -
+          (0.25 * pow(-(alpha * h), n) *
+           pow(-1. +
+                     pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n), m),
+                                     1 / m),
+                           m),
+                 2) *
+           m * n) /
+              (pow(1 + pow(-(alpha * h), n), 2 * m) *
+               pow(pow(1 + pow(-(alpha * h), n), -m), 1.5)) +
+          0.5 * pow(-(alpha * h), n) *
+              pow(pow(1 + pow(-(alpha * h), n), -m), 0.5) *
+              pow(-1. + pow(1 - pow(f1 / pow(1 + pow(-(alpha * h), n),
+                                                     m),
+                                          1 / m),
+                                m),
+                    2) *
+              (1. + m) * n)) /
+        (pow(-1 + pow(1 - pow(f1, 1 / m), m), 2) * pow(h, 2) *
+         pow(1 + pow(-(alpha * h), n), 2));
+        
+        diffDiffK = Ks * diff_diff;
+    // } else {
+    //   diffDiffK = 0.;
+    // }
+
+    MoFEMFunctionReturnHot(0);
+    }
 
   MoFEMErrorCode calC() {
     MoFEMFunctionBeginHot;

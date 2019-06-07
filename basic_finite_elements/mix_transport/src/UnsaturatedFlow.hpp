@@ -50,6 +50,7 @@ struct GenericMaterial {
   double diffC; ///< Derivative of capacity [S^2/L^2 * L^2/F ]
   double tHeta; ///< Water content
   double Se;    ///< Effective saturation
+  double diffDiffK; ///< Derivative of hydraulic conductivity [L/s * L^2/F]
 
   Range tEts; ///< Elements with this material
 
@@ -106,6 +107,13 @@ struct GenericMaterial {
             "Not implemented how to calculate capacity");
     MoFEMFunctionReturn(0);
   }
+
+  virtual MoFEMErrorCode calDiffDiffK() {
+    MoFEMFunctionBegin;
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "Not implemented how to calculate capacity");
+    MoFEMFunctionReturn(0);
+  }
 };
 
 /**
@@ -149,6 +157,43 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     }
     SETERRQ(mField.get_comm(), MOFEM_DATA_INCONSISTENCY,
             "Element not found, no material data");
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode getBcConductivityOnValues(const EntityHandle ent, const int gg,
+                                           const double x, const double y,
+                                           const double z, double &value,
+                                           UnsaturatedFlowElement &c_tx,
+                                           double &k) {
+    MoFEMFunctionBegin;
+    std::vector<EntityHandle> corresponding_tet;
+    mField.get_moab().get_adjacencies(&ent, 1, 3, false, corresponding_tet,
+                                      moab::Interface::UNION);
+
+    for (MaterialsDoubleMap::const_iterator mit = dMatMap.begin();
+         mit != dMatMap.end(); mit++) {
+      if (mit->second->tEts.find(*corresponding_tet.begin()) !=
+          mit->second->tEts.end()) {
+        int block_id;
+        block_id = mit->first;
+        CHKERR c_tx.getMaterial(*corresponding_tet.begin(), block_id);
+        // Get material block
+        boost::shared_ptr<GenericMaterial> &block_data =
+            c_tx.dMatMap.at(block_id);
+
+        block_data->h = value;
+        // block_data->x = t_coords(0);
+        // block_data->y = t_coords(1);
+        // block_data->z = t_coords(2);
+        CHKERR block_data->calK();
+        k = block_data->K;
+        //printf("Value only %e K %e\n", value, k);
+
+        MoFEMFunctionReturnHot(0);
+      }
+    }
+    SETERRQ(mField.get_comm(), MOFEM_DATA_INCONSISTENCY,
+            "Element not found for boundary conductivity!");
     MoFEMFunctionReturn(0);
   }
 
@@ -292,11 +337,32 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         x = getCoordsAtGaussPts()(gg, 0);
         y = getCoordsAtGaussPts()(gg, 1);
         z = getCoordsAtGaussPts()(gg, 2);
+        auto t_h = getFTensor0FromVec(cTx.valuesAtGaussPts);
+        double help = t_h;
+        //printf("t_h is %e \n", help);
         double value;
         // get value of boundary condition
         CHKERR cTx.getBcOnValues(fe_ent, gg, x, y, z, value);
         const double w = getGaussPts()(2, gg) * 0.5;
-        const double beta = w * (value /*- z*/);
+        double K;
+        CHKERR cTx.getBcConductivityOnValues(fe_ent, gg, x, y, z, value, cTx,
+                                             K);
+        FTensor::Tensor0<double *> t_base(&data.getN()(gg, 0));
+        const double check = t_base;
+        //printf("CHeck %e\n", check);
+        // printf("Check %d %e %e %e %e\n", nb_gauss_pts, data.getN(gg)[0],
+        //        data.getN(gg)[1], data.getN(gg)[2], data.getN(gg)[3]);
+        // printf(
+        //     "Value is %e and t_h is %e K(h_bar) %e mult %e field values %e
+        //     wtf %e\n", value, help, K, K * (value - help),
+        //     data.getFieldData()[0], wtf);
+        double area = getArea();
+        const double beta = w * K * (value - z);
+
+        // const double beta = w * K * wtf;
+        // printf("Beta %e\n", beta);
+        // printf("Conductuvity on boundary: %e\n", K);
+        // const double beta = w * (value /*- z*/);
         noalias(nF) += beta * prod(data.getVectorN<3>(gg), getNormal());
       }
       // Scale vector if history  evaluating method is given
@@ -349,6 +415,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_h = getFTensor0FromVec(cTx.valuesAtGaussPts);
       // Get flux
       auto t_flux = getFTensor1FromMat<3>(cTx.fluxesAtGaussPts);
+      auto t_gradient_values = getFTensor1FromMat<3>(cTx.valuesGradientAtGaussPts);
       // Coords at integration points
       auto t_coords = getFTensor1CoordsAtGaussPts();
       // Get integration weight
@@ -367,20 +434,47 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         block_data->z = t_coords(2);
         CHKERR block_data->calK();
         const double K = block_data->K;
+        CHKERR block_data->calDiffDiffK();
+
+        const double diff_diff_K = block_data->diffDiffK;
+        CHKERR block_data->calDiffK();
+        const double diffK = block_data->diffK;
+
+        //printf("diff diff K is : %e\n", diff_diff_K);
         const double z = t_coords(2); /// z-coordinate at Gauss pt
         // Calculate pressure gradient
-        noalias(nF) -= alpha * (t_h /*- z*/) * divVec;
+        noalias(nF) -= alpha * K * (t_h - z) * divVec;
+        
+        //noalias(nF) -= alpha * (t_h - z) * divVec;
         // Calculate presure gradient from flux
         FTensor::Tensor0<double *> t_nf(&*nF.begin());
         for (int rr = 0; rr != nb_dofs; rr++) {
-          t_nf += alpha * (1 / K) * (t_n_hdiv(i) * t_flux(i));
-          ++t_n_hdiv; // move to next base function
-          ++t_nf;     // move to next element in vector
+           t_nf += alpha * (t_n_hdiv(i) * t_flux(i));
+           
+           t_nf -=
+               alpha * diffK * (t_n_hdiv(i) * t_gradient_values(i)) * (t_h - z);
+           
+           //t_nf -= alpha * diffK * (t_h - z )* (t_n_hdiv(i) * t_gradient_values(i));
+
+           double checking = alpha * K * (t_n_hdiv(i) * t_gradient_values(i));
+           //cerr << cTx.valuesGradientAtGaussPts << "\n";
+           // printf("K %e\n",   K );
+           // printf("diffK %e\n", diffK);
+           // printf("inner %e\n", t_n_hdiv(i) * t_gradient_values(i));
+
+           // t_nf -=
+           //     alpha * diffK * K * t_h * (t_n_hdiv(i) *
+           //     t_gradient_values(i));
+
+           // t_nf += alpha * (1 / K) * (t_n_hdiv(i) * t_flux(i));
+           ++t_n_hdiv; // move to next base function
+           ++t_nf;     // move to next element in vector
         }
         ++t_h; // move to next integration point
         ++t_flux;
         ++t_coords;
         ++t_w;
+        ++t_gradient_values;
       }
       // Assemble residual
       CHKERR VecSetValues(getFEMethod()->ts_F, nb_dofs,
@@ -528,12 +622,16 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         const double K = block_data->K;
         // get integration weight and multiply by element volume
         const double alpha = t_w * vol;
-        const double beta = alpha * (1 / K);
+        const double beta = alpha;
+        //const double beta = alpha * (1 / K);
         FTensor::Tensor0<double *> t_a(&*nN.data().begin());
         for (int kk = 0; kk != nb_row; kk++) {
           auto t_n_hdiv_col = col_data.getFTensor1N<3>(gg, 0);
           for (int ll = 0; ll != nb_col; ll++) {
             t_a += beta * (t_n_hdiv_row(j) * t_n_hdiv_col(j));
+            // printf("Div Div /k : %e\n", beta * (t_n_hdiv_row(j) * t_n_hdiv_col(j) ) );
+            // printf("Div Div : %e\n", beta * K * (t_n_hdiv_row(j) * t_n_hdiv_col(j)));
+
             ++t_n_hdiv_col;
             ++t_a;
           }
@@ -795,10 +893,18 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_w = getFTensor0IntegrationWeight();
       // Get base function
       auto t_n_hdiv_row = row_data.getFTensor1N<3>();
+      auto t_gradient_values =
+          getFTensor1FromMat<3>(cTx.valuesGradientAtGaussPts);
+
+
       // Get volume
       double vol = getVolume();
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
+        FTensor::Tensor1<double *, 3> dN_dx(
+            &col_data.getDiffN()(gg, 0), &col_data.getDiffN()(gg, 1),
+            &col_data.getDiffN()(gg, 2));
+
         block_data->h = t_h;
         block_data->x = t_coords(0);
         block_data->y = t_coords(1);
@@ -806,21 +912,44 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         CHKERR block_data->calK();
         CHKERR block_data->calDiffK();
         const double K = block_data->K;
-        // const double z = t_coords(2);
+        const double z = t_coords(2);
         const double KK = K * K;
         const double diffK = block_data->diffK;
         double alpha = t_w * vol;
         CHKERR getDivergenceOfHDivBaseFunctions(row_side, row_type, row_data,
                                                 gg, divVec);
-        noalias(nN) -= alpha * outer_prod(divVec, col_data.getN(gg));
+        //noalias(nN) -= alpha * outer_prod(divVec, col_data.getN(gg));
+
+        noalias(nN) -= alpha * (K + diffK * (t_h - z) ) *  outer_prod(divVec, col_data.getN(gg));
+        double help = divVec[0];
+        // noalias(nN) -=
+        //     alpha * (diffK) * (t_h - z) * divVec, col_data.getN(gg));
+        // nN(0) -=
+        //     alpha * (diffK) * (t_h - z) * divVec(0);
+
+        //const double z = t_coords(2);
+        //noalias(nN) -= alpha * diffK * (t_h - z) * divVec;
+        // cerr << col_data.getN(gg) << "\n";
+        // noalias(nN) -= alpha * (diffK * t_h) * outer_prod(divVec,
+        // col_data.getN(gg));
+
+        // cerr << alpha * (K + diffK * t_h) *
+        //             outer_prod(divVec, col_data.getN(gg))<<"\n";
         FTensor::Tensor0<double *> t_a(&*nN.data().begin());
         for (int rr = 0; rr != nb_row; rr++) {
-          double beta = alpha * (-diffK / KK) * (t_n_hdiv_row(i) * t_flux(i));
+          //double beta = alpha * (-diffK / KK) * (t_n_hdiv_row(i) * t_flux(i));
+          //double beta = alpha * (-diffK / KK) * (t_n_hdiv_row(i) * t_flux(i));
           auto t_n_col = col_data.getFTensor0N(gg, 0);
           for (int cc = 0; cc != nb_col; cc++) {
-            t_a += beta * t_n_col;
+            
+             t_a -= alpha * (diffK)*t_n_hdiv_row(i) *
+                    (dN_dx(i) * (t_h - z) + t_gradient_values(i) * t_n_col);
+            
+            //t_a -= alpha * (diffK) * (t_h - z) * help * t_n_col;
+            //t_a += beta * t_n_col;
             ++t_n_col;
             ++t_a;
+            ++dN_dx;
           }
           ++t_n_hdiv_row;
         }
@@ -828,6 +957,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         ++t_coords;
         ++t_h;
         ++t_flux;
+        ++t_gradient_values;
       }
       CHKERR MatSetValues(getFEMethod()->ts_B, nb_row,
                           &row_data.getIndices()[0], nb_col,
@@ -1488,6 +1618,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         new OpValuesAtGaussPts(*this, "VALUES"));
     feVolRhs->getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
+    feVolRhs->getOpPtrVector().push_back(
+        new OpValuesGradientAtGaussPts(*this, "VALUES"));
     feVolRhs->getOpPtrVector().push_back(new OpResidualFlux(*this, "FLUXES"));
     feVolRhs->getOpPtrVector().push_back(new OpResidualMass(*this, "VALUES"));
     feVolRhs->getOpPtrVector().back().opType =
@@ -1503,6 +1635,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         new OpValuesAtGaussPts(*this, "VALUES"));
     feVolLhs->getOpPtrVector().push_back(
         new OpFluxDivergenceAtGaussPts(*this, "FLUXES"));
+    feVolLhs->getOpPtrVector().push_back(
+        new OpValuesGradientAtGaussPts(*this, "VALUES"));
     feVolLhs->getOpPtrVector().push_back(
         new OpTauDotSigma_HdivHdiv(*this, "FLUXES"));
     feVolLhs->getOpPtrVector().push_back(new OpVU_L2L2(*this, "VALUES"));
