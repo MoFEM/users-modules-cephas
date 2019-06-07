@@ -681,8 +681,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
-  if (data.getFieldData().size() == 0)
+  if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
+
   if (V) {
     vAlues.resize(data.getFieldData().size());
     double *a;
@@ -703,6 +704,12 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
     vAluesPtr = &data.getFieldData();
   }
 
+  CHKERR loopSideVolumes(feVolName, *sideOpFe);
+
+  //quit if tag is not needed
+  if(!saveOnTag)
+    MoFEMFunctionReturnHot(0);
+
   const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0].get();
   int rank = dof_ptr->getNbOfCoeffs();
 
@@ -715,7 +722,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
   CHKERR postProcMesh.tag_get_handle(tagName.c_str(), tag_length,
                                      MB_TYPE_DOUBLE, th,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-  CHKERR loopSideVolumes(feVolName, *sideFe);
+
   // zero tags, this for Vertex if H1 and TRI if Hdiv, EDGE for Hcurl
   // no need for L2
   const void *tags_ptr[mapGaussPts.size()];
@@ -729,7 +736,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
 
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
-    
     // FIXME: this is not very efficient
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       for (int rr = 0; rr != rank; ++rr) {

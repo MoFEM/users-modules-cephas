@@ -729,6 +729,13 @@ struct PostProcFatPrismOnRefinedMesh
   }
 };
 
+// template <class ELEMENT>
+// struct PostProcFaceOnRefinedMeshTemplate
+//     : public PostProcTemplateOnRefineMesh<
+//           MoFEM::ELEMENT> {
+//   bool sixNodePostProcTris;
+// };
+
 /**
  * \brief Postprocess on face
  *
@@ -739,11 +746,13 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
   bool sixNodePostProcTris;
 
-  PostProcFaceOnRefinedMesh(MoFEM::Interface &m_field,
-                            bool six_node_post_proc_tris = true)
+  PostProcFaceOnRefinedMesh(
+      MoFEM::Interface &m_field,
+      bool six_node_post_proc_tris = true)
       : PostProcTemplateOnRefineMesh<MoFEM::FaceElementForcesAndSourcesCore>(
             m_field),
-        sixNodePostProcTris(six_node_post_proc_tris) {}
+        sixNodePostProcTris(six_node_post_proc_tris) {
+  }
 
   virtual ~PostProcFaceOnRefinedMesh() {
     ParallelComm *pcomm_post_proc_mesh =
@@ -776,26 +785,27 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
-    CommonData &commonData;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideOpFe;
     const std::string tagName;
+    const bool saveOnTag;
     Vec V;
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
     const std::string feVolName;
     boost::shared_ptr<MatrixDouble> gradMatPtr;
 
-    OpGetFieldGradientValuesOnSkin(
-        moab::Interface &post_proc_mesh,
-        std::vector<EntityHandle> &map_gauss_pts, const std::string field_name,
-        const std::string tag_name, CommonData &common_data,
-        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
-        const std::string vol_fe_name,
-        boost::shared_ptr<MatrixDouble> grad_mat_ptr, Vec v = PETSC_NULL)
+    OpGetFieldGradientValuesOnSkin(moab::Interface &post_proc_mesh,
+                                   std::vector<EntityHandle> &map_gauss_pts,
+                                   const std::string field_name,
+                                   const std::string tag_name,
+                                   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+                                   const std::string vol_fe_name,
+                                   boost::shared_ptr<MatrixDouble> grad_mat_ptr,
+                                   bool save_on_tag, Vec v = PETSC_NULL)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          tagName(tag_name), commonData(common_data), sideFe(side_fe),
-          feVolName(vol_fe_name), gradMatPtr(grad_mat_ptr), V(v) {}
+          tagName(tag_name), sideOpFe(side_fe), feVolName(vol_fe_name),
+          gradMatPtr(grad_mat_ptr), saveOnTag(save_on_tag), V(v) {}
 
     VectorDouble vAlues;
     VectorDouble *vAluesPtr;
@@ -813,20 +823,20 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     if (!grad_mat_ptr)
       grad_mat_ptr = boost::make_shared<MatrixDouble>();
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe(
-        new VolumeElementForcesAndSourcesCoreOnSide(mField));
-
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
+        boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+    
     // check number of coefficients
     auto field_ptr = mField.get_field_structure(field_name);
     const int nb_coefficients = field_ptr->getNbOfCoeffs();
 
     switch (nb_coefficients) {
     case 1:
-      side_fe->getOpPtrVector().push_back(
+      my_side_fe->getOpPtrVector().push_back(
           new OpCalculateScalarFieldGradient<3>(field_name, grad_mat_ptr));
       break;
     case 3:
-      side_fe->getOpPtrVector().push_back(
+      my_side_fe->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
       break;
     default:
@@ -834,15 +844,16 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
               "field with that number of coefficients is not implemented");
     }
 
-    if (save_on_tag)
-      FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-          new OpGetFieldGradientValuesOnSkin(
-              postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
-              commonData, side_fe, vol_fe_name, grad_mat_ptr, v));
+    FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+        new OpGetFieldGradientValuesOnSkin(
+            postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+            my_side_fe, vol_fe_name, grad_mat_ptr, v));
 
     MoFEMFunctionReturnHot(0);
   }
 };
+
+// using PostProcFaceOnRefinedMesh = PostProcFaceOnRefinedMeshTemplate<FaceElementForcesAndSourcesCore> ;
 
 #endif //__POSTPROC_ON_REF_MESH_HPP
 

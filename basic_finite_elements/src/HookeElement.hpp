@@ -1435,6 +1435,7 @@ struct HookeElement {
                    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
         : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
 
+
   protected:
     /**
      * \brief Integrate tangent stiffness for material momentum
@@ -1443,6 +1444,124 @@ struct HookeElement {
      * @return error code
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+  };
+
+  template <class ELEMENT> struct OpPostProcHookeElement : public ELEMENT::UserDataOperator  {
+    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
+    map<int, BlockData> &blockSetsPtr; //FIXME: (works only with the first block)
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    bool isALE;
+
+    OpPostProcHookeElement(
+        const string row_field,
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+        map<int, BlockData> &block_sets_ptr,
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts, bool is_ale = false)
+        : ELEMENT::UserDataOperator(row_field, UserDataOperator::OPROW), dataAtPts(data_at_pts),
+          blockSetsPtr(block_sets_ptr), postProcMesh(post_proc_mesh),
+          mapGaussPts(map_gauss_pts), isALE(is_ale) {
+    }
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
+
+      if (type != MBVERTEX) {
+        MoFEMFunctionReturnHot(0);
+      }
+
+      auto tensor_to_tensor = [](const auto &t1, auto &t2) {
+        t2(0, 0) = t1(0, 0);
+        t2(1, 1) = t1(1, 1);
+        t2(2, 2) = t1(2, 2);
+        t2(0, 1) = t2(1, 0) = t1(1, 0);
+        t2(0, 2) = t2(2, 0) = t1(2, 0);
+        t2(1, 2) = t2(2, 1) = t1(2, 1);
+      };
+
+      double def_VAL[9];
+      bzero(def_VAL, 9 * sizeof(double));
+
+      Tag th_stress;
+      CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
+                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+      Tag th_psi;
+      CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
+                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+      const int nb_integration_pts = mapGaussPts.size();
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
+
+      auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
+      auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
+
+      dataAtPts->stiffnessMat->resize(36, 1, false);
+      FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
+          MAT_TO_DDG(dataAtPts->stiffnessMat));
+      for (auto &m : (blockSetsPtr)) {
+        const double young = m.second.E;
+        const double poisson = m.second.PoissonRatio;
+
+        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+        t_D(i, j, k, l) = 0.;
+        t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
+        t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
+            0.5 * (1 - 2 * poisson);
+        t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
+            t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
+        t_D(i, j, k, l) *= coefficient;
+
+        break; // FIXME: calculates only first block
+      }
+
+      double detH = 0.;
+      FTensor::Tensor2<double, 3, 3> t_invH;
+      FTensor::Tensor2<double, 3, 3> t_F;
+      FTensor::Tensor2<double, 3, 3> t_stress;
+      FTensor::Tensor2<double, 3, 3> t_small_strain;
+      FTensor::Tensor2_symmetric<double, 3> t_stress_symm;
+      FTensor::Tensor2_symmetric<double, 3> t_small_strain_symm;
+
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+        if (!isALE) {
+          t_small_strain(i, j) = (t_h(i, j) + t_h(j, i)) / 2.;
+        } else {
+          CHKERR determinantTensor3by3(t_H, detH);
+          CHKERR invertTensor3by3(t_H, detH, t_invH);
+          t_F(i, j) = t_h(i, k) * t_invH(k, j);
+          t_small_strain(i, j) = (t_F(i, j) + t_F(j, i)) / 2.;
+
+          t_small_strain(0, 0) -= 1;
+          t_small_strain(1, 1) -= 1;
+          t_small_strain(2, 2) -= 1;
+          ++t_H;
+        }
+
+        //symmetric tensors need improvement
+        tensor_to_tensor(t_small_strain, t_small_strain_symm);
+        t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
+        tensor_to_tensor(t_stress_symm, t_stress);
+
+        const double psi = 0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
+
+
+        CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
+        CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
+                                         &t_stress(0, 0));
+
+        ++t_h;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
   };
 
   static MoFEMErrorCode
