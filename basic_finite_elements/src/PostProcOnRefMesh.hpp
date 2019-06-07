@@ -728,13 +728,6 @@ struct PostProcFatPrismOnRefinedMesh
   }
 };
 
-// template <class ELEMENT>
-// struct PostProcFaceOnRefinedMeshTemplate
-//     : public PostProcTemplateOnRefineMesh<
-//           MoFEM::ELEMENT> {
-//   bool sixNodePostProcTris;
-// };
-
 /**
  * \brief Postprocess on face
  *
