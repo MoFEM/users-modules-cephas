@@ -396,7 +396,7 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
     }
     CHKERR postProcMesh.delete_entities(&meshset, 1);
     CHKERR postProcMesh.delete_entities(edges);
-    // CHKERR postProcMesh.delete_entities(faces); 
+    // CHKERR postProcMesh.delete_entities(faces);
 
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
@@ -677,7 +677,8 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
+MoFEMErrorCode
+PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -706,8 +707,8 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
 
   CHKERR loopSideVolumes(feVolName, *sideOpFe);
 
-  //quit if tag is not needed
-  if(!saveOnTag)
+  // quit if tag is not needed
+  if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
   const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0].get();
@@ -727,7 +728,8 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork
   // no need for L2
   const void *tags_ptr[mapGaussPts.size()];
   int nb_gauss_pts = data.getN().size1();
-  if (mapGaussPts.size() != (unsigned int)nb_gauss_pts || nb_gauss_pts != gradMatPtr->size2()) {
+  if (mapGaussPts.size() != (unsigned int)nb_gauss_pts ||
+      nb_gauss_pts != gradMatPtr->size2()) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
   }
   switch (space) {
