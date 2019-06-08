@@ -1459,21 +1459,20 @@ struct HookeElement {
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
         if (!isALE) {
-          t_small_strain(i, j) = (t_h(i, j) + t_h(j, i)) / 2.;
+          t_small_strain_symm(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
         } else {
           CHKERR determinantTensor3by3(t_H, detH);
           CHKERR invertTensor3by3(t_H, detH, t_invH);
           t_F(i, j) = t_h(i, k) * t_invH(k, j);
-          t_small_strain(i, j) = (t_F(i, j) + t_F(j, i)) / 2.;
+          t_small_strain_symm(i, j) = (t_F(i, j) || t_F(j, i)) / 2.;
 
-          t_small_strain(0, 0) -= 1;
-          t_small_strain(1, 1) -= 1;
-          t_small_strain(2, 2) -= 1;
+          t_small_strain_symm(0, 0) -= 1;
+          t_small_strain_symm(1, 1) -= 1;
+          t_small_strain_symm(2, 2) -= 1;
           ++t_H;
         }
 
         // symmetric tensors need improvement
-        tensor_to_tensor(t_small_strain, t_small_strain_symm);
         t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
         tensor_to_tensor(t_stress_symm, t_stress);
 
