@@ -685,26 +685,6 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
 
-  if (V) {
-    vAlues.resize(data.getFieldData().size());
-    double *a;
-    CHKERR VecGetArray(V, &a);
-    VectorDofs::iterator it, hi_it;
-    it = data.getFieldDofs().begin();
-    hi_it = data.getFieldDofs().end();
-    for (int ii = 0; it != hi_it; it++, ii++) {
-      int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
-                          ->get()
-                          ->getPetscLocalDofIdx();
-      vAlues[ii] = a[local_idx];
-    }
-    CHKERR VecRestoreArray(V, &a);
-    vAluesPtr = &vAlues;
-  } else {
-    vAluesPtr = &data.getFieldData();
-  }
-
   CHKERR loopSideVolumes(feVolName, *sideOpFe);
 
   // quit if tag is not needed

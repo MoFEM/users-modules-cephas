@@ -778,7 +778,6 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideOpFe;
     const std::string tagName;
     const bool saveOnTag;
-    Vec V;
 
     const std::string feVolName;
     boost::shared_ptr<MatrixDouble> gradMatPtr;
@@ -789,16 +788,12 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
         const std::string tag_name,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
         const std::string vol_fe_name,
-        boost::shared_ptr<MatrixDouble> grad_mat_ptr, bool save_on_tag,
-        Vec v = PETSC_NULL)
+        boost::shared_ptr<MatrixDouble> grad_mat_ptr, bool save_on_tag)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
           tagName(tag_name), sideOpFe(side_fe), feVolName(vol_fe_name),
-          gradMatPtr(grad_mat_ptr), saveOnTag(save_on_tag), V(v) {}
-
-    VectorDouble vAlues;
-    VectorDouble *vAluesPtr;
+          gradMatPtr(grad_mat_ptr), saveOnTag(save_on_tag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -807,8 +802,8 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   MoFEMErrorCode addFieldValuesGradientPostProcOnSkin(
       const std::string field_name, const std::string vol_fe_name,
       boost::shared_ptr<MatrixDouble> grad_mat_ptr = nullptr,
-      bool save_on_tag = true, Vec v = PETSC_NULL) {
-    MoFEMFunctionBeginHot;
+      bool save_on_tag = true) {
+    MoFEMFunctionBegin;
 
     if (!grad_mat_ptr)
       grad_mat_ptr = boost::make_shared<MatrixDouble>();
@@ -837,18 +832,16 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
         new OpGetFieldGradientValuesOnSkin(
             postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
-            my_side_fe, vol_fe_name, grad_mat_ptr, v));
+            my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
 
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
 };
 
-// using PostProcFaceOnRefinedMesh =
-// PostProcFaceOnRefinedMeshTemplate<FaceElementForcesAndSourcesCore> ;
-
 #endif //__POSTPROC_ON_REF_MESH_HPP
 
-/***************************************************************************/ /**
-                                                                               * \defgroup mofem_fs_post_proc Post Process
-                                                                               * \ingroup user_modules
-                                                                               ******************************************************************************/
+/***************************************************************************/ 
+/**
+ * \defgroup mofem_fs_post_proc Post Process
+ * \ingroup user_modules
+******************************************************************************/
