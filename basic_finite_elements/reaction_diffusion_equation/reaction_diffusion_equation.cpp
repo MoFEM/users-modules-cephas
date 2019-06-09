@@ -2,6 +2,10 @@
  * \file reaction_diffusion_equation.cpp
  * \example reaction_diffusion_equation.cpp
  *
+ * \tableofcontents
+ * 
+ * \section reaction_diffusion_imp Implementation of reaction-diffusion equation
+ * 
  *
  * Calculate level set for initally given surface
  */
@@ -419,7 +423,7 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.getInterface<FieldBlas>()->setField(
             u0, MBVERTEX, inner_surface_verts, "u");
       }
-    } 
+    }
 
     // Get skin on the body, i.e. body boundary, and apply homogenous Dirichlet
     // conditions on that boundary.
@@ -474,12 +478,9 @@ int main(int argc, char *argv[]) {
                                    vol_ele_slow_rhs, null, null);
 
     // Add monitor to time solver
-    boost::shared_ptr<TsCtx> ts_ctx;
-    CHKERR DMMoFEMGetTsCtx(dm, ts_ctx);
-    CHKERR TSMonitorSet(ts, TsMonitorSet, ts_ctx.get(), PETSC_NULL);
     boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dm, post_proc));
-    ts_ctx->get_loops_to_do_Monitor().push_back(TsCtx::PairNameFEMethodPtr(
-        simple_interface->getDomainFEName(), monitor_ptr));
+    CHKERR DMMoFEMTSSetMonitor(dm, ts, simple_interface->getDomainFEName(),
+                               monitor_ptr, null, null);
 
     // Create solution vector
     SmartPetscObj<Vec> X;
