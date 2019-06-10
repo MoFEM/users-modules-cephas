@@ -698,7 +698,7 @@ change of time integration scheme is accounted by \f$\sigma\f$.
 
 \section reaction_diffusion_implementation Implementation
 
-Total control on solution process, that is calling functions to calculate
+Total control on solution process that is calling functions to calculate
 matrices and vectors in the right order is taken over by PETSc time solver
 (TS). TS call MoFEM methods iterating over finite element entities, which are
 provided to it by Discrete Manager (DM). The MoFEM keeps responsibility for
@@ -706,7 +706,7 @@ managing degrees of freedom, finite elements, and iterating over entities on
 the mesh. MOAB is a mesh database where all data are stored on mesh tags at
 any point of analysis.
 
-MoFEM and MOAB databases provide low level functions, however in this case
+MoFEM and MOAB databases provide low-level functions, however in this case
 flexibility of \ref MoFEM::Simple interface is adequate. \ref MoFEM::Simple
 interface creates approximation fields and finite elements on whole mesh, and
 create problem data structures accessed by DM. DM is a bridge between PETSc
@@ -718,16 +718,16 @@ vectors when called by time solver (TS). The relation between TS functions, DM
 in MoFEM and finite elements are shown in \ref Figure3 "Figure 3".
 
 \note Implementation of the problem is for PDE in two 2D, however with minimal
-effort, by changing type of element can be changed to three dimensional.
+the effort, by changing the type of element, can be changed to three dimensional.
 Moreover is independent on time integration method, exploiting how PETSc time
-solver is implemented.
+the solver is implemented.
 
 \anchor Figure3
-\image html reaction_diffusion_operators.png "Figure 3: Finite elements and operators. Yellow color indicate functions realted to Time Solver (TS). Read color indicated that functions are menaged by Discrete Manager (DM). Blue color indicate finite element instances. Green color indicate user data operators, where dark green standard user data operators, and lighter green user data operators implemented in this tutorial" width=800p
+\image html reaction_diffusion_operators.png "Figure 3: Finite elements and operators. Yellow colour indicates functions related to Time Solver (TS). Read colour indicated that functions are managed by Discrete Manager (DM). Blue colour indicates finite element instances. Green colour indicates user data operators, where dark green standard user data operators, and lighter green user data operators implemented in this tutorial" width=800p
 
 \subsection reaction_diffusion_mesh Setup problem
 
-MoFEM always has to start with initialisation, and main function has format
+MoFEM always has to start with initialisation, and the main function has the format
 \code
 int main(int argc, char *argv[]) {
   // initialize petsc
@@ -744,10 +744,10 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 \endcode
-Note that almost all MoFEM, PETSc and MOAB functions should be cheked by
+Note that almost all MoFEM, PETSc and MOAB functions should be checked by
 CHKERR, that is essential to write safe code, and error detection.
 
-In this tutorial initialisation of database has floowing steps
+In this tutorial initialisation of the database has following steps
 
 -# Main code starts with creating moab database and mofem database instances and
 intefaces to each of them
@@ -782,32 +782,31 @@ CHKERR simple_interface->setUp();
 Note that here we add only one field \em u, in \f$H^1(\Omega)\f$ space,
 approximation base is constructed following AINSWORTH_LEGENDRE_BASE recipe, and
 field is scalar filed, i.e. number of coefficients for base function is 1.
-Simple interface preasumes that field is span over whole domain, and integration
+Simple interface presumes that field is span over the whole domain, and integration
 in domain will be over highest dimension entities on the mesh, in this
 particular example all triangles. The finite element name is accessed through
 \code std::string fe_name = simple_interface->getDomainFEName(); \endcode On
 that element will be executed finite element instances, described below, and on
 each element user push set of operators to execute. Finite elements instances
-for other hand will be called through DM manager by TS solver.
+for another hand will be called through DM manager by TS solver.
 
--# Getting access to database from that point can be done exclusively through DM
+-# Getting access to the database from that point can be done exclusively through DM
 \code
 MoFEM::SmartPetscObj<DM> dm = simple_interface->getDM();
 \endcode
 Note that MoFEM::SmartPetscObj wraps PETSc object, can be used as regular PETSc
-object but user is revived form the need of calling destructor for it. Having
-access to DM one can push finite element instaces which can be used by TS to
-calculate matrices and vectors at subseqent time steps.
+object but the user has revived form the need of calling the destructor for it. Having
+access to DM one can push finite element instances which can be used by TS to
+calculate matrices and vectors at subsequent time steps.
 
 \subsection reaction_diffusion_telling_ts Telling TS what elements should be used
 
 In \ref Figure3 "Figure 3" in yellow boxes are PETSc functions, or yellow
-boxes on red background functions beeing part of DM and interfacing Time
+boxes on red background functions being part of DM and interfacing Time
 Solver (TS) with the MoFEM. In this tutorial TS is set to use IMEX
-(implicit/explict) method, <a
+(implicit/explicit) method, <a
 href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>see
-details</a> in section 6. Methods calculating vector and matrices needed by TS
-solver to proceed are set by DM functions
+details</a> in section 6. Methods calculating vector and matrices needed by TS solver to proceed set by DM functions
 
 -# \ref MoFEM::DMMoFEMTSSetRHSFunction to calculate \f$\mathbf{G}\f$
 -# \ref MoFEM::DMMoFEMTSSetIFunction to calculate \f$\mathbf{F}\f$
@@ -818,10 +817,10 @@ solver to proceed are set by DM functions
 
 Those functions provide sequences of finite elements (or just one element for
 each term in this particular case) to calculate entries of vectors and
-matrices at particular time steps. 
+matrices at specific time steps. 
 
--# Finite elements are marked by blue boxes on \ref Figure3 "Figure 3", and are
-created by following code 
+-# Blue boxes mark finite elements by  on \ref Figure3 "Figure 3", and are
+created by the following code 
 
 \code
 // Create finite element instances to integrate the right-hand side of slow
@@ -844,12 +843,11 @@ case we evaluated mass matrices, thus we need exactly calculate polynomial
 order \f$2p\f$. 
 
 Note that finite elements instances implementation is generic. Elements do
-problem specific calculations by providing to them user data operators, what
-is described in following sections. Three elements \em vol_ele_slow_rhs, \em
+problem specific calculations by providing to them user data operators, what is described in the following sections. Three elements \em vol_ele_slow_rhs, \em
 vol_ele_stiff_rhs, \em vol_ele_stiff_lhs are provided to Discrete Manager
-(DM) to calculate slow and stiff vectors, and jacobian matrix. Those three
+(DM) to calculate slow and stiff vectors and Jacobian matrix. Those three
 elements are instances of the class MoFEM::FaceElementForcesAndSourcesCore. 
-Once elements are created, we can add them to TS manger through DM interface
+Once elements are created, we can add them to the TS manager through the DM interface
 
 \code
 // Add element to calculate lhs of stiff part
@@ -860,10 +858,10 @@ CHKERR DMMoFEMTSSetIFunction(dm, simple_interface->getDomainFEName(), vol_ele_st
 CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(), vol_ele_slow_rhs, null, null);
 \endcode
 
-\note In case of 3D problem, user has to switch to
+\note In case of 3D problem, the user has to switch to
 MoFEM::VolumeElementForcesAndSourcesCore, to integrate over volume entities.
 Note that all users operators implemented in the example are templates, where
-template variable is dimension of the element. That makes implementation
+the template variable is a dimension of the element. That makes implementation
 dimension independent.
 
 \subsection reaction_diffusion_telling_fe Telling finite elements what operators should be used
@@ -885,12 +883,12 @@ vector \f$\mathbf{F}\f$
 -# ReactionDiffusionEquation::OpAssembleStiffLhs used to calculate the \em stiff
 matrix \f$\frac{\textrm{d}\mathbf{F}}{\textrm{d} \overline{\mathbf{u}^n}}\f$
 
--# ReactionDiffusionEquation::Monitor used to postprocess results at the end of
+-# ReactionDiffusionEquation::Monitor used to post-process results at the end of
 each time step
 
-Implementation of each operator follow similar pattern,
+Implementation of each operator follows a similar pattern,
 
--# The class is inherithed form ReactionDiffusionEquation::OpEle
+-# The class is inherited form ReactionDiffusionEquation::OpEle
 
 -# Two types of operators are implemented
 ReactionDiffusionEquation::OpEle::OPROW, to calculate vectors, and
@@ -898,18 +896,18 @@ ReactionDiffusionEquation::OpEle::OPROWCOL to calculate matrices.
 
 -# Implementation of user operator overload \em doWork member function
 
--# In each doWork method user iterate over integration points, and then over
-base functions. In case of matrix over base functions on rows and columns.
+-# In each doWork method, user iterate over integration points, and then over
+base functions. In case of a matrix over base functions on rows and columns.
 
 -# Once local element vector or is assembled, \em doWork function is finalised
 with assembling to global vector or global matrix.
 
 \note More derail description how to implement user data operator you can find
-in other tutorials, for example \ref poisson_tut2.
+in other tutorials, for example, \ref poisson_tut2.
 
 \subsection reaction_diffusion_common_data Common data
 
-The data between operator and finite elements are passed thrugh
+The data between the operator and finite elements are passed through
 ReactionDiffusionEquation::CommonData
 \code
 struct CommonData {
@@ -975,9 +973,9 @@ provide
 \mathbf{M}^{-1}\mathbf{G}(t,\overline{\mathbf{u}})
 \f]
 
-wheras user data operators provie vector
+whereas user data operators provide vector
 \f$\mathbf{G}(t,\overline{\mathbf{u}})\f$. This issue can be resolved by
-exploiting finite elemnet functionality. Each element has derived from
+exploiting finite element functionality. Each element has derived from
 MoFEM::BasicMethod
 
 \code 
@@ -1051,7 +1049,7 @@ CHKERR MatAssemblyEnd(data->M, MAT_FINAL_ASSEMBLY);
 
 with the use on the fly created finite element \em vol_mass_ele with pushed
 one operator ReactionDiffusionEquation::OpAssembleMass. The linear KSP solver
-is created and setup as follows
+is created and set up as follows
 
 \code 
 data->ksp = createKSP(m_field.get_comm()); 
@@ -1063,9 +1061,9 @@ CHKERR KSPSetFromOptions(data->ksp); CHKERR KSPSetUp(data->ksp);
 
 \subsection reaction_diffusion_initial Initial conditions
 
-To set initial conditions we use MoFEM::MeshsetsManager to get entities on the blockset,
-which are set by meshing code, for example Cubit, Salome or gMEsh. We assume
-that entities on which we set boundary conditions are set on subset of entities,
+To set initial conditions, we use MoFEM::MeshsetsManager to get entities on the blockset,
+which are set by meshing code, for example, Cubit, Salome or gMEsh. We assume
+that entities on which we set boundary conditions are set on a subset of entities,
 which are listed in \em BLOCKSET 1. In the following code
 
 \code
@@ -1082,22 +1080,22 @@ if (m_field.getInterface<MoFEM::MeshsetsManager>()->checkMeshset(1, BLOCKSET)) {
 }
 \endcode
 
--# We check if BLOCKSET 1 exist. Since problem is solved in parallel, each
-processor keeps only part of the mesh, BLOCKSET 1 exist only on some processors,
+-# We check if BLOCKSET 1 exist. Since the problem is solved in parallel, each
+the processor keeps only part of the mesh, BLOCKSET 1 exist only on some processors,
 which the right set of the entities
 
 -# If block exist, we ask MoFEM::MeshsetsManager to give entities dimension 2,
 i.e. faces, i.e. triangles in the block set
 
 -# We gat all the vertices on faces, and using MoFEM::FieldBlas interface we set
-values to the nodes on vertices. The value which is set is constsat \f$u_0\f$.
+values to the nodes on vertices. The value which is set is constant \f$u_0\f$.
 
 \subsection reaction_diffusion_bc Dirichlet boundary conditions
 
-To keep inital assumption, given in the begining paragraphs about fire
-propagation, that around plain of dry grass we have trench filled with water
-which stop fire, we will apply on boundary homogenous Dirichlet boundary
-conditions. In order to do that we follow code
+To keep initial assumption, given in the beginning paragraphs about fire
+propagation, that around the plain of dry grass we have trench filled with water
+which stops the fire, we will apply on boundary homogenous Dirichlet boundary
+conditions. To do that we follow the code
 
 \code
 Range surface;
@@ -1119,24 +1117,24 @@ CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
 -# Take all triangle on the mesh
 
 -# Using MOAB implemented skinner, we take skin from the mesh. Consequently we
-have all edges bounding mesh on part of the processor.
+have all edges bounding mesh on the part of the mesh.
 
--# Since we work on parallel mesh, not all edges are on true domain boundary. In
-order to fillter out true boundary we using moab::ParallelComm::filter_pstatus
+-# Since we work on the parallel mesh, not all edges are on true domain boundary. In
+order to filter out true boundary we using moab::ParallelComm::filter_pstatus
 which is provided with MOAB interface. Using moab::ParallelComm::filter_pstatus
 we filter out all entities which are not shared with any other processor. That
 entities are physical domain boundary.
 
--# In order to enforce homogenous essential boundary conditions in finite
-element method, the simplest way is to remove deress of freedom (DOFs) from the
+-# In order to enforce homogenous essential boundary conditions in the finite
+element method, the simplest way is to remove degrees of freedom (DOFs) from the
 problem. That is done by MoFEM::ProblemsManager interface using
 MoFEM::ProblemsManager::removeDofsOnEntities function. MoFEM::ProblemsManager is
 a MoFEM interface to manage DOFs and finite elements on the problems.
 
-\note MoFEM can manage many problems at once, for example one will have elastic
-problem and thermal problem set independently when solve them in staggered
-manner. Problems can share fields values, and finite elements, however keep sets
-of numbered DOFs independently and have diffrent subsets of DOFs.
+\note MoFEM can manage many problems at once; for example, one will have an elastic
+problem and thermal problem set independently when solve them in a staggered
+manner. Problems can share fields values, and finite elements, however, keep sets
+of numbered DOFs independently and have different subsets of DOFs.
 
 \section reaction_diffusion_code The plain program.
 
