@@ -644,20 +644,20 @@ matrix and \f$\mathbf{G}\f$ is source vector.
 
 \subsection reaction_diffusion_time Time discretisation
 
-In this section we fully realay on the time stepping algorithms briefly
+In this section, we fully really on time stepping algorithms briefly
 described in <a
 href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>in PETSc
 documentation</a> in section 6. Moreover, we focus attention on IMEX method,
 i.e. implicit-explicit time integration. The IMEX method is particularly useful
-when two time scales are separate and present in the solution, i.e. one fast
-scale, associated with \em stiff part of differential equation, and \em slow
-scale usually associated with strongly nonlinear part of the equation. In our
-particular case, \em stiff part of the equation is assisted with diffussion
-process, and slow is associated with reaction part of the equation. Focussing
-attention on our example of fire propagation, in plane of dry grass, \em stiff
-part controls speed of advencing fire, and \em slow part is realted to the
+when two-time scales are separate and present in the solution, i.e. one fast
+scale, associated with \em stiff part of a differential equation, and \em slow
+scale usually associated with the strongly nonlinear part of the equation. In our
+particular case, \em stiff part of the equation is assisted with the diffusion
+process, and slow is associated with the reaction part of the equation. Focusing
+attention on our example of fire propagation, in the plane of dry grass, \em stiff
+part controls the speed of advancing fire, and \em slow part is related to the
 length of the burning process itself, which a bit takes longer time. Using
-formallism pressented in PETSc documentation we have
+formalism presented in PETSc documentation we have
 
 \f[ \mathbf{F} \left(
 t,\overline{\mathbf{u}^n}, \dot{\overline{\mathbf{u}^n}}
