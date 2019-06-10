@@ -558,20 +558,20 @@ Moreover, we assume that fire is initiated in two places, as shown in the
 figure \ref Figure1 "Figure 1" below
 
 \anchor Figure1
-\image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are places where fire is initiated. On boundary is assumed Dirichlet boundary condition u = 0." width=500p
+\image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are places where the fire is initiated. On boundary is assumed Dirichlet boundary condition u = 0." width=500p
 
 \section reaction_diffusion_running_code Running code
 
-Code can work in parallel, so before start we have to do mesh partitioning,
-such that form very begining each processor store in the
-memory only part of the mesh. In order to partition mesh execut the script
+The code can work in parallel, so before the start, we have to do mesh partitioning,
+such that form very beginning each processor store in the
+memory only part of the mesh. In order to partition mesh execute the script
 in build directory in \em basic_finite_elements/reaction_diffusion_equation
 \code
 NBPROC=6 && ../../tools/mofem_part \
 -my_file mesh.cub -output_file mesh.h5m -my_nparts $NBPROC -dim 2 -adj_dim 1
 \endcode
-where variable \em NPROC represents number of processers. The mesh file \em
-mesh.cub is inital mesh from mesher, and the partitioned mesh is saved to file
+where variable \em NPROC represents a number of processers. The mesh file \em
+mesh.cub is initial mesh from the master, and the partitioned mesh is saved to file
 \em mesh.h5m. Having that mesh at hand we can solve the problem \code time
 mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log \endcode where
 parameters to run calculations are set from the file \em param_file.petsc
@@ -579,14 +579,14 @@ parameters to run calculations are set from the file \em param_file.petsc
 \include
 users_modules/basic_finite_elements/reaction_diffusion_equation/param_file.petsc
 
-where key paramaters are
+where key parameters are
 - \em -ts_final_time is time duration
 - \em -ts_dt time step size
 - \em -ts_arkimex_type ARIMEX time integration type
-- \em -ts_adapt_type time step adapation (if stiff part is not updated it has to
+- \em -ts_adapt_type time step adaptation (if the stiff part is not updated it has to
 be set to \em node)
 - \em -snes_lag_jacobian set how often jacobian (stiff part) is updated. If set
-to -2 jacobian is calculated only once at begining of analysis
+to -2 jacobian is calculated only once at the beginning of the analysis
 
 \anchor Figure2
 \image html reaction_diffusion.gif "Figure 2: Solution of the problem." width=800p
