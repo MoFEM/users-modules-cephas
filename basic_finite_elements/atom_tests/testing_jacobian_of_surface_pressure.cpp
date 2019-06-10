@@ -26,14 +26,14 @@ using namespace MoFEM;
 
 static char help[] = "\n";
 
-
 /* struct ScaleOp: public MethodForForceScaling {
-  //Hassan: This function to read data file (once) and save it in a pair vector ts
+  //Hassan: This function to read data file (once) and save it in a pair vector
+ts
 
   ScaleOp(
   ):
  {
-    
+
   }
 
   //Hassan: this function will loop over data in pair vector ts to find load
@@ -59,8 +59,8 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
-    //PetscBool ale = PETSC_FALSE;
-    //CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
+    // PetscBool ale = PETSC_FALSE;
+    // CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
     PetscBool test_jacobian = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
@@ -72,14 +72,13 @@ int main(int argc, char *argv[]) {
     CHKERR si->getOptions();
     CHKERR si->loadFile();
     CHKERR si->addDomainField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);                                          
+    CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
     const int order = 2;
     CHKERR si->setFieldOrder("x", order);
 
     CHKERR si->addDomainField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->addBoundaryField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->setFieldOrder("X", order);
-
 
     CHKERR si->setUp();
 
@@ -101,17 +100,21 @@ int main(int argc, char *argv[]) {
       // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
     }
 
-    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPts> dataAtIntegrationPts =
-        boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
+    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPts>
+        dataAtIntegrationPts =
+            boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
 
-    boost::shared_ptr<NeummanForcesSurface> surfacePressure(new NeummanForcesSurface(m_field));
+    boost::shared_ptr<NeummanForcesSurface> surfacePressure(
+        new NeummanForcesSurface(m_field));
 
-    boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_rhs_ptr(surfacePressure, &(surfacePressure->getLoopFe()));
-    boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_lhs_ptr(surfacePressure, &(surfacePressure->getLoopFeLhs()));
+    boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_rhs_ptr(
+        surfacePressure, &(surfacePressure->getLoopFe()));
+    boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_lhs_ptr(
+        surfacePressure, &(surfacePressure->getLoopFeLhs()));
     fe_rhs_ptr->meshPositionsFieldName = "X";
     fe_lhs_ptr->meshPositionsFieldName = "X";
-    //fe_rhs_ptr->addToRule = 2;
-    //fe_lhs_ptr->addToRule = 2;
+    // fe_rhs_ptr->addToRule = 2;
+    // fe_lhs_ptr->addToRule = 2;
 
     /* for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, SIDESET | PRESSURESET, it)) {
@@ -121,13 +124,14 @@ int main(int argc, char *argv[]) {
                                           it->getMeshsetId(), false, false) ;
     }  */
 
-    Range faces;
+    boost::shared_ptr<double> lambda_ptr = boost::make_shared<double>(1.0);
+
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
-      if (bit->getName().compare(0, 8, "PRESSURE") == 0) { 
-        CHKERR surfacePressure->addPressure("x", "X", dataAtIntegrationPts,
-                                          PETSC_NULL, PETSC_NULL,
-                                          bit->getMeshsetId(), true, true);
+      if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
+        CHKERR surfacePressure->addPressure(
+            "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
+            bit->getMeshsetId(), lambda_ptr, true, true);
       }
     }
 

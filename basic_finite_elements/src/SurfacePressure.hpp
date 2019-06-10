@@ -205,7 +205,7 @@ struct NeummanForcesSurface {
 
     // Vec F;
     bCPressure &dAta;
-    boost::ptr_vector<MethodForForceScaling> &methodsOp;
+    //boost::ptr_vector<MethodForForceScaling> &methodsOp;
     bool hoGeometry;
     // VectorDouble Nf;
     /*  MoFEMErrorCode doWork(int side, EntityType type,
@@ -215,6 +215,8 @@ struct NeummanForcesSurface {
     boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
     MatrixDouble NN;
 
+    boost::shared_ptr<double> lambdaPtr;
+
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
@@ -223,15 +225,17 @@ struct NeummanForcesSurface {
     OpNeumannPressureLhs(
         const string field_name_1, const string field_name_2,
         boost::shared_ptr<DataAtIntegrationPts> &dataAtIntegrationPts, Mat aij,
-        bCPressure &data, boost::ptr_vector<MethodForForceScaling> &methods_op,
+        bCPressure &data, boost::shared_ptr<double> lambda_ptr = nullptr,
         bool ho_geometry = false)
         : UserDataOperator(field_name_1, field_name_2,
                            UserDataOperator::OPROWCOL),
           dataAtIntegrationPts(dataAtIntegrationPts), Aij(aij), dAta(data),
-          methodsOp(methods_op), hoGeometry(ho_geometry) {
+          lambdaPtr(lambda_ptr), hoGeometry(ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
+
+ // if(lambdaPtr) NN *= *lambdaPtr;
 
   /// Operator for flux element
   struct OpNeumannFlux : public UserDataOperator {
@@ -297,7 +301,8 @@ struct NeummanForcesSurface {
       MoFEMErrorCode addPressure(
           const std::string field_name_1, const std::string field_name_2,
           boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts, Vec F,
-          Mat aij, int ms_id, bool ho_geometry = false, bool block_set = false);
+          Mat aij, int ms_id, boost::shared_ptr<double> lambda_ptr = nullptr,
+          bool ho_geometry = true, bool block_set = false);
 
       /**
        * \brief Add operator to calculate pressure on element
