@@ -80,8 +80,11 @@ struct NeummanForcesSurface {
   MyTriangleFE feLhs;
   MyTriangleFE &getLoopFeLhs() { return feLhs; }
 
+  MyTriangleFE feMatRhs;
+  MyTriangleFE &getLoopFeMatRhs() { return feMatRhs; }
+
   NeummanForcesSurface(MoFEM::Interface &m_field)
-      : mField(m_field), fe(m_field), feLhs(m_field) {}
+      : mField(m_field), fe(m_field), feLhs(m_field), feMatRhs(m_field) {}
 
   struct bCForce {
     ForceCubitBcData data;
@@ -100,6 +103,29 @@ struct NeummanForcesSurface {
 
   using UserDataOperator =
       MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
+  using EntData = DataForcesAndSourcesCore::EntData;
+
+  struct DataAtIntegrationPtsMat {
+
+    vector<vector<VectorDouble>> tangent;
+
+    boost::shared_ptr<MatrixDouble> hMat;
+    boost::shared_ptr<MatrixDouble> FMat;
+    boost::shared_ptr<MatrixDouble> HMat;
+    //boost::shared_ptr<VectorDouble> detHVec;
+    boost::shared_ptr<MatrixDouble> invHMat;
+
+    DataAtIntegrationPts() {
+      hMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      FMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      //detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
+      invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    }
+
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
+  };
 
   /// Operator for force element
   struct OpNeumannForce : public UserDataOperator {
@@ -224,7 +250,7 @@ struct NeummanForcesSurface {
 
     OpNeumannPressureLhs(
         const string field_name_1, const string field_name_2,
-        boost::shared_ptr<DataAtIntegrationPts> &dataAtIntegrationPts, Mat aij,
+        boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts, Mat aij,
         bCPressure &data, boost::shared_ptr<double> lambda_ptr = nullptr,
         bool ho_geometry = false)
         : UserDataOperator(field_name_1, field_name_2,
@@ -235,7 +261,90 @@ struct NeummanForcesSurface {
     };
   };
 
- // if(lambdaPtr) NN *= *lambdaPtr;
+  struct OpAssemble : public UserDataOperator {
+
+    OpAssemble(const std::string row_field, const std::string col_field,
+               boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+               const char type, bool symm = false);
+
+    /**
+     * \brief Do calculations for give operator
+     * @param  row_side row side number (local number) of entity on element
+     * @param  col_side column side number (local number) of entity on element
+     * @param  row_type type of row entity MBVERTEX, MBEDGE, MBTRI or MBTET
+     * @param  col_type type of column entity MBVERTEX, MBEDGE, MBTRI or MBTET
+     * @param  row_data data for row
+     * @param  col_data data for column
+     * @return          error code
+     */
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data);
+
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
+
+  protected:
+    // Finite element stiffness sub-matrix K_ij
+    MatrixDouble K;
+    MatrixDouble transK;
+    VectorDouble nF;
+
+    boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts;
+
+    VectorInt rowIndices;
+    VectorInt colIndices;
+
+    int nbRows;           ///< number of dofs on rows
+    int nbCols;           ///< number if dof on column
+    int nbIntegrationPts; ///< number of integration points
+    bool isDiag;          ///< true if this block is on diagonal
+
+    virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+
+    virtual MoFEMErrorCode iNtegrate(EntData &row_data);
+
+    /**
+     * \brief Assemble local entity block matrix
+     * @param  row_data row data (consist base functions on row entity)
+     * @param  col_data column data (consist base functions on column
+     * entity)
+     * @return          error code
+     */
+    MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+
+    /**
+     * \brief Assemble local entity right-hand vector
+     * @param  row_data row data (consist base functions on row entity)
+     * @param  col_data column data (consist base functions on column
+     * entity)
+     * @return          error code
+     */
+    MoFEMErrorCode aSsemble(EntData &row_data);
+  };
+
+  struct OpNeumannPressureMaterialRhs : public UserDataOperator {
+
+    Vec F;
+    bCPressure &dAta;
+    // boost::ptr_vector<MethodForForceScaling> &methodsOp;
+    bool hoGeometry;
+    boost::shared_ptr<DataAtIntegrationPtsMat> dataAtIntegrationPts;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &sideFe;
+
+    VectorDouble Nf;
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+    OpNeumannPressureMaterialRhs(
+        const string material_field,
+        boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        Vec f, bCPressure &data, bool ho_geometry = false)
+        : UserDataOperator(material_field, UserDataOperator::OPROWCOL),
+          dataAtIntegrationPts(dataAtIntegrationPts), sideFe(side_fe), F(f),
+          dAta(data), hoGeometry(ho_geometry){};
+  };
 
   /// Operator for flux element
   struct OpNeumannFlux : public UserDataOperator {

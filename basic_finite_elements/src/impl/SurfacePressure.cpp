@@ -340,8 +340,6 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs::doWork(
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
 
-  //VectorDouble3 n4_unit_current(3);
-
   auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
     return FTensor::Tensor2<double *, 3, 3>(
         &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
