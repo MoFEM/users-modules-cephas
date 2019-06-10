@@ -447,6 +447,149 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode NeummanForcesSurface::OpCalculateDeformationAle::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+
+  MoFEMFunctionBegin;
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  // get number of integration points
+  const int nb_integration_pts = getGaussPts().size2();
+  auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
+
+  dataAtPts->detHVec->resize(nb_integration_pts, false);
+  dataAtPts->invHMat->resize(9, nb_integration_pts, false);
+  dataAtPts->FMat->resize(9, nb_integration_pts, false);
+
+  auto t_detH = getFTensor0FromVec(*dataAtPts->detHVec);
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
+  
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    CHKERR determinantTensor3by3(t_H, t_detH);
+    CHKERR invertTensor3by3(t_H, t_detH, t_invH);
+    t_F(i, j) = t_h(i, k) * t_invH(k, j);
+
+    ++t_h;
+    ++t_H;
+    ++t_detH;
+    ++t_invH;
+    ++t_F;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+
+  MoFEMFunctionBegin;
+
+  // get number of dofs on row
+  nbRows = row_data.getIndices().size();
+  // if no dofs on row, exit that work, nothing to do here
+  if (!nbRows)
+    MoFEMFunctionReturnHot(0);
+
+  nF.resize(nbRows, false);
+  nF.clear();
+
+  // get number of integration points
+  nbIntegrationPts = getGaussPts().size2();
+
+  // integrate local matrix for entity block
+  CHKERR iNtegrate(row_data);
+
+  // assemble local matrix
+  CHKERR aSsemble(row_data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs::iNtegrate(
+    EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  auto get_tensor1 = [](VectorDouble &v, const int r) {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(
+        &v(r + 0), &v(r + 1), &v(r + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  CHKERR loopSideVolumes("PRESSURE_FE", *sideFe);
+
+  // get element volume
+  //double vol = getVolume();
+  // get intergration weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  auto t_normal = getFTensor1NormalsAtGaussPts();
+
+  // get derivatives of base functions on rows
+  //const int row_nb_base_fun = row_data.getN().size2();
+  //auto &det_H = *dataAtPts->detHVec;
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    FTensor::Tensor0<double *> t_base(&row_data.getN()(gg, 0));
+
+    // calculate scalar weight times element volume
+    // TODO: check if multiplication by detH is needed
+    double alpha = -0.5 * t_w * dAta.data.data.value1; //det_H[gg];
+    auto t_nf = get_tensor1(nF, 0);
+
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+      t_nf(i) += alpha * t_base * t_F(j, i) * t_normal(j);
+      ++t_base;
+      ++t_nf;
+    }
+
+    //for (; rr != row_nb_base_fun; ++rr)
+    //  ++t_row_diff_base;
+
+    ++t_w;
+    ++t_F;
+    ++t_normal;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs::aSsemble(
+    EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+
+  // auto &data = *dataAtPts;
+  // if (!data.forcesOnlyOnEntitiesRow.empty()) {
+  //   rowIndices.resize(nbRows, false);
+  //   noalias(rowIndices) = row_data.getIndices();
+  //   row_indices = &rowIndices[0];
+  //   VectorDofs &dofs = row_data.getFieldDofs();
+  //   VectorDofs::iterator dit = dofs.begin();
+  //   for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+  //     if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+  //         data.forcesOnlyOnEntitiesRow.end()) {
+  //       rowIndices[ii] = -1;
+  //     }
+  //   }
+  // }
+
+  Vec F = getFEMethod()->snes_f;
+  // assemble local matrix
+  CHKERR VecSetValues(F, nbRows, row_indices, &*nF.data().begin(), ADD_VALUES);
+  MoFEMFunctionReturn(0);
+}
+
 NeummanForcesSurface::OpNeumannFlux::OpNeumannFlux(
     const std::string field_name, Vec _F, bCPressure &data,
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
@@ -672,6 +815,65 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(
     feLhs.getOpPtrVector().push_back(new OpNeumannPressureLhs(
         field_name_1, field_name_2, dataAtIntegrationPts, aij,
         mapPressure[ms_id], lambda_ptr, ho_geometry));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
+    const std::string spatial_field, const std::string material_field,
+    boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe, Vec F,
+    Mat aij, int ms_id, boost::shared_ptr<double> lambda_ptr,
+    bool ho_geometry, bool block_set) {
+
+  const CubitMeshSets *cubit_meshset_ptr;
+  MeshsetsManager *mmanager_ptr;
+  MoFEMFunctionBegin;
+  CHKERR mField.getInterface(mmanager_ptr);
+  if (block_set) {
+    CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, BLOCKSET,
+                                            &cubit_meshset_ptr);
+    std::vector<double> mydata;
+    CHKERR cubit_meshset_ptr->getAttributes(mydata);
+    VectorDouble pressure(mydata.size());
+    for (unsigned int ii = 0; ii < mydata.size(); ii++) {
+      pressure[ii] = mydata[ii];
+    }
+    if (pressure.empty()) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Pressure not given");
+    }
+    const string name = "Pressure";
+    strncpy(mapPressure[ms_id].data.data.name, name.c_str(),
+            name.size() > 8 ? 8 : name.size());
+    mapPressure[ms_id].data.data.flag1 = 0;
+    mapPressure[ms_id].data.data.flag2 = 1;
+    mapPressure[ms_id].data.data.value1 = pressure[0];
+    mapPressure[ms_id].data.data.zero = 0;
+    CHKERR mField.get_moab().get_entities_by_type(
+        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+
+    side_fe->getOpPtrVector().push_back(new OpCalculateDeformationAle(
+        material_field, data_at_pts, ho_geometry));
+
+    feMatRhs.getOpPtrVector().push_back(
+        new OpNeumannPressureMaterialRhs(material_field, data_at_pts, side_fe,
+                                         F, mapPressure[ms_id], ho_geometry));
+
+    // TODO: push operators for LHS
+  } else {
+    CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, SIDESET, &cubit_meshset_ptr);
+    CHKERR cubit_meshset_ptr->getBcDataStructure(mapPressure[ms_id].data);
+    CHKERR mField.get_moab().get_entities_by_type(
+        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+
+    side_fe->getOpPtrVector().push_back(new OpCalculateDeformationAle(
+        material_field, data_at_pts, ho_geometry));
+
+    feMatRhs.getOpPtrVector().push_back(
+        new OpNeumannPressureMaterialRhs(material_field, data_at_pts, side_fe,
+                                         F, mapPressure[ms_id], ho_geometry));
+
+    // TODO: push operators for LHS
   }
   MoFEMFunctionReturn(0);
 }
