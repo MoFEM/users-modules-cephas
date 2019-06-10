@@ -609,12 +609,12 @@ where \f$\Omega\f$ is solution domian. To have unique solution, we have to a
 priori enforce essential boundary conditions, such as test functions \f$v\f$ and
 tested function \f$u\f$ disapiear on boundary \f$\partial\Omega\f$.
 Also, approximation and tested functions are in
-Hilbert space \f$H^1_0(\Omega)\f$, such that integral of first direvarive and
-function value over domian is bounded. That will make solution of our week
-equation stable and equal to solution of strong equation, if smooth enough
-inital and boundary conditions are provided. Moreover, solution of the problem
-can be approximated by finite dimensional and complete set of the pice-linear
-confirming polynomails, which are dense in \f$H^1(\Omega)\f$, thus we will
+Hilbert space \f$H^1_0(\Omega)\f$, such that integral of the first derivative and
+function value over the domain is bounded. That will make the solution for our week
+equation stable and equal to the solution of the strong equation, if smooth enough
+initial and boundary conditions are provided. Moreover, the solution to the problem
+can be approximated by a finite-dimensional and complete set of the pice-linear
+confirming polynomials, which are dense in \f$H^1(\Omega)\f$, thus we will
 have convergence to the exact solution with mesh refinement or increasing
 polynomial approximation order. The approximation of test and tested functions
 is given as follows \f[ v^h = \pmb\Phi
