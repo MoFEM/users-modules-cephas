@@ -519,9 +519,9 @@ Fisher's equation \cite fisher1937wave, also know as
 Kolmogorov–Petrovsky–Piskunov equation is
 describing the population dynamics, e.g. mutation, in space and time.
 Its predictive power can be applied to model fire propagation, virile mutant
-propagation, the evolution of a neutron population in nuclear reactor, or spread
+propagation, the evolution of a neutron population in a nuclear reactor, or spread
 of Alzheimer's disease in the brain, and many more phenomenon related to growth
-and transformation of one infite and uncountable set species into another.
+and transformation of one infinite and uncountable set species into another.
 
 In this tutorial, we consider equation almost in his original form presented
 in \cite fisher1937wave
@@ -529,14 +529,15 @@ in \cite fisher1937wave
 \frac{\partial u}{\partial t} - D \nabla^2 u =
 ru\left(1-\frac{u}{k}\right)
 \f]
-where \f$D\f$ is diffusivity, \f$r\f$ is rate factor and \f$k\f$ is carring
-capacity. This equation can be understood that advencing wave with speed no
-greater than \f$\sqrt{Dr}\f$, will transform abandon spices into another
-"mutant" form, swiching state variable \f$u\f$ from equilibrium \f$u=0\f$ state
-to another equilibrium \f$u=k\f$. The estimated speed of advencing wave can be
-used futher to choose duration of analysis and length of time step.
 
-One can understand this equation by example spreading fire on the plane of
+where \f$D\f$ is diffusivity, \f$r\f$ is rate factor and \f$k\f$ is carrying
+capacity. This equation can be understood that advancing wave with speed no
+greater than \f$\sqrt{Dr}\f$, will transform abandon spices into another
+"mutant" form, switching state variable \f$u\f$ from equilibrium \f$u=0\f$ state
+to another equilibrium \f$u=k\f$. The estimated speed of the advancing wave can be
+used further to choose the duration of analysis and length of the time step.
+
+One can understand this equation by example, spreading fire on the plane of
 dry grass, isolated from the rest of the domain by the trench of water. Fire
 will spread over the whole area, where all grass over time will be consumed
 by fire and transformed to ash, where viring (not burn) grass is indicated by
@@ -547,13 +548,13 @@ would be controlled by parameter \f$k\f$, i.e. caring capacity. Also, if there
 is no wind or no inclination of the surface, the diffusivity parameter is
 scalar. From the other hand, if the ground has some inclination, or wind is
 present, the fire will have a tendency to go up the hill or direction of
-wind, that would be accounted for by tensorial representation of diffusivity.
-If grass has the same hight everywhere, \f$D\f$ is equal everyware, i.e.
-homogenous. If for example grass hight changing from postion to position,
+the wind, that would be accounted for by tensorial representation of diffusivity.
+If the grass has the same hight everywhere, \f$D\f$ is equal everywhere, i.e.
+homogenous. If for example grass hight changing from position to position,
 \f$D=D(\mathbf{x})\f$ and \f$r=r(\mathbf{x})\f$, diffusivity and rate factor
-is heterogenous. In this example, to keep the problem as simple as
-possible, we implemented homogenous case, with isotropic diffusivity.
-Moreover we assuming that fire is initiated in two places, as shown in the
+is heterogeneous. In this example, to keep the problem as simple as
+possible, we implemented a homogenous case, with isotropic diffusivity.
+Moreover, we assume that fire is initiated in two places, as shown in the
 figure \ref Figure1 "Figure 1" below
 
 \anchor Figure1
