@@ -394,3 +394,21 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_hook_scaled_with_density_element
   -file_name mesh_for_testing_elastic_jacobian.h5m -ale
   )
+
+# Surface pressure element
+
+bfe_add_executable(testing_jacobian_of_surface_pressure
+${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_surface_pressure.cpp
+)
+
+target_link_libraries(testing_jacobian_of_surface_pressure
+users_modules
+mofem_finite_elements
+mofem_interfaces
+mofem_multi_indices
+mofem_petsc
+mofem_approx
+mofem_third_party
+mofem_cblas
+${MoFEM_PROJECT_LIBS}
+)

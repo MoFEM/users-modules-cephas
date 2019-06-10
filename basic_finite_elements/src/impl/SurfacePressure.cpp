@@ -286,23 +286,32 @@ MoFEMErrorCode NeummanForcesSurface::OpGetTangent::doWork(int side, EntityType t
 
   ngp = data.getN().size1();
 
-  dataAtIntegrationPts->tangent.resize(ngp / 2);
+  unsigned int nb_dofs = data.getFieldData().size() / 3;
 
-  // tangent vectors to face F3
-  for (unsigned int gg = 0; gg != ngp / 2; ++gg) {
-    dataAtIntegrationPts->tangent[gg].resize(2);
-    dataAtIntegrationPts->tangent[gg][0].resize(3);
-    dataAtIntegrationPts->tangent[gg][1].resize(3);
+  if (type == MBVERTEX) {
+    dataAtIntegrationPts->tangent.resize(ngp);
+    // tangent vectors to face F3
+    for (unsigned int gg = 0; gg != ngp; ++gg) {
+      dataAtIntegrationPts->tangent[gg].resize(2);
+      dataAtIntegrationPts->tangent[gg][0].resize(3);
+      dataAtIntegrationPts->tangent[gg][1].resize(3);
+      dataAtIntegrationPts->tangent[gg][0].clear();
+      dataAtIntegrationPts->tangent[gg][1].clear();
+    }
+  }
 
+  for (unsigned int gg = 0; gg != ngp; ++gg) {
     for (unsigned int dd = 0; dd != 3; ++dd) {
-      dataAtIntegrationPts->tangent[gg][0][dd] =
-          cblas_ddot(3, &data.getDiffN()(gg, 0), 2, &data.getFieldData()[dd],
+      dataAtIntegrationPts->tangent[gg][0][dd] +=
+          cblas_ddot(nb_dofs, &data.getDiffN()(gg, 0), 2, &data.getFieldData()[dd],
                      3); // tangent-1
-      dataAtIntegrationPts->tangent[gg][1][dd] =
-          cblas_ddot(3, &data.getDiffN()(gg, 1), 2, &data.getFieldData()[dd],
+      dataAtIntegrationPts->tangent[gg][1][dd] +=
+          cblas_ddot(nb_dofs, &data.getDiffN()(gg, 1), 2, &data.getFieldData()[dd],
                      3); // tangent-2
     }
   }
+
+  int test = 0;
 
   MoFEMFunctionReturn(0);
 }
@@ -393,7 +402,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs::doWork(
   VectorDouble3 der_ksi(3);
   VectorDouble3 der_eta(3);
 
-  for (int gg = 0; gg != nb_gauss_pts / 2; gg++) {
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
     double val = getGaussPts()(2, gg); // * area;
 
     FTensor::Tensor0<double *> t_N_over_ksi(&col_data.getDiffN()(gg, 0));
