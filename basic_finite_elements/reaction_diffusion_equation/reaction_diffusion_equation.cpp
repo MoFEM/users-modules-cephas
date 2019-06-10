@@ -1093,8 +1093,8 @@ values to the nodes on vertices. The value which is set is constant \f$u_0\f$.
 \subsection reaction_diffusion_bc Dirichlet boundary conditions
 
 To keep initial assumption, given in the beginning paragraphs about fire
-propagation, that around the plain of dry grass we have trench filled with water
-which stops the fire, we will apply on boundary homogenous Dirichlet boundary
+propagation, that around the plain of dry grass we have trench filled with water, 
+we will apply on boundary homogenous Dirichlet boundary
 conditions. To do that we follow the code
 
 \code
@@ -1114,9 +1114,9 @@ CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
     unite(edges_verts, edges_part));
 \endcode
 
--# Take all triangle on the mesh
+-# Take all triangles on the mesh
 
--# Using MOAB implemented skinner, we take skin from the mesh. Consequently we
+-# Using Skinner implemented in MOAB, we take skin from the mesh. Consequently we
 have all edges bounding mesh on the part of the mesh.
 
 -# Since we work on the parallel mesh, not all edges are on true domain boundary. In
@@ -1130,11 +1130,6 @@ element method, the simplest way is to remove degrees of freedom (DOFs) from the
 problem. That is done by MoFEM::ProblemsManager interface using
 MoFEM::ProblemsManager::removeDofsOnEntities function. MoFEM::ProblemsManager is
 a MoFEM interface to manage DOFs and finite elements on the problems.
-
-\note MoFEM can manage many problems at once; for example, one will have an elastic
-problem and thermal problem set independently when solve them in a staggered
-manner. Problems can share fields values, and finite elements, however, keep sets
-of numbered DOFs independently and have different subsets of DOFs.
 
 \section reaction_diffusion_code The plain program.
 
