@@ -540,7 +540,7 @@ used further to choose the duration of analysis and length of the time step.
 One can understand this equation by example, spreading fire on the plane of
 dry grass, isolated from the rest of the domain by the trench of water. Fire
 will spread over the whole area, where all grass over time will be consumed
-by fire and transformed to ash, where viring (not burn) grass is indicated by
+by fire and transformed to ash, where virgin (not burn) grass is indicated by
 \f$u=0\f$, and grass consumed by fire, i.e. ash is \f$u=1\f$. The front of
 the fire will move with the velocity not greater than \f$\sqrt{Dr}\f$. In the
 case with the grass is mix with a plant with some resistance to fire, that
@@ -571,7 +571,7 @@ NBPROC=6 && ../../tools/mofem_part \
 -my_file mesh.cub -output_file mesh.h5m -my_nparts $NBPROC -dim 2 -adj_dim 1
 \endcode
 where variable \em NPROC represents a number of processers. The mesh file \em
-mesh.cub is initial mesh from the master, and the partitioned mesh is saved to file
+mesh.cub is initial mesh from the preprocessor mesher, and the partitioned mesh is saved to file
 \em mesh.h5m. Having that mesh at hand we can solve the problem \code time
 mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log \endcode where
 parameters to run calculations are set from the file \em param_file.petsc
@@ -598,7 +598,7 @@ to -2 jacobian is calculated only once at the beginning of the analysis
 To solve the equation, we apply standard Galerkin method, used in finite
 elements approximation, i.e. multiplying both sided by test function and
 integrate by parts to reduce demand for the regularity of tested and testing
-functions we get
+functions, we get
 \f[
 \int_\Omega v \frac{\partial u}{\partial t} \textrm{d}\Omega +
 \int_\Omega \nabla v \cdot D \nabla u \textrm{d}\Omega
@@ -613,22 +613,32 @@ Hilbert space \f$H^1_0(\Omega)\f$, such that integral of the first derivative an
 function value over the domain is bounded. That will make the solution for our week
 equation stable and equal to the solution of the strong equation, if smooth enough
 initial and boundary conditions are provided. Moreover, the solution to the problem
-can be approximated by a finite-dimensional and complete set of the pice-linear
-confirming polynomials, which are dense in \f$H^1(\Omega)\f$, thus we will
+can be approximated by a finite-dimensional and complete set of the piecewise
+mesh confirming polynomials, which are dense in \f$H^1(\Omega)\f$, thus we will
 have convergence to the exact solution with mesh refinement or increasing
 polynomial approximation order. The approximation of test and tested functions
-is given as follows \f[ v^h = \pmb\Phi
-\overline{\mathbf{v}}^\textrm{T}\quad\textrm{and}\quad u^h = \pmb\Phi
-\overline{\mathbf{u}}^\textrm{T} \f] where \f$\pmb\Phi\f$ is vector of
+is given as follows 
+
+\f[ 
+v^h = \pmb\Phi \overline{\mathbf{v}}^\textrm{T}
+\quad\textrm{and}\quad 
+u^h = \pmb\Phi \overline{\mathbf{u}}^\textrm{T} 
+\f] 
+
+where \f$\pmb\Phi\f$ is vector of
 hierarchical base functions, and \f$\overline{\mathbf{v}}\f$,
 \f$\overline{\mathbf{u}}\f$ are vectors of coefficients at degrees of freedom.
 Utilising finite element approximation functions we finally get semi-discreate
-form of the Fisher's equation \f[ \mathbf{M} \frac{\partial
-\overline{\mathbf{u}}}{\partial t} + \mathbf{K} \overline{\mathbf{u}}
+form of the Fisher's equation 
+
+\f[ 
+\mathbf{M} \frac{\partial \overline{\mathbf{u}}}{\partial t} + \mathbf{K} \overline{\mathbf{u}}
 =
 \mathbf{G}
 \f]
+
 where
+
 \f[
 \mathbf{M} :=
 \int_\Omega \pmb\Phi^\textrm{T} \pmb\Phi\, \textrm{d}\Omega,\quad
@@ -639,6 +649,7 @@ where
 \pmb\Phi^\textrm{T} \left\{ r u^h \left(1-\frac{u^h}{k}\right) \right\}
 \, \textrm{d}\Omega
 \f]
+
 where \f$\mathbf{M}\f$ is so called mass matrix, \f$\mathbf{K}\f$ stiffness
 matrix and \f$\mathbf{G}\f$ is source vector.
 
@@ -795,13 +806,13 @@ for another hand will be called through DM manager by TS solver.
 MoFEM::SmartPetscObj<DM> dm = simple_interface->getDM();
 \endcode
 Note that MoFEM::SmartPetscObj wraps PETSc object, can be used as regular PETSc
-object but the user has revived form the need of calling the destructor for it. Having
+object but the user is relived from the need of calling the destructor for it. Having
 access to DM one can push finite element instances which can be used by TS to
 calculate matrices and vectors at subsequent time steps.
 
 \subsection reaction_diffusion_telling_ts Telling TS what elements should be used
 
-In \ref Figure3 "Figure 3" in yellow boxes are PETSc functions, or yellow
+In \ref Figure3 "Figure 3" in yellow boxes are PETSc functions, on yellow
 boxes on red background functions being part of DM and interfacing Time
 Solver (TS) with the MoFEM. In this tutorial TS is set to use IMEX
 (implicit/explicit) method, <a
@@ -839,12 +850,12 @@ vol_ele_stiff_rhs->getRuleHook = vol_rule;
 vol_ele_stiff_lhs->getRuleHook = vol_rule;
 \endcode
 Integration rule depends on type of operator evaluated on element, in our
-case we evaluated mass matrices, thus we need exactly calculate polynomial
-order \f$2p\f$. 
+case we evaluated mass matrices, thus we need exactly calculate integras with 
+polynomial order \f$2p\f$. 
 
 Note that finite elements instances implementation is generic. Elements do
 problem specific calculations by providing to them user data operators, what is described in the following sections. Three elements \em vol_ele_slow_rhs, \em
-vol_ele_stiff_rhs, \em vol_ele_stiff_lhs are provided to Discrete Manager
+vol_ele_stiff_rhs and \em vol_ele_stiff_lhs are provided to Discrete Manager
 (DM) to calculate slow and stiff vectors and Jacobian matrix. Those three
 elements are instances of the class MoFEM::FaceElementForcesAndSourcesCore. 
 Once elements are created, we can add them to the TS manager through the DM interface
@@ -939,7 +950,7 @@ auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad);
 \subsection reaction_diffusion_pushing_fe Pushing operators to finite element
 
 Each of those user data operators are added to finite element, for example to
-\em vol_ele_stiff_rh we add operators as following
+\em vol_ele_stiff_rhs we add operators as following
 \code
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new MoFEM::OpCalculateInvJacForFace(data->invJac));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new MoFEM::OpSetInvJacH1ForFace(data->invJac));
@@ -958,10 +969,10 @@ direvatives of base functions to element reference configuration \f[
 where \f$\pmb \xi\f$ are coordinates in local element configuration,
 \f$\overline{\mathbf{x}}\f$ ale nodal positions or higher order coefficients in
 edges and faces if necessary to describe higher order geometry. Operators
-OpCalculateScalarFieldGradient and OpCalculateScalarFieldGradient are standard
+MoFEM::OpCalculateScalarFieldGradient and MoFEM::OpCalculateScalarFieldGradient are standard
 operators and are used to calculate field values, and gradients of field
-values at integration points, respectively. All operator in \ref Figure3 "Figure
-3" marked by dark green color, indicate that are standard operators and are
+values at integration points, respectively. All operator in \ref Figure3 "Figure 3" 
+marked by dark green color, indicate that are standard operators and are
 implemented in basic user modules.
 
 \subsection reaction_diffusion_g Problem with IMAX method in TS
@@ -975,7 +986,7 @@ provide
 
 whereas user data operators provide vector
 \f$\mathbf{G}(t,\overline{\mathbf{u}})\f$. This issue can be resolved by
-exploiting finite element functionality. Each element has derived from
+exploiting finite element functionality. Each finite element class is derived from
 MoFEM::BasicMethod
 
 \code 
@@ -1004,8 +1015,8 @@ elements on the mesh
 -# \em postProcess() is executed after code iterate over all given entity finite
 elements on the mesh
 
-If user provied hook, after vector \f$\mathbf{G}(t,\overline{\mathbf{u}})\f$ is
-calculated, and implementation of following lambda function 
+If user provied hook to postProcess stage, after vector \f$\mathbf{G}(t,\overline{\mathbf{u}})\f$ is
+calculated, can solve on place for \f$\mathbf{g}(t,\overline{\mathbf{u}})\f$. This is done by following lambda function 
 
 \code 
 auto solve_for_g = [&]() { 
@@ -1021,7 +1032,8 @@ auto solve_for_g = [&]() {
   MoFEMFunctionReturn(0);
 };
 \endcode
-This hooke can be set to the \em slow finite element, i.e. \em vol_ele_slow_rhs as
+ 
+The lambda function is set as a hook to the \em slow finite element, i.e. \em vol_ele_slow_rhs as
 follows 
 \code 
 vol_ele_slow_rhs->postProcessHook = solve_for_g; 
