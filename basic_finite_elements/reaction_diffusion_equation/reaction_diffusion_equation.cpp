@@ -515,16 +515,15 @@ int main(int argc, char *argv[]) {
 
 \section reaction_diffusion_equation Fisher's reaction-diffusion equation
 
-Fisher's equation \cite fisher1937wave, also know as
-Kolmogorov–Petrovsky–Piskunov equation is
-describing the population dynamics, e.g. mutation, in space and time.
-Its predictive power can be applied to model fire propagation, virile mutant
-propagation, the evolution of a neutron population in a nuclear reactor, or spread
-of Alzheimer's disease in the brain, and many more phenomenon related to growth
-and transformation of one infinite and uncountable set species into another.
+Fisher's equation \cite fisher1937wave is describing the population dynamics,
+transformation of species into "mutant" spices in space and time. Its
+predictive power can be applied to model fire propagation, virile mutant
+propagation, the evolution of a neutron population in a nuclear reactor, or
+spread of Alzheimer's disease in the brain, and many more phenomenon.
 
-In this tutorial, we consider equation almost in his original form presented
-in \cite fisher1937wave
+In this tutorial, we consider equation in his original form presented
+by Fisher in 1937 in \cite fisher1937wave
+
 \f[
 \frac{\partial u}{\partial t} - D \nabla^2 u =
 ru\left(1-\frac{u}{k}\right)
@@ -534,14 +533,13 @@ where \f$D\f$ is diffusivity, \f$r\f$ is rate factor and \f$k\f$ is carrying
 capacity. This equation can be understood that advancing wave with speed no
 greater than \f$\sqrt{Dr}\f$, will transform abandon spices into another
 "mutant" form, switching state variable \f$u\f$ from equilibrium \f$u=0\f$ state
-to another equilibrium \f$u=k\f$. The estimated speed of the advancing wave can be
-used further to choose the duration of analysis and length of the time step.
+to another equilibrium \f$u=k\f$. 
 
-One can understand this equation by example, spreading fire on the plane of
+To understand equation better, we can focus attention on spreading fire on the plane of
 dry grass, isolated from the rest of the domain by the trench of water. Fire
 will spread over the whole area, where all grass over time will be consumed
-by fire and transformed to ash, where virgin (not burn) grass is indicated by
-\f$u=0\f$, and grass consumed by fire, i.e. ash is \f$u=1\f$. The front of
+by fire and transformed to ash, i.e. mutant, where virgin (not burn) grass is indicated by
+\f$u=0\f$, and grass consumed by fire, i.e. ash is \f$u=k\f$. The front of
 the fire will move with the velocity not greater than \f$\sqrt{Dr}\f$. In the
 case with the grass is mix with a plant with some resistance to fire, that
 would be controlled by parameter \f$k\f$, i.e. caring capacity. Also, if there
@@ -559,6 +557,9 @@ figure \ref Figure1 "Figure 1" below
 
 \anchor Figure1
 \image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are places where the fire is initiated. On boundary is assumed Dirichlet boundary condition u = 0." width=500p
+
+\note The estimated speed of the advancing wave can be
+used further to choose the duration of analysis and length of the time step.
 
 \section reaction_diffusion_running_code Running code
 
