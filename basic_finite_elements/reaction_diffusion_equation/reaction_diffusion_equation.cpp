@@ -573,8 +573,13 @@ NBPROC=6 && ../../tools/mofem_part \
 \endcode
 where variable \em NPROC represents a number of processers. The mesh file \em
 mesh.cub is initial mesh from the preprocessor mesher, and the partitioned mesh is saved to file
-\em mesh.h5m. Having that mesh at hand we can solve the problem \code time
-mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log \endcode where
+\em mesh.h5m. Having that mesh at hand we can solve the problem 
+
+\code 
+time mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log 
+\endcode 
+
+where
 parameters to run calculations are set from the file \em param_file.petsc
 
 \include
@@ -616,7 +621,7 @@ equation stable and equal to the solution of the strong equation, if smooth enou
 initial and boundary conditions are provided. Moreover, the solution to the problem
 can be approximated by a finite-dimensional and complete set of the piecewise
 mesh confirming polynomials, which are dense in \f$H^1(\Omega)\f$, thus we will
-have convergence to the exact solution with mesh refinement or increasing
+have a convergence of approximate solution to the exact solution with mesh refinement or increasing
 polynomial approximation order. The approximation of test and tested functions
 is given as follows 
 
@@ -729,13 +734,13 @@ provide users operators called by finite elements to evaluate matrices and
 vectors when called by time solver (TS). The relation between TS functions, DM
 in MoFEM and finite elements are shown in \ref Figure3 "Figure 3".
 
+\anchor Figure3
+\image html reaction_diffusion_operators.png "Figure 3: Finite elements and operators. Yellow colour indicates functions related to Time Solver (TS). Read colour indicated that functions are managed by Discrete Manager (DM). Blue colour indicates finite element instances. Green colour indicates user data operators, where dark green standard user data operators, and lighter green user data operators implemented in this tutorial" width=800p
+
 \note Implementation of the problem is for PDE in two 2D, however with minimal
 the effort, by changing the type of element, can be changed to three dimensional.
 Moreover is independent on time integration method, exploiting how PETSc time
 the solver is implemented.
-
-\anchor Figure3
-\image html reaction_diffusion_operators.png "Figure 3: Finite elements and operators. Yellow colour indicates functions related to Time Solver (TS). Read colour indicated that functions are managed by Discrete Manager (DM). Blue colour indicates finite element instances. Green colour indicates user data operators, where dark green standard user data operators, and lighter green user data operators implemented in this tutorial" width=800p
 
 \subsection reaction_diffusion_mesh Setup problem
 
