@@ -557,9 +557,7 @@ homogenous case, with isotropic diffusivity. Moreover, we assume that fire is
 initiated at two places, as shown in \ref Figure1 "Figure 1" below.
 
 \anchor Figure1
-\image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are placed
-where the fire is initiated. On boundary, Dirichlet boundary condition
-u = 0 is applied." width=500p
+\image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are placed where the fire is initiated. On boundary, Dirichlet boundary condition u = 0 is applied." width=500p
 
 \note The estimated speed of the advancing wave can be
 used further to choose the duration of analysis and length of the time step.
@@ -600,8 +598,7 @@ has to be set to \em node)
   If set to -2 jacobian is calculated only once at the beginning of the analysis
 
 \anchor Figure2
-\image html reaction_diffusion.gif "Figure 2: Solution of the problem."
-width=800p
+\image html reaction_diffusion.gif "Figure 2: Solution of the problem." width=800p
 
 \section reaction_diffusion_discretisation Discretisation
 
@@ -742,17 +739,7 @@ vectors when called by time solver (TS). The relation between TS functions, DM
 in MoFEM and finite elements are shown in \ref Figure3 "Figure 3".
 
 \anchor Figure3
-\image html reaction_diffusion_operators.png "Figure 3: Finite elements and
-operators. Yellow colour indicates functions related to TS. Red
-colour indicates functions managed by DM. Blue
-colour indicates finite element instances. Green colour indicates user data
-operators, where dark green represents standard user data operators, and light
-green represents user data operators implemented for this tutorial" width=800p
-
-\note Implementation of the problem is for PDE in 2D, however, with minimal
-effort changing the type of element, it can be extended to 3D. Moreover is
-independent on time integration method, exploiting how PETSc time solver is
-implemented.
+\image html reaction_diffusion_operators.png "Figure 3: Finite elements and operators. Yellow colour indicates functions related to TS. Red colour indicates functions managed by DM. Blue colour indicates finite element instances. Green colour indicates user data operators, where dark green represents standard user data operators, and light green represents user data operators implemented for this tutorial" width=800p \note Implementation of the problem is for PDE in 2D, however, with minimal effort changing the type of element, it can be extended to 3D. Moreover is independent on time integration method, exploiting how PETSc time solver is implemented. width=800p
 
 \subsection reaction_diffusion_mesh Setup problem
 
