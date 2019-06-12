@@ -568,7 +568,8 @@ The code can run in parallel, so before starting the analysis, we have to do
 mesh partitioning, such that, from very beginning, each processor stores in the
 memory only one part of the mesh. In order to partition mesh, execute the script
 in build directory in directory \em
-basic_finite_elements/reaction_diffusion_equation \code
+basic_finite_elements/reaction_diffusion_equation 
+\code
 NBPROC=6 && ../../tools/mofem_part \
 -my_file mesh.cub -output_file mesh.h5m -my_nparts $NBPROC -dim 2 -adj_dim 1
 \endcode
@@ -822,8 +823,7 @@ object but user is relieved from the need of calling the destructor for it.
 Having access to DM one can push finite element instances which can be used by
 TS to calculate matrices and vectors at subsequent time steps.
 
-\subsection reaction_diffusion_telling_ts Telling TS which elements should be
-used
+\subsection reaction_diffusion_telling_ts Telling TS which elements should be used
 
 In \ref Figure3 "Figure 3", yellows are PETSc functions and those on red
 background are part of DM interfacing TS with MoFEM. In this tutorial TS is set
@@ -893,8 +893,7 @@ Note that all users operators implemented in the example are templates, where
 the template variable is the dimension of the element. That makes implementation
 dimension independent.
 
-\subsection reaction_diffusion_telling_fe Telling finite elements which
-operators should be used
+\subsection reaction_diffusion_telling_fe Telling finite elements which operators should be used
 
 The problem specific matrices and vectors are implemented in namespace
 \ref ReactionDiffusionEquation, by users data operators \ref
