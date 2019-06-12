@@ -840,8 +840,7 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
 #endif //__POSTPROC_ON_REF_MESH_HPP
 
-/***************************************************************************/ 
 /**
  * \defgroup mofem_fs_post_proc Post Process
  * \ingroup user_modules
-******************************************************************************/
+ **/
