@@ -515,14 +515,14 @@ int main(int argc, char *argv[]) {
 
 \section reaction_diffusion_equation Fisher's reaction-diffusion equation
 
-Fisher's equation \cite fisher1937wave is describing the population dynamics,
+Fisher's equation \cite fisher1937wave describes the population dynamics,
 transformation of species into "mutant" spices in space and time. Its
-predictive power can be applied to model fire propagation, virile mutant
-propagation, the evolution of a neutron population in a nuclear reactor, or
-spread of Alzheimer's disease in the brain, and many more phenomenon.
+predictive capabilities include modelling of fire propagation, virile mutant
+propagation, evolution of a neutron population in a nuclear reactor,
+spreading of Alzheimer's disease in human brain, and many more phenomena.
 
-In this tutorial, we consider equation in his original form presented
-by Fisher in 1937 in \cite fisher1937wave
+In this tutorial, we consider the equation in its original form presented
+by Fisher in 1937 \cite fisher1937wave
 
 \f[
 \frac{\partial u}{\partial t} - D \nabla^2 u =
@@ -530,79 +530,85 @@ ru\left(1-\frac{u}{k}\right)
 \f]
 
 where \f$D\f$ is diffusivity, \f$r\f$ is rate factor and \f$k\f$ is carrying
-capacity. This equation can be understood that advancing wave with speed no
-greater than \f$\sqrt{Dr}\f$, will transform abandon spices into another
-"mutant" form, switching state variable \f$u\f$ from equilibrium \f$u=0\f$ state
-to another equilibrium \f$u=k\f$. 
+capacity. This equation can be interpreted that advancing wave with a speed no
+greater than \f$\sqrt{Dr}\f$ will transform abandon spices into another
+"mutant" form, switching state variable \f$u\f$ from the equilibrium state of
+\f$u=0\f$ to another equilibrium state of \f$u=k\f$.
 
-To understand equation better, we can focus attention on spreading fire on the plane of
-dry grass, isolated from the rest of the domain by the trench of water. Fire
-will spread over the whole area, where all grass over time will be consumed
-by fire and transformed to ash, i.e. mutant, where virgin (not burn) grass is indicated by
-\f$u=0\f$, and grass consumed by fire, i.e. ash is \f$u=k\f$. The front of
-the fire will move with the velocity not greater than \f$\sqrt{Dr}\f$. In the
-case with the grass is mix with a plant with some resistance to fire, that
-would be controlled by parameter \f$k\f$, i.e. caring capacity. Also, if there
-is no wind or no inclination of the surface, the diffusivity parameter is
-scalar. From the other hand, if the ground has some inclination, or wind is
-present, the fire will have a tendency to go up the hill or direction of
-the wind, that would be accounted for by tensorial representation of diffusivity.
-If the grass has the same hight everywhere, \f$D\f$ is equal everywhere, i.e.
-homogenous. If for example grass hight changing from position to position,
-\f$D=D(\mathbf{x})\f$ and \f$r=r(\mathbf{x})\f$, diffusivity and rate factor
-is heterogeneous. In this example, to keep the problem as simple as
-possible, we implemented a homogenous case, with isotropic diffusivity.
-Moreover, we assume that fire is initiated in two places, as shown in the
-figure \ref Figure1 "Figure 1" below
+To understand equation better, we can focus our attention on the spreading of
+fire on a plane of dry grass which is isolated from the rest of the domain by a
+closed trench of water. Fire will spread over the whole area, where all grass
+over time will be consumed by fire and transformed into ash, i.e. mutant, where
+virgin (unburned) grass is indicated by \f$u=0\f$, and grass consumed by fire,
+i.e. ash is \f$u=k\f$. The front of the fire will move with the velocity not
+greater than \f$\sqrt{Dr}\f$. In the case with the grass is mixed with a plant
+having some resistance to fire, that would be controlled by parameter \f$k\f$,
+i.e. carrying capacity. Also, if there is no wind or no surface inclination, the
+diffusivity parameter \f$D\f$ is scalar. On the contrary, if the ground has some
+inclination or wind is present, the fire will have a tendency to go up the hill
+or follow the direction of the wind, that would be accounted for by tensorial
+representation of diffusivity. If the grass is of uniform height, \f$D\f$ is
+equal everywhere, i.e. homogenous. If, for example, the height of the grass
+varies from one place to another, diffusivity and rate factor is
+heterogeneous, i.e. \f$D=D(\mathbf{x})\f$ and \f$r=r(\mathbf{x})\f$.
+
+In this example, to keep the problem as simple as possible, we implement a
+homogenous case, with isotropic diffusivity. Moreover, we assume that fire is
+initiated at two places, as shown in \ref Figure1 "Figure 1" below.
 
 \anchor Figure1
-\image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are places where the fire is initiated. On boundary is assumed Dirichlet boundary condition u = 0." width=500p
+\image html reaction_diffusion_bc.png "Figure 1: Two yellow spots are placed
+where the fire is initiated. On boundary, Dirichlet boundary condition
+u = 0 is applied." width=500p
 
 \note The estimated speed of the advancing wave can be
 used further to choose the duration of analysis and length of the time step.
 
 \section reaction_diffusion_running_code Running code
 
-The code can work in parallel, so before the start, we have to do mesh partitioning,
-such that form very beginning each processor store in the
-memory only part of the mesh. In order to partition mesh execute the script
-in build directory in \em basic_finite_elements/reaction_diffusion_equation
-\code
+The code can run in parallel, so before starting the analysis, we have to do
+mesh partitioning, such that, from very beginning, each processor stores in the
+memory only one part of the mesh. In order to partition mesh, execute the script
+in build directory in directory \em
+basic_finite_elements/reaction_diffusion_equation \code
 NBPROC=6 && ../../tools/mofem_part \
 -my_file mesh.cub -output_file mesh.h5m -my_nparts $NBPROC -dim 2 -adj_dim 1
 \endcode
-where variable \em NPROC represents a number of processers. The mesh file \em
-mesh.cub is initial mesh from the preprocessor mesher, and the partitioned mesh is saved to file
-\em mesh.h5m. Having that mesh at hand we can solve the problem 
+where variable \em NBPROC represents the number of processors. The mesh file \em
+mesh.cub is the initial mesh which can be generated by a preprocessor, for
+example Cubit in this case. The partitioned mesh is saved to file \em mesh.h5m.
+Having that mesh at hand, we can solve the problem by running the command line
+below
 
-\code 
-time mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log 
-\endcode 
+\code
+time mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log
+\endcode
 
-where
-parameters to run calculations are set from the file \em param_file.petsc
+with parameters to run calculations can be found in the file \em
+param_file.petsc stored in the working directory
 
 \include
 users_modules/basic_finite_elements/reaction_diffusion_equation/param_file.petsc
 
-where key parameters are
-- \em -ts_final_time is time duration
-- \em -ts_dt time step size
-- \em -ts_arkimex_type ARIMEX time integration type
-- \em -ts_adapt_type time step adaptation (if the stiff part is not updated it has to
-be set to \em node)
-- \em -snes_lag_jacobian set how often jacobian (stiff part) is updated. If set
-to -2 jacobian is calculated only once at the beginning of the analysis
+The key parameters are
+- \em -ts_final_time: time duration
+- \em -ts_dt: time step size
+- \em -ts_arkimex_type: ARKIMEX time integration type
+- \em -ts_adapt_type: time step adaptation (if the stiff part is not updated, it
+has to be set to \em node)
+- \em -snes_lag_jacobian: determines how often jacobian (stiff part) is updated.
+  If set to -2 jacobian is calculated only once at the beginning of the analysis
 
 \anchor Figure2
-\image html reaction_diffusion.gif "Figure 2: Solution of the problem." width=800p
+\image html reaction_diffusion.gif "Figure 2: Solution of the problem."
+width=800p
 
 \section reaction_diffusion_discretisation Discretisation
 
-\subsection reaction_diffusion_weak_form Semi-discreate form of the equations
+\subsection reaction_diffusion_weak_form Semi-discrete form of the equation
 
 To solve the equation, we apply standard Galerkin method, used in finite
-elements approximation, i.e. multiplying both sided by test function and
+element approximation, i.e. multiplying both sides by a test function and
 integrate by parts to reduce demand for the regularity of tested and testing
 functions, we get
 \f[
@@ -611,34 +617,35 @@ functions, we get
 =
 \int_\Omega v r u \left(1-\frac{u}{k}\right) \textrm{d}\Omega
 \f]
-where \f$\Omega\f$ is solution domian. To have unique solution, we have to a
-priori enforce essential boundary conditions, such as test functions \f$v\f$ and
-tested function \f$u\f$ disapiear on boundary \f$\partial\Omega\f$.
+where \f$\Omega\f$ is solution domian. To have a unique solution, we have to a
+priori enforce essential boundary conditions, such that test functions \f$v\f$
+and tested function \f$u\f$ disappear on the boundary \f$\partial\Omega\f$.
 Also, approximation and tested functions are in
-Hilbert space \f$H^1_0(\Omega)\f$, such that integral of the first derivative and
-function value over the domain is bounded. That will make the solution for our week
-equation stable and equal to the solution of the strong equation, if smooth enough
-initial and boundary conditions are provided. Moreover, the solution to the problem
-can be approximated by a finite-dimensional and complete set of the piecewise
-mesh confirming polynomials, which are dense in \f$H^1(\Omega)\f$, thus we will
-have a convergence of approximate solution to the exact solution with mesh refinement or increasing
-polynomial approximation order. The approximation of test and tested functions
-is given as follows 
+Hilbert space \f$H^1_0(\Omega)\f$, such that integral of the first derivative
+and function value over the domain is bounded. That will make the solution for
+our weak equation stable and equal to the solution of the strong equation, if
+smooth enough initial and boundary conditions are provided. Moreover, the
+solution to the problem can be approximated by a finite-dimensional and complete
+set of the piecewise mesh conforming polynomials, which are dense in
+\f$H^1(\Omega)\f$, thus we will have a convergence of approximate solution to
+the exact solution with mesh refinement or increasing polynomial approximation
+order. The approximation of test and tested functions is given as follows
 
-\f[ 
+\f[
 v^h = \pmb\Phi \overline{\mathbf{v}}^\textrm{T}
-\quad\textrm{and}\quad 
-u^h = \pmb\Phi \overline{\mathbf{u}}^\textrm{T} 
-\f] 
+\quad\textrm{and}\quad
+u^h = \pmb\Phi \overline{\mathbf{u}}^\textrm{T}
+\f]
 
-where \f$\pmb\Phi\f$ is vector of
+where \f$\pmb\Phi\f$ is the vector of
 hierarchical base functions, and \f$\overline{\mathbf{v}}\f$,
 \f$\overline{\mathbf{u}}\f$ are vectors of coefficients at degrees of freedom.
-Utilising finite element approximation functions we finally get semi-discreate
-form of the Fisher's equation 
+Utilising finite element approximation functions we finally get semi-discrete
+form of the Fisher's equation
 
-\f[ 
-\mathbf{M} \frac{\partial \overline{\mathbf{u}}}{\partial t} + \mathbf{K} \overline{\mathbf{u}}
+\f[
+\mathbf{M} \frac{\partial \overline{\mathbf{u}}}{\partial t} + \mathbf{K}
+\overline{\mathbf{u}}
 =
 \mathbf{G}
 \f]
@@ -661,20 +668,20 @@ matrix and \f$\mathbf{G}\f$ is source vector.
 
 \subsection reaction_diffusion_time Time discretisation
 
-In this section, we fully really on time stepping algorithms briefly
+In this section, we fully rely on time stepping algorithms briefly
 described in <a
-href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>in PETSc
+href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>PETSc
 documentation</a> in section 6. Moreover, we focus attention on IMEX method,
 i.e. implicit-explicit time integration. The IMEX method is particularly useful
-when two-time scales are separate and present in the solution, i.e. one fast
+when two time scales are separated and present in the solution, i.e. one fast
 scale, associated with \em stiff part of a differential equation, and \em slow
-scale usually associated with the strongly nonlinear part of the equation. In our
-particular case, \em stiff part of the equation is assisted with the diffusion
-process, and slow is associated with the reaction part of the equation. Focusing
-attention on our example of fire propagation, in the plane of dry grass, \em stiff
-part controls the speed of advancing fire, and \em slow part is related to the
-length of the burning process itself, which a bit takes longer time. Using
-formalism presented in PETSc documentation we have
+scale usually associated with the strongly nonlinear part of the equation. In
+our particular case, \em stiff part of the equation is assisted with the
+diffusion process, and slow is associated with the reaction part of the
+equation. Focusing attention on our example of fire propagation, in the plane of
+dry grass, \em stiff part controls the speed of advancing fire, and \em slow
+part is related to the length of the burning process itself, which takes a bit
+longer time. Using formalism presented in PETSc documentation, we have
 
 \f[ \mathbf{F} \left(
 t,\overline{\mathbf{u}^n}, \dot{\overline{\mathbf{u}^n}}
@@ -708,26 +715,26 @@ where
 \sigma = \left. \frac{\partial \dot{u}}{\partial u} \right|_{u^n}
 \f]
 is paramter provided by algortim of time integration implemented in PETSc. The
-key advantage of presented algorithm is that implementation of equation
+key advantage of the presented algorithm is that implementation of equation
 is independent on time integration algorithm, and user can freely and quickly
 change time integration method without need of changing a line of the code. The
 change of time integration scheme is accounted by \f$\sigma\f$.
 
 \section reaction_diffusion_implementation Implementation
 
-Total control on solution process that is calling functions to calculate
-matrices and vectors in the right order is taken over by PETSc time solver
-(TS). TS call MoFEM methods iterating over finite element entities, which are
-provided to it by Discrete Manager (DM). The MoFEM keeps responsibility for
+Total control on solution process including calling functions to calculate
+matrices and vectors in the right order is handled by PETSc time solver
+(TS). TS call MoFEM methods iterating over finite element entities to which are
+provided by Discrete Manager (DM). MoFEM is responsible for
 managing degrees of freedom, finite elements, and iterating over entities on
-the mesh. MOAB is a mesh database where all data are stored on mesh tags at
+the mesh. MOAB is the mesh database where all data are stored on mesh tags at
 any point of analysis.
 
 MoFEM and MOAB databases provide low-level functions, however in this case
 flexibility of \ref MoFEM::Simple interface is adequate. \ref MoFEM::Simple
-interface creates approximation fields and finite elements on whole mesh, and
-create problem data structures accessed by DM. DM is a bridge between PETSc
-and MoFEM data structures and functions, in this particular case TS.
+interface creates approximation fields and finite elements on the whole mesh,
+and it creates problem data structures accessed by DM. DM is a bridge between
+PETSc and MoFEM data structures and functions, in this particular case TS.
 
 The programmer responsibility is to initialise data structures, methods and
 provide users operators called by finite elements to evaluate matrices and
@@ -735,16 +742,22 @@ vectors when called by time solver (TS). The relation between TS functions, DM
 in MoFEM and finite elements are shown in \ref Figure3 "Figure 3".
 
 \anchor Figure3
-\image html reaction_diffusion_operators.png "Figure 3: Finite elements and operators. Yellow colour indicates functions related to Time Solver (TS). Read colour indicated that functions are managed by Discrete Manager (DM). Blue colour indicates finite element instances. Green colour indicates user data operators, where dark green standard user data operators, and lighter green user data operators implemented in this tutorial" width=800p
+\image html reaction_diffusion_operators.png "Figure 3: Finite elements and
+operators. Yellow colour indicates functions related to TS. Red
+colour indicates functions managed by DM. Blue
+colour indicates finite element instances. Green colour indicates user data
+operators, where dark green represents standard user data operators, and light
+green represents user data operators implemented for this tutorial" width=800p
 
-\note Implementation of the problem is for PDE in two 2D, however with minimal
-the effort, by changing the type of element, can be changed to three dimensional.
-Moreover is independent on time integration method, exploiting how PETSc time
-the solver is implemented.
+\note Implementation of the problem is for PDE in 2D, however, with minimal
+effort changing the type of element, it can be extended to 3D. Moreover is
+independent on time integration method, exploiting how PETSc time solver is
+implemented.
 
 \subsection reaction_diffusion_mesh Setup problem
 
-MoFEM always has to start with initialisation, and the main function has the format
+MoFEM always has to start with initialisation and the main function has the
+followwing format
 \code
 int main(int argc, char *argv[]) {
   // initialize petsc
@@ -754,19 +767,20 @@ int main(int argc, char *argv[]) {
 
     // Implementation
 
-  } 
+  }
   CATCH_ERRORS;
   // finish work cleaning memory, getting statistics, etc.
   MoFEM::Core::Finalize();
   return 0;
 }
 \endcode
-Note that almost all MoFEM, PETSc and MOAB functions should be checked by
-CHKERR, that is essential to write safe code, and error detection.
+It is worth noting that almost all MoFEM, PETSc and MOAB functions should be
+checked by CHKERR which is essential for safe code development and error
+detection.
 
-In this tutorial initialisation of the database has following steps
+In this tutorial, the initialisation of the database contains following steps
 
--# Main code starts with creating moab database and mofem database instances and
+-# Main code starts with creating MOAB database and MoFEM database instances and
 intefaces to each of them
 \code
 moab::Core mb_instance;
@@ -775,13 +789,13 @@ MoFEM::Core core(moab);
 MoFEM::Interface &m_field = core;
 \endcode
 
--# Registring MoFEM Discrete Manager in PETSc
+-# Registration of MoFEM Discrete Manager in PETSc
 \code
 DMType dm_name = "DMMOFEM";
 CHKERR DMRegister_MoFEM(dm_name);
 \endcode
 
--# Loading mesh, and adding fields and setup DM manager
+-# Loading mesh, adding fields and setting-up DM manager
 \code
 // Simple interface
 Simple *simple_interface;
@@ -798,46 +812,53 @@ CHKERR simple_interface->setUp();
 \endcode
 Note that here we add only one field \em u, in \f$H^1(\Omega)\f$ space,
 approximation base is constructed following AINSWORTH_LEGENDRE_BASE recipe, and
-field is scalar filed, i.e. number of coefficients for base function is 1.
-Simple interface presumes that field is span over the whole domain, and integration
-in domain will be over highest dimension entities on the mesh, in this
-particular example all triangles. The finite element name is accessed through
-\code std::string fe_name = simple_interface->getDomainFEName(); \endcode On
-that element will be executed finite element instances, described below, and on
-each element user push set of operators to execute. Finite elements instances
-for another hand will be called through DM manager by TS solver.
+field is a scalar field, i.e. number of coefficients for base function is 1.
+Simple interface presumes that field is spanned over the whole domain, and
+integration in domain will be performed over the highest dimension entities on
+the mesh, in this particular example all triangles. The finite element name is
+accessed through
+\code
+std::string fe_name = simple_interface->getDomainFEName();
+\endcode
+On that element,finite element instances will be executed, described
+below, and on each element, user pushes a set of operators to execute. On the
+other hand, finite element instances will be called through DM manager by TS
+solver.
 
--# Getting access to the database from that point can be done exclusively through DM
+-# Getting access to the database from this point can be done exclusively
+through DM
 \code
 MoFEM::SmartPetscObj<DM> dm = simple_interface->getDM();
 \endcode
-Note that MoFEM::SmartPetscObj wraps PETSc object, can be used as regular PETSc
-object but the user is relived from the need of calling the destructor for it. Having
-access to DM one can push finite element instances which can be used by TS to
-calculate matrices and vectors at subsequent time steps.
+Note that MoFEM::SmartPetscObj wraps PETSc object can be used as a regular PETSc
+object but user is relieved from the need of calling the destructor for it.
+Having access to DM one can push finite element instances which can be used by
+TS to calculate matrices and vectors at subsequent time steps.
 
-\subsection reaction_diffusion_telling_ts Telling TS what elements should be used
+\subsection reaction_diffusion_telling_ts Telling TS which elements should be
+used
 
-In \ref Figure3 "Figure 3" in yellow boxes are PETSc functions, on yellow
-boxes on red background functions being part of DM and interfacing Time
-Solver (TS) with the MoFEM. In this tutorial TS is set to use IMEX
-(implicit/explicit) method, <a
+In \ref Figure3 "Figure 3", yellows are PETSc functions and those on red
+background are part of DM interfacing TS with MoFEM. In this tutorial TS is set
+to use IMEX (implicit/explicit) method, <a
 href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>see
-details</a> in section 6. Methods calculating vector and matrices needed by TS solver to proceed set by DM functions
+details</a> in section 6. Methods calculating vector and matrices needed by TS
+solver to proceed set by DM functions are as follows
 
 -# \ref MoFEM::DMMoFEMTSSetRHSFunction to calculate \f$\mathbf{G}\f$
 -# \ref MoFEM::DMMoFEMTSSetIFunction to calculate \f$\mathbf{F}\f$
 -# \ref MoFEM::DMMoFEMTSSetIJacobian to calculate \f$\left.
 \frac{\textrm{d}\mathbf{F}}{\textrm{d}\overline{\mathbf{u}}}
 \right|_{\overline{\mathbf{u}^n}}\f$
--# \ref MoFEM::DMMoFEMTSSetMonitor to set monitor run at the end of each load step
+-# \ref MoFEM::DMMoFEMTSSetMonitor to set monitor run at the end of each load
+step
 
 Those functions provide sequences of finite elements (or just one element for
 each term in this particular case) to calculate entries of vectors and
-matrices at specific time steps. 
+matrices at specific time steps.
 
--# Blue boxes mark finite elements by  on \ref Figure3 "Figure 3", and are
-created by the following code 
+Blue boxes mark finite elements in \ref Figure3 "Figure 3" are
+created by the following code
 
 \code
 // Create finite element instances to integrate the right-hand side of slow
@@ -855,37 +876,42 @@ vol_ele_slow_rhs->getRuleHook = vol_rule;
 vol_ele_stiff_rhs->getRuleHook = vol_rule;
 vol_ele_stiff_lhs->getRuleHook = vol_rule;
 \endcode
-Integration rule depends on type of operator evaluated on element, in our
-case we evaluated mass matrices, thus we need exactly calculate integras with 
-polynomial order \f$2p\f$. 
+The integration rule depends on type of operator evaluated on element, in our
+case, we evaluate mass matrices, thus we need to calculate integrals exactly
+with polynomial order \f$2p\f$.
 
-Note that finite elements instances implementation is generic. Elements do
-problem specific calculations by providing to them user data operators, what is described in the following sections. Three elements \em vol_ele_slow_rhs, \em
-vol_ele_stiff_rhs and \em vol_ele_stiff_lhs are provided to Discrete Manager
-(DM) to calculate slow and stiff vectors and Jacobian matrix. Those three
-elements are instances of the class MoFEM::FaceElementForcesAndSourcesCore. 
-Once elements are created, we can add them to the TS manager through the DM interface
+Note that finite element instances implementation is generic. Elements do
+problem specific calculations by providing to them user data operators which
+will be described in the following sections. Three elements \em
+vol_ele_slow_rhs, \em vol_ele_stiff_rhs and \em vol_ele_stiff_lhs are provided
+to Discrete Manager (DM) to calculate slow and stiff vectors and Jacobian
+matrix. Those three elements are instances of the class
+MoFEM::FaceElementForcesAndSourcesCore. Once elements are created, we can add
+them to the TS manager through the DM interface
 
 \code
 // Add element to calculate lhs of stiff part
-CHKERR DMMoFEMTSSetIJacobian(dm, simple_interface->getDomainFEName(), vol_ele_stiff_lhs, null, null);
+CHKERR DMMoFEMTSSetIJacobian(dm, simple_interface->getDomainFEName(),
+vol_ele_stiff_lhs, null, null);
 // Add element to calculate rhs of stiff part
-CHKERR DMMoFEMTSSetIFunction(dm, simple_interface->getDomainFEName(), vol_ele_stiff_rhs, null, null);
+CHKERR DMMoFEMTSSetIFunction(dm, simple_interface->getDomainFEName(),
+vol_ele_stiff_rhs, null, null);
 // Add element to calculate rhs of slow (nonlinear) part
-CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(), vol_ele_slow_rhs, null, null);
-\endcode
+CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(),
+vol_ele_slow_rhs, null, null); \endcode
 
-\note In case of 3D problem, the user has to switch to
-MoFEM::VolumeElementForcesAndSourcesCore, to integrate over volume entities.
+\note In case of 3D problem, user has to switch to
+MoFEM::VolumeElementForcesAndSourcesCore to integrate over volume entities.
 Note that all users operators implemented in the example are templates, where
-the template variable is a dimension of the element. That makes implementation
+the template variable is the dimension of the element. That makes implementation
 dimension independent.
 
-\subsection reaction_diffusion_telling_fe Telling finite elements what operators should be used
+\subsection reaction_diffusion_telling_fe Telling finite elements which
+operators should be used
 
 The problem specific matrices and vectors are implemented in namespace
 \ref ReactionDiffusionEquation, by users data operators \ref
-ReactionDiffusionEquation::OpEle. In this tutorial following operators are
+ReactionDiffusionEquation::OpEle. In this tutorial, following operators are
 implemented
 
 -# ReactionDiffusionEquation::OpAssembleMass used to calculate mass matrix
@@ -905,22 +931,22 @@ each time step
 
 Implementation of each operator follows a similar pattern,
 
--# The class is inherited form ReactionDiffusionEquation::OpEle
+-# The class is inherited from ReactionDiffusionEquation::OpEle
 
 -# Two types of operators are implemented
-ReactionDiffusionEquation::OpEle::OPROW, to calculate vectors, and
+ReactionDiffusionEquation::OpEle::OPROW to calculate vectors, and
 ReactionDiffusionEquation::OpEle::OPROWCOL to calculate matrices.
 
 -# Implementation of user operator overload \em doWork member function
 
--# In each doWork method, user iterate over integration points, and then over
-base functions. In case of a matrix over base functions on rows and columns.
+-# In each \em doWork method, user iterates over integration points, and then
+over base functions. In case of a matrix, over base functions on rows and columns.
 
--# Once local element vector or is assembled, \em doWork function is finalised
+-# Once local element vector is assembled, \em doWork function is finalised
 with assembling to global vector or global matrix.
 
-\note More derail description how to implement user data operator you can find
-in other tutorials, for example, \ref poisson_tut2.
+\note More detail description on how to implement user data operator can
+be found in other tutorials, for example, \ref poisson_tut2.
 
 \subsection reaction_diffusion_common_data Common data
 
@@ -939,18 +965,18 @@ struct CommonData {
 
 };
 \endcode
-which is dynamically allocated and keep by shared pointer
+which is dynamically allocated and kept by shared pointer
 \code
 boost::shared_ptr<CommonData> data(new CommonData());
 \endcode
-in addition some other operators need access directly to data, it can be safely
+in addition some other operators need direct access to data, it can be safely
 done by so called aliased shared pointers (<a
 href=https://stackoverflow.com/questions/27109379/what-is-shared-ptrs-aliasing-constructor-for>see
-here</a>) 
-\code 
-auto val_ptr = boost::shared_ptr<VectorDouble>(data, &data->val); 
-auto dot_val_ptr = boost::shared_ptr<VectorDouble>(data, &data->dot_val); 
-auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad); 
+here</a>)
+\code
+auto val_ptr = boost::shared_ptr<VectorDouble>(data, &data->val);
+auto dot_val_ptr = boost::shared_ptr<VectorDouble>(data, &data->dot_val);
+auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad);
 \endcode
 
 \subsection reaction_diffusion_pushing_fe Pushing operators to finite element
@@ -958,33 +984,37 @@ auto grad_ptr = boost::shared_ptr<MatrixDouble>(data, &data->grad);
 Each of those user data operators are added to finite element, for example to
 \em vol_ele_stiff_rhs we add operators as following
 \code
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new MoFEM::OpCalculateInvJacForFace(data->invJac));
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new MoFEM::OpSetInvJacH1ForFace(data->invJac));
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new MoFEM::OpCalculateScalarValuesDot("u", dot_val_ptr));
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new MoFEM::OpCalculateScalarFieldGradient<2>("u", grad_ptr));
-vol_ele_stiff_rhs->getOpPtrVector().push_back(new ReactionDiffusionEquation::OpAssembleStiffRhs<2>(data));
-\endcode
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new
+MoFEM::OpCalculateInvJacForFace(data->invJac));
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new
+MoFEM::OpSetInvJacH1ForFace(data->invJac));
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new
+MoFEM::OpCalculateScalarValuesDot("u", dot_val_ptr));
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new
+MoFEM::OpCalculateScalarFieldGradient<2>("u", grad_ptr));
+vol_ele_stiff_rhs->getOpPtrVector().push_back(new
+ReactionDiffusionEquation::OpAssembleStiffRhs<2>(data)); 
+\endcode 
 where MoFEM::OpCalculateInvJacForFace and MoFEM::OpSetInvJacH1ForFace are
 standard operators to calculate element inverse of jacobian, and pull
-direvatives of base functions to element reference configuration \f[
+derivatives of base functions to element reference configuration \f[
 \frac{\partial \pmb\Phi}{\partial \mathbf{x}} = \frac{\partial
 \pmb\Phi}{\partial \pmb\xi}\mathbf{J}^{-\textrm{T}} \quad\textrm{where}\quad
-\mathbf{J} = \frac{\partial \mathbf{x}}{\partial \pmb\xi},\;
-\mathbf{x} = \pmb\Phi(\pmb \xi) \overline{\mathbf{x}}
-\f]
-where \f$\pmb \xi\f$ are coordinates in local element configuration,
-\f$\overline{\mathbf{x}}\f$ ale nodal positions or higher order coefficients in
-edges and faces if necessary to describe higher order geometry. Operators
-MoFEM::OpCalculateScalarFieldGradient and MoFEM::OpCalculateScalarFieldGradient are standard
-operators and are used to calculate field values, and gradients of field
-values at integration points, respectively. All operator in \ref Figure3 "Figure 3" 
-marked by dark green color, indicate that are standard operators and are
-implemented in basic user modules.
+\mathbf{J} = \frac{\partial \mathbf{x}}{\partial \pmb\xi},\; \mathbf{x} =
+\pmb\Phi(\pmb \xi) \overline{\mathbf{x}} \f] where \f$\pmb \xi\f$ are
+coordinates in local element configuration, \f$\overline{\mathbf{x}}\f$ are
+nodal positions or higher order coefficients in edges and faces if necessary to
+describe higher order geometry. Operators MoFEM::OpCalculateScalarFieldGradient
+and MoFEM::OpCalculateScalarFieldGradient are standard operators and are used to
+calculate field values, and gradients of field values at integration points,
+respectively. All operators in \ref Figure3 "Figure 3" marked by dark green
+color are standard operators and are implemented in basic user
+modules.
 
 \subsection reaction_diffusion_g Problem with IMAX method in TS
 
-The implementation of IMAX method in TS solver works requires the user to
-provide 
+The implementation of IMAX method in TS solver requires the user to
+provide
 
 \f[ \mathbf{g}(t,\overline{\mathbf{u}}) =
 \mathbf{M}^{-1}\mathbf{G}(t,\overline{\mathbf{u}})
@@ -992,12 +1022,12 @@ provide
 
 whereas user data operators provide vector
 \f$\mathbf{G}(t,\overline{\mathbf{u}})\f$. This issue can be resolved by
-exploiting finite element functionality. Each finite element class is derived from
-MoFEM::BasicMethod
+exploiting finite element functionality. Each finite element class is derived
+from MoFEM::BasicMethod
 
-\code 
-struct BasicMethod : public KspMethod, SnesMethod, TSMethod { 
-  
+\code
+struct BasicMethod : public KspMethod, SnesMethod, TSMethod {
+
   virtual MoFEMErrorCode preProcess() {
     if(preProcessHook)
       CHKERR preProcessHook()
@@ -1013,37 +1043,37 @@ struct BasicMethod : public KspMethod, SnesMethod, TSMethod {
 
 Every element is run in three stages
 
--# \em preProcess() is executed before code iterate over all given entity finite
-elements on the mesh
+-# \em preProcess() is executed before the code iterates over all given entity
+finite elements on the mesh
 
 -# \em operator() is executed for each entity of finite element on the mesh
 
--# \em postProcess() is executed after code iterate over all given entity finite
-elements on the mesh
+-# \em postProcess() is executed after the code iterates over all given entity
+finite elements on the mesh
 
-If user provied hook to postProcess stage, after vector \f$\mathbf{G}(t,\overline{\mathbf{u}})\f$ is
-calculated, can solve on place for \f$\mathbf{g}(t,\overline{\mathbf{u}})\f$. This is done by following lambda function 
+If user provides hook to postProcess stage, after vector
+\f$\mathbf{G}(t,\overline{\mathbf{u}})\f$ is calculated, can solve on place for
+\f$\mathbf{g}(t,\overline{\mathbf{u}})\f$. This is done by following lambda
+function
 
-\code 
-auto solve_for_g = [&]() { 
-  MoFEMFunctionBegin; 
-  if (vol_ele_slow_rhs->vecAssembleSwitch) { 
-    CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES, SCATTER_REVERSE); 
-    CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES, SCATTER_REVERSE); 
-    CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F); 
-    CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F); 
-    *vol_ele_slow_rhs->vecAssembleSwitch = false;
+\code
+auto solve_for_g = [&]() {
+  MoFEMFunctionBegin;
+  if (vol_ele_slow_rhs->vecAssembleSwitch) {
+    CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+SCATTER_REVERSE); CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+SCATTER_REVERSE); CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F); CHKERR
+VecAssemblyEnd(vol_ele_slow_rhs->ts_F); *vol_ele_slow_rhs->vecAssembleSwitch =
+false;
   }
   CHKERR KSPSolve(data->ksp, vol_ele_slow_rhs->ts_F, vol_ele_slow_rhs->ts_F);
   MoFEMFunctionReturn(0);
 };
 \endcode
- 
-The lambda function is set as a hook to the \em slow finite element, i.e. \em vol_ele_slow_rhs as
-follows 
-\code 
-vol_ele_slow_rhs->postProcessHook = solve_for_g; 
-\endcode 
+
+The lambda function is set as a hook to the \em slow finite element, i.e. \em
+vol_ele_slow_rhs as follows \code vol_ele_slow_rhs->postProcessHook =
+solve_for_g; \endcode
 
 Note, that is also indicated on \ref Figure3 "Figure 3". In \em solve_for_g
 the KSP (linear) solver is used to solve linear equation
@@ -1069,20 +1099,20 @@ with the use on the fly created finite element \em vol_mass_ele with pushed
 one operator ReactionDiffusionEquation::OpAssembleMass. The linear KSP solver
 is created and set up as follows
 
-\code 
-data->ksp = createKSP(m_field.get_comm()); 
-CHKERR KSPSetOperators(data->ksp, data->M, data->M); 
-CHKERR KSPSetFromOptions(data->ksp); CHKERR KSPSetUp(data->ksp); 
+\code
+data->ksp = createKSP(m_field.get_comm());
+CHKERR KSPSetOperators(data->ksp, data->M, data->M);
+CHKERR KSPSetFromOptions(data->ksp); CHKERR KSPSetUp(data->ksp);
 \endcode
 
-\section reaction_diffusion_initial Initail and boundary conditions
+\section reaction_diffusion_initial Initial and boundary conditions
 
-\subsection reaction_diffusion_initial Initial conditions
+\subsection reaction_diffusion_init Initial conditions
 
-To set initial conditions, we use MoFEM::MeshsetsManager to get entities on the blockset,
-which are set by meshing code, for example, Cubit, Salome or gMEsh. We assume
-that entities on which we set boundary conditions are set on a subset of entities,
-which are listed in \em BLOCKSET 1. In the following code
+To set initial conditions, we use MoFEM::MeshsetsManager to get entities on the
+blockset, which are set by mesh generators, for example, Cubit, Salome or gMEsh.
+We assume that entities on which we set boundary conditions are set on a subset
+of entities, which are listed in \em BLOCKSET 1 in the following code
 
 \code
 if (m_field.getInterface<MoFEM::MeshsetsManager>()->checkMeshset(1, BLOCKSET)) {
@@ -1099,21 +1129,21 @@ if (m_field.getInterface<MoFEM::MeshsetsManager>()->checkMeshset(1, BLOCKSET)) {
 \endcode
 
 -# We check if BLOCKSET 1 exist. Since the problem is solved in parallel, each
-the processor keeps only part of the mesh, BLOCKSET 1 exist only on some processors,
-which the right set of the entities
+the processor keeps only part of the mesh, BLOCKSET 1 exists only on some
+processors with the right set of the entities
 
--# If block exist, we ask MoFEM::MeshsetsManager to give entities dimension 2,
-i.e. faces, i.e. triangles in the block set
+-# If the blockset exists, we ask MoFEM::MeshsetsManager to give entities
+dimension 2, i.e. faces, i.e. triangles in the blockset
 
--# We gat all the vertices on faces, and using MoFEM::FieldBlas interface we set
+-# We get all the vertices on faces, and using MoFEM::FieldBlas interface we set
 values to the nodes on vertices. The value which is set is constant \f$u_0\f$.
 
 \subsection reaction_diffusion_bc Dirichlet boundary conditions
 
 To keep initial assumption, given in the beginning paragraphs about fire
-propagation, that around the plain of dry grass we have trench filled with water, 
-we will apply on boundary homogenous Dirichlet boundary
-conditions. To do that we follow the code
+propagation, that around the plain of dry grass we have a closed trench filled
+with water, we will apply homogenous Dirichlet boundary conditions on the
+boundary of the domain. To do that we follow the code
 
 \code
 Range surface;
@@ -1134,20 +1164,20 @@ CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
 
 -# Take all triangles on the mesh
 
--# Using Skinner implemented in MOAB, we take skin from the mesh. Consequently we
-have all edges bounding mesh on the part of the mesh.
+-# Using Skinner implemented in MOAB, we take skin from the mesh. Consequently
+we have all edges bounding part of the mesh.
 
--# Since we work on the parallel mesh, not all edges are on true domain boundary. In
-order to filter out true boundary we using moab::ParallelComm::filter_pstatus
-which is provided with MOAB interface. Using moab::ParallelComm::filter_pstatus
-we filter out all entities which are not shared with any other processor. That
-entities are physical domain boundary.
+-# Since we work on the parallel partitioned mesh, not all edges are on true
+domain boundary. In order to filter out true boundary we use
+moab::ParallelComm::filter_pstatus which is provided with MOAB interface. Using
+moab::ParallelComm::filter_pstatus, we filter out all entities that are not
+shared with any other processors. Finally, we obtain entities on physical domain boundary.
 
 -# In order to enforce homogenous essential boundary conditions in the finite
 element method, the simplest way is to remove degrees of freedom (DOFs) from the
 problem. That is done by MoFEM::ProblemsManager interface using
 MoFEM::ProblemsManager::removeDofsOnEntities function. MoFEM::ProblemsManager is
-a MoFEM interface to manage DOFs and finite elements on the problems.
+a MoFEM interface to manage DOFs and finite elements on the problem.
 
 \section reaction_diffusion_code The plain program.
 
