@@ -1424,7 +1424,7 @@ mbconvert out.h5m out.vtk
 \endcode
 
 then open the .vtk file in ParaView <http://www.paraview.org>. For example 
-on Mac OS X
+on macOS
 \code 
 open out.vtk
 \endcode
