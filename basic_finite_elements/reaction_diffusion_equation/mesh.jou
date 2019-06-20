@@ -11,3 +11,4 @@ block 1 surface 2 3
 surface all size auto factor 1
 mesh surface all
 refine surface all numsplit 1 bias 1.0 depth 1 smooth
+save as "/Users/mebratuwakeni/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/reaction_diffusion_equation/mesh.cub" overwrite 
