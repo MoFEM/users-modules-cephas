@@ -1414,7 +1414,7 @@ cd $HOME/mofem_installation/users_modules/basic_finite_elements/simple_elasticit
 Then run the command
 
 \code
-./simple_elasticity -file_name cubit.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 2
+./simple_elasticity -file_name simple_elasticity_part.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 2
 \endcode
 
 To visualise results first convert the out put file from .h5m format to a vtk
