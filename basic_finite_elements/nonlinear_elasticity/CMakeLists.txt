@@ -36,6 +36,16 @@ if(ADOL-C_LIBRARY)
     DESTINATION ${BFE_MOD_DIR} 
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
 
+  file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/examples
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
+  )
+
+  cm_export_file("LShape.h5m" export_files_nonlinear_dynamics)
+  cm_export_file("data.txt" export_files_nonlinear_dynamics)
+  cm_export_file("rod.h5m" export_files_arc_length_nonlinearelasticity)
+  cm_export_file("dome_thin_symm.h5m" export_files_arc_length_nonlinearelasticity)
+
   #testing
   add_test(ArcLengthNonLinearElasticityTest
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity
