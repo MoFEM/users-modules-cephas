@@ -41,11 +41,24 @@ if(ADOL-C_LIBRARY)
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/
   )
 
-  cm_export_file("LShape.h5m" export_files_nonlinear_dynamics)
-  cm_export_file("data.txt" export_files_nonlinear_dynamics)
-  cm_export_file("rod.h5m" export_files_arc_length_nonlinearelasticity)
-  cm_export_file("dome_thin_symm.h5m" export_files_arc_length_nonlinearelasticity)
+  install(
+  DIRECTORY
+  examples
+  DESTINATION
+  ${CMAKE_CURRENT_SOURCE_DIR}/)
 
+  cm_export_file("LShape.h5m" export_files_nonlinear_dynamics)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m DESTINATION ${BFE_MOD_DIR})
+
+  cm_export_file("data.txt" export_files_nonlinear_dynamics)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data.txt DESTINATION ${BFE_MOD_DIR})
+  
+  cm_export_file("rod.h5m" export_files_arc_length_nonlinearelasticity)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rod.h5m DESTINATION ${BFE_MOD_DIR})
+  
+  cm_export_file("dome_thin_symm.h5m" export_files_arc_length_nonlinearelasticity)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/dome_thin_symm.h5m DESTINATION ${BFE_MOD_DIR})
+  
   #testing
   add_test(ArcLengthNonLinearElasticityTest
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/arc_length_nonlinear_elasticity
