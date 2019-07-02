@@ -4,6 +4,12 @@ Check before run
 * Check where is your mesh file
 * Check what verion of openmpi (or other MPI library) are you using
 
+If you are using spack and you would like to use mpirun and mbconvert 
+tools please first run the following 
+======================================================================
+
+spack load moab
+
 Example Static (elastcity)
 ==========================
 
@@ -22,7 +28,7 @@ mpirun -np 2 ../thermal/thermal_unsteady -my_file ../thermal/heat_exchange.h5m \
 -snes_lag_jacobian -2  -my_order 1 -my_max_post_proc_ref_level 1 \
 -ts_exact_final_time stepover
 
-#Then run mechanical problem
+#Then run mechanical problem once thermal is completely run
 
 mpirun -np 2 ./elasticity -my_file solution.h5m \
 -ksp_type gmres -pc_type lu \

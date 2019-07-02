@@ -35,6 +35,13 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/bc.cfg
 bfe_build_and_install(
   h_adaptive_transport ${CMAKE_CURRENT_SOURCE_DIR}/h_adaptive_transport.cpp)
 
+file(
+    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+
+
 if(ADOL-C_LIBRARY)
 
   bfe_build_and_install(
