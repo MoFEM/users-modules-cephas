@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
 
     // Refine mesh
     CHKERR cut_mesh->refineMesh(true, false, 20, nb_ref_cut, nb_ref_trim,
-                                &fixed_edges, VERBOSE, true);
+                                &fixed_edges, VERBOSE, false) ;
 
     // Create tag storing nodal positions
     double def_position[] = {0, 0, 0};
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
     int first_bit = 1;
     CHKERR cut_mesh->cutTrimAndMerge(first_bit, fraction_level, th, tol[0],
                                      tol[1], tol[2], tol[3], fixed_edges,
-                                     corner_nodes, true, true);
+                                     corner_nodes, true, false);
 
     // Set coordinates for tag data
     if (set_coords)
