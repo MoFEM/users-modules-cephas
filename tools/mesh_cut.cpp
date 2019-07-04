@@ -50,8 +50,8 @@ int main(int argc, char *argv[]) {
     int nb_ref_cut = 0;
     int nb_ref_trim = 0;
     PetscBool flg_tol;
-    double tol[] = {1e-4, 2e-1, 2e-1, 1e-4};
-    int nmax_tol = 4;
+    double tol[] = {1e-4, 2e-1, 2e-1};
+    int nmax_tol = 3;
     PetscBool debug = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Mesh cut options", "none");
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "three values expected");
     }
 
-    if (flg_tol && nmax_tol != 4)
+    if (flg_tol && nmax_tol != 3)
       SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA, "four values expected");
 
     moab::Core mb_instance;
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
 
     // Refine mesh
     CHKERR cut_mesh->refineMesh(true, false, 20, nb_ref_cut, nb_ref_trim,
-                                &fixed_edges, VERBOSE, false) ;
+                                &fixed_edges, VERBOSE, false);
 
     // Create tag storing nodal positions
     double def_position[] = {0, 0, 0};
@@ -198,8 +198,8 @@ int main(int argc, char *argv[]) {
     // Cut mesh, trim surface and merge bad edges
     int first_bit = 1;
     CHKERR cut_mesh->cutTrimAndMerge(first_bit, fraction_level, th, tol[0],
-                                     tol[1], tol[2], tol[3], fixed_edges,
-                                     corner_nodes, true, false);
+                                     tol[1], tol[2], fixed_edges, corner_nodes,
+                                     true, true);
 
     // Set coordinates for tag data
     if (set_coords)
@@ -212,10 +212,6 @@ int main(int argc, char *argv[]) {
       CHKERR bit_ref_manager->getEntitiesByTypeAndRefLevel(
           BitRefLevel().set(first_bit), BitRefLevel().set(), MBTET, meshset);
     }
-
-    CHKERR core.getInterface<BitRefManager>()->writeBitLevelByType(
-        BitRefLevel().set(first_bit), BitRefLevel().set(), MBTET, "test0.vtk",
-        "VTK", "");
 
     // Shift bits
     if (squash_bits) {
