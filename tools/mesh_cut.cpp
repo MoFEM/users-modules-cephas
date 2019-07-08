@@ -130,9 +130,8 @@ int main(int argc, char *argv[]) {
       cout << *it << endl;
     }
 
-    BitRefLevel bit_level0;
-    bit_level0.set(0);
-    CHKERR bit_ref_manager->setBitRefLevelByType(0, MBTET, bit_level0);
+    CHKERR bit_ref_manager->setBitRefLevelByType(0, MBTET,
+                                                 BitRefLevel().set(0));
 
     // get surface entities form side set
     Range surface;
