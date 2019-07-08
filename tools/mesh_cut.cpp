@@ -184,8 +184,19 @@ int main(int argc, char *argv[]) {
     CHKERR cut_mesh->buildTree();
 
     // Refine mesh
-    CHKERR cut_mesh->refineMesh(true, false, 20, nb_ref_cut, nb_ref_trim,
+    CHKERR cut_mesh->refineMesh(true, false, 0, nb_ref_cut, nb_ref_trim,
                                 &fixed_edges, VERBOSE, false);
+    auto shift_after_ref = [&]() {
+      MoFEMFunctionBegin;
+      BitRefLevel mask;
+      mask.set(0);
+      for (int ll = 1; ll != nb_ref_cut + nb_ref_trim + 1; ++ll)
+        mask.set(ll);
+      CHKERR core.getInterface<BitRefManager>()->shiftRightBitRef(
+          nb_ref_cut + nb_ref_trim, mask, VERBOSE);
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR shift_after_ref();
 
     // Create tag storing nodal positions
     double def_position[] = {0, 0, 0};
