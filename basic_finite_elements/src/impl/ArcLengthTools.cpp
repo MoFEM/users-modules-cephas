@@ -81,7 +81,9 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
 
   if (std::distance(dIt, hi_dit) != 1) {
     SETERRABORT(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                "can not find unique LAMBDA (load factor)");
+                ("can not find unique LAMBDA (load factor) but found " +
+                 boost::lexical_cast<std::string>(std::distance(dIt, hi_dit)))
+                    .c_str());
   }
 
   if ((unsigned int)mField.get_comm_rank() == (*dIt)->getPart()) {
