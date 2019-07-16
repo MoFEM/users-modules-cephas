@@ -31,11 +31,14 @@ bfe_build_and_install(analytical_nonlinear_poisson
 cm_export_file(".petscrc" export_files_poisson)
 cm_export_file("cube_1part.h5m" export_files_poisson)
 cm_export_file("cube_2part.h5m" export_files_poisson)
+cm_export_file("README" export_files_poisson)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc 
   DESTINATION ${BFE_MOD_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cube_1part.h5m
   DESTINATION ${BFE_MOD_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cube_1part.h5m
+  DESTINATION ${BFE_MOD_DIR})
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README 
   DESTINATION ${BFE_MOD_DIR})
   
 add_test(analytical_poisson
