@@ -1,14 +1,14 @@
 Steady problem,
 
 mpirun -np 2 ./thermal_steady \
-  -my_file simple_thermal_problem.cub \
+  -my_file simple_thermal_problem.h5m \
   -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
   -my_order 4 -my_max_post_proc_ref_level 2
 
 Unsteady problem,
 
 mpirun -np 2 ./thermal_unsteady \
-  -my_file simple_thermal_problem.cub \
+  -my_file simple_thermal_problem.h5m \
   -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
   -snes_type newtonls -snes_linesearch_type basic -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor \
   -ts_monitor -ts_type beuler -ts_dt 0.1 -ts_final_time 5 -snes_lag_jacobian -2 \
@@ -24,7 +24,7 @@ present and problem is linear. It is no need to recalculate jacobian at each
 step.
 
 mpirun -np 2 ./thermal_unsteady \
-  -my_file heat_exchange.cub  \
+  -my_file heat_exchange.h5m  \
   -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
   -snes_type newtonls -snes_linesearch_type basic -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor \
   -ts_monitor -ts_type beuler -ts_dt 0.0025 -ts_final_time 0.01 -snes_lag_jacobian -2 -ts_exact_final_time stepover \
