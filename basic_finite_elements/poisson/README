@@ -1,0 +1,33 @@
+Check before run
+================
+
+* Check where is your mesh file
+* Check what verion of openmpi (or other MPI library) are you using
+
+If you are using spack and you would like to use mpirun and mbconvert 
+tools please first run the following 
+======================================================================
+
+spack load moab
+
+Note
+====
+To solve larger problem, use mumps or pre-conditioner which would work with
+saddle problems. Otherwise you will have problems.
+
+Example for solving linear Poisson problem
+==========================================
+
+mpirun -np 2  ./analytical_poisson -file_name cube_2part.h5m -order 3
+
+Example for solving nonlinear Poisson problem
+=============================================
+
+mpirun -np 2 ./analytical_nonlinear_poisson -file_name cube_2part.h5m -order 3 \
+-snes_monitor -snes_converged_reason  -snes_type newtonls \
+-snes_linesearch_type cp -snes_linesearch_monitor
+
+Example for running the Poisson problem using block matrix
+==========================================================
+
+mpirun -np 2  ./analytical_poisson_field_split -file_name cube_2part.h5m -order 3 -pc_type fieldsplit

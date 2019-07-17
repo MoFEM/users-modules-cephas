@@ -1,0 +1,10 @@
+Check before run
+================
+
+* Check where is your mesh file
+* Check what verion of openmpi (or other MPI library) are you using
+
+
+Command for running hello world executable
+==========================================
+./hello_world

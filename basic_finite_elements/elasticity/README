@@ -4,6 +4,12 @@ Check before run
 * Check where is your mesh file
 * Check what verion of openmpi (or other MPI library) are you using
 
+If you are using spack and you would like to use mpirun and mbconvert 
+tools please first run the following 
+======================================================================
+
+spack load moab
+
 Example Static (elastcity)
 ==========================
 
@@ -12,13 +18,17 @@ mpirun -np 2 ./elasticity -my_file LShape.h5m -ksp_type gmres -pc_type lu -pc_fa
 Example thermo-elasticity
 =========================
 
-mpirun -np 2 ../thermal/thermal_unseady   -my_file heat_exchange.cub \
+#First run thermal problem
+
+mpirun -np 2 ../thermal/thermal_unsteady -my_file ../thermal/heat_exchange.h5m \
 -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps \
 -ksp_monitor   -snes_type newtonls -snes_linesearch_type basic \
 -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor  \
 -ts_monitor -ts_type beuler -ts_dt 0.0025 -ts_final_time 0.06 \
 -snes_lag_jacobian -2  -my_order 1 -my_max_post_proc_ref_level 1 \
 -ts_exact_final_time stepover
+
+#Then run mechanical problem once thermal is completely run
 
 mpirun -np 2 ./elasticity -my_file solution.h5m \
 -ksp_type gmres -pc_type lu \
@@ -36,5 +46,5 @@ mpirun -np 2 ./elasticity \
 -mofem_mg_verbose 1 -mofem_mg_coarse_order 1 -mofem_mg_levels 3 \
 -mg_coarse_ksp_type preonly -mg_coarse_pc_type lu -mg_coarse_pc_factor_mat_solver_package mumps \
 -pc_mg_smoothup 10 -pc_mg_smoothdown 10 \
--pc_mg_galerkin true -pc_mg_type multiplicative \
+-pc_mg_type multiplicative \
 -log_view
