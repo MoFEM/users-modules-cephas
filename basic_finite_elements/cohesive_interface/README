@@ -1,4 +1,17 @@
-#example how to run
+Check before run
+================
+
+* Check where is your mesh file
+* Check what verion of openmpi (or other MPI library) are you using
+
+If you are using spack and you would like to use mpirun and mbconvert 
+tools please first run the following 
+======================================================================
+
+spack load moab
+
+Example for cohesive interface
+==============================
 
 mpirun -np 4 ./arc_length_interface \
 -my_file PeelTestHalfCrack.h5m \
@@ -12,7 +25,7 @@ mpirun -np 4 ./arc_length_interface \
 
 #input
 
-PeelTest.cub - input mesh consisting SIDESET 1 (consiting faces where dirichlet
+PeelTest.h5m - input mesh consisting SIDESET 1 (consiting faces where dirichlet
 bc. are applied), SIDESET2 (faces where tractions t = [0,1,0], are applied),
 SIDESET 3 (faces where tractions t = [0,-1,0], are applied).  SIDESET 4 consist
 faces where interfaces element should be inserted.

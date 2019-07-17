@@ -5,14 +5,6 @@ Check before run
 * Check what verion of openmoi (or other MPI library) are you using
 
 Example run
-===========
-
-
-* simple poisson
-
-mpirun -np 2  ./analytical_poisson -file_name cube_2part.h5m -order 3
-
-* nonlinear poisson
 
 mpirun -np 2 ./analytical_nonlinear_poisson -file_name cube_2part.h5m -order 3 \
 -snes_monitor -snes_converged_reason  -snes_type newtonls \

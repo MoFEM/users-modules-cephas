@@ -49,6 +49,19 @@ if(ADOL-C_LIBRARY)
   bfe_build_and_install(arc_length_interface
     ${CMAKE_CURRENT_SOURCE_DIR}/arc_length_interface.cpp)
 
+  file(
+    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+
+  cm_export_file("PeelTestHalfCrack.h5m" export_files_cohesive_interface)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/PeelTestHalfCrack.h5m DESTINATION ${BFE_MOD_DIR})
+
+  cm_export_file("PeelTest.h5m" export_files_cohesive_interface)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/PeelTest.h5m DESTINATION ${BFE_MOD_DIR})
+
+
   #testing
   add_test(ArcLengthInterfaceTest
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/arc_length_interface

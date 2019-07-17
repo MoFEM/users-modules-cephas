@@ -25,6 +25,13 @@ add_test(simple_elasticity
 
  cm_export_file("simple_elasticity.h5m" export_files_simple_elasticity)
 
+  file(
+    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+
+
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/simple_elasticity.h5m
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
