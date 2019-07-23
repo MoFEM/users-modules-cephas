@@ -1803,7 +1803,7 @@ for(int ll = 0;ll!=nb_levels;ll++) {
   // get intersection of all edges to refine and edges of previous level
   edges = intersect(edges,refined_edges);
   // refine edges by creation of node in middle of edge, if node was previously created use that node, and set BitRefLevel to that node
-  CHKERR refine_ptr->add_vertices_in_the_ middle_of_edges(edges,BitRefLevel().set(ll+1)); 
+  CHKERR refine_ptr->add_vertices_in_the_middle_of_edges(edges,BitRefLevel().set(ll+1)); 
   //  get all tetrahderals for current refined level
   Range tets;
   CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
