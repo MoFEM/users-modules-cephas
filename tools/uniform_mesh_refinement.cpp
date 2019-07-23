@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
     MeshRefinement *refine;
     CHKERR m_field.getInterface(refine);
 
-    CHKERR refine->add_vertices_in_the_middel_of_edges(meshset_ref_edges,
+    CHKERR refine->add_vertices_in_the_ middle_of_edges(meshset_ref_edges,
                                                       BitRefLevel().set(1));
     CHKERR refine->refine_TET(0, BitRefLevel().set(1));
 
