@@ -83,8 +83,11 @@ struct NeummanForcesSurface {
   MyTriangleFE feMatRhs;
   MyTriangleFE &getLoopFeMatRhs() { return feMatRhs; }
 
+  MyTriangleFE feMatLhs;
+  MyTriangleFE &getLoopFeMatLhs() { return feMatLhs; }
+
   NeummanForcesSurface(MoFEM::Interface &m_field)
-      : mField(m_field), fe(m_field), feLhs(m_field), feMatRhs(m_field) {}
+      : mField(m_field), fe(m_field), feLhs(m_field), feMatRhs(m_field), feMatLhs(m_field) {}
 
   struct bCForce {
     ForceCubitBcData data;
@@ -196,8 +199,8 @@ struct NeummanForcesSurface {
 
     boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
     OpGetTangent(const string field_name,
-                 boost::shared_ptr<DataAtIntegrationPts> &dataAtIntegrationPts)
-        : UserDataOperator(field_name, UserDataOperator::OPCOL),
+                 boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts)
+        : UserDataOperator(field_name, UserDataOperator::OPROW),
           dataAtIntegrationPts(dataAtIntegrationPts) {}
 
     int ngp;
@@ -205,15 +208,10 @@ struct NeummanForcesSurface {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
-  struct OpNeumannPressureLhs : public UserDataOperator {
+  struct OpNeumannPressureLhs_dx_dX : public UserDataOperator {
 
-    // Vec F;
     bCPressure &dAta;
-    //boost::ptr_vector<MethodForForceScaling> &methodsOp;
     bool hoGeometry;
-    // VectorDouble Nf;
-    /*  MoFEMErrorCode doWork(int side, EntityType type,
-                           DataForcesAndSourcesCore::EntData &data);  */
 
     Mat Aij;
     boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
@@ -226,7 +224,7 @@ struct NeummanForcesSurface {
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data);
 
-    OpNeumannPressureLhs(
+    OpNeumannPressureLhs_dx_dX(
         const string field_name_1, const string field_name_2,
         boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts, Mat aij,
         bCPressure &data, boost::shared_ptr<double> lambda_ptr = nullptr,
@@ -239,9 +237,9 @@ struct NeummanForcesSurface {
     };
   };           
 
-  struct DataAtIntegrationPtsMat {
+  struct DataAtIntegrationPtsMat : DataAtIntegrationPts {
 
-    vector<vector<VectorDouble>> tangent;
+    //vector<vector<VectorDouble>> tangent;
 
     boost::shared_ptr<MatrixDouble> hMat;
     boost::shared_ptr<MatrixDouble> FMat;
@@ -261,7 +259,7 @@ struct NeummanForcesSurface {
     Range forcesOnlyOnEntitiesCol;
   };
 
-  struct OpCalculateDeformationAle
+  struct OpCalculateDeformation
       : public MoFEM::VolumeElementForcesAndSourcesCoreOnSide::
             UserDataOperator {
 
@@ -271,21 +269,24 @@ struct NeummanForcesSurface {
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
 
-    OpCalculateDeformationAle(const string field_name,
-                            boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
-                            bool ho_geometry = false)
+    OpCalculateDeformation(
+        const string field_name,
+        boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+        bool ho_geometry = false)
         : UserDataOperator(field_name, UserDataOperator::OPROW),
           dataAtPts(data_at_pts), hoGeometry(ho_geometry){};
   };
 
-  struct OpNeumannPressureMaterialRhs : public UserDataOperator {
+  struct OpNeumannPressureMaterialRhs_dX : public UserDataOperator {
 
     Vec F;
     bCPressure &dAta;
-    // boost::ptr_vector<MethodForForceScaling> &methodsOp;
+    boost::shared_ptr<double> lambdaPtr;
     bool hoGeometry;
     boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+
+    std::string sideFeName; 
 
     VectorDouble nF;
 
@@ -299,15 +300,70 @@ struct NeummanForcesSurface {
     MoFEMErrorCode iNtegrate(EntData &row_data);
     MoFEMErrorCode aSsemble(EntData &row_data);
 
-    OpNeumannPressureMaterialRhs(
+    OpNeumannPressureMaterialRhs_dX(
         const string material_field,
         boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
-        Vec f, bCPressure &data, bool ho_geometry = false)
+        std::string &side_fe_name, Vec f, bCPressure &data,
+        boost::shared_ptr<double> lambda_ptr = nullptr,
+        bool ho_geometry = false)
         : UserDataOperator(material_field, UserDataOperator::OPROW),
-          dataAtPts(data_at_pts), sideFe(side_fe), F(f),
-          dAta(data), hoGeometry(ho_geometry){};
+          dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
+          F(f), dAta(data), lambdaPtr(lambda_ptr), hoGeometry(ho_geometry){};
   };
+
+  struct OpNeumannPressureMaterialLhs_dX_dX : public UserDataOperator {
+
+
+    Mat Aij;
+    MatrixDouble NN;
+
+    bCPressure &dAta;
+    boost::shared_ptr<double> lambdaPtr;
+    bool hoGeometry;
+    boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+
+    std::string sideFeName; 
+
+    VectorInt rowIndices;
+    VectorInt colIndices;
+/* 
+    int nbRows;           ///< number of dofs on rows
+    int nbCols;           ///< number if dof on column
+    int nbIntegrationPts; ///< number of integration points */
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+    MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+
+    OpNeumannPressureMaterialLhs_dX_dX(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        std::string &side_fe_name, Mat aij, bCPressure &data,
+        boost::shared_ptr<double> lambda_ptr = nullptr,
+        bool ho_geometry = false)
+        : UserDataOperator(field_name_1, field_name_2,
+                           UserDataOperator::OPROWCOL),
+          dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
+          Aij(aij), dAta(data), lambdaPtr(lambda_ptr),
+          hoGeometry(ho_geometry){};
+  };
+
 
   /// Operator for flux element
   struct OpNeumannFlux : public UserDataOperator {
@@ -379,7 +435,11 @@ struct NeummanForcesSurface {
       MoFEMErrorCode addPressureMaterial(
           const std::string field_name_1, const std::string field_name_2,
           boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
-          boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+          boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide>
+              side_fe_rhs,
+          boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide>
+              side_fe_lhs,
+          std::string &side_fe_name,
           Vec F, Mat aij, int ms_id,
           boost::shared_ptr<double> lambda_ptr = nullptr,
           bool ho_geometry = true, bool block_set = false);

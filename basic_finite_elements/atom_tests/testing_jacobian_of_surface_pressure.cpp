@@ -59,11 +59,19 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
+    PetscInt order_x = 2;
+    PetscInt order_X = 1;
+    PetscBool flg = PETSC_TRUE;
+
     // PetscBool ale = PETSC_FALSE;
     // CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
     PetscBool test_jacobian = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
+    CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-order_spat", &order_x,
+                               &flg);
+    CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-order_mat", &order_X,
+                               &flg);
 
     CHKERR DMRegister_MoFEM("DMMOFEM");
 
@@ -73,12 +81,11 @@ int main(int argc, char *argv[]) {
     CHKERR si->loadFile();
     CHKERR si->addDomainField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
     CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
-    const int order = 2;
-    CHKERR si->setFieldOrder("x", order);
+    CHKERR si->setFieldOrder("x", order_x);
 
-    CHKERR si->addDomainField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->addBoundaryField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->setFieldOrder("X", order);
+    CHKERR si->addDomainField("X", H1, AINSWORTH_LOBATTO_BASE, 3);
+    CHKERR si->addBoundaryField("X", H1, AINSWORTH_LOBATTO_BASE, 3);
+    CHKERR si->setFieldOrder("X", order_X);
 
     CHKERR si->setUp();
 
@@ -104,6 +111,10 @@ int main(int argc, char *argv[]) {
         dataAtIntegrationPts =
             boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
 
+    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPtsMat>
+        data_at_pts =
+            boost::make_shared<NeummanForcesSurface::DataAtIntegrationPtsMat>();
+
     boost::shared_ptr<NeummanForcesSurface> surfacePressure(
         new NeummanForcesSurface(m_field));
 
@@ -111,8 +122,16 @@ int main(int argc, char *argv[]) {
         surfacePressure, &(surfacePressure->getLoopFe()));
     boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeLhs()));
+
+    boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_mat_rhs_ptr(
+        surfacePressure, &(surfacePressure->getLoopFeMatRhs()));
+    boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
+        surfacePressure, &(surfacePressure->getLoopFeMatLhs()));
+
     fe_rhs_ptr->meshPositionsFieldName = "X";
     fe_lhs_ptr->meshPositionsFieldName = "X";
+    fe_mat_rhs_ptr->meshPositionsFieldName = "X";
+    fe_mat_lhs_ptr->meshPositionsFieldName = "X";
     // fe_rhs_ptr->addToRule = 2;
     // fe_lhs_ptr->addToRule = 2;
 
@@ -124,20 +143,34 @@ int main(int argc, char *argv[]) {
                                           it->getMeshsetId(), false, false) ;
     }  */
 
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe_rhs(
+      new VolumeElementForcesAndSourcesCoreOnSide(m_field));
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe_lhs(
+      new VolumeElementForcesAndSourcesCoreOnSide(m_field));
+
     boost::shared_ptr<double> lambda_ptr = boost::make_shared<double>(1.0);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        CHKERR surfacePressure->addPressure(
-            "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), lambda_ptr, true, true);
+        //  CHKERR surfacePressure->addPressure(
+        //     "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
+        //     bit->getMeshsetId(), lambda_ptr, true, true); 
+        CHKERR surfacePressure->addPressureMaterial(
+            "x", "X", data_at_pts, side_fe_rhs, side_fe_lhs,
+            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
+            lambda_ptr, true, true); 
       }
     }
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
+    // CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
+    //                               nullptr, nullptr);
+    // CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
+    //                               nullptr, nullptr); 
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
                                   nullptr, nullptr);
-    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
+    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_mat_rhs_ptr,
                                   nullptr, nullptr);
 
     Vec x, f;
@@ -205,6 +238,19 @@ int main(int argc, char *argv[]) {
                 "difference matrix is too big");
       }
     }
+
+    int size;
+    VecGetSize(f, &size);
+    cout << "f size: " << size << endl;
+
+    int m, n;
+    MatGetSize(A, &m, &n);
+    cout << "A size: " << m << " " << n << endl;
+
+    // int ierr;
+    // cout << "----- Start printting f -----" << endl;
+    // ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    // cout << "----- Finish printting f -----" << endl;
 
     CHKERR VecDestroy(&x);
     CHKERR VecDestroy(&f);

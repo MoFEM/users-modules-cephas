@@ -98,11 +98,6 @@ struct MetaNodalForces {
       Nf *= dOf->getFieldData();
       MoFEMFunctionReturnHot(0);
     }
-    MoFEMErrorCode scaleMat(const FEMethod *fe, VectorDouble &A) {
-      MoFEMFunctionBeginHot;
-      A *= dOf->getFieldData();
-      MoFEMFunctionReturnHot(0);
-    }
   };
 
   /// Add element taking information from NODESET
