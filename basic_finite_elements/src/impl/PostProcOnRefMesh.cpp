@@ -736,3 +736,53 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
 
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode PostProcFaceOnConnectedSkin::generateReferenceElementMesh() {
+  MoFEMFunctionBeginHot;
+  MoFEMFunctionReturnHot(0);
+}
+
+MoFEMErrorCode PostProcFaceOnConnectedSkin::preProcess() {
+  MoFEMFunctionBeginHot;
+  ParallelComm *pcomm_post_proc_mesh =
+      ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+  // FIXME: I think I don't need that
+  // if (pcomm_post_proc_mesh != NULL) {
+  //   delete pcomm_post_proc_mesh;
+  // }
+  MoFEMFunctionReturnHot(0);
+}
+
+MoFEMErrorCode PostProcFaceOnConnectedSkin::setGaussPts(int order) {
+  MoFEMFunctionBegin;
+
+  const EntityHandle *conn;
+  int num_nodes;
+  EntityHandle tri;
+
+  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
+      elementsMap.end()) {
+    tri = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+  } else {
+
+    ublas::vector<EntityHandle> tri_conn(3);
+    MatrixDouble coords_tri(3, 3);
+    VectorDouble coords(3);
+    CHKERR mField.get_moab().get_connectivity(
+        numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
+
+    for (int gg = 0; gg != 3; gg++) {
+    }
+
+    // tri = numeredEntFiniteElementPtr->getEnt();
+    // EntityType check_type = postProcMesh.type_from_handle(tri);
+
+    CHKERR mField.get_moab().get_connectivity(tri, conn, num_nodes, false);
+    mapGaussPts.resize(num_nodes);
+     for (int nn = 0; nn != num_nodes; ++nn) {
+      mapGaussPts[nn] = conn[nn];
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}

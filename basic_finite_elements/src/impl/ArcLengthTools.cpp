@@ -84,6 +84,8 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
                 "can not find unique LAMBDA (load factor)");
   }
 
+  cerr << "CHECK THESE TWO: " << (unsigned int)mField.get_comm_rank()
+       << " = = " << (*dIt)->getPart() << endl;
   if ((unsigned int)mField.get_comm_rank() == (*dIt)->getPart()) {
     ierr = VecCreateGhostWithArray(mField.get_comm(), 1, 1, 0, PETSC_NULL,
                                    &dLambda, &ghosTdLambda);
@@ -747,12 +749,14 @@ MoFEMErrorCode SphericalArcLengthControl::calculateDxAndDlambda(Vec x) {
     ierr = VecRestoreArray(arcPtrRaw->dx, &array);
     CHKERRG(ierr);
   }
+  cout << "arcPtr->dLambda" << arcPtr->dLambda <<  endl;
   ierr = VecGhostUpdateBegin(arcPtrRaw->ghosTdLambda, INSERT_VALUES,
                              SCATTER_FORWARD);
   CHKERRG(ierr);
   ierr = VecGhostUpdateEnd(arcPtrRaw->ghosTdLambda, INSERT_VALUES,
                            SCATTER_FORWARD);
   CHKERRG(ierr);
+
   // dx2
   ierr = VecDot(arcPtrRaw->dx, arcPtrRaw->dx, &arcPtrRaw->dx2);
   CHKERRG(ierr);

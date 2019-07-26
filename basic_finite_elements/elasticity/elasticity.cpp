@@ -189,6 +189,8 @@ int main(int argc, char *argv[]) {
     // Declare approximation fields
     CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LOBATTO_BASE, 3,
                              MB_TAG_DENSE, MF_ZERO);
+    CHKERR m_field.add_field("RHO", H1, AINSWORTH_LOBATTO_BASE, 1,
+                             MB_TAG_DENSE, MF_ZERO);
 
     // We can use higher oder geometry to define body
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
@@ -199,6 +201,7 @@ int main(int argc, char *argv[]) {
     // Add entities (by tets) to the field (all entities in the mesh, root_set
     // = 0 )
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "RHO");
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
     // Set approximation order.
@@ -207,6 +210,12 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+    
+    CHKERR m_field.set_field_order(0, MBTET, "RHO", order);
+    CHKERR m_field.set_field_order(0, MBTRI, "RHO", order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "RHO", order);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "RHO", 1);
+    
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in whole body)
@@ -441,6 +450,17 @@ int main(int argc, char *argv[]) {
     // If 10-node test are on the mesh, use mid nodes to set HO-geometry. Class
     // Projection10NodeCoordsOnField
     // do the trick.
+
+
+    for (_IT_GET_DOFS_FIELD_BY_NAME_FOR_LOOP_(m_field, "RHO", dof)) {
+
+      double coords[3];
+      EntityHandle ent = (*dof)->getEnt();
+      m_field.get_moab().get_coords(&ent, 1, coords);
+      (*dof)->getFieldData() = coords[1];
+    }
+
+
     Projection10NodeCoordsOnField ent_method_material(m_field,
                                                       "MESH_NODE_POSITIONS");
     CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
@@ -460,6 +480,36 @@ int main(int argc, char *argv[]) {
         }
       }
     }
+    auto add_skin_elem_for_post_proc = [&]() {
+      MoFEMFunctionBeginHot;
+      CHKERR m_field.add_finite_element("SKIN");
+      Range all_tets;
+      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, all_tets, true);
+      Skinner skin(&m_field.get_moab());
+      Range skin_tris; // take skin just once in the constructor
+      CHKERR skin.find_skin(0, all_tets, false, skin_tris);
+      cout << "skin_tris" << skin_tris << endl;
+
+      //     EntityHandle meshset_skin;
+      // CHKERR moab.create_meshset(MESHSET_SET, meshset_skin);
+      // CHKERR moab.add_entities(meshset_skin, skin_tris);
+      // CHKERR moab.write_file("my_skin.vtk", "VTK", "", &meshset_skin,1);
+      // CHKERR moab.delete_entities(&meshset_skin, 1);
+
+      CHKERR m_field.add_ents_to_finite_element_by_type(skin_tris, MBTRI,
+                                                        "SKIN");
+      CHKERR m_field.modify_finite_element_add_field_data("SKIN",
+                                                          "DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_data("SKIN",
+                                                          "RHO");
+      CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
+                                                          "RHO");
+      CHKERR m_field.modify_finite_element_add_field_row("SKIN", "DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_col("SKIN", "DISPLACEMENT");
+
+      MoFEMFunctionReturnHot(0);
+    };
+    CHKERR add_skin_elem_for_post_proc();
 
     // Build database for elements. Actual implementation of element is not need
     // here, only elements has to be declared.
@@ -484,6 +534,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "FLUID_PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
+    CHKERR DMMoFEMAddElement(dm, "SKIN");
     CHKERR DMSetUp(dm);
 
     // Create matrices & vectors. Note that native PETSc DM interface is used,
@@ -683,12 +734,25 @@ int main(int argc, char *argv[]) {
     // Add operators to the elements, starting with some generic operators
     CHKERR post_proc.generateReferenceElementMesh();
     CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
+    CHKERR post_proc.addFieldValuesPostProc("RHO");
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+    CHKERR post_proc.addFieldValuesGradientPostProc("RHO");
     // Add problem specific operator on element to post-process stresses
     post_proc.getOpPtrVector().push_back(new PostProcHookStress(
         m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
         post_proc.commonData, block_sets_ptr.get()));
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe(
+        new VolumeElementForcesAndSourcesCoreOnSide(m_field));
+    PostProcFaceOnRefinedMesh post_proc_skin(m_field);
+    CHKERR post_proc_skin.generateReferenceElementMesh(); //change to generate skin
+    CHKERR post_proc_skin.addFieldValuesPostProc("DISPLACEMENT");
+    CHKERR post_proc_skin.addFieldValuesPostProc("RHO");
+    // CHKERR post_proc_skin.addFieldValuesGradientPostProc("DISPLACEMENT");
+    CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin("DISPLACEMENT","ELASTIC"); //optionally you can add your commonData.grad_ptr
+    CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin("RHO","ELASTIC"); //optionally you can add your commonData.grad_ptr
+    // CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin("RHO","ELASTIC"); //optionally you can add your commonData.grad_ptr
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
@@ -858,6 +922,9 @@ int main(int argc, char *argv[]) {
       PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
       CHKERR post_proc.writeFile("out.h5m");
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
+      
+      CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
+      CHKERR post_proc_skin.writeFile("out_skin.h5m");
     }
 
     // Calculate elastic energy

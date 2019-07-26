@@ -838,6 +838,27 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   }
 };
 
+struct PostProcFaceOnConnectedSkin : public PostProcFaceOnRefinedMesh {
+
+  bool connectTriangles;
+
+  PostProcFaceOnConnectedSkin(MoFEM::Interface &m_field)
+      : PostProcFaceOnRefinedMesh(m_field) {}
+
+  virtual ~PostProcFaceOnConnectedSkin() {
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+        //FIXME: I think I don't need that
+    // if (pcomm_post_proc_mesh != NULL) {
+    //   delete pcomm_post_proc_mesh;
+    // }
+  }
+
+  MoFEMErrorCode generateReferenceElementMesh();
+  MoFEMErrorCode preProcess();
+  MoFEMErrorCode setGaussPts(int order);
+
+};
 #endif //__POSTPROC_ON_REF_MESH_HPP
 
 /**
