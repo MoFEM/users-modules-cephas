@@ -396,7 +396,7 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
     }
     CHKERR postProcMesh.delete_entities(&meshset, 1);
     CHKERR postProcMesh.delete_entities(edges);
-    // CHKERR postProcMesh.delete_entities(faces); 
+    // CHKERR postProcMesh.delete_entities(faces);
 
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
@@ -612,9 +612,11 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
           n0 * coords_tri(0, 0) + n1 * coords_tri(1, 0) + n2 * coords_tri(2, 0);
       double y =
           n0 * coords_tri(0, 1) + n1 * coords_tri(1, 1) + n2 * coords_tri(2, 1);
+      double z =
+          n0 * coords_tri(0, 2) + n1 * coords_tri(1, 2) + n2 * coords_tri(2, 2);
       coords[0] = x;
       coords[1] = y;
-      coords[2] = 0;
+      coords[2] = z;
       CHKERR postProcMesh.create_vertex(&coords[0], tri_conn[gg]);
     }
     CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
@@ -672,5 +674,65 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
                                      &rank);
   }
   CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  CHKERR loopSideVolumes(feVolName, *sideOpFe);
+
+  // quit if tag is not needed
+  if (!saveOnTag)
+    MoFEMFunctionReturnHot(0);
+
+  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0].get();
+  int rank = dof_ptr->getNbOfCoeffs();
+
+  int tag_length = rank * 3;
+  FieldSpace space = dof_ptr->getSpace();
+
+  double def_VAL[tag_length];
+  bzero(def_VAL, tag_length * sizeof(double));
+  Tag th;
+  CHKERR postProcMesh.tag_get_handle(tagName.c_str(), tag_length,
+                                     MB_TYPE_DOUBLE, th,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+  // zero tags, this for Vertex if H1 and TRI if Hdiv, EDGE for Hcurl
+  // no need for L2
+  const void *tags_ptr[mapGaussPts.size()];
+  int nb_gauss_pts = data.getN().size1();
+  if (mapGaussPts.size() != (unsigned int)nb_gauss_pts ||
+      nb_gauss_pts != gradMatPtr->size2()) {
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
+  }
+  switch (space) {
+  case H1:
+  case L2:
+
+    CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
+                                       tags_ptr);
+    // FIXME: this is not very efficient
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      for (int rr = 0; rr != rank; ++rr) {
+        for (int dd = 0; dd != 3; ++dd) {
+          const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
+          double *my_ptr = const_cast<double *>(my_ptr2);
+          my_ptr[rank * rr + dd] = (*gradMatPtr)(rank * rr + dd, gg);
+        }
+      }
+    }
+    break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "field with that space is not implemented");
+  }
+
   MoFEMFunctionReturn(0);
 }

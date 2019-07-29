@@ -252,7 +252,7 @@ struct MyTransport : public MixTransportElement {
       edges = intersect(edges, refined_edges);
       // add edges to refine at current level edges (some of the where refined
       // before)
-      CHKERR refine_ptr->add_verices_in_the_middel_of_edges(
+      CHKERR refine_ptr->add_vertices_in_the_middle_of_edges(
           edges, BitRefLevel().set(ll + 1));
       //  get tets at current level
       Range tets;

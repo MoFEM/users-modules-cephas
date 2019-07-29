@@ -434,17 +434,17 @@ struct SmallStrainTranverslyIsotropicADouble: public SmallStrainTranverslyIsotro
   }
 
   virtual MoFEMErrorCode setUserActiveVariables(
-    VectorDouble &active_varibles) {
+    VectorDouble &active_variables) {
     MoFEMFunctionBeginHot;
 
     try {
 
       int shift = nbActiveVariables0; // is a number of elements in F
       ierr = calculateFibreAngles(); CHKERRG(ierr);
-      active_varibles[shift+0] = axVectorDouble[0];
-      active_varibles[shift+1] = axVectorDouble[1];
-      active_varibles[shift+2] = axVectorDouble[2];
-      active_varibles[shift+3] = axAngleDouble;
+      active_variables[shift+0] = axVectorDouble[0];
+      active_variables[shift+1] = axVectorDouble[1];
+      active_variables[shift+2] = axVectorDouble[2];
+      active_variables[shift+3] = axAngleDouble;
 
     } catch (const std::exception& ex) {
       std::ostringstream ss;

@@ -13,10 +13,23 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hello_world)
 
+file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+
+install(
+  FILES ${CMAKE_CURRENT_SOURCE_DIR}/README 
+  DESTINATION ${BFE_MOD_DIR}
+  PERMISSIONS OWNER_READ OWNER_WRITE)
+
 bfe_build_and_install(hello_world
   ${CMAKE_CURRENT_SOURCE_DIR}/hello_world.cpp)
   
 cm_export_file("mesh.h5m" export_files_hello_world)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.h5m
+  DESTINATION ${BFE_MOD_DIR})
+
 add_test(hello_world
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
   ${CMAKE_CURRENT_BINARY_DIR}/hello_world)
