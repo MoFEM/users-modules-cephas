@@ -153,25 +153,25 @@ int main(int argc, char *argv[]) {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        //  CHKERR surfacePressure->addPressure(
-        //     "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
-        //     bit->getMeshsetId(), lambda_ptr, true, true); 
-        CHKERR surfacePressure->addPressureMaterial(
-            "x", "X", data_at_pts, side_fe_rhs, side_fe_lhs,
-            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
-            lambda_ptr, true, true); 
+         CHKERR surfacePressure->addPressure(
+            "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
+            bit->getMeshsetId(), lambda_ptr, true, true); 
+        // CHKERR surfacePressure->addPressureMaterial(
+        //     "x", "X", data_at_pts, side_fe_rhs, side_fe_lhs,
+        //     si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
+        //     lambda_ptr, true, true); 
       }
     }
 
-    // CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
-    //                               nullptr, nullptr);
-    // CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
-    //                               nullptr, nullptr); 
+    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
+                                  nullptr, nullptr);
+    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
+                                  nullptr, nullptr); 
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
-                                  nullptr, nullptr);
-    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_mat_rhs_ptr,
-                                  nullptr, nullptr);
+    // CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
+    //                               nullptr, nullptr);
+    // CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_mat_rhs_ptr,
+    //                               nullptr, nullptr);
 
     Vec x, f;
     CHKERR DMCreateGlobalVector(dm, &x);
@@ -247,10 +247,10 @@ int main(int argc, char *argv[]) {
     MatGetSize(A, &m, &n);
     cout << "A size: " << m << " " << n << endl;
 
-    // int ierr;
-    // cout << "----- Start printting f -----" << endl;
-    // ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    // cout << "----- Finish printting f -----" << endl;
+    int ierr;
+    cout << "----- Start printting f -----" << endl;
+    ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    cout << "----- Finish printting f -----" << endl;
 
     CHKERR VecDestroy(&x);
     CHKERR VecDestroy(&f);

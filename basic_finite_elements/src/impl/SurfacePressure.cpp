@@ -272,6 +272,11 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
     }
     CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
                         &Nf[0], ADD_VALUES);
+
+    int ierr;
+    cout << "----- Start printting f -----" << endl;
+    ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    cout << "----- Finish printting f -----" << endl;
   }
 
   MoFEMFunctionReturn(0);
@@ -602,6 +607,11 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
     }
     CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
                         &nF[0], ADD_VALUES);
+
+    int ierr;
+    cout << "----- Start printting f -----" << endl;
+    ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    cout << "----- Finish printting f -----" << endl;
   }
 
   MoFEMFunctionReturn(0);
