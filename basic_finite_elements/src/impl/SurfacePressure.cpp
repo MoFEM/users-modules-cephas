@@ -703,7 +703,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::doWork(
 
 MoFEMErrorCode
 NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
-    EntData & row_data, EntData & col_data) {
+    EntData &row_data, EntData &col_data) {
 
   MoFEMFunctionBegin;
 

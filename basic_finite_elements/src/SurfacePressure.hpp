@@ -361,7 +361,9 @@ struct NeummanForcesSurface {
                            UserDataOperator::OPROWCOL),
           dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
           Aij(aij), dAta(data), lambdaPtr(lambda_ptr),
-          hoGeometry(ho_geometry){};
+          hoGeometry(ho_geometry){
+            sYmm = false; // This will make sure to loop over all entities
+          };
   };
 
 
