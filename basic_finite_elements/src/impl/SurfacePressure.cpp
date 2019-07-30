@@ -215,7 +215,9 @@ NeummanForcesSurface::OpNeumannPressure::OpNeumannPressure(
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
-      F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
+      F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {
+        count = 0;
+      }
 
 MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
@@ -273,10 +275,11 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
     CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
                         &Nf[0], ADD_VALUES);
 
-    int ierr;
-    cout << "----- Start printting f -----" << endl;
-    ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    cout << "----- Finish printting f -----" << endl;
+    // int ierr;
+    // cout << "----- Start printting f -----" << endl;
+    // cout << "COUNT: " << ++count << endl;
+    // ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    // cout << "----- Finish printting f -----" << endl;
   }
 
   MoFEMFunctionReturn(0);
@@ -508,7 +511,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::doWork(
   CHKERR iNtegrate(row_data);
 
   // assemble local matrix
-  //CHKERR aSsemble(row_data);
+  CHKERR aSsemble(row_data);
 
   MoFEMFunctionReturn(0);
 }
@@ -527,67 +530,65 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
 
   //CHKERR loopSideVolumes(sideFeName, *sideFe);
 
-  // get element volume
-  //double vol = getVolume();
-  // get intergration weights
+  // get integration weights
   auto t_w = getFTensor0IntegrationWeight();
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
 
-  // get derivatives of base functions on rows
+  //get derivatives of base functions on rows
   //auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
 
-  // iterate over integration points
-  // for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+  //iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
 
-  //   FTensor::Tensor0<double *> t_base(&row_data.getN()(gg, 0));
+    FTensor::Tensor0<double *> t_base(&data.getN()(gg, 0));
 
-  //   //double a = -0.5 * t_w * dAta.data.data.value1; 
-  //   double a = 0.5 * t_w * dAta.data.data.value1; 
-  //   auto t_nf = get_tensor1(nF, 0);
+    //double a = -0.5 * t_w * dAta.data.data.value1; 
+    double a = 0.5 * t_w * dAta.data.data.value1; 
+    auto t_nf = get_tensor1(nF, 0);
 
-  //   int rr = 0;
-  //   for (; rr != nbRows / 3; ++rr) {
-  //     //t_nf(i) += a * t_base * t_F(j, i) * t_normal(j);
-  //     //TESTING
-  //     t_nf(i) += a * t_base * t_normal(i);
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+      //t_nf(i) += a * t_base * t_F(j, i) * t_normal(j);
+      //TESTING
+      t_nf(i) += a * t_base * t_normal(i);
       
-  //     ++t_base;
-  //     ++t_nf;
-  //   }
-
-  //   ++t_w;
-  //   //++t_F;
-  //   ++t_normal;
-  // }
-
-  int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
-  int nb_row_dofs = data.getIndices().size() / rank;
-
-  nF.resize(data.getIndices().size(), false);
-  nF.clear();
-
-  for (unsigned int gg = 0; gg != data.getN().size1(); ++gg) {
-
-    double val = getGaussPts()(2, gg);
-    for (int rr = 0; rr != rank; ++rr) {
-
-      double force;
-      if (hoGeometry) {
-        force = dAta.data.data.value1 * getNormalsAtGaussPts()(gg, rr);
-      } else {
-        force = dAta.data.data.value1 * getNormal()[rr];
-      }
-      cblas_daxpy(nb_row_dofs, 0.5 * val * force, &data.getN()(gg, 0), 1,
-                  &nF[rr], rank);
+      ++t_base;
+      ++t_nf;
     }
+
+    ++t_w;
+    //++t_F;
+    ++t_normal;
   }
+
+  // int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
+  // int nb_row_dofs = data.getIndices().size() / rank;
+
+  // nF.resize(data.getIndices().size(), false);
+  // nF.clear();
+
+  // for (unsigned int gg = 0; gg != data.getN().size1(); ++gg) {
+
+  //   double val = getGaussPts()(2, gg);
+  //   for (int rr = 0; rr != rank; ++rr) {
+
+  //     double force;
+  //     if (hoGeometry) {
+  //       force = dAta.data.data.value1 * getNormalsAtGaussPts()(gg, rr);
+  //     } else {
+  //       force = dAta.data.data.value1 * getNormal()[rr];
+  //     }
+  //     cblas_daxpy(nb_row_dofs, 0.5 * val * force, &data.getN()(gg, 0), 1,
+  //                 &nF[rr], rank);
+  //   }
+  // }
 
   if (lambdaPtr) {
     nF *= *lambdaPtr;
   }
 
-  {
+  /* {
     Vec my_f;
     if (F == PETSC_NULL) {
       switch (getFEMethod()->ts_ctx) {
@@ -608,11 +609,12 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
     CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
                         &nF[0], ADD_VALUES);
 
-    int ierr;
-    cout << "----- Start printting f -----" << endl;
-    ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    cout << "----- Finish printting f -----" << endl;
-  }
+    // int ierr;
+    // cout << "----- Start printting f -----" << endl;
+    // cout << "COUNT: " << ++count << endl;
+    // ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    // cout << "----- Finish printting f -----" << endl;
+  } */
 
   MoFEMFunctionReturn(0);
 }
@@ -706,7 +708,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::doWork(
   CHKERR iNtegrate(row_data, col_data);
 
   // assemble local matrix
-  //CHKERR aSsemble(row_data, col_data);
+  CHKERR aSsemble(row_data, col_data);
 
   MoFEMFunctionReturn(0);
 }
@@ -819,10 +821,10 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
     NN *= *lambdaPtr;
   } 
 
-  CHKERR MatSetValues(
+  /* CHKERR MatSetValues(
       getFEMethod()->snes_B, row_nb_dofs, &row_data.getIndices()[0],
       col_nb_dofs, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
-
+ */
   MoFEMFunctionReturn(0);
 }
 

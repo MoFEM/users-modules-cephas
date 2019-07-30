@@ -153,25 +153,26 @@ int main(int argc, char *argv[]) {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-         CHKERR surfacePressure->addPressure(
-            "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), lambda_ptr, true, true); 
-        // CHKERR surfacePressure->addPressureMaterial(
-        //     "x", "X", data_at_pts, side_fe_rhs, side_fe_lhs,
-        //     si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
-        //     lambda_ptr, true, true); 
+        //  CHKERR surfacePressure->addPressure(
+        //     "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
+        //     bit->getMeshsetId(), lambda_ptr, true, true); 
+        
+        CHKERR surfacePressure->addPressureMaterial(
+            "x", "X", data_at_pts, side_fe_rhs, side_fe_lhs,
+            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
+            lambda_ptr, true, true); 
       }
     }
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
-                                  nullptr, nullptr);
-    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
-                                  nullptr, nullptr); 
+    // CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
+    //                               nullptr, nullptr);
+    // CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
+    //                               nullptr, nullptr); 
 
-    // CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
-    //                               nullptr, nullptr);
-    // CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_mat_rhs_ptr,
-    //                               nullptr, nullptr);
+    CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
+                                  nullptr, nullptr);
+    CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_mat_rhs_ptr,
+                                  nullptr, nullptr);
 
     Vec x, f;
     CHKERR DMCreateGlobalVector(dm, &x);
@@ -192,12 +193,14 @@ int main(int argc, char *argv[]) {
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 "
-          "-pc_type none";
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
+          //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
-                               "-snes_rtol 0 -snes_max_it 1 -pc_type none";
+                               "-snes_rtol 0 "
+                               "-snes_max_it 1 ";
+                               //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
@@ -211,33 +214,33 @@ int main(int argc, char *argv[]) {
 
     CHKERR SNESSolve(snes, NULL, x);
 
-    if (test_jacobian == PETSC_FALSE) {
-      double nrm_A0;
-      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
+    // if (test_jacobian == PETSC_FALSE) {
+    //   double nrm_A0;
+    //   CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
 
-      char testing_options_fd[] = "-snes_fd";
-      CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
+    //   char testing_options_fd[] = "-snes_fd";
+    //   CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
 
-      CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
-      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
-      CHKERR SNESSetFromOptions(snes);
+    //   CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+    //   CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+    //   CHKERR SNESSetFromOptions(snes);
 
-      CHKERR SNESSolve(snes, NULL, x);
-      CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
+    //   CHKERR SNESSolve(snes, NULL, x);
+    //   CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
 
-      double nrm_A;
-      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
-      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
-                  nrm_A / nrm_A0);
-      nrm_A /= nrm_A0;
+    //   double nrm_A;
+    //   CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
+    //   PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+    //               nrm_A / nrm_A0);
+    //   nrm_A /= nrm_A0;
 
-      const double tol = 1e-5;
-      if (nrm_A > tol) {
-        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                "Difference between hand-calculated tangent matrix and finite "
-                "difference matrix is too big");
-      }
-    }
+    //   const double tol = 1e-5;
+    //   if (nrm_A > tol) {
+    //     SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+    //             "Difference between hand-calculated tangent matrix and finite "
+    //             "difference matrix is too big");
+    //   }
+    // }
 
     int size;
     VecGetSize(f, &size);

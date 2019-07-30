@@ -161,6 +161,8 @@ struct NeummanForcesSurface {
     boost::ptr_vector<MethodForForceScaling> &methodsOp;
     bool hoGeometry;
 
+    int count;
+
     OpNeumannPressure(const std::string field_name, Vec _F, bCPressure &data,
                       boost::ptr_vector<MethodForForceScaling> &methods_op,
                       bool ho_geometry = false);
@@ -286,6 +288,8 @@ struct NeummanForcesSurface {
     boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
 
+    int count;
+
     std::string sideFeName; 
 
     VectorDouble nF;
@@ -309,7 +313,9 @@ struct NeummanForcesSurface {
         bool ho_geometry = false)
         : UserDataOperator(material_field, UserDataOperator::OPROW),
           dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
-          F(f), dAta(data), lambdaPtr(lambda_ptr), hoGeometry(ho_geometry){};
+          F(f), dAta(data), lambdaPtr(lambda_ptr), hoGeometry(ho_geometry){
+            count = 0;
+          };
   };
 
   struct OpNeumannPressureMaterialLhs_dX_dX : public UserDataOperator {
