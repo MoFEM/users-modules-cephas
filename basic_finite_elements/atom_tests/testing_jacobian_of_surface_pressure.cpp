@@ -250,10 +250,10 @@ int main(int argc, char *argv[]) {
     MatGetSize(A, &m, &n);
     cout << "A size: " << m << " " << n << endl;
 
-    int ierr;
-    cout << "----- Start printting f -----" << endl;
-    ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    cout << "----- Finish printting f -----" << endl;
+    // int ierr;
+    // cout << "----- Start printting f -----" << endl;
+    // ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
+    // cout << "----- Finish printting f -----" << endl;
 
     CHKERR VecDestroy(&x);
     CHKERR VecDestroy(&f);

@@ -543,8 +543,8 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
 
     FTensor::Tensor0<double *> t_base(&data.getN()(gg, 0));
 
-    //double a = -0.5 * t_w * dAta.data.data.value1; 
-    double a = 0.5 * t_w * dAta.data.data.value1; 
+    double a = -0.5 * t_w * dAta.data.data.value1; 
+    //double a = 0.5 * t_w * dAta.data.data.value1; 
     auto t_nf = get_tensor1(nF, 0);
 
     int rr = 0;
@@ -805,8 +805,8 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
         // TODO: handle hoGeometry (probably will work as it is, needs to be
         // checked)
         t_assemble(i, k) +=
-            0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
-        //-0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
+            -0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
+        //0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
 
         ++t_base;
       }
