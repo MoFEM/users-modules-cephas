@@ -866,9 +866,9 @@ struct EdgeSlidingConstrains : public GenericSliding {
           }
           return sqrt(coords[0] + coords[1] + coords[2]);
         };
-        const double edge_length = get_edge_length();
-        t_n0(i) *= edge_length;
-        t_n1(i) *= edge_length;
+        // const double edge_length = get_edge_length();
+        // t_n0(i) *= edge_length;
+        // t_n1(i) *= edge_length;
 
         VectorDouble3 &v0 = v[0];
         VectorDouble3 &v1 = v[1];
