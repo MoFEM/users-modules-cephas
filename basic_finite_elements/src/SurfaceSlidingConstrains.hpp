@@ -861,7 +861,7 @@ struct EdgeSlidingConstrains : public GenericSliding {
           VectorDouble6 coords(6);
           CHKERR moab.get_coords(conn, 2, &*coords.begin());
           for (auto n : {0, 1, 2}) {
-            coords[n] -= coords[n];
+            coords[n] -= coords[n + 3];
             coords[n] *= coords[n];
           }
           return sqrt(coords[0] + coords[1] + coords[2]);
