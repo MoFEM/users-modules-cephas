@@ -107,14 +107,6 @@ int main(int argc, char *argv[]) {
       // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
     }
 
-    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPts>
-        dataAtIntegrationPts =
-            boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
-
-    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPtsMat>
-        data_at_pts =
-            boost::make_shared<NeummanForcesSurface::DataAtIntegrationPtsMat>();
-
     boost::shared_ptr<NeummanForcesSurface> surfacePressure(
         new NeummanForcesSurface(m_field));
 
@@ -143,24 +135,18 @@ int main(int argc, char *argv[]) {
                                           it->getMeshsetId(), false, false) ;
     }  */
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe_rhs(
-      new VolumeElementForcesAndSourcesCoreOnSide(m_field));
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe_lhs(
-      new VolumeElementForcesAndSourcesCoreOnSide(m_field));
-
     boost::shared_ptr<double> lambda_ptr = boost::make_shared<double>(1.0);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        //  CHKERR surfacePressure->addPressure(
-        //     "x", "X", dataAtIntegrationPts, PETSC_NULL, PETSC_NULL,
-        //     bit->getMeshsetId(), lambda_ptr, true, true); 
-        
+        // CHKERR surfacePressure->addPressure("x", "X", PETSC_NULL, PETSC_NULL,
+        //                                     bit->getMeshsetId(), lambda_ptr,
+        //                                     true, true);
+
         CHKERR surfacePressure->addPressureMaterial(
-            "x", "X", data_at_pts, side_fe_rhs, side_fe_lhs,
-            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
-            lambda_ptr, true, true); 
+            "x", "X", si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
+            bit->getMeshsetId(), lambda_ptr, true, true);
       }
     }
 
