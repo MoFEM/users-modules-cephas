@@ -275,11 +275,6 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
     CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
                         &Nf[0], ADD_VALUES);
 
-    // int ierr;
-    // cout << "----- Start printting f -----" << endl;
-    // cout << "COUNT: " << ++count << endl;
-    // ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    // cout << "----- Finish printting f -----" << endl;
   }
 
   MoFEMFunctionReturn(0);
@@ -548,10 +543,6 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
     int rr = 0;
     for (; rr != nbRows / 3; ++rr) {
 
-      // for (auto ii : {0, 1, 2}) {
-      //   t_normal(ii) = 1.0;
-      // }
-
       t_nf(i) += a * t_base * t_F(j, i) * t_normal(j);
       
       ++t_base;
@@ -563,59 +554,9 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
     ++t_normal;
   }
 
-  // int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
-  // int nb_row_dofs = data.getIndices().size() / rank;
-
-  // nF.resize(data.getIndices().size(), false);
-  // nF.clear();
-
-  // for (unsigned int gg = 0; gg != data.getN().size1(); ++gg) {
-
-  //   double val = getGaussPts()(2, gg);
-  //   for (int rr = 0; rr != rank; ++rr) {
-
-  //     double force;
-  //     if (hoGeometry) {
-  //       force = dAta.data.data.value1 * getNormalsAtGaussPts()(gg, rr);
-  //     } else {
-  //       force = dAta.data.data.value1 * getNormal()[rr];
-  //     }
-  //     cblas_daxpy(nb_row_dofs, 0.5 * val * force, &data.getN()(gg, 0), 1,
-  //                 &nF[rr], rank);
-  //   }
-  // }
-
   if (lambdaPtr) {
     nF *= *lambdaPtr;
   }
-
-  /* {
-    Vec my_f;
-    if (F == PETSC_NULL) {
-      switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-            FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
-        break;
-      }
-      my_f = getFEMethod()->snes_f;
-    } else {
-      my_f = F;
-    }
-    CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
-                        &nF[0], ADD_VALUES);
-
-    // int ierr;
-    // cout << "----- Start printting f -----" << endl;
-    // cout << "COUNT: " << ++count << endl;
-    // ierr = VecView(my_f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    // cout << "----- Finish printting f -----" << endl;
-  } */
 
   MoFEMFunctionReturn(0);
 }
@@ -645,10 +586,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
   Vec F = getFEMethod()->snes_f;
   // assemble local matrix
   CHKERR VecSetValues(F, nbRows, row_indices, &*nF.data().begin(), ADD_VALUES);
-  // int test1 = row_data.getIndices().size();
-  // int test2 = row_data.getIndices()[0];
-  // CHKERR VecSetValues(F, row_data.getIndices().size(), &row_data.getIndices()[0],
-  //                       &nF[0], ADD_VALUES);
+
   MoFEMFunctionReturn(0);
 }
 
@@ -787,7 +725,7 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
 
         t_assemble(i, k) +=
             -0.5 * val * dAta.data.data.value1 * t_base * t_F(j, i) * d_n(j, k);
-            //-0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
+
         ++t_base;
       }
       ++t_N_over_ksi;
@@ -802,10 +740,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
     NN *= *lambdaPtr;
   } 
 
-  /* CHKERR MatSetValues(
-      getFEMethod()->snes_B, row_nb_dofs, &row_data.getIndices()[0],
-      col_nb_dofs, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
- */
   MoFEMFunctionReturn(0);
 }
 
@@ -855,14 +789,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::aSsemble(
   CHKERR MatSetValues(B, row_nb_dofs, row_indices, col_nb_dofs, col_indices,
                       &*NN.data().begin(), ADD_VALUES);
 
-/*   if (!isDiag && sYmm) {
-    // if not diagonal term and since global matrix is symmetric assemble
-    // transpose term.
-    transK.resize(K.size2(), K.size1(), false);
-    noalias(transK) = trans(K);
-    CHKERR MatSetValues(B, nbCols, col_indices, nbRows, row_indices,
-                        &*transK.data().begin(), ADD_VALUES);
-  } */
   MoFEMFunctionReturn(0);
 }
 
@@ -964,10 +890,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
       for (; bbr != nb_base_fun_row; bbr++) {
 
         double a = -0.5 * t_w * dAta.data.data.value1;
-
-        // for (auto ii : {0, 1, 2}) {
-        //   t_normal(ii) = 1.0;
-        // }
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
         // TODO: handle hoGeometry (probably will work as it is, needs to be
@@ -1096,9 +1018,9 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
-  //FTensor::Index<'k', 3> k;
-  //FTensor::Index<'j', 3> l;
-  //FTensor::Index<'k', 3> m;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
 
   auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
     return FTensor::Tensor2<double *, 3, 3>(
@@ -1118,8 +1040,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
   auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
   auto t_inv_H = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
 
-  FTensor::Tensor2<double, 3, 3> t_d;
-
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     //double val = getGaussPts()(3, gg); // * area;
 
@@ -1135,38 +1055,12 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
         double a = -0.5 * t_w * dAta.data.data.value1;
 
-        // for (auto ii : {0, 1, 2}) {
-        //   t_normal(ii) = 1.0;
-        // }
-
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
 
         // TODO: handle hoGeometry (probably will work as it is, needs to be
         // checked)
 
-        
-        for (int ii = 0; ii < 3; ii++) {
-          for (int jj = 0; jj < 3; jj++) {
-            t_d(ii, jj) = 0.0;
-          }
-        }
-
-        for (int ii = 0; ii < 3; ii++) {
-          for (int jj = 0; jj < 3; jj++) {
-            for (int k = 0; k < 3; k++) {
-              for (int l = 0; l < 3; l++) {
-                for (int m = 0; m < 3; m++) {
-                  t_d(ii, jj) += -1.0 * t_inv_H(l, jj) * t_col_diff_base(m) *
-                                 t_inv_H(m, ii) * t_h(k, l) * t_normal(k);
-                }
-              }
-            }
-          }
-        }
-
-        t_assemble(i, j) += a * t_row_base * t_d(i, j);
-
-        //t_assemble(i, j) += -a * t_row_base * (t_col_diff_base(m) * t_inv_H(m, i)) * (t_inv_H(l, j) * (t_h(k, l) * t_normal(k))); 
+        t_assemble(i, j) += -1.0 * a * t_row_base * t_inv_H(l, j) * t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) * t_normal(k);
 
         ++t_row_base;
       }
