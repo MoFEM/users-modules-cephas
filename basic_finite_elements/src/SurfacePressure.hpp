@@ -249,18 +249,20 @@ struct NeummanForcesSurface {
     boost::shared_ptr<VectorDouble> detHVec;
     boost::shared_ptr<MatrixDouble> invHMat;
 
+    EntData* faceRowData;
+
     DataAtIntegrationPtsMat() {
       hMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       FMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      faceRowData = nullptr;
     }
 
-    EntData * faceRowData;
-
-    Range forcesOnlyOnEntitiesRow;
-    Range forcesOnlyOnEntitiesCol;
+    //Range forcesOnlyOnEntitiesRow;
+    //Range forcesOnlyOnEntitiesCol;
   };
 
   struct OpCalculateDeformation
