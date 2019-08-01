@@ -490,8 +490,6 @@ MoFEMErrorCode NeummanForcesSurface::OpCalculateDeformation::doWork(
   MoFEMFunctionReturn(0);
 }
 
-
-
 MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
 
@@ -508,15 +506,6 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::doWork(
 
   // get number of integration points
   nbIntegrationPts = getGaussPts().size2();
-
-  // int len = getGaussPts().size1();
-
-  // for (int igg = 0; igg < nbIntegrationPts; igg++) {
-  //   for (int ixx = 0; ixx < len; ixx++) {
-  //     cout << getGaussPts()(ixx, igg) << " ";
-  //   }
-  //   cout << endl;
-  // }
 
   // integrate local matrix for entity block
   CHKERR iNtegrate(row_data);
@@ -546,15 +535,10 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
 
-  //get derivatives of base functions on rows
-  //auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
-  //auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
-  auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
-  //cout << "RIGHT-HAND SIDE" << endl;
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
+
   //iterate over integration points
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-    //cout << gg << " " << t_normal(0) << " "  << t_normal(1) << " "  << t_normal(2) << endl;
 
     FTensor::Tensor0<double *> t_base(&data.getN()(gg, 0));
 
@@ -563,25 +547,19 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::iNtegrate(
 
     int rr = 0;
     for (; rr != nbRows / 3; ++rr) {
-      //t_nf(i) += a * t_base * t_F(j, i) * t_normal(j);
-      //TESTING
 
-      for (auto ii : {0, 1, 2}) {
-        t_normal(ii) = 1.0;
-      }
+      // for (auto ii : {0, 1, 2}) {
+      //   t_normal(ii) = 1.0;
+      // }
 
-      // NOT TRANSPOSED !!!!!
-      t_nf(i) += a * t_base * t_H(i, j) * t_normal(j);
-
-      //t_nf(i) += a * t_base * t_normal(i);
+      t_nf(i) += a * t_base * t_F(j, i) * t_normal(j);
       
       ++t_base;
       ++t_nf;
     }
 
     ++t_w;
-    //++t_F;
-    ++t_H;
+    ++t_F;
     ++t_normal;
   }
 
@@ -781,7 +759,7 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
 
   dataAtPts->faceRowData = nullptr;
   CHKERR loopSideVolumes(sideFeName, *sideFe);
-  auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     double val = getGaussPts()(2, gg); // * area;
@@ -807,8 +785,8 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
         // TODO: handle hoGeometry (probably will work as it is, needs to be
         // checked)
 
-        // t_assemble(i, k) +=
-        //     -0.5 * val * dAta.data.data.value1 * t_base * t_h(i, j) * d_n(j, k);
+        t_assemble(i, k) +=
+            -0.5 * val * dAta.data.data.value1 * t_base * t_F(j, i) * d_n(j, k);
             //-0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
         ++t_base;
       }
@@ -817,7 +795,7 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
       ++t_N_over_ksi;
       ++t_N_over_eta;
     }
-    ++t_h;
+    ++t_F;
   }
 
   if (lambdaPtr) {
@@ -970,11 +948,10 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
 
-  //cout << "LEFT-HAND SIDE" <<endl;
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    double val = getGaussPts()(3, gg); // * area;
+  auto t_inv_H = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
 
-    //cout << gg << " " << t_normal(0) << " "  << t_normal(1) << " "  << t_normal(2) << endl;    
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    //double val = getGaussPts()(3, gg); // * area;
 
     auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
@@ -986,28 +963,25 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
 
-        double a = -0.5 * val * dAta.data.data.value1;
+        double a = -0.5 * t_w * dAta.data.data.value1;
 
-        for (auto ii : {0, 1, 2}) {
-          t_normal(ii) = 1.0;
-        }
+        // for (auto ii : {0, 1, 2}) {
+        //   t_normal(ii) = 1.0;
+        // }
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
-
         // TODO: handle hoGeometry (probably will work as it is, needs to be
         // checked)
 
-        for (auto ii : {0, 1, 2}) {
-          for (auto jj : {0, 1, 2}) {
-            t_assemble(ii, ii) += a * t_row_base * t_col_diff_base(jj) * t_normal(jj);
-          }
-        }
+        t_assemble(i, j) += a * t_row_base * t_inv_H(k, i) * t_col_diff_base(k) * t_normal(j);
 
         ++t_row_base;
       }
       ++t_col_diff_base;
     }
+    ++t_w;
     ++t_normal;
+    ++t_inv_H;
   }
 
   if (lambdaPtr) {
@@ -1122,7 +1096,9 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
-  FTensor::Index<'k', 3> k;
+  //FTensor::Index<'k', 3> k;
+  //FTensor::Index<'j', 3> l;
+  //FTensor::Index<'k', 3> m;
 
   auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
     return FTensor::Tensor2<double *, 3, 3>(
@@ -1139,11 +1115,13 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
 
-  //cout << "LEFT-HAND SIDE" <<endl;
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    double val = getGaussPts()(3, gg); // * area;
+  auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_inv_H = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
 
-    //cout << gg << " " << t_normal(0) << " "  << t_normal(1) << " "  << t_normal(2) << endl;    
+  FTensor::Tensor2<double, 3, 3> t_d;
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    //double val = getGaussPts()(3, gg); // * area;
 
     auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
@@ -1155,27 +1133,48 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
 
-        double a = -0.5 * val * dAta.data.data.value1;
+        double a = -0.5 * t_w * dAta.data.data.value1;
 
-        for (auto ii : {0, 1, 2}) {
-          t_normal(ii) = 1.0;
-        }
+        // for (auto ii : {0, 1, 2}) {
+        //   t_normal(ii) = 1.0;
+        // }
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
 
         // TODO: handle hoGeometry (probably will work as it is, needs to be
         // checked)
 
-        for (auto ii : {0, 1, 2}) {
-          for (auto jj : {0, 1, 2}) {
-            t_assemble(ii, ii) += a * t_row_base * t_col_diff_base(jj) * t_normal(jj);
+        
+        for (int ii = 0; ii < 3; ii++) {
+          for (int jj = 0; jj < 3; jj++) {
+            t_d(ii, jj) = 0.0;
           }
         }
+
+        for (int ii = 0; ii < 3; ii++) {
+          for (int jj = 0; jj < 3; jj++) {
+            for (int k = 0; k < 3; k++) {
+              for (int l = 0; l < 3; l++) {
+                for (int m = 0; m < 3; m++) {
+                  t_d(ii, jj) += -1.0 * t_inv_H(l, jj) * t_col_diff_base(m) *
+                                 t_inv_H(m, ii) * t_h(k, l) * t_normal(k);
+                }
+              }
+            }
+          }
+        }
+
+        t_assemble(i, j) += a * t_row_base * t_d(i, j);
+
+        //t_assemble(i, j) += -a * t_row_base * (t_col_diff_base(m) * t_inv_H(m, i)) * (t_inv_H(l, j) * (t_h(k, l) * t_normal(k))); 
 
         ++t_row_base;
       }
       ++t_col_diff_base;
     }
+    ++t_w;
+    ++t_h;
+    ++t_inv_H;
     ++t_normal;
   }
 
@@ -1563,9 +1562,9 @@ MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
       X_field, X_field, dataAtPts, feMatSideLhs_dX, side_fe_name, aij,
       mapPressure[ms_id], lambda_ptr, ho_geometry));
 
-  // feMatLhs.getOpPtrVector().push_back(new OpNeumannPressureMaterialLhs_dX_dx(
-  //     X_field, x_field, dataAtPts, feMatSideLhs_dx, side_fe_name, aij,
-  //     mapPressure[ms_id], lambda_ptr, ho_geometry));
+  feMatLhs.getOpPtrVector().push_back(new OpNeumannPressureMaterialLhs_dX_dx(
+      X_field, x_field, dataAtPts, feMatSideLhs_dx, side_fe_name, aij,
+      mapPressure[ms_id], lambda_ptr, ho_geometry));
 
   MoFEMFunctionReturn(0);
 }
