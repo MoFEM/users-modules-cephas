@@ -257,6 +257,8 @@ struct NeummanForcesSurface {
       invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
 
+    EntData * faceRowData;
+
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
   };
@@ -275,8 +277,15 @@ struct NeummanForcesSurface {
         const string field_name,
         boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
         bool ho_geometry = false)
-        : UserDataOperator(field_name, UserDataOperator::OPROW),
-          dataAtPts(data_at_pts), hoGeometry(ho_geometry){};
+        : MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator(
+              field_name, UserDataOperator::OPROW),
+          dataAtPts(data_at_pts), hoGeometry(ho_geometry) {
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    };
   };
 
   struct OpNeumannPressureMaterialRhs_dX : public UserDataOperator {
@@ -372,6 +381,110 @@ struct NeummanForcesSurface {
           };
   };
 
+  struct OpNeumannPressureMaterialLhs_dX_dx : public UserDataOperator {
+
+    Mat Aij;
+    //MatrixDouble NN;
+
+    bCPressure &dAta;
+    boost::shared_ptr<double> lambdaPtr;
+    bool hoGeometry;
+    boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+
+    std::string sideFeName;
+
+    //VectorInt rowIndices;
+    //VectorInt colIndices;
+    /*
+        int nbRows;           ///< number of dofs on rows
+        int nbCols;           ///< number if dof on column
+        int nbIntegrationPts; ///< number of integration points */
+
+    //int row_nb_dofs;
+    //int col_nb_dofs;
+    //int nb_gauss_pts;
+
+    //int nb_base_fun_row;
+    //int nb_base_fun_col;
+
+    //bool diagonal_block;
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+    //MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+    //MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+
+    OpNeumannPressureMaterialLhs_dX_dx(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        std::string &side_fe_name, Mat aij, bCPressure &data,
+        boost::shared_ptr<double> lambda_ptr = nullptr,
+        bool ho_geometry = false)
+        : UserDataOperator(field_name_1, field_name_2,
+                           UserDataOperator::OPROWCOL),
+          dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
+          Aij(aij), dAta(data), lambdaPtr(lambda_ptr), hoGeometry(ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  struct OpNeumannPressureMaterialVolOnSideLhs_dX_dx
+      : public MoFEM::VolumeElementForcesAndSourcesCoreOnSide::
+            UserDataOperator {
+
+    Mat Aij;
+    MatrixDouble NN;
+
+    bCPressure &dAta;
+    boost::shared_ptr<double> lambdaPtr;
+    bool hoGeometry;
+    boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+
+    std::string sideFeName;
+
+    VectorInt rowIndices;
+    VectorInt colIndices;
+    /*
+        int nbRows;           ///< number of dofs on rows
+        int nbCols;           ///< number if dof on column
+        int nbIntegrationPts; ///< number of integration points */
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+    MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+
+    OpNeumannPressureMaterialVolOnSideLhs_dX_dx(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        std::string &side_fe_name, Mat aij, bCPressure &data,
+        boost::shared_ptr<double> lambda_ptr = nullptr,
+        bool ho_geometry = false)
+        : MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator(
+              field_name_1, field_name_2, UserDataOperator::OPROWCOL),
+          dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
+          Aij(aij), dAta(data), lambdaPtr(lambda_ptr), hoGeometry(ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
 
   /// Operator for flux element
   struct OpNeumannFlux : public UserDataOperator {
