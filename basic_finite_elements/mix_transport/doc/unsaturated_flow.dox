@@ -13,7 +13,7 @@ described in \ref poisson_tut4 and is a generalization of the problem described 
 \ref mix_transport. You might look to those tutorials if some implementation aspects
 of presented methodology are unclear. Also, you are encouraged to post
 questions on our
-<a href=https://groups.google.com/forum/#!forum/mofem-group>Q&A forum</a>.
+<a href=https://groups.google.com/forum/#!categories/mofem-group>Q&A forum</a>.
 
 Presented methodology is applied to the problem of unsaturated water transport.
 We have no intention to give a detailed description of transport in unsaturated
