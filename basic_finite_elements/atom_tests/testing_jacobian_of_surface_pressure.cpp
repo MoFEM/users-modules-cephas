@@ -97,14 +97,14 @@ int main(int argc, char *argv[]) {
     {
       Projection10NodeCoordsOnField ent_method(m_field, "x");
       CHKERR m_field.loop_dofs("x", ent_method);
-      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "x");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2.5, "x");
     }
 
     // Project coordinates on "X" field
     {
       Projection10NodeCoordsOnField ent_method(m_field, "X");
       CHKERR m_field.loop_dofs("X", ent_method);
-      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2, "X");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.5, "X");
     }
 
     boost::shared_ptr<NeummanForcesSurface> surfacePressure(
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeMatLhs()));
 
-    fe_rhs_ptr->meshPositionsFieldName = "X";
+    fe_rhs_ptr->meshPositionsFieldName = "X"; 
     fe_lhs_ptr->meshPositionsFieldName = "X";
     fe_mat_rhs_ptr->meshPositionsFieldName = "X";
     fe_mat_lhs_ptr->meshPositionsFieldName = "X";
