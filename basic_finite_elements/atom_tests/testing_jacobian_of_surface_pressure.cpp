@@ -83,8 +83,8 @@ int main(int argc, char *argv[]) {
     CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
     CHKERR si->setFieldOrder("x", order_x);
 
-    CHKERR si->addDomainField("X", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->addBoundaryField("X", H1, AINSWORTH_LOBATTO_BASE, 3);
+    CHKERR si->addDomainField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->addBoundaryField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->setFieldOrder("X", order_X);
 
     CHKERR si->setUp();
@@ -93,19 +93,44 @@ int main(int argc, char *argv[]) {
     DM dm;
     CHKERR si->getDM(&dm);
 
+    PetscRandom rctx;
+    PetscRandomCreate(PETSC_COMM_WORLD, &rctx); 
+
+    auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
+                           double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 0.5;
+      //cout << "BEFORE: " << field_data[0] << " " << field_data[1] << " " << field_data[2] << endl;  
+      PetscRandomGetValue(rctx, &value);
+      field_data[0] = (*x) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[1] = (*y) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[2] = (*z) + (value - 0.5) * scale;
+      //cout << "AFTER: " << field_data[0] << " " << field_data[1] << " " << field_data[2] << endl;  
+      MoFEMFunctionReturn(0);
+    };
+
     // Projection on "x" field
     {
       Projection10NodeCoordsOnField ent_method(m_field, "x");
       CHKERR m_field.loop_dofs("x", ent_method);
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(2.5, "x");
+      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.0, "x");
     }
+
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
 
     // Project coordinates on "X" field
     {
       Projection10NodeCoordsOnField ent_method(m_field, "X");
       CHKERR m_field.loop_dofs("X", ent_method);
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.5, "X");
+      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.0, "X");
     }
+
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "X");
+
+    PetscRandomDestroy(&rctx);
 
     boost::shared_ptr<NeummanForcesSurface> surfacePressure(
         new NeummanForcesSurface(m_field));

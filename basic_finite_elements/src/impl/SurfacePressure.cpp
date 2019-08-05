@@ -348,9 +348,9 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
         &m(r + 2, c + 2));
   };
 
-  auto get_tensor1 = [](VectorDouble3 &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
+  // auto get_tensor1 = [](VectorDouble3 &n) {
+  //   return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  // };
 
   auto make_vec_der =
       [](VectorDouble3 &der_ksi, VectorDouble3 &der_eta,
@@ -471,6 +471,10 @@ MoFEMErrorCode NeummanForcesSurface::OpCalculateDeformation::doWork(
     CHKERR determinantTensor3by3(t_H, t_detH);
     CHKERR invertTensor3by3(t_H, t_detH, t_invH);
     t_F(i, j) = t_h(i, k) * t_invH(k, j);
+
+    if (t_detH < 0.0) {
+      cout << "NEGATIVE!!!"  << endl;
+    }
 
     //t_h(i, j) = t_h(i, j) * 2.0;
 
@@ -643,9 +647,9 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
         &m(r + 2, c + 2));
   };
 
-  auto get_tensor1 = [](VectorDouble3 &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
+  // auto get_tensor1 = [](VectorDouble3 &n) {
+  //   return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  // };
 
   auto make_vec_der =
       [](VectorDouble3 &der_ksi, VectorDouble3 &der_eta,
@@ -863,10 +867,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
         &m(r + 2, c + 2));
   };
 
-  auto get_tensor1 = [](VectorDouble3 &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
-
   auto t_w = getFTensor0IntegrationWeight();
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
@@ -888,9 +888,10 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
         double a = -0.5 * t_w * dAta.data.data.value1;
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
-        // TODO: handle hoGeometry 
+        // TODO: handle hoGeometry
 
-        t_assemble(i, j) += a * t_row_base * t_inv_H(k, i) * t_col_diff_base(k) * t_normal(j);
+        t_assemble(i, j) +=
+            a * t_row_base * t_inv_H(k, i) * t_col_diff_base(k) * t_normal(j);
 
         ++t_row_base;
       }
@@ -984,16 +985,14 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
         &m(r + 2, c + 2));
   };
 
-  auto get_tensor1 = [](VectorDouble3 &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
-
   auto t_w = getFTensor0IntegrationWeight();
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
 
   auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
   auto t_inv_H = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+
+  FTensor::Tensor2<double, 3, 3> t_d;
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
@@ -1010,8 +1009,9 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
         double a = -0.5 * t_w * dAta.data.data.value1;
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
+
         // TODO: handle hoGeometry
-        
+
         t_assemble(i, j) += -1.0 * a * t_row_base * t_inv_H(l, j) *
                             t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
                             t_normal(k);

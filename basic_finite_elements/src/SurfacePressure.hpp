@@ -284,6 +284,7 @@ struct NeummanForcesSurface {
       doTris = false;
       doTets = false;
       doPrisms = false;
+      sYmm = false;
     };
   };
 
