@@ -25,6 +25,10 @@ namespace SoftTissue
     using namespace MoFEM;
     using Ele = FaceElementForcesAndSourcesCore;
     using OpEle = FaceElementForcesAndSourcesCore::UserDataOperator;
+
+    using BoundaryEle = EdgeElementForcesAndSourcesCore;
+    using OpBoundaryEle = EdgeElementForcesAndSourcesCore::UserDataOperator;
+
     using EntData = DataForcesAndSourcesCore::EntData; 
 
     const double D = 2e-3; ///< diffusivity
@@ -39,17 +43,62 @@ namespace SoftTissue
 
     struct CommonData 
     {
-        MatrixDouble grad;    ///< Gradients of field "u" at integration points
-        VectorDouble val;     ///< Values of field "u" at integration points
-        VectorDouble dot_val; ///< Rate of values of field "u" at integration points
-        MatrixDouble invJac;  ///< Inverse of element jacobian
+        MatrixDouble flux_values;    ///< flux values at integration points
+        VectorDouble flux_divs;      ///< flux divergences at integration points
+        VectorDouble mass_values; b  ///< mass values at integration points
+        VectorDouble mass_dots;      ///< mass rates at integration points
+
+
+        MatrixDouble invJac; ///< Inverse of element jacobian at integration points
+
+        CommonData() {}
+
+        SmartPetscObj<Mat> M;   ///< Mass matrix
+        SmartPetscObj<KSP> ksp; ///< Linear solver
     };
 
-    struct OpAssembleMass : OpEle 
+///////////////////////////////////////////////////////////////////////////////////
+                        /////// Declarations //////////////   
+///////////////////////////////////////////////////////////////////////////////////
+
+//Assembly of system mass matrix //***********************************************                                 
+
+    // Mass matrix corresponding to the flux equation. 
+    // Note that it is an identity matrix
+    struct OpAssembleMassFlux : OpEle 
     {
-        OpAssembleMass(std::string                    fieldu,
-                       std::string                    fieldv, 
-                       SmartPetscObj<Mat>             m);
+        OpAssembleMassMassFlux(std::string                    flux_field,
+                               SmartPetscObj<Mat>             mass_matrix)
+        : OpEle(flux_field, flux_field, OpEle::OPROWCOL), 
+          M(mass_matrix)
+
+        {
+            sYmm = true;
+        }
+
+        MoFEMErrorCode doWork(int                  row_side, 
+                              int                  col_side, 
+                              EntityType           row_type,
+                              EntityType           col_type, 
+                              EntData              &row_data,
+                              EntData              &col_data);
+
+        private:
+        MatrixDouble mat, transMat;
+        SmartPetscObj<Mat> M;
+    };
+   
+    // Mass matrix corresponding to the balance of mass equation where
+    // there is a time derivative. 
+    struct OpAssembleMassMass : OpEle 
+    {
+        OpAssembleMassMass(std::string                    mass_field,
+                           SmartPetscObj<Mat>             mass_matrix)
+        : OpEle(mass_field, mass_field, OpEle::OPROWCOL),
+          M(mass_matrix)
+          {
+              sYmm = true;
+          }
         MoFEMErrorCode doWork(int                  row_side, 
                               int                  col_side, 
                               EntityType           row_type,
@@ -62,304 +111,315 @@ namespace SoftTissue
         SmartPetscObj<Mat> M;
     };
 
-    struct OpAssembleSlowRhs : OpEle 
+//Assembly of RHS for explicit (slow) part//**************************************
+
+    // RHS for explicit part of the flux equation excluding the essential boundary
+    struct OpAssembleSlowRhsFlux : OpEle 
     {
-        OpAssembleSlowRhs(std::string                         field,
-                          boost::shared_ptr<CommonData>       &datau,
-                          boost::shared_ptr<CommonData>       &datav);
+        OpAssembleSlowRhsFlux(std::string                         flux_field,
+                             boost::shared_ptr<CommonData>        &common_data
+                             Range                                &essential_bd_ents)
+        : OpEle(flux_field, OpEle::OPROW), 
+          commonData(common_data), 
+          field(flux_field),
+          essential_bd_ents(essential_bd_ents) 
+          {}
 
         MoFEMErrorCode doWork(int             side, 
                               EntityType      type, 
-                              EntData &data);
+                              EntData         &data);
         private:
-            boost::shared_ptr<CommonData>      commonData_u;
-            boost::shared_ptr<CommonData>      commonData_v;
+            boost::shared_ptr<CommonData>      commonData;
+            VectorDouble                       vecF;
+            std::string                        field;
+            Range                              &essential_bd_ents;
+    };
+    
+    // RHS for explicit part of the mass balance equation
+    struct OpAssembleSlowRhsMass : OpEle 
+    {
+        OpAssembleSlowRhsMass(std::string                         flux_field,
+                              boost::shared_ptr<CommonData>       &common_data);
+        : OpEle(flux_field, OpEle::OPROW), 
+          commonData(common_data), 
+          field(flux_field) 
+          {}
+
+        MoFEMErrorCode doWork(int             side, 
+                              EntityType      type, 
+                              EntData         &data);
+        private:
+            boost::shared_ptr<CommonData>      commonData;
             VectorDouble                       vecF;
             std::string                        field;
     };
+   
 
-    template <int DIM> 
-    struct OpAssembleStiffRhs : OpEle 
+//Assembly of RHS for the implicit (stiff) part excluding the essential boundary //**********************************
+    template<int dim> 
+    struct OpAssembleStiffRhsFlux : OpEle 
     {
-        OpAssembleStiffRhs(std::string                   field,
-                           boost::shared_ptr<CommonData> &data);
-        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+        OpAssembleStiffRhsFlux(std::string                    flux_field, 
+                               boost::shared_ptr<CommonData>  &data
+                               Range                          &essential_bd_ents)
+            : OpEle(flux_field, OpEle::OPROW), 
+              commonData(data), 
+              field(flux_field),
+              essential_bd_ents(essential_bd_ents)
+              {}
+        
+        MoFEMErrorCode doWork(int             side, 
+                              EntityType      type, 
+                              EntData         &data);
 
         private:
             boost::shared_ptr<CommonData> commonData;
-            VectorDouble vecF;
+            VectorDouble                  vecF;
+            std::string                   flux_field;
+            Range                         essential_bd_ents; 
+
     };
 
-    template <int DIM> 
-    struct OpAssembleStiffLhs : OpEle 
+    template<int dim> 
+    struct OpAssembleStiffRhsMass : OpEle 
     {
-        OpAssembleStiffLhs(std::string                   fieldu,
-                           std::string                   fieldv,
-                           boost::shared_ptr<CommonData> &data);
-        MoFEMErrorCode doWork(int               row_side, 
-                              int               col_side, 
-                              EntityType        row_type,
-                              EntityType        col_type, 
-                              EntData           &row_data,
-                              EntData           &col_data);
+        OpAssembleStiffRhsMass(std::string                    flux_field, 
+                               boost::shared_ptr<CommonData>  &data)
+        : OpEle(flux_field, OpEle::OPROW), 
+          commonData(data), 
+          field(flux_field) 
+          {}
+        
+        MoFEMErrorCode doWork(int        side, 
+                              EntityType type, 
+                              EntData    &data);
+
         private:
             boost::shared_ptr<CommonData> commonData;
-            MatrixDouble mat, transMat;
+            VectorDouble                  vecF;
+            std::string                   flux_field;
     };
 
-    struct Monitor : public FEMethod 
+// RHS contribution of the natural boundary condition
+   struct OpAssembleNaturalBCRhs : OpBoundaryEle 
     {
+        OpAssembleNaturalBCRhs(std::string                         flux_field,
+                               boost::shared_ptr<CommonData>       &common_data
+                               Range                               &natural_bd_ents)
+        : OpBoundaryEle(flux_field, OpBoundaryEle::OPROW), 
+          commonData(common_data), 
+          field(flux_field),
+          natural_bd_ents(natural_bd_ents) 
+          {}
+
+        MoFEMErrorCode doWork(int             side, 
+                              EntityType      type, 
+                              EntData         &data);
+        private:
+            boost::shared_ptr<CommonData>      commonData;
+            VectorDouble                       vecF;
+            std::string                        field;
+            Range                              natural_bd_ents;
+    };
+
+    // RHS contribution of the essential boundary condition
+    struct OpAssembleEssentialBCRhs : OpBoundaryEle 
+    {
+        OpAssembleEssentialBCRhs(std::string                       flux_field,
+                               boost::shared_ptr<CommonData>       &common_data
+                               Range                               &essential_bd_ents)
+        : OpBoundaryEle(flux_field, OpBoundaryEle::OPROW), 
+          commonData(common_data), 
+          field(flux_field),
+          essential_bd_ents(essential_bd_ents) 
+          {}
+
+        MoFEMErrorCode doWork(int             side, 
+                              EntityType      type, 
+                              EntData         &data);
+        private:
+            boost::shared_ptr<CommonData>      commonData;
+            VectorDouble                       vecF;
+            std::string                        field;
+            Range                              essential_bd_ents;
+    };
+
+// Declaration of thangent operator //**********************************************
+
+    template <int dim>
+    struct OpAssembleLhsFluxFlux : OpEle
+    {
+        OpAssembleLhsFluxFlux(std::string                   flux_field, 
+                              boost::shared_ptr<CommonData> &data, 
+                              Range                         &essential_bd_ents)
+        : OpEle(flux_field, flux_field, OpEle::OPROWCOL), 
+          commonData(data),
+          field(flux_field),
+          essential_bd_ents(essential_bd_ents)
+        {
+            sYmm = true;
+        }
+
+        MoFEMErrorCode doWork(int                  row_side, 
+                              int                  col_side, 
+                              EntityType           row_type,
+                              EntityType           col_type, 
+                              EntData              &row_data,
+                              EntData              &col_data);
+        private: 
+            MatrixDouble                  mat, transMat;
+            std::string                   field;
+            Range                         essential_bd_ents;
+
+    };
+
+    template <int dim>
+    struct OpAssembleLhsFluxFluxEBC : OpBoundaryEle
+    {
+        OpAssembleLhsFluxFluxEBC(std::string                   flux_field, 
+                                 Range                         &essential_bd_ents)
+        : OpBoundaryEle(flux_field, flux_field, OpBoundaryEle::OPROWCOL), 
+          field(flux_field),
+          essential_bd_ents(essential_bd_ents)
+        {
+            sYmm = true;
+        }
+
+        MoFEMErrorCode doWork(int                  row_side, 
+                              int                  col_side, 
+                              EntityType           row_type,
+                              EntityType           col_type, 
+                              EntData              &row_data,
+                              EntData              &col_data);
+        private: 
+            MatrixDouble                  mat, transMat;
+            std::string                   flux_field;
+            Range                         essential_bd_ents;
+
+    };
+
+    template <int dim>
+    struct OpAssembleLhsFluxMass : OpEle
+    {
+        OpAssembleLhsFluxFlux(std::string                   flux_field, 
+                              std::string                   mass_field,
+                              boost::shared_ptr<CommonData> &data, 
+                              Range                         &essential_bd_ents)
+        : OpEle(flux_field, mass_field, OpEle::OPROWCOL), 
+          commonData(data),
+          flux_field(flux_field),
+          mass_field(mass_field),
+          essential_bd_ents(essential_bd_ents)
+        {
+            sYmm = false;
+        }  
+
+
+        MoFEMErrorCode doWork(int                  row_side, 
+                              int                  col_side, 
+                              EntityType           row_type,
+                              EntityType           col_type, 
+                              EntData              &row_data,
+                              EntData              &col_data);
+        private: 
+            boost::shared_ptr<CommonData> commonData;
+            MatrixDouble                  mat;
+            std::string                   flux_field;
+            std::string                   mass_field;
+            Range                         essential_bd_ents;
+
+    };
+
+    template <int dim>
+    struct OpAssembleLhsMassFlux : OpEle
+    {
+        OpAssembleLhsMassFlux(std::string                   mass_field,
+                              std::string                   flux_field)
+        : OpEle(mass_field, flux_field, OpEle::OPROWCOL), 
+          flux_field(flux_field),
+          mass_field(mass_field)
+        {
+            sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int                  row_side, 
+                              int                  col_side, 
+                              EntityType           row_type,
+                              EntityType           col_type, 
+                              EntData              &row_data,
+                              EntData              &col_data);
+        private: 
+            MatrixDouble                  mat;
+            std::string                   mass_field,
+            std::string                   flux_field;
+
+    };
+
+    template <int dim>
+    struct OpAssembleLhsMassMass : OpEle
+    {
+        OpAssembleLhsMassMass(std::string                   mass_field)
+        : OpEle(mass_field, mass_field, OpEle::OPROWCOL), 
+          mass_field(mass_field)
+        {
+            sYmm = true;
+        }
+
+        MoFEMErrorCode doWork(int                  row_side, 
+                              int                  col_side, 
+                              EntityType           row_type,
+                              EntityType           col_type, 
+                              EntData              &row_data,
+                              EntData              &col_data);
+        private: 
+            MatrixDouble                  mat, transMat;
+            std::string                   mass_field,
+            std::string                   flux_field;
+
+    };
+
+    struct Monitor : public FEMethod {
         Monitor(SmartPetscObj<DM>                            &dm,
-                boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc);
-
+                boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
+        : dM(dm), 
+        postProc(post_proc)
+        {};
         MoFEMErrorCode preProcess() { return 0; }
         MoFEMErrorCode operator()() { return 0; }
+        MoFEMErrorCode postProcess() 
+        {
+            MoFEMFunctionBegin;
+            if (ts_step % save_every_nth_step == 0) 
+            {
+                CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+                CHKERR postProc->writeFile(
+                    "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+            }
+            MoFEMFunctionReturn(0);
+        }
 
-        MoFEMErrorCode postProcess();
-
-        private:
-            SmartPetscObj<DM>                            dM;
-            boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
-
+    private:
+        SmartPetscObj<DM> dM;
+        boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
     };
+    
 
-    template<DIM>
-    struct ChemoMechanics
-    {
-        ChemoMechanics(const int  order);
+}; //
 
-        MoFEMErrorCode  initialize_finite_element();
-        
+    
 
-        private:
-                SmartPetscObj<Mat>  local_M;
-                SmartPetscObj<KSP>  local_Ksp;
-    }:
 
-    Monitor::Monitor(SmartPetscObj<DM>                            &dm,
-            boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
-    : dM(dm)
-    , postProc(post_proc)
-    {};  
 
-    MoFEMErrorCode Monitor::postProcess() 
-    {
-        MoFEMFunctionBegin;
-        if (ts_step % save_every_nth_step == 0) 
-        {
-            CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
-            CHKERR postProc->writeFile("out_level_" + 
-                                       boost::lexical_cast<std::string>(ts_step) + 
-                                       ".h5m");
-        }
-        MoFEMFunctionReturn(0);
-    }  
 
-    OpAssembleStiffLhs::OpAssembleStiffLhs(std::string                   fieldu,
-                                           std::string                   fieldv,
-                                           boost::shared_ptr<CommonData> &data)
-    : OpEle(fieldu, fieldv, OpEle::OPROWCOL), commonData(data) 
-    {
-        sYmm = true;
-    }
-    MoFEMErrorCode OpAssembleStiffLhs::doWork(int             row_side, 
-                                              int             col_side, 
-                                              EntityType      row_type,
-                                              EntityType      col_type, 
-                                              EntData         &row_data,
-                                              EntData         &col_data) 
-    {
-        MoFEMFunctionBegin;
 
-        const int nb_row_dofs = row_data.getIndices().size();
-        const int nb_col_dofs = col_data.getIndices().size();
-        if (nb_row_dofs && nb_col_dofs) 
-        {
-            mat.resize(nb_row_dofs, nb_col_dofs, false);
-            mat.clear();
-            const int nb_integration_pts = getGaussPts().size2();
-            auto t_row_base = row_data.getFTensor0N();
-            auto t_val = getFTensor0FromVec(commonData->val);
-            auto t_grad = getFTensor1FromMat<DIM>(commonData->grad);
-            auto t_row_diff_base = row_data.getFTensor1DiffN<DIM>();
-            auto t_w = getFTensor0IntegrationWeight();
-            FTensor::Index<'i', DIM> i;
-            const double ts_a = getFEMethod()->ts_a;
-            const double vol = getMeasure();
-            for (int gg = 0; gg != nb_integration_pts; ++gg) 
-            {
-                const double a = vol * t_w;
-                for (int rr = 0; rr != nb_row_dofs; ++rr) 
-                {
-                    auto t_col_base = col_data.getFTensor0N(gg, 0);
-                    auto t_col_diff_base = col_data.getFTensor1DiffN<DIM>(gg, 0);
-                    for (int cc = 0; cc != nb_col_dofs; ++cc) 
-                    {
-                        mat(rr, cc) += a * (t_row_base * t_col_base * ts_a +
-                                    (D + Dn * t_val) * t_row_diff_base(i) * t_col_diff_base(i)
-                                    + Dn * t_col_base * t_row_diff_base(i) * t_grad(i));
-                        ++t_col_base;
-                        ++t_col_diff_base;
-                    }
-                    ++t_row_base;
-                    ++t_row_diff_base;
-                }
-                ++t_w;
-                ++t_val;
-                ++t_grad;
-            }
-            CHKERR MatSetValues(getFEMethod()->ts_B, row_data, col_data, &mat(0, 0),
-                          ADD_VALUES);
-            if (row_side != col_side || row_type != col_type) 
-            {
-                transMat.resize(nb_col_dofs, nb_row_dofs, false);
-                noalias(transMat) = trans(mat);
-                CHKERR MatSetValues(getFEMethod()->ts_B, col_data, row_data,
-                            &transMat(0, 0), ADD_VALUES);
-            }
-        }
-        MoFEMFunctionReturn(0);
-    }
 
-    OpAssembleStiffRhs::OpAssembleStiffRhs(std::string                   field,
-                                           boost::shared_ptr<CommonData> &data)
-        : OpEle(field, OpEle::OPROW)
-        , commonData(data) 
-        {}
-    MoFEMErrorCode OpAssembleStiffRhs::doWork(int side, EntityType type, EntData &data) 
-    {
-        MoFEMFunctionBegin;
-        const int nb_dofs = data.getIndices().size();
-        if (nb_dofs) 
-        {
-            vecF.resize(nb_dofs, false);
-            vecF.clear();
-            const int nb_integration_pts = getGaussPts().size2();
-            auto t_dot_val = getFTensor0FromVec(commonData->dot_val);
-            auto t_val = getFTensor0FromVec(commonData->val);
-            auto t_grad = getFTensor1FromMat<DIM>(commonData->grad);
-            auto t_base = data.getFTensor0N();
-            auto t_diff_base = data.getFTensor1DiffN<DIM>();
-            auto t_w = getFTensor0IntegrationWeight();
-            FTensor::Index<'i', DIM> i;
-            const double vol = getMeasure();
-            for (int gg = 0; gg != nb_integration_pts; ++gg) 
-            {
-                const double a = vol * t_w;
-                for (int rr = 0; rr != nb_dofs; ++rr) 
-                {
-                    vecF[rr] += a * (t_base * t_dot_val + (D + Dn * t_val) * t_diff_base(i) * t_grad(i));
-                    ++t_diff_base;
-                    ++t_base;
-                }
-                ++t_dot_val;
-                ++t_grad;
-                ++t_val;
-                ++t_w;
-            }
-            CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-            CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(), ADD_VALUES);
-        }
-        MoFEMFunctionReturn(0);
-    }
+///////////////////////////////////////////////////////////////////////////////////
+                        /////// Definitions //////////////   
+///////////////////////////////////////////////////////////////////////////////////
 
-    OpAssembleSlowRhs::OpAssembleSlowRhs(std::string                         field,
-                                         boost::shared_ptr<CommonData>       &datau,
-                                         boost::shared_ptr<CommonData>       &datav)
-    : OpEle(field, OpEle::OPROW)
-    , commonData_u(datau)
-    , commonData_v(datav)
-    , field(field)      
-    {}
 
-    MoFEMErrorCode OpAssembleSlowRhs::doWork(int side, EntityType type, EntData &data) 
-    {
-        MoFEMFunctionBegin;
-        if(field == "v"){ r = rv; a1 = av1; a2 = av2;}
-        if(field == "u"){ r = ru; a1 = au1; a2 = au2;}
-        const int nb_dofs = data.getIndices().size();
-        if (nb_dofs) 
-        {
-            vecF.resize(nb_dofs, false);
-            vecF.clear();
-            const int nb_integration_pts = getGaussPts().size2();
-            //FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_val(new VectorDouble);
-            auto t_val_u = getFTensor0FromVec(commonData_u->val);
-            auto t_val_v = getFTensor0FromVec(commonData_v->val);
-            auto t_base = data.getFTensor0N();
-            auto t_w = getFTensor0IntegrationWeight();
-            const double vol = getMeasure();
-            for (int gg = 0; gg != nb_integration_pts; ++gg) 
-            {
-                const double a = vol * t_w;
-                const double f = a * r * t_val_u * (1 - a1 * t_val_u - a2 * t_val_v);
-                for (int rr = 0; rr != nb_dofs; ++rr) 
-                {
-                    const double b = f * t_base;
-                    vecF[rr] += b;
-                    ++t_base;
-                }
-                ++t_val_u;
-                ++t_val_v;        
-                ++t_w;
-            }
-            CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-            CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(), ADD_VALUES);
-        }
-        MoFEMFunctionReturn(0);
-    }
 
-    OpAssembleMass::OpAssembleMass(std::string                    fieldu,
-                                   std::string                    fieldv, 
-                                   SmartPetscObj<Mat>             m)
-    : OpEle(fieldu, fieldv, OpEle::OPROWCOL)
-    , M(m) 
-      
-    {
-        sYmm = true;
-    }
 
-    MoFEMErrorCode OpAssembleMass::doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data) 
-    {
-        MoFEMFunctionBegin;
-        const int nb_row_dofs = row_data.getIndices().size();
-        const int nb_col_dofs = col_data.getIndices().size();
-        if (nb_row_dofs && nb_col_dofs) 
-        {
-            const int nb_integration_pts = getGaussPts().size2();
-            mat.resize(nb_row_dofs, nb_col_dofs, false);
-            mat.clear();
-            auto t_row_base = row_data.getFTensor0N();
-            auto t_w = getFTensor0IntegrationWeight();
-            const double vol = getMeasure();
-            for (int gg = 0; gg != nb_integration_pts; ++gg) 
-            {
-                const double a = t_w * vol;
-                for (int rr = 0; rr != nb_row_dofs; ++rr) 
-                {
-                    auto t_col_base = col_data.getFTensor0N(gg, 0);
-                    for (int cc = 0; cc != nb_col_dofs; ++cc) 
-                    {
-                        mat(rr, cc) += a * t_row_base * t_col_base;
-                        ++t_col_base;
-                    }
-                    ++t_row_base;
-                }
-                ++t_w;
-            }
-            CHKERR MatSetValues(M, row_data, col_data, &mat(0, 0), ADD_VALUES);
-            if (row_side != col_side || row_type != col_type) 
-            {
-                transMat.resize(nb_col_dofs, nb_row_dofs, false);
-                noalias(transMat) = trans(mat);
-                CHKERR MatSetValues(M, col_data, row_data, &transMat(0, 0), ADD_VALUES);
-            }
-        }
-        MoFEMFunctionReturn(0);
-    }
-}  // namespace SoftTtissue
 
 
 

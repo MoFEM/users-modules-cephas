@@ -2,7 +2,7 @@
  
  -ts_monitor 
  -ts_exact_final_time stepover 
- -ts_dt 0.25 
+ -ts_dt 0.1 
  -ts_final_time 30
  -ts_adapt_type none 
  
@@ -14,4 +14,4 @@
 -snes_rtol 1e-12
 
  -snes_monitor 
- -snes_lag_jacobian -2    
+ -snes_lag_jacobian 2    

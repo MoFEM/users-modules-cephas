@@ -15,6 +15,10 @@ bfe_build_and_install(
   reaction_diffusion_equation 
   ${CMAKE_CURRENT_SOURCE_DIR}/reaction_diffusion_equation.cpp)
 
+bfe_build_and_install(
+  reac_diff_mixed 
+  ${CMAKE_CURRENT_SOURCE_DIR}/reac_diff_mixed.cpp)
+
  cm_export_file("param_file.petsc" export_reaction_diffusion_equation)
  cm_export_file("README" export_reaction_diffusion_equation)
  cm_export_file("mesh.jou" export_reaction_diffusion_equation)

@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
 
   // Register DM Manager
   CHKERR DMRegister_MoFEM("DMMOFEM"); // register MoFEM DM in PETSc
+  
   // Register materials
   CHKERR RegisterMaterials()();
 

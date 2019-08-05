@@ -21,10 +21,10 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef __UNSATURATD_FLOW_HPP__
-#define __UNSATURATD_FLOW_HPP__
+#ifndef __UNSATURATD_FLOW_MIXED_HPP__
+#define __UNSATURATD_FLOW_MIXED_HPP__
 
-namespace MixTransport {
+namespace MixTransportMixed {
 
 /**
  * \brief Generic material model for unsaturated water transport
@@ -492,31 +492,12 @@ struct UnsaturatedFlowElement : public MixTransportElement {
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data) {
       MoFEMFunctionBegin;
-
-      
-
-
       const int nb_row = row_data.getIndices().size();
       const int nb_col = col_data.getIndices().size();
       if (nb_row == 0)
         MoFEMFunctionReturnHot(0);
       if (nb_col == 0)
         MoFEMFunctionReturnHot(0);
-
-      // // AAAAAAAA
-      // EntityHandle fe_ent = getFEEntityHandle();
-      // if(essential_bd_ents.find(fe_ent)!=essential_bd_ents.end())
-      //   cerr << "element is on essenital boundary" << endl;
-
-      // EntityHandle row_side_ent = row_data.getFieldData()[0]->getEnt();
-      // EntityHandle col_side_ent = col_data.getFieldData()[0]->getEnt();
-      // if(essential_bd_ents.find(row_side_ent)!=essential_bd_ents.end())
-      //   cerr << "rows are essential" << endl;
-      // if(essential_bd_ents.find(col_side_ent)!=essential_bd_ents.end())
-      //   cerr << "cols are essential" << endl;
-        
-
-
       nN.resize(nb_row, nb_col, false);
       nN.clear();
       // Get EntityHandle of the finite element
@@ -1740,6 +1721,6 @@ struct UnsaturatedFlowElement : public MixTransportElement {
   }
 };
 
-} // namespace MixTransport
+} // namespace MixTransportMixed
 
-#endif //  __UNSATURATD_FLOW_HPP__
+#endif //  __UNSATURATD_FLOW_MIXED_HPP__

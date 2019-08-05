@@ -22,7 +22,8 @@ set(BFE_DIRS
   poisson
   hello_world
   hierarchical_approximation
-  reaction_diffusion_equation)
+  reaction_diffusion_equation
+  mixed_chemo_mechanics)
 
 function(bfe_install bfe_mod_dir)
   install(
