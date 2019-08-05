@@ -183,12 +183,12 @@ int main(int argc, char *argv[]) {
     // setup problem
     CHKERR simple_interface->setUp();
     // create elements instances
-    boost::shared_ptr<ForcesAndSourcesCore>                    domain_fe(
-                                                                 new VolumeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore>                    boundary_fe(
-                                                                new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore>                    skeleton_fe(
-                                                                new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<ForcesAndSourcesCore> domain_fe(
+        new VolumeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<ForcesAndSourcesCore> boundary_fe(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<ForcesAndSourcesCore> skeleton_fe(
+        new FaceElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe(
         new VolumeElementForcesAndSourcesCoreOnSide(m_field));
     // set operator to the volume element instance
@@ -206,15 +206,15 @@ int main(int argc, char *argv[]) {
     side_fe->getOpPtrVector().push_back(new OpVolumeSide("U"));
 
     auto dm = simple_interface->getDM();
-    // loop over domain elements and execute element instance with operator on
+    // iterate domain elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
-                                                                             domain_fe);
-    // loop over boundary elements and execute element instance with operator on
+                                    domain_fe);
+    // iterate boundary elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getBoundaryFEName(),
-                                                                             boundary_fe);
-    // loop over skeleton elements and execute element instance with operator on
+                                    boundary_fe);
+    // iterate skeleton elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getSkeletonFEName(),
                                     skeleton_fe);

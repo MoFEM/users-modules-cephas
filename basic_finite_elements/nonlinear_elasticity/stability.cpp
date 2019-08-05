@@ -136,19 +136,19 @@ template <typename TYPE> struct MyMat : public MyMat_double<TYPE> {
     MoFEMFunctionReturnHot(0);
   }
 
-  virtual MoFEMErrorCode setUserActiveVariables(VectorDouble &active_varibles) {
+  virtual MoFEMErrorCode setUserActiveVariables(VectorDouble &active_variables) {
     MoFEMFunctionBeginHot;
 
     try {
 
       int shift = nbActiveVariables0; // is a number of elements in F
       MatrixDouble &G0 = (this->commonDataPtr->gradAtGaussPts["D0"][this->gG]);
-      active_varibles[shift + 0] = G0(0, 0);
-      active_varibles[shift + 1] = G0(1, 1);
-      active_varibles[shift + 2] = G0(2, 2);
-      active_varibles[shift + 3] = G0(0, 1) + G0(1, 0);
-      active_varibles[shift + 4] = G0(1, 2) + G0(2, 1);
-      active_varibles[shift + 5] = G0(0, 2) + G0(2, 0);
+      active_variables[shift + 0] = G0(0, 0);
+      active_variables[shift + 1] = G0(1, 1);
+      active_variables[shift + 2] = G0(2, 2);
+      active_variables[shift + 3] = G0(0, 1) + G0(1, 0);
+      active_variables[shift + 4] = G0(1, 2) + G0(2, 1);
+      active_variables[shift + 5] = G0(0, 2) + G0(2, 0);
 
     } catch (const std::exception &ex) {
       std::ostringstream ss;
