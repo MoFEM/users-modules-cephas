@@ -162,14 +162,32 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<double> lambda_ptr = boost::make_shared<double>(1.0);
 
+    Range nodes;
+
+    rval = moab.get_entities_by_type(0, MBVERTEX, nodes, false);
+    MOAB_THROW(rval);
+
+    nodes.pop_front();
+    nodes.pop_back();
+    nodes.print();
+
+    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPts> dataAtPts =
+        boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
+
+    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPtsMat>
+        dataAtPtsMat =
+            boost::make_shared<NeummanForcesSurface::DataAtIntegrationPtsMat>();
+
+    dataAtPtsMat->forcesOnlyOnEntitiesRow = nodes;
+
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        CHKERR surfacePressure->addPressure("x", "X", PETSC_NULL, PETSC_NULL,
+        CHKERR surfacePressure->addPressure("x", "X", dataAtPts, PETSC_NULL, PETSC_NULL,
                                             bit->getMeshsetId(), lambda_ptr,
                                             true, true);
         CHKERR surfacePressure->addPressureMaterial(
-            "x", "X", si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
+            "x", "X", dataAtPtsMat, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
             bit->getMeshsetId(), lambda_ptr, true, true);
       }
     }

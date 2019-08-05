@@ -261,8 +261,8 @@ struct NeummanForcesSurface {
       faceRowData = nullptr;
     }
 
-    //Range forcesOnlyOnEntitiesRow;
-    //Range forcesOnlyOnEntitiesCol;
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
   };
 
   struct OpCalculateDeformation : public VolOnSideUserDataOperator {
@@ -552,14 +552,15 @@ struct NeummanForcesSurface {
                                  bool block_set = false);
 
       MoFEMErrorCode addPressure(
-          const std::string field_name_1, const std::string field_name_2, Vec F,
-          Mat aij, int ms_id, boost::shared_ptr<double> lambda_ptr = nullptr,
+          const std::string field_name_1, const std::string field_name_2,
+          boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Vec F, Mat aij,
+          int ms_id, boost::shared_ptr<double> lambda_ptr = nullptr,
           bool ho_geometry = true, bool block_set = false);
 
       MoFEMErrorCode addPressureMaterial(
           const std::string field_name_1, const std::string field_name_2,
-          std::string &side_fe_name,
-          Vec F, Mat aij, int ms_id,
+          boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+          std::string &side_fe_name, Vec F, Mat aij, int ms_id,
           boost::shared_ptr<double> lambda_ptr = nullptr,
           bool ho_geometry = true, bool block_set = false);
 
