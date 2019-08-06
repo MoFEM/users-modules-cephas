@@ -595,17 +595,17 @@ int main(int argc, char *argv[]) {
     double length = 2.;
     double inv_length = 1. / length;
     CHKERR m_field.getInterface(field_blas);
-    auto set_displacement_field = [&](VectorAdaptor &field_data, double *xcoord,
-                                      double *ycoord, double *zcoord) {
-      MoFEMFunctionBegin;
+    // auto set_displacement_field = [&](VectorAdaptor &field_data, double *xcoord,
+    //                                   double *ycoord, double *zcoord) {
+    //   MoFEMFunctionBegin;
 
-      field_data[0] = 0.;//0.5 * magnitude * ((*xcoord) * inv_length + 1.);
-      //field_data[0] = std::sin((*xcoord));
-      field_data[1] = 0.;
+    //   field_data[0] = 0.;//0.5 * magnitude * ((*xcoord) * inv_length + 1.);
+    //   //field_data[0] = std::sin((*xcoord));
+    //   field_data[1] = 0.;
 
-      MoFEMFunctionReturn(0);
-    };
-    CHKERR field_blas->setVertexDofs(set_displacement_field, "U");
+    //   MoFEMFunctionReturn(0);
+    // };
+    // CHKERR field_blas->setVertexDofs(set_displacement_field, "U");
 
     // Create common data structure
     boost::shared_ptr<CommonData> data(new CommonData());
