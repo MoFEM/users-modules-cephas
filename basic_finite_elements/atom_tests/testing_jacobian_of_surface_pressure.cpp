@@ -184,11 +184,11 @@ int main(int argc, char *argv[]) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
         CHKERR surfacePressure->addPressure("x", "X", dataAtPts, PETSC_NULL, PETSC_NULL,
-                                            bit->getMeshsetId(), lambda_ptr,
+                                            bit->getMeshsetId(), nullptr,
                                             true, true);
         CHKERR surfacePressure->addPressureMaterial(
             "x", "X", dataAtPtsMat, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), lambda_ptr, true, true);
+            bit->getMeshsetId(), nullptr, true, true);
       }
     }
 
