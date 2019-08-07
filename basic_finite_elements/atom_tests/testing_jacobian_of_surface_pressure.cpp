@@ -174,21 +174,16 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPts> dataAtPts =
         boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
 
-    boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPtsMat>
-        dataAtPtsMat =
-            boost::make_shared<NeummanForcesSurface::DataAtIntegrationPtsMat>();
-
-    dataAtPtsMat->forcesOnlyOnEntitiesRow = nodes;
+    dataAtPts->forcesOnlyOnEntitiesRow = nodes;
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        CHKERR surfacePressure->addPressure("x", "X", dataAtPts, PETSC_NULL, PETSC_NULL,
-                                            bit->getMeshsetId(), nullptr,
-                                            true, true);
-        CHKERR surfacePressure->addPressureMaterial(
-            "x", "X", dataAtPtsMat, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), nullptr, true, true);
+        CHKERR surfacePressure->addPressure("x", PETSC_NULL,
+                                            bit->getMeshsetId(), true, true);
+        CHKERR surfacePressure->addPressureAle(
+            "x", "X", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
+            bit->getMeshsetId(), surfacePressure, true, true);
       }
     }
 

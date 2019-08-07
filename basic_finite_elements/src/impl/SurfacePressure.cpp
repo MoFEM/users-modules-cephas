@@ -215,9 +215,7 @@ NeummanForcesSurface::OpNeumannPressure::OpNeumannPressure(
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
-      F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {
-        count = 0;
-      }
+      F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
 MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
@@ -436,13 +434,23 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   }
 
   //scale matrix NN
-  if (arcLengthDof) {
-    NN *= arcLengthDof->getFieldData();
+  if (surfacePressure->arcLengthDof) {
+    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
-  CHKERR MatSetValues(
-      getFEMethod()->snes_B, row_nb_dofs, &row_data.getIndices()[0],
-      col_nb_dofs, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+  // get pointer to first global index on column
+  const int *col_indices = &*col_data.getIndices().data().begin();
+
+  Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
+                                             : getFEMethod()->snes_B;
+
+  // CHKERR MatSetValues(B, row_nb_dofs, &row_data.getIndices()[0],
+  //     col_nb_dofs, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+
+  CHKERR MatSetValues(B, row_nb_dofs, row_indices, col_nb_dofs, col_indices,
+                      &*NN.data().begin(), ADD_VALUES);
       
   MoFEMFunctionReturn(0);
 }
@@ -665,7 +673,7 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
          VectorDouble3 &normal_der, MatrixDouble &der_normal_mat,
          FTensor::Tensor0<double *> &t_N_over_ksi,
          FTensor::Tensor0<double *> &t_N_over_eta, MatrixDouble &spin,
-         boost::shared_ptr<DataAtIntegrationPtsMat> dataAtPts,
+         boost::shared_ptr<DataAtIntegrationPts> dataAtPts,
          const int &gg) {
         der_normal_mat.clear();
 
@@ -747,8 +755,8 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
     ++t_F;
   }
 
-  if (arcLengthDof) {
-    NN *= arcLengthDof->getFieldData();
+  if (surfacePressure->arcLengthDof) {
+    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   MoFEMFunctionReturn(0);
@@ -911,8 +919,8 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
     ++t_inv_H;
   }
 
-  if (arcLengthDof) {
-    NN *= arcLengthDof->getFieldData();
+  if (surfacePressure->arcLengthDof) {
+    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   MoFEMFunctionReturn(0);
@@ -964,14 +972,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs::aSsemble(
   CHKERR MatSetValues(B, row_nb_dofs, row_indices, col_nb_dofs, col_indices,
                       &*NN.data().begin(), ADD_VALUES);
 
-/*   if (!isDiag && sYmm) {
-    // if not diagonal term and since global matrix is symmetric assemble
-    // transpose term.
-    transK.resize(K.size2(), K.size1(), false);
-    noalias(transK) = trans(K);
-    CHKERR MatSetValues(B, nbCols, col_indices, nbRows, row_indices,
-                        &*transK.data().begin(), ADD_VALUES);
-  } */
   MoFEMFunctionReturn(0);
 }
 
@@ -1035,8 +1035,8 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
     ++t_normal;
   }
 
-  if (arcLengthDof) {
-    NN *= arcLengthDof->getFieldData();
+  if (surfacePressure->arcLengthDof) {
+    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   MoFEMFunctionReturn(0);
@@ -1211,7 +1211,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(const std::string field_name,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurface::addPressure(
+/* MoFEMErrorCode NeummanForcesSurface::addPressure(
     const std::string x_field, const std::string X_field,
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Vec F, Mat aij,
     int ms_id, boost::shared_ptr<DofEntity> arc_length_dof, bool ho_geometry,
@@ -1265,13 +1265,14 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(
       arc_length_dof, ho_geometry));
 
   MoFEMFunctionReturn(0);
-}
+} */
 
-MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
+MoFEMErrorCode NeummanForcesSurface::addPressureAle(
     const std::string x_field, const std::string X_field,
-    boost::shared_ptr<DataAtIntegrationPtsMat> data_at_pts,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
     std::string side_fe_name, Vec F, Mat aij, int ms_id,
-    boost::shared_ptr<DofEntity> arc_length_dof, bool ho_geometry, bool block_set) {
+    boost::shared_ptr<NeummanForcesSurface> surface_pressure,
+    bool ho_geometry, bool block_set) {
 
   const CubitMeshSets *cubit_meshset_ptr;
   MeshsetsManager *mmanager_ptr;
@@ -1306,7 +1307,16 @@ MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
         cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
   }
 
-  // RIGHT-HAND SIDE
+  // LEFT-HAND SIDE (SPATIAL)
+
+  feLhs.getOpPtrVector().push_back(
+      new OpGetTangent(X_field, data_at_pts));
+
+  feLhs.getOpPtrVector().push_back(new OpNeumannPressureLhs_dx_dX(
+      x_field, X_field, data_at_pts, aij, mapPressure[ms_id], surface_pressure,
+      ho_geometry));
+
+  // RIGHT-HAND SIDE (MATERIAL)
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
@@ -1322,7 +1332,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
       X_field, data_at_pts, feMatSideRhs, side_fe_name, F, mapPressure[ms_id],
       ho_geometry));
 
-  // LEFT-HAND SIDE
+  // LEFT-HAND SIDE (MATERIAL)
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dx =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
@@ -1337,12 +1347,12 @@ MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
       new OpCalculateDeformation(X_field, data_at_pts, ho_geometry));
   feMatSideLhs_dx->getOpPtrVector().push_back(
       new OpNeumannPressureMaterialVolOnSideLhs_dX_dx(
-          X_field, x_field, data_at_pts, aij, mapPressure[ms_id], arc_length_dof,
-          ho_geometry));
+          X_field, x_field, data_at_pts, aij, mapPressure[ms_id],
+          surface_pressure, ho_geometry));
 
   feMatLhs.getOpPtrVector().push_back(new OpNeumannPressureMaterialLhs_dX_dx(
       X_field, x_field, data_at_pts, feMatSideLhs_dx, side_fe_name, aij,
-      mapPressure[ms_id], arc_length_dof, ho_geometry));
+      mapPressure[ms_id], surface_pressure, ho_geometry));
 
   feMatSideLhs_dX->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
@@ -1352,13 +1362,13 @@ MoFEMErrorCode NeummanForcesSurface::addPressureMaterial(
       new OpCalculateDeformation(X_field, data_at_pts, ho_geometry));
   feMatSideLhs_dX->getOpPtrVector().push_back(
       new OpNeumannPressureMaterialVolOnSideLhs_dX_dX(
-          X_field, X_field, data_at_pts, aij, mapPressure[ms_id], arc_length_dof,
-          ho_geometry));
+          X_field, X_field, data_at_pts, aij, mapPressure[ms_id],
+          surface_pressure, ho_geometry));
 
   feMatLhs.getOpPtrVector().push_back(new OpGetTangent(X_field, data_at_pts));
   feMatLhs.getOpPtrVector().push_back(new OpNeumannPressureMaterialLhs_dX_dX(
       X_field, X_field, data_at_pts, feMatSideLhs_dX, side_fe_name, aij,
-      mapPressure[ms_id], arc_length_dof, ho_geometry));
+      mapPressure[ms_id], surface_pressure, ho_geometry));
 
   MoFEMFunctionReturn(0);
 }
