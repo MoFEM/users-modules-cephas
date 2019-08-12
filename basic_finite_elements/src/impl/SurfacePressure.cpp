@@ -589,27 +589,29 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
       }
     }
   }
+  {
+    Vec my_f;
+    if (F == PETSC_NULL) {
+      switch (getFEMethod()->ts_ctx) {
+      case FEMethod::CTX_TSSETIFUNCTION: {
+        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
+            FEMethod::CTX_SNESSETFUNCTION;
+        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
+        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
+        break;
+      }
+      default:
+        break;
+      }
+      my_f = getFEMethod()->snes_f;
+    } else {
+      my_f = F;
+    }
 
-  Vec my_f;
-  if (F == PETSC_NULL) {
-    switch (getFEMethod()->ts_ctx) {
-    case FEMethod::CTX_TSSETIFUNCTION: {
-      const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-          FEMethod::CTX_SNESSETFUNCTION;
-      const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-      const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-      break;
-    }
-    default:
-      break;
-    }
-    my_f = getFEMethod()->snes_f;
-  } else {
-    my_f = F;
+    // assemble local matrix
+    CHKERR VecSetValues(my_f, nbRows, row_indices, &*nF.data().begin(), ADD_VALUES);
+
   }
-
-  // assemble local matrix
-  CHKERR VecSetValues(my_f, nbRows, row_indices, &*nF.data().begin(), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -1307,7 +1309,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressureAle(
         cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
   }
 
-  // LEFT-HAND SIDE (SPATIAL)
+ /*  LEFT-HAND SIDE (SPATIAL) */
 
   feLhs.getOpPtrVector().push_back(
       new OpGetTangent(X_field, data_at_pts));
@@ -1316,7 +1318,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressureAle(
       x_field, X_field, data_at_pts, aij, mapPressure[ms_id], surface_pressure,
       ho_geometry));
 
-  // RIGHT-HAND SIDE (MATERIAL)
+  /* RIGHT-HAND SIDE (MATERIAL) */
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
@@ -1332,7 +1334,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressureAle(
       X_field, data_at_pts, feMatSideRhs, side_fe_name, F, mapPressure[ms_id],
       ho_geometry));
 
-  // LEFT-HAND SIDE (MATERIAL)
+  /* LEFT-HAND SIDE (MATERIAL) */
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dx =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
