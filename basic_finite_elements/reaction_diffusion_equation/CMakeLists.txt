@@ -27,6 +27,6 @@ bfe_build_and_install(
   DESTINATION ${BFE_MOD_DIR})
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.jou
    DESTINATION ${BFE_MOD_DIR})
- install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.h5m
+ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cub
    DESTINATION ${BFE_MOD_DIR})
     

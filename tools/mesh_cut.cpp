@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     int nb_ref_cut = 0;
     int nb_ref_trim = 0;
     PetscBool flg_tol;
-    double tol[] = {1e-4, 2e-1, 2e-1};
+    double tol[] = {1e-2, 2e-1, 2e-1};
     int nmax_tol = 3;
     PetscBool debug = PETSC_FALSE;
 
