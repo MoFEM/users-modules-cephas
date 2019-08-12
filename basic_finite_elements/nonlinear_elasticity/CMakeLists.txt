@@ -33,6 +33,15 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/dome_thin_symm.h5m
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
 
+file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)  
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
+  DESTINATION ${BFE_MOD_DIR}
+  PERMISSIONS OWNER_READ OWNER_WRITE)
+
   file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
@@ -87,6 +96,9 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data.txt
 
   cm_export_file("LShape.h5m" export_files_nonlinear_dynamics)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m DESTINATION ${BFE_MOD_DIR})
+
+  cm_export_file(".petscrc" export_files_nonlinear_dynamics)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc DESTINATION ${BFE_MOD_DIR})
 
   cm_export_file("data.txt" export_files_nonlinear_dynamics)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/data.txt DESTINATION ${BFE_MOD_DIR})

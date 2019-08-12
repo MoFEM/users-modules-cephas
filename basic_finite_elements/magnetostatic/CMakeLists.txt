@@ -23,6 +23,12 @@ file(
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+  
+file(
+    COPY ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
 
 cm_export_file("magnetic_coil.cub" export_files_magnetostatic)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.cub DESTINATION ${BFE_MOD_DIR})
@@ -37,7 +43,11 @@ add_test(MagnetostaticTest
 cm_export_file("magnetic_coil.jou" export_files_magenotstatic)
 cm_export_file("magnetic_coil.cub" export_files_magenotstatic)
 cm_export_file("README" export_files_magenotstatic)
+cm_export_file(".petscrc" export_files_magenotstatic)
 
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
+  DESTINATION ${BFE_MOD_DIR}
+  PERMISSIONS OWNER_READ OWNER_WRITE)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
