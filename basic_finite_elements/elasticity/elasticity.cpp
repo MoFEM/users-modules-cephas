@@ -225,7 +225,8 @@ int main(int argc, char *argv[]) {
       // CHKERR m_field.get_moab().get_adjacencies(
       //   faces,1,false,edges,moab::Interface::UNION
       // );
-      // CHKERR m_field.synchronise_entities(edges);
+      // CHKERR
+      // m_field.getInterface<CommInterface>()->synchroniseEntities(edges);
 
       CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
@@ -304,7 +305,8 @@ int main(int argc, char *argv[]) {
               CHKERR moab.get_adjacencies(block_ents, 1, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
-              CHKERR m_field.synchronise_entities(ents_to_set_order);
+              CHKERR m_field.getInterface<CommInterface>()->synchroniseEntities(
+                  ents_to_set_order);
 
               CHKERR m_field.set_field_order(
                   ents_to_set_order, "DISPLACEMENT",
