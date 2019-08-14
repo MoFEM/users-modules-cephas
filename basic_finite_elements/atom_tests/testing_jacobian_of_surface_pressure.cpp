@@ -1,8 +1,9 @@
 /** \file testing_jacobian_of_surface_pressure.cpp
  * \example testing_jacobian_of_surface_pressure.cpp
 
-Testing implementation of Hook element by verifying tangent stiffness matrix.
-Test like this is an example of how to verify the implementation of Jacobian.
+Testing implementation of surface pressure element (ALE) by verifying tangent
+stiffness matrix. Test like this is an example of how to verify the
+implementation of Jacobian.
 
 */
 
@@ -26,25 +27,6 @@ using namespace MoFEM;
 
 static char help[] = "\n";
 
-/* struct ScaleOp: public MethodForForceScaling {
-  //Hassan: This function to read data file (once) and save it in a pair vector
-ts
-
-  ScaleOp(
-  ):
- {
-
-  }
-
-  //Hassan: this function will loop over data in pair vector ts to find load
-  //scale based on ts_t
-  MoFEMErrorCode scaleNf(const FEMethod *fe,VectorDouble &Nf) {
-    MoFEMFunctionBeginHot;
-    NF*=2;
-    MoFEMFunctionReturnHot(0);
-  }
-}; */
-
 int main(int argc, char *argv[]) {
 
   // Initialize MoFEM
@@ -63,8 +45,8 @@ int main(int argc, char *argv[]) {
     PetscInt order_X = 1;
     PetscBool flg = PETSC_TRUE;
 
-    // PetscBool ale = PETSC_FALSE;
-    // CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
+    PetscBool ale = PETSC_TRUE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
     PetscBool test_jacobian = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
@@ -94,21 +76,19 @@ int main(int argc, char *argv[]) {
     CHKERR si->getDM(&dm);
 
     PetscRandom rctx;
-    PetscRandomCreate(PETSC_COMM_WORLD, &rctx); 
+    PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
 
     auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
                            double *z) {
       MoFEMFunctionBegin;
       double value;
       double scale = 0.5;
-      //cout << "BEFORE: " << field_data[0] << " " << field_data[1] << " " << field_data[2] << endl;  
       PetscRandomGetValue(rctx, &value);
       field_data[0] = (*x) + (value - 0.5) * scale;
       PetscRandomGetValue(rctx, &value);
       field_data[1] = (*y) + (value - 0.5) * scale;
       PetscRandomGetValue(rctx, &value);
-      field_data[2] = (*z) + (value - 0.5) * scale;
-      //cout << "AFTER: " << field_data[0] << " " << field_data[1] << " " << field_data[2] << endl;  
+      field_data[2] = (*z) + (value - 0.5) * scale; 
       MoFEMFunctionReturn(0);
     };
 
@@ -118,7 +98,6 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.loop_dofs("x", ent_method);
       // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.0, "x");
     }
-
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
 
     // Project coordinates on "X" field
@@ -127,7 +106,6 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.loop_dofs("X", ent_method);
       // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.0, "X");
     }
-
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "X");
 
     PetscRandomDestroy(&rctx);
@@ -139,7 +117,6 @@ int main(int argc, char *argv[]) {
         surfacePressure, &(surfacePressure->getLoopFe()));
     boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeLhs()));
-
     boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_mat_rhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeMatRhs()));
     boost::shared_ptr<NeummanForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
@@ -152,18 +129,9 @@ int main(int argc, char *argv[]) {
     // fe_rhs_ptr->addToRule = 2;
     // fe_lhs_ptr->addToRule = 2;
 
-    /* for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-               cout << it->getName() << endl;
-      CHKERR surfacePressure->addPressure("x", "X", dataAtIntegrationPts,
-                                          PETSC_NULL, PETSC_NULL,
-                                          it->getMeshsetId(), false, false) ;
-    }  */
-
     boost::shared_ptr<double> lambda_ptr = boost::make_shared<double>(1.0);
 
     Range nodes;
-
     rval = moab.get_entities_by_type(0, MBVERTEX, nodes, false);
     MOAB_THROW(rval);
 
@@ -201,13 +169,6 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateGlobalVector(dm, &x);
     CHKERR VecDuplicate(x, &f);
     CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
-
-    // CHKERR VecDuplicate(x, &dx);
-    // PetscRandom rctx;
-    // PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
-    // VecSetRandom(dx, rctx);
-    // PetscRandomDestroy(&rctx);
-    // CHKERR DMoFEMMeshToGlobalVector(dm, x, INSERT_VALUES, SCATTER_REVERSE);
 
     Mat A, fdA;
     CHKERR DMCreateMatrix(dm, &A);
@@ -264,19 +225,6 @@ int main(int argc, char *argv[]) {
     //             "difference matrix is too big");
     //   }
     // }
-
-    int size;
-    VecGetSize(f, &size);
-    cout << "f size: " << size << endl;
-
-    int m, n;
-    MatGetSize(A, &m, &n);
-    cout << "A size: " << m << " " << n << endl;
-
-    // int ierr;
-    // cout << "----- Start printting f -----" << endl;
-    // ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD); CHKERRG(ierr);
-    // cout << "----- Finish printting f -----" << endl;
 
     CHKERR VecDestroy(&x);
     CHKERR VecDestroy(&f);
