@@ -232,7 +232,7 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief Operator to compute 2 tangent vectors
+   * @brief Operator for computing tangent vectors
    *
    */ 
   struct OpGetTangent : public UserDataOperator {
@@ -240,7 +240,7 @@ struct NeummanForcesSurface {
     boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
     OpGetTangent(const string field_name,
                  boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts)
-        : UserDataOperator(field_name, UserDataOperator::OPROW),
+        : UserDataOperator(field_name, UserDataOperator::OPCOL),
           dataAtIntegrationPts(dataAtIntegrationPts) {}
 
     int ngp;
@@ -315,7 +315,7 @@ struct NeummanForcesSurface {
   };
   
   /**
-   * @brief Operator to compute deformation on a side volume
+   * @brief Operator for computing deformation in a side volume
    *
    */ 
   struct OpCalculateDeformation : public VolOnSideUserDataOperator {
@@ -344,6 +344,23 @@ struct NeummanForcesSurface {
    * @brief RHS-operator for the pressure element 
    *
    * Integrates pressure in the material configuration
+   * 
+   * Computes linearisation of the spatial component with respect to 
+   * material coordinates.
+   *
+   * Virtual work of the surface pressure corresponding to a test function 
+   * of the spatial configuration (\f$\delta\mathbf{x}\f$):
+   * \f[
+   * \delta W^\text{spatial}_p = \int\limits_\mathcal{T} p\,\mathbf{N}(\mathbf{X})
+   * \cdot \delta\mathbf{x}\, \textrm{d}\mathcal{T} = \int\limits_{\mathcal{T}_{\xi}}
+   *  p\left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial\mathbf{X}}
+   * {\partial\eta}\right) \cdot \delta\mathbf{x}\, \textrm{d}\xi\textrm{d}\eta,
+   * \f]
+   * where \f$p\f$ is pressure, \f$\mathbf{N}\f$ is a normal to the face 
+   * in the material configuration and \f$\xi, \eta\f$ are coordinates in the parent space
+   * (\f$\mathcal{T}_\xi\f$).
+   * 
+   * 
    */ 
   struct OpNeumannPressureMaterialRhs_dX : public UserDataOperator {
 
@@ -369,7 +386,7 @@ struct NeummanForcesSurface {
     MoFEMErrorCode aSsemble(EntData &row_data);
 
     /**
-    * @brief RHS-operator for the pressure element 
+    * @brief Integrate pressure in the material configuration
     *
     */ 
     OpNeumannPressureMaterialRhs_dX(

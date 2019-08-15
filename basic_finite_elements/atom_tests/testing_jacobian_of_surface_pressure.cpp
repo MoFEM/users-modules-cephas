@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
-    PetscInt order_x = 1;
+    PetscInt order_x = 2;
     PetscInt order_X = 1;
     PetscBool flg = PETSC_TRUE;
 
