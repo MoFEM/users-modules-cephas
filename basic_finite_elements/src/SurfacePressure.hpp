@@ -74,26 +74,23 @@ struct NeummanForcesSurface {
     int getRule(int order) { return 2 * order + addToRule; };
   };
   
-  // FE for the right-hand side (spatial)
-  // used in both non-ALE and ALE
+  // FE for the right-hand side (spatial configuration)
   MyTriangleFE fe;
   MyTriangleFE &getLoopFe() { return fe; }
 
-  // FE for the left-hand side (spatial)
-  // used in ALE
+  // FE for the left-hand side (spatial configuration, ALE)
   MyTriangleFE feLhs;
   MyTriangleFE &getLoopFeLhs() { return feLhs; }
 
-  // FE for the right-hand side (material)
-  // used in ALE
+  // FE for the right-hand side (material configuration, ALE)
   MyTriangleFE feMatRhs;
   MyTriangleFE &getLoopFeMatRhs() { return feMatRhs; }
 
-  // FE for the left-hand side (material)
-  // used in ALE
+  // FE for the left-hand side (material configuration, ALE)
   MyTriangleFE feMatLhs;
   MyTriangleFE &getLoopFeMatLhs() { return feMatLhs; }
 
+  // Pointer to arc length method DOF, used to scale pressure in LHS
   boost::shared_ptr<DofEntity> arcLengthDof;
 
   NeummanForcesSurface(MoFEM::Interface &m_field,
@@ -165,7 +162,7 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief Operator for pressure element (RHS)
+   * @brief RHS-operator for pressure element (spatial configuration)
    *
    */
   struct OpNeumannPressure : public UserDataOperator {
@@ -249,10 +246,11 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief LHS-operator for pressure element 
+   * @brief LHS-operator for pressure element (spatial configuration)
    * 
    * Computes linearisation of the spatial component with respect to 
    * material coordinates.
+   * 
    */ 
   struct OpNeumannPressureLhs_dx_dX : public UserDataOperator {
 
@@ -272,22 +270,22 @@ struct NeummanForcesSurface {
      * material coordinates.
      *
      * Virtual work of the surface pressure corresponding to a test function 
-     * of the spatial configuration (\f$\delta\mathbf{x}\f$):
+     * of the spatial configuration \f$(\delta\mathbf{x})\f$:
      * \f[
-     * \delta W^\text{spatial}_p = \int\limits_\mathcal{T} p\,\mathbf{N}(\mathbf{X})
+     * \delta W^\text{spatial}_p(\mathbf{X}, \delta\mathbf{x}) = \int\limits_\mathcal{T} p\,\mathbf{N}(\mathbf{X})
      * \cdot \delta\mathbf{x}\, \textrm{d}\mathcal{T} = \int\limits_{\mathcal{T}_{\xi}}
      *  p\left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial\mathbf{X}}
      * {\partial\eta}\right) \cdot \delta\mathbf{x}\, \textrm{d}\xi\textrm{d}\eta,
      * \f]
      * where \f$p\f$ is pressure, \f$\mathbf{N}\f$ is a normal to the face 
      * in the material configuration and \f$\xi, \eta\f$ are coordinates in the parent space
-     * (\f$\mathcal{T}_\xi\f$).
+     * \f$(\mathcal{T}_\xi)\f$.
      * 
      * Linearisation with respect to a variation of material coordinates 
-     * (\f$\Delta\mathbf{X}\f$):
+     * \f$(\Delta\mathbf{X})\f$:
      * 
      * \f[
-     * \Delta\delta W^\text{spatial}_p = \int\limits_{\mathcal{T}_{\xi}}
+     * \textrm{D} \delta W^\text{spatial}_p(\mathbf{X}, \delta\mathbf{x}) [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}}
      *  p\left[ \frac{\partial\mathbf{X}}{\partial\xi} \cdot \left(\frac{\partial\Delta
      *  \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right) -\frac{\partial\mathbf{X}}
      *  {\partial\eta} \cdot \left(\frac{\partial\Delta \mathbf{X}}{\partial\xi}\times
@@ -315,7 +313,7 @@ struct NeummanForcesSurface {
   };
   
   /**
-   * @brief Operator for computing deformation in a side volume
+   * @brief Operator for computing deformation gradients in side volumes
    *
    */ 
   struct OpCalculateDeformation : public VolOnSideUserDataOperator {
@@ -341,27 +339,11 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief RHS-operator for the pressure element 
+   * @brief RHS-operator for the pressure element (material configuration)
    *
-   * Integrates pressure in the material configuration
-   * 
-   * Computes linearisation of the spatial component with respect to 
-   * material coordinates.
+   * Integrates pressure in the material configuration.
    *
-   * Virtual work of the surface pressure corresponding to a test function 
-   * of the spatial configuration (\f$\delta\mathbf{x}\f$):
-   * \f[
-   * \delta W^\text{spatial}_p = \int\limits_\mathcal{T} p\,\mathbf{N}(\mathbf{X})
-   * \cdot \delta\mathbf{x}\, \textrm{d}\mathcal{T} = \int\limits_{\mathcal{T}_{\xi}}
-   *  p\left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial\mathbf{X}}
-   * {\partial\eta}\right) \cdot \delta\mathbf{x}\, \textrm{d}\xi\textrm{d}\eta,
-   * \f]
-   * where \f$p\f$ is pressure, \f$\mathbf{N}\f$ is a normal to the face 
-   * in the material configuration and \f$\xi, \eta\f$ are coordinates in the parent space
-   * (\f$\mathcal{T}_\xi\f$).
-   * 
-   * 
-   */ 
+   */
   struct OpNeumannPressureMaterialRhs_dX : public UserDataOperator {
 
     Vec F;
@@ -380,15 +362,43 @@ struct NeummanForcesSurface {
     int nbRows;           ///< number of dofs on rows
     int nbIntegrationPts; ///< number of integration points
 
+    /**
+     * @brief Integrate pressure in the material configuration.
+     *
+     * Virtual work of the surface pressure corresponding to a test function
+     * of the material configuration \f$(\delta\mathbf{X})\f$:
+     *
+     * \f[
+     * \delta W^\text{material}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{X}) = -\int\limits_\mathcal{T}
+     * p\left\{\mathbf{F}^{\intercal}\cdot \mathbf{N}(\mathbf{X}) \right\} \cdot
+     * \delta\mathbf{X}\, \textrm{d}\mathcal{T} =
+     * -\int\limits_{\mathcal{T}_{\xi}} p\left\{\mathbf{F}^{\intercal}\cdot
+     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial\mathbf{X}}
+     * {\partial\eta}\right) \right\} \cdot \delta\mathbf{X}\,
+     * \textrm{d}\xi\textrm{d}\eta
+     *  \f]
+     *
+     * where \f$p\f$ is pressure, \f$\mathbf{N}\f$ is a normal to the face
+     * in the material configuration, \f$\xi, \eta\f$ are coordinates in the
+     * parent space
+     * \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the deformation gradient:
+     *
+     * \f[
+     * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
+     * \frac{\partial\mathbf{x}}{\partial\mathbf{\chi}}
+     * \frac{\partial\mathbf{\chi}}{\partial\mathbf{X}}
+     * \f]
+     *
+     * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
+     * spatial and material maps, respectively, and \f$\mathbf{\chi}\f$ are
+     * the reference coordinates.
+     * 
+     */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &row_data);
     MoFEMErrorCode iNtegrate(EntData &row_data);
     MoFEMErrorCode aSsemble(EntData &row_data);
 
-    /**
-    * @brief Integrate pressure in the material configuration
-    *
-    */ 
     OpNeumannPressureMaterialRhs_dX(
         const string material_field,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
@@ -401,9 +411,24 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief LHS-operator for the pressure element (material configuration)
+   * @brief Base class for LHS-operators for pressure element (material configuration)
    *
-   */ 
+   * Linearisation of the material component with respect to
+   * spatial and material coordinates consists of three parts, computed 
+   * by operators working on the face and on the side volume:
+   *
+   * \f[
+   * \textrm{D} \delta W^\text{material}_p(\mathbf{x}, \mathbf{X},
+   * \delta\mathbf{x}) 
+   * [\Delta\mathbf{x}, \Delta\mathbf{X}] = \textrm{D} \delta
+   * W^\text{(face)}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{x}) 
+   * [\Delta\mathbf{X}] + \textrm{D} \delta
+   * W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{x}) 
+   * [\Delta\mathbf{x}] + \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x},
+   * \mathbf{X}, \delta\mathbf{x}) [\Delta\mathbf{X}] 
+   * \f]
+   *
+   */
   struct OpNeumannPressureMaterialLhs : public UserDataOperator {
 
     Mat Aij;
@@ -463,14 +488,45 @@ struct NeummanForcesSurface {
   /**
    * @brief LHS-operator for the pressure element (material configuration)
    *
-   */ 
+   * Computes linearisation of the material component with respect to
+   * material coordinates (also triggers a loop over operators 
+   * from the side volume).
+   *
+   */
   struct OpNeumannPressureMaterialLhs_dX_dX
       : public OpNeumannPressureMaterialLhs {
-
+    
+    /**
+     * Integrates a contribution to the left-hand side and triggers a loop over 
+     * side volume operators.
+     * 
+     */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data);
+
+    /**
+     * @brief Compute part of the left-hand side
+     *
+     * Computes the linearisation of the material component
+     * with respect to a variation of material coordinates
+     * \f$(\Delta\mathbf{X})\f$:
+     *
+     * \f[
+     * \textrm{D} \delta W^\text{(face)}_p(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{x})
+     * [\Delta\mathbf{X}] = -\int\limits_{\mathcal{T}_{\xi}} p \, \mathbf{F}^{\intercal}\cdot
+     * \left[
+     * \frac{\partial\mathbf{X}}{\partial\xi} \cdot \left(\frac{\partial\Delta
+     *  \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right)
+     * -\frac{\partial\mathbf{X}}
+     *  {\partial\eta} \cdot \left(\frac{\partial\Delta
+     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right]
+     * \textrm{d}\xi\textrm{d}\eta 
+     * \f]
+     *
+     */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
     OpNeumannPressureMaterialLhs_dX_dX(
@@ -490,10 +546,16 @@ struct NeummanForcesSurface {
   /**
    * @brief LHS-operator for the pressure element (material configuration)
    *
-   */ 
+   * Triggers loop over operators from the side volume
+   *
+   */
   struct OpNeumannPressureMaterialLhs_dX_dx
       : public OpNeumannPressureMaterialLhs {
 
+    /*
+    * Triggers loop over operators from the side volume
+    * 
+    */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
@@ -514,9 +576,9 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief LHS-operator for the pressure element (material configuration)
+   * @brief Base class for LHS-operators (material) on side volumes
    *
-   */ 
+   */
   struct OpNeumannPressureMaterialVolOnSideLhs
       : public VolOnSideUserDataOperator {
 
@@ -567,12 +629,31 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief LHS-operator for the pressure element (material configuration)
+   * @brief LHS-operator (material configuration) on the side volume
    *
-   */ 
+   * Computes the linearisation of the material component
+   * with respect to a variation of spatial coordinates on the side volume.
+   */
   struct OpNeumannPressureMaterialVolOnSideLhs_dX_dx
       : public OpNeumannPressureMaterialVolOnSideLhs {
 
+    /**
+     * @brief Integrates over a face contribution from a side volume 
+     *
+     * Computes linearisation of the material component
+     * with respect to a variation of spatial coordinates:
+     *
+     * \f[
+     * \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{x})
+     * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}} p
+     * \left\{\left[ \frac{\partial\Delta\mathbf{x}}{\partial\mathbf{\chi}}\,\mathbf{H}^{-1}
+     * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi} 
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
+     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
+     * \f]
+     *
+     */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
     OpNeumannPressureMaterialVolOnSideLhs_dX_dx(
@@ -589,12 +670,33 @@ struct NeummanForcesSurface {
   };
 
   /**
-   * @brief LHS-operator for the pressure element (material configuration)
+   * @brief LHS-operator (material configuration) on the side volume
    *
-   */ 
+   * Computes the linearisation of the material component
+   * with respect to a variation of material coordinates on the side volume.
+   *
+   */
   struct OpNeumannPressureMaterialVolOnSideLhs_dX_dX
       : public OpNeumannPressureMaterialVolOnSideLhs {
 
+    /**
+     * @brief Integrates over a face contribution from a side volume 
+     *
+     * Computes linearisation of the material component
+     * with respect to a variation of material coordinates:
+     * 
+     * \f[
+     * \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{x})
+     * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}} p
+     * \left\{\left[
+     * \mathbf{h}\,\mathbf{H}^{-1}\,\frac{\partial\Delta\mathbf{X}}
+     * {\partial\mathbf{\chi}}\,\mathbf{H}^{-1}
+     * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
+     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
+     * \f]
+     */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
     OpNeumannPressureMaterialVolOnSideLhs_dX_dX(
@@ -638,73 +740,75 @@ struct NeummanForcesSurface {
    * @param  block_set   If tru get data from block set
    * @return             ErrorCode
    */
-  MoFEMErrorCode addForce(const std::string field_name, Vec F, int ms_id,
-                          bool ho_geometry = false, bool block_set = false);
+    MoFEMErrorCode addForce(const std::string field_name, Vec F, int ms_id,
+                            bool ho_geometry = false, bool block_set = false);
 
-  /**
-   * \brief Add operator to calculate pressure on element
-   * @param  field_name  Field name (f.e. TEMPERATURE)
-   * @param  F           Right hand side vector
-   * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
-   * @param  ho_geometry Use higher order shape functions to define curved
-   * geometry
-   * @param  block_set   If true get data from block set
-   * @return             ErrorCode
-   */
-  MoFEMErrorCode addPressure(const std::string field_name, Vec F, int ms_id,
-                             bool ho_geometry = false, bool block_set = false);
+    /**
+     * \brief Add operator to calculate pressure on element
+     * @param  field_name  Field name (f.e. TEMPERATURE)
+     * @param  F           Right hand side vector
+     * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
+     * @param  ho_geometry Use higher order shape functions to define curved
+     * geometry
+     * @param  block_set   If true get data from block set
+     * @return             ErrorCode
+     */
+    MoFEMErrorCode addPressure(const std::string field_name, Vec F, int ms_id,
+                               bool ho_geometry = false,
+                               bool block_set = false);
 
-  /**
-   * \brief Add operator to calculate pressure on element (in ALE)
-   * @param  field_name_1  Field name for spatial positions
-   * @param  field_name_2  Field name for material positions
-   * @param  data_at_pts   Common data at integration points
-   * @param  side_fe_name  Name of the element in the side volume
-   * @param  F             Right hand side vector
-   * @param  aij           Tangent matrix
-   * @param  ms_id         Set id (SideSet or BlockSet if block_set = true)
-   * @param  ho_geometry   Use higher order shape functions to define curved
-   * geometry
-   * @param  block_set   If true get data from block set
-   * @return             ErrorCode
-   */
-  MoFEMErrorCode
-  addPressureAle(const std::string field_name_1, const std::string field_name_2,
-                 boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
-                 std::string side_fe_name, Vec F, Mat aij, int ms_id,
-                 boost::shared_ptr<NeummanForcesSurface> surface_pressure,
-                 bool ho_geometry = false, bool block_set = false);
+    /**
+     * \brief Add operator to calculate pressure on element (in ALE)
+     * @param  field_name_1  Field name for spatial positions
+     * @param  field_name_2  Field name for material positions
+     * @param  data_at_pts   Common data at integration points
+     * @param  side_fe_name  Name of the element in the side volume
+     * @param  F             Right hand side vector
+     * @param  aij           Tangent matrix
+     * @param  ms_id         Set id (SideSet or BlockSet if block_set = true)
+     * @param  ho_geometry   Use higher order shape functions to define curved
+     * geometry
+     * @param  block_set   If true get data from block set
+     * @return             ErrorCode
+     */
+    MoFEMErrorCode
+    addPressureAle(const std::string field_name_1,
+                   const std::string field_name_2,
+                   boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+                   std::string side_fe_name, Vec F, Mat aij, int ms_id,
+                   boost::shared_ptr<NeummanForcesSurface> surface_pressure,
+                   bool ho_geometry = false, bool block_set = false);
 
-  /**
-   * \brief Add operator to calculate pressure on element
-   * @param  field_name  Field name (f.e. TEMPERATURE)
-   * @param  F           Right hand side vector
-   * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
-   * @param  ho_geometry Use higher order shape functions to define curved
-   * geometry
-   * @param  block_set   If tru get data from block set
-   * @return             ErrorCode
-   */
-  MoFEMErrorCode addLinearPressure(const std::string field_name, Vec F,
-                                   int ms_id, bool ho_geometry = false);
+    /**
+     * \brief Add operator to calculate pressure on element
+     * @param  field_name  Field name (f.e. TEMPERATURE)
+     * @param  F           Right hand side vector
+     * @param  ms_id       Set id (SideSet or BlockSet if block_set = true)
+     * @param  ho_geometry Use higher order shape functions to define curved
+     * geometry
+     * @param  block_set   If tru get data from block set
+     * @return             ErrorCode
+     */
+    MoFEMErrorCode addLinearPressure(const std::string field_name, Vec F,
+                                     int ms_id, bool ho_geometry = false);
 
-  /// Add flux element operator (integration on face)
-  MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
-                         bool ho_geometry = false);
+    /// Add flux element operator (integration on face)
+    MoFEMErrorCode addFlux(const std::string field_name, Vec F, int ms_id,
+                           bool ho_geometry = false);
 
-  /// \deprecated fixed spelling mistake
-  DEPRECATED typedef MethodForAnalyticalForce MethodForAnaliticalForce;
+    /// \deprecated fixed spelling mistake
+    DEPRECATED typedef MethodForAnalyticalForce MethodForAnaliticalForce;
 
-  DEPRECATED typedef OpNeumannPressure OpNeumannPreassure;
+    DEPRECATED typedef OpNeumannPressure OpNeumannPreassure;
 
-  DEPRECATED typedef bCPressure
-      bCPreassure; ///< \deprecated Do not use spelling mistake
+    DEPRECATED typedef bCPressure
+        bCPreassure; ///< \deprecated Do not use spelling mistake
 
-  /// \deprecated function is deprecated because spelling mistake, use
-  /// addPressure instead
-  DEPRECATED MoFEMErrorCode addPreassure(const std::string field_name, Vec F,
-                                         int ms_id, bool ho_geometry = false,
-                                         bool block_set = false);
+    /// \deprecated function is deprecated because spelling mistake, use
+    /// addPressure instead
+    DEPRECATED MoFEMErrorCode addPreassure(const std::string field_name, Vec F,
+                                           int ms_id, bool ho_geometry = false,
+                                           bool block_set = false);
 };
 
 /** \brief Set of high-level function declaring elements and setting operators
