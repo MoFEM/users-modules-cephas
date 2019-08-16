@@ -215,7 +215,7 @@ NeummanForcesSurface::OpNeumannPressure::OpNeumannPressure(
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
-      F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry), count_rhs(0) {}
+      F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
 MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
@@ -234,8 +234,6 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
 
   Nf.resize(data.getIndices().size(), false);
   Nf.clear();
-
-  //cout << "RHS: " << ++count_rhs << endl;
 
   for (unsigned int gg = 0; gg != data.getN().size1(); ++gg) {
 
@@ -402,15 +400,14 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   VectorDouble3 der_ksi(3);
   VectorDouble3 der_eta(3);
 
-  //cout << "LHS: " << ++count_lhs << endl;
-
-  // double lambda = 1;
-  // if (surfacePressure->arcLengthDof) {
-  //   lambda = surfacePressure->arcLengthDof->getFieldData();
-  // }
+  double lambda = 1;
+  if (surfacePressure->arcLengthDof) {
+    lambda = surfacePressure->arcLengthDof->getFieldData();
+  }
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    double val = getGaussPts()(2, gg); 
+
+    double val = getGaussPts()(2, gg) * lambda; 
 
     FTensor::Tensor0<double *> t_N_over_ksi(&col_data.getDiffN()(gg, 0));
     FTensor::Tensor0<double *> t_N_over_eta(&col_data.getDiffN()(gg, 1));
@@ -441,13 +438,6 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
       ++t_N_over_ksi;
       ++t_N_over_eta;
     }
-  }
-
-  //scale matrix NN
-  if (surfacePressure->arcLengthDof) {
-    //double lambda = surfacePressure->arcLengthDof->getFieldData();
-    //NN *= lambda;
-    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   // get pointer to first global index on row
@@ -736,8 +726,14 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
 
   auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
 
+  double lambda = 1;
+  if (surfacePressure->arcLengthDof) {
+    lambda = surfacePressure->arcLengthDof->getFieldData();
+  }
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    double val = getGaussPts()(2, gg); // * area;
+
+    double val = getGaussPts()(2, gg) * lambda; 
 
     FTensor::Tensor0<double *> t_N_over_ksi(&col_data.getDiffN()(gg, 0));
     FTensor::Tensor0<double *> t_N_over_eta(&col_data.getDiffN()(gg, 1));
@@ -769,10 +765,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
       ++t_N_over_eta;
     }
     ++t_F;
-  }
-
-  if (surfacePressure->arcLengthDof) {
-    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   MoFEMFunctionReturn(0);
@@ -909,7 +901,14 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
 
   auto t_inv_H = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
 
+  double lambda = 1;
+  if (surfacePressure->arcLengthDof) {
+    lambda = surfacePressure->arcLengthDof->getFieldData();
+  }
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    double a = -0.5 * t_w * dAta.data.data.value1 * lambda;
 
     auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
@@ -919,9 +918,7 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
       FTensor::Tensor0<double *> t_row_base(&row_data.getN()(gg, 0));
 
       int bbr = 0;
-      for (; bbr != nb_base_fun_row; bbr++) {
-
-        double a = -0.5 * t_w * dAta.data.data.value1;
+      for (; bbr != nb_base_fun_row; bbr++) {    
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
         // TODO: handle hoGeometry
@@ -936,10 +933,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
     ++t_w;
     ++t_normal;
     ++t_inv_H;
-  }
-
-  if (surfacePressure->arcLengthDof) {
-    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   MoFEMFunctionReturn(0);
@@ -1022,7 +1015,14 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
   FTensor::Tensor2<double, 3, 3> t_d;
 
+  double lambda = 1;
+  if (surfacePressure->arcLengthDof) {
+    lambda = surfacePressure->arcLengthDof->getFieldData();
+  }
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    double a = -0.5 * t_w * dAta.data.data.value1 * lambda;
 
     auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
 
@@ -1033,8 +1033,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
-
-        double a = -0.5 * t_w * dAta.data.data.value1;
 
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
 
@@ -1052,10 +1050,6 @@ NeummanForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
     ++t_h;
     ++t_inv_H;
     ++t_normal;
-  }
-
-  if (surfacePressure->arcLengthDof) {
-    NN *= surfacePressure->arcLengthDof->getFieldData();
   }
 
   MoFEMFunctionReturn(0);
@@ -1269,9 +1263,6 @@ MoFEMErrorCode NeummanForcesSurface::addPressureAle(
     CHKERR mField.get_moab().get_entities_by_type(
         cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
   }
-  // cout << mapPressure[ms_id].tRis.size() << endl;
-  // mapPressure[ms_id].tRis.print();
-  // cout << mapPressure[ms_id].data.data.value1 << endl;
 
  /*  LEFT-HAND SIDE (SPATIAL) */
 
@@ -1284,7 +1275,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressureAle(
 
   /* RIGHT-HAND SIDE (MATERIAL) */
 
-  // Side volume element used to compute F=hH^-1
+  // Side volume element computes the deformation gradient F=hH^-1
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 
@@ -1301,12 +1292,10 @@ MoFEMErrorCode NeummanForcesSurface::addPressureAle(
 
   /* LEFT-HAND SIDE (MATERIAL) */
   
-  // Side volume element used to compute linearisation with respect to 
-  // spatial coordinates
+  // Side volume element computes linearisation with spatial coordinates
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dx =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
-  // Side volume element used to compute linearisation with respect to 
-  // material coordinates
+  // Side volume element computes linearisation with material coordinates
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dX =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 

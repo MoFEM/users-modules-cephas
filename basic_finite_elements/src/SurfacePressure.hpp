@@ -175,8 +175,6 @@ struct NeummanForcesSurface {
     boost::ptr_vector<MethodForForceScaling> &methodsOp;
     bool hoGeometry;
 
-    int count_rhs;
-
     OpNeumannPressure(const std::string field_name, Vec _F, bCPressure &data,
                       boost::ptr_vector<MethodForForceScaling> &methods_op,
                       bool ho_geometry = false);
@@ -267,8 +265,6 @@ struct NeummanForcesSurface {
 
     boost::shared_ptr<NeummanForcesSurface> surfacePressure;
 
-    int count_lhs;  
-
     /**
      * @brief Compute left-hand side
      * 
@@ -313,7 +309,7 @@ struct NeummanForcesSurface {
         : UserDataOperator(field_name_1, field_name_2,
                            UserDataOperator::OPROWCOL),
           dataAtIntegrationPts(data_at_pts), Aij(aij), dAta(data),
-          surfacePressure(surface_pressure), hoGeometry(ho_geometry), count_lhs(0) {
+          surfacePressure(surface_pressure), hoGeometry(ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
