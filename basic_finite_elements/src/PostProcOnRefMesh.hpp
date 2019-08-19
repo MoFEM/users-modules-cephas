@@ -308,7 +308,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     moab::Core core_ref;
     moab::Interface &moab_ref = core_ref;
-    
+
     auto create_reference_element = [&moab_ref]() {
       MoFEMFunctionBegin;
       const double base_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
@@ -343,7 +343,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
         // refine mesh
         MeshRefinement *m_ref;
         CHKERR m_field_ref.getInterface(m_ref);
-        CHKERR m_ref->add_verices_in_the_middel_of_edges(
+        CHKERR m_ref->add_vertices_in_the_middle_of_edges(
             edges, BitRefLevel().set(ll + 1));
         CHKERR m_ref->refine_TET(tets, BitRefLevel().set(ll + 1));
       }
@@ -443,8 +443,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
     auto &level_ref_gauss_pts = levelGaussPtsOnRefMesh[level];
     auto &level_ref_tets = levelRefTets[level];
     auto &shape_functions = levelShapeFunctions[level];
-    T::gaussPts.resize(level_ref_gauss_pts.size1(),
-                       level_ref_gauss_pts.size2(), false);
+    T::gaussPts.resize(level_ref_gauss_pts.size1(), level_ref_gauss_pts.size2(),
+                       false);
     noalias(T::gaussPts) = level_ref_gauss_pts;
 
     ReadUtilIface *iface;
@@ -457,7 +457,6 @@ struct PostProcTemplateVolumeOnRefinedMesh
     T::mapGaussPts.resize(level_ref_gauss_pts.size2());
     for (int gg = 0; gg != num_nodes; ++gg)
       T::mapGaussPts[gg] = startv + gg;
-
 
     Tag th;
     int def_in_the_loop = -1;
@@ -473,7 +472,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
     CHKERR iface->get_element_connect(num_el, num_nodes_on_ele, MBTET, 0,
                                       starte, conn);
     for (unsigned int tt = 0; tt != level_ref_tets.size1(); ++tt) {
-      for (int nn = 0; nn != num_nodes_on_ele; ++nn) 
+      for (int nn = 0; nn != num_nodes_on_ele; ++nn)
         conn[num_nodes_on_ele * tt + nn] =
             T::mapGaussPts[level_ref_tets(tt, nn)];
     }
@@ -525,140 +524,140 @@ struct PostProcTemplateVolumeOnRefinedMesh
     MoFEMFunctionBeginHot;
     T::getOpPtrVector().clear();
     MoFEMFunctionReturnHot(0);
+  }
+
+  MoFEMErrorCode preProcess() {
+    MoFEMFunctionBeginHot;
+    moab::Interface &moab = T::coreMesh;
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    if (pcomm_post_proc_mesh != NULL) {
+      delete pcomm_post_proc_mesh;
+    }
+    CHKERR T::postProcMesh.delete_mesh();
+    MoFEMFunctionReturnHot(0);
+  }
+
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBeginHot;
+
+    moab::Interface &moab = T::coreMesh;
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&T::mField.get_moab(), MYPCOMM_INDEX);
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    if (pcomm_post_proc_mesh == NULL) {
+      pcomm_post_proc_mesh = new ParallelComm(&moab, T::mField.get_comm());
     }
 
-    MoFEMErrorCode preProcess() {
-      MoFEMFunctionBeginHot;
-      moab::Interface &moab = T::coreMesh;
-      ParallelComm *pcomm_post_proc_mesh =
-          ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-      if (pcomm_post_proc_mesh != NULL) {
-        delete pcomm_post_proc_mesh;
-      }
-      CHKERR T::postProcMesh.delete_mesh();
-      MoFEMFunctionReturnHot(0);
+    Range edges;
+    CHKERR T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
+    CHKERR T::postProcMesh.delete_entities(edges);
+    Range tris;
+    CHKERR T::postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
+    CHKERR T::postProcMesh.delete_entities(tris);
+
+    Range tets;
+    CHKERR T::postProcMesh.get_entities_by_type(0, MBTET, tets, false);
+
+    int rank = pcomm->rank();
+    Range::iterator tit = tets.begin();
+    for (; tit != tets.end(); tit++) {
+      CHKERR T::postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(),
+                                          &*tit, 1, &rank);
     }
 
-    MoFEMErrorCode postProcess() {
-      MoFEMFunctionBeginHot;
+    CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
 
-      moab::Interface &moab = T::coreMesh;
-      ParallelComm *pcomm =
-          ParallelComm::get_pcomm(&T::mField.get_moab(), MYPCOMM_INDEX);
-      ParallelComm *pcomm_post_proc_mesh =
-          ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-      if (pcomm_post_proc_mesh == NULL) {
-        pcomm_post_proc_mesh = new ParallelComm(&moab, T::mField.get_comm());
-      }
+    MoFEMFunctionReturnHot(0);
+  }
 
-      Range edges;
-      CHKERR T::postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
-      CHKERR T::postProcMesh.delete_entities(edges);
-      Range tris;
-      CHKERR T::postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
-      CHKERR T::postProcMesh.delete_entities(tris);
+  /** \brief Add operator to post-process Hdiv field
+   */
+  MoFEMErrorCode addHdivFunctionsPostProc(const std::string field_name) {
+    MoFEMFunctionBeginHot;
+    T::getOpPtrVector().push_back(
+        new OpHdivFunctions(T::postProcMesh, T::mapGaussPts, field_name));
+    MoFEMFunctionReturnHot(0);
+  }
 
-      Range tets;
-      CHKERR T::postProcMesh.get_entities_by_type(0, MBTET, tets, false);
+  struct OpHdivFunctions : public VOLUME_ELEMENT::UserDataOperator {
 
-      int rank = pcomm->rank();
-      Range::iterator tit = tets.begin();
-      for (; tit != tets.end(); tit++) {
-        CHKERR T::postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(),
-                                            &*tit, 1, &rank);
-      }
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
 
-      CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+    OpHdivFunctions(moab::Interface &post_proc_mesh,
+                    std::vector<EntityHandle> &map_gauss_pts,
+                    const std::string field_name)
+        : VOLUME_ELEMENT::UserDataOperator(field_name,
+                                           T::UserDataOperator::OPCOL),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
 
-      MoFEMFunctionReturnHot(0);
-    }
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
 
-    /** \brief Add operator to post-process Hdiv field
-     */
-    MoFEMErrorCode addHdivFunctionsPostProc(const std::string field_name) {
-      MoFEMFunctionBeginHot;
-      T::getOpPtrVector().push_back(
-          new OpHdivFunctions(T::postProcMesh, T::mapGaussPts, field_name));
-      MoFEMFunctionReturnHot(0);
-    }
+      if (data.getIndices().size() == 0)
+        MoFEMFunctionReturnHot(0);
 
-    struct OpHdivFunctions : public VOLUME_ELEMENT::UserDataOperator {
+      std::vector<Tag> th;
+      th.resize(data.getFieldData().size());
 
-      moab::Interface &postProcMesh;
-      std::vector<EntityHandle> &mapGaussPts;
+      double def_VAL[9] = {0, 0, 0};
 
-      OpHdivFunctions(moab::Interface &post_proc_mesh,
-                      std::vector<EntityHandle> &map_gauss_pts,
-                      const std::string field_name)
-          : VOLUME_ELEMENT::UserDataOperator(field_name,
-                                             T::UserDataOperator::OPCOL),
-            postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {}
-
-      MoFEMErrorCode doWork(int side, EntityType type,
-                            DataForcesAndSourcesCore::EntData &data) {
-        MoFEMFunctionBegin;
-
-        if (data.getIndices().size() == 0)
-          MoFEMFunctionReturnHot(0);
-
-        std::vector<Tag> th;
-        th.resize(data.getFieldData().size());
-
-        double def_VAL[9] = {0, 0, 0};
-
-        switch (type) {
-        case MBTRI:
-          for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
-            std::ostringstream ss;
-            ss << "HDIV_FACE_" << side << "_" << dd;
-            CHKERR postProcMesh.tag_get_handle(
-                ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
-                MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-          }
-          break;
-        case MBTET:
-          for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
-            std::ostringstream ss;
-            ss << "HDIV_TET_" << dd;
-            CHKERR postProcMesh.tag_get_handle(
-                ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
-                MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-          }
-          break;
-        default:
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                  "data inconsistency");
+      switch (type) {
+      case MBTRI:
+        for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
+          std::ostringstream ss;
+          ss << "HDIV_FACE_" << side << "_" << dd;
+          CHKERR postProcMesh.tag_get_handle(
+              ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
+              MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
         }
-
-        for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
-          for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
-            CHKERR postProcMesh.tag_set_data(th[dd], &mapGaussPts[gg], 1,
-                                             &data.getVectorN<3>(gg)(dd, 0));
-          }
+        break;
+      case MBTET:
+        for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
+          std::ostringstream ss;
+          ss << "HDIV_TET_" << dd;
+          CHKERR postProcMesh.tag_get_handle(
+              ss.str().c_str(), 3, MB_TYPE_DOUBLE, th[dd],
+              MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
         }
-
-        MoFEMFunctionReturn(0);
+        break;
+      default:
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                "data inconsistency");
       }
-    };
 
-  private:
-    std::vector<MatrixDouble> levelShapeFunctions;
-    std::vector<MatrixDouble> levelGaussPtsOnRefMesh;
-    std::vector<ublas::matrix<int>> levelRefTets;
+      for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
+        for (unsigned int dd = 0; dd < data.getN().size2() / 3; dd++) {
+          CHKERR postProcMesh.tag_set_data(th[dd], &mapGaussPts[gg], 1,
+                                           &data.getVectorN<3>(gg)(dd, 0));
+        }
+      }
+
+      MoFEMFunctionReturn(0);
+    }
   };
 
-  /** \brief Post processing
-   * \ingroup mofem_fs_post_proc
-   */
-  struct PostProcVolumeOnRefinedMesh
-      : public PostProcTemplateVolumeOnRefinedMesh<
-            MoFEM::VolumeElementForcesAndSourcesCore> {
+private:
+  std::vector<MatrixDouble> levelShapeFunctions;
+  std::vector<MatrixDouble> levelGaussPtsOnRefMesh;
+  std::vector<ublas::matrix<int>> levelRefTets;
+};
 
-    PostProcVolumeOnRefinedMesh(MoFEM::Interface &m_field,
-                                bool ten_nodes_post_proc_tets = true,
-                                int nb_ref_levels = -1)
-        : PostProcTemplateVolumeOnRefinedMesh<
-              MoFEM::VolumeElementForcesAndSourcesCore>(m_field) {}
+/** \brief Post processing
+ * \ingroup mofem_fs_post_proc
+ */
+struct PostProcVolumeOnRefinedMesh
+    : public PostProcTemplateVolumeOnRefinedMesh<
+          MoFEM::VolumeElementForcesAndSourcesCore> {
+
+  PostProcVolumeOnRefinedMesh(MoFEM::Interface &m_field,
+                              bool ten_nodes_post_proc_tets = true,
+                              int nb_ref_levels = -1)
+      : PostProcTemplateVolumeOnRefinedMesh<
+            MoFEM::VolumeElementForcesAndSourcesCore>(m_field) {}
 };
 
 // /** \deprecated Use PostPocOnRefinedMesh instead
@@ -770,11 +769,78 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
     return commonData;
   }
+
+  struct OpGetFieldGradientValuesOnSkin
+      : public FaceElementForcesAndSourcesCore::UserDataOperator {
+
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideOpFe;
+    const std::string tagName;
+    const bool saveOnTag;
+
+    const std::string feVolName;
+    boost::shared_ptr<MatrixDouble> gradMatPtr;
+
+    OpGetFieldGradientValuesOnSkin(
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts, const std::string field_name,
+        const std::string tag_name,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        const std::string vol_fe_name,
+        boost::shared_ptr<MatrixDouble> grad_mat_ptr, bool save_on_tag)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+          tagName(tag_name), sideOpFe(side_fe), feVolName(vol_fe_name),
+          gradMatPtr(grad_mat_ptr), saveOnTag(save_on_tag) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  MoFEMErrorCode addFieldValuesGradientPostProcOnSkin(
+      const std::string field_name, const std::string vol_fe_name,
+      boost::shared_ptr<MatrixDouble> grad_mat_ptr = nullptr,
+      bool save_on_tag = true) {
+    MoFEMFunctionBegin;
+
+    if (!grad_mat_ptr)
+      grad_mat_ptr = boost::make_shared<MatrixDouble>();
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
+        boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+    // check number of coefficients
+    auto field_ptr = mField.get_field_structure(field_name);
+    const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+    switch (nb_coefficients) {
+    case 1:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldGradient<3>(field_name, grad_mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+
+    FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+        new OpGetFieldGradientValuesOnSkin(
+            postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+            my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
+
+    MoFEMFunctionReturn(0);
+  }
 };
 
 #endif //__POSTPROC_ON_REF_MESH_HPP
 
-/***************************************************************************/ /**
+/**
  * \defgroup mofem_fs_post_proc Post Process
  * \ingroup user_modules
-******************************************************************************/
+ **/

@@ -79,6 +79,7 @@ struct DataAtIntegrationPtsSprings {
       if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
 
         const int id = bit->getMeshsetId();
+        mapSpring[id].tRis.clear();
         CHKERR mField.get_moab().get_entities_by_type(bit->getMeshset(), MBTRI,
                                                       mapSpring[id].tRis, true);
 

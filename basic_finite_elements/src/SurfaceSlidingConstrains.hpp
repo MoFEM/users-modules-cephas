@@ -23,10 +23,9 @@
 
 /**
  * @brief Implementation of surface sliding constrains
- * 
+ *
  */
 struct GenericSliding {
-
 
   struct OpGetActiveDofsLambda
       : public MoFEM::ForcesAndSourcesCore::UserDataOperator {
@@ -68,7 +67,7 @@ struct GenericSliding {
     }
   };
 
-  template <int SizeLambda,int SizePositions>
+  template <int SizeLambda, int SizePositions>
   struct OpAssembleRhs : public MoFEM::ForcesAndSourcesCore::UserDataOperator {
 
     boost::shared_ptr<VectorDouble> resultsPtr;
@@ -86,17 +85,17 @@ struct GenericSliding {
         MoFEMFunctionReturnHot(0);
       VectorInt &indices = data.getIndices();
       int shift = 0;
-      if (indices.empty()) {
+      if (indices.empty())
         MoFEMFunctionReturnHot(0);
-      } else if (indices.size() == SizeLambda) {
+      else if (indices.size() == SizeLambda)
         shift = 0;
-      } else if (indices.size() == SizePositions) {
+      else if (indices.size() == SizePositions)
         shift = SizeLambda;
-      } else {
-        SETERRQ2(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+      else
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                  "Element %s: Data inconsistency nb of indices %d",
                  getFEName().c_str(), indices.size());
-      }
+
       CHKERR VecSetOption(getSnesF(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
       CHKERR VecSetValues(getSnesF(), indices.size(), &indices[0],
                           &(*resultsPtr)[shift], ADD_VALUES);
@@ -130,28 +129,33 @@ struct GenericSliding {
       VectorInt &col_indices = col_data.getIndices();
       if (row_indices.empty() || col_indices.empty())
         MoFEMFunctionReturnHot(0);
+
       int shift_row = 0;
-      if (row_indices.size() == SizeLambda) {
+      if (row_indices.size() == SizeLambda)
         shift_row = 0;
-      } else if (row_indices.size() == SizePositions) {
+      else if (row_indices.size() == SizePositions)
         shift_row = SizeLambda;
-      } else {
-        SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+      else
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                 "Data inconsistency");
-      }
+
       int shift_col = 0;
-      if (col_indices.size() == SizeLambda) {
+      if (col_indices.size() == SizeLambda)
         shift_col = 0;
-      } else if (col_indices.size() == SizePositions) {
+      else if (col_indices.size() == SizePositions)
         shift_col = SizeLambda;
-      } else {
-        SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+      else
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                 "Data inconsistency");
-      }
+
       MatrixDouble jac(row_indices.size(), col_indices.size());
       for (unsigned int rr = 0; rr != row_indices.size(); ++rr) {
         for (unsigned int cc = 0; cc != col_indices.size(); ++cc) {
           jac(rr, cc) = (*jacobianPtr)(shift_row + rr, shift_col + cc);
+          if (jac(rr, cc) != jac(rr, cc))
+            SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                     "Jacobian assemble not a number jac(rr,cc) = %3.4f",
+                     jac(rr, cc));
         }
       }
       CHKERR MatSetValues(getSnesB(), row_indices.size(), &row_indices[0],
@@ -325,7 +329,7 @@ struct GenericSliding {
   \f]
 
 */
-struct SurfaceSlidingConstrains: public GenericSliding {
+struct SurfaceSlidingConstrains : public GenericSliding {
 
   /** \brief Class implemented by user to detect face orientation
 
@@ -403,7 +407,6 @@ struct SurfaceSlidingConstrains: public GenericSliding {
   MyTriangleFE &feLhs;
   MyTriangleFE &getLoopFeLhs() { return feLhs; }
 
-
   DriverElementOrientation &crackFrontOrientation;
 
   double aLpha;
@@ -471,7 +474,7 @@ struct SurfaceSlidingConstrains: public GenericSliding {
       }
       ublas::vector<adouble> position_dofs(9);
       for (int dd = 0; dd != 9; ++dd) {
-        position_dofs[dd] <<= (*activeVariablesPtr)[3+dd];
+        position_dofs[dd] <<= (*activeVariablesPtr)[3 + dd];
       }
 
       FTensor::Index<'i', 3> i;
@@ -482,7 +485,7 @@ struct SurfaceSlidingConstrains: public GenericSliding {
       FTensor::Number<2> N2;
 
       CHKERR oRientation.getElementOrientation(getFaceFE()->mField,
-                                                     getFEMethod());
+                                               getFEMethod());
       int eo = oRientation.elementOrientation;
 
       int nb_gauss_pts = data.getN().size1();
@@ -534,7 +537,7 @@ struct SurfaceSlidingConstrains: public GenericSliding {
         FTensor::Tensor0<adouble *> t_c(&c_vec[0]);
         FTensor::Tensor1<adouble *, 3> t_f(&f_vec[0], &f_vec[1], &f_vec[2], 3);
 
-        adouble area = sqrt(t_normal(i)*t_normal(i));
+        adouble area = sqrt(t_normal(i) * t_normal(i));
 
         for (int bb = 0; bb != nb_base_functions; ++bb) {
           if (indices[bb] != -1) {
@@ -551,27 +554,27 @@ struct SurfaceSlidingConstrains: public GenericSliding {
         ++t_coord_ref;
       }
 
-      for (int rr = 0; rr != 3; ++rr) {
+      for (int rr = 0; rr != 3; ++rr) 
         c_vec[rr] >>= (*resultsPtr)[rr];
-      }
-      for (int rr = 0; rr != 9; ++rr) {
+      
+      for (int rr = 0; rr != 9; ++rr) 
         f_vec(rr) >>= (*resultsPtr)[3 + rr];
-      }
+      
 
       trace_off();
 
       if (evaluateJacobian) {
         double *jac_ptr[3 + 9];
-        for (int rr = 0; rr != 3 + 9; ++rr) {
+        for (int rr = 0; rr != 3 + 9; ++rr) 
           jac_ptr[rr] = &(*jacobianPtr)(rr, 0);
-        }
+        
         // play recorder for jacobians
         int r =
             ::jacobian(tAg, 3 + 9, 3 + 9, &(*activeVariablesPtr)[0], jac_ptr);
-        if (r < 0) {
+        if (r < 0) 
           SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
                   "ADOL-C function evaluation with error");
-        }
+        
       }
 
       MoFEMFunctionReturn(0);
@@ -588,9 +591,11 @@ struct SurfaceSlidingConstrains: public GenericSliding {
       aLpha = *alpha;
     }
 
-    boost::shared_ptr<VectorDouble> active_variables_ptr(new VectorDouble(3+9));
-    boost::shared_ptr<VectorDouble> results_ptr(new VectorDouble(3+9));
-    boost::shared_ptr<MatrixDouble> jacobian_ptr(new MatrixDouble(3+9,3+9));
+    boost::shared_ptr<VectorDouble> active_variables_ptr(
+        new VectorDouble(3 + 9));
+    boost::shared_ptr<VectorDouble> results_ptr(new VectorDouble(3 + 9));
+    boost::shared_ptr<MatrixDouble> jacobian_ptr(
+        new MatrixDouble(3 + 9, 3 + 9));
 
     feRhs.getOpPtrVector().clear();
     feRhs.getOpPtrVector().push_back(new OpGetActiveDofsLambda(
@@ -645,21 +650,19 @@ struct SurfaceSlidingConstrains: public GenericSliding {
     feLhs.getOpPtrVector().push_back(new OpJacobian(
         tag, lagrange_multipliers_field_name, active_variables_ptr, results_ptr,
         jacobian_ptr, crackFrontOrientation, true, aLpha));
-    feLhs.getOpPtrVector().push_back(
-        new OpAssembleLhs<3,9>(lagrange_multipliers_field_name, material_field_name,
-                          jacobian_ptr));
+    feLhs.getOpPtrVector().push_back(new OpAssembleLhs<3, 9>(
+        lagrange_multipliers_field_name, material_field_name, jacobian_ptr));
 
     MoFEMFunctionReturn(0);
   }
-
 };
 
-struct EdgeSlidingConstrains: public GenericSliding {
+struct EdgeSlidingConstrains : public GenericSliding {
 
   struct CalculateEdgeBase {
 
     static MoFEMErrorCode createTag(moab::Interface &moab, Tag &th0, Tag &th1,
-                                    Tag &th2,Tag &th3) {
+                                    Tag &th2, Tag &th3) {
       MoFEMFunctionBegin;
       double def_val[] = {0, 0, 0};
       CHKERR moab.tag_get_handle("EDGE_BASE0", 3, MB_TYPE_DOUBLE, th0,
@@ -691,7 +694,7 @@ struct EdgeSlidingConstrains: public GenericSliding {
       auto get_face_adj = [&, get_edges](const Range &faces) {
         Range adj_faces;
         CHKERR moab.get_adjacencies(subtract(get_edges(faces), edges), 2, false,
-                                   adj_faces, moab::Interface::UNION);
+                                    adj_faces, moab::Interface::UNION);
         return intersect(adj_faces, tris);
       };
 
@@ -702,7 +705,7 @@ struct EdgeSlidingConstrains: public GenericSliding {
         do {
           nb0 = patch_ents.size();
           patch_ents.merge(get_face_adj(patch_ents));
-        } while(nb0 != patch_ents.size());
+        } while (nb0 != patch_ents.size());
         return patch_ents;
       };
 
@@ -710,7 +713,7 @@ struct EdgeSlidingConstrains: public GenericSliding {
         std::vector<Range> patches;
         while (!tris.empty()) {
           patches.push_back(get_patch(tris[0]));
-          tris = subtract(tris,patches.back());
+          tris = subtract(tris, patches.back());
         }
         return patches;
       };
@@ -720,10 +723,10 @@ struct EdgeSlidingConstrains: public GenericSliding {
 
       auto patches = get_patches();
       int pp = 0;
-      for(auto patch : patches) {
+      for (auto patch : patches) {
         // cerr << "pp: " << pp << endl;
         // cerr << patch << endl;
-        std::vector<int> tags_vals(patch.size(),pp);
+        std::vector<int> tags_vals(patch.size(), pp);
         CHKERR moab.tag_set_data(th2, patch, &*tags_vals.begin());
         ++pp;
       }
@@ -743,21 +746,22 @@ struct EdgeSlidingConstrains: public GenericSliding {
         Range adj_faces;
         CHKERR moab.get_adjacencies(&edge, 1, 2, false, adj_faces);
         adj_faces = intersect(adj_faces, tris);
-        if(adj_faces.size()!=2) {
-          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                  "Should be 2 faces adjacent to edge but is %d",
-                  adj_faces.size());
+        if (adj_faces.size() != 2) {
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                   "Should be 2 faces adjacent to edge but is %d",
+                   adj_faces.size());
         }
-        VectorDouble3 v[2] = { VectorDouble3(3), VectorDouble3(3) };
+        VectorDouble3 v[2] = {VectorDouble3(3), VectorDouble3(3)};
         auto get_tensor_from_vec = [](VectorDouble3 &v) {
-          return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3>(&v[0], &v[1],
-                                                             &v[2]);
+          return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3>(
+              &v[0], &v[1], &v[2]);
         };
 
-        FTensor::Index<'i',3> i;
-        FTensor::Index<'j',3> j;
-        FTensor::Index<'k',3> k;
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
 
+        std::array<double, 3> areas;
         auto calculate_normals = [&, get_tensor_from_vec]() {
           int ff = 0;
           for (auto face : adj_faces) {
@@ -766,10 +770,11 @@ struct EdgeSlidingConstrains: public GenericSliding {
             double &z = (v[ff])[2];
             moab::Util::normal(&moab, face, x, y, z);
             auto t_n = get_tensor_from_vec(v[ff]);
-            t_n(i) /= sqrt(t_n(i) * t_n(i));
+            areas[ff] = sqrt(t_n(i) * t_n(i));
+            t_n(i) /= areas[ff];
             int orientation;
             CHKERR moab.tag_get_data(th3, &face, 1, &orientation);
-            if(orientation==-1) {
+            if (orientation == -1) {
               t_n(i) *= -1;
             }
             ++ff;
@@ -779,29 +784,91 @@ struct EdgeSlidingConstrains: public GenericSliding {
 
         auto get_patch_number = [&]() {
           std::vector<int> p = {0, 0};
-          CHKERR moab.tag_get_data(th2,adj_faces,&*p.begin());
+          CHKERR moab.tag_get_data(th2, adj_faces, &*p.begin());
           return p;
         };
 
+        std::array<EntityHandle, 2> faces_handles = {adj_faces[0],
+                                                     adj_faces[1]};
         auto order_normals = [&, get_patch_number]() {
           auto p = get_patch_number();
           if (p[0] < p[1]) {
             v[0].swap(v[1]);
+            faces_handles[0] = adj_faces[1];
+            faces_handles[1] = adj_faces[0];
           }
         };
         order_normals();
 
-        auto t_cross = FTensor::Tensor1<double, 3>();
+        FTensor::Tensor1<double, 3> t_cross;
         auto t_n0 = get_tensor_from_vec(v[0]);
         auto t_n1 = get_tensor_from_vec(v[1]);
-
         t_cross(k) = FTensor::cross(t_n0(i), t_n1(j), k);
-        t_n1(k) = FTensor::cross(t_n0(i), t_cross(j), k);
 
-        // if (fabs(t_n1(i) * t_n1(i) - 1.) > 1e-12) {
-          // SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                  // "Zero vector base");
-        // }
+        auto get_base_for_coplanar_faces = [&]() {
+          MoFEMFunctionBegin;
+
+          std::vector<EntityHandle> face_conn;
+          CHKERR moab.get_connectivity(&faces_handles[1], 1, face_conn, true);
+          std::vector<EntityHandle> edge_conn;
+          CHKERR moab.get_connectivity(&edge, 1, edge_conn, true);
+          std::sort(face_conn.begin(), face_conn.end());
+          std::sort(edge_conn.begin(), edge_conn.end());
+          int n = 0;
+          for (; n != 2; ++n)
+            if (face_conn[n] != edge_conn[n])
+              break;
+          VectorDouble3 coords_face(3);
+          CHKERR moab.get_coords(&face_conn[n], 1,
+                                 &*coords_face.data().begin());
+          VectorDouble6 coords_edge(6);
+          CHKERR moab.get_coords(&edge_conn[0], 2,
+                                 &*coords_edge.data().begin());
+          auto t_edge_n0 = FTensor::Tensor1<double, 3>(
+              coords_edge[0], coords_edge[1], coords_edge[2]);
+          auto t_edge_n1 = FTensor::Tensor1<double, 3>(
+              coords_edge[3], coords_edge[4], coords_edge[5]);
+          auto t_face_n = get_tensor_from_vec(coords_face);
+          t_face_n(i) -= t_edge_n0(i);
+          FTensor::Tensor1<double, 3> t_delta;
+          t_delta(i) = t_edge_n1(i) - t_edge_n0(i);
+          t_delta(i) /= sqrt(t_delta(i) * t_delta(i));
+          t_n1(k) = FTensor::cross(t_n0(i), t_delta(j), k);
+          if (t_n1(i) * t_face_n(i) < 0)
+            t_n1(i) *= -1;
+
+          MoFEMFunctionReturn(0);
+        };
+
+        auto get_base_for_not_planar_faces = [&]() {
+          MoFEMFunctionBeginHot;
+          t_n1(k) = FTensor::cross(t_n0(i), t_cross(j), k);
+          t_n1(i) /= sqrt(t_n1(i) * t_n1(i));
+          MoFEMFunctionReturnHot(0);
+        };
+
+        // This a case when faces adjacent to edge are coplanar !!!
+        constexpr double tol = 1e-6;
+        if ((t_cross(i) * t_cross(i)) < tol)
+          CHKERR get_base_for_coplanar_faces();
+        else
+          CHKERR get_base_for_not_planar_faces();
+
+        auto get_edge_length = [&]() {
+          int num_nodes;
+          const EntityHandle *conn;
+          CHKERR moab.get_connectivity(edge, conn, num_nodes, true);
+          VectorDouble6 coords(6);
+          CHKERR moab.get_coords(conn, 2, &*coords.begin());
+          for (auto n : {0, 1, 2}) {
+            coords[n] -= coords[n + 3];
+            coords[n] *= coords[n];
+          }
+          return sqrt(coords[0] + coords[1] + coords[2]);
+        };
+        // const double edge_length = get_edge_length();
+        // t_n0(i) *= edge_length;
+        // t_n1(i) *= edge_length;
 
         VectorDouble3 &v0 = v[0];
         VectorDouble3 &v1 = v[1];
@@ -812,14 +879,14 @@ struct EdgeSlidingConstrains: public GenericSliding {
     }
 
     static MoFEMErrorCode saveEdges(moab::Interface &moab, std::string name,
-                             Range edges, Range *faces = nullptr) {
+                                    Range edges, Range *faces = nullptr) {
       MoFEMFunctionBegin;
       EntityHandle meshset;
       Tag ths[4];
       CHKERR createTag(moab, ths[0], ths[1], ths[2], ths[3]);
       CHKERR moab.create_meshset(MESHSET_SET, meshset);
       CHKERR moab.add_entities(meshset, edges);
-      if(faces != nullptr) {
+      if (faces != nullptr) {
         CHKERR moab.add_entities(meshset, *faces);
       }
       CHKERR moab.write_file(name.c_str(), "VTK", "", &meshset, 1, ths, 4);
@@ -827,7 +894,6 @@ struct EdgeSlidingConstrains: public GenericSliding {
       MoFEMFunctionReturn(0);
     }
   };
-
 
   MoFEM::Interface &mField;
 
@@ -875,7 +941,6 @@ struct EdgeSlidingConstrains: public GenericSliding {
 
       MoFEMFunctionReturn(0);
     }
-
   };
 
   boost::shared_ptr<MyEdgeFE> feRhsPtr, feLhsPtr;
@@ -969,7 +1034,6 @@ struct EdgeSlidingConstrains: public GenericSliding {
       FTensor::Tensor1<adouble *, 3> t_node1(
           &position_dofs[3], &position_dofs[4], &position_dofs[5]);
 
-
       FTensor::Tensor1<adouble, 3> t_tangent;
       t_tangent(i) = t_node1(i) - t_node0(i);
       adouble l = sqrt(t_tangent(i) * t_tangent(i));
@@ -979,19 +1043,11 @@ struct EdgeSlidingConstrains: public GenericSliding {
       t_dot0 = t_edge_base0(i) * t_tangent(i);
       t_dot1 = t_edge_base1(i) * t_tangent(i);
 
-      FTensor::Tensor1<adouble,3> t_base0, t_base1;
-      // t_edge_base0.t_tangent - (t_edge_base0.t_tangent)*t_tangent.t_tangent
-      // t_edge_base0 . ( t_tangent - t_tangent*(t_tangent.t_tangent) )
+      FTensor::Tensor1<adouble, 3> t_base0, t_base1;
       t_base0(i) = t_edge_base0(i) - t_dot0 * t_tangent(i);
       t_base1(i) = t_edge_base1(i) - t_dot1 * t_tangent(i);
       t_base0(i) /= sqrt(t_base0(i) * t_base0(i));
       t_base1(i) /= sqrt(t_base1(i) * t_base1(i));
-
-      // cerr << t_edge_base0 << " : " << t_base0 << " : "
-      //      << t_edge_base0(i) * t_base0(i) << endl;
-      // cerr << t_edge_base1 << " : " << t_base1 << " : "
-      //      << t_edge_base1(i) * t_base1(i) << endl;
-      // cerr << endl;
 
       auto t_base_fun1 = data.getFTensor0N();
       auto t_base_fun2 = data.getFTensor0N();

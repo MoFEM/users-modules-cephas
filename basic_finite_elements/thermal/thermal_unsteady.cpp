@@ -28,10 +28,10 @@ using namespace MoFEM;
 using namespace std;
 namespace po = boost::program_options;
 
-#ifdef __GROUNDSURFACETEMERATURE_HPP
+#ifdef __GROUND_SURFACE_TEMPERATURE_HPP
 
-  #include <GenricClimateModel.hpp>
-  #include <GroundSurfaceTemerature.hpp>
+  #include <GenericClimateModel.hpp>
+  #include <GroundSurfaceTemperature.hpp>
 
   #include <time.h>
   extern "C" {
@@ -39,7 +39,7 @@ namespace po = boost::program_options;
   }
   #include <CrudeClimateModel.hpp>
 
-#endif // __GROUNDSURFACETEMERATURE_HPP
+#endif // __GROUND_SURFACE_TEMPERATURE_HPP
 
 static char help[] =
   "-my_file mesh file\n"
@@ -278,7 +278,6 @@ int main(int argc, char *argv[]) {
                     it->getMeshsetId(), block_data[it->getMeshsetId()].oRder);
         Range block_ents;
         CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
-        CHKERRG(rval);
         Range ents_to_set_order;
         CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
                                     moab::Interface::UNION);
@@ -344,15 +343,15 @@ int main(int argc, char *argv[]) {
     }
   }
 
-#ifdef __GROUNDSURFACETEMERATURE_HPP
-  GroundSurfaceTemerature ground_surface(m_field);
+#ifdef __GROUND_SURFACE_TEMPERATURE_HPP
+  GroundSurfaceTemperature ground_surface(m_field);
   CrudeClimateModel time_data(time_data_file_for_ground_surface);
-  GroundSurfaceTemerature::PreProcess exectuteGenericClimateModel(&time_data);
+  GroundSurfaceTemperature::PreProcess exectuteGenericClimateModel(&time_data);
   if (ground_temperature_analysis) {
     CHKERR ground_surface.addSurfaces("TEMP");
     CHKERR ground_surface.setOperators(&time_data, "TEMP");
   }
-#endif //__GROUNDSURFACETEMERATURE_HPP
+#endif //__GROUND_SURFACE_TEMPERATURE_HPP
 
   //build database, i.e. declare dofs, elements and adjacencies
 
@@ -366,10 +365,8 @@ int main(int argc, char *argv[]) {
     if (block_data[it->getMeshsetId()].initTemp != 0) {
       Range block_ents;
       CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
-      CHKERRG(rval);
       Range vertices;
       CHKERR moab.get_connectivity(block_ents, vertices, true);
-      CHKERRG(rval);
       CHKERR m_field.getInterface<FieldBlas>()->setField(
           block_data[it->getMeshsetId()].initTemp, MBVERTEX, vertices, "TEMP");
     }
@@ -399,11 +396,11 @@ int main(int argc, char *argv[]) {
   CHKERR DMMoFEMAddElement(dm, "THERMAL_FLUX_FE");
   CHKERR DMMoFEMAddElement(dm, "THERMAL_CONVECTION_FE");
   CHKERR DMMoFEMAddElement(dm, "THERMAL_RADIATION_FE");
-#ifdef __GROUNDSURFACETEMERATURE_HPP
+#ifdef __GROUND_SURFACE_TEMPERATURE_HPP
   if (ground_temperature_analysis) {
     CHKERR DMMoFEMAddElement(dm, "GROUND_SURFACE_FE");
   }
-#endif //__GROUNDSURFACETEMERATURE_HPP
+#endif //__GROUND_SURFACE_TEMPERATURE_HPP
 
   CHKERR DMSetUp(dm);
 
@@ -431,13 +428,13 @@ int main(int argc, char *argv[]) {
                                NULL);
   CHKERR DMMoFEMTSSetIFunction(dm, DM_NO_ELEMENT, NULL, &dirichlet_bc, NULL);
   CHKERR DMMoFEMTSSetIJacobian(dm, DM_NO_ELEMENT, NULL, &dirichlet_bc, NULL);
-#ifdef __GROUNDSURFACETEMERATURE_HPP
+#ifdef __GROUND_SURFACE_TEMPERATURE_HPP
   CHKERR DMMoFEMTSSetIFunction(dm, DM_NO_ELEMENT, NULL,
                                &exectuteGenericClimateModel, NULL);
   { // add preprocessor, calculating angle on which sun ray on the surface
     if (solar_radiation) {
       boost::ptr_vector<
-          GroundSurfaceTemerature::SolarRadiationPreProcessor>::iterator it,
+          GroundSurfaceTemperature::SolarRadiationPreProcessor>::iterator it,
           hi_it;
       it    = ground_surface.preProcessShade.begin();
       hi_it = ground_surface.preProcessShade.end();
@@ -446,7 +443,7 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-#endif //__GROUNDSURFACETEMERATURE_HPP
+#endif //__GROUND_SURFACE_TEMPERATURE_HPP
 
   // loops rhs
   CHKERR DMMoFEMTSSetIFunction(dm, "THERMAL_FE", &thermal_elements.feRhs, NULL,
@@ -457,13 +454,13 @@ int main(int argc, char *argv[]) {
                                &thermal_elements.feConvectionRhs, NULL, NULL);
   CHKERR DMMoFEMTSSetIFunction(dm, "THERMAL_RADIATION_FE",
                                &thermal_elements.feRadiationRhs, NULL, NULL);
-#ifdef __GROUNDSURFACETEMERATURE_HPP
+#ifdef __GROUND_SURFACE_TEMPERATURE_HPP
   if (ground_temperature_analysis) {
     CHKERR DMMoFEMTSSetIFunction(dm, "GROUND_SURFACE_FE",
                                  &ground_surface.getFeGroundSurfaceRhs(), NULL,
                                  NULL);
   }
-#endif //__GROUNDSURFACETEMERATURE_HPP
+#endif //__GROUND_SURFACE_TEMPERATURE_HPP
 
   // loops lhs
   CHKERR DMMoFEMTSSetIJacobian(dm, "THERMAL_FE", &thermal_elements.feLhs, NULL,
@@ -472,13 +469,13 @@ int main(int argc, char *argv[]) {
                                &thermal_elements.feConvectionLhs, NULL, NULL);
   CHKERR DMMoFEMTSSetIJacobian(dm, "THERMAL_RADIATION_FE",
                                &thermal_elements.feRadiationLhs, NULL, NULL);
-#ifdef __GROUNDSURFACETEMERATURE_HPP
+#ifdef __GROUND_SURFACE_TEMPERATURE_HPP
   if (ground_temperature_analysis) {
     CHKERR DMMoFEMTSSetIJacobian(dm, "GROUND_SURFACE_FE",
                                  &ground_surface.getFeGroundSurfaceLhs(), NULL,
                                  NULL);
   }
-#endif //__GROUNDSURFACETEMERATURE_HPP
+#endif //__GROUND_SURFACE_TEMPERATURE_HPP
 
   //postprocess
   CHKERR DMMoFEMTSSetIFunction(dm,DM_NO_ELEMENT,NULL,NULL,&dirichlet_bc); 
@@ -534,11 +531,9 @@ int main(int argc, char *argv[]) {
                              &is_partitioned, PETSC_NULL);
   if (is_partitioned) {
     CHKERR moab.write_file("solution.h5m");
-    CHKERRG(rval);
   } else {
     if (pcomm->rank() == 0) {
       CHKERR moab.write_file("solution.h5m");
-      CHKERRG(rval);
     }
   }
 

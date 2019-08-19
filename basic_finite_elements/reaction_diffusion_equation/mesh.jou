@@ -1,0 +1,13 @@
+reset
+create surface ellipse major radius 2 minor radius 2 zplane 
+create surface ellipse major radius 0.2 minor radius 0.2 zplane
+move Surface 2 x 0.5 y 0.5 z 0 include_merged 
+create surface ellipse major radius 0.2 minor radius 0.2 zplane
+imprint tolerant surface 1  with curve 3 2  merge 
+delete Body 3
+delete Body 2
+merge curve all with curve all 
+block 1 surface 2 3
+surface all size auto factor 1
+mesh surface all
+refine surface all numsplit 1 bias 1.0 depth 1 smooth

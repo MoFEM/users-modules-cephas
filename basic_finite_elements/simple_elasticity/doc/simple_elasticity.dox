@@ -1414,7 +1414,7 @@ cd $HOME/mofem_installation/users_modules/basic_finite_elements/simple_elasticit
 Then run the command
 
 \code
-./simple_elasticity -file_name cubit.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 2
+./simple_elasticity -file_name simple_elasticity_part.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 2
 \endcode
 
 To visualise results first convert the out put file from .h5m format to a vtk
@@ -1424,7 +1424,7 @@ mbconvert out.h5m out.vtk
 \endcode
 
 then open the .vtk file in ParaView <http://www.paraview.org>. For example 
-on Mac OS X
+on macOS
 \code 
 open out.vtk
 \endcode
@@ -1451,7 +1451,7 @@ converge with increasing approximation order?
 hand plot convergence for beam subjected bending and torsion.
 
 If you have problems with understanding this tutorial or exercises, please
-contact us on Q&A forum, see <a href=https://groups.google.com/forum/#!forum/mofem-group>link</a>.
+contact us on Q&A forum, see <a href=https://groups.google.com/forum/#!categories/mofem-group>link</a>.
 
 
 \section mai_minimal_surface_equation The plain program

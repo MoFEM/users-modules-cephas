@@ -22,7 +22,8 @@ set(BFE_DIRS
   magnetostatic
   poisson
   hello_world
-  hierarchical_approximation)
+  hierarchical_approximation
+  reaction_diffusion_equation)
 
 function(bfe_install bfe_mod_dir)
   install(

@@ -204,9 +204,8 @@ int main(int argc, char *argv[]) {
     skeleton_fe->getOpPtrVector().push_back(new OpFaceSide("S", side_fe));
     // set operator to the volume on side of the skeleton face
     side_fe->getOpPtrVector().push_back(new OpVolumeSide("U"));
-    DM dm;
-    // get dm
-    CHKERR simple_interface->getDM(&dm);
+
+    auto dm = simple_interface->getDM();
     // iterate domain elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
@@ -219,8 +218,6 @@ int main(int argc, char *argv[]) {
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getSkeletonFEName(),
                                     skeleton_fe);
-    // destroy dm
-    CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 

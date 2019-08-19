@@ -705,7 +705,7 @@ struct ThermalElement {
 
 #endif //__THERMAL_ELEMENT_HPP
 
-/***************************************************************************/ /**
-* \defgroup mofem_thermal_elem Thermal element
-* \ingroup user_modules
-******************************************************************************/
+/**
+ * \defgroup mofem_thermal_elem Thermal element
+ * \ingroup user_modules
+ **/
