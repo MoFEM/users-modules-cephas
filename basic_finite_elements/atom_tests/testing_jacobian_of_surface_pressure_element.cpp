@@ -42,11 +42,11 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core;
 
     PetscInt order_x = 2;
-    PetscInt order_X = 1;
+    PetscInt order_X = 2;
     PetscBool flg = PETSC_TRUE;
 
-    PetscBool ale = PETSC_TRUE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
+    //PetscBool ale = PETSC_TRUE;
+    //CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
     PetscBool test_jacobian = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
@@ -88,24 +88,22 @@ int main(int argc, char *argv[]) {
       PetscRandomGetValue(rctx, &value);
       field_data[1] = (*y) + (value - 0.5) * scale;
       PetscRandomGetValue(rctx, &value);
-      field_data[2] = (*z) + (value - 0.5) * scale; 
-      MoFEMFunctionReturn(0);
+      field_data[2] = (*z) + (value - 0.5) * scale;
+       MoFEMFunctionReturn(0);
     };
 
     // Projection on "x" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "x");
-      CHKERR m_field.loop_dofs("x", ent_method);
-      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.0, "x");
-    }
+    // {
+    //   Projection10NodeCoordsOnField ent_method(m_field, "x");
+    //   CHKERR m_field.loop_dofs("x", ent_method);
+    // }
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
 
     // Project coordinates on "X" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "X");
-      CHKERR m_field.loop_dofs("X", ent_method);
-      // CHKERR m_field.getInterface<FieldBlas>()->fieldScale(1.0, "X");
-    }
+    // {
+    //   Projection10NodeCoordsOnField ent_method(m_field, "X");
+    //   CHKERR m_field.loop_dofs("X", ent_method);
+    // }
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "X");
 
     PetscRandomDestroy(&rctx);
@@ -126,10 +124,6 @@ int main(int argc, char *argv[]) {
     fe_lhs_ptr->meshPositionsFieldName = "X";
     fe_mat_rhs_ptr->meshPositionsFieldName = "X";
     fe_mat_lhs_ptr->meshPositionsFieldName = "X";
-    // fe_rhs_ptr->addToRule = 2;
-    // fe_lhs_ptr->addToRule = 2;
-
-    boost::shared_ptr<double> lambda_ptr = boost::make_shared<double>(1.0);
 
     Range nodes;
     rval = moab.get_entities_by_type(0, MBVERTEX, nodes, false);
@@ -137,7 +131,6 @@ int main(int argc, char *argv[]) {
 
     nodes.pop_front();
     nodes.pop_back();
-    nodes.print();
 
     boost::shared_ptr<NeummanForcesSurface::DataAtIntegrationPts> dataAtPts =
         boost::make_shared<NeummanForcesSurface::DataAtIntegrationPts>();
@@ -145,7 +138,6 @@ int main(int argc, char *argv[]) {
     dataAtPts->forcesOnlyOnEntitiesRow = nodes;
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      cout << bit->getName() << endl;
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
         CHKERR surfacePressure->addPressure("x", PETSC_NULL,
                                             bit->getMeshsetId(), true, true);
@@ -198,33 +190,33 @@ int main(int argc, char *argv[]) {
 
     CHKERR SNESSolve(snes, NULL, x);
 
-    // if (test_jacobian == PETSC_FALSE) {
-    //   double nrm_A0;
-    //   CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
+    if (test_jacobian == PETSC_FALSE) {
+      double nrm_A0;
+      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
 
-    //   char testing_options_fd[] = "-snes_fd";
-    //   CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
+      char testing_options_fd[] = "-snes_fd";
+      CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
 
-    //   CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
-    //   CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
-    //   CHKERR SNESSetFromOptions(snes);
+      CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+      CHKERR SNESSetFromOptions(snes);
 
-    //   CHKERR SNESSolve(snes, NULL, x);
-    //   CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
+      CHKERR SNESSolve(snes, NULL, x);
+      CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
 
-    //   double nrm_A;
-    //   CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
-    //   PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
-    //               nrm_A / nrm_A0);
-    //   nrm_A /= nrm_A0;
+      double nrm_A;
+      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
+      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+                  nrm_A / nrm_A0);
+      nrm_A /= nrm_A0;
 
-    //   const double tol = 1e-5;
-    //   if (nrm_A > tol) {
-    //     SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-    //             "Difference between hand-calculated tangent matrix and finite "
-    //             "difference matrix is too big");
-    //   }
-    // }
+      const double tol = 1e-7;
+      if (nrm_A > tol) {
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                "Difference between hand-calculated tangent matrix and finite "
+                "difference matrix is too big");
+      }
+    }
 
     CHKERR VecDestroy(&x);
     CHKERR VecDestroy(&f);

@@ -395,13 +395,13 @@ add_test(
   -file_name mesh_for_testing_elastic_jacobian.h5m -ale
   )
 
-# Surface pressure element
+# Surface pressure element (ALE)
 
-bfe_add_executable(testing_jacobian_of_surface_pressure
-${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_surface_pressure.cpp
+bfe_add_executable(testing_jacobian_of_surface_pressure_element
+${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_surface_pressure_element.cpp
 )
 
-target_link_libraries(testing_jacobian_of_surface_pressure
+target_link_libraries(testing_jacobian_of_surface_pressure_element
 users_modules
 mofem_finite_elements
 mofem_interfaces
@@ -412,3 +412,11 @@ mofem_third_party
 mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
+
+cm_export_file("mesh_for_testing_surface_pressure_element.h5m" export_atom_tests_basic_fe)
+add_test(
+  testing_jacobian_of_surface_pressure_element_ale
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
+  -file_name mesh_for_testing_surface_pressure_element.h5m
+  )
