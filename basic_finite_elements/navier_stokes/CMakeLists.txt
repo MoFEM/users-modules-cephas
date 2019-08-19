@@ -21,9 +21,9 @@ bfe_build_and_install(stokes
 bfe_build_and_install(navier_stokes
   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes.cpp
 )
-bfe_build_and_install(test_jac_navier_stokes_elem
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_jac_navier_stokes_elem.cpp
-)
+# bfe_build_and_install(test_jac_navier_stokes_elem
+#   ${CMAKE_CURRENT_SOURCE_DIR}/test_jac_navier_stokes_elem.cpp
+# )
 
 #file(
 #  COPY

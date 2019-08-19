@@ -42,9 +42,10 @@ int main(int argc, char *argv[]) {
   // MOAB and PETSC functions.
   MPI_Comm moab_comm_world;
   MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-  if (pcomm == NULL)
-    pcomm = new ParallelComm(&moab, moab_comm_world);
+
+  // ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  // if (pcomm == NULL)
+  //   pcomm = new ParallelComm(&moab, moab_comm_world);
 
   PetscBool test_jacobian = PETSC_FALSE;
 
@@ -244,12 +245,13 @@ int main(int argc, char *argv[]) {
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 "
-          "-pc_type none";
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
+          //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
-                               "-snes_rtol 0 -snes_max_it 1 -pc_type none";
+                               "-snes_rtol 0 -snes_max_it 1";
+                               // "-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
