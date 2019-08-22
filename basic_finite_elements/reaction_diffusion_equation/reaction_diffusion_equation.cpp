@@ -358,19 +358,27 @@ private:
  *
  */
 template <int DIM> struct OpAssembleStiffLhs : OpEle {
-  OpAssembleStiffLhs(std::string fieldu, std::string fieldv,
+
+  OpAssembleStiffLhs(std::string                   fieldu, 
+                     std::string                   fieldv,
                      boost::shared_ptr<CommonData> &data)
-      : OpEle(fieldu, fieldv, OpEle::OPROWCOL), commonData(data),
-        field(fieldu) {
-    sYmm = true;
-  }
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data) {
+  : OpEle(fieldu, fieldv, OpEle::OPROWCOL), 
+    commonData(data),
+    field(fieldu) 
+    {
+      sYmm = true;
+    }
+  MoFEMErrorCode doWork(int           row_side, 
+                        int           col_side, 
+                        EntityType    row_type,
+                        EntityType    col_type, 
+                        EntData       &row_data,
+                        EntData       &col_data) {
     MoFEMFunctionBegin;
 
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
+    // cerr << "In doWork() : (row, col) = (" << nb_row_dofs << ", " << nb_col_dofs << ")" << endl; 
     if (nb_row_dofs && nb_col_dofs) {
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
@@ -645,29 +653,17 @@ int main(int argc, char *argv[]) {
     vol_ele_slow_rhs->getOpPtrVector().push_back(
         new OpAssembleSlowRhs("u", data));
 
-    // //OpCalculateVectorFieldGradient_General
 
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldValues("u", val_ptr_u));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldValues("v", val_ptr_v));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldValues("w", val_ptr_w));
 
     vol_ele_slow_rhs->getOpPtrVector().push_back(
         new OpAssembleSlowRhs("v", data));
 
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldValues("w", val_ptr_u));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldValues("w", val_ptr_v));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpCalculateScalarFieldValues("w", val_ptr_w));
+
 
     vol_ele_slow_rhs->getOpPtrVector().push_back(
         new OpAssembleSlowRhs("w", data));
 
-    // PETSc IMAX and Explicit solver demans that g = M^-1 G is provided. So
+    // PETSc IMEX and Explicit solver demans that g = M^-1 G is provided. So
     // when the slow right-hand side vector (G) is assembled is solved for g
     // vector.
     auto solve_for_g = [&]() {
