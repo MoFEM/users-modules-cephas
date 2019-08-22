@@ -45,82 +45,90 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
                            const std::string &problem_name,
                            const std::string &field_name)
     : mField(m_field), dx2(0), F_lambda2(0), res_lambda(0) {
-  ierr = m_field.getInterface<VecManager>()->vecCreateGhost(problem_name, ROW,
-                                                            &F_lambda);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecSetOption(F_lambda, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDuplicate(F_lambda, &db);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDuplicate(F_lambda, &xLambda);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDuplicate(F_lambda, &x0);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDuplicate(F_lambda, &dx);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
 
-  ierr = VecZeroEntries(F_lambda); 
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecZeroEntries(db); 
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecZeroEntries(xLambda); 
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecZeroEntries(x0); 
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecZeroEntries(dx);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  auto create_f_lambda = [&]() {
+    MoFEMFunctionBegin;
+    CHKERR m_field.getInterface<VecManager>()->vecCreateGhost(problem_name, ROW,
+                                                              F_lambda);
+    CHKERR VecSetOption(F_lambda, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+    MoFEMFunctionReturn(0);
+  };
 
-  const Problem *problem_ptr;
-  ierr = m_field.get_problem(problem_name, &problem_ptr);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  boost::shared_ptr<NumeredDofEntity_multiIndex> dofs_ptr_no_const =
-      problem_ptr->getNumeredDofsRows();
-  NumeredDofEntityByFieldName::iterator hi_dit;
-  dIt = dofs_ptr_no_const->get<FieldName_mi_tag>().lower_bound(field_name);
-  hi_dit = dofs_ptr_no_const->get<FieldName_mi_tag>().upper_bound(field_name);
+  auto vec_duplicate = [&]() {
+    MoFEMFunctionBegin;
+    db = smartVectorDuplicate(F_lambda);
+    xLambda = smartVectorDuplicate(F_lambda);
+    x0 = smartVectorDuplicate(F_lambda);
+    dx = smartVectorDuplicate(F_lambda);
+    MoFEMFunctionReturn(0);
+  };
 
-  if (std::distance(dIt, hi_dit) != 1) {
-    SETERRABORT(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                ("can not find unique LAMBDA (load factor) but found " +
-                 boost::lexical_cast<std::string>(std::distance(dIt, hi_dit)))
-                    .c_str());
-  }
+  auto zero_vectors = [&]() {
+    MoFEMFunctionBegin;
+    CHKERR VecZeroEntries(F_lambda);
+    CHKERR VecZeroEntries(db);
+    CHKERR VecZeroEntries(xLambda);
+    CHKERR VecZeroEntries(x0);
+    CHKERR VecZeroEntries(dx);
+    MoFEMFunctionReturn(0);
+  };
 
-  if ((unsigned int)mField.get_comm_rank() == (*dIt)->getPart()) {
-    ierr = VecCreateGhostWithArray(mField.get_comm(), 1, 1, 0, PETSC_NULL,
-                                   &dLambda, &ghosTdLambda);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    ierr = VecCreateGhostWithArray(mField.get_comm(), 1, 1, 0, PETSC_NULL,
-                                   &dIag, &ghostDiag);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  } else {
-    int one[] = {0};
-    ierr = VecCreateGhostWithArray(mField.get_comm(), 0, 1, 1, one, &dLambda,
-                                   &ghosTdLambda);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    ierr = VecCreateGhostWithArray(mField.get_comm(), 0, 1, 1, one, &dIag,
-                                   &ghostDiag);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  }
-  dLambda = 0;
-  dIag = 0;
-}
+  auto find_lambda_dof = [&]() {
+    MoFEMFunctionBegin;
+    
+    const Problem *problem_ptr;
+    CHKERR m_field.get_problem(problem_name, &problem_ptr);
+    boost::shared_ptr<NumeredDofEntity_multiIndex> dofs_ptr_no_const =
+        problem_ptr->getNumeredDofsRows();
+    NumeredDofEntityByFieldName::iterator hi_dit;
+    dIt = dofs_ptr_no_const->get<FieldName_mi_tag>().lower_bound(field_name);
+    hi_dit = dofs_ptr_no_const->get<FieldName_mi_tag>().upper_bound(field_name);
+    if (std::distance(dIt, hi_dit) != 1) 
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  ("can not find unique LAMBDA (load factor) but found " +
+                   boost::lexical_cast<std::string>(std::distance(dIt, hi_dit)))
+                      .c_str());
+    
+    MoFEMFunctionReturn(0);
+  };
 
-ArcLengthCtx::~ArcLengthCtx() {
-  ierr = VecDestroy(&F_lambda);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDestroy(&db);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDestroy(&xLambda);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDestroy(&x0);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDestroy(&dx);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDestroy(&ghosTdLambda);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = VecDestroy(&ghostDiag);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  auto create_ghost_vecs = [&]() {
+    MoFEMFunctionBegin;
+    Vec ghost_d_lambda, ghost_diag;
+    if ((unsigned int)mField.get_comm_rank() == (*dIt)->getPart()) {
+      CHKERR VecCreateGhostWithArray(mField.get_comm(), 1, 1, 0, PETSC_NULL,
+                                     &dLambda, &ghost_d_lambda);
+
+      CHKERR VecCreateGhostWithArray(mField.get_comm(), 1, 1, 0, PETSC_NULL,
+                                     &dIag, &ghost_diag);
+    } else {
+      int one[] = {0};
+      CHKERR VecCreateGhostWithArray(mField.get_comm(), 0, 1, 1, one,
+                                     &dLambda, &ghost_d_lambda);
+      CHKERR VecCreateGhostWithArray(mField.get_comm(), 0, 1, 1, one, &dIag,
+                                     &ghost_diag);
+    }
+    dLambda = 0;
+    dIag = 0;
+    ghosTdLambda = ghost_d_lambda;
+    ghostDiag = ghost_diag;
+    MoFEMFunctionReturn(0);
+  };
+
+  ierr = create_f_lambda();
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+
+  ierr = vec_duplicate();
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+
+  ierr = zero_vectors();
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+
+  ierr = find_lambda_dof();
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
+
+  ierr = create_ghost_vecs();
+  CHKERRABORT(PETSC_COMM_SELF, ierr);
 }
 
 // ***********************
@@ -128,24 +136,13 @@ ArcLengthCtx::~ArcLengthCtx() {
 
 ArcLengthMatShell::ArcLengthMatShell(Mat aij, ArcLengthCtx *arc_ptr_raw,
                                      string problem_name)
-    : Aij(aij), arcPtrRaw(arc_ptr_raw), problemName(problem_name) {
-  ierr = PetscObjectReference((PetscObject)aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-}
+    : Aij(aij, true), problemName(problem_name), arcPtrRaw(arc_ptr_raw) {}
 
 ArcLengthMatShell::ArcLengthMatShell(Mat aij,
                                      boost::shared_ptr<ArcLengthCtx> arc_ptr,
                                      string problem_name)
-    : Aij(aij), arcPtrRaw(arc_ptr.get()), problemName(problem_name),
-      arcPtr(arc_ptr) {
-  ierr = PetscObjectReference((PetscObject)aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-}
-
-ArcLengthMatShell::~ArcLengthMatShell() {
-  ierr = MatDestroy(&Aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-}
+    : Aij(aij, true), problemName(problem_name), arcPtrRaw(arc_ptr.get()),
+      arcPtr(arc_ptr) {}
 
 MoFEMErrorCode ArcLengthMatShell::setLambda(Vec ksp_x, double *lambda,
                                             ScatterMode scattermode) {
@@ -192,7 +189,7 @@ MoFEMErrorCode ArcLengthMatMultShellOp(Mat A, Vec x, Vec f) {
   MoFEMFunctionBegin;
   void *void_ctx;
   CHKERR MatShellGetContext(A, &void_ctx);
-  ArcLengthMatShell *ctx = (ArcLengthMatShell *)void_ctx;
+  ArcLengthMatShell *ctx = static_cast<ArcLengthMatShell *>(void_ctx);
   CHKERR MatMult(ctx->Aij, x, f);
   double lambda;
   CHKERR ctx->setLambda(x, &lambda, SCATTER_FORWARD);
@@ -208,75 +205,43 @@ MoFEMErrorCode ArcLengthMatMultShellOp(Mat A, Vec x, Vec f) {
 // arc-length preconditioner
 
 PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij, ArcLengthCtx *arc_ptr)
-    : kSP(PETSC_NULL), pC(PETSC_NULL), shellAij(shell_Aij), Aij(aij),
-      arcPtrRaw(arc_ptr) {
-  ierr = PetscObjectReference((PetscObject)shellAij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = PetscObjectReference((PetscObject)Aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = PCCreate(PetscObjectComm((PetscObject)aij), &pC);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = KSPCreate(PetscObjectComm((PetscObject)pC), &kSP);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+    : shellAij(shell_Aij, true), Aij(aij, true), arcPtrRaw(arc_ptr) {
+  auto comm = PetscObjectComm((PetscObject)aij);
+  pC = createPC(comm);
+  kSP = createKSP(comm);
   ierr = KSPAppendOptionsPrefix(kSP, "arc_length_");
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
 }
 
 PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij,
                                boost::shared_ptr<ArcLengthCtx> &arc_ptr)
-    : kSP(PETSC_NULL), shellAij(shell_Aij), Aij(aij), arcPtrRaw(arc_ptr.get()),
+    : shellAij(shell_Aij, true), Aij(aij, true), arcPtrRaw(arc_ptr.get()),
       arcPtr(arc_ptr) {
-  ierr = PetscObjectReference((PetscObject)shellAij); 
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = PetscObjectReference((PetscObject)Aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);  
-  ierr = PCCreate(PetscObjectComm((PetscObject)aij), &pC);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = KSPCreate(PetscObjectComm((PetscObject)pC), &kSP);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  auto comm = PetscObjectComm((PetscObject)aij);
+  pC = createPC(comm);
+  kSP = createKSP(comm);      
   ierr = KSPAppendOptionsPrefix(kSP, "arc_length_");
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
 }
 
 PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
                                boost::shared_ptr<ArcLengthCtx> &arc_ptr)
-    : kSP(PETSC_NULL), pC(pc), shellAij(shell_Aij), Aij(aij),
+    : pC(pc, true), shellAij(shell_Aij, true), Aij(aij, true),
       arcPtrRaw(arc_ptr.get()), arcPtr(arc_ptr) {
-  ierr = PetscObjectReference((PetscObject)shellAij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = PetscObjectReference((PetscObject)Aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);  
-  ierr = PetscObjectReference((PetscObject)pC);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = KSPCreate(PetscObjectComm((PetscObject)pC), &kSP);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  auto comm = PetscObjectComm((PetscObject)aij);
+  kSP = createKSP(comm);      
   ierr = KSPAppendOptionsPrefix(kSP, "arc_length_");
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
-}
-
-PCArcLengthCtx::~PCArcLengthCtx() {
-  ierr = MatDestroy(&shellAij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  ierr = MatDestroy(&Aij);
-  CHKERRABORT(PETSC_COMM_WORLD, ierr); 
-  if (kSP != PETSC_NULL) {
-    ierr = KSPDestroy(&kSP);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  }
-  if (pC != PETSC_NULL) {
-    ierr = PCDestroy(&pC);
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  }
 }
 
 MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x) {
   MoFEMFunctionBegin;
   void *void_ctx;
   CHKERR PCShellGetContext(pc, &void_ctx);
-  PCArcLengthCtx *ctx = (PCArcLengthCtx *)void_ctx;
+  PCArcLengthCtx *ctx = static_cast<PCArcLengthCtx *>(void_ctx);
   void *void_MatCtx;
   MatShellGetContext(ctx->shellAij, &void_MatCtx) ;
-  ArcLengthMatShell *mat_ctx = (ArcLengthMatShell *)void_MatCtx;
+  ArcLengthMatShell *mat_ctx = static_cast<ArcLengthMatShell *>(void_MatCtx);
   PetscBool same;
   PetscObjectTypeCompare((PetscObject)ctx->kSP, KSPPREONLY, &same);
 
@@ -349,8 +314,16 @@ MoFEMErrorCode PCSetupArcLength(PC pc) {
   MoFEMFunctionBegin;
   void *void_ctx;
   CHKERR PCShellGetContext(pc, &void_ctx);
-  PCArcLengthCtx *ctx = (PCArcLengthCtx *)void_ctx;
-  CHKERR PCGetOperators(pc, &ctx->shellAij, &ctx->Aij);
+  PCArcLengthCtx *ctx = static_cast<PCArcLengthCtx *>(void_ctx);
+  auto get_pc_ops = [&](auto pc) {
+    MoFEMFunctionBegin;
+    Mat shell_aij_raw, aij_raw;
+    CHKERR PCGetOperators(pc, &shell_aij_raw, &aij_raw);
+    ctx->shellAij = SmartPetscObj<Mat>(shell_aij_raw, true);
+    ctx->Aij = SmartPetscObj<Mat>(aij_raw, true);
+    MoFEMFunctionReturn(0);
+  };
+  CHKERR get_pc_ops(pc);
   CHKERR PCSetUseAmat(pc, PETSC_TRUE);
   CHKERR PCSetOperators(ctx->pC, ctx->Aij, ctx->Aij);
   CHKERR PCSetFromOptions(ctx->pC);
@@ -733,31 +706,24 @@ MoFEMErrorCode SphericalArcLengthControl::postProcess() {
 MoFEMErrorCode SphericalArcLengthControl::calculateDxAndDlambda(Vec x) {
   MoFEMFunctionBegin;
   // dx
-  ierr = VecCopy(x, arcPtrRaw->dx);
-  ierr = VecAXPY(arcPtrRaw->dx, -1, arcPtrRaw->x0);
-  ierr = VecGhostUpdateBegin(arcPtrRaw->dx, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERRG(ierr);
-  ierr = VecGhostUpdateEnd(arcPtrRaw->dx, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERRG(ierr);
+  CHKERR VecCopy(x, arcPtrRaw->dx);
+  CHKERR VecAXPY(arcPtrRaw->dx, -1, arcPtrRaw->x0);
+  CHKERR VecGhostUpdateBegin(arcPtrRaw->dx, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(arcPtrRaw->dx, INSERT_VALUES, SCATTER_FORWARD);
   // dlambda
   if (arcPtrRaw->getPetscLocalDofIdx() != -1) {
     double *array;
-    ierr = VecGetArray(arcPtrRaw->dx, &array);
-    CHKERRG(ierr);
+    CHKERR VecGetArray(arcPtrRaw->dx, &array);
     arcPtrRaw->dLambda = array[arcPtrRaw->getPetscLocalDofIdx()];
     array[arcPtrRaw->getPetscLocalDofIdx()] = 0;
-    ierr = VecRestoreArray(arcPtrRaw->dx, &array);
-    CHKERRG(ierr);
+    CHKERR VecRestoreArray(arcPtrRaw->dx, &array);
   }
-  ierr = VecGhostUpdateBegin(arcPtrRaw->ghosTdLambda, INSERT_VALUES,
+  CHKERR VecGhostUpdateBegin(arcPtrRaw->ghosTdLambda, INSERT_VALUES,
                              SCATTER_FORWARD);
-  CHKERRG(ierr);
-  ierr = VecGhostUpdateEnd(arcPtrRaw->ghosTdLambda, INSERT_VALUES,
+  CHKERR VecGhostUpdateEnd(arcPtrRaw->ghosTdLambda, INSERT_VALUES,
                            SCATTER_FORWARD);
-  CHKERRG(ierr);
   // dx2
-  ierr = VecDot(arcPtrRaw->dx, arcPtrRaw->dx, &arcPtrRaw->dx2);
-  CHKERRG(ierr);
+  CHKERR VecDot(arcPtrRaw->dx, arcPtrRaw->dx, &arcPtrRaw->dx2);
   PetscPrintf(arcPtrRaw->mField.get_comm(), "\tdlambda = %6.4e dx2 = %6.4e\n",
               arcPtrRaw->dLambda, arcPtrRaw->dx2);
   MoFEMFunctionReturn(0);
@@ -783,8 +749,7 @@ MoFEMErrorCode SphericalArcLengthControl::setDlambdaToX(Vec x, double dlambda) {
   // this processor
   if (arcPtrRaw->getPetscLocalDofIdx() != -1) {
     double *array;
-    ierr = VecGetArray(x, &array);
-    CHKERRG(ierr);
+    CHKERR VecGetArray(x, &array);
     double lambda_old = array[arcPtrRaw->getPetscLocalDofIdx()];
     if (!(dlambda == dlambda)) {
       std::ostringstream sss;
@@ -796,8 +761,7 @@ MoFEMErrorCode SphericalArcLengthControl::setDlambdaToX(Vec x, double dlambda) {
     PetscPrintf(arcPtrRaw->mField.get_comm(),
                 "\tlambda = %6.4e, %6.4e (%6.4e)\n", lambda_old,
                 array[arcPtrRaw->getPetscLocalDofIdx()], dlambda);
-    ierr = VecRestoreArray(x, &array);
-    CHKERRG(ierr);
+    CHKERR VecRestoreArray(x, &array);
   }
   MoFEMFunctionReturnHot(0);
 }
