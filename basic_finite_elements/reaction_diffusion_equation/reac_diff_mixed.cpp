@@ -191,7 +191,7 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
         const double f = a * r * t_mass_value * (1 - t_mass_value);
         for (int rr = 0; rr != nb_dofs; ++rr) {
           auto t_col_v_base = data.getFTensor0N(gg, 0);
-          vecF[rr] += f * t_row_v_base;
+          vecF[rr] += - f * t_row_v_base;
           for (int cc = 0; cc != nb_dofs; ++cc) {
             mat(rr, cc) += a * t_row_v_base * t_col_v_base;
             ++t_col_v_base;
@@ -313,11 +313,12 @@ struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
         const double vol = getMeasure();
 
         for (int gg = 0; gg < nb_integration_pts; ++gg) {
-          double div_base = t_tau_grad(0, 0) + t_tau_grad(1, 1);
+          
           const double K = B_epsilon + (B0 + B * t_mass_value);
           const double K_inv = 1. / K;
           const double a = vol * t_w;
           for (int rr = 0; rr < nb_dofs; ++rr) {
+            double div_base = t_tau_grad(0, 0) + t_tau_grad(1, 1);
             vecF[rr] += (K_inv * t_tau_base(i) * t_flux_value(i) -
                          div_base * t_mass_value) * a;
             ++t_tau_base;
@@ -414,6 +415,9 @@ struct OpAssembleEssentialBCRhsTau : OpBoundaryEle // F_tau_2
         vecF.clear();
         const int nb_integration_pts = getGaussPts().size2();
         auto t_flux_value = getFTensor1FromMat<3>(commonData->flux_values);
+        double tmp = t_flux_value(0);
+        t_flux_value(0) = -t_flux_value(1);
+        t_flux_value(0) = tmp;
         auto t_tau_base = data.getFTensor1N<3>();
 
         auto dir = getDirection();
@@ -425,7 +429,10 @@ struct OpAssembleEssentialBCRhsTau : OpBoundaryEle // F_tau_2
         auto t_w = getFTensor0IntegrationWeight();
         const double vol = getMeasure();
         for (int gg = 0; gg < nb_integration_pts; ++gg) {
-          const double a = vol * t_w;
+           const double a = vol * t_w;
+          // double tmp = t_flux_value(0);
+          // t_flux_value(0) = -t_flux_value(1);
+          // t_flux_value(0) = tmp;
           for (int rr = 0; rr < nb_dofs; ++rr) {
             vecF[rr] +=
                 (t_tau_base(i) * t_normal(i) *
@@ -498,7 +505,7 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
           for (int rr = 0; rr != nb_row_dofs; ++rr) {
             auto t_col_tau_base = col_data.getFTensor1N<3>(gg, 0);
             for (int cc = 0; cc != nb_col_dofs; ++cc) {
-              mat(rr, cc) = (K_inv * t_row_tau_base(i) * t_col_tau_base(i)) * a;
+              mat(rr, cc) += (K_inv * t_row_tau_base(i) * t_col_tau_base(i)) * a;
               ++t_col_tau_base;
             }
             ++t_row_tau_base;
@@ -563,7 +570,7 @@ struct OpAssembleLhsEssentialBCTauTau : OpBoundaryEle // A_TauTau_2
 
         auto dir = getDirection();
         double len = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
-        FTensor::Tensor1<double, 3> t_normal(dir[1] / len, dir[0] / len, dir[2]/len);
+        FTensor::Tensor1<double, 3> t_normal(-dir[1] / len, dir[0] / len, dir[2]/len);
 
         const double vol = getMeasure();
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
@@ -572,7 +579,7 @@ struct OpAssembleLhsEssentialBCTauTau : OpBoundaryEle // A_TauTau_2
             auto t_col_tau_base = col_data.getFTensor1N<3>(gg, 0);
          
             for (int cc = 0; cc != nb_col_dofs; ++cc) {
-              mat(rr, cc) = ((t_row_tau_base(i) * t_normal(i)) *
+              mat(rr, cc) += ((t_row_tau_base(i) * t_normal(i)) *
                              (t_col_tau_base(i) * t_normal(i))) *
                             a;
 
@@ -644,10 +651,11 @@ struct OpAssembleLhsTauV : OpFaceEle // E_TauV
           const double K = B_epsilon + (B0 + B * t_mass_value);
           const double K_inv = 1. / K;
           const double K_diff = B;
-          double div_row_base = t_row_tau_grad(0, 0) + t_row_tau_grad(1, 1);
+          
           for (int rr = 0; rr != nb_row_dofs; ++rr) {
             auto t_col_v_base = col_data.getFTensor0N(gg, 0);
             for (int cc = 0; cc != nb_col_dofs; ++cc) {
+              double div_row_base = t_row_tau_grad(0, 0) + t_row_tau_grad(1, 1);
               mat(rr, cc) += (-(t_row_tau_base(i) * t_flux_value(i) * K_inv *
                                 K_inv * K_diff * t_col_v_base) -
                               (div_row_base * t_col_v_base)) *
@@ -756,7 +764,7 @@ struct OpAssembleLhsVV : OpFaceEle // D
         for (int rr = 0; rr != nb_row_dofs; ++rr) {
           auto t_col_v_base = col_data.getFTensor0N(gg, 0);
           for (int cc = 0; cc != nb_col_dofs; ++cc) {
-            mat(rr, cc) = (ts_a * t_row_v_base * t_col_v_base) * a;
+            mat(rr, cc) += -(ts_a * t_row_v_base * t_col_v_base) * a;
 
             ++t_col_v_base;
           }
@@ -955,6 +963,7 @@ int main(int argc, char *argv[]) {
 
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpAssembleStiffRhsV<3>("MASS", data));
+
 
     essential_bdry_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpSetContrariantPiolaTransformOnEdge());
