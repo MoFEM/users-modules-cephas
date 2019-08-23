@@ -44,11 +44,17 @@ const double B_epsilon = 0.0;
 const double r = 1.0;
 
 const int save_every_nth_step = 4;
-const int order = 2; ///< approximation order
+const int order = 3; ///< approximation order
 const double natural_bc_values = 0.0;
 const double essential_bc_values = 0.0;
 // const int dim = 3;
 FTensor::Index<'i', 3> i;
+
+auto wrap_matrix3_ftensor = [](MatrixDouble &m) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+      &m(0, 0), &m(0, 1), &m(0, 2), &m(1, 0), &m(1, 1), &m(1, 2), &m(2, 0),
+      &m(2, 1), &m(2, 2));
+};
 
 struct CommonData {
   MatrixDouble flux_values; ///< flux values at integration points
@@ -66,22 +72,77 @@ struct CommonData {
   }
 };
 
-struct CommonDataEssential {
-  MatrixDouble flux_e_values;
+struct OpEssentialBC : public OpBoundaryEle {
+  OpEssentialBC(const std::string &flux_field, Range &essential_bd_ents)
+      : OpBoundaryEle(flux_field, OpBoundaryEle::OPROW),
+        essential_bd_ents(essential_bd_ents) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data){
+    MoFEMFunctionBegin;
+    int nb_dofs = data.getFieldData().size();
+    if (nb_dofs) {
+      EntityHandle fe_ent = getFEEntityHandle();
+      bool is_essential = (essential_bd_ents.find(fe_ent) != essential_bd_ents.end());
+      if (is_essential) {
+        int nb_gauss_pts = data.getN().size1();
+        if (nb_dofs != static_cast<int>(data.getN().size2()))
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "wrong number of dofs");
+        nN.resize(nb_dofs, nb_dofs, false);
+        nF.resize(nb_dofs, false);
+        nN.clear();
+        nF.clear();
+
+        auto t_row_tau = data.getFTensor1N<3>();
+
+        auto dir = getDirection();
+        FTensor::Tensor1<double, 3> t_normal(-dir[1], dir[0], dir[2]);
+
+        auto t_w = getFTensor0IntegrationWeight();
+        const double vol = getMeasure();
+
+        for (int gg = 0; gg < nb_gauss_pts; gg++) {
+          const double a = t_w * vol;
+          const double ess_bc_value_gg = essential_bc_values;
+          for (int rr = 0; rr != nb_dofs; rr++) {
+            auto t_col_tau = data.getFTensor1N<3>(gg, 0);
+            nF[rr] += a * ess_bc_value_gg * t_row_tau(i) * t_normal(i);
+            for (int cc = 0; cc != nb_dofs; cc++) {
+              nN(rr, cc) += a * (t_row_tau(i) * t_normal(i)) * 
+                              (t_col_tau(i) * t_normal(i));
+              ++t_col_tau;
+            }
+            ++t_row_tau;
+          }
+          ++t_w;
+        }
+
+        cholesky_decompose(nN);
+        cholesky_solve(nN, nF, ublas::lower());
+
+        for (auto &dof : data.getFieldDofs()) {
+          dof->getFieldData() = nF[dof->getEntDofIdx()];
+
+          // this is only to check
+          // data.getFieldData()[dof->getEntDofIdx()] = nF[dof->getEntDofIdx()];
+        }
+      }
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+  private:
+   MatrixDouble nN;
+   VectorDouble nF;
+   Range &essential_bd_ents;
 };
 
-struct CommonDataNatural {
-  VectorDouble mass_n_values;
-};
 
 // Assembly of system mass matrix
 // //***********************************************
 
 // Mass matrix corresponding to the flux equation.
 // 01. Note that it is an identity matrix
-struct OpInitialMassRhs : public OpFaceEle{
-
-};
 
 struct OpInitialMass : public OpFaceEle {
   OpInitialMass(const std::string &mass_field, Range &inner_surface)
@@ -191,7 +252,7 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
         const double f = a * r * t_mass_value * (1 - t_mass_value);
         for (int rr = 0; rr != nb_dofs; ++rr) {
           auto t_col_v_base = data.getFTensor0N(gg, 0);
-          vecF[rr] += - f * t_row_v_base;
+          vecF[rr] +=  f * t_row_v_base;
           for (int cc = 0; cc != nb_dofs; ++cc) {
             mat(rr, cc) += a * t_row_v_base * t_col_v_base;
             ++t_col_v_base;
@@ -415,9 +476,9 @@ struct OpAssembleEssentialBCRhsTau : OpBoundaryEle // F_tau_2
         vecF.clear();
         const int nb_integration_pts = getGaussPts().size2();
         auto t_flux_value = getFTensor1FromMat<3>(commonData->flux_values);
-        double tmp = t_flux_value(0);
-        t_flux_value(0) = -t_flux_value(1);
-        t_flux_value(0) = tmp;
+        // double tmp = t_flux_value(0);
+        // t_flux_value(0) = -t_flux_value(1);
+        // t_flux_value(0) = tmp;
         auto t_tau_base = data.getFTensor1N<3>();
 
         auto dir = getDirection();
@@ -469,9 +530,9 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
                       boost::shared_ptr<CommonData> &commonData,
                       Range &essential_bd_ents)
       : OpFaceEle(flux_field, flux_field, OpFaceEle::OPROWCOL),
-        essential_bd_ents(essential_bd_ents),
+        // essential_bd_ents(essential_bd_ents),
         commonData(commonData) {
-    sYmm = true;
+    sYmm = false;
     cerr << "OpAssembleLhsTauTau()" << endl;
   }
 
@@ -484,10 +545,10 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
     // cerr << "In doWork() : (row, col) = (" << nb_row_dofs << ", "
     //      << nb_col_dofs << ")" << endl;
     if (nb_row_dofs && nb_col_dofs) {
-      EntityHandle row_side_ent = row_data.getFieldDofs()[0]->getEnt();
-      bool is_essential =
-          (essential_bd_ents.find(row_side_ent) != essential_bd_ents.end());
-      if (!is_essential) {
+      // EntityHandle row_side_ent = row_data.getFieldDofs()[0]->getEnt();
+      // bool is_essential =
+      //     (essential_bd_ents.find(row_side_ent) != essential_bd_ents.end());
+      if (1) {
         mat.resize(nb_row_dofs, nb_col_dofs, false);
         mat.clear();
         const int nb_integration_pts = getGaussPts().size2();
@@ -515,12 +576,12 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
         }
         CHKERR MatSetValues(getFEMethod()->ts_B, row_data, col_data, &mat(0, 0),
                             ADD_VALUES);
-        if (row_side != col_side || row_type != col_type) {
-          transMat.resize(nb_col_dofs, nb_row_dofs, false);
-          noalias(transMat) = trans(mat);
-          CHKERR MatSetValues(getFEMethod()->ts_B, col_data, row_data,
-                              &transMat(0, 0), ADD_VALUES);
-        }
+        // if (row_side != col_side || row_type != col_type) {
+        //   transMat.resize(nb_col_dofs, nb_row_dofs, false);
+        //   noalias(transMat) = trans(mat);
+        //   CHKERR MatSetValues(getFEMethod()->ts_B, col_data, row_data,
+        //                       &transMat(0, 0), ADD_VALUES);
+        // }
       }
     }
     MoFEMFunctionReturn(0);
@@ -551,13 +612,15 @@ struct OpAssembleLhsEssentialBCTauTau : OpBoundaryEle // A_TauTau_2
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
 
+    EntityHandle row_side_ent = getFEEntityHandle();
+
+    bool is_essential =
+        (essential_bd_ents.find(row_side_ent) != essential_bd_ents.end());
+
     if (nb_row_dofs && nb_col_dofs) {
       // cerr << "EssentialBCTauTau" << endl;
 
-      EntityHandle row_side_ent = row_data.getFieldDofs()[0]->getEnt();
 
-      bool is_essential =
-          (essential_bd_ents.find(row_side_ent) != essential_bd_ents.end());
 
       if (is_essential) {
         // cerr << "is essential" << endl;
@@ -631,10 +694,10 @@ struct OpAssembleLhsTauV : OpFaceEle // E_TauV
 
 
     if (nb_row_dofs && nb_col_dofs) {
-      EntityHandle row_side_ent = row_data.getFieldDofs()[0]->getEnt();
-      bool is_essential =
-          (essential_bd_ents.find(row_side_ent) != essential_bd_ents.end());
-      if (!is_essential) {
+      // EntityHandle row_side_ent = row_data.getFieldDofs()[0]->getEnt();
+      // bool is_essential =
+      //     (essential_bd_ents.find(row_side_ent) != essential_bd_ents.end());
+      if (1) {
         mat.resize(nb_row_dofs, nb_col_dofs, false);
         mat.clear();
         const int nb_integration_pts = getGaussPts().size2();
@@ -842,13 +905,24 @@ int main(int argc, char *argv[]) {
                                             AINSWORTH_LEGENDRE_BASE, 1);
 
     CHKERR simple_interface->addBoundaryField("FLUX", HCURL,
-                                              AINSWORTH_LEGENDRE_BASE, 1);
+                                              DEMKOWICZ_JACOBI_BASE, 1);
 
     CHKERR simple_interface->setFieldOrder("MASS", order - 1);
     CHKERR simple_interface->setFieldOrder("FLUX", order);
 
     CHKERR simple_interface->setUp();
 
+    // MatrixDouble mat;
+    // mat.resize(3, 3);
+
+    // auto t_mat = wrap_matrix3_ftensor(mat);
+    
+    // mat.clear();
+    // mat(0, 0) = 1; mat(1, 1) = 2; mat(2, 2) = 3;
+   
+    // auto t_trace = t_mat(i, i);
+
+    // cerr << "trace = " << t_trace << endl;
     // ******* extracting the essential and natural boundary entities as a range
     // *****************
     Range essential_bdry_ents;
@@ -901,8 +975,6 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<BoundaryEle> essential_bdry_ele_stiff_lhs(
         new BoundaryEle(m_field));
 
-    
-
     // ************* pushing operators for slow rhs system vector (G)
     // **************
     // vol_ele_slow_rhs->getOpPtrVector().push_back(new
@@ -949,14 +1021,13 @@ int main(int argc, char *argv[]) {
         new OpCalculateScalarFieldValues("MASS", mass_values_ptr));
 
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr, MBEDGE));
+        new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr));
 
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarValuesDot("MASS", mass_dots_ptr));
 
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateHdivVectorDivergence<3>("FLUX", flux_divs_ptr,
-        MBEDGE));
+        new OpCalculateHdivVectorDivergence<3, 2>("FLUX", flux_divs_ptr));
 
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpAssembleStiffRhsTau<3>("FLUX", data, essential_bdry_ents));
@@ -968,7 +1039,7 @@ int main(int argc, char *argv[]) {
     essential_bdry_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpSetContrariantPiolaTransformOnEdge());
     essential_bdry_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr, MBEDGE));
+        new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr));
     essential_bdry_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpAssembleEssentialBCRhsTau("FLUX", data, essential_bdry_ents));
 
@@ -986,7 +1057,10 @@ int main(int argc, char *argv[]) {
         new OpSetInvJacHcurlFace(data->inv_jac));
 
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr, MBEDGE));
+        new OpCalculateScalarFieldValues("MASS", mass_values_ptr));
+
+    vol_ele_stiff_lhs->getOpPtrVector().push_back(
+        new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr));
 
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
         new OpAssembleLhsTauTau<3>("FLUX", data, essential_bdry_ents));
@@ -1031,17 +1105,24 @@ int main(int argc, char *argv[]) {
     // Get PETSc discrete manager
     auto dm = simple_interface->getDM();
 
-
-
-
+    
 
     boost::shared_ptr<FaceEle> initial_mass_ele(new FaceEle(m_field));
+    boost::shared_ptr<BoundaryEle> essential_bd_ele(new BoundaryEle(m_field));
 
     initial_mass_ele->getOpPtrVector().push_back(
         new OpInitialMass("MASS", inner_surface));
 
+    essential_bd_ele->getOpPtrVector().push_back(
+      new OpEssentialBC("FLUX", essential_bdry_ents));
+
     CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
                                     initial_mass_ele);
+    CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getBoundaryFEName(),
+                                    essential_bd_ele);
+    CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        "SimpleProblem", "FLUX", essential_bdry_ents);
+
     // CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
     //                                 post_proc);
     // CHKERR post_proc->writeFile("out_level_initail.h5m");
