@@ -336,28 +336,48 @@ int main(int argc, char *argv[]) {
 
     // }
 
-    NavierStokesElement::DataAtIntegrationPts commonData(m_field);
-    CHKERR commonData.getParameters();
+    boost::shared_ptr<NavierStokesElement::CommonData> commonData =
+        boost::make_shared<NavierStokesElement::CommonData>();
+    //CHKERR commonData->getParameters();
     
     //dragFe->getOpPtrVector().push_back(new OpCalcViscosity());
-    for (auto &sit : commonData.setOfBlocksData) {
+
+    //std::map<int, NavierStokesElement::BlockData> setOfBlocksData;
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+        const int id = bit->getMeshsetId();
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].tEts, true);
+
+        std::vector<double> attributes;
+        bit->getAttributes(attributes);
+        if (attributes.size() != 2) {
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                   "should be 2 attributes but is %d", attributes.size());
+        }
+        commonData->setOfBlocksData[id].iD = id;
+        commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
+        commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+      }
+    }
+
+    for (auto &sit : commonData->setOfBlocksData) {
       sideDragFe->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>("U",
-                                                 commonData.gradDispPtr));
+                                                 commonData->gradDispPtr));
       dragFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(commonData.invJac));
-      dragFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(commonData.invJac));
+        new OpCalculateInvJacForFace(commonData->invJac));
+      dragFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(commonData->invJac));
       dragFe->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues("P", commonData.pPtr));
+        new OpCalculateScalarFieldValues("P", commonData->pPtr));
       dragFe->getOpPtrVector().push_back(
         new NavierStokesElement::OpCalcPressureDrag(commonData, sit.second));
       dragFe->getOpPtrVector().push_back(
         new NavierStokesElement::OpCalcViscousDrag(sideDragFe, commonData, sit.second));
     }
 
-    
-
-    CHKERR NavierStokesElement::setOperators(feLhs, feRhs, commonData);
-
+    CHKERR NavierStokesElement::setOperators(feLhs, feRhs,
+                                             commonData);
 
     Mat Aij;      // Stiffness matrix
     Vec D, F; //, D0; // Vector of DOFs and the RHS
@@ -574,24 +594,24 @@ int main(int argc, char *argv[]) {
           CHKERR postProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
           // postProcPtr->getOpPtrVector().push_back(
-          //     new OpCalculateScalarFieldValues("PHASE_FIELD", commonData.cPtr));
+          //     new OpCalculateScalarFieldValues("PHASE_FIELD", commonData->cPtr));
           // postProcPtr->getOpPtrVector().push_back(
           //     new OpCalculateVectorFieldGradient<3, 3>("U",
-          //                                             commonData.gradDispPtr));
-          // for (auto &sit : commonData.setOfBlocksData) {
+          //                                             commonData->gradDispPtr));
+          // for (auto &sit : commonData->setOfBlocksData) {
           //   postProcPtr->getOpPtrVector().push_back(new OpPostProcStress(
           //       postProcPtr->postProcMesh, postProcPtr->mapGaussPts, commonData,
           //       sit.second));
           // }
 
           //loop over blocks
-          for (auto &sit : commonData.setOfBlocksData) {
-            
+          for (auto &sit : commonData->setOfBlocksData) {
+
             //postProcPtr->getOpPtrVector().push_back(
-            //    new OpCalculateScalarFieldValues("P", commonData.pPtr));
+            //    new OpCalculateScalarFieldValues("P", commonData->pPtr));
             postProcPtr->getOpPtrVector().push_back(
                 new OpCalculateVectorFieldGradient<3, 3>("U",
-                                                        commonData.gradDispPtr));
+                                                        commonData->gradDispPtr));
             postProcPtr->getOpPtrVector().push_back(
                new NavierStokesElement::OpPostProcVorticity(postProcPtr->postProcMesh, postProcPtr->mapGaussPts,
                                     commonData, sit.second));
@@ -608,17 +628,17 @@ int main(int argc, char *argv[]) {
         CHKERR postProcPtr->postProcMesh.write_file(out_file_name.c_str(), "MOAB",
                                                     "PARALLEL=WRITE_PART");
 
-        //commonData.pressureDrag = commonData.viscousDrag = commonData.totalDrag = 0.0;
+        //commonData->pressureDrag = commonData->viscousDrag = commonData->totalDrag = 0.0;
         for (int dd = 0; dd != 3; dd++) {
-          commonData.pressureDrag[dd] = commonData.viscousDrag[dd] = 0.0;
+          commonData->pressureDrag[dd] = commonData->viscousDrag[dd] = 0.0;
         } 
         CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", dragFe);
         for (int dd = 0; dd != 3; dd++) {
-          totalDrag[dd] = commonData.pressureDrag[dd] + commonData.viscousDrag[dd];
+          totalDrag[dd] = commonData->pressureDrag[dd] + commonData->viscousDrag[dd];
         } 
         /// SUM ALL WITH MPI
-        cout << "pressure drag: " << commonData.pressureDrag << endl;   
-        cout << "viscous drag: " << commonData.viscousDrag << endl;    
+        cout << "pressure drag: " << commonData->pressureDrag << endl;   
+        cout << "viscous drag: " << commonData->viscousDrag << endl;    
         cout << "total drag: " << totalDrag << endl;                             
       }
 

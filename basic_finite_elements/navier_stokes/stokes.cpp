@@ -209,8 +209,11 @@ int main(int argc, char *argv[]) {
     // setup the DM
     CHKERR DMSetUp(dm);
 
-    NavierStokesElement::DataAtIntegrationPts commonData(m_field);
-    CHKERR commonData.getParameters();
+    //NavierStokesElement::DataAtIntegrationPts commonData(m_field);
+    //CHKERR commonData->getParameters();
+
+    boost::shared_ptr<NavierStokesElement::CommonData> commonData =
+        boost::make_shared<NavierStokesElement::CommonData>();
 
     boost::shared_ptr<FEMethod> nullFE;
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs(
@@ -225,8 +228,28 @@ int main(int argc, char *argv[]) {
 
     PostProcVolumeOnRefinedMesh post_proc(m_field);
 
+    //std::map<int, NavierStokesElement::BlockData> setOfBlocksData;
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+        const int id = bit->getMeshsetId();
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].tEts, true);
+
+        std::vector<double> attributes;
+        bit->getAttributes(attributes);
+        if (attributes.size() != 2) {
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                   "should be 2 attributes but is %d", attributes.size());
+        }
+        commonData->setOfBlocksData[id].iD = id;
+        commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
+        commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+      }
+    }
+
     // loop over blocks
-    for (auto &sit : commonData.setOfBlocksData) {
+    for (auto &sit : commonData->setOfBlocksData) {
 
       // feLhs->getOpPtrVector().push_back(
       //     new OpAssembleP(commonData, sit.second));
@@ -236,10 +259,10 @@ int main(int argc, char *argv[]) {
           new NavierStokesElement::OpAssembleG(commonData, sit.second));
 
       post_proc.getOpPtrVector().push_back(
-          new OpCalculateScalarFieldValues("P", commonData.pPtr));
+          new OpCalculateScalarFieldValues("P", commonData->pPtr));
       post_proc.getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>("U",
-                                                   commonData.gradDispPtr));
+                                                   commonData->gradDispPtr));
       //post_proc.getOpPtrVector().push_back(
       //    new OpPostProcStress(post_proc.postProcMesh, post_proc.mapGaussPts,
       //                         commonData, sit.second));

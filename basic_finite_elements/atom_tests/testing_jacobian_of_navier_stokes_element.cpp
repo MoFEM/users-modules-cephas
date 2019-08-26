@@ -42,10 +42,9 @@ int main(int argc, char *argv[]) {
   // MOAB and PETSC functions.
   MPI_Comm moab_comm_world;
   MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-
-  // ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-  // if (pcomm == NULL)
-  //   pcomm = new ParallelComm(&moab, moab_comm_world);
+  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  if (pcomm == NULL)
+    pcomm = new ParallelComm(&moab, moab_comm_world);
 
   PetscBool test_jacobian = PETSC_FALSE;
 
@@ -53,8 +52,8 @@ int main(int argc, char *argv[]) {
     // Get command line options
     char mesh_file_name[255];
     PetscBool flg_file;
-    int order_p = 2; // default approximation order_p
-    int order_u = 3; // default approximation order_u
+    int order_p = 1; // default approximation order_p
+    int order_u = 2; // default approximation order_u
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
 
@@ -154,15 +153,41 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.build_fields();
 
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(
-    //     0, MBVERTEX, "P"); // initial p = 0 everywhere
     Projection10NodeCoordsOnField ent_method_material(m_field,
                                                         "MESH_NODE_POSITIONS");
     CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
-    // setup elements for loading
-    //CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "U");
-    //CHKERR MetaNodalForces::addElement(m_field, "U");
-    //CHKERR MetaEdgeForces::addElement(m_field, "U");
+
+    PetscRandom rctx;
+    PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
+
+    auto set_velocity = [&](VectorAdaptor &&field_data, double *x, double *y,
+                         double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 2.0;
+      PetscRandomGetValueReal(rctx, &value);
+      field_data[0] = (value - 0.5) * scale;
+      PetscRandomGetValueReal(rctx, &value);
+      field_data[1] = (value - 0.5) * scale;
+      PetscRandomGetValueReal(rctx, &value);
+      field_data[2] = (value - 0.5) * scale;
+      MoFEMFunctionReturn(0);
+    };
+
+    auto set_pressure = [&](VectorAdaptor &&field_data, double *x, double *y,
+                            double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 1.0;
+      PetscRandomGetValueReal(rctx, &value);
+      field_data[0] = value * scale;
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_velocity, "U");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure, "P");
+
+    PetscRandomDestroy(&rctx);
 
     // **** ADD ELEMENTS **** //
 
@@ -216,10 +241,31 @@ int main(int argc, char *argv[]) {
     feLhs->getRuleHook = NavierStokesElement::VolRule();
     feRhs->getRuleHook = NavierStokesElement::VolRule();
 
-    NavierStokesElement::DataAtIntegrationPts commonData(m_field);
-    CHKERR commonData.getParameters();
+    boost::shared_ptr<NavierStokesElement::CommonData> commonData =
+        boost::make_shared<NavierStokesElement::CommonData>();
+    //CHKERR commonData.getParameters();
 
-    CHKERR NavierStokesElement::setOperators(feLhs, feRhs, commonData);
+    //std::map<int, NavierStokesElement::BlockData> setOfBlocksData;
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+        const int id = bit->getMeshsetId();
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].tEts, true);
+
+        std::vector<double> attributes;
+        bit->getAttributes(attributes);
+        if (attributes.size() != 2) {
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                   "should be 2 attributes but is %d", attributes.size());
+        }
+        commonData->setOfBlocksData[id].iD = id;
+        commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
+        commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+      }
+    }
+
+    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, commonData);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "TEST_NAVIER_STOKES", feLhs,
                                   nullFE, nullFE);
@@ -231,13 +277,6 @@ int main(int argc, char *argv[]) {
     CHKERR VecDuplicate(x, &f);
     CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
 
-    // CHKERR VecDuplicate(x, &dx);
-    // PetscRandom rctx;
-    // PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
-    // VecSetRandom(dx, rctx);
-    // PetscRandomDestroy(&rctx);
-    // CHKERR DMoFEMMeshToGlobalVector(dm, x, INSERT_VALUES, SCATTER_REVERSE);
-
     Mat A, fdA;
     CHKERR DMCreateMatrix(dm, &A);
     CHKERR MatDuplicate(A, MAT_DO_NOT_COPY_VALUES, &fdA);
@@ -245,13 +284,12 @@ int main(int argc, char *argv[]) {
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
-          //"-pc_type none";
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 "
+          "-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
-                               "-snes_rtol 0 -snes_max_it 1";
-                               // "-pc_type none";
+                               "-snes_rtol 0 -snes_max_it 1 -pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
@@ -264,6 +302,13 @@ int main(int argc, char *argv[]) {
     CHKERR SNESSetFromOptions(snes);
 
     CHKERR SNESSolve(snes, NULL, x);
+
+    int ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD);
+    CHKERRG(ierr);
+
+    PetscInt N;
+    VecGetSize(f, &N);
+    cout << "f size: " << N << endl;
 
     if (test_jacobian == PETSC_FALSE) {
       double nrm_A0;

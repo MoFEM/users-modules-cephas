@@ -410,4 +410,4 @@ target_link_libraries(testing_jacobian_of_navier_stokes_element
   mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
-cm_export_file("testing_jacobian_of_navier_stokes_element.h5m" export_atom_tests_basic_fe)
+cm_export_file("mesh_for_testing_navier_stokes_element.h5m" export_atom_tests_basic_fe)
