@@ -37,7 +37,7 @@ using OpBoundaryEle = BoundaryEle::UserDataOperator;
 
 using EntData = DataForcesAndSourcesCore::EntData;
 
-const double B = 0.0;
+const double B = 1e-2;
 const double B0 = 1e-3;
 const double B_epsilon = 0.0;
 
@@ -801,16 +801,6 @@ int main(int argc, char *argv[]) {
     //     new BoundaryEle(m_field));
 
     // ************* pushing operators for slow rhs system vector (G)
-    // **************
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(new
-    // OpCalculateJacForFace(data->jac));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(new
-    // OpCalculateInvJacForFace(data->inv_jac));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpSetContravariantPiolaTransformFace(data->jac));
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(new
-    // OpSetInvJacHcurlFace(data->inv_jac));
 
     vol_ele_slow_rhs->getOpPtrVector().push_back(
     new OpCalculateScalarFieldValues("MASS", mass_values_ptr));
