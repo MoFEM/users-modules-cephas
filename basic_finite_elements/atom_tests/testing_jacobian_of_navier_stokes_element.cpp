@@ -265,7 +265,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, commonData);
+    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P", commonData);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "TEST_NAVIER_STOKES", feLhs,
                                   nullFE, nullFE);
@@ -303,8 +303,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR SNESSolve(snes, NULL, x);
 
-    int ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD);
-    CHKERRG(ierr);
+    // int ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD);
+    // CHKERRG(ierr);
 
     PetscInt N;
     VecGetSize(f, &N);

@@ -376,7 +376,7 @@ int main(int argc, char *argv[]) {
         new NavierStokesElement::OpCalcViscousDrag(sideDragFe, commonData, sit.second));
     }
 
-    CHKERR NavierStokesElement::setOperators(feLhs, feRhs,
+    CHKERR NavierStokesElement::setOperators(feLhs, feRhs, "U", "P",
                                              commonData);
 
     Mat Aij;      // Stiffness matrix
