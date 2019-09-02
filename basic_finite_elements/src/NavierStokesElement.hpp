@@ -44,7 +44,7 @@ struct NavierStokesElement {
 
   struct BlockData {
     int iD;
-    //int oRder;
+    // int oRder;
     double fluidViscosity;
     double fluidDensity;
     Range tEts;
@@ -59,7 +59,7 @@ struct NavierStokesElement {
     boost::shared_ptr<MatrixDouble> dispPtr;
     boost::shared_ptr<VectorDouble> pPtr;
 
-    //VectorDouble3 totalDrag;
+    // VectorDouble3 totalDrag;
     VectorDouble3 pressureDrag;
     VectorDouble3 viscousDrag;
 
@@ -72,7 +72,7 @@ struct NavierStokesElement {
       dispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
-      //totalDrag = VectorDouble3(3);
+      // totalDrag = VectorDouble3(3);
       pressureDrag = VectorDouble3(3);
       viscousDrag = VectorDouble3(3);
 
@@ -80,19 +80,18 @@ struct NavierStokesElement {
         pressureDrag[dd] = viscousDrag[dd] = 0.0;
       }
 
-      //ierr = setBlocks();
-      //CHKERRABORT(PETSC_COMM_WORLD, ierr);
+      // ierr = setBlocks();
+      // CHKERRABORT(PETSC_COMM_WORLD, ierr);
     }
 
     MoFEMErrorCode getParameters() {
-      MoFEMFunctionBegin; 
+      MoFEMFunctionBegin;
       CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
 
       ierr = PetscOptionsEnd();
       CHKERRQ(ierr);
       MoFEMFunctionReturn(0);
     }
-
   };
 
   struct LoadScale : public MethodForForceScaling {
@@ -112,14 +111,13 @@ struct NavierStokesElement {
                const std::string velocity_field,
                const std::string pressure_field,
                boost::shared_ptr<CommonData> common_data);
-               
 
   /**
    * \brief Set integration rule to volume elements
    *
    * This rule is used to integrate \f$\nabla v \cdot \nabla u\f$, thus
-   * if the approximation field and the testing field are polynomials of order "p",
-   * then the rule for the exact integration is 2*(p-1).
+   * if the approximation field and the testing field are polynomials of order
+   * "p", then the rule for the exact integration is 2*(p-1).
    *
    * Integration rule is order of polynomial which is calculated exactly. Finite
    * element selects integration method based on return of this function.
@@ -129,8 +127,8 @@ struct NavierStokesElement {
     int operator()(int order_row, int order_col, int order_data) const {
       // return order_row < order_col ? 2 * order_col - 1
       //                   : 2 * order_row - 1;
-      return 2 * order_data; 
-      //return order_row < order_col ? 3 * order_col - 1
+      return 2 * order_data;
+      // return order_row < order_col ? 3 * order_col - 1
       //                   : 3 * order_row - 1;
     }
   };
@@ -209,9 +207,9 @@ struct NavierStokesElement {
     FTensor::Tensor2<double, 3, 3> diffDiff;
 
     OpAssembleLhsDiagLin(const string field_name_row,
-                            const string field_name_col,
-                            boost::shared_ptr<CommonData> common_data,
-                            BlockData &block_data)
+                         const string field_name_col,
+                         boost::shared_ptr<CommonData> common_data,
+                         BlockData &block_data)
         : OpAssembleLhs(field_name_row, field_name_col, common_data,
                         block_data) {
       sYmm = true;
@@ -259,16 +257,14 @@ struct NavierStokesElement {
         : UserDataOperator(field_name, UserDataOperator::OPROW),
           commonData(common_data), blockData(block_data){};
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                                  EntData &row_data);
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
     virtual MoFEMErrorCode iNtegrate(EntData &data) {
       MoFEMFunctionBegin;
       MoFEMFunctionReturn(0);
     };
-    
-    MoFEMErrorCode aSsemble(EntData &data);
 
+    MoFEMErrorCode aSsemble(EntData &data);
   };
 
   struct OpAssembleRhsVelocityLin : public OpAssembleRhs {
@@ -289,8 +285,8 @@ struct NavierStokesElement {
   struct OpAssembleRhsVelocityNonLin : public OpAssembleRhs {
 
     OpAssembleRhsVelocityNonLin(const string field_name,
-                             boost::shared_ptr<CommonData> common_data,
-                             BlockData &block_data)
+                                boost::shared_ptr<CommonData> common_data,
+                                BlockData &block_data)
         : OpAssembleRhs(field_name, common_data, block_data){};
 
     /**
@@ -432,7 +428,7 @@ struct NavierStokesElement {
         ++t_normal;
       }
       MoFEMFunctionReturn(0);
-          }
+    }
   };
 
   struct OpPostProcVorticity : public UserDataOperator {
@@ -595,8 +591,6 @@ struct NavierStokesElement {
       MoFEMFunctionReturn(0);
     }
   };
-
-  
 };
 
 struct DirichletVelocityBc : public DirichletDisplacementBc {
