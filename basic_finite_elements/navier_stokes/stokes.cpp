@@ -254,9 +254,11 @@ int main(int argc, char *argv[]) {
       // feLhs->getOpPtrVector().push_back(
       //     new OpAssembleP(commonData, sit.second));
       feLhs->getOpPtrVector().push_back(
-          new NavierStokesElement::OpAssembleK(commonData, sit.second));
+          new NavierStokesElement::OpAssembleLhsDiagNonLin(
+              "U", "U", commonData, sit.second));
       feLhs->getOpPtrVector().push_back(
-          new NavierStokesElement::OpAssembleG(commonData, sit.second));
+          new NavierStokesElement::OpAssembleLhsOffDiag(
+              "U", "P", commonData, sit.second));
 
       post_proc.getOpPtrVector().push_back(
           new OpCalculateScalarFieldValues("P", commonData->pPtr));

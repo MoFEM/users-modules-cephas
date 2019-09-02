@@ -147,7 +147,13 @@ struct NavierStokesElement {
     MatrixDouble locMat;
     BlockData &blockData;
 
-    bool 
+    bool diagonalBlock;
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int row_nb_gauss_pts;
+
+    bool isOnDiagonal;
 
     OpAssembleLhs(const string field_name_row, const string field_name_col,
                   boost::shared_ptr<CommonData> common_data,
@@ -156,11 +162,19 @@ struct NavierStokesElement {
                            UserDataOperator::OPROWCOL),
           commonData(common_data), blockData(block_data) {
       sYmm = false;
+      diagonalBlock = false;
     };
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
+
+    virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    };
+
+    MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
   };
 
   /** * @brief Assemble G *
@@ -169,24 +183,19 @@ struct NavierStokesElement {
    * \f]
    *
    */
-  struct OpAssembleG
-      : public UserDataOperator {
+  struct OpAssembleLhsOffDiag : public OpAssembleLhs {
 
-    boost::shared_ptr<CommonData> commonData;
-    MatrixDouble locG;
-    BlockData &blockData;
-
-    OpAssembleG(boost::shared_ptr<CommonData> common_data, BlockData &block_data)
-        : UserDataOperator(
-              "U", "P", UserDataOperator::OPROWCOL),
-          commonData(common_data), blockData(block_data) {
+    OpAssembleLhsOffDiag(const string field_name_row,
+                         const string field_name_col,
+                         boost::shared_ptr<CommonData> common_data,
+                         BlockData &block_data)
+        : OpAssembleLhs(field_name_row, field_name_col, common_data,
+                        block_data) {
       sYmm = false;
+      diagonalBlock = false;
     };
 
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data);
-  
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   /** * @brief Assemble K *
@@ -195,24 +204,44 @@ struct NavierStokesElement {
    * \f]
    *
    */
-  struct OpAssembleK
-      : public UserDataOperator {
+  struct OpAssembleLhsDiagLin : public OpAssembleLhs {
 
-    MatrixDouble locK;
-    MatrixDouble translocK;
-    BlockData &blockData;
     FTensor::Tensor2<double, 3, 3> diffDiff;
 
-    boost::shared_ptr<CommonData> commonData;
+    OpAssembleLhsDiagLin(const string field_name_row,
+                            const string field_name_col,
+                            boost::shared_ptr<CommonData> common_data,
+                            BlockData &block_data)
+        : OpAssembleLhs(field_name_row, field_name_col, common_data,
+                        block_data) {
+      sYmm = true;
+      diagonalBlock = true;
+    };
 
-    OpAssembleK(boost::shared_ptr<CommonData> common_data,
-                BlockData &block_data)
-        : UserDataOperator("U", "U", OPROWCOL, false), commonData(common_data),
-          blockData(block_data) {};
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+  };
 
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data);
+  /** * @brief Assemble K *
+   * \f[
+   * {\bf{K}} = \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{D}}_d}{\bf{B}}d\Omega }
+   * \f]
+   *
+   */
+  struct OpAssembleLhsDiagNonLin : public OpAssembleLhs {
+
+    FTensor::Tensor2<double, 3, 3> diffDiff;
+
+    OpAssembleLhsDiagNonLin(const string field_name_row,
+                            const string field_name_col,
+                            boost::shared_ptr<CommonData> common_data,
+                            BlockData &block_data)
+        : OpAssembleLhs(field_name_row, field_name_col, common_data,
+                        block_data) {
+      sYmm = false;
+      diagonalBlock = true;
+    };
+
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   struct OpAssembleRhs : public UserDataOperator {
@@ -247,7 +276,7 @@ struct NavierStokesElement {
     OpAssembleRhsVelocityLin(const string field_name,
                              boost::shared_ptr<CommonData> common_data,
                              BlockData &block_data)
-        : OpAssembleRhs(field_name, common_data, block_data) {};
+        : OpAssembleRhs(field_name, common_data, block_data){};
 
     /**
      * \brief Integrate local entity vector
@@ -255,7 +284,21 @@ struct NavierStokesElement {
      * @return      error code
      */
     MoFEMErrorCode iNtegrate(EntData &data);
+  };
 
+  struct OpAssembleRhsVelocityNonLin : public OpAssembleRhs {
+
+    OpAssembleRhsVelocityNonLin(const string field_name,
+                             boost::shared_ptr<CommonData> common_data,
+                             BlockData &block_data)
+        : OpAssembleRhs(field_name, common_data, block_data){};
+
+    /**
+     * \brief Integrate local entity vector
+     * @param  data entity data on element row
+     * @return      error code
+     */
+    MoFEMErrorCode iNtegrate(EntData &data);
   };
 
   struct OpAssembleRhsPressure : public OpAssembleRhs {
@@ -334,60 +377,61 @@ struct NavierStokesElement {
     BlockData &blockData;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &sideFe;
 
-    OpCalcViscousDrag(boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &side_fe, boost::shared_ptr<CommonData> &common_data, BlockData &block_data)
+    OpCalcViscousDrag(
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &side_fe,
+        boost::shared_ptr<CommonData> &common_data, BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               "U", UserDataOperator::OPROW),
           sideFe(side_fe), commonData(common_data), blockData(block_data) {
-        doVertices = true;
-        doEdges = false;
-        doQuads = false;
-        doTris = false;
-        doTets = false;
-        doPrisms = false;
-          };
+      doVertices = true;
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    };
 
-          PetscErrorCode doWork(int side, EntityType type, EntData &data) {
-            MoFEMFunctionBegin;
+    PetscErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
 
-            if (type != MBVERTEX)
-              PetscFunctionReturn(0);
+      if (type != MBVERTEX)
+        PetscFunctionReturn(0);
 
-            double def_VAL[9];
-            bzero(def_VAL, 9 * sizeof(double));
+      double def_VAL[9];
+      bzero(def_VAL, 9 * sizeof(double));
 
-            CHKERR loopSideVolumes("NAVIER_STOKES", *sideFe);
+      CHKERR loopSideVolumes("NAVIER_STOKES", *sideFe);
 
-            // commonData->getBlockData(blockData);
+      // commonData->getBlockData(blockData);
 
-            auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
-            const int nb_gauss_pts = commonData->gradDispPtr->size2();
-            auto t_normal = getFTensor1NormalsAtGaussPts();
-            // auto t_normal = getFTensor1Normal();
+      auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
+      const int nb_gauss_pts = commonData->gradDispPtr->size2();
+      auto t_normal = getFTensor1NormalsAtGaussPts();
+      // auto t_normal = getFTensor1Normal();
 
-            FTensor::Index<'i', 3> i;
+      FTensor::Index<'i', 3> i;
 
-            for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-              double nrm2 = sqrt(t_normal(i) * t_normal(i));
-              t_normal(i) = t_normal(i) / nrm2;
+        double nrm2 = sqrt(t_normal(i) * t_normal(i));
+        t_normal(i) = t_normal(i) / nrm2;
 
-              double w =
-                  getArea() * getGaussPts()(2, gg) * blockData.fluidViscosity;
-              // if (getHoGaussPtsDetJac().size() > 0) {
-              //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-              // }
+        double w = getArea() * getGaussPts()(2, gg) * blockData.fluidViscosity;
+        // if (getHoGaussPtsDetJac().size() > 0) {
+        //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+        // }
 
-              for (int ii = 0; ii != 3; ii++) {
-                for (int jj = 0; jj != 3; jj++) {
-                  commonData->viscousDrag[ii] +=
-                      -w * (t_u_grad(ii, jj) + t_u_grad(jj, ii)) * t_normal(jj);
-                }
-              }
+        for (int ii = 0; ii != 3; ii++) {
+          for (int jj = 0; jj != 3; jj++) {
+            commonData->viscousDrag[ii] +=
+                -w * (t_u_grad(ii, jj) + t_u_grad(jj, ii)) * t_normal(jj);
+          }
+        }
 
-              ++t_u_grad;
-              ++t_normal;
-            }
-            MoFEMFunctionReturn(0);
+        ++t_u_grad;
+        ++t_normal;
+      }
+      MoFEMFunctionReturn(0);
           }
   };
 
