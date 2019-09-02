@@ -37,16 +37,26 @@ using OpBoundaryEle = BoundaryEle::UserDataOperator;
 
 using EntData = DataForcesAndSourcesCore::EntData;
 
-const double B = 1e-2;
+const double a11 = 1.0;
+const double a12 = 0.0;
+const double a13 = 0.0;
+const double a21 = 0.0;
+const double a22 = 1.0;
+const double a23 = 0.0;
+const double a31 = 0.0;
+const double a32 = 0.0;
+const double a33 = 1.0;
+const double r = 1.0;
+
+const double B = 0.0;
 const double B0 = 1e-3;
 const double B_epsilon = 0.0;
 
-const double r = 1.0;
 
-const int save_every_nth_step = 4;
-const int order = 3; ///< approximation order
+const int save_every_nth_step = 2;
 const double natural_bc_values = 0.0;
 const double essential_bc_values = 0.0;
+const int order = 2;
 // const int dim = 3;
 FTensor::Index<'i', 3> i;
 
@@ -63,6 +73,8 @@ struct CommonData {
   MatrixDouble mass_grads;
   VectorDouble mass_dots; ///< mass rates at integration points
 
+  VectorDouble slow_values;
+
   MatrixDouble jac;
   MatrixDouble inv_jac; ///< Inverse of element jacobian at integration points
 
@@ -70,6 +82,75 @@ struct CommonData {
     jac.resize(2,2,false);
     inv_jac.resize(2,2,false);
   }
+};
+
+struct OpComputeSlowValue : public OpFaceEle {
+  OpComputeSlowValue(std::string mass_field,
+                     boost::shared_ptr<CommonData> &data1,
+                     boost::shared_ptr<CommonData> &data2,
+                     boost::shared_ptr<CommonData> &data3)
+      : OpFaceEle(mass_field, OpFaceEle::OPROW), commonData1(data1),
+        commonData2(data2), commonData3(data3), massField(mass_field) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+    boost::shared_ptr<VectorDouble> slow_value_ptr1(commonData1, 
+                                                    &commonData1->slow_values);
+    boost::shared_ptr<VectorDouble> slow_value_ptr2(commonData2,
+                                                    &commonData2->slow_values);
+    boost::shared_ptr<VectorDouble> slow_value_ptr3(commonData3,
+                                                    &commonData3->slow_values);
+
+    VectorDouble &vec1 = *slow_value_ptr1;
+    VectorDouble &vec2 = *slow_value_ptr2;
+    VectorDouble &vec3 = *slow_value_ptr3;
+    const int nb_integration_pts = getGaussPts().size2();
+    if(type == MBVERTEX){
+      vec1.resize(nb_integration_pts, false);
+      vec2.resize(nb_integration_pts, false);
+      vec3.resize(nb_integration_pts, false);
+      vec1.clear();
+      vec2.clear();
+      vec3.clear();
+    }
+    const int nb_dofs = data.getIndices().size();
+    if (nb_dofs) {
+      const int nb_integration_pts = getGaussPts().size2();
+      
+      auto t_slow_values1 = getFTensor0FromVec(vec1);
+      auto t_slow_values2 = getFTensor0FromVec(vec2);
+      auto t_slow_values3 = getFTensor0FromVec(vec3);
+
+      auto t_mass_values1 = getFTensor0FromVec(commonData1->mass_values);
+      auto t_mass_values2 = getFTensor0FromVec(commonData2->mass_values);
+      auto t_mass_values3 = getFTensor0FromVec(commonData3->mass_values);
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+   
+          t_slow_values1 = r * t_mass_values1 *
+                          (1.0 - a11 * t_mass_values1 - a12 * t_mass_values2 -
+                           a13 * t_mass_values3);
+          t_slow_values2 = r * t_mass_values1 *
+                          (1.0 - a21 * t_mass_values1 - a22 * t_mass_values2 -
+                           a23 * t_mass_values3);
+      
+          t_slow_values3 = r * t_mass_values1 *
+                          (1.0 - a31 * t_mass_values1 - a32 * t_mass_values2 -
+                           a33 * t_mass_values3);
+        ++t_slow_values1;
+        ++t_slow_values2;
+        ++t_slow_values3;
+
+        ++t_mass_values1;
+        ++t_mass_values2;
+        ++t_mass_values3;
+      }
+    }
+    MoFEMFunctionReturn(0);
+  }
+  private:
+  std::string massField;
+  boost::shared_ptr<CommonData> commonData1;
+  boost::shared_ptr<CommonData> commonData2;
+  boost::shared_ptr<CommonData> commonData3;
 };
 
 struct OpEssentialBC : public OpBoundaryEle {
@@ -250,15 +331,16 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
       mat.clear();
       const int nb_integration_pts = getGaussPts().size2();
       auto t_mass_value = getFTensor0FromVec(commonData->mass_values);
+      auto t_slow_value = getFTensor0FromVec(commonData->slow_values);
       auto t_row_v_base = data.getFTensor0N();
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        const double f = a * r * t_mass_value * (1 - t_mass_value);
+        // const double f = a * r * t_mass_value * (1 - t_mass_value);
         for (int rr = 0; rr != nb_dofs; ++rr) {
           auto t_col_v_base = data.getFTensor0N(gg, 0);
-          vecF[rr] +=  f * t_row_v_base;
+          vecF[rr] +=  a * t_slow_value * t_row_v_base;
           for (int cc = 0; cc != nb_dofs; ++cc) {
             mat(rr, cc) += a * t_row_v_base * t_col_v_base;
             ++t_col_v_base;
@@ -266,6 +348,7 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
             ++t_row_v_base;
         }
         ++t_mass_value;
+        ++t_slow_value;
         ++t_w;
       }
       cholesky_decompose(mat);
@@ -458,8 +541,7 @@ template <int dim>
 struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
 {
   OpAssembleLhsTauTau(std::string flux_field,
-                      boost::shared_ptr<CommonData> &commonData,
-                      Range &essential_bd_ents)
+                      boost::shared_ptr<CommonData> &commonData)
       : OpFaceEle(flux_field, flux_field, OpFaceEle::OPROWCOL),
         // essential_bd_ents(essential_bd_ents),
         commonData(commonData) {
@@ -725,10 +807,12 @@ int main(int argc, char *argv[]) {
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
     MoFEM::Core core(moab);
-    MoFEM::Interface &m_field = core;
-    // Register DM Manager
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
+    
+    MoFEM::Interface &m_field = core;
+    // Register DM Manager
+    
     // Simple interface
     Simple *simple_interface;
     CHKERR m_field.getInterface(simple_interface);
@@ -774,8 +858,17 @@ int main(int argc, char *argv[]) {
           block_id1, BLOCKSET, 2, inner_surface, true);
     }
 
+    boost::shared_ptr<FaceEle> vol_ele_slow_rhs(new FaceEle(m_field));
+    boost::shared_ptr<BoundaryEle> natural_bdry_ele_slow_rhs(
+        new BoundaryEle(m_field));
+
+    boost::shared_ptr<FaceEle> vol_ele_stiff_rhs(new FaceEle(m_field));
+
+    boost::shared_ptr<FaceEle> vol_ele_stiff_lhs(new FaceEle(m_field));
+
     boost::shared_ptr<CommonData> data(new CommonData());
 
+ 
     auto flux_values_ptr =
         boost::shared_ptr<MatrixDouble>(data, &data->flux_values);
     auto flux_divs_ptr =
@@ -788,17 +881,8 @@ int main(int argc, char *argv[]) {
         boost::shared_ptr<VectorDouble>(data, &data->mass_dots);
 
     // ************* creating finite element instances for the lhs and rhs *****
-    boost::shared_ptr<FaceEle> vol_ele_slow_rhs(new FaceEle(m_field));
-    boost::shared_ptr<BoundaryEle> natural_bdry_ele_slow_rhs(
-        new BoundaryEle(m_field));
+    
 
-    boost::shared_ptr<FaceEle> vol_ele_stiff_rhs(new FaceEle(m_field));
-    // boost::shared_ptr<BoundaryEle> essential_bdry_ele_stiff_rhs(
-    //     new BoundaryEle(m_field));
-
-    boost::shared_ptr<FaceEle> vol_ele_stiff_lhs(new FaceEle(m_field));
-    // boost::shared_ptr<BoundaryEle> essential_bdry_ele_stiff_lhs(
-    //     new BoundaryEle(m_field));
 
     // ************* pushing operators for slow rhs system vector (G)
 
@@ -806,7 +890,10 @@ int main(int argc, char *argv[]) {
     new OpCalculateScalarFieldValues("MASS", mass_values_ptr));
 
     vol_ele_slow_rhs->getOpPtrVector().push_back(
-    new OpAssembleSlowRhsV("MASS", data));
+        new OpComputeSlowValue("MASS", data, data, data));
+
+    vol_ele_slow_rhs->getOpPtrVector().push_back(
+      new OpAssembleSlowRhsV("MASS", data));
   
 
     natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
@@ -872,7 +959,7 @@ int main(int argc, char *argv[]) {
         new OpCalculateHdivVectorField<3>("FLUX", flux_values_ptr));
 
     vol_ele_stiff_lhs->getOpPtrVector().push_back(
-        new OpAssembleLhsTauTau<3>("FLUX", data, essential_bdry_ents));
+        new OpAssembleLhsTauTau<3>("FLUX", data));
 
     vol_ele_stiff_lhs->getOpPtrVector().push_back(new OpAssembleLhsVV("MASS"));
 
@@ -899,19 +986,10 @@ int main(int argc, char *argv[]) {
     vol_ele_stiff_lhs->getRuleHook = vol_rule;
     // essential_bdry_ele_stiff_lhs->getRuleHook = vol_rule;
 
-    // Create element for post-processing
-    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc =
-        boost::shared_ptr<PostProcFaceOnRefinedMesh>(
-            new PostProcFaceOnRefinedMesh(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore> null;
-
-    // Genarte post-processing mesh
-    post_proc->generateReferenceElementMesh();
-
-    post_proc->addFieldValuesPostProc("MASS");
-    post_proc->addFieldValuesPostProc("FLUX");
+    
 
     // Get PETSc discrete manager
+    boost::shared_ptr<ForcesAndSourcesCore> null;
     auto dm = simple_interface->getDM();
 
     
@@ -953,7 +1031,16 @@ int main(int argc, char *argv[]) {
                                    vol_ele_slow_rhs, null, null);
     CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getBoundaryFEName(),
                                    natural_bdry_ele_slow_rhs, null, null);
+    // Create element for post-processing
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc =
+        boost::shared_ptr<PostProcFaceOnRefinedMesh>(
+            new PostProcFaceOnRefinedMesh(m_field));
 
+    // Genarte post-processing mesh
+    post_proc->generateReferenceElementMesh();
+
+    post_proc->addFieldValuesPostProc("MASS");
+    post_proc->addFieldValuesPostProc("FLUX");
     // Add monitor to time solver
     boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dm, post_proc));
     CHKERR DMMoFEMTSSetMonitor(dm, ts, simple_interface->getDomainFEName(),

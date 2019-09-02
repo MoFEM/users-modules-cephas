@@ -1,0 +1,15 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "modular_reaction_diffusion",
+      "type": "shell",
+      "command": "make -j6 -C /Users/mebratuwakeni/mofem_install/um_debug/build/basic_finite_elements/chemo_mech",
+      // "presentation": {
+      //   "reveal": "silent"
+      // }
+    }
+  ]
+}

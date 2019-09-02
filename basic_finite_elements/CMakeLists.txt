@@ -23,7 +23,8 @@ set(BFE_DIRS
   hello_world
   hierarchical_approximation
   reaction_diffusion_equation
-  mixed_chemo_mechanics)
+  mixed_chemo_mechanics
+  chemo_mech)
 
 function(bfe_install bfe_mod_dir)
   install(

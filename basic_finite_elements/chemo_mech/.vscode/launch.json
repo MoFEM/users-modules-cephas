@@ -1,0 +1,22 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "debugging_mixed_RD",
+      "program": "/Users/mebratuwakeni/mofem_install/um_debug/build/basic_finite_elements/chemo_mech/mixed_reac_diff",
+      "args": [
+        "-file_name",
+        "mixed_mesh.h5m"
+      ],
+      "cwd": "/Users/mebratuwakeni/jobs/standard_reaction_diffusion/mixed_reaction_diffusion/modular",
+      "preLaunchTask": "modular_reaction_diffusion",
+      //"internalConsoleOptions": "openOnSessionStart",
+      //"console": "internalConsole"
+    }
+  ]
+}
