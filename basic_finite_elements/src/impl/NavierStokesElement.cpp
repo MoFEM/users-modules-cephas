@@ -122,9 +122,6 @@ MoFEMErrorCode NavierStokesElement::OpAssembleLhs::doWork(
   locMat.resize(row_nb_dofs, col_nb_dofs, false);
   locMat.clear();
 
-  Mat m1 = getFEMethod()->ksp_B;
-  Mat m2 = getFEMethod()->snes_B;
-
   CHKERR iNtegrate(row_data, col_data);
 
   CHKERR aSsemble(row_data, col_data);
@@ -138,9 +135,6 @@ MoFEMErrorCode NavierStokesElement::OpAssembleLhs::aSsemble(EntData &row_data,
 
   const int *row_ind = &*row_data.getIndices().begin();
   const int *col_ind = &*col_data.getIndices().begin();
-
-  Mat m1 = getFEMethod()->ksp_B;
-  Mat m2 = getFEMethod()->snes_B;
 
   Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
                                              : getFEMethod()->snes_B;
@@ -376,10 +370,6 @@ MoFEMErrorCode NavierStokesElement::OpAssembleRhs::doWork(int row_side,
   }
   // get number of integration points
   nbIntegrationPts = getGaussPts().size2();
-
-  Mat m1 = getFEMethod()->ksp_B;
-  Mat m2 = getFEMethod()->snes_B;
-
   
   // integrate local vector
   CHKERR iNtegrate(row_data);
@@ -480,6 +470,7 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
     ++t_u_grad;
     ++t_p;
   }
+
   MoFEMFunctionReturn(0);
 }
 

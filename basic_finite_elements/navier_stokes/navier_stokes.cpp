@@ -221,8 +221,16 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.build_fields();
 
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(
-    //     0, MBVERTEX, "P"); // initial p = 0 everywhere
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBVERTEX, "P");
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBEDGE, "P");
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTRI, "P");
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTET, "P");
+
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBVERTEX, "U");
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBEDGE, "U");
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTRI, "U");
+    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTET, "U");
+
     Projection10NodeCoordsOnField ent_method_material(m_field,
                                                       "MESH_NODE_POSITIONS");
     CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
@@ -381,6 +389,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P",
                                              commonData);
+    // CHKERR NavierStokesElement::setLinearOperators(feRhs, feLhs, "U", "P",
+    //                                          commonData);
 
     Mat Aij;  // Stiffness matrix
     Vec D, F; //, D0; // Vector of DOFs and the RHS
