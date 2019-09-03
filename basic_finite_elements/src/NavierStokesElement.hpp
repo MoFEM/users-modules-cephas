@@ -112,6 +112,12 @@ struct NavierStokesElement {
                const std::string pressure_field,
                boost::shared_ptr<CommonData> common_data);
 
+  static MoFEMErrorCode setLinearOperators(
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feRhs,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feLhs,
+      const std::string velocity_field, const std::string pressure_field,
+      boost::shared_ptr<CommonData> common_data);
+
   /**
    * \brief Set integration rule to volume elements
    *

@@ -55,11 +55,37 @@ MoFEMErrorCode NavierStokesElement::setOperators(
         velocity_field, common_data->gradDispPtr));
     feRhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
-
     feRhs->getOpPtrVector().push_back(
         new OpAssembleRhsVelocityLin(velocity_field, common_data, sit.second));
     feRhs->getOpPtrVector().push_back(new OpAssembleRhsVelocityNonLin(
         velocity_field, common_data, sit.second));
+    feRhs->getOpPtrVector().push_back(
+        new OpAssembleRhsPressure(pressure_field, common_data, sit.second));
+  }
+
+  MoFEMFunctionReturn(0);
+};
+
+MoFEMErrorCode NavierStokesElement::setLinearOperators(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feRhs,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feLhs,
+    const std::string velocity_field, const std::string pressure_field,
+    boost::shared_ptr<CommonData> common_data) {
+  MoFEMFunctionBegin;
+
+  for (auto &sit : common_data->setOfBlocksData) {
+
+    feLhs->getOpPtrVector().push_back(new OpAssembleLhsDiagLin(
+        velocity_field, velocity_field, common_data, sit.second));
+    feLhs->getOpPtrVector().push_back(new OpAssembleLhsOffDiag(
+        velocity_field, pressure_field, common_data, sit.second));
+
+    feRhs->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
+        velocity_field, common_data->gradDispPtr));
+    feRhs->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
+    feRhs->getOpPtrVector().push_back(
+        new OpAssembleRhsVelocityLin(velocity_field, common_data, sit.second));
     feRhs->getOpPtrVector().push_back(
         new OpAssembleRhsPressure(pressure_field, common_data, sit.second));
   }
@@ -405,7 +431,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
   // get base function gradient on rows
   auto t_v_grad = data.getFTensor1DiffN<3>();
 
-  auto t_u = getFTensor1FromMat<3>(*commonData->dispPtr);
   auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
   auto t_p = getFTensor0FromVec(*commonData->pPtr);
 
@@ -452,7 +477,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
       ++t_v_grad;
     }
 
-    ++t_u;
     ++t_u_grad;
     ++t_p;
   }

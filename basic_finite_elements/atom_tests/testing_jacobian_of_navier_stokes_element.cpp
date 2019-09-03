@@ -1,8 +1,9 @@
 /** \file test_jac_navier_stokes_elem.cpp
  * \example test_jac_navier_stokes_elem.cpp
 
-Testing implementation of Navier-Stokes element by verifying tangent stiffness matrix.
-Test like this is an example of how to verify the implementation of Jacobian.
+Testing implementation of Navier-Stokes element by verifying tangent stiffness
+matrix. Test like this is an example of how to verify the implementation of
+Jacobian.
 
 */
 
@@ -115,7 +116,6 @@ int main(int argc, char *argv[]) {
         0, 3, bit_level0);
 
     // **** ADD FIELDS **** //
-    
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
@@ -154,14 +154,14 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.build_fields();
 
     Projection10NodeCoordsOnField ent_method_material(m_field,
-                                                        "MESH_NODE_POSITIONS");
+                                                      "MESH_NODE_POSITIONS");
     CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
 
     PetscRandom rctx;
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
 
     auto set_velocity = [&](VectorAdaptor &&field_data, double *x, double *y,
-                         double *z) {
+                            double *z) {
       MoFEMFunctionBegin;
       double value;
       double scale = 2.0;
@@ -194,19 +194,26 @@ int main(int argc, char *argv[]) {
     // Add finite element (this defines element, declaration comes later)
     CHKERR m_field.add_finite_element("TEST_NAVIER_STOKES");
 
-    CHKERR m_field.modify_finite_element_add_field_row("TEST_NAVIER_STOKES", "U");
-    CHKERR m_field.modify_finite_element_add_field_col("TEST_NAVIER_STOKES", "U");
-    CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES", "U");
+    CHKERR m_field.modify_finite_element_add_field_row("TEST_NAVIER_STOKES",
+                                                       "U");
+    CHKERR m_field.modify_finite_element_add_field_col("TEST_NAVIER_STOKES",
+                                                       "U");
+    CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES",
+                                                        "U");
 
-    CHKERR m_field.modify_finite_element_add_field_row("TEST_NAVIER_STOKES", "P");
-    CHKERR m_field.modify_finite_element_add_field_col("TEST_NAVIER_STOKES", "P");
-    CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES", "P");
+    CHKERR m_field.modify_finite_element_add_field_row("TEST_NAVIER_STOKES",
+                                                       "P");
+    CHKERR m_field.modify_finite_element_add_field_col("TEST_NAVIER_STOKES",
+                                                       "P");
+    CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES",
+                                                        "P");
 
     CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES",
                                                         "MESH_NODE_POSITIONS");
 
     // Add entities to that element
-    CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET, "TEST_NAVIER_STOKES");
+    CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
+                                                      "TEST_NAVIER_STOKES");
     // build finite elements
     CHKERR m_field.build_finite_elements();
     // build adjacencies between elements and degrees of freedom
@@ -226,7 +233,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetFromOptions(dm);
     // Add elements to dm (only one here)
     CHKERR DMMoFEMAddElement(dm, "TEST_NAVIER_STOKES");
-  
+
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // setup the DM
     CHKERR DMSetUp(dm);
@@ -243,15 +250,16 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>();
-    //CHKERR commonData.getParameters();
+    // CHKERR commonData.getParameters();
 
-    //std::map<int, NavierStokesElement::BlockData> setOfBlocksData;
+    // std::map<int, NavierStokesElement::BlockData> setOfBlocksData;
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 5, "FLUID") == 0) {
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].tEts, true);
+            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].tEts,
+            true);
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
@@ -265,12 +273,15 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P", commonData);
+    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P",
+                                             commonData);
+    // CHKERR NavierStokesElement::setLinearOperators(feRhs, feLhs, "U", "P",
+    //                                                commonData);
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, "TEST_NAVIER_STOKES", feLhs,
-                                  nullFE, nullFE);
-    CHKERR DMMoFEMSNESSetFunction(dm, "TEST_NAVIER_STOKES", feRhs,
-                                  nullFE, nullFE);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "TEST_NAVIER_STOKES", feLhs, nullFE,
+                                  nullFE);
+    CHKERR DMMoFEMSNESSetFunction(dm, "TEST_NAVIER_STOKES", feRhs, nullFE,
+                                  nullFE);
 
     Vec x, f;
     CHKERR DMCreateGlobalVector(dm, &x);
@@ -346,7 +357,7 @@ int main(int argc, char *argv[]) {
 
     // destroy DM
     CHKERR DMDestroy(&dm);
-    }
+  }
   CATCH_ERRORS;
 
   // finish work cleaning memory, getting statistics, etc
