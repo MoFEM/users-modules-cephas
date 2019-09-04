@@ -53,35 +53,29 @@ struct NavierStokesElement {
 
   struct CommonData {
 
-    MatrixDouble invJac;
+    //MatrixDouble invJac;
 
     boost::shared_ptr<MatrixDouble> gradDispPtr;
     boost::shared_ptr<MatrixDouble> dispPtr;
     boost::shared_ptr<VectorDouble> pPtr;
 
-    // VectorDouble3 totalDrag;
     VectorDouble3 pressureDrag;
     VectorDouble3 viscousDrag;
 
     std::map<int, BlockData> setOfBlocksData;
 
-    CommonData() { //}: mField(m_field) {
+    CommonData() { 
 
-      // Setting default values for coeffcients
       gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       dispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
-      // totalDrag = VectorDouble3(3);
       pressureDrag = VectorDouble3(3);
       viscousDrag = VectorDouble3(3);
 
-      for (int dd = 0; dd != 3; dd++) {
-        pressureDrag[dd] = viscousDrag[dd] = 0.0;
-      }
+      pressureDrag.clear();
+      viscousDrag.clear();
 
-      // ierr = setBlocks();
-      // CHKERRABORT(PETSC_COMM_WORLD, ierr);
     }
 
     MoFEMErrorCode getParameters() {
@@ -338,10 +332,13 @@ struct NavierStokesElement {
       MoFEMFunctionBegin;
       if (type != MBVERTEX)
         PetscFunctionReturn(0);
-      double def_VAL[9];
-      bzero(def_VAL, 9 * sizeof(double));
+      // double def_VAL[9];
+      // bzero(def_VAL, 9 * sizeof(double));
 
-      // commonData->getBlockData(blockData);
+      if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+          blockData.tEts.end()) {
+        MoFEMFunctionReturnHot(0);
+      }
 
       auto t_p = getFTensor0FromVec(*commonData->pPtr);
       const int nb_gauss_pts = commonData->pPtr->size();
@@ -399,8 +396,13 @@ struct NavierStokesElement {
       if (type != MBVERTEX)
         PetscFunctionReturn(0);
 
-      double def_VAL[9];
-      bzero(def_VAL, 9 * sizeof(double));
+      // double def_VAL[9];
+      // bzero(def_VAL, 9 * sizeof(double));
+
+      if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+          blockData.tEts.end()) {
+        MoFEMFunctionReturnHot(0);
+      }
 
       CHKERR loopSideVolumes("NAVIER_STOKES", *sideFe);
 
