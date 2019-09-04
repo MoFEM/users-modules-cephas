@@ -277,8 +277,10 @@ int main(int argc, char *argv[]) {
                                                        solid_faces, true);
       }
     }
-    CHKERR m_field.add_ents_to_finite_element_by_type(solid_faces, MBTRI,
-                                                      "DRAG");
+    if (!solid_faces.empty()) {
+      CHKERR m_field.add_ents_to_finite_element_by_type(solid_faces, MBTRI,
+                                                        "DRAG");
+    }
 
     // build finite elements
     CHKERR m_field.build_finite_elements();
@@ -348,21 +350,24 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    for (auto &sit : commonData->setOfBlocksData) {
-      sideDragFe->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("U",
-                                                   commonData->gradDispPtr));
-      // dragFe->getOpPtrVector().push_back(
-      //     new OpCalculateInvJacForFace(commonData->invJac));
-      // dragFe->getOpPtrVector().push_back(
-      //     new OpSetInvJacH1ForFace(commonData->invJac));
-      dragFe->getOpPtrVector().push_back(
-          new OpCalculateScalarFieldValues("P", commonData->pPtr));
-      dragFe->getOpPtrVector().push_back(
-          new NavierStokesElement::OpCalcPressureDrag(commonData, sit.second));
-      dragFe->getOpPtrVector().push_back(
-          new NavierStokesElement::OpCalcViscousDrag(sideDragFe, commonData,
-                                                     sit.second));
+    if (!solid_faces.empty()) {
+      for (auto &sit : commonData->setOfBlocksData) {
+        sideDragFe->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldGradient<3, 3>("U",
+                                                     commonData->gradDispPtr));
+        // dragFe->getOpPtrVector().push_back(
+        //     new OpCalculateInvJacForFace(commonData->invJac));
+        // dragFe->getOpPtrVector().push_back(
+        //     new OpSetInvJacH1ForFace(commonData->invJac));
+        dragFe->getOpPtrVector().push_back(
+            new OpCalculateScalarFieldValues("P", commonData->pPtr));
+        dragFe->getOpPtrVector().push_back(
+            new NavierStokesElement::OpCalcPressureDrag(commonData,
+                                                        sit.second));
+        dragFe->getOpPtrVector().push_back(
+            new NavierStokesElement::OpCalcViscousDrag(sideDragFe, commonData,
+                                                       sit.second));
+      }
     }
 
     CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P",
@@ -629,21 +634,23 @@ int main(int argc, char *argv[]) {
         CHKERR postProcPtr->postProcMesh.write_file(
             out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
 
-        commonData->pressureDrag.clear();
-        commonData->viscousDrag.clear();
-        CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", dragFe);
+        if (!solid_faces.empty()) {
+          commonData->pressureDrag.clear();
+          commonData->viscousDrag.clear();
+          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", dragFe);
 
-        compute_global_drag(commonData->pressureDrag, vecPresDrag);
-        compute_global_drag(commonData->viscousDrag, vecViscDrag);
+          compute_global_drag(commonData->pressureDrag, vecPresDrag);
+          compute_global_drag(commonData->viscousDrag, vecViscDrag);
 
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "pressure drag: (%g, %g, %g)\n",
-                           vecPresDrag[0], vecPresDrag[1], vecPresDrag[2]);
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "viscous drag:  (%g, %g, %g)\n",
-                           vecViscDrag[0], vecViscDrag[1], vecViscDrag[2]);
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "total drag:    (%g, %g, %g)\n",
-                           vecPresDrag[0] + vecViscDrag[0],
-                           vecPresDrag[1] + vecViscDrag[1],
-                           vecPresDrag[2] + vecViscDrag[2]);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "pressure drag: (%g, %g, %g)\n",
+                             vecPresDrag[0], vecPresDrag[1], vecPresDrag[2]);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "viscous drag:  (%g, %g, %g)\n",
+                             vecViscDrag[0], vecViscDrag[1], vecViscDrag[2]);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "total drag:    (%g, %g, %g)\n",
+                             vecPresDrag[0] + vecViscDrag[0],
+                             vecPresDrag[1] + vecViscDrag[1],
+                             vecPresDrag[2] + vecViscDrag[2]);
+        }
       }
     }
 

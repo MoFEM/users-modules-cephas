@@ -335,10 +335,10 @@ struct NavierStokesElement {
       // double def_VAL[9];
       // bzero(def_VAL, 9 * sizeof(double));
 
-      if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-          blockData.tEts.end()) {
-        MoFEMFunctionReturnHot(0);
-      }
+      // if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      //     blockData.tEts.end()) {
+      //   MoFEMFunctionReturnHot(0);
+      // }
 
       auto t_p = getFTensor0FromVec(*commonData->pPtr);
       const int nb_gauss_pts = commonData->pPtr->size();
@@ -399,10 +399,10 @@ struct NavierStokesElement {
       // double def_VAL[9];
       // bzero(def_VAL, 9 * sizeof(double));
 
-      if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-          blockData.tEts.end()) {
-        MoFEMFunctionReturnHot(0);
-      }
+      // if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      //     blockData.tEts.end()) {
+      //   MoFEMFunctionReturnHot(0);
+      // }
 
       CHKERR loopSideVolumes("NAVIER_STOKES", *sideFe);
 
