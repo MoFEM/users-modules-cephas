@@ -1015,10 +1015,11 @@ MoFEMErrorCode DirichletPressureBc::iNitalize() {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       string name = it->getName();
       if (name.compare(0, 5, "PRESS") == 0) {
-        // if (name.compare(0, 7, "fdsfdsfsd") == 0) {
 
         VectorDouble scaled_values(1);
-        scaled_values[0] = 0.0;
+        std::vector<double> attributes;
+        it->getAttributes(attributes);
+        scaled_values[0] = attributes[0];
 
         for (int dim = 0; dim < 3; dim++) {
           Range ents;

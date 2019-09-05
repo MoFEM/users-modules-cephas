@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
     // **** ADD FIELDS **** //
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+    CHKERR m_field.add_field("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3);
 
@@ -403,7 +403,7 @@ int main(int argc, char *argv[]) {
           new TimeForceScale("-load_table", false));
     }
     dirichlet_bc_ptr->methodsOp.push_back(new NavierStokesElement::LoadScale());
-    dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+    //dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
 
     // VELOCITY DIRICHLET BC
@@ -415,13 +415,13 @@ int main(int argc, char *argv[]) {
     }
     dirichlet_vel_bc_ptr->methodsOp.push_back(
         new NavierStokesElement::LoadScale());
-    dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+    //dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_vel_bc_ptr->snes_x = D;
 
     // PRESSURE DIRICHLET BC
-    boost::shared_ptr<DirichletPressureBc> dirichlet_pres_bc_ptr(
-        new DirichletPressureBc(m_field, "P", Aij, D, F));
-    dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+    boost::shared_ptr<DirichletSetFieldFromBlock> dirichlet_pres_bc_ptr(
+        new DirichletSetFieldFromBlock(m_field, "P", "PRESS", Aij, D, F));
+    //dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_pres_bc_ptr->snes_x = D;
 
     CHKERR VecZeroEntries(D);
@@ -448,6 +448,7 @@ int main(int argc, char *argv[]) {
       boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
+        mit->second->methodsOp.push_back(new NavierStokesElement::LoadScale());
         CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
                                       &mit->second->getLoopFe(), NULL, NULL);
       }
@@ -545,12 +546,12 @@ int main(int argc, char *argv[]) {
       CHKERR PetscPrintf(PETSC_COMM_WORLD, "Step: %d | Lambda: %6.4e  \n", ss,
                          NavierStokesElement::LoadScale::lambda);
 
-      dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-      dirichlet_vel_bc_ptr->snes_x = D;
-      dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-      dirichlet_bc_ptr->snes_x = D;
-      dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-      dirichlet_pres_bc_ptr->snes_x = D;
+      // dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+      // dirichlet_vel_bc_ptr->snes_x = D;
+      // dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+      // dirichlet_bc_ptr->snes_x = D;
+      // dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
+      // dirichlet_pres_bc_ptr->snes_x = D;
 
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
