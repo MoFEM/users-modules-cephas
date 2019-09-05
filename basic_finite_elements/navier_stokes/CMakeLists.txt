@@ -21,6 +21,9 @@ bfe_build_and_install(stokes
 bfe_build_and_install(navier_stokes
   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes.cpp
 )
+bfe_build_and_install(add_prisms_layer
+  ${CMAKE_CURRENT_SOURCE_DIR}/add_prisms_layer.cpp
+)
 # bfe_build_and_install(navier_stokes_prisms
 #   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes_prisms.cpp
 # )
