@@ -37,7 +37,31 @@ namespace po = boost::program_options;
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type fgmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-ksp_atol 1e-10 \n"
+                                 "-ksp_rtol 1e-10 \n"
+                                 "-snes_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type basic \n"
+                                 "-snes_max_it 100 \n"
+                                 "-snes_atol 1e-7 \n"
+                                 "-snes_rtol 1e-7 \n"
+                                 "-ts_monitor \n"
+                                 "-ts_type alpha \n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
+
 
   try {
 

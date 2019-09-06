@@ -28,13 +28,26 @@ using namespace boost::numeric;
 using namespace MoFEM;
 using namespace std;
 
-static char help[] = "-my_block_config set block data\n"
-                     "\n";
+static char help[] = "-my_order_p approximation order_p \n"
+                     "-my_order_u approximation order_u \n"
+                     "-is_partitioned is_partitioned? \n";
 
 int main(int argc, char *argv[]) {
 
-  // Initialise MoFEM
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type gmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-ksp_monitor\n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   // Create mesh database
   moab::Core mb_instance;              // create database
