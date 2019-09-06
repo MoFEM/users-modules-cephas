@@ -24,15 +24,6 @@ install(
   PERMISSIONS OWNER_READ OWNER_WRITE)
 
 file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/simple_thermal_problem.h5m
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
   FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
@@ -55,9 +46,6 @@ install(
 
 cm_export_file("heat_exchange.h5m" export_files_thermal)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/heat_exchange.h5m DESTINATION ${BFE_MOD_DIR})
-
-cm_export_file(".petscrc" export_files_thermal)
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc DESTINATION ${BFE_MOD_DIR})
 
 cm_export_file("simple_thermal_problem.h5m" export_files_thermal)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/simple_thermal_problem.h5m DESTINATION ${BFE_MOD_DIR})

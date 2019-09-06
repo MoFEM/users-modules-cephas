@@ -44,15 +44,6 @@ install(
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
 
-  file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
 if(ADOL-C_LIBRARY)
 
   bfe_build_and_install(arc_length_interface
@@ -69,9 +60,6 @@ if(ADOL-C_LIBRARY)
 
   cm_export_file("PeelTest.h5m" export_files_cohesive_interface)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/PeelTest.h5m DESTINATION ${BFE_MOD_DIR})
-
-  cm_export_file(".petscrc" export_files_cohesive_interface)
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/.petscrc DESTINATION ${BFE_MOD_DIR})
 
 
   #testing
