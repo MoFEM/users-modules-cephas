@@ -186,6 +186,17 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
 
+    // CHECK IF EDGE BLOCKSET EXIST AND IF IT IS ADD ALL ENTITIES FROM IT
+    // CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        // MESHSET_OF_EDGE_BLOCKSET, 1, bit_level0);
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 18, "SIMPLE_ROD_ELEMENT") == 0) {
+        CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+            0, 1, bit_level0);
+      }
+    }
+
     // Declare approximation fields
     CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LOBATTO_BASE, 3,
                              MB_TAG_DENSE, MF_ZERO);
@@ -201,12 +212,54 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
+    Range edges_in_simple_rod;
+    // CHECK IF EDGE BLOCSET EXIST AND ADD ENTITIES TO FIELD BY MESHSET
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 18, "SIMPLE_ROD_ELEMENT") == 0) {
+        // Get edges in simple rod
+        Range edges;
+        CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(),
+                                                       MBEDGE, edges, true);
+        edges_in_simple_rod.merge(edges);
+      }
+    }
+
+    CHKERR m_field.add_ents_to_field_by_type(
+            edges_in_simple_rod, MBEDGE, "DISPLACEMENT");
+
+    // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
+    //                                                   MBEDGE, "DISPLACEMENT");
+
+    // Set order of edge in rod to be 1
+    CHKERR m_field.set_field_order(edges_in_simple_rod, "DISPLACEMENT",
+                                   1);
+
+    // Get all edges in the mesh
+    Range all_edges;
+    CHKERR m_field.get_moab().get_entities_by_type(0, MBEDGE, all_edges, true);
+
+    // Get edges to set order
+    Range edges_to_set_order;
+    edges_to_set_order = subtract(all_edges, edges_in_simple_rod);
+
+    // all_edges.print();
+    // edges_in_simple_rod.print();
+    // edges_to_set_order.print();
     // Set approximation order.
-    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral Meshes.
+    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
+    // Meshes.
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
-    CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+    // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(edges_to_set_order, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+
+    // BE CARFULL HERE, SINCE ALL EDGES FROM ROD ELEMENT HAS TO BE FISRT ORDER
+    // TO SOLVE THAT PROBLEM, TAKE ALL THE EDGES FORM ROOT MESHSET AND
+    // SUBSTRACT EDGES OF RODS. USE moab.get_enetities_by_type
+    // edges_to_set_order = subtact(all_edges, edges_in_simple_rod);
+    // CHKERR m_field.set_field_order(edges_to_set_order,
+    // "DISPLACEMENT", order);
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in whole body)
@@ -380,6 +433,25 @@ int main(int argc, char *argv[]) {
                                             fe_spring_rhs_ptr, "DISPLACEMENT",
                                             "MESH_NODE_POSITIONS");
 
+    // Add Simple Rod elements
+    // This is only declaration not implementation.
+    CHKERR MetaSimpleRodElement::addSimpleRodElements(m_field, "DISPLACEMENT",
+                                          "MESH_NODE_POSITIONS");
+
+    // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
+    //                                                   MBEDGE, "SIMPLE_ROD");
+
+    // Implementation of Simple Rod element
+    // Create new instances of volume elements for Simple Rod
+    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_lhs_ptr(
+        new EdgeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr(
+        new EdgeElementForcesAndSourcesCore(m_field));
+
+    CHKERR MetaSimpleRodElement::setSimpleRodOperators(m_field, fe_simple_rod_lhs_ptr,
+                                           fe_simple_rod_rhs_ptr, "DISPLACEMENT",
+                                           "MESH_NODE_POSITIONS");
+
     // Add body force element. This is only declaration of element. not its
     // implementation.
     CHKERR m_field.add_finite_element("BODY_FORCE");
@@ -482,6 +554,7 @@ int main(int argc, char *argv[]) {
     // Add elements to DM manager
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
+    CHKERR DMMoFEMAddElement(dm, "SIMPLE_ROD");
     CHKERR DMMoFEMAddElement(dm, "BODY_FORCE");
     CHKERR DMMoFEMAddElement(dm, "FLUID_PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
@@ -501,6 +574,10 @@ int main(int argc, char *argv[]) {
     // Assign global matrix/vector contributed by springs
     fe_spring_lhs_ptr->ksp_B = Aij;
     fe_spring_rhs_ptr->ksp_f = F;
+
+    // Assign global matrix/vector contributed by Simple Rod
+    fe_simple_rod_lhs_ptr->ksp_B = Aij;
+    // fe_simple_rod_rhs_ptr->ksp_f = F;
 
     // Zero vectors and matrices
     CHKERR VecZeroEntries(F);
@@ -579,6 +656,10 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_lhs_ptr);
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_rhs_ptr);
 
+    // Assemble Simple Rod
+    CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_lhs_ptr);
+    // CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_rhs_ptr);
+
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
     // MetaNeummanForces how this is implemented.
@@ -638,7 +719,10 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMPostProcessFiniteElements(dm, dirichlet_bc_ptr.get());
 
     // Matrix View
-    // MatView(Aij,PETSC_VIEWER_STDOUT_WORLD);
+    // PetscViewerPushFormat(
+    //     PETSC_VIEWER_STDOUT_SELF,
+    //     PETSC_VIEWER_ASCII_DENSE); /// PETSC_VIEWER_ASCII_MATLAB
+    // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
     // MatView(Aij,PETSC_VIEWER_DRAW_WORLD);//PETSC_VIEWER_STDOUT_WORLD);
     // std::string wait;
     // std::cin >> wait;
@@ -844,8 +928,13 @@ int main(int argc, char *argv[]) {
 
     } else {
       // Elastic analysis no temperature field
+      // VecView(F, PETSC_VIEWER_STDOUT_WORLD);
       // Solve for vector D
       CHKERR KSPSolve(solver, F, D);
+
+      // VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+      // cerr << F;
+
       // Add kinetic boundary conditions
       CHKERR VecAXPY(D, 1., D0);
       // Update ghost values
@@ -856,8 +945,9 @@ int main(int argc, char *argv[]) {
       // Post-process results
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
+      // CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
-      PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
+      PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
       CHKERR post_proc.writeFile("out.h5m");
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
