@@ -29,9 +29,9 @@ using namespace boost::numeric;
 #include <MethodForForceScaling.hpp>
 #include <NavierStokesElement.hpp>
 
-MoFEMErrorCode NavierStokesElement::setOperators(
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feRhs,
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feLhs,
+MoFEMErrorCode NavierStokesElement::setNavierStokesOperators(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
     const std::string velocity_field, const std::string pressure_field,
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
@@ -66,9 +66,9 @@ MoFEMErrorCode NavierStokesElement::setOperators(
   MoFEMFunctionReturn(0);
 };
 
-MoFEMErrorCode NavierStokesElement::setLinearOperators(
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feRhs,
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> &feLhs,
+MoFEMErrorCode NavierStokesElement::setStokesOperators(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
     const std::string velocity_field, const std::string pressure_field,
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
@@ -394,6 +394,10 @@ MoFEMErrorCode NavierStokesElement::OpAssembleRhs::aSsemble(EntData &data) {
                                              : getFEMethod()->snes_f;
   // assemble vector
   CHKERR VecSetValues(f, nbRows, indices, vals, ADD_VALUES);
+
+  //int ierr = VecView(getFEMethod()->snes_f, PETSC_VIEWER_STDOUT_WORLD);
+  //CHKERRG(ierr);
+
   MoFEMFunctionReturn(0);
 }
 
@@ -430,6 +434,8 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
   // loop over all integration points
   for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
+    double d1 = getVolume();
+    double d2 = getGaussPts()(3, gg);
     double w = getVolume() * getGaussPts()(3, gg);
 
     if (getHoGaussPtsDetJac().size() > 0) {

@@ -153,9 +153,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.build_fields();
 
-    Projection10NodeCoordsOnField ent_method_material(m_field,
-                                                      "MESH_NODE_POSITIONS");
-    CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+    // Projection10NodeCoordsOnField ent_method_material(m_field,
+    //                                                   "MESH_NODE_POSITIONS");
+    // CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
 
     PetscRandom rctx;
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
@@ -184,8 +184,24 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
+    auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
+                         double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 0.5;
+      PetscRandomGetValue(rctx, &value);
+      field_data[0] = (*x) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[1] = (*y) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[2] = (*z) + (value - 0.5) * scale;
+      MoFEMFunctionReturn(0);
+    };
+
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_velocity, "U");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure, "P");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+        set_coord, "MESH_NODE_POSITIONS");
 
     PetscRandomDestroy(&rctx);
 
@@ -273,9 +289,9 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P",
-                                             commonData);
-    // CHKERR NavierStokesElement::setLinearOperators(feRhs, feLhs, "U", "P",
+    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
+                                                         commonData);
+    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
     //                                                commonData);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "TEST_NAVIER_STOKES", feLhs, nullFE,
