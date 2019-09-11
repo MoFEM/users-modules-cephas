@@ -145,7 +145,8 @@ int main(int argc, char *argv[]) {
     // Print boundary conditions and material parameters
     MeshsetsManager *meshsets_mng_ptr;
     CHKERR m_field.getInterface(meshsets_mng_ptr);
-    // CHKERR meshsets_mng_ptr->printDisplacementSet();
+    CHKERR meshsets_mng_ptr->printDisplacementSet();
+    CHKERR meshsets_mng_ptr->printPressureSet();
     // CHKERR meshsets_mng_ptr->printForceSet();
     // CHKERR meshsets_mng_ptr->printMaterialsSet();
 
@@ -157,7 +158,7 @@ int main(int argc, char *argv[]) {
     // **** ADD FIELDS **** //
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR m_field.add_field("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
+    CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3);
 
@@ -218,8 +219,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
       MoFEMFunctionReturn(0);
     };
-    CHKERR setting_second_order_geometry();
-
+    //CHKERR setting_second_order_geometry();
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.build_fields();
 
     // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBVERTEX, "P");
@@ -370,9 +371,9 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR NavierStokesElement::setOperators(feRhs, feLhs, "U", "P",
-                                             commonData);
-    // CHKERR NavierStokesElement::setLinearOperators(feRhs, feLhs, "U", "P",
+    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
+                                                         commonData);
+    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
     //                                          commonData);
 
     Mat Aij;  // Stiffness matrix
