@@ -103,106 +103,7 @@ private:
   MoFEM::Interface &mField;
 };
 
-/** * @brief Assemble contribution of SimpleRod elements to RHS *
- * \f[
- * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
- * \right)d\partial \Omega }  = \int\limits_{\partial \Omega }^{} {{\psi
- * ^T}{k_s}ud\partial \Omega }
- * \f]
- *
- */
-struct OpSimpleRodFs : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
-
-  // vector used to store force vector for each degree of freedom
-  VectorDouble nF;
-
-  boost::shared_ptr<DataAtIntegrationPtsSimpleRods> commonDataPtr;
-  BlockOptionDataSimpleRods &dAta;
-  bool is_spatial_position = true;
-
-  OpSimpleRodFs(boost::shared_ptr<DataAtIntegrationPtsSimpleRods> &common_data_ptr,
-             BlockOptionDataSimpleRods &data, const std::string field_name)
-      : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator(
-            field_name.c_str(), OPROW),
-        commonDataPtr(common_data_ptr), dAta(data) {
-    if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
-      is_spatial_position = true;
-  }
-
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-
-    MoFEMFunctionBegin;
-
-    // check that the eDges have associated degrees of freedom
-    const int nb_dofs = data.getIndices().size();
-    if (nb_dofs == 0)
-      MoFEMFunctionReturnHot(0);
-
-    if (dAta.eDges.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.eDges.end()) {
-      MoFEMFunctionReturnHot(0);
-    }
-
-    CHKERR commonDataPtr->getBlockData(dAta);
-
-    // size of force vector associated to the entity
-    // set equal to the number of degrees of freedom of associated with the
-    // entity
-    nF.resize(nb_dofs, false);
-    nF.clear();
-
-    // get number of Gauss points
-    const int nb_gauss_pts = data.getN().size1();
-
-    // get intergration weights
-    auto t_w = getFTensor0IntegrationWeight();
-
-    // FTensor indices
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
-
-    // loop over all Gauss points of the edge
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      // double w = t_w * getArea();
-      double w = t_w * getMeasure();
-      cerr << "getMeasure: " << getMeasure() << "";
-
-      auto t_base_func = data.getFTensor0N(gg, 0);
-
-      // create a vector t_nf whose pointer points an array of 3 pointers
-      // pointing to nF  memory location of components
-      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf(&nF[0], &nF[1],
-                                                              &nF[2]);
-
-      for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
-        t_nf(i) += w * t_base_func;
-
-        // move to next base function
-        ++t_base_func;
-        // move the pointer to next element of t_nf
-        ++t_nf;
-      }
-      // move to next integration weight
-      ++t_w;
-      // move to the solutions at the next Gauss point
-    //   ++t_solution_at_gauss_point;
-    //   ++t_init_solution_at_gauss_point;
-    }
-    // add computed values of spring in the global right hand side vector
-    Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
-                                               : getFEMethod()->snes_f;
-    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0], &nF[0], ADD_VALUES);
-    MoFEMFunctionReturn(0);
-  }
-};
-
 /** * @brief Assemble contribution of SimpleRod element to LHS *
- * \f[
- * {K^s} = \int\limits_\Omega ^{} {{\psi ^T}{k_s}\psi d\Omega }
- * \f]
  *
  */
 struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
@@ -331,6 +232,7 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
     MoFEMFunctionReturn(0);
   }
 };
+
 
 MoFEMErrorCode
 MetaSimpleRodElement::addSimpleRodElements(MoFEM::Interface &m_field,
