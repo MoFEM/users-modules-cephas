@@ -141,6 +141,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
+  
   try {
 
   PetscBool flg = PETSC_TRUE;
