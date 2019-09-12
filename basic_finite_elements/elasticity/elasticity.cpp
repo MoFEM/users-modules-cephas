@@ -776,6 +776,10 @@ int main(int argc, char *argv[]) {
         m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
         post_proc.commonData, block_sets_ptr.get()));
 
+    PostProcEdgeOnRefinedMesh post_proc_edge(m_field);
+    CHKERR post_proc_edge.generateReferenceElementMesh();
+    CHKERR post_proc_edge.addFieldValuesPostProc("DISPLACEMENT");
+
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
 
@@ -945,10 +949,13 @@ int main(int argc, char *argv[]) {
       // Post-process results
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
-      // CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc);
+      CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc_edge);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
       CHKERR post_proc.writeFile("out.h5m");
+      if (!edges_in_simple_rod.empty())
+        CHKERR post_proc_edge.writeFile("out_edge.h5m");
+
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
 
