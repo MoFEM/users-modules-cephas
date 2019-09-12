@@ -417,6 +417,19 @@ int main(int argc, char *argv[]) {
                                       "DISPLACEMENT", "MESH_NODE_POSITIONS",
                                       false, true);
 
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_mass_ptr(
+        new VolumeElementForcesAndSourcesCore(m_field));
+
+    boost::shared_ptr<HookeElement::DataAtIntegrationPts> data_at_pts(
+        new HookeElement::DataAtIntegrationPts());
+    // HookeElement::DataAtIntegrationPts &data_at_pts;
+
+    for (auto &sit : *block_sets_ptr) {
+      fe_mass_ptr->getOpPtrVector().push_back(
+          new HookeElement::OpCalculateMassMatrix(
+              "DISPLACEMENT", "DISPLACEMENT", sit.second, data_at_pts));
+    }
+  
     // Add spring boundary condition applied on surfaces.
     // This is only declaration not implementation.
     CHKERR MetaSpringBC::addSpringElements(m_field, "DISPLACEMENT",
@@ -442,7 +455,7 @@ int main(int argc, char *argv[]) {
     //                                                   MBEDGE, "SIMPLE_ROD");
 
     // Implementation of Simple Rod element
-    // Create new instances of volume elements for Simple Rod
+    // Create new instances of edge elements for Simple Rod
     boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_lhs_ptr(
         new EdgeElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr(
@@ -562,7 +575,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetUp(dm);
 
     // Create matrices & vectors. Note that native PETSc DM interface is used,
-    // but under the PETSc interface MOFEM implementation is running.
+    // but under the PETSc interface MoFEM implementation is running.
     Vec F, D, D0;
     CHKERR DMCreateGlobalVector(dm, &F);
     CHKERR VecDuplicate(F, &D);
@@ -570,6 +583,12 @@ int main(int argc, char *argv[]) {
     Mat Aij;
     CHKERR DMCreateMatrix(dm, &Aij);
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+
+    //Initialise mass matrix
+    Mat Mij;
+    CHKERR MatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES, &Mij);
+    CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
+    // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
 
     // Assign global matrix/vector contributed by springs
     fe_spring_lhs_ptr->ksp_B = Aij;
@@ -660,6 +679,14 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_lhs_ptr);
     // CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_rhs_ptr);
 
+    // Assemble mass matrix
+    fe_mass_ptr->snes_B = Mij;
+    PetscPrintf(PETSC_COMM_WORLD, "Calculate mass matrix  ...");
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_mass_ptr);
+    PetscPrintf(PETSC_COMM_WORLD, " done\n");
+
+    // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
+
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
     // MetaNeummanForces how this is implemented.
@@ -719,16 +746,24 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMPostProcessFiniteElements(dm, dirichlet_bc_ptr.get());
 
     // Matrix View
-    // PetscViewerPushFormat(
-    //     PETSC_VIEWER_STDOUT_SELF,
-    //     PETSC_VIEWER_ASCII_DENSE); /// PETSC_VIEWER_ASCII_MATLAB
+    PetscViewerPushFormat(
+        PETSC_VIEWER_STDOUT_SELF,
+        PETSC_VIEWER_ASCII_MATLAB); /// PETSC_VIEWER_ASCII_DENSE,
+                                    /// PETSC_VIEWER_ASCII_MATLAB
     // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
     // MatView(Aij,PETSC_VIEWER_DRAW_WORLD);//PETSC_VIEWER_STDOUT_WORLD);
     // std::string wait;
     // std::cin >> wait;
 
+    CHKERR MatAssemblyBegin(Mij, MAT_FINAL_ASSEMBLY);
+    CHKERR MatAssemblyEnd(Mij, MAT_FINAL_ASSEMBLY);
+
+    // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
+    // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
+
     // Set matrix positive defined and symmetric for Cholesky and icc
     // pre-conditioner
+
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
     CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
     CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
@@ -742,6 +777,7 @@ int main(int argc, char *argv[]) {
     CHKERR KSPSetDM(solver, dm);
     CHKERR KSPSetFromOptions(solver);
     CHKERR KSPSetOperators(solver, Aij, Aij);
+
     // Setup multi-grid pre-conditioner if set from command line
     {
       // from PETSc example ex42.c
@@ -958,6 +994,32 @@ int main(int argc, char *argv[]) {
 
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
+
+    // Calculate model mass, m = u^T * M * u
+    Vec u1;
+    VecDuplicate (D, &u1);
+    CHKERR MatMult(Mij, D, u1);
+
+    double model_mass;
+    CHKERR VecDot(u1, D, &model_mass);
+
+    // VecView(u_transpose, PETSC_VIEWER_STDOUT_WORLD);
+
+    // Calculate model stiffness, k = v^T * K * v where v = u / norm(u)
+    double u_norm;
+    CHKERR VecNorm(D, NORM_2, &u_norm);
+
+    CHKERR VecScale(D,1./u_norm);     // v obtained
+    Vec v1;
+    VecDuplicate(D, &v1);
+    CHKERR MatMult(Aij, D, v1);
+
+    double model_stiffness;
+    CHKERR VecDot(v1, D, &model_stiffness);
+
+    double frequency;
+    frequency = sqrt(model_stiffness / model_mass);
+    PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
 
     // Calculate elastic energy
     auto calculate_strain_energy = [dm, &block_sets_ptr, test_nb]() {

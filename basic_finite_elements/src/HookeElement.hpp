@@ -336,6 +336,132 @@ struct HookeElement {
     int lastEvaluatedId;
   };
 
+  /** * @brief Assemble mass matrix for elastic element TODO: CHANGE FORMULA *
+   * \f[
+   * {\bf{M}} = \int\limits_\Omega
+   * \f]
+   *
+   */
+  struct OpCalculateMassMatrix
+      : public VolumeElementForcesAndSourcesCore::UserDataOperator {
+
+    MatrixDouble locK;
+    MatrixDouble translocK;
+    BlockData &dAta  ;
+    // boost::shared_ptr<map<int, BlockData>> dAta;
+    // boost::shared_ptr<std::map<int, BlockData>> dAta =
+    //     boost::make_shared<std::map<int, BlockData>>();
+
+    boost::shared_ptr<DataAtIntegrationPts> commonData;
+
+    OpCalculateMassMatrix(const std::string row_field,
+                          const std::string col_field, BlockData &data,
+                          boost::shared_ptr<DataAtIntegrationPts> &common_data,
+                          bool symm = true)
+        : VolumeElementForcesAndSourcesCore::UserDataOperator(
+              row_field, col_field, OPROWCOL, symm),
+          commonData(common_data), dAta(data) {}
+
+    PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+
+      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+        return FTensor::Tensor2<double *, 3, 3>(
+            &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1),
+            &m(3 * r + 0, 3 * c + 2), &m(3 * r + 1, 3 * c + 0),
+            &m(3 * r + 1, 3 * c + 1), &m(3 * r + 1, 3 * c + 2),
+            &m(3 * r + 2, 3 * c + 0), &m(3 * r + 2, 3 * c + 1),
+            &m(3 * r + 2, 3 * c + 2));
+      };
+
+      const int row_nb_dofs = row_data.getIndices().size();
+      if (!row_nb_dofs)
+        MoFEMFunctionReturnHot(0);
+      const int col_nb_dofs = col_data.getIndices().size();
+      if (!col_nb_dofs)
+        MoFEMFunctionReturnHot(0);
+      if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+          dAta.tEts.end()) {
+        MoFEMFunctionReturnHot(0);
+      }
+      // commonData.getBlockData(dAta);
+
+      const bool diagonal_block =
+          (row_type == col_type) && (row_side == col_side);
+      // get number of integration points
+      // Set size can clear local tangent matrix
+      locK.resize(row_nb_dofs, col_nb_dofs, false);
+      locK.clear();
+
+      const int row_nb_gauss_pts = row_data.getN().size1();
+      const int row_nb_base_functions = row_data.getN().size2();
+
+      // auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
+
+      // const double mu = commonData.mU;
+      // const double lambda = commonData.lAmbda;
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
+
+      double density = 1.;
+
+      // integrate local matrix for entity block
+      for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+
+        auto t_row_base_func = row_data.getFTensor0N(gg, 0);
+
+        // Get volume and integration weight
+        double w = getVolume() * getGaussPts()(3, gg);
+
+        for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
+          auto t_col_base_func = col_data.getFTensor0N(gg, 0);
+          for (int col_bb = 0; col_bb != col_nb_dofs / 3; col_bb++) {
+            auto t_assemble = get_tensor2(locK, row_bb, col_bb);
+            t_assemble(i, j) += density * t_row_base_func * t_col_base_func * w;
+            // Next base function for column
+            ++t_col_base_func;
+          }
+          ++t_row_base_func;
+        }
+      }
+
+      // if (diagonal_block) {
+      //   for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
+      //     int col_bb = 0;
+      //     for (; col_bb != row_bb + 1; col_bb++) {
+      //       auto t_assemble = get_tensor2(locK, 3 * row_bb, 3 * col_bb);
+      //       auto t_off_side = get_tensor2(locK, 3 * col_bb, 3 * row_bb);
+      //       t_off_side(i, k) = t_assemble(k, i);
+      //     }
+      //   }
+      // }
+
+      const int *row_ind = &*row_data.getIndices().begin();
+      const int *col_ind = &*col_data.getIndices().begin();
+      Mat B = getFEMethod()->snes_B != PETSC_NULL ? getFEMethod()->snes_B
+                                                  : getFEMethod()->ksp_B;
+      CHKERR MatSetValues(B, row_nb_dofs, row_ind, col_nb_dofs, col_ind,
+                          &locK(0, 0), ADD_VALUES);
+
+      // is symmetric
+      if (row_type != col_type || row_side != col_side) {
+        translocK.resize(col_nb_dofs, row_nb_dofs, false);
+        noalias(translocK) = trans(locK);
+
+        CHKERR MatSetValues(B, col_nb_dofs, col_ind, row_nb_dofs, row_ind,
+                            &translocK(0, 0), ADD_VALUES);
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
   struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
   protected:
     boost::shared_ptr<map<int, BlockData>>
