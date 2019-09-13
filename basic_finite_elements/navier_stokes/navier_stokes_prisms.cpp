@@ -22,7 +22,8 @@
  *
  * */
 #include <BasicFiniteElements.hpp>
-#include <NavierStokesElement.hpp>
+
+#include <NavierStokesProblem.hpp>
 
 using namespace boost::numeric;
 using namespace MoFEM;
@@ -315,13 +316,11 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetUp(dm);
 
     boost::shared_ptr<FEMethod> nullFE;
-    boost::shared_ptr<FatPrismElementForcesAndSourcesCore> feLhs(
-        new FatPrismElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FatPrismElementForcesAndSourcesCore> feRhs(
-        new FatPrismElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FatPrism> feLhs(new FatPrism(m_field));
+    boost::shared_ptr<FatPrism> feRhs(new FatPrism(m_field));
 
-    feLhs->getRuleHook = NavierStokesElement::VolRule();
-    feRhs->getRuleHook = NavierStokesElement::VolRule();
+    //feLhs->getRuleHook = NavierStokesElement::VolRule();
+    //feRhs->getRuleHook = NavierStokesElement::VolRule();
     // feRhs->getRuleHook = FaceRule();
 
     // boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe(
@@ -387,10 +386,10 @@ int main(int argc, char *argv[]) {
     //   }
     // }
 
-    // CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
-    //                                                      commonData);
-    CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
-                                             commonData);
+    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
+                                                         commonData);
+    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
+    //                                          commonData);
 
     Mat Aij;  // Stiffness matrix
     Vec D, F; //, D0; // Vector of DOFs and the RHS

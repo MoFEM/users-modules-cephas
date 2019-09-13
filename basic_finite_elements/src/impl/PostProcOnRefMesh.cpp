@@ -338,21 +338,36 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
   //   generated");
   // }
 
-  // FIXME: Refinement not implement and inefficient implementation, looks ugly.
-
-  //
+  int max_ref_level_thick = 0;
+  PetscBool flg = PETSC_TRUE;
+  PetscOptionsGetInt(PETSC_NULL, PETSC_NULL,
+                     "-my_max_post_proc_ref_level_prism_thick",
+                     &max_ref_level_thick, &flg);
+  int const level_thick = max_ref_level_thick + 1;
   const EntityHandle *conn;
   int num_nodes;
+  //std::vector<EntityHandle> prism_vec;
   EntityHandle prism;
   const int nb_on_triangle = 6;
   const int nb_through_thickness = 3;
 
-  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
-      elementsMap.end()) {
-    prism = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+  std::vector<PointsMap3D_multiIndex> pointsMapVector;
+
+      if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
+          elementsMap.end()) {
+    // prism_vec = elementsMap[numeredEntFiniteElementPtr->getEnt()];
   } else {
+    pointsMapVector.resize(0);
+    gaussPtsTrianglesOnly.resize(3, nb_on_triangle, false);
+    gaussPtsTrianglesOnly.clear();
+    gaussPtsThroughThickness.resize(2, nb_through_thickness * level_thick, false);
+    gaussPtsThroughThickness.clear();
+
     MatrixDouble gauss_pts_triangles_only, gauss_pts_through_thickness;
-    {
+
+    double inc_thick = 1.0 / (double)level_thick;
+    for (int ll = 0; ll < level_thick; ll++) {
+
       gauss_pts_triangles_only.resize(3, 3, false);
       gauss_pts_triangles_only.clear();
       gauss_pts_triangles_only(0, 0) = 0;
@@ -362,62 +377,63 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
       gauss_pts_triangles_only(0, 2) = 0;
       gauss_pts_triangles_only(1, 2) = 1;
       gauss_pts_through_thickness.resize(2, 2, false);
-      gauss_pts_through_thickness(0, 0) = 0;
-      gauss_pts_through_thickness(0, 1) = 1;
-    }
-    ublas::vector<EntityHandle> prism_conn(6);
-    VectorDouble coords(3);
-    for (int ggf = 0; ggf != 3; ggf++) {
-      double ksi = gauss_pts_triangles_only(0, ggf);
-      double eta = gauss_pts_triangles_only(1, ggf);
-      coords[0] = ksi;
-      coords[1] = eta;
-      for (int ggt = 0; ggt != 2; ggt++) {
-        double zeta = gauss_pts_through_thickness(0, ggt);
-        coords[2] = zeta;
-        int side = ggt * 3 + ggf;
-        CHKERR postProcMesh.create_vertex(&coords[0], prism_conn[side]);
+      gauss_pts_through_thickness(0, 0) = ll * inc_thick;
+      gauss_pts_through_thickness(0, 1) = (ll + 1) * inc_thick;
+
+      ublas::vector<EntityHandle> prism_conn(6);
+      VectorDouble coords(3);
+      for (int ggf = 0; ggf != 3; ggf++) {
+        double ksi = gauss_pts_triangles_only(0, ggf);
+        double eta = gauss_pts_triangles_only(1, ggf);
+        coords[0] = ksi;
+        coords[1] = eta;
+        for (int ggt = 0; ggt != 2; ggt++) {
+          double zeta = gauss_pts_through_thickness(0, ggt);
+          coords[2] = zeta;
+          int side = ggt * 3 + ggf;
+          CHKERR postProcMesh.create_vertex(&coords[0], prism_conn[side]);
+        }
       }
-    }
-    CHKERR postProcMesh.create_element(MBPRISM, &prism_conn[0], 6, prism);
+      CHKERR postProcMesh.create_element(MBPRISM, &prism_conn[0], 6, prism);
 
-    elementsMap[numeredEntFiniteElementPtr->getEnt()] = prism;
-    // Range faces;
-    // CHKERR postProcMesh.get_adjacencies(&prism,1,2,true,faces);
-    Range edges;
-    CHKERR postProcMesh.get_adjacencies(&prism, 1, 1, true, edges);
-    EntityHandle meshset;
-    CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
-    CHKERR postProcMesh.add_entities(meshset, &prism, 1);
-    // CHKERR postProcMesh.add_entities(meshset,faces);
-    CHKERR postProcMesh.add_entities(meshset, edges);
-    if (tenNodesPostProcTets) {
-      CHKERR postProcMesh.convert_entities(meshset, true, false, false);
-    }
-    CHKERR postProcMesh.delete_entities(&meshset, 1);
-    CHKERR postProcMesh.delete_entities(edges);
-    // CHKERR postProcMesh.delete_entities(faces);
+      elementsMap[numeredEntFiniteElementPtr->getEnt()].push_back(prism);
+      // Range faces;
+      // CHKERR postProcMesh.get_adjacencies(&prism,1,2,true,faces);
+      Range edges;
+      CHKERR postProcMesh.get_adjacencies(&prism, 1, 1, true, edges);
+      EntityHandle meshset;
+      CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
+      CHKERR postProcMesh.add_entities(meshset, &prism, 1);
+      // CHKERR postProcMesh.add_entities(meshset,faces);
+      CHKERR postProcMesh.add_entities(meshset, edges);
+      if (tenNodesPostProcTets) {
+        CHKERR postProcMesh.convert_entities(meshset, true, false, false);
+      }
+      CHKERR postProcMesh.delete_entities(&meshset, 1);
+      CHKERR postProcMesh.delete_entities(edges);
+      // CHKERR postProcMesh.delete_entities(faces);
 
-    CHKERR mField.get_moab().get_connectivity(
-        numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
-    MatrixDouble coords_prism_global;
-    coords_prism_global.resize(num_nodes, 3, false);
-    CHKERR mField.get_moab().get_coords(conn, num_nodes,
-                                        &coords_prism_global(0, 0));
+      CHKERR mField.get_moab().get_connectivity(
+          numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
+      MatrixDouble coords_prism_global;
+      coords_prism_global.resize(num_nodes, 3, false);
+      CHKERR mField.get_moab().get_coords(conn, num_nodes,
+                                          &coords_prism_global(0, 0));
 
-    CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
-    MatrixDouble coords_prism_local;
-    coords_prism_local.resize(num_nodes, 3, false);
-    CHKERR postProcMesh.get_coords(conn, num_nodes, &coords_prism_local(0, 0));
+      CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+      MatrixDouble coords_prism_local;
+      coords_prism_local.resize(num_nodes, 3, false);
+      CHKERR postProcMesh.get_coords(conn, num_nodes,
+                                     &coords_prism_local(0, 0));
 
-    if (gaussPtsThroughThickness.size2() != nb_through_thickness) {
-      pointsMap.clear();
-      gaussPtsTrianglesOnly.resize(3, nb_on_triangle, false);
-      gaussPtsTrianglesOnly.clear();
-      gaussPtsThroughThickness.resize(2, nb_through_thickness, false);
-      gaussPtsThroughThickness.clear();
       const double eps = 1e-6;
       int ggf = 0, ggt = 0;
+
+      //pointsMap.insert(PointsMap3D(0, 0, 0, 0));
+      //pointsMap.insert(PointsMap3D(0, 0, 0, 1));
+
+      pointsMap.clear();
+
       for (int nn = 0; nn != num_nodes; nn++) {
         double ksi = coords_prism_local(nn, 0);
         double eta = coords_prism_local(nn, 1);
@@ -429,57 +445,73 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
           ggf++;
         }
         if (fabs(ksi) < eps && fabs(eta) < eps) {
-          gaussPtsThroughThickness(0, ggt) = zeta;
+          gaussPtsThroughThickness(0, ggt + nb_through_thickness * ll) = zeta;
           ggt++;
         }
       }
-    }
 
-    for (int nn = 0; nn != num_nodes; nn++) {
-      const double ksi = coords_prism_local(nn, 0);
-      const double eta = coords_prism_local(nn, 1);
-      const double zeta = coords_prism_local(nn, 2);
-      const double n0 = N_MBTRI0(ksi, eta);
-      const double n1 = N_MBTRI1(ksi, eta);
-      const double n2 = N_MBTRI2(ksi, eta);
-      const double e0 = N_MBEDGE0(zeta);
-      const double e1 = N_MBEDGE1(zeta);
-      double coords_global[3];
-      for (int dd = 0; dd != 3; dd++) {
-        coords_global[dd] = n0 * e0 * coords_prism_global(0, dd) +
-                            n1 * e0 * coords_prism_global(1, dd) +
-                            n2 * e0 * coords_prism_global(2, dd) +
-                            n0 * e1 * coords_prism_global(3, dd) +
-                            n1 * e1 * coords_prism_global(4, dd) +
-                            n2 * e1 * coords_prism_global(5, dd);
+      pointsMapVector.push_back(pointsMap);
+
+      for (int nn = 0; nn != num_nodes; nn++) {
+        const double ksi = coords_prism_local(nn, 0);
+        const double eta = coords_prism_local(nn, 1);
+        const double zeta = coords_prism_local(nn, 2);
+        const double n0 = N_MBTRI0(ksi, eta);
+        const double n1 = N_MBTRI1(ksi, eta);
+        const double n2 = N_MBTRI2(ksi, eta);
+        const double e0 = N_MBEDGE0(zeta);
+        const double e1 = N_MBEDGE1(zeta);
+        double coords_global[3];
+        for (int dd = 0; dd != 3; dd++) {
+          coords_global[dd] = n0 * e0 * coords_prism_global(0, dd) +
+                              n1 * e0 * coords_prism_global(1, dd) +
+                              n2 * e0 * coords_prism_global(2, dd) +
+                              n0 * e1 * coords_prism_global(3, dd) +
+                              n1 * e1 * coords_prism_global(4, dd) +
+                              n2 * e1 * coords_prism_global(5, dd);
+        }
+        // cerr << coords_global[0] << " " << coords_global[1] << " " <<
+        // coords_global[2] << endl;
+        CHKERR postProcMesh.set_coords(&conn[nn], 1, coords_global);
       }
-      // cerr << coords_global[0] << " " << coords_global[1] << " " <<
-      // coords_global[2] << endl;
-      CHKERR postProcMesh.set_coords(&conn[nn], 1, coords_global);
     }
   }
 
   mapGaussPts.clear();
-  mapGaussPts.resize(nb_through_thickness * nb_on_triangle);
-  CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+  mapGaussPts.resize(nb_through_thickness * nb_on_triangle * level_thick);
   fill(mapGaussPts.begin(), mapGaussPts.end(), 0);
-  {
-    int gg = 0;
-    for (unsigned int ggf = 0; ggf != gaussPtsTrianglesOnly.size2(); ggf++) {
+  int gg = 0;
+  //for (int ll = 0; ll < level_thick; ll++) {
+    // prism = elementsMap[numeredEntFiniteElementPtr->getEnt()][ll];
+    // pointsMap = pointsMapVector[ll];
+    // CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes,
+    //                                                false);
+    int ll;
+
+    for (unsigned int ggf = 0;
+         ggf != gaussPtsTrianglesOnly.size2(); ggf++) {
       const double ksi = gaussPtsTrianglesOnly(0, ggf);
       const double eta = gaussPtsTrianglesOnly(1, ggf);
-      for (unsigned int ggt = 0; ggt != gaussPtsThroughThickness.size2();
-           ggt++, gg++) {
-        const double zeta = gaussPtsThroughThickness(0, ggt);
+      for (unsigned int ggt = 0;
+           ggt != gaussPtsThroughThickness.size2(); ggt++, gg++) {
+        ll = ggt / 3;
+        prism = elementsMap[numeredEntFiniteElementPtr->getEnt()][ll];
+        pointsMap = pointsMapVector[ll];
+        CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+
+        const double zeta =
+            gaussPtsThroughThickness(0, ggt);
         PointsMap3D_multiIndex::iterator it;
         it =
             pointsMap.find(boost::make_tuple(ksi * 100, eta * 100, zeta * 100));
         if (it != pointsMap.end()) {
-          mapGaussPts[gg] = conn[it->nN];
+           mapGaussPts[gg] = conn[it->nN];
         }
       }
     }
-  }
+ // }
+
+  int g = 0;
 
   MoFEMFunctionReturn(0);
 }

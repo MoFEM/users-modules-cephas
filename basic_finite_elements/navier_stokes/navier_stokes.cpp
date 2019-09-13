@@ -22,7 +22,6 @@
  *
  * */
 #include <BasicFiniteElements.hpp>
-#include <NavierStokesElement.hpp>
 
 using namespace boost::numeric;
 using namespace MoFEM;

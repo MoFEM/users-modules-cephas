@@ -395,8 +395,8 @@ MoFEMErrorCode NavierStokesElement::OpAssembleRhs::aSsemble(EntData &data) {
   // assemble vector
   CHKERR VecSetValues(f, nbRows, indices, vals, ADD_VALUES);
 
-  //int ierr = VecView(getFEMethod()->snes_f, PETSC_VIEWER_STDOUT_WORLD);
-  //CHKERRG(ierr);
+  // int ierr = VecView(getFEMethod()->snes_f, PETSC_VIEWER_STDOUT_WORLD);
+  // CHKERRG(ierr);
 
   MoFEMFunctionReturn(0);
 }

@@ -65,6 +65,7 @@ extern "C" {
 #include <SaveVertexDofOnTag.hpp>
 #include <HookeElement.hpp>
 #include <SpringElement.hpp>
+#include <NavierStokesElement.hpp>
 
 using namespace BasicFiniteElements;
 
