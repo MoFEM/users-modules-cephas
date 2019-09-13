@@ -21,19 +21,19 @@
 #define __PROJECTION_MATRIX_CTX_HPP__
 
 /**
-  * \brief structure for projection matrices
-  * \ingroup projection_matrix
-  *
-  */
+ * \brief structure for projection matrices
+ * \ingroup projection_matrix
+ *
+ */
 struct ConstrainMatrixCtx {
 
-  MoFEM::Interface& mField;
+  MoFEM::Interface &mField;
 
   KSP kSP;
-  Mat C,CT,CCT,CTC,K;
-  Vec Cx,CCTm1_Cx,CT_CCTm1_Cx,CTCx;
-  Vec X,Qx,KQx;
-  bool initQorP,initQTKQ;
+  Mat C, CT, CCT, CTC, K;
+  Vec Cx, CCTm1_Cx, CT_CCTm1_Cx, CTCx;
+  Vec X, Qx, KQx;
+  bool initQorP, initQTKQ;
   bool createKSP;
   bool createScatter;
   bool cancelKSPMonitor;
@@ -43,8 +43,7 @@ struct ConstrainMatrixCtx {
   // in the constructor
 
   VecScatter sCatter;
-  string xProblem,yProblem;
-
+  string xProblem, yProblem;
 
   PetscLogEvent MOFEM_EVENT_projInit;
   PetscLogEvent MOFEM_EVENT_projQ;
@@ -62,76 +61,71 @@ struct ConstrainMatrixCtx {
    * \param y_problem problem used to construct projection matrices
    * \param create_ksp create ksp solver otherwise  user need to set it up
    */
-  ConstrainMatrixCtx(
-    MoFEM::Interface& m_field,
-    string x_problem,
-    string y_problem,
-    bool create_ksp = true,
-    bool own_contrain_matrix = false
-  );
+  ConstrainMatrixCtx(MoFEM::Interface &m_field, string x_problem,
+                     string y_problem, bool create_ksp = true,
+                     bool own_contrain_matrix = false);
 
-  ConstrainMatrixCtx(
-    MoFEM::Interface& m_field,
-    VecScatter scatter,
-    bool create_ksp = true,
-    bool own_contrain_matrix = false
-  );
+  ConstrainMatrixCtx(MoFEM::Interface &m_field, VecScatter scatter,
+                     bool create_ksp = true, bool own_contrain_matrix = false);
 
   virtual ~ConstrainMatrixCtx() {
-    ierr = destroyQorP(); CHKERRABORT(mField.get_comm(),ierr);
-    ierr = destroyQTKQ(); CHKERRABORT(mField.get_comm(),ierr);
-    if(ownConstrainMatrix) {
-      ierr = MatDestroy(&C); CHKERRABORT(mField.get_comm(),ierr);
+    ierr = destroyQorP();
+    CHKERRABORT(mField.get_comm(), ierr);
+    ierr = destroyQTKQ();
+    CHKERRABORT(mField.get_comm(), ierr);
+    if (ownConstrainMatrix) {
+      ierr = MatDestroy(&C);
+      CHKERRABORT(mField.get_comm(), ierr);
     }
   };
 
-  PetscReal rTol,absTol,dTol;
+  PetscReal rTol, absTol, dTol;
   PetscInt maxIts;
 
   /**
-    * \brief initialize vectors and matrices for Q and P shell matrices,
+   * \brief initialize vectors and matrices for Q and P shell matrices,
    * scattering is set based on x_problem and y_problem
-    *
-    * \param x is a vector from problem x
-    */
+   *
+   * \param x is a vector from problem x
+   */
   MoFEMErrorCode initializeQorP(Vec x);
 
   /**
-    * \brief initialize vectors and matrices for CTC+QTKQ shell matrices,
+   * \brief initialize vectors and matrices for CTC+QTKQ shell matrices,
    * scattering is set based on x_problem and y_problem
-    */
+   */
   MoFEMErrorCode initializeQTKQ();
 
   /**
-    * \brief re-calculate CT and CCT if C matrix has been changed since
+   * \brief re-calculate CT and CCT if C matrix has been changed since
    * initialization
-    */
+   */
   MoFEMErrorCode recalculateCTandCCT();
 
   /**
-    * \brief re-calculate CTC matrix has been changed since initialization
-    */
+   * \brief re-calculate CTC matrix has been changed since initialization
+   */
   MoFEMErrorCode recalculateCTC();
 
   /**
-    * \brief destroy sub-matrices used for shell matrices P, Q, R, RT
-    */
+   * \brief destroy sub-matrices used for shell matrices P, Q, R, RT
+   */
   MoFEMErrorCode destroyQorP();
 
   /**
-    * \brief destroy sub-matrices used for shell matrix QTKQ
-    */
+   * \brief destroy sub-matrices used for shell matrix QTKQ
+   */
   MoFEMErrorCode destroyQTKQ();
 
-  friend MoFEMErrorCode ProjectionMatrixMultOpQ(Mat Q,Vec x,Vec f);
-  friend MoFEMErrorCode ConstrainMatrixMultOpP(Mat P,Vec x,Vec f);
-  friend MoFEMErrorCode ConstrainMatrixMultOpR(Mat R,Vec x,Vec f);
-  friend MoFEMErrorCode ConstrainMatrixMultOpRT(Mat RT,Vec x,Vec f);
-  friend MoFEMErrorCode ConstrainMatrixMultOpCTC_QTKQ(Mat CTC_QTKQ,Vec x,Vec f);
+  friend MoFEMErrorCode ProjectionMatrixMultOpQ(Mat Q, Vec x, Vec f);
+  friend MoFEMErrorCode ConstrainMatrixMultOpP(Mat P, Vec x, Vec f);
+  friend MoFEMErrorCode ConstrainMatrixMultOpR(Mat R, Vec x, Vec f);
+  friend MoFEMErrorCode ConstrainMatrixMultOpRT(Mat RT, Vec x, Vec f);
+  friend MoFEMErrorCode ConstrainMatrixMultOpCTC_QTKQ(Mat CTC_QTKQ, Vec x,
+                                                      Vec f);
 
   friend MoFEMErrorCode ConstrainMatrixDestroyOpPorQ();
   friend MoFEMErrorCode ConstrainMatrixDestroyOpQTKQ();
-
 };
 
 /**
@@ -139,24 +133,20 @@ struct ConstrainMatrixCtx {
   *
   * \code
   * Mat Q; //for problem
-  * ConstrainMatrixCtx projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
+  * ConstrainMatrixCtx
+  projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
   * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&Q);
-  * CHKERR MatShellSetOperation(Q,MATOP_MULT,(void(*)(void))ProjectionMatrixMultOpQ);
-  * CHKERR MatShellSetOperation(Q,MATOP_DESTROY,(void(*)(void))ConstrainMatrixDestroyOpPorQ);
+  * CHKERR
+  MatShellSetOperation(Q,MATOP_MULT,(void(*)(void))ProjectionMatrixMultOpQ);
+  * CHKERR
+  MatShellSetOperation(Q,MATOP_DESTROY,(void(*)(void))ConstrainMatrixDestroyOpPorQ);
   *
   * \endcode
 
   * \ingroup projection_matrix
 
   */
-MoFEMErrorCode ProjectionMatrixMultOpQ(Mat Q,Vec x,Vec f);
-
-/**
- * \deprecated Use ProjectionMatrixMultOpQ
- */
-DEPRECATED inline MoFEMErrorCode PorjectionMatrixMultOpQ(Mat Q, Vec x, Vec f) {
-  return ProjectionMatrixMultOpQ(Q, x, f);
-}
+MoFEMErrorCode ProjectionMatrixMultOpQ(Mat Q, Vec x, Vec f);
 
 /**
   * \brief Multiplication operator for P = CT(CCT)^-1C
@@ -166,7 +156,8 @@ DEPRECATED inline MoFEMErrorCode PorjectionMatrixMultOpQ(Mat Q, Vec x, Vec f) {
   * ConstrainMatrixCtx
   projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
   * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&P);
-  * CHKERR MatShellSetOperation(P,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpP);
+  * CHKERR
+  MatShellSetOperation(P,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpP);
   *
   * \endcode
 
@@ -180,42 +171,50 @@ MoFEMErrorCode ConstrainMatrixMultOpP(Mat P, Vec x, Vec f);
   *
   * \code
   * Mat R; //for problem
-  * ConstrainMatrixCtx projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
+  * ConstrainMatrixCtx
+  projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
   * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&R);
-  * CHKERR MatShellSetOperation(R,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpR);
+  * CHKERR
+  MatShellSetOperation(R,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpR);
   *
   * \endcode
 
   * \ingroup projection_matrix
 
   */
-MoFEMErrorCode ConstrainMatrixMultOpR(Mat R,Vec x,Vec f);
+MoFEMErrorCode ConstrainMatrixMultOpR(Mat R, Vec x, Vec f);
 
 /**
   * \brief Multiplication operator for RT = (CCT)^-TC
   *
   * \code
   * Mat RT; //for problem
-  * ConstrainMatrixCtx projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
+  * ConstrainMatrixCtx
+  projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
   * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&RT);
-  * CHKERR MatShellSetOperation(RT,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpRT);
+  * CHKERR
+  MatShellSetOperation(RT,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpRT);
   *
   * \endcode
 
   * \ingroup projection_matrix
 
   */
-MoFEMErrorCode ConstrainMatrixMultOpRT(Mat RT,Vec x,Vec f);
+MoFEMErrorCode ConstrainMatrixMultOpRT(Mat RT, Vec x, Vec f);
 
 /**
   * \brief Multiplication operator for RT = (CCT)^-TC
   *
   * \code
   * Mat CTC_QTKQ; //for problem
-  * ConstrainMatrixCtx projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
-  * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&CTC_QTKQ);
-  * CHKERR MatShellSetOperation(CTC_QTKQ,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpCTC_QTKQ);
-  * CHKERR MatShellSetOperation(CTC_QTKQ,MATOP_DESTROY,(void(*)(void))ConstrainMatrixDestroyOpQTKQ);
+  * ConstrainMatrixCtx
+  projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
+  * CHKERR
+  MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&CTC_QTKQ);
+  * CHKERR
+  MatShellSetOperation(CTC_QTKQ,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpCTC_QTKQ);
+  * CHKERR
+  MatShellSetOperation(CTC_QTKQ,MATOP_DESTROY,(void(*)(void))ConstrainMatrixDestroyOpQTKQ);
   *
   * \endcode
   *
@@ -223,17 +222,20 @@ MoFEMErrorCode ConstrainMatrixMultOpRT(Mat RT,Vec x,Vec f);
   * \ingroup projection_matrix
 
   */
-MoFEMErrorCode ConstrainMatrixMultOpCTC_QTKQ(Mat CTC_QTKQ,Vec x,Vec f);
+MoFEMErrorCode ConstrainMatrixMultOpCTC_QTKQ(Mat CTC_QTKQ, Vec x, Vec f);
 
 /**
   * \brief Destroy shell matrix Q
   *
   * \code
   * Mat Q; //for problem
-  * ConstrainMatrixCtx projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
+  * ConstrainMatrixCtx
+  projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
   * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&Q);
-  * CHKERR MatShellSetOperation(Q,MATOP_MULT,(void(*)(void))ProjectionMatrixMultOpQ);
-  * CHKERR MatShellSetOperation(Q,MATOP_DESTROY,(void(*)(void))ConstrainMatrixDestroyOpPorQ);
+  * CHKERR
+  MatShellSetOperation(Q,MATOP_MULT,(void(*)(void))ProjectionMatrixMultOpQ);
+  * CHKERR
+  MatShellSetOperation(Q,MATOP_DESTROY,(void(*)(void))ConstrainMatrixDestroyOpPorQ);
   *
   * \endcode
 
@@ -247,10 +249,13 @@ MoFEMErrorCode ConstrainMatrixDestroyOpPorQ(Mat Q);
   *
   * \code
   * Mat CTC_QTKQ; //for problem
-  * ConstrainMatrixCtx projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
+  * ConstrainMatrixCtx
+  projection_matrix_ctx(m_field,problem_name,contrains_problem_name);
   * CHKERR MatCreateShell(PETSC_COMM_WORLD,m,m,M,M,&projection_matrix_ctx,&Q);
-  * CHKERR MatShellSetOperation(Q,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpCTC_QTKQ);
-  * CHKERR MatShellSetOperation(Q,MATOP_DESTROY,(void(*)(void))mat_destroy_QTKQ);
+  * CHKERR
+  MatShellSetOperation(Q,MATOP_MULT,(void(*)(void))ConstrainMatrixMultOpCTC_QTKQ);
+  * CHKERR
+  MatShellSetOperation(Q,MATOP_DESTROY,(void(*)(void))mat_destroy_QTKQ);
   *
   * \endcode
 
@@ -261,7 +266,7 @@ MoFEMErrorCode ConstrainMatrixDestroyOpQTKQ(Mat QTKQ);
 
 #endif // __PROJECTION_MATRIX_CTX_HPP__
 
-/***************************************************************************//**
+/**
  \defgroup projection_matrix Constrain Projection Matrix
  \ingroup user_modules
- ******************************************************************************/
+**/
