@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
       if (bit->getName().compare(0, 5, "FLUID") == 0) {
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBPRISM, commonData->setOfBlocksData[id].tEts,
+            bit->getMeshset(), MBPRISM, commonData->setOfBlocksData[id].eNts,
             true);
 
         std::vector<double> attributes;

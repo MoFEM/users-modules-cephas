@@ -269,14 +269,58 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
                                                       "NAVIER_STOKES");
 
-    Range solid_faces;
+    boost::shared_ptr<NavierStokesElement::CommonData> commonData =
+        boost::make_shared<NavierStokesElement::CommonData>();
+
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      cout << bit->getName() << endl;
-      if (bit->getName().compare(0, 5, "SOLID") == 0) {
-        CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(), MBTRI,
-                                                       solid_faces, true);
+      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+        const int id = bit->getMeshsetId();
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].eNts,
+            true);
+
+        std::vector<double> attributes;
+        bit->getAttributes(attributes);
+        if (attributes.size() != 2) {
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                   "should be 2 attributes but is %d", attributes.size());
+        }
+        commonData->setOfBlocksData[id].iD = id;
+        commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
+        commonData->setOfBlocksData[id].fluidDensity = attributes[1];
       }
     }
+
+    Range solid_faces;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 5, "SOLID") == 0) {
+        Range tets, tet; 
+        const int id = bit->getMeshsetId();
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTRI, commonData->setOfFacesData[id].eNts,
+            true);
+        solid_faces.merge(commonData->setOfFacesData[id].eNts);
+        CHKERR moab.get_adjacencies(commonData->setOfFacesData[id].eNts, 3,
+                                    true, tets, moab::Interface::UNION);
+        tet = Range(tets.front(), tets.front());
+        for (auto &bit : commonData->setOfBlocksData) {
+          if (bit.second.eNts.contains(tet)) {
+            commonData->setOfFacesData[id].fluidViscosity =
+                bit.second.fluidViscosity;
+            commonData->setOfFacesData[id].fluidDensity =
+                bit.second.fluidDensity;
+            commonData->setOfFacesData[id].iD = id;
+            break;
+          }
+        }
+        if (commonData->setOfFacesData[id].fluidViscosity < 0) {
+          SETERRQ(
+              PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+              "Cannot find a fluid block adjacent to a given solid face");
+        }
+      }
+    }
+
     if (!solid_faces.empty()) {
       CHKERR m_field.add_ents_to_finite_element_by_type(solid_faces, MBTRI,
                                                         "DRAG");
@@ -328,52 +372,15 @@ int main(int argc, char *argv[]) {
 
     dragFe->getRuleHook = NavierStokesElement::FaceRule();
 
-    boost::shared_ptr<NavierStokesElement::CommonData> commonData =
-        boost::make_shared<NavierStokesElement::CommonData>();
-
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "FLUID") == 0) {
-        const int id = bit->getMeshsetId();
-        CHKERR m_field.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].tEts,
-            true);
-
-        std::vector<double> attributes;
-        bit->getAttributes(attributes);
-        if (attributes.size() != 2) {
-          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                   "should be 2 attributes but is %d", attributes.size());
-        }
-        commonData->setOfBlocksData[id].iD = id;
-        commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
-        commonData->setOfBlocksData[id].fluidDensity = attributes[1];
-      }
-    }
-
     if (!solid_faces.empty()) {
-      for (auto &sit : commonData->setOfBlocksData) {
-        sideDragFe->getOpPtrVector().push_back(
-            new OpCalculateVectorFieldGradient<3, 3>("U",
-                                                     commonData->gradDispPtr));
-        // dragFe->getOpPtrVector().push_back(
-        //     new OpCalculateInvJacForFace(commonData->invJac));
-        // dragFe->getOpPtrVector().push_back(
-        //     new OpSetInvJacH1ForFace(commonData->invJac));
-        dragFe->getOpPtrVector().push_back(
-            new OpCalculateScalarFieldValues("P", commonData->pPtr));
-        dragFe->getOpPtrVector().push_back(
-            new NavierStokesElement::OpCalcPressureDrag(commonData,
-                                                        sit.second));
-        dragFe->getOpPtrVector().push_back(
-            new NavierStokesElement::OpCalcViscousDrag(sideDragFe, commonData,
-                                                       sit.second));
-      }
+      NavierStokesElement::setDragForceOperators(
+          dragFe, sideDragFe, "NAVIER_STOKES", "U", "P", commonData);
     }
 
-    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
-                                                         commonData);
-    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
-    //                                          commonData);
+    // CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
+    //                                                      commonData);
+    CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
+                                             commonData);
 
     Mat Aij;  // Stiffness matrix
     Vec D, F; //, D0; // Vector of DOFs and the RHS
@@ -530,12 +537,6 @@ int main(int argc, char *argv[]) {
       NavierStokesElement::LoadScale::lambda = 0;
 
     for (int ss = 0; ss < nbSubSteps; ++ss) {
-
-      // for testing loading //TODO: Implement load history config file
-      // if(ss < nbSubSteps/3)
-      //   LoadScale::lambda += lambda0 / nbSubSteps;
-      // else
-      //   LoadScale::lambda -= lambda0 / nbSubSteps;
 
       if (flg_load_file == PETSC_TRUE) {
         dirichlet_vel_bc_ptr->ts_t = ss;

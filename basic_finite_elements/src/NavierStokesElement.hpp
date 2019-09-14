@@ -47,13 +47,13 @@ struct NavierStokesElement {
     // int oRder;
     double fluidViscosity;
     double fluidDensity;
-    Range tEts;
-    BlockData() : fluidViscosity(-1), fluidDensity(-1) {}
+    Range eNts;
+    BlockData() : iD(-1), fluidViscosity(-1), fluidDensity(-1) {}
   };
 
   struct CommonData {
 
-    //MatrixDouble invJac;
+    MatrixDouble invJac;
 
     boost::shared_ptr<MatrixDouble> gradDispPtr;
     boost::shared_ptr<MatrixDouble> dispPtr;
@@ -63,6 +63,7 @@ struct NavierStokesElement {
     VectorDouble3 viscousDrag;
 
     std::map<int, BlockData> setOfBlocksData;
+    std::map<int, BlockData> setOfFacesData;
 
     CommonData() { 
 
@@ -111,6 +112,13 @@ struct NavierStokesElement {
                      const std::string velocity_field,
                      const std::string pressure_field,
                      boost::shared_ptr<CommonData> common_data);
+
+  static MoFEMErrorCode setDragForceOperators(
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
+      std::string side_fe_name, 
+      const std::string velocity_field, const std::string pressure_field,
+      boost::shared_ptr<CommonData> common_data);
 
   /**
    * \brief Set integration rule to volume elements
@@ -328,46 +336,7 @@ struct NavierStokesElement {
       doPrisms = false;
     };
 
-    PetscErrorCode doWork(int side, EntityType type, EntData &data) {
-      MoFEMFunctionBegin;
-      if (type != MBVERTEX)
-        PetscFunctionReturn(0);
-      // double def_VAL[9];
-      // bzero(def_VAL, 9 * sizeof(double));
-
-      // if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      //     blockData.tEts.end()) {
-      //   MoFEMFunctionReturnHot(0);
-      // }
-
-      auto t_p = getFTensor0FromVec(*commonData->pPtr);
-      const int nb_gauss_pts = commonData->pPtr->size();
-      auto t_normal = getFTensor1NormalsAtGaussPts();
-      // auto t_normal = getFTensor1Normal();
-
-      FTensor::Index<'i', 3> i;
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-
-        double nrm2 = sqrt(t_normal(i) * t_normal(i));
-        t_normal(i) = t_normal(i) / nrm2;
-
-        double w = getArea() * getGaussPts()(2, gg);
-
-        // if (getHoGaussPtsDetJac().size() > 0) {
-        //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        // }
-
-        for (int dd = 0; dd != 3; dd++) {
-          commonData->pressureDrag[dd] += w * t_p * t_normal(dd);
-        }
-
-        ++t_p;
-        ++t_normal;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
   struct OpCalcViscousDrag : public FaceUserDataOperator {
@@ -375,13 +344,15 @@ struct NavierStokesElement {
     boost::shared_ptr<CommonData> &commonData;
     BlockData &blockData;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &sideFe;
+    std::string sideFeName;
 
     OpCalcViscousDrag(
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &side_fe,
-        boost::shared_ptr<CommonData> &common_data, BlockData &block_data)
+        std::string &side_fe_name, boost::shared_ptr<CommonData> &common_data,
+        BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               "U", UserDataOperator::OPROW),
-          sideFe(side_fe), commonData(common_data), blockData(block_data) {
+          sideFe(side_fe), sideFeName(side_fe_name), commonData(common_data), blockData(block_data) {
       doVertices = true;
       doEdges = false;
       doQuads = false;
@@ -390,53 +361,7 @@ struct NavierStokesElement {
       doPrisms = false;
     };
 
-    PetscErrorCode doWork(int side, EntityType type, EntData &data) {
-      MoFEMFunctionBegin;
-
-      if (type != MBVERTEX)
-        PetscFunctionReturn(0);
-
-      // double def_VAL[9];
-      // bzero(def_VAL, 9 * sizeof(double));
-
-      // if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      //     blockData.tEts.end()) {
-      //   MoFEMFunctionReturnHot(0);
-      // }
-
-      CHKERR loopSideVolumes("NAVIER_STOKES", *sideFe);
-
-      // commonData->getBlockData(blockData);
-
-      auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
-      const int nb_gauss_pts = commonData->gradDispPtr->size2();
-      auto t_normal = getFTensor1NormalsAtGaussPts();
-      // auto t_normal = getFTensor1Normal();
-
-      FTensor::Index<'i', 3> i;
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-
-        double nrm2 = sqrt(t_normal(i) * t_normal(i));
-        t_normal(i) = t_normal(i) / nrm2;
-
-        double w = getArea() * getGaussPts()(2, gg) * blockData.fluidViscosity;
-        // if (getHoGaussPtsDetJac().size() > 0) {
-        //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        // }
-
-        for (int ii = 0; ii != 3; ii++) {
-          for (int jj = 0; jj != 3; jj++) {
-            commonData->viscousDrag[ii] +=
-                -w * (t_u_grad(ii, jj) + t_u_grad(jj, ii)) * t_normal(jj);
-          }
-        }
-
-        ++t_u_grad;
-        ++t_normal;
-      }
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
   struct OpPostProcVorticity : public UserDataOperator {
@@ -461,143 +386,7 @@ struct NavierStokesElement {
       doPrisms = false;
     };
 
-    PetscErrorCode doWork(int side, EntityType type, EntData &data) {
-      MoFEMFunctionBegin;
-      if (type != MBVERTEX)
-        PetscFunctionReturn(0);
-      double def_VAL[9];
-      bzero(def_VAL, 9 * sizeof(double));
-
-      if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-          blockData.tEts.end()) {
-        MoFEMFunctionReturnHot(0);
-      }
-      // commonData->getBlockData(blockData);
-
-      Tag th_vorticity;
-      Tag th_q;
-      Tag th_l2;
-      CHKERR postProcMesh.tag_get_handle("VORTICITY", 3, MB_TYPE_DOUBLE,
-                                         th_vorticity,
-                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-      CHKERR postProcMesh.tag_get_handle("Q", 1, MB_TYPE_DOUBLE, th_q,
-                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-      CHKERR postProcMesh.tag_get_handle("L2", 1, MB_TYPE_DOUBLE, th_l2,
-                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-
-      auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
-      // auto p = getFTensor0FromVec(*commonData->pPtr);
-
-      const int nb_gauss_pts = commonData->gradDispPtr->size2();
-      // const int nb_gauss_pts2 = commonData->pPtr->size();
-
-      // const double lambda = commonData->lAmbda;
-      // const double mu = commonData->mU;
-
-      // FTensor::Index<'i', 3> i;
-      // FTensor::Index<'j', 3> j;
-      // FTensor::Index<'j', 3> k;
-      FTensor::Tensor1<double, 3> vorticity;
-      // FTensor::Tensor2<double,3,3> t_s;
-      double q;
-      double l2;
-      // FTensor::Tensor2<double, 3, 3> stress;
-      MatrixDouble S;
-      MatrixDouble Omega;
-      MatrixDouble M;
-
-      S.resize(3, 3);
-      Omega.resize(3, 3);
-      M.resize(3, 3);
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-
-        vorticity(0) = t_u_grad(2, 1) - t_u_grad(1, 2);
-        vorticity(1) = t_u_grad(0, 2) - t_u_grad(2, 0);
-        vorticity(2) = t_u_grad(1, 0) - t_u_grad(0, 1);
-
-        q = 0;
-        for (int i = 0; i != 3; i++) {
-          for (int j = 0; j != 3; j++) {
-            q += -0.5 * t_u_grad(i, j) * t_u_grad(j, i);
-          }
-        }
-        for (int i = 0; i != 3; i++) {
-          for (int j = 0; j != 3; j++) {
-            S(i, j) = 0.5 * (t_u_grad(i, j) + t_u_grad(j, i));
-            Omega(i, j) = 0.5 * (t_u_grad(i, j) - t_u_grad(j, i));
-            M(i, j) = 0.0;
-          }
-        }
-
-        for (int i = 0; i != 3; i++) {
-          for (int j = 0; j != 3; j++) {
-            for (int k = 0; k != 3; k++) {
-              M(i, j) += S(i, k) * S(k, j) + Omega(i, k) * Omega(k, j);
-            }
-          }
-        }
-
-        MatrixDouble eigen_vectors = M;
-        VectorDouble eigen_values(3);
-
-        // LAPACK - eigenvalues and vectors. Applied twice for initial creates
-        // memory space
-        int n = 3, lda = 3, info, lwork = -1;
-        double wkopt;
-        info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
-                            &(eigen_values.data()[0]), &wkopt, lwork);
-        if (info != 0)
-          SETERRQ1(PETSC_COMM_SELF, 1,
-                   "is something wrong with lapack_dsyev info = %d", info);
-        lwork = (int)wkopt;
-        double work[lwork];
-        info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
-                            &(eigen_values.data()[0]), work, lwork);
-        if (info != 0)
-          SETERRQ1(PETSC_COMM_SELF, 1,
-                   "is something wrong with lapack_dsyev info = %d", info);
-
-        map<double, int> eigen_sort;
-        eigen_sort[eigen_values[0]] = 0;
-        eigen_sort[eigen_values[1]] = 1;
-        eigen_sort[eigen_values[2]] = 2;
-
-        // prin_stress_vect.clear();
-        VectorDouble prin_vals_vect(3);
-        prin_vals_vect.clear();
-
-        int ii = 0;
-        for (map<double, int>::reverse_iterator mit = eigen_sort.rbegin();
-             mit != eigen_sort.rend(); mit++) {
-          prin_vals_vect[ii] = eigen_values[mit->second];
-          // for (int dd = 0; dd != 3; dd++) {
-          //   prin_stress_vect(ii, dd) = eigen_vectors.data()[3 * mit->second +
-          //   dd];
-          // }
-          ii++;
-        }
-
-        l2 = prin_vals_vect[1];
-        // cout << prin_vals_vect << endl;
-        // cout << "-0.5 sum: " << -0.5 * (prin_vals_vect[0] + prin_vals_vect[1]
-        // + prin_vals_vect[2]) << endl; cout << "q: " << q << endl;
-
-        // t_s(i,j) = 0.5*(t)
-
-        // vorticity(0) = t_u_grad(1, 2) - t_u_grad(2, 1);
-        // vorticity(1) = t_u_grad(2, 0) - t_u_grad(0, 2);
-        // vorticity(2) = t_u_grad(0, 1) - t_u_grad(1, 0);
-
-        CHKERR postProcMesh.tag_set_data(th_vorticity, &mapGaussPts[gg], 1,
-                                         &vorticity(0));
-        CHKERR postProcMesh.tag_set_data(th_q, &mapGaussPts[gg], 1, &q);
-        CHKERR postProcMesh.tag_set_data(th_l2, &mapGaussPts[gg], 1, &l2);
-        ++t_u_grad;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };
 

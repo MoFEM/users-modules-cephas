@@ -93,6 +93,33 @@ MoFEMErrorCode NavierStokesElement::setStokesOperators(
   MoFEMFunctionReturn(0);
 };
 
+MoFEMErrorCode NavierStokesElement::setDragForceOperators(
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
+    std::string side_fe_name, const std::string velocity_field,
+    const std::string pressure_field,
+    boost::shared_ptr<CommonData> common_data) {
+  MoFEMFunctionBegin;
+
+  for (auto &sit : common_data->setOfFacesData) {
+    sideDragFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
+                                                 common_data->gradDispPtr));
+    dragFe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(common_data->invJac));
+    dragFe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFace(common_data->invJac));
+    dragFe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
+    dragFe->getOpPtrVector().push_back(
+        new NavierStokesElement::OpCalcPressureDrag(common_data, sit.second));
+    dragFe->getOpPtrVector().push_back(
+        new NavierStokesElement::OpCalcViscousDrag(
+            sideDragFe, side_fe_name, common_data, sit.second));
+  }
+  MoFEMFunctionReturn(0);
+};
+
 MoFEMErrorCode NavierStokesElement::OpAssembleLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
@@ -106,8 +133,8 @@ MoFEMErrorCode NavierStokesElement::OpAssembleLhs::doWork(
   if (!col_nb_dofs)
     MoFEMFunctionReturnHot(0);
 
-  if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      blockData.tEts.end()) {
+  if (blockData.eNts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      blockData.eNts.end()) {
     MoFEMFunctionReturnHot(0);
   }
 
@@ -363,9 +390,8 @@ MoFEMErrorCode NavierStokesElement::OpAssembleRhs::doWork(int row_side,
   nbRows = row_data.getIndices().size();
   if (!nbRows)
     MoFEMFunctionReturnHot(0);
-  if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      blockData.tEts.end()) {
-    PetscPrintf(PETSC_COMM_WORLD, "PROBLEM");
+  if (blockData.eNts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      blockData.eNts.end()) {
     MoFEMFunctionReturnHot(0);
   }
   // get number of integration points
@@ -600,238 +626,237 @@ NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-// PetscErrorCode NavierStokesElement::OpCalcPressureDrag::doWork(int side,
-//                                                              EntityType
-//                                                              type,
-// //                                                              EntData
-// &data) {
-//   MoFEMFunctionBegin;
-//   if (type != MBVERTEX)
-//     PetscFunctionReturn(0);
-//   double def_VAL[9];
-//   bzero(def_VAL, 9 * sizeof(double));
+MoFEMErrorCode NavierStokesElement::OpCalcPressureDrag::doWork(int side,
+                                                               EntityType type,
+                                                               EntData &data) {
+  MoFEMFunctionBegin;
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
 
-//   // commonData->getBlockData(blockData);
+  if (blockData.eNts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      blockData.eNts.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
 
-//   auto t_p = getFTensor0FromVec(*commonData->pPtr);
-//   const int nb_gauss_pts = commonData->pPtr->size();
-//   auto t_normal = getFTensor1NormalsAtGaussPts();
-//   // auto t_normal = getFTensor1Normal();
+  // double def_VAL[9];
+  // bzero(def_VAL, 9 * sizeof(double));
 
-//   FTensor::Index<'i', 3> i;
+  auto t_p = getFTensor0FromVec(*commonData->pPtr);
+  const int nb_gauss_pts = commonData->pPtr->size();
+  auto t_normal = getFTensor1NormalsAtGaussPts();
+  // auto t_normal = getFTensor1Normal();
 
-//   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+  FTensor::Index<'i', 3> i;
 
-//     double nrm2 = sqrt(t_normal(i) * t_normal(i));
-//     t_normal(i) = t_normal(i) / nrm2;
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-//     double w = getArea() * getGaussPts()(2, gg);
+    double nrm2 = sqrt(t_normal(i) * t_normal(i));
+    t_normal(i) = t_normal(i) / nrm2;
 
-//     // if (getHoGaussPtsDetJac().size() > 0) {
-//     //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-//     // }
+    double w = getArea() * getGaussPts()(2, gg);
 
-//     for (int dd = 0; dd != 3; dd++) {
-//       commonData->pressureDrag[dd] += w * t_p * t_normal(dd);
-//     }
+    // if (getHoGaussPtsDetJac().size() > 0) {
+    //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+    // }
 
-//     ++t_p;
-//     ++t_normal;
-//   }
+    for (int dd = 0; dd != 3; dd++) {
+      commonData->pressureDrag[dd] += w * t_p * t_normal(dd);
+    }
 
-//   MoFEMFunctionReturn(0);
-// }
+    ++t_p;
+    ++t_normal;
+  }
 
-// PetscErrorCode NavierStokesElement::OpCalcViscousDrag::doWork(int side,
-//                                                             EntityType
-//                                                             type, EntData
-//                                                             &data) {
-//   MoFEMFunctionBegin;
+  MoFEMFunctionReturn(0);
+}
 
-//   if (type != MBVERTEX)
-//     PetscFunctionReturn(0);
+MoFEMErrorCode NavierStokesElement::OpCalcViscousDrag::doWork(int side,
+                                                              EntityType type,
+                                                              EntData &data) {
+  MoFEMFunctionBegin;
 
-//   double def_VAL[9];
-//   bzero(def_VAL, 9 * sizeof(double));
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
 
-//   CHKERR loopSideVolumes("NAVIER_STOKES", *sideFe);
+  if (blockData.eNts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      blockData.eNts.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
 
-//   // commonData->getBlockData(blockData);
+  // double def_VAL[9];
+  // bzero(def_VAL, 9 * sizeof(double));
 
-//   auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
-//   const int nb_gauss_pts = commonData->gradDispPtr->size2();
-//   auto t_normal = getFTensor1NormalsAtGaussPts();
-//   // auto t_normal = getFTensor1Normal();
+  CHKERR loopSideVolumes(sideFeName, *sideFe);
 
-//   FTensor::Index<'i', 3> i;
+  auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
+  const int nb_gauss_pts = commonData->gradDispPtr->size2();
+  auto t_normal = getFTensor1NormalsAtGaussPts();
+  // auto t_normal = getFTensor1Normal();
 
-//   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+  FTensor::Index<'i', 3> i;
 
-//     double nrm2 = sqrt(t_normal(i) * t_normal(i));
-//     t_normal(i) = t_normal(i) / nrm2;
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-//     double w = getArea() * getGaussPts()(2, gg) * blockData.fluidViscosity;
-//     // if (getHoGaussPtsDetJac().size() > 0) {
-//     //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-//     // }
+    double nrm2 = sqrt(t_normal(i) * t_normal(i));
+    t_normal(i) = t_normal(i) / nrm2;
 
-//     for (int ii = 0; ii != 3; ii++) {
-//       for (int jj = 0; jj != 3; jj++) {
-//         commonData->viscousDrag[ii] +=
-//             -w * (t_u_grad(ii, jj) + t_u_grad(jj, ii)) * t_normal(jj);
-//       }
-//     }
+    double w = getArea() * getGaussPts()(2, gg) * blockData.fluidViscosity;
+    // if (getHoGaussPtsDetJac().size() > 0) {
+    //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+    // }
 
-//     ++t_u_grad;
-//     ++t_normal;
-//   }
-//   MoFEMFunctionReturn(0);
-// }
+    for (int ii = 0; ii != 3; ii++) {
+      for (int jj = 0; jj != 3; jj++) {
+        commonData->viscousDrag[ii] +=
+            -w * (t_u_grad(ii, jj) + t_u_grad(jj, ii)) * t_normal(jj);
+      }
+    }
 
-// PetscErrorCode NavierStokesElement::OpPostProcVorticity::doWork(int side,
-//                                                               EntityType
-//                                                               type, EntData
-//                                                               &data) {
-//   MoFEMFunctionBegin;
-//   if (type != MBVERTEX)
-//     PetscFunctionReturn(0);
-//   double def_VAL[9];
-//   bzero(def_VAL, 9 * sizeof(double));
+    ++t_u_grad;
+    ++t_normal;
+  }
+  MoFEMFunctionReturn(0);
+}
 
-//   if (blockData.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-//       blockData.tEts.end()) {
-//     MoFEMFunctionReturnHot(0);
-//   }
-//   // commonData->getBlockData(blockData);
+MoFEMErrorCode NavierStokesElement::OpPostProcVorticity::doWork(int side,
+                                                                EntityType type,
+                                                                EntData &data) {
+  MoFEMFunctionBegin;
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
+  double def_VAL[9];
+  bzero(def_VAL, 9 * sizeof(double));
 
-//   Tag th_vorticity;
-//   Tag th_q;
-//   Tag th_l2;
-//   CHKERR postProcMesh.tag_get_handle("VORTICITY", 3, MB_TYPE_DOUBLE,
-//                                      th_vorticity, MB_TAG_CREAT |
-//                                      MB_TAG_SPARSE, def_VAL);
-//   CHKERR postProcMesh.tag_get_handle("Q", 1, MB_TYPE_DOUBLE, th_q,
-//                                      MB_TAG_CREAT | MB_TAG_SPARSE,
-//                                      def_VAL);
-//   CHKERR postProcMesh.tag_get_handle("L2", 1, MB_TYPE_DOUBLE, th_l2,
-//                                      MB_TAG_CREAT | MB_TAG_SPARSE,
-//                                      def_VAL);
+  if (blockData.eNts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      blockData.eNts.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+  // commonData->getBlockData(blockData);
 
-//   auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
-//   // auto p = getFTensor0FromVec(*commonData->pPtr);
+  Tag th_vorticity;
+  Tag th_q;
+  Tag th_l2;
+  CHKERR postProcMesh.tag_get_handle("VORTICITY", 3, MB_TYPE_DOUBLE,
+                                     th_vorticity, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                     def_VAL);
+  CHKERR postProcMesh.tag_get_handle("Q", 1, MB_TYPE_DOUBLE, th_q,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+  CHKERR postProcMesh.tag_get_handle("L2", 1, MB_TYPE_DOUBLE, th_l2,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
-//   const int nb_gauss_pts = commonData->gradDispPtr->size2();
-//   // const int nb_gauss_pts2 = commonData->pPtr->size();
+  auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
+  // auto p = getFTensor0FromVec(*commonData->pPtr);
 
-//   // const double lambda = commonData->lAmbda;
-//   // const double mu = commonData->mU;
+  const int nb_gauss_pts = commonData->gradDispPtr->size2();
+  // const int nb_gauss_pts2 = commonData->pPtr->size();
 
-//   // FTensor::Index<'i', 3> i;
-//   // FTensor::Index<'j', 3> j;
-//   // FTensor::Index<'j', 3> k;
-//   FTensor::Tensor1<double, 3> vorticity;
-//   // FTensor::Tensor2<double,3,3> t_s;
-//   double q;
-//   double l2;
-//   // FTensor::Tensor2<double, 3, 3> stress;
-//   MatrixDouble S;
-//   MatrixDouble Omega;
-//   MatrixDouble M;
+  // const double lambda = commonData->lAmbda;
+  // const double mu = commonData->mU;
 
-//   S.resize(3, 3);
-//   Omega.resize(3, 3);
-//   M.resize(3, 3);
+  // FTensor::Index<'i', 3> i;
+  // FTensor::Index<'j', 3> j;
+  // FTensor::Index<'j', 3> k;
+  FTensor::Tensor1<double, 3> vorticity;
+  // FTensor::Tensor2<double,3,3> t_s;
+  double q;
+  double l2;
+  // FTensor::Tensor2<double, 3, 3> stress;
+  MatrixDouble S;
+  MatrixDouble Omega;
+  MatrixDouble M;
 
-//   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+  S.resize(3, 3);
+  Omega.resize(3, 3);
+  M.resize(3, 3);
 
-//     vorticity(0) = t_u_grad(2, 1) - t_u_grad(1, 2);
-//     vorticity(1) = t_u_grad(0, 2) - t_u_grad(2, 0);
-//     vorticity(2) = t_u_grad(1, 0) - t_u_grad(0, 1);
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-//     q = 0;
-//     for (int i = 0; i != 3; i++) {
-//       for (int j = 0; j != 3; j++) {
-//         q += -0.5 * t_u_grad(i, j) * t_u_grad(j, i);
-//       }
-//     }
-//     for (int i = 0; i != 3; i++) {
-//       for (int j = 0; j != 3; j++) {
-//         S(i, j) = 0.5 * (t_u_grad(i, j) + t_u_grad(j, i));
-//         Omega(i, j) = 0.5 * (t_u_grad(i, j) - t_u_grad(j, i));
-//         M(i, j) = 0.0;
-//       }
-//     }
+    vorticity(0) = t_u_grad(2, 1) - t_u_grad(1, 2);
+    vorticity(1) = t_u_grad(0, 2) - t_u_grad(2, 0);
+    vorticity(2) = t_u_grad(1, 0) - t_u_grad(0, 1);
 
-//     for (int i = 0; i != 3; i++) {
-//       for (int j = 0; j != 3; j++) {
-//         for (int k = 0; k != 3; k++) {
-//           M(i, j) += S(i, k) * S(k, j) + Omega(i, k) * Omega(k, j);
-//         }
-//       }
-//     }
+    q = 0;
+    for (int i = 0; i != 3; i++) {
+      for (int j = 0; j != 3; j++) {
+        q += -0.5 * t_u_grad(i, j) * t_u_grad(j, i);
+      }
+    }
+    for (int i = 0; i != 3; i++) {
+      for (int j = 0; j != 3; j++) {
+        S(i, j) = 0.5 * (t_u_grad(i, j) + t_u_grad(j, i));
+        Omega(i, j) = 0.5 * (t_u_grad(i, j) - t_u_grad(j, i));
+        M(i, j) = 0.0;
+      }
+    }
 
-//     MatrixDouble eigen_vectors = M;
-//     VectorDouble eigen_values(3);
+    for (int i = 0; i != 3; i++) {
+      for (int j = 0; j != 3; j++) {
+        for (int k = 0; k != 3; k++) {
+          M(i, j) += S(i, k) * S(k, j) + Omega(i, k) * Omega(k, j);
+        }
+      }
+    }
 
-//     // LAPACK - eigenvalues and vectors. Applied twice for initial creates
-//     // memory space
-//     int n = 3, lda = 3, info, lwork = -1;
-//     double wkopt;
-//     info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
-//                         &(eigen_values.data()[0]), &wkopt, lwork);
-//     if (info != 0)
-//       SETERRQ1(PETSC_COMM_SELF, 1,
-//                "is something wrong with lapack_dsyev info = %d", info);
-//     lwork = (int)wkopt;
-//     double work[lwork];
-//     info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
-//                         &(eigen_values.data()[0]), work, lwork);
-//     if (info != 0)
-//       SETERRQ1(PETSC_COMM_SELF, 1,
-//                "is something wrong with lapack_dsyev info = %d", info);
+    MatrixDouble eigen_vectors = M;
+    VectorDouble eigen_values(3);
 
-//     map<double, int> eigen_sort;
-//     eigen_sort[eigen_values[0]] = 0;
-//     eigen_sort[eigen_values[1]] = 1;
-//     eigen_sort[eigen_values[2]] = 2;
+    // LAPACK - eigenvalues and vectors. Applied twice for initial creates
+    // memory space
+    int n = 3, lda = 3, info, lwork = -1;
+    double wkopt;
+    info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
+                        &(eigen_values.data()[0]), &wkopt, lwork);
+    if (info != 0)
+      SETERRQ1(PETSC_COMM_SELF, 1,
+               "is something wrong with lapack_dsyev info = %d", info);
+    lwork = (int)wkopt;
+    double work[lwork];
+    info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
+                        &(eigen_values.data()[0]), work, lwork);
+    if (info != 0)
+      SETERRQ1(PETSC_COMM_SELF, 1,
+               "is something wrong with lapack_dsyev info = %d", info);
 
-//     // prin_stress_vect.clear();
-//     VectorDouble prin_vals_vect(3);
-//     prin_vals_vect.clear();
+    map<double, int> eigen_sort;
+    eigen_sort[eigen_values[0]] = 0;
+    eigen_sort[eigen_values[1]] = 1;
+    eigen_sort[eigen_values[2]] = 2;
 
-//     int ii = 0;
-//     for (map<double, int>::reverse_iterator mit = eigen_sort.rbegin();
-//          mit != eigen_sort.rend(); mit++) {
-//       prin_vals_vect[ii] = eigen_values[mit->second];
-//       // for (int dd = 0; dd != 3; dd++) {
-//       //   prin_stress_vect(ii, dd) = eigen_vectors.data()[3 * mit->second
-//       +
-//       //   dd];
-//       // }
-//       ii++;
-//     }
+    // prin_stress_vect.clear();
+    VectorDouble prin_vals_vect(3);
+    prin_vals_vect.clear();
 
-//     l2 = prin_vals_vect[1];
-//     // cout << prin_vals_vect << endl;
-//     // cout << "-0.5 sum: " << -0.5 * (prin_vals_vect[0] +
-//     prin_vals_vect[1] +
-//     // prin_vals_vect[2]) << endl; cout << "q: " << q << endl;
+    int ii = 0;
+    for (map<double, int>::reverse_iterator mit = eigen_sort.rbegin();
+         mit != eigen_sort.rend(); mit++) {
+      prin_vals_vect[ii] = eigen_values[mit->second];
+      // for (int dd = 0; dd != 3; dd++) {
+      //   prin_stress_vect(ii, dd) = eigen_vectors.data()[3 * mit->second +
+      //   dd];
+      // }
+      ii++;
+    }
 
-//     // t_s(i,j) = 0.5*(t)
+    l2 = prin_vals_vect[1];
+    // cout << prin_vals_vect << endl;
+    // cout << "-0.5 sum: " << -0.5 * (prin_vals_vect[0] + prin_vals_vect[1]
+    // + prin_vals_vect[2]) << endl; cout << "q: " << q << endl;
 
-//     // vorticity(0) = t_u_grad(1, 2) - t_u_grad(2, 1);
-//     // vorticity(1) = t_u_grad(2, 0) - t_u_grad(0, 2);
-//     // vorticity(2) = t_u_grad(0, 1) - t_u_grad(1, 0);
+    // t_s(i,j) = 0.5*(t)
 
-//     CHKERR postProcMesh.tag_set_data(th_vorticity, &mapGaussPts[gg], 1,
-//                                      &vorticity(0));
-//     CHKERR postProcMesh.tag_set_data(th_q, &mapGaussPts[gg], 1, &q);
-//     CHKERR postProcMesh.tag_set_data(th_l2, &mapGaussPts[gg], 1, &l2);
-//     ++t_u_grad;
-//   }
+    // vorticity(0) = t_u_grad(1, 2) - t_u_grad(2, 1);
+    // vorticity(1) = t_u_grad(2, 0) - t_u_grad(0, 2);
+    // vorticity(2) = t_u_grad(0, 1) - t_u_grad(1, 0);
 
-//   MoFEMFunctionReturn(0);
-// }
+    CHKERR postProcMesh.tag_set_data(th_vorticity, &mapGaussPts[gg], 1,
+                                     &vorticity(0));
+    CHKERR postProcMesh.tag_set_data(th_q, &mapGaussPts[gg], 1, &q);
+    CHKERR postProcMesh.tag_set_data(th_l2, &mapGaussPts[gg], 1, &l2);
+    ++t_u_grad;
+  }
+
+  MoFEMFunctionReturn(0);
+}
 
 VectorDouble3 stokes_flow_velocity(double x, double y, double z) {
   double r = sqrt(x * x + y * y + z * z);

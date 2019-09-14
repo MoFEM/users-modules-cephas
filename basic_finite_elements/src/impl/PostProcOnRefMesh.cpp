@@ -346,7 +346,6 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
   int const level_thick = max_ref_level_thick + 1;
   const EntityHandle *conn;
   int num_nodes;
-  //std::vector<EntityHandle> prism_vec;
   EntityHandle prism;
   const int nb_on_triangle = 6;
   const int nb_through_thickness = 3;
@@ -355,7 +354,6 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
 
       if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
           elementsMap.end()) {
-    // prism_vec = elementsMap[numeredEntFiniteElementPtr->getEnt()];
   } else {
     pointsMapVector.resize(0);
     gaussPtsTrianglesOnly.resize(3, nb_on_triangle, false);
@@ -428,9 +426,6 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
 
       const double eps = 1e-6;
       int ggf = 0, ggt = 0;
-
-      //pointsMap.insert(PointsMap3D(0, 0, 0, 0));
-      //pointsMap.insert(PointsMap3D(0, 0, 0, 1));
 
       pointsMap.clear();
 

@@ -27,7 +27,7 @@ struct FatPrism : public MoFEM::FatPrismElementForcesAndSourcesCore {
   FatPrism(MoFEM::Interface &m_field)
       : MoFEM::FatPrismElementForcesAndSourcesCore(m_field) {}
   int getRuleTrianglesOnly(int order) { return 2 * (order + 0); }
-  int getRuleThroughThickness(int order) { return 2 * (order + 1); }
+  int getRuleThroughThickness(int order) { return 2 * (order + 2); }
 };
 
 //} // namespace NavierStokesProblem
