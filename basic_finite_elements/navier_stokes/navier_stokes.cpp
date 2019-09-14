@@ -65,9 +65,8 @@ int main(int argc, char *argv[]) {
 
     int nbSubSteps = 1;   // default number of steps
     double lAmbda0 = 1.0; // default step size
-    // int initD = 0.0;            // initial phase_field value
-    double stepRed = 0.2; // stepsize reduction while diverging to 20%
-    int maxDivStep = 100; // maximumim number of diverged steps
+    double stepRed = 0.5; // stepsize reduction while diverging
+    int maxDivStep = 10; // maximum number of diverged steps
     int outPutStep = 1;   // how often post processing data is saved to h5m file
 
     PetscBool is_partitioned = PETSC_FALSE;
@@ -377,16 +376,18 @@ int main(int argc, char *argv[]) {
           dragFe, sideDragFe, "NAVIER_STOKES", "U", "P", commonData);
     }
 
-    // CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
-    //                                                      commonData);
-    CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
-                                             commonData);
+    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
+                                                         commonData);
+    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
+    //                                          commonData);
 
     Mat Aij;  // Stiffness matrix
-    Vec D, F; //, D0; // Vector of DOFs and the RHS
+    Vec D, D0, F; //, D0; // Vector of DOFs and the RHS
 
     {
       CHKERR DMCreateGlobalVector(dm, &D);
+
+      CHKERR VecDuplicate(D, &D0);
       // CHKERR VecDuplicate(D, &D0);
       CHKERR VecDuplicate(D, &F);
       CHKERR DMCreateMatrix(dm, &Aij);
@@ -435,6 +436,10 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+    CHKERR VecZeroEntries(D0);
+    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
 
     // CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
     // CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
@@ -536,7 +541,8 @@ int main(int argc, char *argv[]) {
     else
       NavierStokesElement::LoadScale::lambda = 0;
 
-    for (int ss = 0; ss < nbSubSteps; ++ss) {
+    int ss = 0;
+    while (NavierStokesElement::LoadScale::lambda < lAmbda0) {
 
       if (flg_load_file == PETSC_TRUE) {
         dirichlet_vel_bc_ptr->ts_t = ss;
@@ -575,17 +581,24 @@ int main(int argc, char *argv[]) {
       // adaptivity
 
       if (snes_reason < 0) {
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Nonlinear solver diverged!\n");
-        // if (isAtomTest)
-        //  SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-        //          "atom test diverged!");
+        //CHKERR PetscPrintf(PETSC_COMM_WORLD, "Nonlinear solver diverged!\n");
+
         if (number_of_diverges < maxDivStep) {
 
-          NavierStokesElement::LoadScale::lambda -= 2 * step_size;
-          NavierStokesElement::LoadScale::lambda += stepRed * (step_size);
+          NavierStokesElement::LoadScale::lambda -= step_size;
+          step_size *= stepRed;
+          // NavierStokesElement::LoadScale::lambda += stepRed *
+          // (step_size);
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Reducing step... \n");
           number_of_diverges++;
-          ss--;
+          //ss--;
+
+          CHKERR VecCopy(D0, D);
+          CHKERR VecAssemblyBegin(D);
+          CHKERR VecAssemblyEnd(D);
+          CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+          CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
           continue;
 
         } else {
@@ -595,6 +608,13 @@ int main(int argc, char *argv[]) {
       // ADAPTIVE STEPPING
       // const double frac = (double)desired_iteration_number / its;
       // step_size *= sqrt(frac);
+
+      CHKERR VecCopy(D, D0);
+
+      CHKERR VecAssemblyBegin(D0);
+      CHKERR VecAssemblyEnd(D0);
+      CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
 
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -654,6 +674,8 @@ int main(int argc, char *argv[]) {
                              vecPresDrag[2] + vecViscDrag[2]);
         }
       }
+
+      ss++;
     }
 
 
