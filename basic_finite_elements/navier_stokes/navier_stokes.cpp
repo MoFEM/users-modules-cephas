@@ -217,8 +217,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
       MoFEMFunctionReturn(0);
     };
-    //CHKERR setting_second_order_geometry();
-    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+    CHKERR setting_second_order_geometry();
+    //CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.build_fields();
 
     // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBVERTEX, "P");
@@ -321,6 +321,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (!solid_faces.empty()) {
+      //solid_faces.print();
       CHKERR m_field.add_ents_to_finite_element_by_type(solid_faces, MBTRI,
                                                         "DRAG");
     }
@@ -372,7 +373,7 @@ int main(int argc, char *argv[]) {
     dragFe->getRuleHook = NavierStokesElement::FaceRule();
 
     if (!solid_faces.empty()) {
-      NavierStokesElement::setDragForceOperators(
+      NavierStokesElement::setCalcDragOperators(
           dragFe, sideDragFe, "NAVIER_STOKES", "U", "P", commonData);
     }
 
@@ -503,26 +504,25 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetFromOptions(snes);
     }
 
-    Vec vecGlobalDrag;
-    CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &vecGlobalDrag);
-    VectorDouble3 vecPresDrag = VectorDouble3(3);
-    VectorDouble3 vecViscDrag = VectorDouble3(3);
+    Vec G;
+    CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
+    VectorDouble3 vecGlobalDrag = VectorDouble3(3);
 
-    auto compute_global_drag = [&vecGlobalDrag](VectorDouble3 &loc,
+    auto compute_global_drag = [&G](VectorDouble3 &loc,
                                                 VectorDouble3 &res) {
       MoFEMFunctionBegin;
 
-      CHKERR VecZeroEntries(vecGlobalDrag);
-      CHKERR VecAssemblyBegin(vecGlobalDrag);
-      CHKERR VecAssemblyEnd(vecGlobalDrag);
+      CHKERR VecZeroEntries(G);
+      CHKERR VecAssemblyBegin(G);
+      CHKERR VecAssemblyEnd(G);
 
       int ind[3] = {0, 1, 2};
-      CHKERR VecSetValues(vecGlobalDrag, 3, ind, loc.data().begin(),
+      CHKERR VecSetValues(G, 3, ind, loc.data().begin(),
                           ADD_VALUES);
-      CHKERR VecAssemblyBegin(vecGlobalDrag);
-      CHKERR VecAssemblyEnd(vecGlobalDrag);
+      CHKERR VecAssemblyBegin(G);
+      CHKERR VecAssemblyEnd(G);
 
-      CHKERR VecGetValues(vecGlobalDrag, 3, ind, res.data().begin());
+      CHKERR VecGetValues(G, 3, ind, res.data().begin());
 
       MoFEMFunctionReturn(0);
     };
@@ -535,6 +535,7 @@ int main(int argc, char *argv[]) {
     double step_size = lAmbda0 / nbSubSteps;
 
     boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProcPtr;
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr;
 
     if (flg_load_file == PETSC_TRUE)
       NavierStokesElement::LoadScale::lambda = lAmbda0;
@@ -621,6 +622,7 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
       if (ss % outPutStep == 0) {
+
         // for postprocessing:
         if (!postProcPtr) {
 
@@ -630,6 +632,7 @@ int main(int argc, char *argv[]) {
           CHKERR postProcPtr->addFieldValuesPostProc("U");
           CHKERR postProcPtr->addFieldValuesPostProc("P");
           CHKERR postProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+          CHKERR postProcPtr->addFieldValuesGradientPostProc("U");
 
           // loop over blocks
           for (auto &sit : commonData->setOfBlocksData) {
@@ -646,6 +649,42 @@ int main(int argc, char *argv[]) {
           }
         }
 
+        if (!solid_faces.empty() && !postProcDragPtr) {
+
+          postProcDragPtr =
+              boost::make_shared<PostProcFaceOnRefinedMesh>(m_field);
+          CHKERR postProcDragPtr->generateReferenceElementMesh();
+          //CHKERR postProcDragPtr->addFieldValuesPostProc("U");
+          //CHKERR postProcDragPtr->addFieldValuesPostProc("P");
+          //CHKERR postProcDragPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+          //CHKERR postProcDragPtr->addFieldValuesGradientPostProc("U");
+
+          CHKERR NavierStokesElement::setPostProcDragOperators(
+              postProcDragPtr, sideDragFe, "NAVIER_STOKES", "U", "P",
+              commonData);
+
+          // for (auto &sit : commonData->setOfFacesData) {
+          //   // sideDragFe->getOpPtrVector().push_back(
+          //   //     new OpCalculateVectorFieldGradient<3, 3>(
+          //   //         velocity_field, common_data->gradDispPtr));
+
+          //   postProcDragPtr->getOpPtrVector().push_back(
+          //       new OpCalculateInvJacForFace(commonData->invJac));
+          //   postProcDragPtr->getOpPtrVector().push_back(
+          //       new OpSetInvJacH1ForFace(commonData->invJac));
+          //   postProcDragPtr->getOpPtrVector().push_back(
+          //       new OpCalculateScalarFieldValues("P",
+          //                                        common_data->pPtr));
+          //   postProcDragPtr->getOpPtrVector().push_back(
+          //       new NavierStokesElement::OpCalcDragTraction(
+          //           sideDragFe, "NAVIER_STOKES", commonData, sit.second));
+          //   postProcDragPtr->getOpPtrVector().push_back(
+          //       new NavierStokesElement::OpPostProcDrag(
+          //           postProcDragPtr->postProcMesh, postProcDragPtr->mapGaussPts,
+          //           commonData, sit.second));
+          // }
+        }
+
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", postProcPtr);
         string out_file_name;
         std::ostringstream stm;
@@ -657,22 +696,38 @@ int main(int argc, char *argv[]) {
             out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
 
         if (!solid_faces.empty()) {
-          commonData->pressureDrag.clear();
-          commonData->viscousDrag.clear();
+
+          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", postProcDragPtr);
+          string out_file_name;
+          std::ostringstream stm;
+          stm << "out_drag_" << ss << ".h5m";
+          out_file_name = stm.str();
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                             out_file_name.c_str());
+          CHKERR postProcDragPtr->postProcMesh.write_file(
+              out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+
+          commonData->pressureDragForce.clear();
+          commonData->viscousDragForce.clear();
+          commonData->totalDragForce.clear();
           CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", dragFe);
 
-          compute_global_drag(commonData->pressureDrag, vecPresDrag);
-          compute_global_drag(commonData->viscousDrag, vecViscDrag);
-
+          compute_global_drag(commonData->pressureDragForce, vecGlobalDrag);
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "pressure drag: (%g, %g, %g)\n",
-                             vecPresDrag[0], vecPresDrag[1], vecPresDrag[2]);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "viscous drag:  (%g, %g, %g)\n",
-                             vecViscDrag[0], vecViscDrag[1], vecViscDrag[2]);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "total drag:    (%g, %g, %g)\n",
-                             vecPresDrag[0] + vecViscDrag[0],
-                             vecPresDrag[1] + vecViscDrag[1],
-                             vecPresDrag[2] + vecViscDrag[2]);
+                             vecGlobalDrag[0], vecGlobalDrag[1],
+                             vecGlobalDrag[2]);
+
+          compute_global_drag(commonData->viscousDragForce, vecGlobalDrag);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "viscous drag: (%g, %g, %g)\n",
+                             vecGlobalDrag[0], vecGlobalDrag[1],
+                             vecGlobalDrag[2]);
+
+          compute_global_drag(commonData->totalDragForce, vecGlobalDrag);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "total drag: (%g, %g, %g)\n",
+                             vecGlobalDrag[0], vecGlobalDrag[1],
+                             vecGlobalDrag[2]);
         }
+
       }
 
       ss++;
@@ -682,10 +737,11 @@ int main(int argc, char *argv[]) {
     CHKERR SNESDestroy(&snes);
     CHKERR MatDestroy(&Aij);
     CHKERR VecDestroy(&D);
+    CHKERR VecDestroy(&D0);
     CHKERR VecDestroy(&F);
     CHKERR DMDestroy(&dm);
 
-    CHKERR VecDestroy(&vecGlobalDrag);
+    CHKERR VecDestroy(&G);
   }
   CATCH_ERRORS;
 

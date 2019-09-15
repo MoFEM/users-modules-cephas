@@ -59,24 +59,34 @@ struct NavierStokesElement {
     boost::shared_ptr<MatrixDouble> dispPtr;
     boost::shared_ptr<VectorDouble> pPtr;
 
-    VectorDouble3 pressureDrag;
-    VectorDouble3 viscousDrag;
+    boost::shared_ptr<MatrixDouble> pressureDragTract;
+    boost::shared_ptr<MatrixDouble> viscousDragTract;
+    boost::shared_ptr<MatrixDouble> totalDragTract;
+
+    VectorDouble3 pressureDragForce;
+    VectorDouble3 viscousDragForce;
+    VectorDouble3 totalDragForce;
 
     std::map<int, BlockData> setOfBlocksData;
     std::map<int, BlockData> setOfFacesData;
 
-    CommonData() { 
+    CommonData() {
 
       gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       dispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
-      pressureDrag = VectorDouble3(3);
-      viscousDrag = VectorDouble3(3);
+      pressureDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      viscousDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      totalDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
-      pressureDrag.clear();
-      viscousDrag.clear();
+      pressureDragForce = VectorDouble3(3);
+      viscousDragForce = VectorDouble3(3);
+      totalDragForce = VectorDouble3(3);
 
+      pressureDragForce.clear();
+      viscousDragForce.clear();
+      totalDragForce.clear();
     }
 
     MoFEMErrorCode getParameters() {
@@ -113,22 +123,30 @@ struct NavierStokesElement {
                      const std::string pressure_field,
                      boost::shared_ptr<CommonData> common_data);
 
-  static MoFEMErrorCode setDragForceOperators(
+  static MoFEMErrorCode setCalcDragOperators(
       boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe,
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
-      std::string side_fe_name, 
-      const std::string velocity_field, const std::string pressure_field,
+      std::string side_fe_name, const std::string velocity_field,
+      const std::string pressure_field,
+      boost::shared_ptr<CommonData> common_data);
+
+  static MoFEMErrorCode setPostProcDragOperators(
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
+      std::string side_fe_name, const std::string velocity_field,
+      const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data);
 
   /**
    * \brief Set integration rule to volume elements
    *
    * This rule is used to integrate \f$\nabla v \cdot \nabla u\f$, thus
-   * if the approximation field and the testing field are polynomials of order
-   * "p", then the rule for the exact integration is 2*(p-1).
+   * if the approximation field and the testing field are polynomials of
+   * order "p", then the rule for the exact integration is 2*(p-1).
    *
-   * Integration rule is order of polynomial which is calculated exactly. Finite
-   * element selects integration method based on return of this function.
+   * Integration rule is order of polynomial which is calculated exactly.
+   * Finite element selects integration method based on return of this
+   * function.
    *
    */
   struct VolRule {
@@ -318,13 +336,13 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &data);
   };
 
-  struct OpCalcPressureDrag : public FaceUserDataOperator {
+  struct OpCalcDragForce: public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> &commonData;
     BlockData &blockData;
 
-    OpCalcPressureDrag(boost::shared_ptr<CommonData> &common_data,
-                       BlockData &block_data)
+    OpCalcDragForce(boost::shared_ptr<CommonData> &common_data,
+                            BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               "P", UserDataOperator::OPROW),
           commonData(common_data), blockData(block_data) {
@@ -339,20 +357,48 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
-  struct OpCalcViscousDrag : public FaceUserDataOperator {
+  struct OpCalcDragTraction : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> &commonData;
     BlockData &blockData;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &sideFe;
     std::string sideFeName;
 
-    OpCalcViscousDrag(
+    OpCalcDragTraction(
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &side_fe,
-        std::string &side_fe_name, boost::shared_ptr<CommonData> &common_data,
+        std::string side_fe_name, boost::shared_ptr<CommonData> &common_data,
         BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               "U", UserDataOperator::OPROW),
-          sideFe(side_fe), sideFeName(side_fe_name), commonData(common_data), blockData(block_data) {
+          sideFe(side_fe), sideFeName(side_fe_name), commonData(common_data),
+          blockData(block_data) {
+      doVertices = true;
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    };
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpPostProcDrag : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonData> &commonData;
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    BlockData &blockData;
+
+    OpPostProcDrag(
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts, 
+        boost::shared_ptr<CommonData> &common_data,
+        BlockData &block_data)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              "U", UserDataOperator::OPROW),
+          commonData(common_data), postProcMesh(post_proc_mesh),
+          mapGaussPts(map_gauss_pts), blockData(block_data) {
       doVertices = true;
       doEdges = false;
       doQuads = false;
