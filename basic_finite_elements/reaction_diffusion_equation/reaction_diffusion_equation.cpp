@@ -809,7 +809,7 @@ int main(int argc, char *argv[]) {
         Range inner_surface_verts;
         CHKERR moab.get_connectivity(inner_surface, inner_surface_verts, false);
         CHKERR m_field.getInterface<FieldBlas>()->setField(
-            ((double) rand() / (RAND_MAX)), MBVERTEX, inner_surface_verts, "v");
+            0.5, MBVERTEX, inner_surface_verts, "v");
       }
     }
     cerr << "rand :" << ((double) rand() / (RAND_MAX)) << "\n";

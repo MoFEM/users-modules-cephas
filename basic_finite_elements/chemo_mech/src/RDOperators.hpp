@@ -20,21 +20,8 @@ using OpBoundaryEle = BoundaryEle::UserDataOperator;
 
 using EntData = DataForcesAndSourcesCore::EntData;
 
-const double a11 = 1; 
-const double a12 = 2; 
-const double a13 = 7;
-
-const double a21 = 7;
-const double a22 = 1;
-const double a23 = 2;
-
-const double a31 = 2;
-const double a32 = 7;
-const double a33 = 1;
-const double r = 1;
 
 const double B = 0.0;
-const double B0 = 1e-2;
 const double B_epsilon = 0.0;
 
 
@@ -44,6 +31,7 @@ const double natural_bc_values = 0.0;
 const double essential_bc_values = 0.0;
 // const int dim = 3;
 FTensor::Index<'i', 3> i;
+
 
 struct PreviousData {
   MatrixDouble flux_values;
@@ -61,6 +49,24 @@ struct PreviousData {
     jac.resize(2, 2, false);
     inv_jac.resize(2, 2, false);
   }
+};
+
+struct BlockData {
+  int block_id;
+  double a11, a12, a13,
+         a21, a22, a23,
+         a31, a32, a33;
+
+  double r1, r2, r3;
+
+  Range block_ents;
+
+  double B0;  // species mobility
+
+  BlockData(): a11(1), a12(0), a13(0),
+                  a21(0), a22(1), a23(0),
+                  a31(0), a32(0), a33(1),
+                  B0(1e-3), r1(1), r2(1), r3(1) {}
 };
 
 
@@ -113,9 +119,11 @@ struct OpComputeSlowValue : public OpFaceEle {
   OpComputeSlowValue(std::string mass_field,
                      boost::shared_ptr<PreviousData> &data1,
                      boost::shared_ptr<PreviousData> &data2,
-                     boost::shared_ptr<PreviousData> &data3)
+                     boost::shared_ptr<PreviousData> &data3,
+                     std::map<int, BlockData> &block_map)
       : OpFaceEle(mass_field, OpFaceEle::OPROW), commonData1(data1),
-        commonData2(data2), commonData3(data3), massField(mass_field) {}
+        commonData2(data2), commonData3(data3), massField(mass_field),
+        setOfBlock(block_map) {}
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
     boost::shared_ptr<VectorDouble> slow_value_ptr1(commonData1,
@@ -138,7 +146,28 @@ struct OpComputeSlowValue : public OpFaceEle {
       vec3.clear();
     }
     const int nb_dofs = data.getIndices().size();
+    
     if (nb_dofs) {
+      auto find_block_data = [&]() {
+        EntityHandle fe_ent = getFEEntityHandle();
+        BlockData *block_raw_ptr = nullptr;
+        for (auto &m : setOfBlock) {
+          if(m.second.block_ents.find(fe_ent)!=m.second.block_ents.end()) {
+            block_raw_ptr = &m.second;
+            break;
+          } 
+        }
+        return block_raw_ptr;
+      };
+
+      auto block_data_ptr = find_block_data();
+      if(!block_data_ptr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+
+      auto &block_data = *block_data_ptr;
+
+
+      
       const int nb_integration_pts = getGaussPts().size2();
 
       auto t_slow_values1 = getFTensor0FromVec(vec1);
@@ -148,17 +177,23 @@ struct OpComputeSlowValue : public OpFaceEle {
       auto t_mass_values1 = getFTensor0FromVec(commonData1->mass_values);
       auto t_mass_values2 = getFTensor0FromVec(commonData2->mass_values);
       auto t_mass_values3 = getFTensor0FromVec(commonData3->mass_values);
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        t_slow_values1 = r * t_mass_values1 *
-                         (1.0 - a11 * t_mass_values1 - a12 * t_mass_values2 -
-                          a13 * t_mass_values3);
-        t_slow_values2 = r * t_mass_values2 *
-                         (1.0 - a21 * t_mass_values1 - a22 * t_mass_values2 -
-                          a23 * t_mass_values3);
+     
 
-        t_slow_values3 = r * t_mass_values3 *
-                         (1.0 - a31 * t_mass_values1 - a32 * t_mass_values2 -
-                          a33 * t_mass_values3);
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+        t_slow_values1 =
+            block_data.r1 * t_mass_values1 *
+            (1.0 - block_data.a11 * t_mass_values1 -
+             block_data.a12 * t_mass_values2 - block_data.a13 * t_mass_values3);
+        t_slow_values2 =
+            block_data.r2 * t_mass_values2 *
+            (1.0 - block_data.a21 * t_mass_values1 -
+             block_data.a22 * t_mass_values2 - block_data.a23 * t_mass_values3);
+
+        t_slow_values3 =
+            block_data.r3 * t_mass_values3 *
+            (1.0 - block_data.a31 * t_mass_values1 -
+                   block_data.a32 * t_mass_values2 - 
+                   block_data.a33 * t_mass_values3);
         ++t_slow_values1;
         ++t_slow_values2;
         ++t_slow_values3;
@@ -176,6 +211,7 @@ private:
   boost::shared_ptr<PreviousData> commonData1;
   boost::shared_ptr<PreviousData> commonData2;
   boost::shared_ptr<PreviousData> commonData3;
+  std::map<int , BlockData>  setOfBlock;
 };
 
 struct OpEssentialBC : public OpBoundaryEle {
@@ -185,7 +221,6 @@ struct OpEssentialBC : public OpBoundaryEle {
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
-    EntityType type1 = type;
     int nb_dofs = data.getIndices().size();
     if (nb_dofs) {
       EntityHandle fe_ent = getFEEntityHandle();
@@ -344,18 +379,11 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
       const double vol = getMeasure();
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        // const double f;
-        // if(mass_field == "MASS1"){
-        //   f = a * r * t_mass_value
-        // }else if(mass_field == "MASS1"){
-
-        // } else if (mass_field == "MASS1") {
-
-        // }
           // const double f = a * r * t_mass_value * (1 - t_mass_value);
           for (int rr = 0; rr != nb_dofs; ++rr) {
             auto t_col_v_base = data.getFTensor0N(gg, 0);
             vecF[rr] += a * t_slow_value * t_row_v_base;
+            // vecF[rr] += f * t_row_v_base;
             for (int cc = 0; cc != nb_dofs; ++cc) {
               mat(rr, cc) += a * t_row_v_base * t_col_v_base;
               ++t_col_v_base;
@@ -442,8 +470,9 @@ template <int dim>
 struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
 {
   OpAssembleStiffRhsTau(std::string flux_field,
-                        boost::shared_ptr<PreviousData> &data)
-      : OpFaceEle(flux_field, OpFaceEle::OPROW), commonData(data) {
+                        boost::shared_ptr<PreviousData> &data,
+                        std::map<int, BlockData> &block_map)
+      : OpFaceEle(flux_field, OpFaceEle::OPROW), commonData(data), setOfBlock(block_map) {
     cerr << "OpAssembleStiffRhsTau()" << endl;
   }
 
@@ -452,41 +481,57 @@ struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
 
     const int nb_dofs = data.getIndices().size();
     if (nb_dofs) {
+        auto find_block_data = [&]() {
+          EntityHandle fe_ent = getFEEntityHandle();
+          BlockData *block_raw_ptr = nullptr;
+          for (auto &m : setOfBlock) {
+            if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+              block_raw_ptr = &m.second;
+              break;
+            }
+          }
+          return block_raw_ptr;
+        };
 
-      vecF.resize(nb_dofs, false);
-      vecF.clear();
+        auto block_data_ptr = find_block_data();
+        if (!block_data_ptr)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+        auto &block_data = *block_data_ptr;
 
-      const int nb_integration_pts = getGaussPts().size2();
-      auto t_flux_value = getFTensor1FromMat<3>(commonData->flux_values);
-      auto t_mass_value = getFTensor0FromVec(commonData->mass_values);
-      auto t_tau_base = data.getFTensor1N<3>();
+        vecF.resize(nb_dofs, false);
+        vecF.clear();
 
-      auto t_tau_grad = data.getFTensor2DiffN<3, 2>();
+        const int nb_integration_pts = getGaussPts().size2();
+        auto t_flux_value = getFTensor1FromMat<3>(commonData->flux_values);
+        auto t_mass_value = getFTensor0FromVec(commonData->mass_values);
+        auto t_tau_base = data.getFTensor1N<3>();
 
-      auto t_w = getFTensor0IntegrationWeight();
-      const double vol = getMeasure();
+        auto t_tau_grad = data.getFTensor2DiffN<3, 2>();
 
-      for (int gg = 0; gg < nb_integration_pts; ++gg) {
+        auto t_w = getFTensor0IntegrationWeight();
+        const double vol = getMeasure();
 
-        const double K = B_epsilon + (B0 + B * t_mass_value);
-        const double K_inv = 1. / K;
-        const double a = vol * t_w;
-        for (int rr = 0; rr < nb_dofs; ++rr) {
-          double div_base = t_tau_grad(0, 0) + t_tau_grad(1, 1);
-          vecF[rr] += (K_inv * t_tau_base(i) * t_flux_value(i) -
-                       div_base * t_mass_value) *
-                      a;
-          ++t_tau_base;
-          ++t_tau_grad;
+        for (int gg = 0; gg < nb_integration_pts; ++gg) {
+
+          const double K = B_epsilon + (block_data.B0 + B * t_mass_value);
+          const double K_inv = 1. / K;
+          const double a = vol * t_w;
+          for (int rr = 0; rr < nb_dofs; ++rr) {
+            double div_base = t_tau_grad(0, 0) + t_tau_grad(1, 1);
+            vecF[rr] += (K_inv * t_tau_base(i) * t_flux_value(i) -
+                         div_base * t_mass_value) *
+                        a;
+            ++t_tau_base;
+            ++t_tau_grad;
+          }
+          ++t_flux_value;
+          ++t_mass_value;
+          ++t_w;
         }
-        ++t_flux_value;
-        ++t_mass_value;
-        ++t_w;
-      }
-      CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
-                          PETSC_TRUE);
-      CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(),
-                          ADD_VALUES);
+        CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
+                            PETSC_TRUE);
+        CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(),
+                            ADD_VALUES);
     }
     MoFEMFunctionReturn(0);
   }
@@ -494,6 +539,7 @@ struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
 private:
   boost::shared_ptr<PreviousData> commonData;
   VectorDouble vecF;
+  std::map<int, BlockData> setOfBlock;
 };
 // 4. Assembly of F_v
 template <int dim>
@@ -549,9 +595,10 @@ template <int dim>
 struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
 {
   OpAssembleLhsTauTau(std::string flux_field,
-                      boost::shared_ptr<PreviousData> &commonData)
+                      boost::shared_ptr<PreviousData> &commonData,
+                      std::map<int, BlockData> &block_map)
       : OpFaceEle(flux_field, flux_field, OpFaceEle::OPROWCOL),
-        // essential_bd_ents(essential_bd_ents),
+        setOfBlock(block_map),
         commonData(commonData) {
     sYmm = true;
     cerr << "OpAssembleLhsTauTau()" << endl;
@@ -565,6 +612,23 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
     const int nb_col_dofs = col_data.getIndices().size();
 
     if (nb_row_dofs && nb_col_dofs) {
+      auto find_block_data = [&]() {
+        EntityHandle fe_ent = getFEEntityHandle();
+        BlockData *block_raw_ptr = nullptr;
+        for (auto &m : setOfBlock) {
+          if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+            block_raw_ptr = &m.second;
+            break;
+          }
+        }
+        return block_raw_ptr;
+      };
+
+      auto block_data_ptr = find_block_data();
+      if (!block_data_ptr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+      auto &block_data = *block_data_ptr;
+
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
       const int nb_integration_pts = getGaussPts().size2();
@@ -577,7 +641,7 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
 
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        const double K = B_epsilon + (B0 + B * t_mass_value);
+        const double K = B_epsilon + (block_data.B0 + B * t_mass_value);
         const double K_inv = 1. / K;
         for (int rr = 0; rr != nb_row_dofs; ++rr) {
           auto t_col_tau_base = col_data.getFTensor1N<3>(gg, 0);
@@ -606,6 +670,7 @@ private:
   boost::shared_ptr<PreviousData> commonData;
   MatrixDouble mat, transMat;
   Range essential_bd_ents;
+  std::map<int, BlockData> setOfBlock;
 };
 
 // 9. Assembly of tangent for F_tau_v excluding the essential bc
@@ -613,9 +678,9 @@ template <int dim>
 struct OpAssembleLhsTauV : OpFaceEle // E_TauV
 {
   OpAssembleLhsTauV(std::string flux_field, std::string mass_field,
-                    boost::shared_ptr<PreviousData> &data)
+                    boost::shared_ptr<PreviousData> &data, std::map<int, BlockData> &block_map)
       : OpFaceEle(flux_field, mass_field, OpFaceEle::OPROWCOL),
-        commonData(data) {
+        commonData(data), setOfBlock(block_map) {
     sYmm = false;
     cerr << "OpAssembleLhsTauV()" << endl;
   }
@@ -628,6 +693,22 @@ struct OpAssembleLhsTauV : OpFaceEle // E_TauV
     const int nb_col_dofs = col_data.getIndices().size();
 
     if (nb_row_dofs && nb_col_dofs) {
+      auto find_block_data = [&]() {
+        EntityHandle fe_ent = getFEEntityHandle();
+        BlockData *block_raw_ptr = nullptr;
+        for (auto &m : setOfBlock) {
+          if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+            block_raw_ptr = &m.second;
+            break;
+          }
+        }
+        return block_raw_ptr;
+      };
+
+      auto block_data_ptr = find_block_data();
+      if (!block_data_ptr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+      auto &block_data = *block_data_ptr;
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
       const int nb_integration_pts = getGaussPts().size2();
@@ -641,7 +722,7 @@ struct OpAssembleLhsTauV : OpFaceEle // E_TauV
 
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        const double K = B_epsilon + (B0 + B * t_mass_value);
+        const double K = B_epsilon + (block_data.B0 + B * t_mass_value);
         const double K_inv = 1. / K;
         const double K_diff = B;
 
@@ -671,6 +752,7 @@ struct OpAssembleLhsTauV : OpFaceEle // E_TauV
 private:
   boost::shared_ptr<PreviousData> commonData;
   MatrixDouble mat;
+  std::map<int, BlockData> setOfBlock;
 };
 
 // 10. Assembly of tangent for F_v_tau

@@ -11,9 +11,9 @@
       "program": "/Users/mebratuwakeni/mofem_install/um_debug/build/basic_finite_elements/chemo_mech/mixed_reac_diff",
       "args": [
         "-file_name",
-        "mixed_mesh.h5m"
+        "mesh.h5m"
       ],
-      "cwd": "/Users/mebratuwakeni/jobs/standard_reaction_diffusion/mixed_reaction_diffusion/modular",
+      "cwd": "/Users/mebratuwakeni/jobs/standard_reaction_diffusion/mixed_reaction_diffusion/strib_b",
       "preLaunchTask": "modular_reaction_diffusion",
       //"internalConsoleOptions": "openOnSessionStart",
       //"console": "internalConsole"
