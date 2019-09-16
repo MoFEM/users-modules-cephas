@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) {
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
 
+    PetscBool only_stokes = PETSC_FALSE;
+
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "TEST_NAVIER_STOKES problem",
                              "none");
 
@@ -71,6 +73,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-is_partitioned", "is_partitioned?", "",
                             is_partitioned, &is_partitioned, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-only_stokes", "only stokes", "", only_stokes,
+                            &only_stokes, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
@@ -105,10 +110,10 @@ int main(int argc, char *argv[]) {
 
     // Print boundary conditions and material parameters
     MeshsetsManager *meshsets_mng_ptr;
-    CHKERR m_field.getInterface(meshsets_mng_ptr);
-    CHKERR meshsets_mng_ptr->printDisplacementSet();
-    CHKERR meshsets_mng_ptr->printForceSet();
-    CHKERR meshsets_mng_ptr->printMaterialsSet();
+    // CHKERR m_field.getInterface(meshsets_mng_ptr);
+    // CHKERR meshsets_mng_ptr->printDisplacementSet();
+    // CHKERR meshsets_mng_ptr->printForceSet();
+    // CHKERR meshsets_mng_ptr->printMaterialsSet();
 
     BitRefLevel bit_level0;
     bit_level0.set(0);
@@ -266,9 +271,40 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>();
-    // CHKERR commonData.getParameters();
 
-    // std::map<int, NavierStokesElement::BlockData> setOfBlocksData;
+    auto set_scales_for_block = [&](NavierStokesElement::BlockData &block) {
+      MoFEMFunctionBegin;
+      EntityHandle tree_root;
+      AdaptiveKDTree myTree(&moab);
+      CHKERR myTree.build_tree(block.eNts, &tree_root);
+
+      // get the overall bounding box corners
+      BoundBox box;
+      CHKERR myTree.get_bounding_box(box, &tree_root);
+      block.dimScales.length = box.diagonal_length();
+      block.dimScales.velocity = 1.0;
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
+          (1.0/block.dimScales.length), "MESH_NODE_POSITIONS");
+
+      block.dimScales.Re = block.fluidDensity * block.dimScales.velocity *
+                           block.dimScales.length / block.fluidViscosity;
+      if (only_stokes) {
+        block.dimScales.pressure = block.fluidViscosity *
+                                   block.dimScales.velocity /
+                                   block.dimScales.length;
+        block.inertiaCoef = 0.0;
+        block.viscousCoef = 1.0;
+
+      } 
+      else {
+        block.dimScales.pressure = block.fluidDensity *
+                                   block.dimScales.velocity *
+                                   block.dimScales.velocity;
+        block.inertiaCoef = 1.0;
+        block.viscousCoef = 1.0 / block.dimScales.Re;
+      }
+      MoFEMFunctionReturn(0);
+    };
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 5, "FLUID") == 0) {
@@ -276,7 +312,6 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.get_moab().get_entities_by_type(
             bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].eNts,
             true);
-
         std::vector<double> attributes;
         bit->getAttributes(attributes);
         if (attributes.size() != 2) {
@@ -286,13 +321,17 @@ int main(int argc, char *argv[]) {
         commonData->setOfBlocksData[id].iD = id;
         commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
         commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+        set_scales_for_block(commonData->setOfBlocksData[id]);
       }
     }
 
-    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
-                                                         commonData);
-    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
-    //                                                commonData);
+    if (only_stokes) {
+      CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
+                                                     commonData);
+    } else {
+      CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U",
+                                                           "P", commonData);
+    }
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "TEST_NAVIER_STOKES", feLhs, nullFE,
                                   nullFE);
@@ -311,68 +350,70 @@ int main(int argc, char *argv[]) {
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 "
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it "
+          "1 "
           "-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
-    } else {
-      char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
-                               "-snes_rtol 0 -snes_max_it 1 -pc_type none";
-      CHKERR PetscOptionsInsertString(NULL, testing_options);
-    }
+      } else {
+        char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
+                                 "-snes_rtol 0 -snes_max_it 1 -pc_type none";
+        CHKERR PetscOptionsInsertString(NULL, testing_options);
+      }
 
-    SNES snes;
-    CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
-    MoFEM::SnesCtx *snes_ctx;
-    CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
-    CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
-    CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
-    CHKERR SNESSetFromOptions(snes);
-
-    CHKERR SNESSolve(snes, NULL, x);
-
-    // int ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD);
-    // CHKERRG(ierr);
-
-    PetscInt N;
-    VecGetSize(f, &N);
-    cout << "f size: " << N << endl;
-
-    if (test_jacobian == PETSC_FALSE) {
-      double nrm_A0;
-      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
-
-      char testing_options_fd[] = "-snes_fd";
-      CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
-
+      SNES snes;
+      CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
+      MoFEM::SnesCtx *snes_ctx;
+      CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
-      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+      CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
       CHKERR SNESSetFromOptions(snes);
 
       CHKERR SNESSolve(snes, NULL, x);
-      CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
 
-      double nrm_A;
-      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
-      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
-                  nrm_A / nrm_A0);
-      nrm_A /= nrm_A0;
+      // int ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD);
+      // CHKERRG(ierr);
 
-      const double tol = 1e-5;
-      if (nrm_A > tol) {
-        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                "Difference between hand-calculated tangent matrix and finite "
-                "difference matrix is too big");
+      PetscInt N;
+      VecGetSize(f, &N);
+      cout << "f size: " << N << endl;
+
+      if (test_jacobian == PETSC_FALSE) {
+        double nrm_A0;
+        CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
+
+        char testing_options_fd[] = "-snes_fd";
+        CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
+
+        CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+        CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+        CHKERR SNESSetFromOptions(snes);
+
+        CHKERR SNESSolve(snes, NULL, x);
+        CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
+
+        double nrm_A;
+        CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
+        PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+                    nrm_A / nrm_A0);
+        nrm_A /= nrm_A0;
+
+        const double tol = 1e-5;
+        if (nrm_A > tol) {
+          SETERRQ(
+              PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+              "Difference between hand-calculated tangent matrix and finite "
+              "difference matrix is too big");
+        }
       }
-    }
 
-    CHKERR VecDestroy(&x);
-    CHKERR VecDestroy(&f);
-    CHKERR MatDestroy(&A);
-    CHKERR MatDestroy(&fdA);
-    CHKERR SNESDestroy(&snes);
+      CHKERR VecDestroy(&x);
+      CHKERR VecDestroy(&f);
+      CHKERR MatDestroy(&A);
+      CHKERR MatDestroy(&fdA);
+      CHKERR SNESDestroy(&snes);
 
-    // destroy DM
-    CHKERR DMDestroy(&dm);
+      // destroy DM
+      CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 

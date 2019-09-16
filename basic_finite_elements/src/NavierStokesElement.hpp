@@ -42,13 +42,26 @@ struct NavierStokesElement {
 
   using EntData = DataForcesAndSourcesCore::EntData;
 
+  struct DimScales {
+    double length;
+    double velocity;
+    double pressure;
+    double Re;
+    DimScales() : length(-1), velocity(-1), pressure(-1), Re(-1) {}
+  };
+
   struct BlockData {
     int iD;
     // int oRder;
     double fluidViscosity;
     double fluidDensity;
+    double inertiaCoef;
+    double viscousCoef;
+    DimScales dimScales;
     Range eNts;
-    BlockData() : iD(-1), fluidViscosity(-1), fluidDensity(-1) {}
+    BlockData()
+        : iD(-1), fluidViscosity(-1), fluidDensity(-1), inertiaCoef(-1),
+          viscousCoef(-1) {}
   };
 
   struct CommonData {

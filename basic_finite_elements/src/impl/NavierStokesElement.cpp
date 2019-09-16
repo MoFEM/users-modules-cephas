@@ -288,7 +288,8 @@ NavierStokesElement::OpAssembleLhsDiagLin::iNtegrate(EntData &row_data,
       w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    double const alpha = w * blockData.fluidViscosity;
+    //double const alpha = w * blockData.fluidViscosity;
+    double const alpha = w * blockData.viscousCoef;
 
     int row_bb = 0;
     for (; row_bb != row_nb_dofs / 3; row_bb++) {
@@ -370,7 +371,8 @@ NavierStokesElement::OpAssembleLhsDiagNonLin::iNtegrate(EntData &row_data,
       w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    double const beta = w * blockData.fluidDensity;
+    //double const beta = w * blockData.fluidDensity;
+    double const beta = w * blockData.inertiaCoef;
 
     int row_bb = 0;
     for (; row_bb != row_nb_dofs / 3; row_bb++) {
@@ -505,7 +507,8 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
     }
 
     // evaluate constant term
-    const double alpha = w * blockData.fluidViscosity;
+    //const double alpha = w * blockData.fluidViscosity;
+    const double alpha = w * blockData.viscousCoef;
 
     auto t_a = get_tensor1(locVec, 0);
     int rr = 0;
@@ -582,7 +585,8 @@ NavierStokesElement::OpAssembleRhsVelocityNonLin::iNtegrate(EntData &data) {
     }
 
     // evaluate constant term
-    const double beta = w * blockData.fluidDensity;
+    //const double beta = w * blockData.fluidDensity;
+    const double beta = w * blockData.inertiaCoef;
 
     auto t_a = get_tensor1(locVec, 0);
     int rr = 0;

@@ -72,6 +72,8 @@ int main(int argc, char *argv[]) {
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
 
+    PetscBool only_stokes = PETSC_FALSE;
+
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "NAVIER_STOKES problem",
                              "none");
 
@@ -107,6 +109,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-is_partitioned", "is_partitioned?", "",
                             is_partitioned, &is_partitioned, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-only_stokes", "only stokes", "", only_stokes,
+                            &only_stokes, PETSC_NULL);
 
     // Set testing (used by CTest)
     CHKERR PetscOptionsBool("-test", "if true is ctest", "", flg_test,
@@ -461,7 +466,7 @@ int main(int argc, char *argv[]) {
       boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
-        mit->second->methodsOp.push_back(new NavierStokesElement::LoadScale());
+        //mit->second->methodsOp.push_back(new NavierStokesElement::LoadScale());
         CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
                                       &mit->second->getLoopFe(), NULL, NULL);
       }
