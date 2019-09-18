@@ -191,7 +191,7 @@ int main(int argc, char *argv[]) {
         // MESHSET_OF_EDGE_BLOCKSET, 1, bit_level0);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 18, "SIMPLE_ROD_ELEMENT") == 0) {
+      if (bit->getName().compare(0, 18, "ROD") == 0) {
         CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
             0, 1, bit_level0);
       }
@@ -215,7 +215,7 @@ int main(int argc, char *argv[]) {
     Range edges_in_simple_rod;
     // CHECK IF EDGE BLOCSET EXIST AND ADD ENTITIES TO FIELD BY MESHSET
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 18, "SIMPLE_ROD_ELEMENT") == 0) {
+      if (bit->getName().compare(0, 18, "ROD") == 0) {
         // Get edges in simple rod
         Range edges;
         CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(),
@@ -1021,7 +1021,8 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n", model_stiffness);
 
     double frequency;
-    frequency = sqrt(model_stiffness / model_mass);
+    double pi = 3.14159265359;
+    frequency = sqrt(model_stiffness / model_mass) / (2 * pi);
     PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
 
     // Calculate elastic energy

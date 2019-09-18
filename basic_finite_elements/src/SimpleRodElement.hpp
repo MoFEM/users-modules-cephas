@@ -27,11 +27,11 @@ struct MetaSimpleRodElement {
   /**
    * \brief Declare SimpleRod element
    *
-   * Search cubit sidesets and blockset SIMPLE_ROD_ELEMENT and declare
+   * Search cubit sidesets and blockset ROD and declare
    volume
    * element
 
-   * Blockset has to have name “SIMPLE_ROD_ELEMENT”. The first attribute of the
+   * Blockset has to have name "ROD". The first attribute of the
    * blockset is Young's modulus.
 
    *

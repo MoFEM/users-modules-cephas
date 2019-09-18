@@ -250,10 +250,10 @@ MetaSimpleRodElement::addSimpleRodElements(MoFEM::Interface &m_field,
     CHKERR m_field.modify_finite_element_add_field_data("SIMPLE_ROD",
                                                         mesh_nodals_positions);
   }
-  // Add entities to that element, here we add all eDges with SIMPLE_ROD_ELEMENT
+  // Add entities to that element, here we add all eDges with ROD
   // from cubit
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-    if (bit->getName().compare(0, 19, "SIMPLE_ROD_ELEMENT") == 0) {
+    if (bit->getName().compare(0, 19, "ROD") == 0) {
       CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
                                                         MBEDGE, "SIMPLE_ROD");
     }
