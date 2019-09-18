@@ -76,7 +76,7 @@ struct DataAtIntegrationPtsSimpleRods {
     MoFEMFunctionBegin;
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 18, "SIMPLE_ROD_ELEMENT") == 0) {
+      if (bit->getName().compare(0, 3, "ROD") == 0) {
 
         const int id = bit->getMeshsetId();
         mapSimpleRod[id].eDges.clear();

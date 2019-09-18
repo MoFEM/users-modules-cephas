@@ -409,7 +409,7 @@ struct HookeElement {
       FTensor::Index<'k', 3> k;
       FTensor::Index<'l', 3> l;
 
-      double density = 1.;
+      double density = 7850.e-9;
 
       // integrate local matrix for entity block
       for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
