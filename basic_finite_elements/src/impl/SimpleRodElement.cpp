@@ -27,11 +27,13 @@ struct BlockOptionDataSimpleRods {
 
   double simpleRodYoungModulus;
   double simpleRodSectionArea;
+  double simpleRodPreStress;
 
   Range eDges;
 
   BlockOptionDataSimpleRods()
-      : simpleRodYoungModulus(-1), simpleRodSectionArea(-1) {}
+      : simpleRodYoungModulus(-1), simpleRodSectionArea(-1),
+        simpleRodPreStress(-1) {}
 };
 
 struct DataAtIntegrationPtsSimpleRods {
@@ -45,6 +47,7 @@ struct DataAtIntegrationPtsSimpleRods {
 
   double simpleRodYoungModulus;
   double simpleRodSectionArea;
+  double simpleRodPreStress;
 
   std::map<int, BlockOptionDataSimpleRods> mapSimpleRod;
   //   ~DataAtIntegrationPtsSimpleRods() {}
@@ -68,6 +71,7 @@ struct DataAtIntegrationPtsSimpleRods {
 
     simpleRodYoungModulus = data.simpleRodYoungModulus;
     simpleRodSectionArea = data.simpleRodSectionArea;
+    simpleRodPreStress = data.simpleRodPreStress;
 
     MoFEMFunctionReturn(0);
   }
@@ -80,12 +84,12 @@ struct DataAtIntegrationPtsSimpleRods {
 
         const int id = bit->getMeshsetId();
         mapSimpleRod[id].eDges.clear();
-        CHKERR mField.get_moab().get_entities_by_type(bit->getMeshset(), MBEDGE,
-                                                      mapSimpleRod[id].eDges, true);
+        CHKERR mField.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBEDGE, mapSimpleRod[id].eDges, true);
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 2) {
+        if (attributes.size() != 3) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
                    "Input mesh should have 2 attributes but there is %d",
                    attributes.size());
@@ -93,6 +97,7 @@ struct DataAtIntegrationPtsSimpleRods {
         mapSimpleRod[id].iD = id;
         mapSimpleRod[id].simpleRodYoungModulus = attributes[0];
         mapSimpleRod[id].simpleRodSectionArea = attributes[1];
+        mapSimpleRod[id].simpleRodPreStress = attributes[2];
       }
     }
 
@@ -129,7 +134,7 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
                         DataForcesAndSourcesCore::EntData &col_data) {
     MoFEMFunctionBegin;
 
-    // check if the volumes have associated degrees of freedom
+    // check if the edge have associated degrees of freedom
     const int row_nb_dofs = row_data.getIndices().size();
     if (!row_nb_dofs)
       MoFEMFunctionReturnHot(0);
@@ -150,11 +155,11 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
 
     double tension_stiffness = commonDataPtr->simpleRodYoungModulus *
                                commonDataPtr->simpleRodSectionArea;
-    
+
     VectorDouble coords;
     coords = getCoords();
     double L = getLength();
-    double coeff = tension_stiffness/(L*L*L);
+    double coeff = tension_stiffness / (L * L * L);
 
     double x21 = coords(3) - coords(0);
     double y21 = coords(4) - coords(1);
@@ -203,15 +208,6 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
     locK(5, 4) = locK(4, 5);
     locK(5, 5) = coeff * z21 * z21;
 
-    // cerr << locK.size1();
-    // for (int i = 0; i != 6; i++) {
-    //   for (int j = 0; j != 6; j++) {
-    //     cerr << locK(i, j) << " ";
-    //   }
-    //   cerr << "\n";
-    // }
-    // cerr << "\n";
-
     // Add computed values of spring stiffness to the global LHS matrix
     Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
                                                : getFEMethod()->snes_B;
@@ -219,28 +215,75 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
                         col_nb_dofs, &*col_data.getIndices().begin(),
                         &locK(0, 0), ADD_VALUES);
 
-    // // is symmetric
-    // if (row_side != col_side || row_type != col_type) {
-    //   transLocK.resize(col_nb_dofs, row_nb_dofs, false);
-    //   noalias(transLocK) = trans(locK);
-
-    //   CHKERR MatSetValues(B, col_nb_dofs, &*col_data.getIndices().begin(),
-    //                       row_nb_dofs, &*row_data.getIndices().begin(),
-    //                       &transLocK(0, 0), ADD_VALUES);
-    // }
-
     MoFEMFunctionReturn(0);
   }
 };
 
+/** * @brief Add ROD pre-stress to the RHS *
+ */
+struct OpSimpleRodPreStress
+    : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
 
-MoFEMErrorCode
-MetaSimpleRodElement::addSimpleRodElements(MoFEM::Interface &m_field,
-                               const std::string field_name,
-                               const std::string mesh_nodals_positions) {
+  // vector used to store force vector for each degree of freedom
+  VectorDouble nF;
+
+  boost::shared_ptr<DataAtIntegrationPtsSimpleRods> commonDataPtr;
+  BlockOptionDataSimpleRods &dAta;
+
+  OpSimpleRodPreStress(
+      boost::shared_ptr<DataAtIntegrationPtsSimpleRods> &common_data_ptr,
+      BlockOptionDataSimpleRods &data, const std::string field_name)
+      : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator(
+            field_name.c_str(), OPROW),
+        commonDataPtr(common_data_ptr), dAta(data) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+
+    MoFEMFunctionBegin;
+
+    // check that the edge have associated degrees of freedom
+    const int nb_dofs = data.getIndices().size();
+    if (nb_dofs == 0)
+      MoFEMFunctionReturnHot(0);
+
+    if (dAta.eDges.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        dAta.eDges.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
+    CHKERR commonDataPtr->getBlockData(dAta);
+
+    // size of force vector associated to the entity
+    // set equal to the number of degrees of freedom of associated with the
+    // entity
+    nF.resize(nb_dofs, false);
+    nF.clear();
+
+    double axial_force =
+        commonDataPtr->simpleRodSectionArea * commonDataPtr->simpleRodPreStress;
+    
+    auto dir = getDirection();
+    dir /= norm_2(dir);
+    for (auto d : {0, 1, 2}) {
+      nF(d) = -axial_force * dir[d];
+      nF(d + 3) = axial_force * dir[d];
+    }
+
+    // add computed values of spring in the global right hand side vector
+    Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
+                                               : getFEMethod()->snes_f;
+    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0], &nF[0], ADD_VALUES);
+    MoFEMFunctionReturn(0);
+  }
+};
+
+MoFEMErrorCode MetaSimpleRodElement::addSimpleRodElements(
+    MoFEM::Interface &m_field, const std::string field_name,
+    const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
 
-  // Define boundary element that operates on rows, columns and data of a 
+  // Define boundary element that operates on rows, columns and data of a
   // given field
   CHKERR m_field.add_finite_element("SIMPLE_ROD", MF_ZERO);
   CHKERR m_field.modify_finite_element_add_field_row("SIMPLE_ROD", field_name);
@@ -253,7 +296,7 @@ MetaSimpleRodElement::addSimpleRodElements(MoFEM::Interface &m_field,
   // Add entities to that element, here we add all eDges with ROD
   // from cubit
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-    if (bit->getName().compare(0, 19, "ROD") == 0) {
+    if (bit->getName().compare(0, 3, "ROD") == 0) {
       CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
                                                         MBEDGE, "SIMPLE_ROD");
     }
@@ -280,55 +323,10 @@ MoFEMErrorCode MetaSimpleRodElement::setSimpleRodOperators(
     fe_simple_rod_lhs_ptr->getOpPtrVector().push_back(
         new OpSimpleRodK(commonDataPtr, sitSimpleRod.second, field_name));
 
-    // fe_simple_rod_rhs_ptr->getOpPtrVector().push_back(
-    //     new OpCalculateVectorFieldValues<3>(field_name, commonDataPtr->xAtPts));
-    // fe_simple_rod_rhs_ptr->getOpPtrVector().push_back(
-    //     new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
-    //                                         commonDataPtr->xInitAtPts));
-    // fe_simple_rod_rhs_ptr->getOpPtrVector().push_back(
-    //     new OpSimpleRodFs(commonDataPtr, sitSimpleRod.second, field_name));
+    fe_simple_rod_rhs_ptr->getOpPtrVector().push_back(new OpSimpleRodPreStress(
+        commonDataPtr, sitSimpleRod.second, field_name));
   }
   //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
   //   " times" << endl;
   MoFEMFunctionReturn(0);
 }
-
-/**
-FTensor::Tensor2<double, 3, 3> MetaSpringBC::transformLocalToGlobal(
-    FTensor::Tensor1<double, 3> t_normal_local,
-    FTensor::Tensor1<double, 3> t_tangent1_local,
-    FTensor::Tensor1<double, 3> t_tangent2_local,
-    FTensor::Tensor2<double, 3, 3> t_spring_local) {
-
-  // FTensor indices
-  FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
-  FTensor::Index<'k', 3> k;
-  FTensor::Index<'l', 3> l;
-
-  // Global base vectors
-  FTensor::Tensor1<double, 3> t_e1(1., 0., 0.);
-  FTensor::Tensor1<double, 3> t_e2(0., 1., 0.);
-  FTensor::Tensor1<double, 3> t_e3(0., 0., 1.);
-
-  // Direction cosines
-  auto get_cosine = [&](auto x, auto xp) {
-    return (x(i) * xp(i)) / (sqrt(x(i) * x(i)) * sqrt(xp(i) * xp(i)));
-  };
-
-  // Transformation matrix (tensor)
-  FTensor::Tensor2<double, 3, 3> t_transformation_matrix(
-      get_cosine(t_e1, t_normal_local), get_cosine(t_e1, t_tangent1_local),
-      get_cosine(t_e1, t_tangent2_local), get_cosine(t_e2, t_normal_local),
-      get_cosine(t_e2, t_tangent1_local), get_cosine(t_e2, t_tangent2_local),
-      get_cosine(t_e3, t_normal_local), get_cosine(t_e3, t_tangent1_local),
-      get_cosine(t_e3, t_tangent2_local));
-
-  // Spring stiffness in global coordinate, Q*ls*Q^T
-  FTensor::Tensor2<double, 3, 3> t_spring_global;
-  t_spring_global(i, j) = t_transformation_matrix(i, k) * t_spring_local(k, l) *
-                          t_transformation_matrix(j, l);
-
-  return t_spring_global;
-};
-*/

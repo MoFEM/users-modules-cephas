@@ -105,6 +105,7 @@ int main(int argc, char *argv[]) {
     PetscInt test_nb = 0;
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
+    PetscBool is_calculating_frequency = PETSC_FALSE;
 
     // Read options from command line
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
@@ -126,6 +127,10 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_block_config", "elastic configure file name",
                               "", "block_conf.in", block_config_file, 255,
                               &flg_block_config);
+
+    CHKERR PetscOptionsBool(
+        "-my_is_calculating_frequency", "set if frequency will be calculated",
+        "", is_calculating_frequency, &is_calculating_frequency, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
@@ -191,7 +196,7 @@ int main(int argc, char *argv[]) {
         // MESHSET_OF_EDGE_BLOCKSET, 1, bit_level0);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 18, "ROD") == 0) {
+      if (bit->getName().compare(0, 3, "ROD") == 0) {
         CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
             0, 1, bit_level0);
       }
@@ -215,7 +220,7 @@ int main(int argc, char *argv[]) {
     Range edges_in_simple_rod;
     // CHECK IF EDGE BLOCSET EXIST AND ADD ENTITIES TO FIELD BY MESHSET
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 18, "ROD") == 0) {
+      if (bit->getName().compare(0, 3, "ROD") == 0) {
         // Get edges in simple rod
         Range edges;
         CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(),
@@ -429,7 +434,7 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpCalculateMassMatrix(
               "DISPLACEMENT", "DISPLACEMENT", sit.second, data_at_pts));
     }
-  
+
     // Add spring boundary condition applied on surfaces.
     // This is only declaration not implementation.
     CHKERR MetaSpringBC::addSpringElements(m_field, "DISPLACEMENT",
@@ -584,11 +589,13 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix(dm, &Aij);
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
-    //Initialise mass matrix
+    // Initialise mass matrix
     Mat Mij;
-    CHKERR MatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES, &Mij);
-    CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
-    // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
+    if (is_calculating_frequency == PETSC_TRUE) {
+      CHKERR MatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES, &Mij);
+      CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
+      // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
+    }
 
     // Assign global matrix/vector contributed by springs
     fe_spring_lhs_ptr->ksp_B = Aij;
@@ -596,7 +603,7 @@ int main(int argc, char *argv[]) {
 
     // Assign global matrix/vector contributed by Simple Rod
     fe_simple_rod_lhs_ptr->ksp_B = Aij;
-    // fe_simple_rod_rhs_ptr->ksp_f = F;
+    fe_simple_rod_rhs_ptr->ksp_f = F;
 
     // Zero vectors and matrices
     CHKERR VecZeroEntries(F);
@@ -677,14 +684,16 @@ int main(int argc, char *argv[]) {
 
     // Assemble Simple Rod
     CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_lhs_ptr);
-    // CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_rhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_rhs_ptr);
 
-    // Assemble mass matrix
-    fe_mass_ptr->snes_B = Mij;
-    PetscPrintf(PETSC_COMM_WORLD, "Calculate mass matrix  ...");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_mass_ptr);
-    PetscPrintf(PETSC_COMM_WORLD, " done\n");
-
+    if (is_calculating_frequency == PETSC_TRUE) {
+      // Assemble mass matrix
+      fe_mass_ptr->snes_B = Mij;
+      PetscPrintf(PETSC_COMM_WORLD, "Calculate mass matrix  ...");
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_mass_ptr);
+      PetscPrintf(PETSC_COMM_WORLD, " done\n");
+    }
+    
     // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
 
     // Assemble pressure and traction forces. Run particular implemented for do
@@ -755,11 +764,13 @@ int main(int argc, char *argv[]) {
     // std::string wait;
     // std::cin >> wait;
 
-    CHKERR MatAssemblyBegin(Mij, MAT_FINAL_ASSEMBLY);
-    CHKERR MatAssemblyEnd(Mij, MAT_FINAL_ASSEMBLY);
+    if (is_calculating_frequency == PETSC_TRUE) {
+      CHKERR MatAssemblyBegin(Mij, MAT_FINAL_ASSEMBLY);
+      CHKERR MatAssemblyEnd(Mij, MAT_FINAL_ASSEMBLY);
 
-    // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
-    // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
+      // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
+      // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
+    }
 
     // Set matrix positive defined and symmetric for Cholesky and icc
     // pre-conditioner
@@ -995,35 +1006,38 @@ int main(int argc, char *argv[]) {
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
 
-    // Calculate model mass, m = u^T * M * u
-    Vec u1; 
-    VecDuplicate (D, &u1);
-    CHKERR MatMult(Mij, D, u1);
+    if (is_calculating_frequency == PETSC_TRUE) {
+      // Calculate model mass, m = u^T * M * u
+      Vec u1;
+      VecDuplicate(D, &u1);
+      CHKERR MatMult(Mij, D, u1);
+      double model_mass;
+      CHKERR VecDot(u1, D, &model_mass);
+      PetscPrintf(PETSC_COMM_WORLD, "Model mass  %6.4e\n", model_mass);
 
-    double model_mass;
-    CHKERR VecDot(u1, D, &model_mass);
-    PetscPrintf(PETSC_COMM_WORLD, "Model mass  %6.4e\n", model_mass);
+      // Calculate model stiffness, k = v^T * K * v where v = u / norm(u)
+      double u_norm;
+      CHKERR VecNorm(D, NORM_2, &u_norm);
 
+      // CHKERR VecScale(D,1./u_norm);     // v obtained
+      CHKERR VecScale(D, 1. / 1.); // v obtained
+      PetscPrintf(PETSC_COMM_WORLD, "u_norm  %6.4e\n", u_norm);
 
-    // Calculate model stiffness, k = v^T * K * v where v = u / norm(u)
-    double u_norm;
-    CHKERR VecNorm(D, NORM_2, &u_norm);
-    // CHKERR VecScale(D,1./u_norm);     // v obtained
-    CHKERR VecScale(D,1./1.);     // v obtained
-    PetscPrintf(PETSC_COMM_WORLD, "u_norm  %6.4e\n", u_norm);
+      Vec v1;
+      VecDuplicate(D, &v1);
+      CHKERR MatMult(Aij, D, v1);
+
+      double model_stiffness;
+      CHKERR VecDot(v1, D, &model_stiffness);
+      PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n",
+                  model_stiffness);
+
+      double frequency;
+      double pi = 3.14159265359;
+      frequency = sqrt(model_stiffness / model_mass) / (2 * pi);
+      PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
+    }
     
-    Vec v1;
-    VecDuplicate(D, &v1);
-    CHKERR MatMult(Aij, D, v1);
-
-    double model_stiffness;
-    CHKERR VecDot(v1, D, &model_stiffness);
-    PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n", model_stiffness);
-
-    double frequency;
-    double pi = 3.14159265359;
-    frequency = sqrt(model_stiffness / model_mass) / (2 * pi);
-    PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
 
     // Calculate elastic energy
     auto calculate_strain_energy = [dm, &block_sets_ptr, test_nb]() {
