@@ -9,8 +9,8 @@ static char help[] = "...\n\n";
 
 struct RDProblem {
 public:
-  RDProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order)
-      : moab(mb_instance), m_field(core), order(order) {
+  RDProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order, const int n_species)
+      : moab(mb_instance), m_field(core), order(order), nb_species(n_species) {
     vol_ele_slow_rhs = boost::shared_ptr<Ele>(new Ele(m_field));
     vol_ele_stiff_rhs = boost::shared_ptr<Ele>(new Ele(m_field));
     vol_ele_stiff_lhs = boost::shared_ptr<Ele>(new Ele(m_field));
@@ -20,25 +20,23 @@ public:
     post_proc = boost::shared_ptr<PostProcFaceOnRefinedMesh>(
         new PostProcFaceOnRefinedMesh(m_field));
 
-    data1 = boost::shared_ptr<PreviousData>(new PreviousData());
-    data2 = boost::shared_ptr<PreviousData>(new PreviousData());
-    data3 = boost::shared_ptr<PreviousData>(new PreviousData());
+    data.resize(nb_species);
+    values_ptr.resize(nb_species);
+    grads_ptr.resize(nb_species);
+    dots_ptr.resize(nb_species);
+    inner_surface.resize(nb_species);
 
-    grads_ptr1 = boost::shared_ptr<MatrixDouble>(data1, &data1->grads);
-    values_ptr1 = boost::shared_ptr<VectorDouble>(data1, &data1->values);
-    dots_ptr1 = boost::shared_ptr<VectorDouble>(data1, &data1->dot_values);
-
-    grads_ptr2 = boost::shared_ptr<MatrixDouble>(data2, &data2->grads);
-    values_ptr2 = boost::shared_ptr<VectorDouble>(data2, &data2->values);
-    dots_ptr2 = boost::shared_ptr<VectorDouble>(data2, &data2->dot_values);
-
-    grads_ptr3 = boost::shared_ptr<MatrixDouble>(data3, &data3->grads);
-    values_ptr3 = boost::shared_ptr<VectorDouble>(data3, &data3->values);
-    dots_ptr3 = boost::shared_ptr<VectorDouble>(data3, &data3->dot_values);
+    for(int i = 0; i < nb_species; ++i){
+      data[i] = boost::shared_ptr<PreviousData>(new PreviousData());
+      grads_ptr[i] = boost::shared_ptr<MatrixDouble>(data[i], &data[i]->grads);
+      values_ptr[i] = boost::shared_ptr<VectorDouble>(data[i], &data[i]->values);
+      dots_ptr[i] = boost::shared_ptr<VectorDouble>(data[i], &data[i]->dot_values);
+    }
+  
   }
 
   // RDProblem(const int order) : order(order){}
-  MoFEMErrorCode run_analysis(int nb_sp);
+  MoFEMErrorCode run_analysis();
 
 private:
   MoFEMErrorCode setup_system();
@@ -96,9 +94,9 @@ private:
   SmartPetscObj<Mat> mass_matrix;
   SmartPetscObj<KSP> mass_Ksp;
 
-  Range inner_surface1; // nb_species times
-  Range inner_surface2;
-  Range inner_surface3;
+
+
+  std::vector<Range> inner_surface;
 
   int order;
   int nb_species;
@@ -111,25 +109,15 @@ private:
 
   boost::shared_ptr<Ele> vol_mass_ele;
 
-      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc;
   boost::shared_ptr<Monitor> monitor_ptr;
 
-  boost::shared_ptr<PreviousData> data1; // nb_species times
-  boost::shared_ptr<PreviousData> data2;
-  boost::shared_ptr<PreviousData> data3;
 
-  boost::shared_ptr<MatrixDouble> grads_ptr1; // nb_species times
-  boost::shared_ptr<MatrixDouble> grads_ptr2;
-  boost::shared_ptr<MatrixDouble> grads_ptr3;
+  std::vector<boost::shared_ptr<PreviousData>> data;
 
-  boost::shared_ptr<VectorDouble> values_ptr1; // nb_species times
-  boost::shared_ptr<VectorDouble> values_ptr2;
-  boost::shared_ptr<VectorDouble> values_ptr3;
-
-
-  boost::shared_ptr<VectorDouble> dots_ptr1; // nb_species times
-  boost::shared_ptr<VectorDouble> dots_ptr2;
-  boost::shared_ptr<VectorDouble> dots_ptr3;
+  std::vector<boost::shared_ptr<MatrixDouble>> grads_ptr;
+  std::vector<boost::shared_ptr<VectorDouble>> values_ptr;
+  std::vector<boost::shared_ptr<VectorDouble>> dots_ptr;
 
   boost::shared_ptr<ForcesAndSourcesCore> null;
 };
@@ -156,26 +144,31 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
+      // block_map[id].set_param(nb_species);
       block_map[id].B0 = 1e-2;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
+      // block_map[id].set_param(nb_species);
       block_map[id].B0 = 1e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION3") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
+      // block_map[id].set_param(nb_species);
       block_map[id].B0 = 1e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION4") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
+      // block_map[id].set_param(nb_species);
       block_map[id].B0 = 5e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION5") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
+      // block_map[id].set_param(nb_species);
       block_map[id].B0 = 1e-2;
       block_map[id].block_id = id;
     }
@@ -360,158 +353,113 @@ MoFEMErrorCode RDProblem::solve() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
+MoFEMErrorCode RDProblem::run_analysis() {
   MoFEMFunctionBegin;
-  // set nb_species
-  CHKERR setup_system(); // only once
-  nb_species = nb_sp;
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR add_fe("MASS1"); // nb_species times
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR add_fe("MASS2");
-      if (nb_species == 3) {
-        CHKERR add_fe("MASS3");
-      }
-    }
+  std::vector<std::string> mass_names(nb_species);
+  std::vector<std::string> flux_names(nb_species);
+
+  for(int i = 0; i < nb_species; ++i){
+    mass_names[i] = "MASS" + boost::lexical_cast<std::string>(i+1);
+  }
+  CHKERR setup_system();
+  for (int i = 0; i < nb_species; ++i) {
+    add_fe(mass_names[i]);
   }
 
-  CHKERR simple_interface->setUp();
+   
 
-  CHKERR set_blockData(material_blocks);
+    CHKERR simple_interface->setUp();
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR set_initial_values("MASS1", 2, inner_surface1);
-    CHKERR update_slow_rhs("MASS1", values_ptr1);
+    CHKERR set_blockData(material_blocks);
+
+    for (int i = 0; i < nb_species; ++i) {
+      CHKERR set_initial_values(mass_names[i], i+2, inner_surface[i]);
+      CHKERR update_slow_rhs(mass_names[i], values_ptr[i]);
+    }
+
+    // vol_ele_slow_rhs->getOpPtrVector().push_back(
+    //     new OpComputeSlowValue(mass_names[0], data, material_blocks));
+
     if (nb_species == 1) {
       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          "MASS1", data1, data1, data1, material_blocks));
-    } else if (nb_species == 2 || nb_species == 3) {
-      CHKERR set_initial_values("MASS2", 3, inner_surface2);
-      CHKERR update_slow_rhs("MASS2", values_ptr2);
-      if (nb_species == 2) {
-        vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-            "MASS1", data1, data2, data2, material_blocks));
-      } else if (nb_species == 3) {
-        CHKERR set_initial_values("MASS3", 4, inner_surface3);
-        CHKERR update_slow_rhs("MASS3", values_ptr3);
-        vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-            "MASS1", data1, data2, data3, material_blocks));
-      }
+          mass_names[0], data[0], data[0], data[0], material_blocks));
+    } else if(nb_species == 2){
+      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+          mass_names[1], data[0], data[1], data[1], material_blocks));
+    } else if(nb_species == 3){
+      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+          mass_names[2], data[0], data[1], data[2], material_blocks));
     }
-  }
+     
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR push_slow_rhs("MASS1", data1); // nb_species times
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR push_slow_rhs("MASS2", data2);
-      if (nb_species == 3) {
-        CHKERR push_slow_rhs("MASS3", data3);
-      }
+    for (int i = 0; i < nb_species; ++i) {
+      CHKERR push_slow_rhs(mass_names[i], data[i]);
     }
-  }
 
-  auto solve_for_g = [&]() {
-    MoFEMFunctionBegin;
-    if (vol_ele_slow_rhs->vecAssembleSwitch) {
-      CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
-                                 SCATTER_REVERSE);
-      CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
-                               SCATTER_REVERSE);
-      CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F);
-      CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F);
-      *vol_ele_slow_rhs->vecAssembleSwitch = false;
-    }
-    CHKERR KSPSolve(mass_Ksp, vol_ele_slow_rhs->ts_F, vol_ele_slow_rhs->ts_F);
-    MoFEMFunctionReturn(0);
-  };
-  // Add hook to the element to calculate g.
-  vol_ele_slow_rhs->postProcessHook = solve_for_g;
+    
 
-  dm = simple_interface->getDM();
-  ts = createTS(m_field.get_comm());
+      auto solve_for_g = [&]() {
+        MoFEMFunctionBegin;
+        if (vol_ele_slow_rhs->vecAssembleSwitch) {
+          CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+                                     SCATTER_REVERSE);
+          CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+                                   SCATTER_REVERSE);
+          CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F);
+          CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F);
+          *vol_ele_slow_rhs->vecAssembleSwitch = false;
+        }
+        CHKERR KSPSolve(mass_Ksp, vol_ele_slow_rhs->ts_F,
+                        vol_ele_slow_rhs->ts_F);
+        MoFEMFunctionReturn(0);
+      };
+      // Add hook to the element to calculate g.
+      vol_ele_slow_rhs->postProcessHook = solve_for_g;
 
-  CHKERR DMCreateMatrix_MoFEM(dm, mass_matrix);
-  CHKERR MatZeroEntries(mass_matrix);
+      dm = simple_interface->getDM();
+      ts = createTS(m_field.get_comm());
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR push_mass_ele("MASS1"); // nb_species times
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR push_mass_ele("MASS2");
-      if (nb_species == 3) {
-        CHKERR push_mass_ele("MASS3");
-      }
-    }
-  }
+      CHKERR DMCreateMatrix_MoFEM(dm, mass_matrix);
+      CHKERR MatZeroEntries(mass_matrix);
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR resolve_slow_rhs(); // nb_species times
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR resolve_slow_rhs();
-      if (nb_species == 3) {
+      for (int i = 0; i < nb_species; ++i) {
+        CHKERR push_mass_ele(mass_names[i]);
         CHKERR resolve_slow_rhs();
       }
-    }
-  }
+       
+      
 
-  CHKERR update_vol_fe(vol_ele_stiff_rhs, data1);
+        CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR update_stiff_rhs("MASS1", values_ptr1,
-                            grads_ptr1, dots_ptr1);
-    CHKERR push_stiff_rhs("MASS1", data1,
-                          material_blocks); // nb_species times
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR update_stiff_rhs("MASS2", values_ptr2,
-                              grads_ptr2, dots_ptr2);
-      CHKERR push_stiff_rhs("MASS2", data2, material_blocks);
-      if (nb_species == 3) {
-        CHKERR update_stiff_rhs("MASS3", values_ptr3,
-                                grads_ptr3, dots_ptr3);
-        CHKERR push_stiff_rhs("MASS3", data3, material_blocks);
-      }
-    }
-  }
+        for (int i = 0; i < nb_species; ++i) {
+          CHKERR update_stiff_rhs(mass_names[i], values_ptr[i], grads_ptr[i], dots_ptr[i]);
+          CHKERR push_stiff_rhs(mass_names[i], data[i], material_blocks);
+        }
+         
 
-  CHKERR update_vol_fe(vol_ele_stiff_lhs, data1);
+          CHKERR update_vol_fe(vol_ele_stiff_lhs, data[0]);
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR update_stiff_lhs("MASS1", values_ptr1,
-                            grads_ptr1);
-    CHKERR push_stiff_lhs("MASS1", data1,
-                          material_blocks); // nb_species times
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR update_stiff_lhs("MASS2", values_ptr2,
-                              grads_ptr2);
-      CHKERR push_stiff_lhs("MASS2", data2, material_blocks);
-      if (nb_species == 3) {
-        CHKERR update_stiff_lhs("MASS3", values_ptr3,
-                                grads_ptr3);
-        CHKERR push_stiff_lhs("MASS3", data3, material_blocks);
-      }
-    }
-  }
-  CHKERR set_integration_rule();
-  
+          for (int i = 0; i < nb_species; ++i) {
+            CHKERR update_stiff_lhs(mass_names[i], values_ptr[i], grads_ptr[i]);
+            CHKERR push_stiff_lhs(mass_names[i], data[i],
+                                  material_blocks); // nb_species times
+          }
+           
+            CHKERR set_integration_rule();
 
+            CHKERR set_fe_in_loop();                   // only once
+            post_proc->generateReferenceElementMesh(); // only once
 
-  CHKERR set_fe_in_loop();                          // only once
-  post_proc->generateReferenceElementMesh(); // only once
+            for (int i = 0; i < nb_species; ++i) {
+              CHKERR post_proc_fields(mass_names[i]);
+            }
+              
+              monitor_ptr = boost::shared_ptr<Monitor>(
+                  new Monitor(dm, post_proc)); // nb_species times
+              CHKERR output_result();          // only once
+              CHKERR solve();                  // only once
 
-  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR post_proc_fields("MASS1");
-    if (nb_species == 2 || nb_species == 3) {
-      CHKERR post_proc_fields("MASS2");
-      if (nb_species == 3) {
-        CHKERR post_proc_fields("MASS3");
-      }
-    }
-  }
-  monitor_ptr = boost::shared_ptr<Monitor>(
-      new Monitor(dm, post_proc)); // nb_species times
-  CHKERR output_result();          // only once
-  CHKERR solve();                  // only once
-
-  MoFEMFunctionReturn(0);
+              MoFEMFunctionReturn(0);
 }
 
 int main(int argc, char *argv[]) {
@@ -524,10 +472,11 @@ int main(int argc, char *argv[]) {
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
 
+  
     int order = 3;
-    int nb_species = 1;
-    RDProblem reac_diff_problem(mb_instance, core, order);
-    CHKERR reac_diff_problem.run_analysis(nb_species);
+    int nb_species = 2;
+    RDProblem reac_diff_problem(mb_instance, core, order, nb_species);
+    CHKERR reac_diff_problem.run_analysis();
   }
   CATCH_ERRORS;
   MoFEM::Core::Finalize();

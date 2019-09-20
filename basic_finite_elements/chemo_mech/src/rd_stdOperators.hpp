@@ -20,17 +20,25 @@ namespace StdRDOperators {
 
   struct BlockData {
     int block_id;
-    double a11, a12, a13, a21, a22, a23, a31, a32, a33;
-
-        double r1, r2, r3;
+    MatrixDouble coef;
+    VectorDouble rate;
 
     Range block_ents;
 
     double B0; // species mobility
 
     BlockData()
-        : a11(1), a12(0), a13(0), a21(0), a22(1), a23(0), a31(0), a32(0),
-          a33(1), r1(1), r2(1), r3(1), B0(1e-3) {}
+      : B0(1e-3) {
+      coef.resize(3, 3, false);
+      rate.resize(3, false);
+      coef.clear();
+      rate.clear();
+      for (int i = 0; i < 3; ++i) {
+        coef(i, i) = 1;
+        rate[i] = 1;
+        }
+      }
+
   };
 
   struct PreviousData {
@@ -99,7 +107,7 @@ namespace StdRDOperators {
                        boost::shared_ptr<PreviousData> &data3,
                        std::map<int, BlockData> &block_map)
         : OpEle(mass_field, OpEle::OPROW), commonData1(data1),
-          commonData2(data2), commonData3(data3),
+          commonData2(data2), commonData3(data3), massField(mass_field),
           setOfBlock(block_map) {}
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
@@ -154,19 +162,19 @@ namespace StdRDOperators {
         auto t_mass_values3 = getFTensor0FromVec(commonData3->values);
 
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
-          t_slow_values1 = block_data.r1 * t_mass_values1 *
-                           (1.0 - block_data.a11 * t_mass_values1 -
-                            block_data.a12 * t_mass_values2 -
-                            block_data.a13 * t_mass_values3);
-          t_slow_values2 = block_data.r2 * t_mass_values2 *
-                           (1.0 - block_data.a21 * t_mass_values1 -
-                            block_data.a22 * t_mass_values2 -
-                            block_data.a23 * t_mass_values3);
+          t_slow_values1 = block_data.rate[0] * t_mass_values1 *
+                           (1.0 - block_data.coef(0, 0) * t_mass_values1 -
+                                  block_data.coef(0, 1) * t_mass_values2 -
+                                  block_data.coef(0, 2) * t_mass_values3);
+          t_slow_values2 = block_data.rate[1] * t_mass_values2 *
+                           (1.0 - block_data.coef(1, 0) * t_mass_values1 -
+                                  block_data.coef(1, 1) * t_mass_values2 -
+                                  block_data.coef(1, 2) * t_mass_values3);
 
-          t_slow_values3 = block_data.r3 * t_mass_values3 *
-                           (1.0 - block_data.a31 * t_mass_values1 -
-                            block_data.a32 * t_mass_values2 -
-                            block_data.a33 * t_mass_values3);
+          t_slow_values3 = block_data.rate[2] * t_mass_values3 *
+                           (1.0 - block_data.coef(2, 0) * t_mass_values1 -
+                                  block_data.coef(2, 1) * t_mass_values2 -
+                                  block_data.coef(2, 2) * t_mass_values3);
           ++t_slow_values1;
           ++t_slow_values2;
           ++t_slow_values3;
@@ -180,6 +188,7 @@ namespace StdRDOperators {
     }
 
   private:
+    std::string massField;
     boost::shared_ptr<PreviousData> commonData1;
     boost::shared_ptr<PreviousData> commonData2;
     boost::shared_ptr<PreviousData> commonData3;
