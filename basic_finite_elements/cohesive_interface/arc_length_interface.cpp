@@ -30,7 +30,11 @@ using namespace MoFEM;
 
 using namespace boost::numeric;
 
-static char help[] = "...\n\n";
+static char help[] = "\
+ -my_file mesh file name\n\
+ -my_sr reduction of step size\n\
+ -my_its_d desired number of steps\n\
+ -my_ms maximal number of steps\n\n";
 
 #define DATAFILENAME "load_disp.txt"
 
@@ -155,7 +159,30 @@ using namespace CohesiveElement;
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type fgmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps\n"
+                                 "-ksp_monitor \n"
+                                 "-ksp_atol 1e-10 \n"
+                                 "-ksp_rtol 1e-10 \n"
+                                 "-snes_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type l2 \n"
+                                 "-snes_linesearch_monitor \n"
+                                 "-snes_max_it 16 \n"
+                                 "-snes_atol 1e-8 \n"
+                                 "-snes_rtol 1e-8 \n"
+                                 "-snes_converged_reason \n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   try {
 

@@ -581,7 +581,7 @@ linear elasticity module elasticity.cpp, the test using above rod model with
 springs is conducted. The displacement results using finite element analysis is
 presented in \ref figure_spring_result_linear "Figure 3". The command line that has been used to run this test is as follows
 \code
-./elasticity -my_file spring_rod.cub -my_order 2 -ksp_type cg -pc_type asm -sub_pc_type lu -ksp_monitor
+./elasticity -my_file spring_rod.cub -my_order 2 -ksp_type cg -pc_type asm -sub_pc_type lu
 \endcode
 
 \anchor figure_spring_result_linear
@@ -656,7 +656,7 @@ spring boundary condition to the RHS and LHS
 The nonlinear analysis of the rod is run using the command line with the output
 of the first two load steps as follows
 \code
-./arc_length_nonlinear_elasticity -my_file spring_rod.cub -ksp_type fgmres -pc_type asm -sub_pc_type lu -ksp_atol 1e-10 -ksp_rtol 1e-10 -snes_monitor -snes_type newtonls -snes_linesearch_type basic -snes_linesearch_monitor -snes_max_it 16 -snes_atol 1e-8 -snes_rtol 1e-8 -my_sr 1e-6 -my_ms 5 -snes_converged_reason -my_order 2
+./arc_length_nonlinear_elasticity -my_file spring_rod.cub  -my_sr 1e-6 -my_ms 5 -snes_converged_reason -my_order 2
 \endcode
 
 \code

@@ -60,14 +60,12 @@ Before we look into implementation details, you can run simple example
 cd basic_finite_elements/mix_transport
 mpirun -np 2 ./h_adaptive_transport \
 -my_file l-shape.msh -meshsets_config bc.cfg  \
--ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
 -my_order 1 -nb_levels 5 2>&1 | tee log_order1
 \endcode
 where
 - \em -np \b 2 indicate number of processors
 - \em -my_file \b l-shape.msh name of the mesh file
 - \em -meshsets_config \b bc.cfg name of file with boundary conditions
-- \em -ksp_type \b fgmres \em -pc_type \b lu \em -pc_factor_mat_solver_package \b mumps \em -ksp_monitor set-up linear solver
 - \em -my_order \b 1 set approximation order (0,1,2,..)
 - \em -nb_levels \b 5 set number of mesh refinement level driven by approximation error
 

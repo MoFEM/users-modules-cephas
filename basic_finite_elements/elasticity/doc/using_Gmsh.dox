@@ -128,7 +128,7 @@ and are used for displacement and pressure boundary conditions. Subsequently,
 the following command is used to run the elastic analysis on the beam problem:
 
 \code
-mpirun -np 1 ./elasticity -my_file out.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 1
+mpirun -np 1 ./elasticity -my_file out.h5m -my_order 1
 \endcode
 
 This will create out.h5m file, which is then converted to out.vtk file using
