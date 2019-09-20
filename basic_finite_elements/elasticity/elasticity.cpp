@@ -99,14 +99,7 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type gmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_package mumps \n"
-                                 "-ksp_monitor \n"
-                                 "-snes_type newtonls \n"
-                                 "-snes_linesearch_type basic \n"
-                                 "-snes_atol 1e-8 \n"
-                                 "-snes_rtol 1e-8 \n"
-                                 "-snes_monitor \n"
-                                 "-ts_monitor \n"
-                                 "-ts_type beuler \n";
+                                 "-ksp_monitor \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -129,6 +122,11 @@ int main(int argc, char *argv[]) {
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
 
+    // Select base
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
+    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+    PetscInt choice_base_value = LOBATTO;
+
     // Read options from command line
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
     CHKERR(ierr);
@@ -137,6 +135,10 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsInt("-my_order", "default approximation order", "",
                            order, &order, PETSC_NULL);
+
+    CHKERR PetscOptionsEList("-base", "approximation base", "", list_bases,
+                             LASBASETOP, list_bases[choice_base_value],
+                             &choice_base_value, PETSC_NULL);
 
     CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "",
                            test_nb, &test_nb, PETSC_NULL);
@@ -210,7 +212,21 @@ int main(int argc, char *argv[]) {
         0, 3, bit_level0);
 
     // Declare approximation fields
-    CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LOBATTO_BASE, 3,
+    FieldApproximationBase base = NOBASE;
+    switch (choice_base_value) {
+    case LEGENDRE:
+      base = AINSWORTH_LEGENDRE_BASE;
+      break;
+    case LOBATTO:
+      base = AINSWORTH_LOBATTO_BASE;
+      break;
+    case BERNSTEIN_BEZIER:
+      base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+      break;
+    default:
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED, "Base not implemented");
+    };
+    CHKERR m_field.add_field("DISPLACEMENT", H1, base, 3,
                              MB_TAG_DENSE, MF_ZERO);
 
     // We can use higher oder geometry to define body
@@ -225,11 +241,15 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
     // Set approximation order.
-    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral Meshes.
+    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
+    // Meshes.
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+    if(base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
+    else
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in whole body)
@@ -258,8 +278,8 @@ int main(int argc, char *argv[]) {
     };
     CHKERR setting_second_order_geometry();
 
-    // Configure blocks by parsing config file. It allows setting approximation
-    // order for each block independently.
+    // Configure blocks by parsing config file. It allows setting
+    // approximation order for each block independently.
     std::map<int, BlockOptionData> block_data;
     auto setting_blocks_data_and_order_from_config_file =
         [&m_field, &moab, &block_data, flg_block_config, block_config_file,
@@ -347,7 +367,8 @@ int main(int argc, char *argv[]) {
             }
           }
 
-          // Update material parameters. Set material parameters block by block.
+          // Update material parameters. Set material parameters block by
+          // block.
           for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                    m_field, BLOCKSET | MAT_ELASTICSET, it)) {
             const int id = it->getMeshsetId();
@@ -420,7 +441,8 @@ int main(int argc, char *argv[]) {
       Range tets;
       CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTET, tets,
                                                      true);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tets, MBTET, "BODY_FORCE");
+      CHKERR m_field.add_ents_to_finite_element_by_type(tets, MBTET,
+                                                        "BODY_FORCE");
     }
 
     // Add Neumann forces, i.e. pressure or traction forces applied on body
