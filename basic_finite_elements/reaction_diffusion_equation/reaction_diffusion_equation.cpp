@@ -333,7 +333,8 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->loadFile();
 
     // add fields
-    CHKERR simple_interface->addDomainField("u", H1, AINSWORTH_LEGENDRE_BASE, 1);
+    CHKERR simple_interface->addDomainField("u", H1, AINSWORTH_LEGENDRE_BASE,
+                                            1);
     // set fields order
     CHKERR simple_interface->setFieldOrder("u", order);
     // setup problem
@@ -441,7 +442,8 @@ int main(int argc, char *argv[]) {
     CHKERR skin.find_skin(0, surface, false, edges);
     Range edges_part;
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED, PSTATUS_NOT, -1, &edges_part);
+    CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &edges_part);
     Range edges_verts;
     CHKERR moab.get_connectivity(edges_part, edges_verts, false);
     // Since Dirichlet b.c. are essential boundary conditions, remove DOFs from
