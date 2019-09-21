@@ -95,7 +95,7 @@ struct MonitorPostProc : public FEMethod {
     if (!iNit) {
       CHKERR postProc.generateReferenceElementMesh();
       CHKERR postProc.addFieldValuesPostProc("DISPLACEMENT");
-      CHKERR postProc.addFieldValuesPostProc("SPATIAL_VELOCITY");
+      CHKERR postProc.addFieldValuesPostProc("VELOCITY");
       CHKERR postProc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR postProc.addFieldValuesGradientPostProc("DISPLACEMENT");
 
@@ -209,7 +209,7 @@ struct MonitorRestart : public FEMethod {
     //     ss << "restart_" << (*step) << ".h5m";
     //     CHKERR
     //     mField.get_moab().write_file(ss.str().c_str()/*,"MOAB","PARALLEL=WRITE_PART"*/);
-    //    
+    //
     //   }
     // }
     (*step)++;
@@ -304,7 +304,7 @@ int main(int argc, char *argv[]) {
     bit_level0.set(0);
     EntityHandle meshset_level0;
     CHKERR moab.create_meshset(MESHSET_SET, meshset_level0);
-   
+
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByRefLevel(
@@ -320,8 +320,9 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
     bool check_if_spatial_field_exist = m_field.check_field("DISPLACEMENT");
-    CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LEGENDRE_BASE, 3,
-                             MB_TAG_SPARSE, MF_ZERO);
+    CHKERR m_field.add_field("DISPLACEMENT", H1,
+                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
+                             MF_ZERO);
     // add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
 
@@ -357,7 +358,7 @@ int main(int argc, char *argv[]) {
                                                     it)) {
       Range tris;
       CHKERR moab.get_entities_by_type(it->meshset, MBTRI, tris, true);
-     
+
       CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                         "NEUMANN_FE");
     }
@@ -365,7 +366,7 @@ int main(int argc, char *argv[]) {
              m_field, SIDESET | PRESSURESET, it)) {
       Range tris;
       CHKERR moab.get_entities_by_type(it->meshset, MBTRI, tris, true);
-     
+
       CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
                                                         "NEUMANN_FE");
     }
@@ -378,35 +379,31 @@ int main(int argc, char *argv[]) {
         "DISPLACEMENT", PETSC_NULL, false, true);
 
     // Velocity
-    CHKERR m_field.add_field("SPATIAL_VELOCITY", H1, AINSWORTH_LEGENDRE_BASE, 3,
+    CHKERR m_field.add_field("VELOCITY", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_VELOCITY");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "VELOCITY");
 
-    CHKERR m_field.set_field_order(0, MBTET, "SPATIAL_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_VELOCITY", 1);
+    CHKERR m_field.set_field_order(0, MBTET, "VELOCITY", vel_order);
+    CHKERR m_field.set_field_order(0, MBTRI, "VELOCITY", vel_order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "VELOCITY", vel_order);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", 1);
 
     CHKERR m_field.add_field("DOT_DISPLACEMENT", H1,
-                             AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
+                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
                              MF_ZERO);
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DOT_DISPLACEMENT");
-    CHKERR m_field.set_field_order(0, MBTET, "DOT_DISPLACEMENT",
-                                   disp_order);
-    CHKERR m_field.set_field_order(0, MBTRI, "DOT_DISPLACEMENT",
-                                   disp_order);
-    CHKERR m_field.set_field_order(0, MBEDGE, "DOT_DISPLACEMENT",
-                                   disp_order);
+    CHKERR m_field.set_field_order(0, MBTET, "DOT_DISPLACEMENT", disp_order);
+    CHKERR m_field.set_field_order(0, MBTRI, "DOT_DISPLACEMENT", disp_order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "DOT_DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_DISPLACEMENT", 1);
-    CHKERR m_field.add_field("DOT_SPATIAL_VELOCITY", H1,
-                             AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
+    CHKERR m_field.add_field("DOT_VELOCITY", H1,
+                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
                              MF_ZERO);
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DOT_SPATIAL_VELOCITY");
-    CHKERR m_field.set_field_order(0, MBTET, "DOT_SPATIAL_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBTRI, "DOT_SPATIAL_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBEDGE, "DOT_SPATIAL_VELOCITY",
-                                   vel_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_SPATIAL_VELOCITY", 1);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DOT_VELOCITY");
+    CHKERR m_field.set_field_order(0, MBTET, "DOT_VELOCITY", vel_order);
+    CHKERR m_field.set_field_order(0, MBTRI, "DOT_VELOCITY", vel_order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "DOT_VELOCITY", vel_order);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_VELOCITY", 1);
 
     // Set material model and mass element
     NonlinearElasticElement elastic(m_field, 2);
@@ -418,16 +415,16 @@ int main(int argc, char *argv[]) {
     // st_venant_kirchhoff_material_double;  CHKERR
     // elastic.setBlocks(&st_venant_kirchhoff_material_double,&st_venant_kirchhoff_material_adouble);
     CHKERR elastic.addElement("ELASTIC", "DISPLACEMENT");
-    CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS",
-                                false, true);
+    CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
+                                true);
 
     // set mass element
     ConvectiveMassElement inertia(m_field, 1);
     // CHKERR inertia.setBlocks();
     CHKERR elastic_materials.setBlocks(inertia.setOfBlocks);
-    CHKERR inertia.addConvectiveMassElement("MASS_ELEMENT", "SPATIAL_VELOCITY",
+    CHKERR inertia.addConvectiveMassElement("MASS_ELEMENT", "VELOCITY",
                                             "DISPLACEMENT");
-    CHKERR inertia.addVelocityElement("VELOCITY_ELEMENT", "SPATIAL_VELOCITY",
+    CHKERR inertia.addVelocityElement("VELOCITY_ELEMENT", "VELOCITY",
                                       "DISPLACEMENT");
 
     // Add possibility to load accelerogram
@@ -456,8 +453,8 @@ int main(int argc, char *argv[]) {
                                                          "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data("DAMPER",
                                                           "DISPLACEMENT");
-      CHKERR m_field.modify_finite_element_add_field_data(
-          "DAMPER", "DOT_DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_data("DAMPER",
+                                                          "DOT_DISPLACEMENT");
       if (m_field.check_field("MESH_NODE_POSITIONS")) {
         CHKERR m_field.modify_finite_element_add_field_data(
             "DAMPER", "MESH_NODE_POSITIONS");
@@ -484,12 +481,11 @@ int main(int argc, char *argv[]) {
 #ifdef BLOCKED_PROBLEM
     // elastic and mass element calculated in Kuu shell matrix problem. To
     // calculate Mass element, velocity field is needed.
-    CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
-                                                        "SPATIAL_VELOCITY");
+    CHKERR m_field.modify_finite_element_add_field_data("ELASTIC", "VELOCITY");
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
                                                         "DOT_DISPLACEMENT");
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
-                                                        "DOT_SPATIAL_VELOCITY");
+                                                        "DOT_VELOCITY");
 #endif
 
     // build field
@@ -501,9 +497,6 @@ int main(int argc, char *argv[]) {
       Projection10NodeCoordsOnField ent_method_material(m_field,
                                                         "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
-      // Projection10NodeCoordsOnField ent_method_spatial(m_field,
-      //                                                  "DISPLACEMENT");
-      // CHKERR m_field.loop_dofs("DISPLACEMENT", ent_method_spatial);
     }
 
     // build finite elements
@@ -582,7 +575,7 @@ int main(int argc, char *argv[]) {
         new ConvectiveMassElement::MatShellCtx();
     CHKERR m_field.getInterface<MatrixManager>()
         ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("Kuu",
-                                                          &shellAij_ctx->K);
+                                                        &shellAij_ctx->K);
     CHKERR MatDuplicate(shellAij_ctx->K, MAT_DO_NOT_COPY_VALUES,
                         &shellAij_ctx->M);
     CHKERR shellAij_ctx->iNit();
@@ -590,8 +583,8 @@ int main(int argc, char *argv[]) {
         D, "DYNAMICS", COL, shellAij_ctx->u, "Kuu", COL,
         &shellAij_ctx->scatterU);
     CHKERR m_field.getInterface<VecManager>()->vecScatterCreate(
-        D, "DYNAMICS", "SPATIAL_VELOCITY", COL, shellAij_ctx->v, "Kuu",
-        "DISPLACEMENT", COL, &shellAij_ctx->scatterV);
+        D, "DYNAMICS", "VELOCITY", COL, shellAij_ctx->v, "Kuu", "DISPLACEMENT",
+        COL, &shellAij_ctx->scatterV);
     Mat shell_Aij;
     const Problem *problem_ptr;
     CHKERR m_field.get_problem("DYNAMICS", &problem_ptr);
@@ -606,11 +599,10 @@ int main(int argc, char *argv[]) {
         (void (*)(void))ConvectiveMassElement::ZeroEntriesOp);
     // blocked problem
     ConvectiveMassElement::ShellMatrixElement shell_matrix_element(m_field);
-    DirichletDisplacementBc shell_dirichlet_bc(m_field, "DISPLACEMENT",
-                                                   shellAij_ctx->barK,
-                                                   PETSC_NULL, PETSC_NULL);
-    DirichletDisplacementBc my_dirichlet_bc(m_field, "DISPLACEMENT",
-                                                PETSC_NULL, D, F);
+    DirichletDisplacementBc shell_dirichlet_bc(
+        m_field, "DISPLACEMENT", shellAij_ctx->barK, PETSC_NULL, PETSC_NULL);
+    DirichletDisplacementBc my_dirichlet_bc(m_field, "DISPLACEMENT", PETSC_NULL,
+                                            D, F);
     shell_matrix_element.problemName = "Kuu";
     shell_matrix_element.shellMatCtx = shellAij_ctx;
     shell_matrix_element.DirichletBcPtr = &shell_dirichlet_bc;
@@ -644,8 +636,8 @@ int main(int argc, char *argv[]) {
         ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
             "NEUMANN_FE", &surface_force));
 
-    CHKERR inertia.setShellMatrixMassOperators(
-        "SPATIAL_VELOCITY", "DISPLACEMENT", "MESH_NODE_POSITIONS", linear);
+    CHKERR inertia.setShellMatrixMassOperators("VELOCITY", "DISPLACEMENT",
+                                               "MESH_NODE_POSITIONS", linear);
     // element name "ELASTIC" is used, therefore M matrix is assembled as K
     // matrix. This is added to M is shell matrix. M matrix is a derivative of
     // inertia forces over spatial velocities
@@ -666,9 +658,9 @@ int main(int argc, char *argv[]) {
     Mat Aij;
     CHKERR m_field.getInterface<MatrixManager>()
         ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("DYNAMICS", &Aij);
-    DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "DISPLACEMENT",
-                                                Aij, D, F);
-    // my_dirichlet_bc.fixFields.push_back("SPATIAL_VELOCITY");
+    DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "DISPLACEMENT", Aij, D,
+                                                F);
+    // my_dirichlet_bc.fixFields.push_back("VELOCITY");
 
     // surface forces
     NeumannForcesSurfaceComplexForLazy neumann_forces(m_field, Aij, F);
@@ -689,9 +681,8 @@ int main(int argc, char *argv[]) {
     surface_force.methodsOp.push_back(new TimeForceScale());
 
     CHKERR inertia.setConvectiveMassOperators(
-        "SPATIAL_VELOCITY", "DISPLACEMENT", "MESH_NODE_POSITIONS", false,
-        linear);
-    CHKERR inertia.setVelocityOperators("SPATIAL_VELOCITY", "DISPLACEMENT");
+        "VELOCITY", "DISPLACEMENT", "MESH_NODE_POSITIONS", false, linear);
+    CHKERR inertia.setVelocityOperators("VELOCITY", "DISPLACEMENT");
 #endif
 
     // nodal forces
@@ -707,7 +698,7 @@ int main(int argc, char *argv[]) {
 
     MonitorRestart monitor_restart(m_field, ts);
     ConvectiveMassElement::UpdateAndControl update_and_control(
-        m_field, ts, "SPATIAL_VELOCITY", "DISPLACEMENT");
+        m_field, ts, "VELOCITY", "DISPLACEMENT");
 
     // TS
     TsCtx ts_ctx(m_field, "DYNAMICS");
@@ -878,12 +869,10 @@ int main(int argc, char *argv[]) {
           "ELASTIC", &inertia.getLoopFeMassAuxLhs()));
       snes_ctx.get_postProcess_to_do_Mat().push_back(&my_dirichlet_bc);
 
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0, "VELOCITY");
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0,
-                                                           "SPATIAL_VELOCITY");
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
-          0, "DOT_DISPLACEMENT");
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
-          0, "DOT_SPATIAL_VELOCITY");
+                                                           "DOT_DISPLACEMENT");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0, "DOT_VELOCITY");
 
       CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
           "Kuu", COL, D, INSERT_VALUES, SCATTER_FORWARD);
