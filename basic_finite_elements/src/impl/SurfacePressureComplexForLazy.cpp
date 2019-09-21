@@ -524,7 +524,7 @@ operator()() {
 
     CHKERR FaceElementForcesAndSourcesCore::operator()();
     if(spatialDisp)
-      cblas_daxpy(12, 1, dofs_X, 1, dofs_x, 1);
+      cblas_daxpy(9, 1, dofs_X, 1, dofs_x, 1);
 
     CHKERR calcTraction();
 
