@@ -132,7 +132,7 @@ struct NeummanForcesSurface {
                           DataForcesAndSourcesCore::EntData &data);
 
     Vec F;
-    
+
   private:
     const Range tRis;
     boost::ptr_vector<MethodForForceScaling> &methodsOp;
@@ -314,7 +314,9 @@ struct MetaNeummanForces {
 
 #endif //__SURFACE_PERSSURE_HPP__
 
-/******************************************************************************
+/**
  * \defgroup mofem_static_boundary_conditions Pressure and force boundary
- *conditions \ingroup user_modules
- ******************************************************************************/
+ * conditions
+ *
+ * \ingroup user_modules
+ **/
