@@ -173,10 +173,11 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
 
 NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::MyTriangleSpatialFE(
     MoFEM::Interface &_mField, Mat _Aij, Vec &_F, double *scale_lhs,
-    double *scale_rhs, std::string spatial_field_name,
+    double *scale_rhs, std::string spatial_field_name, bool spatial_disp,
     std::string mat_field_name)
     : FaceElementForcesAndSourcesCore(_mField), sCaleLhs(scale_lhs),
-      sCaleRhs(scale_rhs), typeOfForces(CONSERVATIVE), eps(1e-8), uSeF(false) {
+      sCaleRhs(scale_rhs), typeOfForces(CONSERVATIVE), eps(1e-8), uSeF(false),
+      spatialDisp(spatial_disp) {
 
   meshPositionsFieldName = "NoNE";
   methodsOp.clear();
@@ -409,59 +410,46 @@ MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::
 MoFEMErrorCode
 NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::calcTraction() {
   MoFEMFunctionBeginHot;
-
-  try {
-
-    EntityHandle ent = numeredEntFiniteElementPtr->getEnt();
-    map<int, bCPressure>::iterator mip = mapPressure.begin();
-    tLoc.resize(3);
-    tLoc[0] = tLoc[1] = tLoc[2] = 0;
-    for (; mip != mapPressure.end(); mip++) {
-      if (mip->second.tRis.find(ent) != mip->second.tRis.end()) {
-        tLoc[2] -= mip->second.data.data.value1;
-      }
+  EntityHandle ent = numeredEntFiniteElementPtr->getEnt();
+  map<int, bCPressure>::iterator mip = mapPressure.begin();
+  tLoc.resize(3);
+  tLoc[0] = tLoc[1] = tLoc[2] = 0;
+  for (; mip != mapPressure.end(); mip++) {
+    if (mip->second.tRis.find(ent) != mip->second.tRis.end()) {
+      tLoc[2] -= mip->second.data.data.value1;
     }
-    tLocNodal.resize(3, 3);
-    for (int nn = 0; nn < 3; nn++) {
-      for (int dd = 0; dd < 3; dd++) {
-        tLocNodal(nn, dd) = tLoc[dd];
-      }
-    }
-
-    map<int, bCForce>::iterator mif = mapForce.begin();
-    for (; mif != mapForce.end(); mif++) {
-      if (mif->second.tRis.find(ent) != mif->second.tRis.end()) {
-        tGlob.resize(3);
-        tGlob[0] = mif->second.data.data.value3;
-        tGlob[1] = mif->second.data.data.value4;
-        tGlob[2] = mif->second.data.data.value5;
-        tGlob *= mif->second.data.data.value1;
-        tGlobNodal.resize(3, 3);
-        for (int nn = 0; nn < 3; nn++) {
-          for (int dd = 0; dd < 3; dd++) {
-            tGlobNodal(nn, dd) = tGlob[dd];
-          }
-        }
-        CHKERR reBaseToFaceLoocalCoordSystem(tGlobNodal);
-        tLocNodal += tGlobNodal;
-      }
-    }
-
-    VectorDouble scale(1, 1);
-    // cerr << methodsOp.size() << endl;
-    CHKERR MethodForForceScaling::applyScale(this, methodsOp, scale);
-    tLocNodal *= scale[0];
-
-    // cerr << tLocNodal << endl;
-    t_loc = &*tLocNodal.data().begin();
-    // cerr << "tLocNodal: " << tLocNodal << endl;
-
-  } catch (exception &ex) {
-    ostringstream ss;
-    ss << "thorw in method: " << ex.what() << " at line " << __LINE__
-       << " in file " << __FILE__;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
+  tLocNodal.resize(3, 3);
+  for (int nn = 0; nn < 3; nn++) {
+    for (int dd = 0; dd < 3; dd++) {
+      tLocNodal(nn, dd) = tLoc[dd];
+    }
+  }
+
+  map<int, bCForce>::iterator mif = mapForce.begin();
+  for (; mif != mapForce.end(); mif++) {
+    if (mif->second.tRis.find(ent) != mif->second.tRis.end()) {
+      tGlob.resize(3);
+      tGlob[0] = mif->second.data.data.value3;
+      tGlob[1] = mif->second.data.data.value4;
+      tGlob[2] = mif->second.data.data.value5;
+      tGlob *= mif->second.data.data.value1;
+      tGlobNodal.resize(3, 3);
+      for (int nn = 0; nn < 3; nn++) {
+        for (int dd = 0; dd < 3; dd++) {
+          tGlobNodal(nn, dd) = tGlob[dd];
+        }
+      }
+      CHKERR reBaseToFaceLoocalCoordSystem(tGlobNodal);
+      tLocNodal += tGlobNodal;
+    }
+  }
+
+  VectorDouble scale(1, 1);
+  CHKERR MethodForForceScaling::applyScale(this, methodsOp, scale);
+  tLocNodal *= scale[0];
+
+  t_loc = &*tLocNodal.data().begin();
 
   MoFEMFunctionReturnHot(0);
 }
@@ -535,6 +523,9 @@ operator()() {
     } 
 
     CHKERR FaceElementForcesAndSourcesCore::operator()();
+    if(spatialDisp)
+      cblas_daxpy(12, 1, dofs_X, 1, dofs_x, 1);
+
     CHKERR calcTraction();
 
     switch (snes_ctx) {
@@ -590,8 +581,9 @@ NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addPressure(
 NeumannForcesSurfaceComplexForLazy::NeumannForcesSurfaceComplexForLazy(
     MoFEM::Interface &m_field, Mat _Aij, Vec _F, std::string spatial_field_name,
     bool spatial_disp, std::string material_field_name)
-    : mField(m_field), feSpatial(m_field, _Aij, _F, NULL, NULL,
-                                 spatial_field_name, material_field_name),
+    : mField(m_field),
+      feSpatial(m_field, _Aij, _F, NULL, NULL, spatial_field_name, spatial_disp,
+                material_field_name),
       spatialField(spatial_field_name), spatialDisplacement(spatial_disp),
       materialField(material_field_name) {
 
@@ -622,8 +614,9 @@ NeumannForcesSurfaceComplexForLazy::NeumannForcesSurfaceComplexForLazy(
     MoFEM::Interface &m_field, Mat _Aij, Vec _F, double *scale_lhs,
     double *scale_rhs, std::string spatial_field_name, bool spatial_disp,
     std::string material_field_name)
-    : mField(m_field), feSpatial(m_field, _Aij, _F, scale_lhs, scale_rhs,
-                                 spatial_field_name, material_field_name),
+    : mField(m_field),
+      feSpatial(m_field, _Aij, _F, scale_lhs, scale_rhs, spatial_field_name,
+                spatial_disp, material_field_name),
       spatialField(spatial_field_name), spatialDisplacement(spatial_disp),
       materialField(material_field_name) {}
 
