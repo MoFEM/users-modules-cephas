@@ -99,7 +99,14 @@ int main(int argc, char *argv[]) {
   const string default_options = "-ksp_type gmres \n"
                                  "-pc_type lu \n"
                                  "-pc_factor_mat_solver_package mumps \n"
-                                 "-ksp_monitor \n";
+                                 "-ksp_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type basic \n"
+                                 "-snes_atol 1e-8 \n"
+                                 "-snes_rtol 1e-8 \n"
+                                 "-snes_monitor \n"
+                                 "-ts_monitor \n"
+                                 "-ts_type beuler \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
