@@ -24,7 +24,7 @@
   auto-differentiation. It is well tested and works. well.
 
   */
-struct NeummanForcesSurfaceComplexForLazy {
+struct NeumannForcesSurfaceComplexForLazy {
 
   struct MyTriangleSpatialFE;
   struct AuxMethodSpatial
@@ -61,7 +61,9 @@ struct NeummanForcesSurfaceComplexForLazy {
     Vec F;
 
     MyTriangleSpatialFE(MoFEM::Interface &_mField, Mat _Aij, Vec &_F,
-                        double *scale_lhs, double *scale_rhs);
+                        double *scale_lhs, double *scale_rhs, 
+                        std::string spatial_field_name = "SPATIAL_POSITION",
+                        std::string mat_field_name = "MESH_NODE_POSITIONS");
 
     int getRule(int order) { return max(1, order); };
 
@@ -136,7 +138,6 @@ struct NeummanForcesSurfaceComplexForLazy {
 
     MoFEMErrorCode addForce(int ms_id);
     MoFEMErrorCode addPressure(int ms_id);
-    DEPRECATED MoFEMErrorCode addPreassure(int ms_id);
 
     struct bCForce {
       ForceCubitBcData data;
@@ -153,19 +154,8 @@ struct NeummanForcesSurfaceComplexForLazy {
     boost::ptr_vector<MethodForForceScaling> methodsOp;
   };
 
-  // struct MyTriangleMaterialFE: public MyTriangleSpatialFE {
-  //
-  //   MyTriangleMaterialFE(MoFEM::Interface &_mField,Mat _Aij,Vec &_F,double
-  //   *scale_lhs,double *scale_rhs);
-  //
-  //   MoFEMErrorCode rHs();
-  //   MoFEMErrorCode lHs();
-  //
-  // };
-
   MoFEM::Interface &mField;
   MyTriangleSpatialFE feSpatial;
-  // MyTriangleMaterialFE feMaterial;
 
   Tag thScale;
 
@@ -177,13 +167,28 @@ struct NeummanForcesSurfaceComplexForLazy {
   }
 
   MyTriangleSpatialFE &getLoopSpatialFe() { return feSpatial; }
-  // MyTriangleMaterialFE& getLoopMaterialFe() { return feMaterial; }
 
-  NeummanForcesSurfaceComplexForLazy(MoFEM::Interface &m_field, Mat _Aij,
-                                     Vec _F, double *scale_lhs,
-                                     double *scale_rhs);
-  NeummanForcesSurfaceComplexForLazy(MoFEM::Interface &m_field, Mat _Aij,
-                                     Vec _F);
+  NeumannForcesSurfaceComplexForLazy(
+      MoFEM::Interface &m_field, Mat _Aij, Vec _F, double *scale_lhs,
+      double *scale_rhs, std::string spatial_field_name = "SPATIAL_POSITION",
+      bool spatial_disp = false,
+      std::string material_field_name = "MESH_NODE_POSITIONS");
+  NeumannForcesSurfaceComplexForLazy(
+      MoFEM::Interface &m_field, Mat _Aij, Vec _F,
+      std::string spatial_field_name = "SPATIAL_POSITION",
+      bool spatial_disp = false,
+      std::string material_field_name = "MESH_NODE_POSITIONS");
+
+private:
+  const std::string spatialField;
+  const bool spatialDisplacement;
+  const std::string materialField;
 };
+
+/**
+ * \depracted do not use name with spelling mistake.
+ */
+DEPRECATED typedef NeumannForcesSurfaceComplexForLazy
+    NeummanForcesSurfaceComplexForLazy;
 
 #endif //__COMPLEX_FOR_LAZY_NEUMANN_FORCES_HPP__

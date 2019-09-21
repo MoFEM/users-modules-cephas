@@ -66,17 +66,17 @@ void tricircumcenter3d_tp(double a[3], double b[3], double c[3],
                           double circumcenter[3], double *xi, double *eta);
 }
 
-NeummanForcesSurfaceComplexForLazy::AuxMethodSpatial::AuxMethodSpatial(
+NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::AuxMethodSpatial(
     const string &field_name, MyTriangleSpatialFE *my_ptr, const char type)
     : FaceElementForcesAndSourcesCore::UserDataOperator(field_name, type),
       myPtr(my_ptr) {}
 
-NeummanForcesSurfaceComplexForLazy::AuxMethodMaterial::AuxMethodMaterial(
+NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::AuxMethodMaterial(
     const string &field_name, MyTriangleSpatialFE *my_ptr, const char type)
     : FaceElementForcesAndSourcesCore::UserDataOperator(field_name, type),
       myPtr(my_ptr){};
 
-MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
+MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -127,7 +127,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::AuxMethodSpatial::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
+MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -171,9 +171,10 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::AuxMethodMaterial::doWork(
   MoFEMFunctionReturn(0);
 }
 
-NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::MyTriangleSpatialFE(
+NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::MyTriangleSpatialFE(
     MoFEM::Interface &_mField, Mat _Aij, Vec &_F, double *scale_lhs,
-    double *scale_rhs)
+    double *scale_rhs, std::string spatial_field_name,
+    std::string mat_field_name)
     : FaceElementForcesAndSourcesCore(_mField), sCaleLhs(scale_lhs),
       sCaleRhs(scale_rhs), typeOfForces(CONSERVATIVE), eps(1e-8), uSeF(false) {
 
@@ -186,16 +187,16 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::MyTriangleSpatialFE(
   snes_B = _Aij;
   snes_f = _F;
 
-  if (mField.check_field("MESH_NODE_POSITIONS")) {
+  if (mField.check_field(mat_field_name)) {
     getOpPtrVector().push_back(
-        new AuxMethodMaterial("MESH_NODE_POSITIONS", this,
+        new AuxMethodMaterial(mat_field_name, this,
                               ForcesAndSourcesCore::UserDataOperator::OPROW));
   }
   getOpPtrVector().push_back(new AuxMethodSpatial(
-      "SPATIAL_POSITION", this, ForcesAndSourcesCore::UserDataOperator::OPROW));
+      spatial_field_name, this, ForcesAndSourcesCore::UserDataOperator::OPROW));
 }
 
-MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::rHs() {
+MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::rHs() {
   MoFEMFunctionBegin;
 
   auto &dataH1 = *dataOnElement[H1];
@@ -274,7 +275,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::rHs() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::lHs() {
+MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::lHs() {
   MoFEMFunctionBegin;
 
   if (typeOfForces == NONCONSERVATIVE) {
@@ -386,7 +387,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::lHs() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::
+MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::
     reBaseToFaceLoocalCoordSystem(MatrixDouble &t_glob_nodal) {
   MoFEMFunctionBeginHot;
   double s1[3], s2[3], normal[3], q[9];
@@ -406,7 +407,7 @@ MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::
 }
 
 MoFEMErrorCode
-NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::calcTraction() {
+NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::calcTraction() {
   MoFEMFunctionBeginHot;
 
   try {
@@ -466,7 +467,7 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::calcTraction() {
 }
 
 MoFEMErrorCode
-NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::preProcess() {
+NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::preProcess() {
   MoFEMFunctionBeginHot;
 
   CHKERR PetscOptionsBegin(mField.get_comm(), "",
@@ -498,15 +499,13 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::preProcess() {
   MoFEMFunctionReturnHot(0);
 }
 
-MoFEMErrorCode NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::
+MoFEMErrorCode NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::
 operator()() {
   MoFEMFunctionBeginHot;
 
-  // cerr << "MyTriangleSpatialFE::operator()()\n";
+  {
 
-  try {
-
-    try {
+     {
 
       dofs_X = &*coords.data().begin();
       for (int ee = 0; ee < 3; ee++) {
@@ -533,12 +532,7 @@ operator()() {
       dofs_x_face = NULL;
       idofs_x_face = NULL;
 
-    } catch (exception &ex) {
-      ostringstream ss;
-      ss << "thorw in method: " << ex.what() << " at line " << __LINE__
-         << " in file " << __FILE__;
-      SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
-    }
+    } 
 
     CHKERR FaceElementForcesAndSourcesCore::operator()();
     CHKERR calcTraction();
@@ -557,18 +551,13 @@ operator()() {
     } break;
     }
 
-  } catch (exception &ex) {
-    ostringstream ss;
-    ss << "thorw in method: " << ex.what() << " at line " << __LINE__
-       << " in file " << __FILE__;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
-  }
+  } 
 
   MoFEMFunctionReturnHot(0);
 }
 
 MoFEMErrorCode
-NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addForce(int ms_id) {
+NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addForce(int ms_id) {
   MeshsetsManager *mesh_manager_ptr;
   const CubitMeshSets *cubit_meshset_ptr;
 
@@ -583,7 +572,7 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addForce(int ms_id) {
 }
 
 MoFEMErrorCode
-NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addPressure(
+NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addPressure(
     int ms_id) {
   MeshsetsManager *mesh_manager_ptr;
   const CubitMeshSets *cubit_meshset_ptr;
@@ -598,27 +587,13 @@ NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addPressure(
   MoFEMFunctionReturnHot(0);
 }
 
-DEPRECATED MoFEMErrorCode
-NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE::addPreassure(
-    int ms_id) {
-  MeshsetsManager *mesh_manager_ptr;
-  const CubitMeshSets *cubit_meshset_ptr;
-
-  MoFEMFunctionBeginHot;
-  CHKERR mField.getInterface(mesh_manager_ptr);
-  CHKERR mesh_manager_ptr->getCubitMeshsetPtr(ms_id, SIDESET,
-                                              &cubit_meshset_ptr);
-  CHKERR cubit_meshset_ptr->getBcDataStructure(mapPressure[ms_id].data);
-  CHKERR mField.get_moab().get_entities_by_type(
-      cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
-  MoFEMFunctionReturnHot(0);
-}
-
-NeummanForcesSurfaceComplexForLazy::NeummanForcesSurfaceComplexForLazy(
-    MoFEM::Interface &m_field, Mat _Aij, Vec _F)
-    : mField(m_field),
-      feSpatial(m_field, _Aij, _F, NULL,
-                NULL) /*,feMaterial(m_field,_Aij,_F,NULL,NULL)*/ {
+NeumannForcesSurfaceComplexForLazy::NeumannForcesSurfaceComplexForLazy(
+    MoFEM::Interface &m_field, Mat _Aij, Vec _F, std::string spatial_field_name,
+    bool spatial_disp, std::string material_field_name)
+    : mField(m_field), feSpatial(m_field, _Aij, _F, NULL, NULL,
+                                 spatial_field_name, material_field_name),
+      spatialField(spatial_field_name), spatialDisplacement(spatial_disp),
+      materialField(material_field_name) {
 
   double def_scale = 1.;
   const EntityHandle root_meshset = mField.get_moab().get_root_set();
@@ -643,11 +618,14 @@ NeummanForcesSurfaceComplexForLazy::NeummanForcesSurfaceComplexForLazy(
   feSpatial.sCaleRhs = sCale;
 }
 
-NeummanForcesSurfaceComplexForLazy::NeummanForcesSurfaceComplexForLazy(
+NeumannForcesSurfaceComplexForLazy::NeumannForcesSurfaceComplexForLazy(
     MoFEM::Interface &m_field, Mat _Aij, Vec _F, double *scale_lhs,
-    double *scale_rhs)
-    : mField(m_field), feSpatial(m_field, _Aij, _F, scale_lhs, scale_rhs) {}
-// feMaterial(m_field,_Aij,_F,scale_lhs,scale_rhs) {}
+    double *scale_rhs, std::string spatial_field_name, bool spatial_disp,
+    std::string material_field_name)
+    : mField(m_field), feSpatial(m_field, _Aij, _F, scale_lhs, scale_rhs,
+                                 spatial_field_name, material_field_name),
+      spatialField(spatial_field_name), spatialDisplacement(spatial_disp),
+      materialField(material_field_name) {}
 
 extern "C" {
 
