@@ -413,12 +413,12 @@ int main(int argc, char *argv[]) {
     double scaled_reference_load = 1;
     double *scale_lhs = &(arc_ctx->getFieldData());
     double *scale_rhs = &(scaled_reference_load);
-    NeummanForcesSurfaceComplexForLazy neumann_forces(
+    NeumannForcesSurfaceComplexForLazy neumann_forces(
         m_field, Aij, arc_ctx->F_lambda, scale_lhs, scale_rhs);
-    NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE &fe_neumann =
+    NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE &fe_neumann =
         neumann_forces.getLoopSpatialFe();
     if (linear) {
-      fe_neumann.typeOfForces = NeummanForcesSurfaceComplexForLazy::
+      fe_neumann.typeOfForces = NeumannForcesSurfaceComplexForLazy::
           MyTriangleSpatialFE::NONCONSERVATIVE;
     }
     fe_neumann.uSeF = true;
