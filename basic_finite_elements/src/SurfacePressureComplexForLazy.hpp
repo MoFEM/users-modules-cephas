@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef __COMPLEX_FOR_LAZY_NEUMANM_FORCES_HPP__
-#define __COMPLEX_FOR_LAZY_NEUMANM_FORCES_HPP__
+#ifndef __COMPLEX_FOR_LAZY_NEUMANN_FORCES_HPP__
+#define __COMPLEX_FOR_LAZY_NEUMANN_FORCES_HPP__
 
 /** \brief NonLinear surface pressure element (obsolete implementation)
   * \ingroup nonlinear_elastic_elem
@@ -27,27 +27,31 @@
 struct NeummanForcesSurfaceComplexForLazy {
 
   struct MyTriangleSpatialFE;
-  struct AuxMethodSpatial: public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  struct AuxMethodSpatial
+      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
     MyTriangleSpatialFE *myPtr;
-    AuxMethodSpatial(const string &field_name,MyTriangleSpatialFE *my_ptr,const char type);
-    MoFEMErrorCode doWork(int side, EntityType type, DataForcesAndSourcesCore::EntData &data);
-
+    AuxMethodSpatial(const string &field_name, MyTriangleSpatialFE *my_ptr,
+                     const char type);
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
   };
 
-  struct AuxMethodMaterial: public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  struct AuxMethodMaterial
+      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
     MyTriangleSpatialFE *myPtr;
-    AuxMethodMaterial(const string &field_name,MyTriangleSpatialFE *my_ptr,const char type);
-    MoFEMErrorCode doWork(int side, EntityType type, DataForcesAndSourcesCore::EntData &data);
-
+    AuxMethodMaterial(const string &field_name, MyTriangleSpatialFE *my_ptr,
+                      const char type);
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
   };
 
-  struct MyTriangleSpatialFE: public MoFEM::FaceElementForcesAndSourcesCore {
+  struct MyTriangleSpatialFE : public MoFEM::FaceElementForcesAndSourcesCore {
 
     double *sCaleLhs;
     double *sCaleRhs;
-    enum FORCES { CONSERVATIVE = 1, NONCONSERVATIVE = 2};
+    enum FORCES { CONSERVATIVE = 1, NONCONSERVATIVE = 2 };
 
     FORCES typeOfForces;
     const double eps;
@@ -56,9 +60,10 @@ struct NeummanForcesSurfaceComplexForLazy {
     Mat Aij;
     Vec F;
 
-    MyTriangleSpatialFE(MoFEM::Interface &_mField,Mat _Aij,Vec &_F,double *scale_lhs,double *scale_rhs);
+    MyTriangleSpatialFE(MoFEM::Interface &_mField, Mat _Aij, Vec &_F,
+                        double *scale_lhs, double *scale_rhs);
 
-    int getRule(int order) { return max(1,order); };
+    int getRule(int order) { return max(1, order); };
 
     double *N;
     double *N_face;
@@ -90,35 +95,34 @@ struct NeummanForcesSurfaceComplexForLazy {
 
     int *dofs_X_indices;
 
-
-    VectorDouble tLoc,tGlob;
-    MatrixDouble tLocNodal,tGlobNodal;
+    VectorDouble tLoc, tGlob;
+    MatrixDouble tLocNodal, tGlobNodal;
     double *t_loc;
 
-    ublas::vector<int> dOfs_x_indices,dOfs_x_face_indices;
-    ublas::vector<ublas::vector<int> > dOfs_x_edge_indices;
-    ublas::vector<int> dOfs_X_indices,dOfs_X_face_indices;
-    ublas::vector<ublas::vector<int> > dOfs_X_edge_indices;
+    ublas::vector<int> dOfs_x_indices, dOfs_x_face_indices;
+    ublas::vector<ublas::vector<int>> dOfs_x_edge_indices;
+    ublas::vector<int> dOfs_X_indices, dOfs_X_face_indices;
+    ublas::vector<ublas::vector<int>> dOfs_X_edge_indices;
 
-    VectorDouble dOfs_x,dOfs_x_face;
-    ublas::vector<VectorDouble > dOfs_x_edge;
-    VectorDouble dOfs_X,dOfs_X_face;
-    ublas::vector<VectorDouble > dOfs_X_edge;
+    VectorDouble dOfs_x, dOfs_x_face;
+    ublas::vector<VectorDouble> dOfs_x_edge;
+    VectorDouble dOfs_X, dOfs_X_face;
+    ublas::vector<VectorDouble> dOfs_X_edge;
 
-    VectorDouble fExtNode,fExtFace;
-    ublas::vector<VectorDouble > fExtEdge;
+    VectorDouble fExtNode, fExtFace;
+    ublas::vector<VectorDouble> fExtEdge;
     double *Fext_edge[3];
 
-    MatrixDouble kExtNodeNode,kExtFaceNode;
-    ublas::vector<MatrixDouble > kExtEdgeNode;
+    MatrixDouble kExtNodeNode, kExtFaceNode;
+    ublas::vector<MatrixDouble> kExtEdgeNode;
     double *Kext_edge_node[3];
 
-    MatrixDouble kExtNodeFace,kExtFaceFace;
-    ublas::vector<MatrixDouble > kExtEdgeFace;
+    MatrixDouble kExtNodeFace, kExtFaceFace;
+    ublas::vector<MatrixDouble> kExtEdgeFace;
     double *Kext_edge_face[3];
 
-    ublas::vector<MatrixDouble > kExtFaceEdge,kExtNodeEdge;
-    ublas::matrix<MatrixDouble > kExtEdgeEdge;
+    ublas::vector<MatrixDouble> kExtFaceEdge, kExtNodeEdge;
+    ublas::matrix<MatrixDouble> kExtEdgeEdge;
     double *Kext_node_edge[3];
     double *Kext_face_edge[3];
     double *Kext_edge_edge[3][3];
@@ -138,21 +142,21 @@ struct NeummanForcesSurfaceComplexForLazy {
       ForceCubitBcData data;
       Range tRis;
     };
-    map<int,bCForce> mapForce;
+    map<int, bCForce> mapForce;
     struct bCPressure {
       PressureCubitBcData data;
       Range tRis;
     };
-    map<int,bCPressure> mapPressure;
+    map<int, bCPressure> mapPressure;
     MoFEMErrorCode reBaseToFaceLoocalCoordSystem(MatrixDouble &t_glob_nodal);
 
     boost::ptr_vector<MethodForForceScaling> methodsOp;
-
   };
 
   // struct MyTriangleMaterialFE: public MyTriangleSpatialFE {
   //
-  //   MyTriangleMaterialFE(MoFEM::Interface &_mField,Mat _Aij,Vec &_F,double *scale_lhs,double *scale_rhs);
+  //   MyTriangleMaterialFE(MoFEM::Interface &_mField,Mat _Aij,Vec &_F,double
+  //   *scale_lhs,double *scale_rhs);
   //
   //   MoFEMErrorCode rHs();
   //   MoFEMErrorCode lHs();
@@ -167,18 +171,19 @@ struct NeummanForcesSurfaceComplexForLazy {
 
   double *sCale;
   MoFEMErrorCode setForceScale(double scale) {
-      MoFEMFunctionBeginHot;
-      *sCale = scale;
-      MoFEMFunctionReturnHot(0);
+    MoFEMFunctionBeginHot;
+    *sCale = scale;
+    MoFEMFunctionReturnHot(0);
   }
 
-  MyTriangleSpatialFE& getLoopSpatialFe() { return feSpatial; }
+  MyTriangleSpatialFE &getLoopSpatialFe() { return feSpatial; }
   // MyTriangleMaterialFE& getLoopMaterialFe() { return feMaterial; }
 
-  NeummanForcesSurfaceComplexForLazy(MoFEM::Interface &m_field,Mat _Aij,Vec _F,double *scale_lhs,double *scale_rhs);
-  NeummanForcesSurfaceComplexForLazy(MoFEM::Interface &m_field,Mat _Aij,Vec _F);
-
+  NeummanForcesSurfaceComplexForLazy(MoFEM::Interface &m_field, Mat _Aij,
+                                     Vec _F, double *scale_lhs,
+                                     double *scale_rhs);
+  NeummanForcesSurfaceComplexForLazy(MoFEM::Interface &m_field, Mat _Aij,
+                                     Vec _F);
 };
 
-
-#endif //__COMPLEX_FOR_LAZY_NEUMANM_FORCES_HPP__
+#endif //__COMPLEX_FOR_LAZY_NEUMANN_FORCES_HPP__
