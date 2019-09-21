@@ -392,8 +392,8 @@ int main(int argc, char *argv[]) {
                                                         &Aij);
 
     // surface forces
-    NeummanForcesSurfaceComplexForLazy neumann_forces(m_field, Aij, F);
-    NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE &neumann =
+    NeumannForcesSurfaceComplexForLazy neumann_forces(m_field, Aij, F);
+    NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE &neumann =
         neumann_forces.getLoopSpatialFe();
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
