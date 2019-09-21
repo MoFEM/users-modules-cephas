@@ -148,83 +148,59 @@ ConvectiveMassElement::OpGetDataAtGaussPts::OpGetDataAtGaussPts(
 MoFEMErrorCode ConvectiveMassElement::OpGetDataAtGaussPts::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBeginHot;
-  try {
 
-    int nb_dofs = data.getFieldData().size();
-    if (nb_dofs == 0) {
-      MoFEMFunctionReturnHot(0);
-    }
-    int nb_gauss_pts = data.getN().size1();
-    int nb_base_functions = data.getN().size2();
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0) {
+    MoFEMFunctionReturnHot(0);
+  }
+  int nb_gauss_pts = data.getN().size1();
+  int nb_base_functions = data.getN().size2();
 
-    // initialize
-    // VectorDouble& values = data.getFieldData();
-    valuesAtGaussPts.resize(nb_gauss_pts);
-    gradientAtGaussPts.resize(nb_gauss_pts);
-    for (int gg = 0; gg < nb_gauss_pts; gg++) {
-      valuesAtGaussPts[gg].resize(3);
-      gradientAtGaussPts[gg].resize(3, 3);
-    }
-
-    if (type == zeroAtType) {
-      for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        valuesAtGaussPts[gg].clear();
-        gradientAtGaussPts[gg].clear();
-      }
-    }
-
-    auto base_function = data.getFTensor0N();
-    auto diff_base_functions = data.getFTensor1DiffN<3>();
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-      auto field_data = data.getFTensor1FieldData<3>();
-      FTensor::Tensor1<double *, 3> values(&valuesAtGaussPts[gg][0],
-                                           &valuesAtGaussPts[gg][1],
-                                           &valuesAtGaussPts[gg][2]);
-      FTensor::Tensor2<double *, 3, 3> gradient(
-          &gradientAtGaussPts[gg](0, 0), &gradientAtGaussPts[gg](0, 1),
-          &gradientAtGaussPts[gg](0, 2), &gradientAtGaussPts[gg](1, 0),
-          &gradientAtGaussPts[gg](1, 1), &gradientAtGaussPts[gg](1, 2),
-          &gradientAtGaussPts[gg](2, 0), &gradientAtGaussPts[gg](2, 1),
-          &gradientAtGaussPts[gg](2, 2));
-      int bb = 0;
-      for (; bb != nb_dofs / 3; bb++) {
-        values(i) += base_function * field_data(i);
-        gradient(i, j) += field_data(i) * diff_base_functions(j);
-        ++diff_base_functions;
-        ++base_function;
-        ++field_data;
-      }
-      for (; bb != nb_base_functions; bb++) {
-        ++diff_base_functions;
-        ++base_function;
-      }
-    }
-
-    // std::cerr << valuesAtGaussPts[0] << " : ";
-    //
-    // for(int gg = 0;gg<nb_gauss_pts;gg++) {
-    //   VectorDouble N = data.getN(gg,nb_dofs/3);
-    //   MatrixDouble diffN = data.getDiffN(gg,nb_dofs/3);
-    //   for(int dd = 0;dd<nb_dofs/3;dd++) {
-    //     for(int rr1 = 0;rr1<3;rr1++) {
-    //       valuesAtGaussPts[gg][rr1] += N[dd]*values[3*dd+rr1];
-    //       for(int rr2 = 0;rr2<3;rr2++) {
-    //         gradientAtGaussPts[gg](rr1,rr2) +=
-    //         diffN(dd,rr2)*values[3*dd+rr1];
-    //       }
-    //     }
-    //   }
-    // }
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
+  // initialize
+  // VectorDouble& values = data.getFieldData();
+  valuesAtGaussPts.resize(nb_gauss_pts);
+  gradientAtGaussPts.resize(nb_gauss_pts);
+  for (int gg = 0; gg < nb_gauss_pts; gg++) {
+    valuesAtGaussPts[gg].resize(3);
+    gradientAtGaussPts[gg].resize(3, 3);
   }
 
+  if (type == zeroAtType) {
+    for (int gg = 0; gg < nb_gauss_pts; gg++) {
+      valuesAtGaussPts[gg].clear();
+      gradientAtGaussPts[gg].clear();
+    }
+  }
+
+  auto base_function = data.getFTensor0N();
+  auto diff_base_functions = data.getFTensor1DiffN<3>();
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    auto field_data = data.getFTensor1FieldData<3>();
+    FTensor::Tensor1<double *, 3> values(&valuesAtGaussPts[gg][0],
+                                         &valuesAtGaussPts[gg][1],
+                                         &valuesAtGaussPts[gg][2]);
+    FTensor::Tensor2<double *, 3, 3> gradient(
+        &gradientAtGaussPts[gg](0, 0), &gradientAtGaussPts[gg](0, 1),
+        &gradientAtGaussPts[gg](0, 2), &gradientAtGaussPts[gg](1, 0),
+        &gradientAtGaussPts[gg](1, 1), &gradientAtGaussPts[gg](1, 2),
+        &gradientAtGaussPts[gg](2, 0), &gradientAtGaussPts[gg](2, 1),
+        &gradientAtGaussPts[gg](2, 2));
+    int bb = 0;
+    for (; bb != nb_dofs / 3; bb++) {
+      values(i) += base_function * field_data(i);
+      gradient(i, j) += field_data(i) * diff_base_functions(j);
+      ++diff_base_functions;
+      ++base_function;
+      ++field_data;
+    }
+    for (; bb != nb_base_functions; bb++) {
+      ++diff_base_functions;
+      ++base_function;
+    }
+  }
   MoFEMFunctionReturnHot(0);
 }
 
@@ -260,7 +236,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
   if (nb_dofs == 0)
     MoFEMFunctionReturnHot(0);
 
-  try {
+  {
 
     if (a.size() != 3) {
       a.resize(3, false);
@@ -447,11 +423,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassJacobian::doWork(
         commonData.jacMass[gg] *= val;
       }
     }
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
 
   MoFEMFunctionReturnHot(0);
@@ -480,7 +451,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassRhs::doWork(
   auto base = row_data.getFTensor0N();
   int nb_base_functions = row_data.getN().size2();
 
-  try {
+  {
 
     nf.resize(nb_dofs);
     nf.clear();
@@ -501,14 +472,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassRhs::doWork(
       for (; dd != nb_base_functions; dd++) {
         ++base;
       }
-
-      // VectorDouble& res = commonData.valMass[gg];
-      // //std::cerr << res << std::endl;
-      // for(int dd = 0;dd<nb_dofs/3;dd++) {
-      //   for(int rr = 0;rr<3;rr++) {
-      //     nf[3*dd+rr] += row_data.getN()(gg,dd)*res[rr];
-      //   }
-      // }
     }
 
     if ((unsigned int)nb_dofs > 3 * row_data.getN().size2()) {
@@ -516,11 +479,6 @@ MoFEMErrorCode ConvectiveMassElement::OpMassRhs::doWork(
     }
     CHKERR VecSetValues(getFEMethod()->ts_F, nb_dofs, &row_data.getIndices()[0],
                         &nf[0], ADD_VALUES);
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
 
   MoFEMFunctionReturnHot(0);
@@ -542,105 +500,68 @@ ConvectiveMassElement::OpMassLhs_dM_dv::OpMassLhs_dM_dv(
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::getJac(
     DataForcesAndSourcesCore::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
-  try {
-    int nb_col = col_data.getIndices().size();
-    jac.clear();
-    if (!nb_col)
-      MoFEMFunctionReturnHot(0);
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
-    FTensor::Tensor2<double *, 3, 3> t_jac(
-        &jac(0, 0), &jac(0, 1), &jac(0, 2), &jac(1, 0), &jac(1, 1), &jac(1, 2),
-        &jac(2, 0), &jac(2, 1), &jac(2, 2), 3);
-    FTensor::Tensor2<double *, 3, 3> t_mass1(
-        &commonData.jacMass[gg](0, 0), &commonData.jacMass[gg](0, 1),
-        &commonData.jacMass[gg](0, 2), &commonData.jacMass[gg](1, 0),
-        &commonData.jacMass[gg](1, 1), &commonData.jacMass[gg](1, 2),
-        &commonData.jacMass[gg](2, 0), &commonData.jacMass[gg](2, 1),
-        &commonData.jacMass[gg](2, 2));
-    double *base_ptr = const_cast<double *>(&col_data.getN(gg)[0]);
-    FTensor::Tensor0<double *> base(base_ptr, 1);
-    if (commonData.dataAtGaussPts["DOT_" + commonData.meshPositions].size() ==
-        0) {
-      for (int dd = 0; dd < nb_col / 3; dd++) {
-        t_jac(i, j) += t_mass1(i, j) * base * getFEMethod()->ts_a;
-        ++base;
-        ++t_jac;
-      }
-    } else {
-      const int s = 3 + 9;
-      FTensor::Tensor3<double *, 3, 3, 3> t_mass3(
-          // T* d000, T* d001, T* d002,
-          // T* d010, T* d011, T* d012,
-          // T* d020, T* d021, T* d022,
-          // T* d100, T* d101, T* d102,
-          // T* d110, T* d111, T* d112,
-          // T* d120, T* d121, T* d122,
-          // T* d200, T* d201, T* d202,
-          // T* d210, T* d211, T* d212,
-          // T* d220, T* d221, T* d222,
-          &commonData.jacMass[gg](0, s + 0), &commonData.jacMass[gg](0, s + 1),
-          &commonData.jacMass[gg](0, s + 2), &commonData.jacMass[gg](0, s + 3),
-          &commonData.jacMass[gg](0, s + 4), &commonData.jacMass[gg](0, s + 5),
-          &commonData.jacMass[gg](0, s + 6), &commonData.jacMass[gg](0, s + 7),
-          &commonData.jacMass[gg](0, s + 8), &commonData.jacMass[gg](1, s + 0),
-          &commonData.jacMass[gg](1, s + 1), &commonData.jacMass[gg](1, s + 2),
-          &commonData.jacMass[gg](1, s + 3), &commonData.jacMass[gg](1, s + 4),
-          &commonData.jacMass[gg](1, s + 5), &commonData.jacMass[gg](1, s + 6),
-          &commonData.jacMass[gg](1, s + 7), &commonData.jacMass[gg](1, s + 8),
-          &commonData.jacMass[gg](2, s + 0), &commonData.jacMass[gg](2, s + 1),
-          &commonData.jacMass[gg](2, s + 2), &commonData.jacMass[gg](2, s + 3),
-          &commonData.jacMass[gg](2, s + 4), &commonData.jacMass[gg](2, s + 5),
-          &commonData.jacMass[gg](2, s + 6), &commonData.jacMass[gg](2, s + 7),
-          &commonData.jacMass[gg](2, s + 8));
-
-      double *diff_ptr =
-          const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
-      FTensor::Tensor1<double *, 3> diff(diff_ptr, &diff_ptr[1], &diff_ptr[2],
-                                         3);
-      for (int dd = 0; dd < nb_col / 3; dd++) {
-        t_jac(i, j) += t_mass1(i, j) * base * getFEMethod()->ts_a;
-        t_jac(i, j) += t_mass3(i, j, k) * diff(k);
-        ++base;
-        ++diff;
-        ++t_jac;
-      }
+  int nb_col = col_data.getIndices().size();
+  jac.clear();
+  if (!nb_col)
+    MoFEMFunctionReturnHot(0);
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Tensor2<double *, 3, 3> t_jac(&jac(0, 0), &jac(0, 1), &jac(0, 2),
+                                         &jac(1, 0), &jac(1, 1), &jac(1, 2),
+                                         &jac(2, 0), &jac(2, 1), &jac(2, 2), 3);
+  FTensor::Tensor2<double *, 3, 3> t_mass1(
+      &commonData.jacMass[gg](0, 0), &commonData.jacMass[gg](0, 1),
+      &commonData.jacMass[gg](0, 2), &commonData.jacMass[gg](1, 0),
+      &commonData.jacMass[gg](1, 1), &commonData.jacMass[gg](1, 2),
+      &commonData.jacMass[gg](2, 0), &commonData.jacMass[gg](2, 1),
+      &commonData.jacMass[gg](2, 2));
+  double *base_ptr = const_cast<double *>(&col_data.getN(gg)[0]);
+  FTensor::Tensor0<double *> base(base_ptr, 1);
+  if (commonData.dataAtGaussPts["DOT_" + commonData.meshPositions].size() ==
+      0) {
+    for (int dd = 0; dd < nb_col / 3; dd++) {
+      t_jac(i, j) += t_mass1(i, j) * base * getFEMethod()->ts_a;
+      ++base;
+      ++t_jac;
     }
-    // std::cerr << commonData.jacMass[gg] << std::endl;
-    // std::cerr << jac << std::endl;
-    // VectorDouble N = col_data.getN(gg,nb_col/3);
-    // for(int dd = 0;dd<nb_col/3;dd++) {
-    //   for(int nn = 0;nn<3;nn++) {
-    //     jac(0,3*dd+nn) =
-    //     commonData.jacMass[gg](0,nn)*N(dd)*getFEMethod()->ts_a;
-    //     jac(1,3*dd+nn) =
-    //     commonData.jacMass[gg](1,nn)*N(dd)*getFEMethod()->ts_a;
-    //     jac(2,3*dd+nn) =
-    //     commonData.jacMass[gg](2,nn)*N(dd)*getFEMethod()->ts_a;
-    //   }
-    // }
-    // if(commonData.dataAtGaussPts["DOT_"+commonData.meshPositions].size()>0) {
-    //   MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-    //   for(int dd = 0;dd<nb_col/3;dd++) {
-    //     //h00 //h01 //h02
-    //     jac(0,3*dd+0) += commonData.jacMass[gg](0,3+9+3*0+0)*diffN(dd,0);
-    //     jac(0,3*dd+0) += commonData.jacMass[gg](0,3+9+3*0+1)*diffN(dd,1);
-    //     jac(0,3*dd+0) += commonData.jacMass[gg](0,3+9+3*0+2)*diffN(dd,2);
-    //     //h10 //h11 //h12
-    //     jac(1,3*dd+1) += commonData.jacMass[gg](1,3+9+3*1+0)*diffN(dd,0);
-    //     jac(1,3*dd+1) += commonData.jacMass[gg](1,3+9+3*1+1)*diffN(dd,1);
-    //     jac(1,3*dd+1) += commonData.jacMass[gg](1,3+9+3*1+2)*diffN(dd,2);
-    //     //h20 //h21 //h22
-    //     jac(2,3*dd+2) += commonData.jacMass[gg](2,3+9+3*2+0)*diffN(dd,0);
-    //     jac(2,3*dd+2) += commonData.jacMass[gg](2,3+9+3*2+1)*diffN(dd,1);
-    //     jac(2,3*dd+2) += commonData.jacMass[gg](2,3+9+3*2+2)*diffN(dd,2);
-    //   }
-    // }
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
+  } else {
+    const int s = 3 + 9;
+    FTensor::Tensor3<double *, 3, 3, 3> t_mass3(
+        // T* d000, T* d001, T* d002,
+        // T* d010, T* d011, T* d012,
+        // T* d020, T* d021, T* d022,
+        // T* d100, T* d101, T* d102,
+        // T* d110, T* d111, T* d112,
+        // T* d120, T* d121, T* d122,
+        // T* d200, T* d201, T* d202,
+        // T* d210, T* d211, T* d212,
+        // T* d220, T* d221, T* d222,
+        &commonData.jacMass[gg](0, s + 0), &commonData.jacMass[gg](0, s + 1),
+        &commonData.jacMass[gg](0, s + 2), &commonData.jacMass[gg](0, s + 3),
+        &commonData.jacMass[gg](0, s + 4), &commonData.jacMass[gg](0, s + 5),
+        &commonData.jacMass[gg](0, s + 6), &commonData.jacMass[gg](0, s + 7),
+        &commonData.jacMass[gg](0, s + 8), &commonData.jacMass[gg](1, s + 0),
+        &commonData.jacMass[gg](1, s + 1), &commonData.jacMass[gg](1, s + 2),
+        &commonData.jacMass[gg](1, s + 3), &commonData.jacMass[gg](1, s + 4),
+        &commonData.jacMass[gg](1, s + 5), &commonData.jacMass[gg](1, s + 6),
+        &commonData.jacMass[gg](1, s + 7), &commonData.jacMass[gg](1, s + 8),
+        &commonData.jacMass[gg](2, s + 0), &commonData.jacMass[gg](2, s + 1),
+        &commonData.jacMass[gg](2, s + 2), &commonData.jacMass[gg](2, s + 3),
+        &commonData.jacMass[gg](2, s + 4), &commonData.jacMass[gg](2, s + 5),
+        &commonData.jacMass[gg](2, s + 6), &commonData.jacMass[gg](2, s + 7),
+        &commonData.jacMass[gg](2, s + 8));
+
+    double *diff_ptr =
+        const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
+    FTensor::Tensor1<double *, 3> diff(diff_ptr, &diff_ptr[1], &diff_ptr[2], 3);
+    for (int dd = 0; dd < nb_col / 3; dd++) {
+      t_jac(i, j) += t_mass1(i, j) * base * getFEMethod()->ts_a;
+      t_jac(i, j) += t_mass3(i, j, k) * diff(k);
+      ++base;
+      ++diff;
+      ++t_jac;
+    }
   }
   MoFEMFunctionReturnHot(0);
 }
@@ -666,7 +587,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::doWork(
   auto base = row_data.getFTensor0N();
   int nb_base_functions = row_data.getN().size2();
 
-  try {
+  {
 
     k.resize(nb_row, nb_col);
     k.clear();
@@ -732,13 +653,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::doWork(
                           &row_data.getIndices()[0], nb_col,
                           &col_data.getIndices()[0], &k(0, 0), ADD_VALUES);
     }
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
-
   MoFEMFunctionReturnHot(0);
 }
 
@@ -750,67 +665,46 @@ ConvectiveMassElement::OpMassLhs_dM_dx::OpMassLhs_dM_dx(
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dx::getJac(
     DataForcesAndSourcesCore::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
-  try {
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
-    int nb_col = col_data.getIndices().size();
-    jac.clear();
-    FTensor::Tensor2<double *, 3, 3> t_jac(
-        &jac(0, 0), &jac(0, 1), &jac(0, 2), &jac(1, 0), &jac(1, 1), &jac(1, 2),
-        &jac(2, 0), &jac(2, 1), &jac(2, 2), 3);
-    const int s = 3;
-    FTensor::Tensor3<double *, 3, 3, 3> t_mass3(
-        // T* d000, T* d001, T* d002,
-        // T* d010, T* d011, T* d012,
-        // T* d020, T* d021, T* d022,
-        // T* d100, T* d101, T* d102,
-        // T* d110, T* d111, T* d112,
-        // T* d120, T* d121, T* d122,
-        // T* d200, T* d201, T* d202,
-        // T* d210, T* d211, T* d212,
-        // T* d220, T* d221, T* d222,
-        &commonData.jacMass[gg](0, s + 0), &commonData.jacMass[gg](0, s + 1),
-        &commonData.jacMass[gg](0, s + 2), &commonData.jacMass[gg](0, s + 3),
-        &commonData.jacMass[gg](0, s + 4), &commonData.jacMass[gg](0, s + 5),
-        &commonData.jacMass[gg](0, s + 6), &commonData.jacMass[gg](0, s + 7),
-        &commonData.jacMass[gg](0, s + 8), &commonData.jacMass[gg](1, s + 0),
-        &commonData.jacMass[gg](1, s + 1), &commonData.jacMass[gg](1, s + 2),
-        &commonData.jacMass[gg](1, s + 3), &commonData.jacMass[gg](1, s + 4),
-        &commonData.jacMass[gg](1, s + 5), &commonData.jacMass[gg](1, s + 6),
-        &commonData.jacMass[gg](1, s + 7), &commonData.jacMass[gg](1, s + 8),
-        &commonData.jacMass[gg](2, s + 0), &commonData.jacMass[gg](2, s + 1),
-        &commonData.jacMass[gg](2, s + 2), &commonData.jacMass[gg](2, s + 3),
-        &commonData.jacMass[gg](2, s + 4), &commonData.jacMass[gg](2, s + 5),
-        &commonData.jacMass[gg](2, s + 6), &commonData.jacMass[gg](2, s + 7),
-        &commonData.jacMass[gg](2, s + 8));
-    double *diff_ptr =
-        const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
-    FTensor::Tensor1<double *, 3> diff(diff_ptr, &diff_ptr[1], &diff_ptr[2], 3);
-    for (int dd = 0; dd < nb_col / 3; dd++) {
-      t_jac(i, j) += t_mass3(i, j, k) * diff(k);
-      ++diff;
-      ++t_jac;
-    }
-    // MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-    // for(int dd = 0;dd<nb_col/3;dd++) {
-    //   //h00 //h01 //h02
-    //   jac(0,3*dd+0) += commonData.jacMass[gg](0,3+3*0+0)*diffN(dd,0);
-    //   jac(0,3*dd+0) += commonData.jacMass[gg](0,3+3*0+1)*diffN(dd,1);
-    //   jac(0,3*dd+0) += commonData.jacMass[gg](0,3+3*0+2)*diffN(dd,2);
-    //   //h10 //h11 //h12
-    //   jac(1,3*dd+1) += commonData.jacMass[gg](1,3+3*1+0)*diffN(dd,0);
-    //   jac(1,3*dd+1) += commonData.jacMass[gg](1,3+3*1+1)*diffN(dd,1);
-    //   jac(1,3*dd+1) += commonData.jacMass[gg](1,3+3*1+2)*diffN(dd,2);
-    //   //h20 //h21 //h22
-    //   jac(2,3*dd+2) += commonData.jacMass[gg](2,3+3*2+0)*diffN(dd,0);
-    //   jac(2,3*dd+2) += commonData.jacMass[gg](2,3+3*2+1)*diffN(dd,1);
-    //   jac(2,3*dd+2) += commonData.jacMass[gg](2,3+3*2+2)*diffN(dd,2);
-    // }
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  int nb_col = col_data.getIndices().size();
+  jac.clear();
+  FTensor::Tensor2<double *, 3, 3> t_jac(&jac(0, 0), &jac(0, 1), &jac(0, 2),
+                                         &jac(1, 0), &jac(1, 1), &jac(1, 2),
+                                         &jac(2, 0), &jac(2, 1), &jac(2, 2), 3);
+  const int s = 3;
+  FTensor::Tensor3<double *, 3, 3, 3> t_mass3(
+      // T* d000, T* d001, T* d002,
+      // T* d010, T* d011, T* d012,
+      // T* d020, T* d021, T* d022,
+      // T* d100, T* d101, T* d102,
+      // T* d110, T* d111, T* d112,
+      // T* d120, T* d121, T* d122,
+      // T* d200, T* d201, T* d202,
+      // T* d210, T* d211, T* d212,
+      // T* d220, T* d221, T* d222,
+      &commonData.jacMass[gg](0, s + 0), &commonData.jacMass[gg](0, s + 1),
+      &commonData.jacMass[gg](0, s + 2), &commonData.jacMass[gg](0, s + 3),
+      &commonData.jacMass[gg](0, s + 4), &commonData.jacMass[gg](0, s + 5),
+      &commonData.jacMass[gg](0, s + 6), &commonData.jacMass[gg](0, s + 7),
+      &commonData.jacMass[gg](0, s + 8), &commonData.jacMass[gg](1, s + 0),
+      &commonData.jacMass[gg](1, s + 1), &commonData.jacMass[gg](1, s + 2),
+      &commonData.jacMass[gg](1, s + 3), &commonData.jacMass[gg](1, s + 4),
+      &commonData.jacMass[gg](1, s + 5), &commonData.jacMass[gg](1, s + 6),
+      &commonData.jacMass[gg](1, s + 7), &commonData.jacMass[gg](1, s + 8),
+      &commonData.jacMass[gg](2, s + 0), &commonData.jacMass[gg](2, s + 1),
+      &commonData.jacMass[gg](2, s + 2), &commonData.jacMass[gg](2, s + 3),
+      &commonData.jacMass[gg](2, s + 4), &commonData.jacMass[gg](2, s + 5),
+      &commonData.jacMass[gg](2, s + 6), &commonData.jacMass[gg](2, s + 7),
+      &commonData.jacMass[gg](2, s + 8));
+  double *diff_ptr =
+      const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
+  FTensor::Tensor1<double *, 3> diff(diff_ptr, &diff_ptr[1], &diff_ptr[2], 3);
+  for (int dd = 0; dd < nb_col / 3; dd++) {
+    t_jac(i, j) += t_mass3(i, j, k) * diff(k);
+    ++diff;
+    ++t_jac;
   }
   MoFEMFunctionReturnHot(0);
 }
@@ -823,91 +717,57 @@ ConvectiveMassElement::OpMassLhs_dM_dX::OpMassLhs_dM_dX(
 MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dX::getJac(
     DataForcesAndSourcesCore::EntData &col_data, int gg) {
   MoFEMFunctionBeginHot;
-  try {
-    int nb_col = col_data.getIndices().size();
-    jac.clear();
-    double *base_ptr = const_cast<double *>(&col_data.getN(gg)[0]);
-    FTensor::Tensor0<double *> base(base_ptr, 1);
-    double *diff_ptr =
-        const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
-    FTensor::Tensor1<double *, 3> diff(diff_ptr, &diff_ptr[1], &diff_ptr[2], 3);
-    FTensor::Tensor2<double *, 3, 3> t_jac(
-        &jac(0, 0), &jac(0, 1), &jac(0, 2), &jac(1, 0), &jac(1, 1), &jac(1, 2),
-        &jac(2, 0), &jac(2, 1), &jac(2, 2), 3);
-    const int u = 3 + 9 + 9;
-    FTensor::Tensor2<double *, 3, 3> t_mass1(
-        &commonData.jacMass[gg](0, u + 0), &commonData.jacMass[gg](0, u + 1),
-        &commonData.jacMass[gg](0, u + 2), &commonData.jacMass[gg](1, u + 0),
-        &commonData.jacMass[gg](1, u + 1), &commonData.jacMass[gg](1, u + 2),
-        &commonData.jacMass[gg](2, u + 0), &commonData.jacMass[gg](2, u + 1),
-        &commonData.jacMass[gg](2, u + 2));
-    const int s = 3 + 9 + 9 + 3;
-    FTensor::Tensor3<double *, 3, 3, 3> t_mass3(
-        // T* d000, T* d001, T* d002,
-        // T* d010, T* d011, T* d012,
-        // T* d020, T* d021, T* d022,
-        // T* d100, T* d101, T* d102,
-        // T* d110, T* d111, T* d112,
-        // T* d120, T* d121, T* d122,
-        // T* d200, T* d201, T* d202,
-        // T* d210, T* d211, T* d212,
-        // T* d220, T* d221, T* d222,
-        &commonData.jacMass[gg](0, s + 0), &commonData.jacMass[gg](0, s + 1),
-        &commonData.jacMass[gg](0, s + 2), &commonData.jacMass[gg](0, s + 3),
-        &commonData.jacMass[gg](0, s + 4), &commonData.jacMass[gg](0, s + 5),
-        &commonData.jacMass[gg](0, s + 6), &commonData.jacMass[gg](0, s + 7),
-        &commonData.jacMass[gg](0, s + 8), &commonData.jacMass[gg](1, s + 0),
-        &commonData.jacMass[gg](1, s + 1), &commonData.jacMass[gg](1, s + 2),
-        &commonData.jacMass[gg](1, s + 3), &commonData.jacMass[gg](1, s + 4),
-        &commonData.jacMass[gg](1, s + 5), &commonData.jacMass[gg](1, s + 6),
-        &commonData.jacMass[gg](1, s + 7), &commonData.jacMass[gg](1, s + 8),
-        &commonData.jacMass[gg](2, s + 0), &commonData.jacMass[gg](2, s + 1),
-        &commonData.jacMass[gg](2, s + 2), &commonData.jacMass[gg](2, s + 3),
-        &commonData.jacMass[gg](2, s + 4), &commonData.jacMass[gg](2, s + 5),
-        &commonData.jacMass[gg](2, s + 6), &commonData.jacMass[gg](2, s + 7),
-        &commonData.jacMass[gg](2, s + 8));
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
-    for (int dd = 0; dd < nb_col / 3; dd++) {
-      t_jac(i, j) += t_mass1(i, j) * base * getFEMethod()->ts_a;
-      t_jac(i, j) += t_mass3(i, j, k) * diff(k);
-      ++base_ptr;
-      ++diff_ptr;
-      ++t_jac;
-    }
-    // std::cerr << commonData.jacVel[gg] << std::endl;
-    // std::cerr << jac << std::endl;
-    // VectorDouble N = col_data.getN(gg,nb_col/3);
-    // for(int dd = 0;dd<nb_col/3;dd++) {
-    //   for(int nn = 0;nn<3;nn++) {
-    //     jac(0,3*dd+nn) =
-    //     commonData.jacMass[gg](0,3+9+9+nn)*N(dd)*getFEMethod()->ts_a;
-    //     jac(1,3*dd+nn) =
-    //     commonData.jacMass[gg](1,3+9+9+nn)*N(dd)*getFEMethod()->ts_a;
-    //     jac(2,3*dd+nn) =
-    //     commonData.jacMass[gg](2,3+9+9+nn)*N(dd)*getFEMethod()->ts_a;
-    //   }
-    // }
-    // MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-    // for(int dd = 0;dd<nb_col/3;dd++) {
-    //   //h00 //h01 //h02
-    //   jac(0,3*dd+0) += commonData.jacMass[gg](0,3+9+9+3+3*0+0)*diffN(dd,0);
-    //   jac(0,3*dd+0) += commonData.jacMass[gg](0,3+9+9+3+3*0+1)*diffN(dd,1);
-    //   jac(0,3*dd+0) += commonData.jacMass[gg](0,3+9+9+3+3*0+2)*diffN(dd,2);
-    //   //h10 //h11 //h12
-    //   jac(1,3*dd+1) += commonData.jacMass[gg](1,3+9+9+3+3*1+0)*diffN(dd,0);
-    //   jac(1,3*dd+1) += commonData.jacMass[gg](1,3+9+9+3+3*1+1)*diffN(dd,1);
-    //   jac(1,3*dd+1) += commonData.jacMass[gg](1,3+9+9+3+3*1+2)*diffN(dd,2);
-    //   //h20 //h21 //h22
-    //   jac(2,3*dd+2) += commonData.jacMass[gg](2,3+9+9+3+3*2+0)*diffN(dd,0);
-    //   jac(2,3*dd+2) += commonData.jacMass[gg](2,3+9+9+3+3*2+1)*diffN(dd,1);
-    //   jac(2,3*dd+2) += commonData.jacMass[gg](2,3+9+9+3+3*2+2)*diffN(dd,2);
-    // }
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
+  int nb_col = col_data.getIndices().size();
+  jac.clear();
+  double *base_ptr = const_cast<double *>(&col_data.getN(gg)[0]);
+  FTensor::Tensor0<double *> base(base_ptr, 1);
+  double *diff_ptr =
+      const_cast<double *>(&(col_data.getDiffN(gg, nb_col / 3)(0, 0)));
+  FTensor::Tensor1<double *, 3> diff(diff_ptr, &diff_ptr[1], &diff_ptr[2], 3);
+  FTensor::Tensor2<double *, 3, 3> t_jac(&jac(0, 0), &jac(0, 1), &jac(0, 2),
+                                         &jac(1, 0), &jac(1, 1), &jac(1, 2),
+                                         &jac(2, 0), &jac(2, 1), &jac(2, 2), 3);
+  const int u = 3 + 9 + 9;
+  FTensor::Tensor2<double *, 3, 3> t_mass1(
+      &commonData.jacMass[gg](0, u + 0), &commonData.jacMass[gg](0, u + 1),
+      &commonData.jacMass[gg](0, u + 2), &commonData.jacMass[gg](1, u + 0),
+      &commonData.jacMass[gg](1, u + 1), &commonData.jacMass[gg](1, u + 2),
+      &commonData.jacMass[gg](2, u + 0), &commonData.jacMass[gg](2, u + 1),
+      &commonData.jacMass[gg](2, u + 2));
+  const int s = 3 + 9 + 9 + 3;
+  FTensor::Tensor3<double *, 3, 3, 3> t_mass3(
+      // T* d000, T* d001, T* d002,
+      // T* d010, T* d011, T* d012,
+      // T* d020, T* d021, T* d022,
+      // T* d100, T* d101, T* d102,
+      // T* d110, T* d111, T* d112,
+      // T* d120, T* d121, T* d122,
+      // T* d200, T* d201, T* d202,
+      // T* d210, T* d211, T* d212,
+      // T* d220, T* d221, T* d222,
+      &commonData.jacMass[gg](0, s + 0), &commonData.jacMass[gg](0, s + 1),
+      &commonData.jacMass[gg](0, s + 2), &commonData.jacMass[gg](0, s + 3),
+      &commonData.jacMass[gg](0, s + 4), &commonData.jacMass[gg](0, s + 5),
+      &commonData.jacMass[gg](0, s + 6), &commonData.jacMass[gg](0, s + 7),
+      &commonData.jacMass[gg](0, s + 8), &commonData.jacMass[gg](1, s + 0),
+      &commonData.jacMass[gg](1, s + 1), &commonData.jacMass[gg](1, s + 2),
+      &commonData.jacMass[gg](1, s + 3), &commonData.jacMass[gg](1, s + 4),
+      &commonData.jacMass[gg](1, s + 5), &commonData.jacMass[gg](1, s + 6),
+      &commonData.jacMass[gg](1, s + 7), &commonData.jacMass[gg](1, s + 8),
+      &commonData.jacMass[gg](2, s + 0), &commonData.jacMass[gg](2, s + 1),
+      &commonData.jacMass[gg](2, s + 2), &commonData.jacMass[gg](2, s + 3),
+      &commonData.jacMass[gg](2, s + 4), &commonData.jacMass[gg](2, s + 5),
+      &commonData.jacMass[gg](2, s + 6), &commonData.jacMass[gg](2, s + 7),
+      &commonData.jacMass[gg](2, s + 8));
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  for (int dd = 0; dd < nb_col / 3; dd++) {
+    t_jac(i, j) += t_mass1(i, j) * base * getFEMethod()->ts_a;
+    t_jac(i, j) += t_mass3(i, j, k) * diff(k);
+    ++base_ptr;
+    ++diff_ptr;
+    ++t_jac;
   }
   MoFEMFunctionReturnHot(0);
 }
@@ -933,7 +793,7 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
     MoFEMFunctionReturnHot(0);
   }
 
-  try {
+  {
 
     for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
       double val = getVolume() * getGaussPts()(3, gg);
@@ -972,11 +832,6 @@ MoFEMErrorCode ConvectiveMassElement::OpEnergy::doWork(
       double energy = 0.5 * rho * inner_prod(v, v);
       CHKERR VecSetValue(*Vptr, 0, val * energy, ADD_VALUES);
     }
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
 
   MoFEMFunctionReturnHot(0);
@@ -1008,7 +863,7 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
   if (nb_dofs == 0)
     MoFEMFunctionReturnHot(0);
 
-  try {
+  {
 
     v.resize(3);
     dot_w.resize(3);
@@ -1182,13 +1037,7 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityJacobian::doWork(
         // std::cerr << gg << " : " << commonData.jacVel[gg] << std::endl;
       }
     }
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
-
   MoFEMFunctionReturnHot(0);
 }
 
@@ -1215,7 +1064,7 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityRhs::doWork(
   int nb_base_functions = row_data.getN().size2();
   FTensor::Index<'i', 3> i;
 
-  try {
+  {
 
     nf.resize(nb_dofs);
     nf.clear();
@@ -1236,27 +1085,12 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityRhs::doWork(
       }
     }
 
-    // for(unsigned int gg = 0;gg<row_data.getN().size1();gg++) {
-    //   VectorDouble& res = commonData.valVel[gg];
-    //   for(int dd = 0;dd<nb_dofs/3;dd++) {
-    //     for(int rr = 0;rr<3;rr++) {
-    //       nf[3*dd+rr] += row_data.getN()(gg,dd)*res[rr];
-    //     }
-    //   }
-    // }
-
     if (row_data.getIndices().size() > 3 * row_data.getN().size2()) {
       SETERRQ(PETSC_COMM_SELF, 1, "data inconsistency");
     }
     CHKERR VecSetValues(getFEMethod()->ts_F, row_data.getIndices().size(),
                         &row_data.getIndices()[0], &nf[0], ADD_VALUES);
-
-  } catch (const std::exception &ex) {
-    std::ostringstream ss;
-    ss << "throw in method: " << ex.what() << std::endl;
-    SETERRQ(PETSC_COMM_SELF, 1, ss.str().c_str());
   }
-
   MoFEMFunctionReturnHot(0);
 }
 
@@ -1290,15 +1124,7 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityLhs_dV_dv::getJac(
     ++base_ptr;
     ++t_jac;
   }
-  // VectorDouble N = col_data.getN(gg,nb_col/3);
-  // //std::cerr << commonData.jacVel[gg] << std::endl;
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   for(int nn = 0;nn<3;nn++) {
-  //     jac(0,3*dd+nn) = commonData.jacVel[gg](0,nn)*N(dd);
-  //     jac(1,3*dd+nn) = commonData.jacVel[gg](1,nn)*N(dd);
-  //     jac(2,3*dd+nn) = commonData.jacVel[gg](2,nn)*N(dd);
-  //   }
-  // }
+
   MoFEMFunctionReturnHot(0);
 }
 
@@ -1374,36 +1200,6 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityLhs_dV_dx::getJac(
       ++t_jac;
     }
   }
-  // std::cerr << commonData.jacVel[gg] << std::endl;
-  // std::cerr << jac << std::endl;
-  // VectorDouble N = col_data.getN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   for(int nn = 0;nn<3;nn++) {
-  //     jac(0,3*dd+nn) =
-  //     commonData.jacVel[gg](0,3+nn)*N(dd)*getFEMethod()->ts_a; jac(1,3*dd+nn)
-  //     = commonData.jacVel[gg](1,3+nn)*N(dd)*getFEMethod()->ts_a;
-  //     jac(2,3*dd+nn) =
-  //     commonData.jacVel[gg](2,3+nn)*N(dd)*getFEMethod()->ts_a;
-  //   }
-  // }
-  // if(commonData.dataAtGaussPts["DOT_"+commonData.meshPositions].size()>0) {
-  //   MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-  //   for(int dd = 0;dd<nb_col/3;dd++) {
-  //     //h00 //h01 //h02
-  //     jac(0,3*dd+0) += commonData.jacVel[gg](0,3+3+3*0+0)*diffN(dd,0);
-  //     jac(0,3*dd+0) += commonData.jacVel[gg](0,3+3+3*0+1)*diffN(dd,1);
-  //     jac(0,3*dd+0) += commonData.jacVel[gg](0,3+3+3*0+2)*diffN(dd,2);
-  //     //h10 //h11 //h12
-  //     jac(1,3*dd+1) += commonData.jacVel[gg](1,3+3+3*1+0)*diffN(dd,0);
-  //     jac(1,3*dd+1) += commonData.jacVel[gg](1,3+3+3*1+1)*diffN(dd,1);
-  //     jac(1,3*dd+1) += commonData.jacVel[gg](1,3+3+3*1+2)*diffN(dd,2);
-  //     //h20 //h21 //h22
-  //     jac(2,3*dd+2) += commonData.jacVel[gg](2,3+3+3*2+0)*diffN(dd,0);
-  //     jac(2,3*dd+2) += commonData.jacVel[gg](2,3+3+3*2+1)*diffN(dd,1);
-  //     jac(2,3*dd+2) += commonData.jacVel[gg](2,3+3+3*2+2)*diffN(dd,2);
-  //   }
-  // }
-  // std::cerr << row_field_name << " " << col_field_name << std::endl;
   MoFEMFunctionReturnHot(0);
 }
 
@@ -1469,35 +1265,6 @@ MoFEMErrorCode ConvectiveMassElement::OpVelocityLhs_dV_dX::getJac(
     ++diff_ptr;
     ++t_jac;
   }
-  // std::cerr << commonData.jacVel[gg] << std::endl;
-  // std::cerr << jac << std::endl;
-  // VectorDouble N = col_data.getN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   for(int nn = 0;nn<3;nn++) {
-  //     jac(0,3*dd+nn) =
-  //     commonData.jacVel[gg](0,3+3+9+nn)*N(dd)*getFEMethod()->ts_a;
-  //     jac(1,3*dd+nn) =
-  //     commonData.jacVel[gg](1,3+3+9+nn)*N(dd)*getFEMethod()->ts_a;
-  //     jac(2,3*dd+nn) =
-  //     commonData.jacVel[gg](2,3+3+9+nn)*N(dd)*getFEMethod()->ts_a;
-  //   }
-  // }
-  // MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   //h00 //h01 //h02
-  //   jac(0,3*dd+0) += commonData.jacVel[gg](0,3+3+9+3+3*0+0)*diffN(dd,0);
-  //   jac(0,3*dd+0) += commonData.jacVel[gg](0,3+3+9+3+3*0+1)*diffN(dd,1);
-  //   jac(0,3*dd+0) += commonData.jacVel[gg](0,3+3+9+3+3*0+2)*diffN(dd,2);
-  //   //h10 //h11 //h12
-  //   jac(1,3*dd+1) += commonData.jacVel[gg](1,3+3+9+3+3*1+0)*diffN(dd,0);
-  //   jac(1,3*dd+1) += commonData.jacVel[gg](1,3+3+9+3+3*1+1)*diffN(dd,1);
-  //   jac(1,3*dd+1) += commonData.jacVel[gg](1,3+3+9+3+3*1+2)*diffN(dd,2);
-  //   //h20 //h21 //h22
-  //   jac(2,3*dd+2) += commonData.jacVel[gg](2,3+3+9+3+3*2+0)*diffN(dd,0);
-  //   jac(2,3*dd+2) += commonData.jacVel[gg](2,3+3+9+3+3*2+1)*diffN(dd,1);
-  //   jac(2,3*dd+2) += commonData.jacVel[gg](2,3+3+9+3+3*2+2)*diffN(dd,2);
-  // }
-  // std::cerr << row_field_name << " " << col_field_name << std::endl;
   MoFEMFunctionReturnHot(0);
 }
 
@@ -1761,16 +1528,6 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumRhs::doWork(
       }
     }
 
-    // for(unsigned int gg = 0;gg<row_data.getN().size1();gg++) {
-    //   VectorDouble& res = commonData.valT[gg];
-    //   //std::cerr << res << std::endl;
-    //   for(int dd = 0;dd<nb_dofs/3;dd++) {
-    //     for(int rr = 0;rr<3;rr++) {
-    //       nf[3*dd+rr] += row_data.getN()(gg,dd)*res[rr];
-    //     }
-    //   }
-    // }
-
     if (row_data.getIndices().size() > 3 * row_data.getN().size2()) {
       SETERRQ(PETSC_COMM_SELF, 1, "data inconsistency");
     }
@@ -1867,38 +1624,6 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dv::getJac(
     ++diff_ptr;
     ++t_jac;
   }
-  // std::cerr << commonData.jacT[gg] << std::endl;
-  // std::cerr << jac << std::endl;
-  // VectorDouble N = col_data.getN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   for(int nn = 0;nn<3;nn++) {
-  //     jac(0,3*dd+nn) = commonData.jacT[gg](0,nn)*N(dd)*getFEMethod()->ts_a;
-  //     jac(1,3*dd+nn) = commonData.jacT[gg](1,nn)*N(dd)*getFEMethod()->ts_a;
-  //     jac(2,3*dd+nn) = commonData.jacT[gg](2,nn)*N(dd)*getFEMethod()->ts_a;
-  //   }
-  // }
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   for(int nn = 0;nn<3;nn++) {
-  //     jac(0,3*dd+nn) += commonData.jacT[gg](0,3+nn)*N(dd);
-  //     jac(1,3*dd+nn) += commonData.jacT[gg](1,3+nn)*N(dd);
-  //     jac(2,3*dd+nn) += commonData.jacT[gg](2,3+nn)*N(dd);
-  //   }
-  // }
-  // MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   //h00 //h01 //h02
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+3*0+0)*diffN(dd,0);
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+3*0+1)*diffN(dd,1);
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+3*0+2)*diffN(dd,2);
-  //   //h10 //h11 //h12
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+3*1+0)*diffN(dd,0);
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+3*1+1)*diffN(dd,1);
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+3*1+2)*diffN(dd,2);
-  //   //h20 //h21 //h22
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+3*2+0)*diffN(dd,0);
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+3*2+1)*diffN(dd,1);
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+3*2+2)*diffN(dd,2);
-  // }
   MoFEMFunctionReturnHot(0);
 }
 
@@ -1956,23 +1681,6 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dx::getJac(
     ++diff_ptr;
     ++t_jac;
   }
-  // std::cerr << commonData.jacT[gg] << std::endl;
-  // std::cerr << jac << std::endl;
-  // MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   //h00 //h01 //h02
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+9+3*0+0)*diffN(dd,0);
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+9+3*0+1)*diffN(dd,1);
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+9+3*0+2)*diffN(dd,2);
-  //   //h10 //h11 //h12
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+9+3*1+0)*diffN(dd,0);
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+9+3*1+1)*diffN(dd,1);
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+9+3*1+2)*diffN(dd,2);
-  //   //h20 //h21 //h22
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+9+3*2+0)*diffN(dd,0);
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+9+3*2+1)*diffN(dd,1);
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+9+3*2+2)*diffN(dd,2);
-  // }
   MoFEMFunctionReturnHot(0);
 }
 
@@ -2030,23 +1738,6 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumLhs_dX::getJac(
     ++diff_ptr;
     ++t_jac;
   }
-  // std::cerr << commonData.jacT[gg] << std::endl;
-  // std::cerr << jac << std::endl;
-  // MatrixDouble diffN = col_data.getDiffN(gg,nb_col/3);
-  // for(int dd = 0;dd<nb_col/3;dd++) {
-  //   //h00 //h01 //h02
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+9+9+3*0+0)*diffN(dd,0);
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+9+9+3*0+1)*diffN(dd,1);
-  //   jac(0,3*dd+0) += commonData.jacT[gg](0,3+3+9+9+3*0+2)*diffN(dd,2);
-  //   //h10 //h11 //h12
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+9+9+3*1+0)*diffN(dd,0);
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+9+9+3*1+1)*diffN(dd,1);
-  //   jac(1,3*dd+1) += commonData.jacT[gg](1,3+3+9+9+3*1+2)*diffN(dd,2);
-  //   //h20 //h21 //h22
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+9+9+3*2+0)*diffN(dd,0);
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+9+9+3*2+1)*diffN(dd,1);
-  //   jac(2,3*dd+2) += commonData.jacT[gg](2,3+3+9+9+3*2+2)*diffN(dd,2);
-  // }
   MoFEMFunctionReturnHot(0);
 }
 
@@ -2747,37 +2438,6 @@ MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::preProcess() {
 
 MoFEMErrorCode ConvectiveMassElement::ShellResidualElement::postProcess() {
   MoFEMFunctionBeginHot;
-
-  /*
-  if(ts_ctx != CTX_TSSETIFUNCTION) {
-    SETERRQ(PETSC_COMM_SELF,MOFEM_NOT_IMPLEMENTED,"It is used to residual of
-  velocities");
-  }
-  if(!shellMatCtx->iNitialized) {
-    CHKERR shellMatCtx->iNit();
-  }
-  CHKERR
-  VecScatterBegin(shellMatCtx->scatterU,ts_F,shellMatCtx->Ku,INSERT_VALUES,SCATTER_FORWARD);
-  CHKERR
-  VecScatterEnd(shellMatCtx->scatterU,ts_F,shellMatCtx->Ku,INSERT_VALUES,SCATTER_FORWARD);
-  CHKERR
-  VecScatterBegin(shellMatCtx->scatterV,ts_F,shellMatCtx->Mv,INSERT_VALUES,SCATTER_FORWARD);
-  CHKERR
-  VecScatterEnd(shellMatCtx->scatterV,ts_F,shellMatCtx->Mv,INSERT_VALUES,SCATTER_FORWARD);
-
-  double nrm2_ku,nrm2_mv;
-  CHKERR VecNorm(shellMatCtx->Ku,NORM_INFINITY,&nrm2_ku);
-  CHKERR VecNorm(shellMatCtx->Mv,NORM_INFINITY,&nrm2_mv);
-  PetscPrintf(mField.get_comm(),"nrm2 U = %6.4e nrm2 V = %6.4e scale =
-  %6.4e\n",nrm2_ku,nrm2_mv,nrm2_ku/fmax(nrm2_mv,nrm2_ku));
-  //shellMatCtx->scale = nrm2_ku/fmax(nrm2_mv,nrm2_ku);
-  //CHKERR VecScale(shellMatCtx->Mv,shellMatCtx->scale);
-  CHKERR
-  VecScatterBegin(shellMatCtx->scatterV,shellMatCtx->Mv,ts_F,INSERT_VALUES,SCATTER_REVERSE);
-  CHKERR
-  VecScatterEnd(shellMatCtx->scatterV,shellMatCtx->Mv,ts_F,INSERT_VALUES,SCATTER_REVERSE);
-*/
-
   MoFEMFunctionReturnHot(0);
 }
 

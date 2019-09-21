@@ -773,9 +773,9 @@ struct ConvectiveMassElement {
                             ///< forces over displacements shell matrix
 
     // variables bellow need to be set by user
-    string problemName;                          ///< name of shell problem
-    MatShellCtx *shellMatCtx;                    ///< pointer to shell matrix
-    DirichletSpatialPositionsBc *DirichletBcPtr; ///< boundary conditions
+    string problemName;                      ///< name of shell problem
+    MatShellCtx *shellMatCtx;                ///< pointer to shell matrix
+    DirichletDisplacementBc *DirichletBcPtr; ///< boundary conditions
 
     MoFEMErrorCode preProcess();
   };
