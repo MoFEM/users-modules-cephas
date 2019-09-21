@@ -418,7 +418,8 @@ int main(int argc, char *argv[]) {
     // st_venant_kirchhoff_material_double;  CHKERR
     // elastic.setBlocks(&st_venant_kirchhoff_material_double,&st_venant_kirchhoff_material_adouble);
     CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
-    CHKERR elastic.setOperators("SPATIAL_POSITION");
+    CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+                                false, true);
 
     // set mass element
     ConvectiveMassElement inertia(m_field, 1);
@@ -500,9 +501,9 @@ int main(int argc, char *argv[]) {
       Projection10NodeCoordsOnField ent_method_material(m_field,
                                                         "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
-      Projection10NodeCoordsOnField ent_method_spatial(m_field,
-                                                       "SPATIAL_POSITION");
-      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method_spatial);
+      // Projection10NodeCoordsOnField ent_method_spatial(m_field,
+      //                                                  "SPATIAL_POSITION");
+      // CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method_spatial);
     }
 
     // build finite elements
@@ -605,10 +606,10 @@ int main(int argc, char *argv[]) {
         (void (*)(void))ConvectiveMassElement::ZeroEntriesOp);
     // blocked problem
     ConvectiveMassElement::ShellMatrixElement shell_matrix_element(m_field);
-    DirichletSpatialPositionsBc shell_dirichlet_bc(m_field, "SPATIAL_POSITION",
+    DirichletDisplacementBc shell_dirichlet_bc(m_field, "SPATIAL_POSITION",
                                                    shellAij_ctx->barK,
                                                    PETSC_NULL, PETSC_NULL);
-    DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "SPATIAL_POSITION",
+    DirichletDisplacementBc my_dirichlet_bc(m_field, "SPATIAL_POSITION",
                                                 PETSC_NULL, D, F);
     shell_matrix_element.problemName = "Kuu";
     shell_matrix_element.shellMatCtx = shellAij_ctx;
@@ -622,12 +623,12 @@ int main(int argc, char *argv[]) {
             "ELASTIC", &damper.feLhs));
 
     // surface forces
-    NeummanForcesSurfaceComplexForLazy neumann_forces(m_field,
-                                                      shellAij_ctx->barK, F);
-    NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE &surface_force =
+    NeumannForcesSurfaceComplexForLazy neumann_forces(
+        m_field, shellAij_ctx->barK, F, "SPATIAL_POSITION", true);
+    NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE &surface_force =
         neumann_forces.getLoopSpatialFe();
     if (linear) {
-      surface_force.typeOfForces = NeummanForcesSurfaceComplexForLazy::
+      surface_force.typeOfForces = NeumannForcesSurfaceComplexForLazy::
           MyTriangleSpatialFE::NONCONSERVATIVE;
     }
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
@@ -670,11 +671,11 @@ int main(int argc, char *argv[]) {
     // my_dirichlet_bc.fixFields.push_back("SPATIAL_VELOCITY");
 
     // surface forces
-    NeummanForcesSurfaceComplexForLazy neumann_forces(m_field, Aij, F);
-    NeummanForcesSurfaceComplexForLazy::MyTriangleSpatialFE &surface_force =
+    NeumannForcesSurfaceComplexForLazy neumann_forces(m_field, Aij, F);
+    NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE &surface_force =
         neumann_forces.getLoopSpatialFe();
     if (linear) {
-      surface_force.typeOfForces = NeummanForcesSurfaceComplexForLazy::
+      surface_force.typeOfForces = NeumannForcesSurfaceComplexForLazy::
           MyTriangleSpatialFE::NONCONSERVATIVE;
     }
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
