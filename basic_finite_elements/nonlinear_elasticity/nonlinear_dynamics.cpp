@@ -281,6 +281,19 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
                                PETSC_NULL);
 
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
+    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+    PetscInt choice_base_value = BERNSTEIN_BEZIER;
+    CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases,
+                                LASBASETOP, &choice_base_value, PETSC_NULL);
+    FieldApproximationBase base = NOBASE;
+    if (choice_base_value == LEGENDRE)
+      base = AINSWORTH_LEGENDRE_BASE;
+    else if (choice_base_value == LOBATTO)
+      base = AINSWORTH_LOBATTO_BASE;
+    else if (choice_base_value == BERNSTEIN_BEZIER)
+      base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+
     if (is_partitioned == PETSC_TRUE) {
       // Read mesh to MOAB
       const char *option;
@@ -302,7 +315,6 @@ int main(int argc, char *argv[]) {
     bit_level0.set(0);
     EntityHandle meshset_level0;
     CHKERR moab.create_meshset(MESHSET_SET, meshset_level0);
-
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByRefLevel(
@@ -318,8 +330,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
     bool check_if_spatial_field_exist = m_field.check_field("DISPLACEMENT");
-    CHKERR m_field.add_field("DISPLACEMENT", H1,
-                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
+    CHKERR m_field.add_field("DISPLACEMENT", H1, base, 3, MB_TAG_SPARSE,
                              MF_ZERO);
     // add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
@@ -341,10 +352,13 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", disp_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", disp_order);
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", disp_order);
+    else
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
 
     // Add nodal force element
-    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "DISPLACEMENT");
+    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "DISPLACEMENT");
     CHKERR MetaEdgeForces::addElement(m_field, "DISPLACEMENT");
     CHKERR MetaNodalForces::addElement(m_field, "DISPLACEMENT");
     // Add fluid pressure finite elements
@@ -354,31 +368,39 @@ int main(int argc, char *argv[]) {
         "DISPLACEMENT", PETSC_NULL, false, true);
 
     // Velocity
-    CHKERR m_field.add_field("VELOCITY", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 3,
-                             MB_TAG_SPARSE, MF_ZERO);
+    CHKERR m_field.add_field("VELOCITY", H1, base, 3, MB_TAG_SPARSE, MF_ZERO);
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "VELOCITY");
 
     CHKERR m_field.set_field_order(0, MBTET, "VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBTRI, "VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", vel_order);
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+      CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", vel_order);
+    else
+      CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", 1);
 
-    CHKERR m_field.add_field("DOT_DISPLACEMENT", H1,
-                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
+    CHKERR m_field.add_field("DOT_DISPLACEMENT", H1, base, 3, MB_TAG_SPARSE,
                              MF_ZERO);
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DOT_DISPLACEMENT");
     CHKERR m_field.set_field_order(0, MBTET, "DOT_DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DOT_DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DOT_DISPLACEMENT", disp_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_DISPLACEMENT", disp_order);
-    CHKERR m_field.add_field("DOT_VELOCITY", H1,
-                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_DISPLACEMENT",
+                                     disp_order);
+    else
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_DISPLACEMENT", 1);
+
+    CHKERR m_field.add_field("DOT_VELOCITY", H1, base, 3, MB_TAG_SPARSE,
                              MF_ZERO);
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DOT_VELOCITY");
     CHKERR m_field.set_field_order(0, MBTET, "DOT_VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DOT_VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DOT_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_VELOCITY", vel_order);
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_VELOCITY", disp_order);
+    else
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_VELOCITY", 1);
 
     // Set material model and mass element
     NonlinearElasticElement elastic(m_field, 2);
@@ -584,7 +606,6 @@ int main(int argc, char *argv[]) {
         ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
             "ELASTIC", &damper.feLhs));
 
-
     CHKERR inertia.setShellMatrixMassOperators("VELOCITY", "DISPLACEMENT",
                                                "MESH_NODE_POSITIONS", linear);
     // element name "ELASTIC" is used, therefore M matrix is assembled as K
@@ -604,10 +625,10 @@ int main(int argc, char *argv[]) {
     shell_matrix_residual.shellMatCtx = shellAij_ctx;
 
     // surface pressure
-    boost::ptr_map<std::string, NeummanForcesSurface> surface_forces;
+    boost::ptr_map<std::string, NeumannForcesSurface> surface_forces;
     {
       string fe_name_str = "FORCE_FE";
-      surface_forces.insert(fe_name_str, new NeummanForcesSurface(m_field));
+      surface_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                       NODESET | FORCESET, it)) {
         CHKERR surface_forces.at(fe_name_str)
@@ -617,10 +638,10 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    boost::ptr_map<std::string, NeummanForcesSurface> surface_pressure;
+    boost::ptr_map<std::string, NeumannForcesSurface> surface_pressure;
     {
       string fe_name_str = "PRESSURE_FE";
-      surface_pressure.insert(fe_name_str, new NeummanForcesSurface(m_field));
+      surface_pressure.insert(fe_name_str, new NeumannForcesSurface(m_field));
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                m_field, SIDESET | PRESSURESET, it)) {
         CHKERR surface_pressure.at(fe_name_str)
@@ -835,7 +856,6 @@ int main(int argc, char *argv[]) {
       CHKERR VecDestroy(&F);
       CHKERR VecDestroy(&D);
       CHKERR SNESDestroy(&snes);
-
     }
 
     if (is_solve_at_time_zero) {
@@ -869,7 +889,6 @@ int main(int argc, char *argv[]) {
     CHKERR VecScatterDestroy(&shellAij_ctx->scatterV);
     CHKERR MatDestroy(&shell_Aij);
     delete shellAij_ctx;
-
   }
   CATCH_ERRORS;
 

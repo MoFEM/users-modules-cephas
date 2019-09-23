@@ -24,7 +24,7 @@ using namespace MoFEM;
 
 using namespace boost::numeric;
 
-MoFEMErrorCode NeummanForcesSurface::LinearVaringPresssure::getForce(
+MoFEMErrorCode NeumannForcesSurface::LinearVaringPresssure::getForce(
     const EntityHandle ent, const VectorDouble3 &coords,
     const VectorDouble3 &normal, VectorDouble3 &force) {
   MoFEMFunctionBegin;
@@ -33,17 +33,17 @@ MoFEMErrorCode NeummanForcesSurface::LinearVaringPresssure::getForce(
   MoFEMFunctionReturn(0);
 }
 
-NeummanForcesSurface::MyTriangleFE::MyTriangleFE(MoFEM::Interface &m_field)
+NeumannForcesSurface::MyTriangleFE::MyTriangleFE(MoFEM::Interface &m_field)
     : FaceElementForcesAndSourcesCore(m_field), addToRule(1) {}
 
-NeummanForcesSurface::OpNeumannForce::OpNeumannForce(
+NeumannForcesSurface::OpNeumannForce::OpNeumannForce(
     const std::string field_name, Vec _F, bCForce &data,
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
       F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
-MoFEMErrorCode NeummanForcesSurface::OpNeumannForce::doWork(
+MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
 
   MoFEMFunctionBegin;
@@ -119,7 +119,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForce::doWork(
   MoFEMFunctionReturn(0);
 }
 
-NeummanForcesSurface::OpNeumannForceAnalytical::OpNeumannForceAnalytical(
+NeumannForcesSurface::OpNeumannForceAnalytical::OpNeumannForceAnalytical(
     const std::string field_name, Vec f, const Range tris,
     boost::ptr_vector<MethodForForceScaling> &methods_op,
     boost::shared_ptr<MethodForAnalyticalForce> &analytical_force_op,
@@ -129,7 +129,7 @@ NeummanForcesSurface::OpNeumannForceAnalytical::OpNeumannForceAnalytical(
       F(f), tRis(tris), methodsOp(methods_op),
       analyticalForceOp(analytical_force_op), hoGeometry(ho_geometry) {}
 
-MoFEMErrorCode NeummanForcesSurface::OpNeumannForceAnalytical::doWork(
+MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -210,14 +210,14 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannForceAnalytical::doWork(
   MoFEMFunctionReturn(0);
 }
 
-NeummanForcesSurface::OpNeumannPressure::OpNeumannPressure(
+NeumannForcesSurface::OpNeumannPressure::OpNeumannPressure(
     const std::string field_name, Vec _F, bCPressure &data,
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
       F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
-MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
+MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
 
   MoFEMFunctionBegin;
@@ -277,14 +277,14 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannPressure::doWork(
   MoFEMFunctionReturn(0);
 }
 
-NeummanForcesSurface::OpNeumannFlux::OpNeumannFlux(
+NeumannForcesSurface::OpNeumannFlux::OpNeumannFlux(
     const std::string field_name, Vec _F, bCPressure &data,
     boost::ptr_vector<MethodForForceScaling> &methods_op, bool ho_geometry)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
           field_name, UserDataOperator::OPROW),
       F(_F), dAta(data), methodsOp(methods_op), hoGeometry(ho_geometry) {}
 
-MoFEMErrorCode NeummanForcesSurface::OpNeumannFlux::doWork(
+MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -341,7 +341,7 @@ MoFEMErrorCode NeummanForcesSurface::OpNeumannFlux::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurface::addForce(const std::string field_name,
+MoFEMErrorCode NeumannForcesSurface::addForce(const std::string field_name,
                                               Vec F, int ms_id,
                                               bool ho_geometry,
                                               bool block_set) {
@@ -403,7 +403,7 @@ MoFEMErrorCode NeummanForcesSurface::addForce(const std::string field_name,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurface::addPressure(const std::string field_name,
+MoFEMErrorCode NeumannForcesSurface::addPressure(const std::string field_name,
                                                  Vec F, int ms_id,
                                                  bool ho_geometry,
                                                  bool block_set) {
@@ -447,7 +447,7 @@ MoFEMErrorCode NeummanForcesSurface::addPressure(const std::string field_name,
 }
 
 MoFEMErrorCode
-NeummanForcesSurface::addLinearPressure(const std::string field_name, Vec F,
+NeumannForcesSurface::addLinearPressure(const std::string field_name, Vec F,
                                         int ms_id, bool ho_geometry) {
 
   const CubitMeshSets *cubit_meshset_ptr;
@@ -477,15 +477,15 @@ NeummanForcesSurface::addLinearPressure(const std::string field_name, Vec F,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode NeummanForcesSurface::addPreassure(const std::string field_name,
+MoFEMErrorCode NeumannForcesSurface::addPreassure(const std::string field_name,
                                                   Vec F, int ms_id,
                                                   bool ho_geometry,
                                                   bool block_set) {
-  return NeummanForcesSurface::addPressure(field_name, F, ms_id, ho_geometry,
+  return NeumannForcesSurface::addPressure(field_name, F, ms_id, ho_geometry,
                                            block_set);
 }
 
-MoFEMErrorCode NeummanForcesSurface::addFlux(const std::string field_name,
+MoFEMErrorCode NeumannForcesSurface::addFlux(const std::string field_name,
                                              Vec F, int ms_id,
                                              bool ho_geometry) {
   const CubitMeshSets *cubit_meshset_ptr;
@@ -501,7 +501,7 @@ MoFEMErrorCode NeummanForcesSurface::addFlux(const std::string field_name,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
+MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
     MoFEM::Interface &m_field, const std::string field_name,
     const std::string mesh_nodals_positions, Range *intersect_ptr) {
   MoFEMFunctionBegin;
@@ -600,15 +600,15 @@ MoFEMErrorCode MetaNeummanForces::addNeumannBCElements(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode MetaNeummanForces::setMomentumFluxOperators(
+MoFEMErrorCode MetaNeumannForces::setMomentumFluxOperators(
     MoFEM::Interface &m_field,
-    boost::ptr_map<std::string, NeummanForcesSurface> &neumann_forces, Vec F,
+    boost::ptr_map<std::string, NeumannForcesSurface> &neumann_forces, Vec F,
     const std::string field_name, const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
 
   string fe_name;
   fe_name = "FORCE_FE";
-  neumann_forces.insert(fe_name, new NeummanForcesSurface(m_field));
+  neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
   bool ho_geometry = m_field.check_field(mesh_nodals_positions);
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                   it)) {
@@ -626,7 +626,7 @@ MoFEMErrorCode MetaNeummanForces::setMomentumFluxOperators(
   }
 
   fe_name = "PRESSURE_FE";
-  neumann_forces.insert(fe_name, new NeummanForcesSurface(m_field));
+  neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                   SIDESET | PRESSURESET, it)) {
     CHKERR neumann_forces.at(fe_name).addPressure(
@@ -656,7 +656,7 @@ MoFEMErrorCode MetaNeummanForces::setMomentumFluxOperators(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode MetaNeummanForces::addNeumannFluxBCElements(
+MoFEMErrorCode MetaNeumannForces::addNeumannFluxBCElements(
     MoFEM::Interface &m_field, const std::string field_name,
     const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
@@ -681,15 +681,15 @@ MoFEMErrorCode MetaNeummanForces::addNeumannFluxBCElements(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode MetaNeummanForces::setMassFluxOperators(
+MoFEMErrorCode MetaNeumannForces::setMassFluxOperators(
     MoFEM::Interface &m_field,
-    boost::ptr_map<std::string, NeummanForcesSurface> &neumann_forces, Vec F,
+    boost::ptr_map<std::string, NeumannForcesSurface> &neumann_forces, Vec F,
     const std::string field_name, const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
 
   string fe_name;
   fe_name = "FLUX_FE";
-  neumann_forces.insert(fe_name, new NeummanForcesSurface(m_field));
+  neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                   SIDESET | PRESSURESET, it)) {
     bool ho_geometry = m_field.check_field(mesh_nodals_positions);

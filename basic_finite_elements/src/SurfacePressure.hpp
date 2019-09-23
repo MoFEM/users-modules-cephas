@@ -23,7 +23,7 @@
 /** \brief Finite element and operators to apply force/pressures applied to
  * surfaces \ingroup mofem_static_boundary_conditions
  */
-struct NeummanForcesSurface {
+struct NeumannForcesSurface {
 
   MoFEM::Interface &mField;
 
@@ -77,7 +77,7 @@ struct NeummanForcesSurface {
   MyTriangleFE fe;
   MyTriangleFE &getLoopFe() { return fe; }
 
-  NeummanForcesSurface(MoFEM::Interface &m_field)
+  NeumannForcesSurface(MoFEM::Interface &m_field)
       : mField(m_field), fe(m_field) {}
 
   struct bCForce {
@@ -260,7 +260,7 @@ struct NeummanForcesSurface {
 /** \brief Set of high-level function declaring elements and setting operators
  * to apply forces/fluxes \ingroup mofem_static_boundary_conditions
  */
-struct MetaNeummanForces {
+struct MetaNeumannForces {
 
   /**
    * \brief Declare finite element
@@ -297,7 +297,7 @@ struct MetaNeummanForces {
    */
   static MoFEMErrorCode setMomentumFluxOperators(
       MoFEM::Interface &m_field,
-      boost::ptr_map<std::string, NeummanForcesSurface> &neumann_forces, Vec F,
+      boost::ptr_map<std::string, NeumannForcesSurface> &neumann_forces, Vec F,
       const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
@@ -307,10 +307,20 @@ struct MetaNeummanForces {
 
   static MoFEMErrorCode setMassFluxOperators(
       MoFEM::Interface &m_field,
-      boost::ptr_map<std::string, NeummanForcesSurface> &neumann_forces, Vec F,
+      boost::ptr_map<std::string, NeumannForcesSurface> &neumann_forces, Vec F,
       const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 };
+
+/**
+ * @deprecated Do not use that name it has spelling mistake
+ */
+DEPRECATED typedef MetaNeumannForces MetaNeummanForces;
+
+/**
+ * @deprecated Do not use that name it has spelling mistake
+ */
+DEPRECATED typedef NeumannForcesSurface NeummanForcesSurface;
 
 #endif //__SURFACE_PERSSURE_HPP__
 

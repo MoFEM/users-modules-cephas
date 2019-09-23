@@ -434,12 +434,12 @@ and RHS
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
 
     // Assemble pressure and traction forces.
-    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
-    CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
                                                        F_ext, "U");
 
     {
-      boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+      boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
         CHKERR DMoFEMLoopFiniteElements(dm, mit->first.c_str(),

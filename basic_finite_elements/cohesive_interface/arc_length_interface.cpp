@@ -484,7 +484,7 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
       // Elements with boundary conditions
-      CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "DISPLACEMENT");
+      CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "DISPLACEMENT");
       CHKERR MetaNodalForces::addElement(m_field, "DISPLACEMENT");
 
       CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
@@ -682,16 +682,16 @@ int main(int argc, char *argv[]) {
     CHKERR VecAssemblyEnd(F_body_force);
 
     // surface forces
-    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     string fe_name_str = "FORCE_FE";
-    neumann_forces.insert(fe_name_str, new NeummanForcesSurface(m_field));
+    neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
       CHKERR neumann_forces.at(fe_name_str)
           .addForce("DISPLACEMENT", arc_ctx->F_lambda, it->getMeshsetId());
     }
     fe_name_str = "PRESSURE_FE";
-    neumann_forces.insert(fe_name_str, new NeummanForcesSurface(m_field));
+    neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, SIDESET | PRESSURESET, it)) {
       CHKERR neumann_forces.at(fe_name_str)
@@ -760,7 +760,7 @@ int main(int argc, char *argv[]) {
       step++;
     }
 
-    boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
     CHKERR VecZeroEntries(arc_ctx->F_lambda);
     CHKERR VecGhostUpdateBegin(arc_ctx->F_lambda, INSERT_VALUES,

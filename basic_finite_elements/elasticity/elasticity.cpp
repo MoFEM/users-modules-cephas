@@ -454,7 +454,7 @@ int main(int argc, char *argv[]) {
 
     // Add Neumann forces, i.e. pressure or traction forces applied on body
     // surface. This is only declaration not implementation.
-    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "DISPLACEMENT");
+    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "DISPLACEMENT");
     CHKERR MetaNodalForces::addElement(m_field, "DISPLACEMENT");
     CHKERR MetaEdgeForces::addElement(m_field, "DISPLACEMENT");
 
@@ -633,13 +633,13 @@ int main(int argc, char *argv[]) {
 
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
-    // MetaNeummanForces how this is implemented.
-    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
-    CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
+    // MetaNeumannForces how this is implemented.
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
                                                        F, "DISPLACEMENT");
 
     {
-      boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+      boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
         CHKERR DMoFEMLoopFiniteElements(dm, mit->first.c_str(),

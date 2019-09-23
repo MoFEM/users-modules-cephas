@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
     }
     // setup elements for loading
-    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "U");
+    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "U");
     CHKERR MetaNodalForces::addElement(m_field, "U");
     CHKERR MetaEdgeForces::addElement(m_field, "U");
 
@@ -264,12 +264,12 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", feLhs);
 
     // Assemble pressure and traction forces.
-    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
-    CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
                                                        F_ext, "U");
 
     {
-      boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+      boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
         CHKERR DMoFEMLoopFiniteElements(dm, mit->first.c_str(),
