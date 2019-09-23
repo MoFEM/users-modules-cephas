@@ -632,7 +632,7 @@ int main(int argc, char *argv[]) {
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                       NODESET | FORCESET, it)) {
         CHKERR surface_forces.at(fe_name_str)
-            .addForce("DISPLACEMENT", F, it->getMeshsetId(), true);
+            .addForce("DISPLACEMENT", PETSC_NULL, it->getMeshsetId(), true);
         surface_forces.at(fe_name_str)
             .methodsOp.push_back(new TimeForceScale());
       }
@@ -645,7 +645,7 @@ int main(int argc, char *argv[]) {
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                m_field, SIDESET | PRESSURESET, it)) {
         CHKERR surface_pressure.at(fe_name_str)
-            .addPressure("DISPLACEMENT", F, it->getMeshsetId(), true);
+            .addPressure("DISPLACEMENT", PETSC_NULL, it->getMeshsetId(), true);
         surface_pressure.at(fe_name_str)
             .methodsOp.push_back(new TimeForceScale());
       }
@@ -659,7 +659,7 @@ int main(int argc, char *argv[]) {
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                       NODESET | FORCESET, it)) {
         CHKERR edge_forces.at(fe_name_str)
-            .addForce("DISPLACEMENT", F, it->getMeshsetId(), true);
+            .addForce("DISPLACEMENT", PETSC_NULL, it->getMeshsetId(), true);
         edge_forces.at(fe_name_str).methodsOp.push_back(new TimeForceScale());
       }
     }
