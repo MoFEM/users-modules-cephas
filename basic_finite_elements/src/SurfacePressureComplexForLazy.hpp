@@ -64,7 +64,6 @@ struct NeumannForcesSurfaceComplexForLazy {
     MyTriangleSpatialFE(MoFEM::Interface &_mField, Mat _Aij, Vec &_F,
                         double *scale_lhs, double *scale_rhs, 
                         std::string spatial_field_name = "SPATIAL_POSITION",
-                        bool spatial_disp = false,
                         std::string mat_field_name = "MESH_NODE_POSITIONS");
 
     int getRule(int order) { return max(1, order); };
@@ -173,17 +172,14 @@ struct NeumannForcesSurfaceComplexForLazy {
   NeumannForcesSurfaceComplexForLazy(
       MoFEM::Interface &m_field, Mat _Aij, Vec _F, double *scale_lhs,
       double *scale_rhs, std::string spatial_field_name = "SPATIAL_POSITION",
-      bool spatial_disp = false,
       std::string material_field_name = "MESH_NODE_POSITIONS");
   NeumannForcesSurfaceComplexForLazy(
       MoFEM::Interface &m_field, Mat _Aij, Vec _F,
       std::string spatial_field_name = "SPATIAL_POSITION",
-      bool spatial_disp = false,
       std::string material_field_name = "MESH_NODE_POSITIONS");
 
 private:
   const std::string spatialField;
-  const bool spatialDisplacement;
   const std::string materialField;
 };
 
