@@ -32,8 +32,6 @@ namespace po = boost::program_options;
 #include <ElasticMaterials.hpp>
 #include <SurfacePressureComplexForLazy.hpp>
 
-#define BLOCKED_PROBLEM
-
 static char help[] = "...\n\n";
 
 struct MonitorPostProc : public FEMethod {
@@ -104,7 +102,7 @@ struct MonitorPostProc : public FEMethod {
       for (; sit != setOfBlocks.end(); sit++) {
         postProc.getOpPtrVector().push_back(new PostProcStress(
             postProc.postProcMesh, postProc.mapGaussPts, "DISPLACEMENT",
-            sit->second, postProc.commonData));
+            sit->second, postProc.commonData, true));
       }
 
       iNit = true;
@@ -343,34 +341,11 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", disp_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", disp_order);
 
-    CHKERR m_field.add_finite_element("NEUMANN_FE", MF_ZERO);
-    CHKERR m_field.modify_finite_element_add_field_row("NEUMANN_FE",
-                                                       "DISPLACEMENT");
-    CHKERR m_field.modify_finite_element_add_field_col("NEUMANN_FE",
-                                                       "DISPLACEMENT");
-    CHKERR m_field.modify_finite_element_add_field_data("NEUMANN_FE",
-                                                        "DISPLACEMENT");
-    CHKERR m_field.modify_finite_element_add_field_data("NEUMANN_FE",
-                                                        "MESH_NODE_POSITIONS");
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                    it)) {
-      Range tris;
-      CHKERR moab.get_entities_by_type(it->meshset, MBTRI, tris, true);
-
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "NEUMANN_FE");
-    }
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      Range tris;
-      CHKERR moab.get_entities_by_type(it->meshset, MBTRI, tris, true);
-
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "NEUMANN_FE");
-    }
     // Add nodal force element
+    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "DISPLACEMENT");
+    CHKERR MetaEdgeForces::addElement(m_field, "DISPLACEMENT");
     CHKERR MetaNodalForces::addElement(m_field, "DISPLACEMENT");
     // Add fluid pressure finite elements
     FluidPressure fluid_pressure_fe(m_field);
@@ -386,7 +361,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBTRI, "VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", vel_order);
 
     CHKERR m_field.add_field("DOT_DISPLACEMENT", H1,
                              AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
@@ -395,7 +370,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "DOT_DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DOT_DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DOT_DISPLACEMENT", disp_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_DISPLACEMENT", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_DISPLACEMENT", disp_order);
     CHKERR m_field.add_field("DOT_VELOCITY", H1,
                              AINSWORTH_BERNSTEIN_BEZIER_BASE, 3, MB_TAG_SPARSE,
                              MF_ZERO);
@@ -403,7 +378,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "DOT_VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DOT_VELOCITY", vel_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DOT_VELOCITY", vel_order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_VELOCITY", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "DOT_VELOCITY", vel_order);
 
     // Set material model and mass element
     NonlinearElasticElement elastic(m_field, 2);
@@ -478,7 +453,6 @@ int main(int argc, char *argv[]) {
                               elastic.getLoopFeEnergy(),
                               inertia.getLoopFeEnergy());
 
-#ifdef BLOCKED_PROBLEM
     // elastic and mass element calculated in Kuu shell matrix problem. To
     // calculate Mass element, velocity field is needed.
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC", "VELOCITY");
@@ -486,7 +460,6 @@ int main(int argc, char *argv[]) {
                                                         "DOT_DISPLACEMENT");
     CHKERR m_field.modify_finite_element_add_field_data("ELASTIC",
                                                         "DOT_VELOCITY");
-#endif
 
     // build field
     CHKERR m_field.build_fields();
@@ -504,12 +477,11 @@ int main(int argc, char *argv[]) {
     // build adjacencies
     CHKERR m_field.build_adjacencies(bit_level0);
 
-// define problems
-#ifdef BLOCKED_PROBLEM
+    // define problems
     {
       CHKERR m_field.add_problem("Kuu", MF_ZERO);
       CHKERR m_field.modify_problem_add_finite_element("Kuu", "ELASTIC");
-      CHKERR m_field.modify_problem_add_finite_element("Kuu", "NEUMANN_FE");
+      CHKERR m_field.modify_problem_add_finite_element("Kuu", "PRESSURE_FE");
       CHKERR m_field.modify_problem_add_finite_element("Kuu", "FORCE_FE");
       CHKERR m_field.modify_problem_add_finite_element("Kuu",
                                                        "FLUID_PRESSURE_FE");
@@ -528,13 +500,12 @@ int main(int argc, char *argv[]) {
       }
       CHKERR prb_mng_ptr->partitionGhostDofs("Kuu");
     }
-#endif
 
     CHKERR m_field.add_problem("DYNAMICS", MF_ZERO);
     // set finite elements for problems
     CHKERR m_field.modify_problem_add_finite_element("DYNAMICS", "ELASTIC");
     CHKERR m_field.modify_problem_add_finite_element("DYNAMICS", "DAMPER");
-    CHKERR m_field.modify_problem_add_finite_element("DYNAMICS", "NEUMANN_FE");
+    CHKERR m_field.modify_problem_add_finite_element("DYNAMICS", "PRESSURE_FE");
     CHKERR m_field.modify_problem_add_finite_element("DYNAMICS", "FORCE_FE");
     CHKERR m_field.modify_problem_add_finite_element("DYNAMICS",
                                                      "FLUID_PRESSURE_FE");
@@ -569,7 +540,6 @@ int main(int argc, char *argv[]) {
     CHKERR TSCreate(PETSC_COMM_WORLD, &ts);
     CHKERR TSSetType(ts, TSBEULER);
 
-#ifdef BLOCKED_PROBLEM
     // shell matrix
     ConvectiveMassElement::MatShellCtx *shellAij_ctx =
         new ConvectiveMassElement::MatShellCtx();
@@ -614,27 +584,6 @@ int main(int argc, char *argv[]) {
         ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
             "ELASTIC", &damper.feLhs));
 
-    // surface forces
-    NeumannForcesSurfaceComplexForLazy neumann_forces(
-        m_field, shellAij_ctx->barK, F, "DISPLACEMENT", true);
-    NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE &surface_force =
-        neumann_forces.getLoopSpatialFe();
-    if (linear) {
-      surface_force.typeOfForces = NeumannForcesSurfaceComplexForLazy::
-          MyTriangleSpatialFE::NONCONSERVATIVE;
-    }
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                    it)) {
-      CHKERR surface_force.addForce(it->getMeshsetId());
-    }
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      CHKERR surface_force.addPressure(it->getMeshsetId());
-    }
-    surface_force.methodsOp.push_back(new TimeForceScale());
-    shell_matrix_element.loopK.push_back(
-        ConvectiveMassElement::ShellMatrixElement::PairNameFEMethodPtr(
-            "NEUMANN_FE", &surface_force));
 
     CHKERR inertia.setShellMatrixMassOperators("VELOCITY", "DISPLACEMENT",
                                                "MESH_NODE_POSITIONS", linear);
@@ -654,46 +603,57 @@ int main(int argc, char *argv[]) {
     ConvectiveMassElement::ShellResidualElement shell_matrix_residual(m_field);
     shell_matrix_residual.shellMatCtx = shellAij_ctx;
 
-#else
-    Mat Aij;
-    CHKERR m_field.getInterface<MatrixManager>()
-        ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("DYNAMICS", &Aij);
-    DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "DISPLACEMENT", Aij, D,
-                                                F);
-    // my_dirichlet_bc.fixFields.push_back("VELOCITY");
+    // surface pressure
+    boost::ptr_map<std::string, NeummanForcesSurface> surface_forces;
+    {
+      string fe_name_str = "FORCE_FE";
+      surface_forces.insert(fe_name_str, new NeummanForcesSurface(m_field));
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
+                                                      NODESET | FORCESET, it)) {
+        CHKERR surface_forces.at(fe_name_str)
+            .addForce("DISPLACEMENT", F, it->getMeshsetId(), true);
+        surface_forces.at(fe_name_str)
+            .methodsOp.push_back(new TimeForceScale());
+      }
+    }
 
-    // surface forces
-    NeumannForcesSurfaceComplexForLazy neumann_forces(m_field, Aij, F);
-    NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE &surface_force =
-        neumann_forces.getLoopSpatialFe();
-    if (linear) {
-      surface_force.typeOfForces = NeumannForcesSurfaceComplexForLazy::
-          MyTriangleSpatialFE::NONCONSERVATIVE;
+    boost::ptr_map<std::string, NeummanForcesSurface> surface_pressure;
+    {
+      string fe_name_str = "PRESSURE_FE";
+      surface_pressure.insert(fe_name_str, new NeummanForcesSurface(m_field));
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+               m_field, SIDESET | PRESSURESET, it)) {
+        CHKERR surface_pressure.at(fe_name_str)
+            .addPressure("DISPLACEMENT", F, it->getMeshsetId(), true);
+        surface_pressure.at(fe_name_str)
+            .methodsOp.push_back(new TimeForceScale());
+      }
     }
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                    it)) {
-      CHKERR surface_force.addForce(it->getMeshsetId());
-    }
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, SIDESET | PRESSURESET, it)) {
-      CHKERR surface_force.addPressure(it->getMeshsetId());
-    }
-    surface_force.methodsOp.push_back(new TimeForceScale());
 
-    CHKERR inertia.setConvectiveMassOperators(
-        "VELOCITY", "DISPLACEMENT", "MESH_NODE_POSITIONS", false, linear);
-    CHKERR inertia.setVelocityOperators("VELOCITY", "DISPLACEMENT");
-#endif
+    // edge forces
+    boost::ptr_map<std::string, EdgeForce> edge_forces;
+    {
+      string fe_name_str = "FORCE_FE";
+      edge_forces.insert(fe_name_str, new EdgeForce(m_field));
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
+                                                      NODESET | FORCESET, it)) {
+        CHKERR edge_forces.at(fe_name_str)
+            .addForce("DISPLACEMENT", F, it->getMeshsetId(), true);
+        edge_forces.at(fe_name_str).methodsOp.push_back(new TimeForceScale());
+      }
+    }
 
     // nodal forces
     boost::ptr_map<std::string, NodalForce> nodal_forces;
-    string fe_name_str = "FORCE_FE";
-    nodal_forces.insert(fe_name_str, new NodalForce(m_field));
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                    it)) {
-      CHKERR nodal_forces.at(fe_name_str)
-          .addForce("DISPLACEMENT", F, it->getMeshsetId(), true);
-      nodal_forces.at(fe_name_str).methodsOp.push_back(new TimeForceScale());
+    {
+      string fe_name_str = "FORCE_FE";
+      nodal_forces.insert(fe_name_str, new NodalForce(m_field));
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
+                                                      NODESET | FORCESET, it)) {
+        CHKERR nodal_forces.at(fe_name_str)
+            .addForce("DISPLACEMENT", F, it->getMeshsetId(), true);
+        nodal_forces.at(fe_name_str).methodsOp.push_back(new TimeForceScale());
+      }
     }
 
     MonitorRestart monitor_restart(m_field, ts);
@@ -714,11 +674,21 @@ int main(int argc, char *argv[]) {
         TsCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
     loops_to_do_Rhs.push_back(
         TsCtx::PairNameFEMethodPtr("DAMPER", &damper.feRhs));
-    loops_to_do_Rhs.push_back(
-        TsCtx::PairNameFEMethodPtr("NEUMANN_FE", &surface_force));
-    boost::ptr_map<std::string, NodalForce>::iterator fit =
-        nodal_forces.begin();
-    for (; fit != nodal_forces.end(); fit++) {
+    for (auto fit = surface_forces.begin(); fit != surface_forces.end();
+         fit++) {
+      loops_to_do_Rhs.push_back(
+          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+    }
+    for (auto fit = surface_pressure.begin(); fit != surface_pressure.end();
+         fit++) {
+      loops_to_do_Rhs.push_back(
+          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+    }
+    for (auto fit = edge_forces.begin(); fit != edge_forces.end(); fit++) {
+      loops_to_do_Rhs.push_back(
+          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+    }
+    for (auto fit = nodal_forces.begin(); fit != nodal_forces.end(); fit++) {
       loops_to_do_Rhs.push_back(
           TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
     }
@@ -726,42 +696,16 @@ int main(int argc, char *argv[]) {
         "FLUID_PRESSURE_FE", &fluid_pressure_fe.getLoopFe()));
     loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr(
         "MASS_ELEMENT", &inertia.getLoopFeMassRhs()));
-#ifdef BLOCKED_PROBLEM
     ts_ctx.get_preProcess_to_do_IFunction().push_back(&shell_matrix_residual);
-#else
-    loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr(
-        "VELOCITY_ELEMENT", &inertia.getLoopFeVelRhs()));
-#endif
+
     // postproc
     ts_ctx.get_postProcess_to_do_IFunction().push_back(&my_dirichlet_bc);
-#ifdef BLOCKED_PROBLEM
     ts_ctx.get_postProcess_to_do_IFunction().push_back(&shell_matrix_residual);
-#endif
 
     // left hand side
     // preprocess
     ts_ctx.get_preProcess_to_do_IJacobian().push_back(&update_and_control);
-#ifdef BLOCKED_PROBLEM
     ts_ctx.get_preProcess_to_do_IJacobian().push_back(&shell_matrix_element);
-#else
-    // preprocess
-    ts_ctx.get_preProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
-    // fe loops
-    TsCtx::FEMethodsSequence &loops_to_do_Mat =
-        ts_ctx.get_loops_to_do_IJacobian();
-    loops_to_do_Mat.push_back(
-        TsCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
-    loops_to_do_Mat.push_back(
-        TsCtx::PairNameFEMethodPtr("DAMPER", &damper.feLhs));
-    loops_to_do_Mat.push_back(
-        TsCtx::PairNameFEMethodPtr("NEUMANN_FE", &surface_force));
-    loops_to_do_Mat.push_back(TsCtx::PairNameFEMethodPtr(
-        "VELOCITY_ELEMENT", &inertia.getLoopFeVelLhs()));
-    loops_to_do_Mat.push_back(TsCtx::PairNameFEMethodPtr(
-        "MASS_ELEMENT", &inertia.getLoopFeMassLhs()));
-    // postrocess
-    ts_ctx.get_postProcess_to_do_IJacobian().push_back(&my_dirichlet_bc);
-#endif
     ts_ctx.get_postProcess_to_do_IJacobian().push_back(&update_and_control);
     // monitor
     TsCtx::FEMethodsSequence &loops_to_do_Monitor =
@@ -772,11 +716,7 @@ int main(int argc, char *argv[]) {
         TsCtx::PairNameFEMethodPtr("MASS_ELEMENT", &monitor_restart));
 
     CHKERR TSSetIFunction(ts, F, TsSetIFunction, &ts_ctx);
-#ifdef BLOCKED_PROBLEM
     CHKERR TSSetIJacobian(ts, shell_Aij, shell_Aij, TsSetIJacobian, &ts_ctx);
-#else
-    CHKERR TSSetIJacobian(ts, Aij, Aij, TsSetIJacobian, &ts_ctx);
-#endif
 
     CHKERR TSMonitorSet(ts, TsMonitorSet, &ts_ctx, PETSC_NULL);
 
@@ -784,7 +724,6 @@ int main(int argc, char *argv[]) {
     CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
     CHKERR TSSetSolution(ts, D);
     CHKERR TSSetFromOptions(ts);
-#ifdef BLOCKED_PROBLEM
     // shell matrix pre-conditioner
     SNES snes;
     CHKERR TSGetSNES(ts, &snes);
@@ -800,7 +739,6 @@ int main(int argc, char *argv[]) {
     CHKERR PCShellSetApply(pc, ConvectiveMassElement::PCShellApplyOp);
     CHKERR PCShellSetSetUp(pc, ConvectiveMassElement::PCShellSetUpOp);
     CHKERR PCShellSetDestroy(pc, ConvectiveMassElement::PCShellDestroy);
-#endif
 
     CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
         "DYNAMICS", COL, D, INSERT_VALUES, SCATTER_FORWARD);
@@ -812,8 +750,6 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_solve_at_time_zero",
                                &is_solve_at_time_zero, &flg);
     if (is_solve_at_time_zero) {
-
-#ifdef BLOCKED_PROBLEM
 
       Mat Aij = shellAij_ctx->K;
       Vec F;
@@ -841,12 +777,24 @@ int main(int argc, char *argv[]) {
       fluid_pressure_fe.getLoopFe().ts_t = 0;
       loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
           "FLUID_PRESSURE_FE", &fluid_pressure_fe.getLoopFe()));
-      surface_force.ts_t = 0;
-      loops_to_do_Rhs.push_back(
-          SnesCtx::PairNameFEMethodPtr("NEUMANN_FE", &surface_force));
-      boost::ptr_map<std::string, NodalForce>::iterator fit =
-          nodal_forces.begin();
-      for (; fit != nodal_forces.end(); fit++) {
+      for (auto fit = surface_forces.begin(); fit != surface_forces.end();
+           fit++) {
+        fit->second->getLoopFe().ts_t = 0;
+        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
+            fit->first, &fit->second->getLoopFe()));
+      }
+      for (auto fit = surface_pressure.begin(); fit != surface_pressure.end();
+           fit++) {
+        fit->second->getLoopFe().ts_t = 0;
+        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
+            fit->first, &fit->second->getLoopFe()));
+      }
+      for (auto fit = edge_forces.begin(); fit != edge_forces.end(); fit++) {
+        fit->second->getLoopFe().ts_t = 0;
+        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
+            fit->first, &fit->second->getLoopFe()));
+      }
+      for (auto fit = nodal_forces.begin(); fit != nodal_forces.end(); fit++) {
         fit->second->getLoopFe().ts_t = 0;
         loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
             fit->first, &fit->second->getLoopFe()));
@@ -861,8 +809,6 @@ int main(int argc, char *argv[]) {
       snes_ctx.get_preProcess_to_do_Mat().push_back(&my_dirichlet_bc);
       loops_to_do_Mat.push_back(
           SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
-      loops_to_do_Mat.push_back(
-          SnesCtx::PairNameFEMethodPtr("NEUMANN_FE", &surface_force));
       inertia.getLoopFeMassAuxLhs().ts_t = 0;
       inertia.getLoopFeMassAuxLhs().ts_a = 0;
       loops_to_do_Mat.push_back(SnesCtx::PairNameFEMethodPtr(
@@ -890,7 +836,6 @@ int main(int argc, char *argv[]) {
       CHKERR VecDestroy(&D);
       CHKERR SNESDestroy(&snes);
 
-#endif // BLOCKED_PROBLEM
     }
 
     if (is_solve_at_time_zero) {
@@ -918,20 +863,15 @@ int main(int argc, char *argv[]) {
 
     CHKERR VecDestroy(&F);
     CHKERR VecDestroy(&D);
-#ifdef BLOCKED_PROBLEM
     CHKERR MatDestroy(&shellAij_ctx->K);
     CHKERR MatDestroy(&shellAij_ctx->M);
     CHKERR VecScatterDestroy(&shellAij_ctx->scatterU);
     CHKERR VecScatterDestroy(&shellAij_ctx->scatterV);
     CHKERR MatDestroy(&shell_Aij);
     delete shellAij_ctx;
-#else
-    CHKERR MatDestroy(&Aij);
-#endif
 
-  } catch (MoFEMException const &e) {
-    SETERRQ(PETSC_COMM_SELF, e.errorCode, e.errorMessage);
   }
+  CATCH_ERRORS;
 
   MoFEM::Core::Finalize();
 
