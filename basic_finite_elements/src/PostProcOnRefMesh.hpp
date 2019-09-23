@@ -715,7 +715,8 @@ struct PostProcFatPrismOnRefinedMesh
   MoFEMErrorCode setGaussPtsThroughThickness(int order_thickness);
   MoFEMErrorCode generateReferenceElementMesh();
 
-  std::map<EntityHandle, EntityHandle> elementsMap;
+  //std::map<EntityHandle, EntityHandle> elementsMap;
+  std::map<EntityHandle, std::vector<EntityHandle>> elementsMap;
 
   MoFEMErrorCode preProcess();
   MoFEMErrorCode postProcess();

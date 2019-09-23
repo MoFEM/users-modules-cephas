@@ -394,3 +394,36 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_hook_scaled_with_density_element
   -file_name mesh_for_testing_elastic_jacobian.h5m -ale
   )
+
+bfe_add_executable(testing_jacobian_of_navier_stokes_element
+  ${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_navier_stokes_element.cpp
+)
+
+target_link_libraries(testing_jacobian_of_navier_stokes_element
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  mofem_cblas
+  ${MoFEM_PROJECT_LIBS}
+)
+cm_export_file("mesh_for_testing_navier_stokes_element.h5m" export_atom_tests_basic_fe)
+
+bfe_add_executable(testing_jacobian_of_navier_stokes_element_with_prisms
+  ${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_navier_stokes_element_with_prisms.cpp
+)
+
+target_link_libraries(testing_jacobian_of_navier_stokes_element_with_prisms
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  mofem_cblas
+  ${MoFEM_PROJECT_LIBS}
+)

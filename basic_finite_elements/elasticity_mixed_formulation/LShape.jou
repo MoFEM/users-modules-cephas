@@ -29,6 +29,7 @@ volume all scheme tetmesh
 volume all size auto factor 7
 mesh volume all
 
-save as "/Users/hoangnguyen/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/LShape_incompressible.cub" overwrite
+save as "/Users/ashvarts/mofem_install/users_modules_debug/build/basic_finite_elements/elasticity_mixed_formulation/LShape.cub" overwrite
+
 
 

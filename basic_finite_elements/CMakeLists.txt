@@ -14,6 +14,7 @@ set(BFE_DIRS
   elasticity
   simple_elasticity
   elasticity_mixed_formulation
+  navier_stokes
   nonlinear_elasticity
   mix_transport
   thermal
@@ -68,4 +69,3 @@ foreach(LOOP_DIR ${BFE_DIRS})
   add_subdirectory(${LOOP_DIR})
   bfe_install(${LOOP_DIR})
 endforeach(LOOP_DIR)
-
