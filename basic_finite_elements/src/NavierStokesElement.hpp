@@ -46,8 +46,8 @@ struct NavierStokesElement {
     double length;
     double velocity;
     double pressure;
-    double Re;
-    DimScales() : length(-1), velocity(-1), pressure(-1), Re(-1) {}
+    double reNumber;
+    DimScales() : length(-1), velocity(-1), pressure(-1), reNumber(-1) {}
   };
 
   struct BlockData {
