@@ -119,7 +119,6 @@ int main(int argc, char *argv[]) {
 
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
-
   try {
 
     PetscBool flg_block_config, flg_file;
@@ -147,8 +146,8 @@ int main(int argc, char *argv[]) {
                              LASBASETOP, list_bases[choice_base_value],
                              &choice_base_value, PETSC_NULL);
 
-    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "",
-                           test_nb, &test_nb, PETSC_NULL);
+    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "", test_nb,
+                           &test_nb, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -233,30 +232,54 @@ int main(int argc, char *argv[]) {
     default:
       SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED, "Base not implemented");
     };
-    CHKERR m_field.add_field("DISPLACEMENT", H1, base, 3,
+    CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LOBATTO_BASE, 3,
                              MB_TAG_DENSE, MF_ZERO);
 
     // We can use higher oder geometry to define body
-    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
-                             3, MB_TAG_DENSE, MF_ZERO);
+    // CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+    //                          3, MB_TAG_DENSE, MF_ZERO);
 
+    int qqq = 1;
     // Declare problem
 
     // Add entities (by tets) to the field (all entities in the mesh, root_set
     // = 0 )
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "DISPLACEMENT");
+    //CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "MESH_NODE_POSITIONS");
 
     // Set approximation order.
     // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
     // Meshes.
-    CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
-    CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
-    if(base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
+    // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
     else
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+
+    Range tris;
+    CHKERR moab.get_entities_by_type(0, MBTRI, tris);
+    tris.print();
+    Range quads;
+    CHKERR moab.get_entities_by_type(0, MBQUAD, quads);
+    quads.print();
+    Range tri_edges;
+    CHKERR moab.get_adjacencies(tris, 1, false, tri_edges,
+                                moab::Interface::UNION);
+    tri_edges.print();
+    Range quads_edges;
+    CHKERR moab.get_adjacencies(quads, 1, false, quads_edges,
+                                moab::Interface::UNION);
+    quads_edges.print();
+
+    // Range quads_and_tris = intersect(tri_edges, quads_edges);
+    Range quads_only = subtract(quads_edges, tri_edges);
+    quads_only.print();
+    CHKERR m_field.set_field_order(tri_edges, "DISPLACEMENT",
+                                   2);
+    CHKERR m_field.set_field_order(quads_only, "DISPLACEMENT", 1);
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in whole body)
@@ -264,7 +287,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Setting geometry order everywhere
       Range tets, edges;
-      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+      CHKERR m_field.get_moab().get_entities_by_type(0, MBPRISM, tets);
       CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
                                                 moab::Interface::UNION);
 
@@ -278,8 +301,8 @@ int main(int argc, char *argv[]) {
       // CHKERR
       // m_field.getInterface<CommInterface>()->synchroniseEntities(edges);
 
-      CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+      //CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
+      //CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
       MoFEMFunctionReturn(0);
     };
@@ -348,7 +371,7 @@ int main(int argc, char *argv[]) {
               CHKERR moab.get_adjacencies(block_ents, 3, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
-              ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
+              ents_to_set_order = ents_to_set_order.subset_by_type(MBPRISM);
               CHKERR moab.get_adjacencies(block_ents, 2, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
@@ -402,11 +425,11 @@ int main(int argc, char *argv[]) {
     CHKERR setting_blocks_data_and_order_from_config_file(block_sets_ptr);
 
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
-        new VolumeElementForcesAndSourcesCore(m_field));
+        new FatPrismElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
-        new VolumeElementForcesAndSourcesCore(m_field));
-    fe_lhs_ptr->getRuleHook = VolRule();
-    fe_rhs_ptr->getRuleHook = VolRule();
+        new FatPrismElementForcesAndSourcesCore(m_field));
+    // fe_lhs_ptr->getRuleHook = VolRule();
+    // fe_rhs_ptr->getRuleHook = VolRule();
 
     CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
                                            "DISPLACEMENT",
@@ -440,15 +463,15 @@ int main(int argc, char *argv[]) {
                                                        "DISPLACEMENT");
     CHKERR m_field.modify_finite_element_add_field_data("BODY_FORCE",
                                                         "DISPLACEMENT");
-    CHKERR m_field.modify_finite_element_add_field_data("BODY_FORCE",
-                                                        "MESH_NODE_POSITIONS");
+    // CHKERR m_field.modify_finite_element_add_field_data("BODY_FORCE",
+    //                                                     "MESH_NODE_POSITIONS");
 
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, BLOCKSET | BODYFORCESSET, it)) {
       Range tets;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTET, tets,
+      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBPRISM, tets,
                                                      true);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tets, MBTET,
+      CHKERR m_field.add_ents_to_finite_element_by_type(tets, MBPRISM,
                                                         "BODY_FORCE");
     }
 
@@ -480,7 +503,7 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.add_field("TEMP", H1, AINSWORTH_LEGENDRE_BASE, 1,
                                  MB_TAG_SPARSE, MF_ZERO);
 
-        CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "TEMP");
+        CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "TEMP");
 
         CHKERR m_field.set_field_order(0, MBVERTEX, "TEMP", 1);
       }
@@ -495,9 +518,9 @@ int main(int argc, char *argv[]) {
     // If 10-node test are on the mesh, use mid nodes to set HO-geometry. Class
     // Projection10NodeCoordsOnField
     // do the trick.
-    Projection10NodeCoordsOnField ent_method_material(m_field,
-                                                      "MESH_NODE_POSITIONS");
-    CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+    // Projection10NodeCoordsOnField ent_method_material(m_field,
+    //                                                   "MESH_NODE_POSITIONS");
+    // CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
     if (m_field.check_field("TEMP")) {
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
         if (block_data[it->getMeshsetId()].initTemp != 0) {
@@ -733,16 +756,16 @@ int main(int argc, char *argv[]) {
 
     // Set up post-processor. It is some generic implementation of finite
     // element.
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
+    PostProcFatPrismOnRefinedMesh post_proc(m_field);
     // Add operators to the elements, starting with some generic operators
     CHKERR post_proc.generateReferenceElementMesh();
     CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
-    CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+    //CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
     // Add problem specific operator on element to post-process stresses
-    post_proc.getOpPtrVector().push_back(new PostProcHookStress(
-        m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
-        post_proc.commonData, block_sets_ptr.get()));
+    // post_proc.getOpPtrVector().push_back(new PostProcHookStress(
+    //     m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
+    //     "DISPLACEMENT", post_proc.commonData, block_sets_ptr.get()));
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {

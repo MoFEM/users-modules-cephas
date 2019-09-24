@@ -272,39 +272,39 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>();
 
-    auto set_scales_for_block = [&](NavierStokesElement::BlockData &block) {
-      MoFEMFunctionBegin;
-      EntityHandle tree_root;
-      AdaptiveKDTree myTree(&moab);
-      CHKERR myTree.build_tree(block.eNts, &tree_root);
+    // auto set_scales_for_block = [&](NavierStokesElement::BlockData &block) {
+    //   MoFEMFunctionBegin;
+    //   EntityHandle tree_root;
+    //   AdaptiveKDTree myTree(&moab);
+    //   CHKERR myTree.build_tree(block.eNts, &tree_root);
 
-      // get the overall bounding box corners
-      BoundBox box;
-      CHKERR myTree.get_bounding_box(box, &tree_root);
-      block.dimScales.length = box.diagonal_length();
-      block.dimScales.velocity = 1.0;
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
-          (1.0/block.dimScales.length), "MESH_NODE_POSITIONS");
+    //   // get the overall bounding box corners
+    //   BoundBox box;
+    //   CHKERR myTree.get_bounding_box(box, &tree_root);
+    //   block.dimScales.length = box.diagonal_length();
+    //   block.dimScales.velocity = 1.0;
+    //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
+    //       (1.0/block.dimScales.length), "MESH_NODE_POSITIONS");
 
-      block.dimScales.Re = block.fluidDensity * block.dimScales.velocity *
-                           block.dimScales.length / block.fluidViscosity;
-      if (only_stokes) {
-        block.dimScales.pressure = block.fluidViscosity *
-                                   block.dimScales.velocity /
-                                   block.dimScales.length;
-        block.inertiaCoef = 0.0;
-        block.viscousCoef = 1.0;
+    //   block.dimScales.Re = block.fluidDensity * block.dimScales.velocity *
+    //                        block.dimScales.length / block.fluidViscosity;
+    //   if (only_stokes) {
+    //     block.dimScales.pressure = block.fluidViscosity *
+    //                                block.dimScales.velocity /
+    //                                block.dimScales.length;
+    //     block.inertiaCoef = 0.0;
+    //     block.viscousCoef = 1.0;
 
-      } 
-      else {
-        block.dimScales.pressure = block.fluidDensity *
-                                   block.dimScales.velocity *
-                                   block.dimScales.velocity;
-        block.inertiaCoef = 1.0;
-        block.viscousCoef = 1.0 / block.dimScales.Re;
-      }
-      MoFEMFunctionReturn(0);
-    };
+    //   } 
+    //   else {
+    //     block.dimScales.pressure = block.fluidDensity *
+    //                                block.dimScales.velocity *
+    //                                block.dimScales.velocity;
+    //     block.inertiaCoef = 1.0;
+    //     block.viscousCoef = 1.0 / block.dimScales.Re;
+    //   }
+    //   MoFEMFunctionReturn(0);
+    // };
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 5, "FLUID") == 0) {
@@ -321,7 +321,7 @@ int main(int argc, char *argv[]) {
         commonData->setOfBlocksData[id].iD = id;
         commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
         commonData->setOfBlocksData[id].fluidDensity = attributes[1];
-        set_scales_for_block(commonData->setOfBlocksData[id]);
+        //set_scales_for_block(commonData->setOfBlocksData[id]);
       }
     }
 

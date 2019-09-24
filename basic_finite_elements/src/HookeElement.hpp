@@ -91,6 +91,8 @@ struct HookeElement {
 
     boost::shared_ptr<MatrixDouble> eshelbyStress_dx;
 
+    boost::shared_ptr<MatrixDouble> invJac;
+
     DataAtIntegrationPts() {
 
       smallStrainMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
@@ -108,6 +110,8 @@ struct HookeElement {
       stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
       eshelbyStress_dx = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      invJac = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
 
     Range forcesOnlyOnEntitiesRow;

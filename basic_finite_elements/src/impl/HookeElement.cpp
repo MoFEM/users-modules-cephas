@@ -561,7 +561,7 @@ MoFEMErrorCode HookeElement::setBlocks(
     int id = it->getMeshsetId();
     auto &block_data = (*block_sets_ptr)[id];
     EntityHandle meshset = it->getMeshset();
-    CHKERR m_field.get_moab().get_entities_by_type(meshset, MBTET,
+    CHKERR m_field.get_moab().get_entities_by_type(meshset, MBPRISM,
                                                    block_data.tEts, true);
     block_data.iD = id;
     block_data.E = mydata.data.Young;
@@ -595,7 +595,7 @@ MoFEMErrorCode HookeElement::addElasticElement(
   }
 
   for (auto &m : (*block_sets_ptr)) {
-    CHKERR m_field.add_ents_to_finite_element_by_type(m.second.tEts, MBTET,
+    CHKERR m_field.add_ents_to_finite_element_by_type(m.second.tEts, MBPRISM,
                                                       element_name);
   }
 
@@ -618,6 +618,12 @@ MoFEMErrorCode HookeElement::setOperators(
       new DataAtIntegrationPts());
 
   if (fe_lhs_ptr) {
+
+    fe_lhs_ptr->getOpPtrVector().push_back(
+        new MoFEM::OpCalculateInvJacForFatPrism(*data_at_pts->invJac));
+    fe_lhs_ptr->getOpPtrVector().push_back(
+        new MoFEM::OpSetInvJacH1ForFatPrism(*data_at_pts->invJac));
+
     if (ale == PETSC_FALSE) {
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateHomogeneousStiffness<true>(
@@ -654,6 +660,10 @@ MoFEMErrorCode HookeElement::setOperators(
   }
 
   if (fe_rhs_ptr) {
+    fe_rhs_ptr->getOpPtrVector().push_back(
+        new MoFEM::OpCalculateInvJacForFatPrism(*data_at_pts->invJac));
+    fe_rhs_ptr->getOpPtrVector().push_back(
+        new MoFEM::OpSetInvJacH1ForFatPrism(*data_at_pts->invJac));
 
     if (ale == PETSC_FALSE) {
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -721,6 +731,11 @@ MoFEMErrorCode HookeElement::calculateEnergy(
 
   boost::shared_ptr<ForcesAndSourcesCore> fe_ptr(
       new VolumeElementForcesAndSourcesCore(*m_field_ptr));
+
+  fe_ptr->getOpPtrVector().push_back(
+      new MoFEM::OpCalculateInvJacForFatPrism(*data_at_pts->invJac));
+  fe_ptr->getOpPtrVector().push_back(
+      new MoFEM::OpSetInvJacH1ForFatPrism(*data_at_pts->invJac));
 
   if (ale == PETSC_FALSE) {
     fe_ptr->getOpPtrVector().push_back(

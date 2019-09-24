@@ -34,7 +34,7 @@ MoFEMErrorCode NeumannForcesSurface::LinearVaringPresssure::getForce(
 }
 
 NeumannForcesSurface::MyTriangleFE::MyTriangleFE(MoFEM::Interface &m_field)
-    : FaceElementForcesAndSourcesCore(m_field), addToRule(1) {}
+    : FaceElementForcesAndSourcesCore(m_field), addToRule(0) {}
 
 NeumannForcesSurface::OpNeumannForce::OpNeumannForce(
     const std::string field_name, Vec _F, bCForce &data,
@@ -251,6 +251,10 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
     }
   }
 
+  if(type == MBEDGE)
+    Nf *= 1.0;
+  cerr << Nf << endl;
+  
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
   {
     Vec my_f;
@@ -439,7 +443,7 @@ MoFEMErrorCode NeumannForcesSurface::addPressure(const std::string field_name,
     CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, SIDESET, &cubit_meshset_ptr);
     CHKERR cubit_meshset_ptr->getBcDataStructure(mapPressure[ms_id].data);
     CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+        cubit_meshset_ptr->meshset, MBQUAD, mapPressure[ms_id].tRis, true);
     fe.getOpPtrVector().push_back(new OpNeumannPressure(
         field_name, F, mapPressure[ms_id], methodsOp, ho_geometry));
   }
@@ -541,11 +545,11 @@ MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                   SIDESET | PRESSURESET, it)) {
     Range tris;
-    CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
+    CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBQUAD, tris,
                                                    true);
     if (intersect_ptr)
       tris = intersect(tris, *intersect_ptr);
-    CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
+    CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBQUAD,
                                                       "PRESSURE_FE");
   }
 
