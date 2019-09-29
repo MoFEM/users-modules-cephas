@@ -836,6 +836,11 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
     MoFEMFunctionReturn(0);
   }
+
+  private:
+    MatrixDouble gaussPtsTri;
+    MatrixDouble gaussPtsQuad;
+
 };
 
 #endif //__POSTPROC_ON_REF_MESH_HPP
