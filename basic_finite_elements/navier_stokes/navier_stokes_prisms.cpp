@@ -160,9 +160,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3);
-
     CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "U");
     CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "P");
     CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "MESH_NODE_POSITIONS");

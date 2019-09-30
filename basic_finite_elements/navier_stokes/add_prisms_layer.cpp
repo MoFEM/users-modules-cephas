@@ -221,8 +221,8 @@ int main(int argc, char *argv[]) {
     // add_quad_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "MESHSET_OUTLET_PRESS");
 
     add_quad_set(ID_SYMMETRY_EDGE, ID_SYMMETRY_DISP, "SYMMETRY_DISP");
-    // add_quad_set(ID_INLET_EDGE, ID_INLET_DISP, "INLET_DISP");
-    // add_quad_set(ID_OUTLET_EDGE, ID_OUTLET_DISP, "OUTLET_DISP");
+    add_quad_set(ID_INLET_EDGE, ID_INLET_DISP, "INLET_DISP");
+    add_quad_set(ID_OUTLET_EDGE, ID_OUTLET_DISP, "OUTLET_DISP");
 
     add_top_tris_set(ID_FAR_FIELD_DISP, "FAR_FIELD_DISP");
 

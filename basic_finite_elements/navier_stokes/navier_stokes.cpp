@@ -695,10 +695,10 @@ int main(int argc, char *argv[]) {
             postProcPtr->getOpPtrVector().push_back(
                 new OpCalculateVectorFieldGradient<3, 3>(
                     "U", commonData->gradDispPtr));
-            // postProcPtr->getOpPtrVector().push_back(
-            //     new NavierStokesElement::OpPostProcVorticity(
-            //         postProcPtr->postProcMesh, postProcPtr->mapGaussPts,
-            //         commonData, sit.second));
+            postProcPtr->getOpPtrVector().push_back(
+                new NavierStokesElement::OpPostProcVorticity(
+                    postProcPtr->postProcMesh, postProcPtr->mapGaussPts,
+                    commonData, sit.second));
           }
         }
 
