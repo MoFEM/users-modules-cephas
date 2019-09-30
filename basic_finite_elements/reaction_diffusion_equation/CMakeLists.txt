@@ -19,6 +19,7 @@ bfe_build_and_install(
  cm_export_file("README" export_reaction_diffusion_equation)
  cm_export_file("mesh.jou" export_reaction_diffusion_equation)
  cm_export_file("mesh.cub" export_reaction_diffusion_equation)
+ cm_export_file("mesh_quad.cub" export_reaction_diffusion_equation)
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/param_file.petsc
   DESTINATION ${BFE_MOD_DIR})
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.jou

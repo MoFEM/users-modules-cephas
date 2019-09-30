@@ -35,7 +35,7 @@ const double k = 1;    ///< caring capacity
 
 const double u0 = 0.1; ///< inital vale on blocksets
 
-const int order = 1; ///< approximation order
+const int order = 4; ///< approximation order
 const int save_every_nth_step = 4;
 
 /**
@@ -436,7 +436,7 @@ int main(int argc, char *argv[]) {
     // Get skin on the body, i.e. body boundary, and apply homogenous Dirichlet
     // conditions on that boundary.
     Range surface;
-    CHKERR moab.get_entities_by_type(0, MBTRI, surface, false);
+    CHKERR moab.get_entities_by_dimension(0, 2, surface, false);
     Skinner skin(&m_field.get_moab());
     Range edges;
     CHKERR skin.find_skin(0, surface, false, edges);

@@ -549,25 +549,34 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
 
     EntityHandle tri;
     CHKERR moab_ref.create_element(MBTRI, tri_conn, 3, tri);
-    Range edges;
-    CHKERR moab_ref.get_adjacencies(&tri, 1, 1, true, edges);
-    EntityHandle meshset;
-    CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
-    CHKERR moab_ref.add_entities(meshset, &tri, 1);
-    CHKERR moab_ref.add_entities(meshset, edges);
-    if (sixNodePostProcTris) {
-      CHKERR moab_ref.convert_entities(meshset, true, false, false);
-    }
-    CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
-    CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
 
-    gauss_pts.resize(3, num_nodes, false);
-    gauss_pts.clear();
-    for (int nn = 0; nn < 3; nn++) {
-      gauss_pts(0, nn) = coords(nn, 0);
-      gauss_pts(1, nn) = coords(nn, 1);
-      gauss_pts(0, 3 + nn) = coords(3 + nn, 0);
-      gauss_pts(1, 3 + nn) = coords(3 + nn, 1);
+    if (sixNodePostProcTris) {
+      Range edges;
+      CHKERR moab_ref.get_adjacencies(&tri, 1, 1, true, edges);
+      EntityHandle meshset;
+      CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
+      CHKERR moab_ref.add_entities(meshset, &tri, 1);
+      CHKERR moab_ref.add_entities(meshset, edges);
+      CHKERR moab_ref.convert_entities(meshset, true, false, false);
+      CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn < 3; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+        gauss_pts(0, 3 + nn) = coords(3 + nn, 0);
+        gauss_pts(1, 3 + nn) = coords(3 + nn, 1);
+      }
+    } else {
+      CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn < 3; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+      }
     }
     MoFEMFunctionReturn(0);
   };
@@ -603,25 +612,34 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
 
     EntityHandle quad;
     CHKERR moab_ref.create_element(MBQUAD, quad_conn.data(), 4, quad);
-    Range edges;
-    CHKERR moab_ref.get_adjacencies(&quad, 1, 1, true, edges);
-    EntityHandle meshset;
-    CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
-    CHKERR moab_ref.add_entities(meshset, &quad, 1);
-    CHKERR moab_ref.add_entities(meshset, edges);
-    if (sixNodePostProcTris) {
-      CHKERR moab_ref.convert_entities(meshset, true, false, false);
-    }
-    CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
-    CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
 
-    gauss_pts.resize(3, num_nodes, false);
-    gauss_pts.clear();
-    for (int nn = 0; nn != 4; nn++) {
-      gauss_pts(0, nn) = coords(nn, 0);
-      gauss_pts(1, nn) = coords(nn, 1);
-      gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
-      gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
+    if (sixNodePostProcTris) {
+      Range edges;
+      CHKERR moab_ref.get_adjacencies(&quad, 1, 1, true, edges);
+      EntityHandle meshset;
+      CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
+      CHKERR moab_ref.add_entities(meshset, &quad, 1);
+      CHKERR moab_ref.add_entities(meshset, edges);
+      CHKERR moab_ref.convert_entities(meshset, true, false, false);
+      CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn != 4; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+        gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
+        gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
+      }
+    } else {
+      CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn != 4; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+      }
     }
 
     MoFEMFunctionReturn(0);
@@ -717,6 +735,19 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
   if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
       elementsMap.end()) {
     tri = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+    switch (numeredEntFiniteElementPtr->getEntType()) {
+    case MBTRI:
+      gaussPts.resize(gaussPtsTri.size1(), gaussPtsTri.size2(), false);
+      noalias(gaussPts) = gaussPtsTri;
+      break;
+    case MBQUAD:
+      gaussPts.resize(gaussPtsQuad.size1(), gaussPtsQuad.size2(), false);
+      noalias(gaussPts) = gaussPtsQuad;
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Not implemented element type");
+    }
   } else {
     switch (numeredEntFiniteElementPtr->getEntType()) {
     case MBTRI:
@@ -741,7 +772,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
   // Set values which map nodes with integration points on the prism
   const EntityHandle *conn;
   int num_nodes;
- 
+
   CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
   mapGaussPts.resize(num_nodes);
   for (int nn = 0; nn != num_nodes; nn++)
