@@ -64,7 +64,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
 
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2, gg);
-    if (hoGeometry) {
+    if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
       val *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
     } else {
       val *= getArea();
@@ -153,7 +153,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
 
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2, gg);
-    if (hoGeometry) {
+    if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
       val *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
       for (int dd = 0; dd != 3; dd++) {
         coords[dd] = getHoCoordsAtGaussPts()(gg, dd);
@@ -241,7 +241,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
     for (int rr = 0; rr != rank; ++rr) {
 
       double force;
-      if (hoGeometry) {
+      if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
         force = dAta.data.data.value1 * getNormalsAtGaussPts()(gg, rr);
       } else {
         force = dAta.data.data.value1 * getNormal()[rr];
@@ -305,7 +305,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
 
     double val = getGaussPts()(2, gg);
     double flux;
-    if (hoGeometry) {
+    if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
       double area = 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
       flux = dAta.data.data.value1 * area;
     } else {
