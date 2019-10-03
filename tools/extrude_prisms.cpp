@@ -82,6 +82,9 @@ int main(int argc, char *argv[]) {
             block_prisms, thickness[0], thickness[1]);
         CHKERR prisms_from_surface_interface->updateMeshestByEdgeBlock(
             block_prisms);
+
+        std::cout << "Extrude block " << it->getMeshsetId() << " set prisms "
+                  << block_prisms.size() << endl;
       }
     }
 
