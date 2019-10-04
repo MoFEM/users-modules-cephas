@@ -8,10 +8,14 @@ namespace StdRDOperators {
 
   using Ele = FaceElementForcesAndSourcesCore;
   using OpEle = FaceElementForcesAndSourcesCore::UserDataOperator;
+
+  using BoundaryEle = MoFEM::EdgeElementForcesAndSourcesCore;
+  using OpBoundaryEle = BoundaryEle::UserDataOperator;
+
   using EntData = DataForcesAndSourcesCore::EntData;
 
   const double B = 0;
-  const int save_every_nth_step = 4;
+  const int save_every_nth_step = 1;
   const double natural_bc_values = 0.0;
   const double essential_bc_values = 0.0;
   const int order = 2;
@@ -28,7 +32,7 @@ namespace StdRDOperators {
     double B0; // species mobility
 
     BlockData()
-      : B0(1e-3) {
+      : B0(1e0) {
       coef.resize(3, 3, false);
       rate.resize(3, false);
       coef.clear();
@@ -196,8 +200,21 @@ namespace StdRDOperators {
   };
 
   struct OpAssembleSlowRhs : OpEle {
-    OpAssembleSlowRhs(std::string field, boost::shared_ptr<PreviousData> &data)
-        : OpEle(field, OpEle::OPROW), commonData(data) {}
+    typedef boost::function<double(const double, const double, const double)>
+        FVal;
+    typedef boost::function<FTensor::Tensor1<double, 3>(
+        const double, const double, const double)>
+        FGrad;
+    OpAssembleSlowRhs(std::string field, 
+                      boost::shared_ptr<PreviousData> &data,
+                      FVal exact_value, 
+                      FVal exact_dot, 
+                      FVal exact_lap)
+        : OpEle(field, OpEle::OPROW)
+        , commonData(data)
+        , exactValue(exact_value)
+        , exactDot(exact_dot)
+        , exactLap(exact_lap) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
@@ -213,16 +230,26 @@ namespace StdRDOperators {
         auto t_base = data.getFTensor0N();
         auto t_w = getFTensor0IntegrationWeight();
         const double vol = getMeasure();
+        const double ct = getFEMethod()->ts_t;
+        auto t_coords = getFTensor1CoordsAtGaussPts();
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
-          const double f = a * t_slow_value;
+
+          double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
+          double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
+
+          double f = u_dot - u_lap;
+
+          // const double f = a * t_slow_value;  
+
           for (int rr = 0; rr != nb_dofs; ++rr) {
-            const double b = f * t_base;
+            const double b = a * f * t_base;
             vecF[rr] += b;
             ++t_base;
           }
           ++t_slow_value;
           ++t_w;
+          ++t_coords;
         }
         CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
                             PETSC_TRUE);
@@ -235,11 +262,30 @@ namespace StdRDOperators {
   private:
     boost::shared_ptr<PreviousData> commonData;
     VectorDouble vecF;
+
+    FVal exactValue;
+    FVal exactDot;
+    FVal exactLap;
+
+    FTensor::Number<0> NX;
+    FTensor::Number<1> NY;
+    FTensor::Number<2> NZ;
   };
 
   template <int DIM> struct OpAssembleStiffRhs : OpEle {
-    OpAssembleStiffRhs(std::string field, boost::shared_ptr<PreviousData> &data,
-                       std::map<int, BlockData> &block_map)
+    typedef boost::function<double(const double, const double, const double)>
+        FVal;
+    typedef boost::function<FTensor::Tensor1<double, 3>(
+        const double, const double, const double)>
+        FGrad;
+      
+    OpAssembleStiffRhs(std::string field, 
+                       boost::shared_ptr<PreviousData> &data,
+                       std::map<int, BlockData> &block_map
+                      //  FVal exact_value, 
+                      //  FVal exact_dot, 
+                      //  FVal exact_lap
+                       )
         : OpEle(field, OpEle::OPROW), commonData(data), setOfBlock(block_map) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -278,11 +324,11 @@ namespace StdRDOperators {
       
         FTensor::Index<'i', DIM> i;
 
+        // cout << "B0 : " << block_data.B0 << endl;
 
         const double vol = getMeasure();
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
-         
           for (int rr = 0; rr != nb_dofs; ++rr) {
             vecF[rr] += a * (t_base * t_dot_val + (block_data.B0 + B * t_val) *
             t_diff_base(i) * t_grad(i));
@@ -361,7 +407,7 @@ namespace StdRDOperators {
 
         FTensor::Index<'i', DIM> i;
 
-        
+        // cout << "B0 : " << block_data.B0 << endl;
 
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
@@ -404,6 +450,65 @@ namespace StdRDOperators {
     MatrixDouble mat, transMat;
   };
 
+  struct OpAssembleNaturalBCRhs : OpBoundaryEle // R_tau_2
+  {
+    OpAssembleNaturalBCRhs(std::string mass_field, Range &natural_bd_ents)
+        : OpBoundaryEle(mass_field, OpBoundaryEle::OPROW),
+          natural_bd_ents(natural_bd_ents) {
+      cerr << "OpAssembleNaturalBCRhsTau()" << endl;
+    }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+      const int nb_dofs = data.getIndices().size();
+
+      if (nb_dofs) {
+        EntityHandle row_side_ent = getFEEntityHandle();
+        bool is_natural =
+            (natural_bd_ents.find(row_side_ent) != natural_bd_ents.end());
+        if (is_natural) {
+          // cerr << "In NaturalBCRhsTau..." << endl;
+          vecF.resize(nb_dofs, false);
+          vecF.clear();
+          const int nb_integration_pts = getGaussPts().size2();
+          auto t_row_base = data.getFTensor0N();
+
+          auto dir = getDirection();
+          FTensor::Tensor1<double, 3> t_normal(-dir[1], dir[0], dir[2]);
+          FTensor::Index<'i', 3> i;
+          auto t_w = getFTensor0IntegrationWeight();
+          const double pi = 3.141592653589793;
+          const double ct = getFEMethod()->ts_t;
+          for (int gg = 0; gg != nb_integration_pts; ++gg) {
+            const double a = t_w;
+            double x = getCoordsAtGaussPts()(gg, 0);
+            double y = getCoordsAtGaussPts()(gg, 1);
+            
+            double mm = - 10 * 8 * pi * cos(2 * pi * x) * sin(2 * pi * y) * sin(2 * pi * ct);
+            double nn = - 10 * 8 * pi * sin(2 * pi * x) * cos(2 * pi * y) * sin(2 * pi * ct);
+            
+            FTensor::Tensor1<double, 3> t_bd_val(mm, nn, 0.0);
+            double h = t_bd_val(i) * t_normal(i);
+            for (int rr = 0; rr != nb_dofs; ++rr) {
+              vecF[rr] += t_row_base * h * a;
+              ++t_row_base;
+            }
+            ++t_w;
+          }
+          CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
+                              PETSC_TRUE);
+          CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(),
+                              ADD_VALUES);
+        }
+      }
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    VectorDouble vecF;
+    Range natural_bd_ents;
+  };
+
   struct Monitor : public FEMethod {
     Monitor(SmartPetscObj<DM> &dm,
             boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
@@ -417,6 +522,7 @@ namespace StdRDOperators {
         CHKERR postProc->writeFile(
             "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       }
+      // cout << "ct : " << ts_t << endl;
       MoFEMFunctionReturn(0);
     }
 

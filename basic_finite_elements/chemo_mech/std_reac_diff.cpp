@@ -15,6 +15,8 @@ public:
     vol_ele_stiff_rhs = boost::shared_ptr<Ele>(new Ele(m_field));
     vol_ele_stiff_lhs = boost::shared_ptr<Ele>(new Ele(m_field));
 
+    boundary_ele_rhs = boost::shared_ptr<BoundaryEle>(new BoundaryEle(m_field));
+
     vol_mass_ele = boost::shared_ptr<Ele>(new Ele(m_field));
 
     post_proc = boost::shared_ptr<PostProcFaceOnRefinedMesh>(
@@ -94,7 +96,7 @@ private:
   SmartPetscObj<Mat> mass_matrix;
   SmartPetscObj<KSP> mass_Ksp;
 
-
+  Range bdry_ents;
 
   std::vector<Range> inner_surface;
 
@@ -106,6 +108,7 @@ private:
   boost::shared_ptr<Ele> vol_ele_slow_rhs;
   boost::shared_ptr<Ele> vol_ele_stiff_rhs;
   boost::shared_ptr<Ele> vol_ele_stiff_lhs;
+  boost::shared_ptr<BoundaryEle> boundary_ele_rhs;
 
   boost::shared_ptr<Ele> vol_mass_ele;
 
@@ -122,6 +125,38 @@ private:
   boost::shared_ptr<ForcesAndSourcesCore> null;
 };
 
+struct ExactFunction {
+  double operator()(const double x, const double y, const double t) const {
+    return sin(2 * M_PI * x) * sin(2 * M_PI * y) * sin(2 * M_PI * t);
+  }
+};
+
+struct ExactFunctionGrad {
+  FTensor::Tensor1<double, 3> operator()(const double x, const double y,
+                                         const double t) const {
+    FTensor::Tensor1<double, 3> grad;
+    grad(0) =
+        2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y) * sin(2 * M_PI * t);
+    grad(1) =
+        2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y) * sin(2 * M_PI * t);
+    grad(2) = 0.0;
+    return grad;
+  }
+};
+
+struct ExactFunctionLap {
+  double operator()(const double x, const double y, const double t) const {
+    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) *
+           sin(2 * M_PI * t);
+  }
+};
+
+struct ExactFunctionDot {
+  double operator()(const double x, const double y, const double t) const {
+    return 2 * M_PI * sin(2 * M_PI * x) * sin(2 * M_PI * y) * cos(2 * M_PI * t);
+  }
+};
+
 MoFEMErrorCode RDProblem::setup_system() {
   MoFEMFunctionBegin;
   CHKERR m_field.getInterface(simple_interface);
@@ -132,6 +167,8 @@ MoFEMErrorCode RDProblem::setup_system() {
 MoFEMErrorCode RDProblem::add_fe(std::string field_name) {
   MoFEMFunctionBegin;
   CHKERR simple_interface->addDomainField(field_name, H1, AINSWORTH_LEGENDRE_BASE, 1);
+  // CHKERR simple_interface->addBoundaryField(field_name, H1,
+  //                                           AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple_interface->setFieldOrder(field_name, order);
   MoFEMFunctionReturn(0);
 }
@@ -145,13 +182,13 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
       // block_map[id].set_param(nb_species);
-      block_map[id].B0 = 1e-2;
+      block_map[id].B0 = 1e0;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
       // block_map[id].set_param(nb_species);
-      block_map[id].B0 = 1e-3;
+      block_map[id].B0 = 5e-4;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION3") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -179,6 +216,7 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
 MoFEMErrorCode RDProblem::set_initial_values(std::string field_name,
                                              int block_id, Range &surface) {
   MoFEMFunctionBegin;
+  double init_val_ver = 0.0;
   if (m_field.getInterface<MeshsetsManager>()->checkMeshset(block_id,
                                                             BLOCKSET)) {
     CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -188,7 +226,7 @@ MoFEMErrorCode RDProblem::set_initial_values(std::string field_name,
     Range surface_verts;
     CHKERR moab.get_connectivity(surface, surface_verts, false);
     CHKERR m_field.getInterface<FieldBlas>()->setField(
-        0.5, MBVERTEX, surface_verts, field_name);
+        init_val_ver, MBVERTEX, surface_verts, field_name);
   }
 
     MoFEMFunctionReturn(0);
@@ -208,7 +246,8 @@ MoFEMErrorCode RDProblem::push_slow_rhs(std::string field_name,
   MoFEMFunctionBegin;
 
   vol_ele_slow_rhs->getOpPtrVector().push_back(
-      new OpAssembleSlowRhs(field_name, data));
+      new OpAssembleSlowRhs(field_name, data, ExactFunction(),
+                            ExactFunctionDot(), ExactFunctionLap()));
 
   MoFEMFunctionReturn(0);
 }
@@ -283,6 +322,7 @@ MoFEMErrorCode RDProblem::set_integration_rule() {
   vol_ele_stiff_rhs->getRuleHook = vol_rule;
 
   vol_ele_stiff_lhs->getRuleHook = vol_rule;
+  boundary_ele_rhs->getRuleHook = vol_rule;
   MoFEMFunctionReturn(0);
 }
 
@@ -356,7 +396,6 @@ MoFEMErrorCode RDProblem::solve() {
 MoFEMErrorCode RDProblem::run_analysis() {
   MoFEMFunctionBegin;
   std::vector<std::string> mass_names(nb_species);
-  std::vector<std::string> flux_names(nb_species);
 
   for(int i = 0; i < nb_species; ++i){
     mass_names[i] = "MASS" + boost::lexical_cast<std::string>(i+1);
@@ -368,17 +407,35 @@ MoFEMErrorCode RDProblem::run_analysis() {
 
    
 
-    CHKERR simple_interface->setUp();
+  CHKERR simple_interface->setUp();
 
-    CHKERR set_blockData(material_blocks);
+  // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+  //   string name = it->getName();
+  //   if (name.compare(0, 14, "ESSENTIAL") == 0) {
+  //     CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), 1,
+  //                                                 bdry_ents, true);
+  //   }
+  // }
+  Range surface;
+  CHKERR moab.get_entities_by_type(0, MBTRI, surface, false);
+  Skinner skin(&m_field.get_moab());
+  Range edges;
+  CHKERR skin.find_skin(0, surface, false, edges);
+  Range edges_part;
+  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                               PSTATUS_NOT, -1, &edges_part);
+  Range edges_verts;
+  CHKERR moab.get_connectivity(edges_part, edges_verts, false);
 
-    for (int i = 0; i < nb_species; ++i) {
-      CHKERR set_initial_values(mass_names[i], i+2, inner_surface[i]);
-      CHKERR update_slow_rhs(mass_names[i], values_ptr[i]);
+  CHKERR set_blockData(material_blocks);
+
+  for (int i = 0; i < nb_species; ++i) {
+    CHKERR set_initial_values(mass_names[i], i + 2, inner_surface[i]);
+    CHKERR update_slow_rhs(mass_names[i], values_ptr[i]);
     }
 
-    // vol_ele_slow_rhs->getOpPtrVector().push_back(
-    //     new OpComputeSlowValue(mass_names[0], data, material_blocks));
+
 
     if (nb_species == 1) {
       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
@@ -394,72 +451,84 @@ MoFEMErrorCode RDProblem::run_analysis() {
 
     for (int i = 0; i < nb_species; ++i) {
       CHKERR push_slow_rhs(mass_names[i], data[i]);
+      // boundary_ele_rhs->getOpPtrVector().push_back(
+      //     new OpAssembleNaturalBCRhs(mass_names[i], bdry_ents));
     }
 
+    dm = simple_interface->getDM();
     
 
-      auto solve_for_g = [&]() {
-        MoFEMFunctionBegin;
-        if (vol_ele_slow_rhs->vecAssembleSwitch) {
-          CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
-                                     SCATTER_REVERSE);
-          CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+    
+    // cout << "essential : " << essential_bdry_ents.empty() << endl;
+    
+
+    auto solve_for_g = [&]() {
+      MoFEMFunctionBegin;
+      if (vol_ele_slow_rhs->vecAssembleSwitch) {
+        CHKERR VecGhostUpdateBegin(vol_ele_slow_rhs->ts_F, ADD_VALUES,
                                    SCATTER_REVERSE);
-          CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F);
-          CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F);
-          *vol_ele_slow_rhs->vecAssembleSwitch = false;
-        }
-        CHKERR KSPSolve(mass_Ksp, vol_ele_slow_rhs->ts_F,
-                        vol_ele_slow_rhs->ts_F);
-        MoFEMFunctionReturn(0);
-      };
-      // Add hook to the element to calculate g.
-      vol_ele_slow_rhs->postProcessHook = solve_for_g;
+        CHKERR VecGhostUpdateEnd(vol_ele_slow_rhs->ts_F, ADD_VALUES,
+                                 SCATTER_REVERSE);
+        CHKERR VecAssemblyBegin(vol_ele_slow_rhs->ts_F);
+        CHKERR VecAssemblyEnd(vol_ele_slow_rhs->ts_F);
+        *vol_ele_slow_rhs->vecAssembleSwitch = false;
+      }
+      CHKERR KSPSolve(mass_Ksp, vol_ele_slow_rhs->ts_F, vol_ele_slow_rhs->ts_F);
+      MoFEMFunctionReturn(0);
+    };
+    // Add hook to the element to calculate g.
+    bdry_ents = unite(edges_verts, edges_part);
+    
+    CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        simple_interface->getProblemName(), mass_names[0], bdry_ents);
 
-      dm = simple_interface->getDM();
-      ts = createTS(m_field.get_comm());
+    CHKERR DMCreateMatrix_MoFEM(dm, mass_matrix);
+    CHKERR MatZeroEntries(mass_matrix);
 
-      CHKERR DMCreateMatrix_MoFEM(dm, mass_matrix);
-      CHKERR MatZeroEntries(mass_matrix);
-
-      for (int i = 0; i < nb_species; ++i) {
-        CHKERR push_mass_ele(mass_names[i]);
-        CHKERR resolve_slow_rhs();
+    for (int i = 0; i < nb_species; ++i) {
+      CHKERR push_mass_ele(mass_names[i]);
+      CHKERR resolve_slow_rhs();
       }
        
-      
+    
 
-        CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
+    CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
 
-        for (int i = 0; i < nb_species; ++i) {
-          CHKERR update_stiff_rhs(mass_names[i], values_ptr[i], grads_ptr[i], dots_ptr[i]);
-          CHKERR push_stiff_rhs(mass_names[i], data[i], material_blocks);
-        }
+    for (int i = 0; i < nb_species; ++i) {
+      CHKERR update_stiff_rhs(mass_names[i], values_ptr[i], grads_ptr[i], dots_ptr[i]);
+      CHKERR push_stiff_rhs(mass_names[i], data[i], material_blocks);
+    }
          
 
-          CHKERR update_vol_fe(vol_ele_stiff_lhs, data[0]);
+    CHKERR update_vol_fe(vol_ele_stiff_lhs, data[0]);
 
-          for (int i = 0; i < nb_species; ++i) {
-            CHKERR update_stiff_lhs(mass_names[i], values_ptr[i], grads_ptr[i]);
-            CHKERR push_stiff_lhs(mass_names[i], data[i],
-                                  material_blocks); // nb_species times
-          }
-           
-            CHKERR set_integration_rule();
+    for (int i = 0; i < nb_species; ++i) {
+      CHKERR update_stiff_lhs(mass_names[i], values_ptr[i], grads_ptr[i]);
+      CHKERR push_stiff_lhs(mass_names[i], data[i],
+                            material_blocks); // nb_species times
+    }
+      
+    CHKERR set_integration_rule();
 
-            CHKERR set_fe_in_loop();                   // only once
-            post_proc->generateReferenceElementMesh(); // only once
+        ts = createTS(m_field.get_comm());
 
-            for (int i = 0; i < nb_species; ++i) {
-              CHKERR post_proc_fields(mass_names[i]);
-            }
-              
-              monitor_ptr = boost::shared_ptr<Monitor>(
-                  new Monitor(dm, post_proc)); // nb_species times
-              CHKERR output_result();          // only once
-              CHKERR solve();                  // only once
+        vol_ele_slow_rhs->postProcessHook = solve_for_g;
 
-              MoFEMFunctionReturn(0);
+        CHKERR set_fe_in_loop();
+
+        post_proc->generateReferenceElementMesh(); // only once
+
+        for (int i = 0; i < nb_species; ++i) {
+          CHKERR post_proc_fields(mass_names[i]);
+    }
+      
+      monitor_ptr = boost::shared_ptr<Monitor>(
+          new Monitor(dm, post_proc)); // nb_species times
+      CHKERR output_result();          // only once
+      
+      CHKERR solve();                  // only once
+
+      MoFEMFunctionReturn(0);
 }
 
 int main(int argc, char *argv[]) {
@@ -474,7 +543,7 @@ int main(int argc, char *argv[]) {
 
   
     int order = 3;
-    int nb_species = 2;
+    int nb_species = 1;
     RDProblem reac_diff_problem(mb_instance, core, order, nb_species);
     CHKERR reac_diff_problem.run_analysis();
   }
