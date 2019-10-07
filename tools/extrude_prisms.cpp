@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     PrismsFromSurfaceInterface *prisms_from_surface_interface;
     CHKERR m_field.getInterface(prisms_from_surface_interface);
 
-    const std::string extrude_block_name = "EXTRUDE_PRIMS";
+    const std::string extrude_block_name = "EXTRUDE_PRISMS";
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
       if (it->getName().compare(0, extrude_block_name.length(),
                                 extrude_block_name) == 0) {
@@ -81,6 +81,8 @@ int main(int argc, char *argv[]) {
         CHKERR prisms_from_surface_interface->setNormalThickness(
             block_prisms, thickness[0], thickness[1]);
         CHKERR prisms_from_surface_interface->updateMeshestByEdgeBlock(
+            block_prisms);
+        CHKERR prisms_from_surface_interface->updateMeshestByTriBlock(
             block_prisms);
 
         std::cout << "Extrude block " << it->getMeshsetId() << " set prisms "
