@@ -41,10 +41,10 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
 #  DESTINATION ${BFE_MOD_DIR}
 #  PERMISSIONS OWNER_READ OWNER_WRITE)
 
-if(ADOL-C_LIBRARY)
-
-  bfe_build_and_install(test_simple_contact
+bfe_build_and_install(test_simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
+
+if(ADOL-C_LIBRARY)
 
 
   #testing
