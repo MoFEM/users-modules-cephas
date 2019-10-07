@@ -561,8 +561,8 @@ MoFEMErrorCode HookeElement::setBlocks(
     int id = it->getMeshsetId();
     auto &block_data = (*block_sets_ptr)[id];
     EntityHandle meshset = it->getMeshset();
-    CHKERR m_field.get_moab().get_entities_by_type(meshset, MBTET,
-                                                   block_data.tEts, true);
+    CHKERR m_field.get_moab().get_entities_by_dimension(meshset, 3,
+                                                        block_data.tEts, true);
     block_data.iD = id;
     block_data.E = mydata.data.Young;
     block_data.PoissonRatio = mydata.data.Poisson;
@@ -595,19 +595,19 @@ MoFEMErrorCode HookeElement::addElasticElement(
   }
 
   for (auto &m : (*block_sets_ptr)) {
-    CHKERR m_field.add_ents_to_finite_element_by_type(m.second.tEts, MBTET,
-                                                      element_name);
+    CHKERR m_field.add_ents_to_finite_element_by_dim(m.second.tEts, 3,
+                                                     element_name);
   }
 
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode HookeElement::setOperators(
-    boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
-    boost::shared_ptr<ForcesAndSourcesCore> &fe_rhs_ptr,
-    boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+    boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr,
+    boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,
+    boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
     const std::string x_field, const std::string X_field, const bool ale,
-    const bool field_disp) {
+    const bool field_disp, const EntityType type) {
   MoFEMFunctionBegin;
 
   if (!block_sets_ptr)
@@ -619,12 +619,26 @@ MoFEMErrorCode HookeElement::setOperators(
 
   if (fe_lhs_ptr) {
     if (ale == PETSC_FALSE) {
+      if (type == MBPRISM) {
+        boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+        fe_lhs_ptr->getOpPtrVector().push_back(
+            new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+        fe_lhs_ptr->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      }
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateHomogeneousStiffness<true>(
               x_field, x_field, block_sets_ptr, data_at_pts));
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpLhs_dx_dx<0>(x_field, x_field, data_at_pts));
     } else {
+      if (type == MBPRISM) {
+        boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+        fe_lhs_ptr->getOpPtrVector().push_back(
+            new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+        fe_lhs_ptr->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      }
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
       fe_lhs_ptr->getOpPtrVector().push_back(
@@ -656,6 +670,13 @@ MoFEMErrorCode HookeElement::setOperators(
   if (fe_rhs_ptr) {
 
     if (ale == PETSC_FALSE) {
+      if (type == MBPRISM) {
+        boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+        fe_rhs_ptr->getOpPtrVector().push_back(
+            new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+        fe_rhs_ptr->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      }
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -673,6 +694,13 @@ MoFEMErrorCode HookeElement::setOperators(
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpRhs_dx(x_field, x_field, data_at_pts));
     } else {
+      if (type == MBPRISM) {
+        boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+        fe_rhs_ptr->getOpPtrVector().push_back(
+            new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+        fe_rhs_ptr->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      } 
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -699,7 +727,7 @@ MoFEMErrorCode HookeElement::setOperators(
 }
 
 MoFEMErrorCode HookeElement::calculateEnergy(
-    DM dm, boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+    DM dm, boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
     const std::string x_field, const std::string X_field, const bool ale,
     const bool field_disp, Vec *v_energy_ptr) {
   MoFEMFunctionBegin;
