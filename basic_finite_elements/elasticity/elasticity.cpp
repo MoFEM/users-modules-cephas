@@ -94,6 +94,17 @@ struct VolRule {
   int operator()(int, int, int order) const { return 2 * (order - 1); }
 };
 
+struct PrismFE : public FatPrismElementForcesAndSourcesCore {
+
+  using FatPrismElementForcesAndSourcesCore::
+      FatPrismElementForcesAndSourcesCore;
+  int getRuleTrianglesOnly(int order);
+  int getRuleThroughThickness(int order);
+};
+
+int PrismFE::getRuleTrianglesOnly(int order) { return 2 * order; };
+int PrismFE::getRuleThroughThickness(int order) { return 2 * order; };
+
 int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type gmres \n"
@@ -118,7 +129,6 @@ int main(int argc, char *argv[]) {
   }
 
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
-
 
   try {
 
@@ -246,12 +256,15 @@ int main(int argc, char *argv[]) {
     // = 0 )
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "DISPLACEMENT");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "MESH_NODE_POSITIONS");
 
     // Set approximation order.
     // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
     // Meshes.
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
     if(base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
@@ -264,7 +277,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Setting geometry order everywhere
       Range tets, edges;
-      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+      CHKERR m_field.get_moab().get_entities_by_dimension(0, 3, tets);
       CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
                                                 moab::Interface::UNION);
 
@@ -348,7 +361,7 @@ int main(int argc, char *argv[]) {
               CHKERR moab.get_adjacencies(block_ents, 3, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
-              ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
+              ents_to_set_order = ents_to_set_order.subset_by_dimension(3);
               CHKERR moab.get_adjacencies(block_ents, 2, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
@@ -408,12 +421,20 @@ int main(int argc, char *argv[]) {
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
 
+    boost::shared_ptr<ForcesAndSourcesCore> prism_fe_lhs_ptr(
+        new PrismFE(m_field));
+    boost::shared_ptr<ForcesAndSourcesCore> prism_fe_rhs_ptr(
+        new PrismFE(m_field));
+
     CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
                                            "DISPLACEMENT",
                                            "MESH_NODE_POSITIONS", false);
     CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
                                       "DISPLACEMENT", "MESH_NODE_POSITIONS",
                                       false, true);
+    CHKERR HookeElement::setOperators(
+        prism_fe_lhs_ptr, prism_fe_rhs_ptr, block_sets_ptr, "DISPLACEMENT",
+        "MESH_NODE_POSITIONS", false, true, MBPRISM);
 
     // Add spring boundary condition applied on surfaces.
     // This is only declaration not implementation.
@@ -618,13 +639,17 @@ int main(int argc, char *argv[]) {
     // in that case. We run NonlinearElasticElement with hook material.
     // Calculate right hand side vector
     fe_rhs_ptr->snes_f = F;
+    prism_fe_rhs_ptr->snes_f = F;
     PetscPrintf(PETSC_COMM_WORLD, "Assemble external force vector  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_rhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_rhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
     // Assemble matrix
     fe_lhs_ptr->snes_B = Aij;
+    prism_fe_lhs_ptr->snes_B = Aij;
     PetscPrintf(PETSC_COMM_WORLD, "Calculate stiffness matrix  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_lhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_lhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
     // Assemble springs
