@@ -501,8 +501,7 @@ struct HookeElement {
   template <int S = 0> struct OpLhs_dx_dx : public OpAssemble {
 
     OpLhs_dx_dx(const std::string row_field, const std::string col_field,
-                boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+                boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
   protected:
     /**
@@ -511,90 +510,7 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size()) {
-          a *= getHoGaussPtsDetJac()[gg];
-        }
-
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          // get derivatives of base functions for columns
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-
-          FTensor::Christof<double, 3, 3> t_rowD;
-          // I mix up the indices here so that it behaves like a
-          // Dg.  That way I don't have to have a separate wrapper
-          // class Christof_Expr, which simplifies things.
-          t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base(i));
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            // integrate block local stiffens matrix
-            t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
-
-            // move to next column base function
-            ++t_col_diff_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        ++t_D;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   struct OpAleRhs_dx : public OpAssemble {
@@ -725,7 +641,6 @@ struct HookeElement {
      * @return error code
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
-    
   };
 
   struct OpAleLhsWithDensity_dx_dX : public OpAssemble {
@@ -873,6 +788,99 @@ struct HookeElement {
 private:
   MatrixDouble invJac;
 };
+
+template <int S>
+HookeElement::OpLhs_dx_dx<S>::OpLhs_dx_dx(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpLhs_dx_dx<S>::iNtegrate(EntData &row_data,
+                                                       EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol;
+    if (getHoGaussPtsDetJac().size()) {
+      a *= getHoGaussPtsDetJac()[gg];
+    }
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      // get derivatives of base functions for columns
+      auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+      FTensor::Christof<double, 3, 3> t_rowD;
+      // I mix up the indices here so that it behaves like a
+      // Dg.  That way I don't have to have a separate wrapper
+      // class Christof_Expr, which simplifies things.
+      t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base(i));
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        // integrate block local stiffens matrix
+        t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
+
+        // move to next column base function
+        ++t_col_diff_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    ++t_D;
+  }
+
+  MoFEMFunctionReturn(0);
+}
 
 template <int S>
 HookeElement::OpAleLhs_dx_dX<S>::OpAleLhs_dx_dX(
