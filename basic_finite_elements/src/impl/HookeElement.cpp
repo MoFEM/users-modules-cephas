@@ -3,14 +3,14 @@
  * \brief Operators and data structures for linear elastic analysis
  *
  * See as well header file HookeElement.hpp
- * 
+ *
  * Implemention of operators for Hooke material. Implementation is extended to
  * the case when the mesh is moving as results of topological changes, also the
  * calculation of material forces and associated tangent matrices are added to
  * implementation.
- * 
- * In other words spatial deformation is small but topological changes large. 
- 
+ *
+ * In other words spatial deformation is small but topological changes large.
+
  */
 
 /* This file is part of MoFEM.
@@ -700,7 +700,7 @@ MoFEMErrorCode HookeElement::setOperators(
             new OpCalculateInvJacForFatPrism(inv_jac_ptr));
         fe_rhs_ptr->getOpPtrVector().push_back(
             new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
-      } 
+      }
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -893,6 +893,215 @@ MoFEMErrorCode HookeElement::OpAleLhs_dX_dx::iNtegrate(EntData &row_data,
     ++t_w;
     ++t_invH;
     ++t_eshelby_stress_dx;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+HookeElement::OpAleLhsWithDensity_dX_dX::OpAleLhsWithDensity_dX_dX(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+    boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
+    boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts, const double rho_n,
+    const double rho_0)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
+      rhoAtGaussPtsPtr(rho_at_gauss_pts),
+      rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {}
+
+MoFEMErrorCode
+HookeElement::OpAleLhsWithDensity_dX_dX::iNtegrate(EntData &row_data,
+                                                   EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+  auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
+
+  auto t_eshelby_stress =
+      getFTensor2FromMat<3, 3>(*dataAtPts->eshelbyStressMat);
+  // auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto &det_H = *dataAtPts->detHVec;
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol * det_H[gg];
+
+    const double stress_dho_coef = (rhoN / rho);
+    // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0,
+    // rhoN));
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+      FTensor::Tensor1<double, 3> t_row_stress;
+      t_row_stress(i) = a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
+
+      // get derivatives of base functions for columns
+      // auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+      auto t_col_base = col_data.getFTensor0N(gg, 0);
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        t_m(i, k) +=
+            t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
+        // move to next column base function
+        ++t_col_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    ++t_eshelby_stress;
+    ++t_invH;
+    ++rho;
+    ++t_grad_rho;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+HookeElement::OpAleLhsWithDensity_dx_dX::OpAleLhsWithDensity_dx_dX(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+    boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
+    boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts, const double rho_n,
+    const double rho_0)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
+      rhoAtGaussPtsPtr(rho_at_gauss_pts),
+      rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {}
+
+MoFEMErrorCode
+HookeElement::OpAleLhsWithDensity_dx_dX::iNtegrate(EntData &row_data,
+                                                   EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get integration weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+  auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
+  auto t_cauchy_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+  // auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto &det_H = *dataAtPts->detHVec;
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol * det_H[gg];
+
+    const double stress_dho_coef = (rhoN / rho);
+    // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0,
+    // rhoN)); iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+      FTensor::Tensor1<double, 3> t_row_stress;
+      t_row_stress(i) = a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
+
+      // get derivatives of base functions for columns
+      auto t_col_base = col_data.getFTensor0N(gg, 0);
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        t_m(i, k) +=
+            t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
+
+        ++t_col_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    // ++t_D;
+    ++t_cauchy_stress;
+    ++t_invH;
+    // ++t_h;
+    ++rho;
+    ++t_grad_rho;
   }
 
   MoFEMFunctionReturn(0);
