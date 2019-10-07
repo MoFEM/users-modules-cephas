@@ -118,43 +118,9 @@ struct HookeElement {
   struct OpCalculateStrain : public VolUserDataOperator {
 
     OpCalculateStrain(const std::string row_field, const std::string col_field,
-                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          dataAtPts(data_at_pts) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      // get number of integration points
-      const int nb_integration_pts = getGaussPts().size2();
-      dataAtPts->smallStrainMat->resize(6, nb_integration_pts, false);
-      auto t_strain =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
-      auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
-
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        t_strain(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
-
-        // If displacement field, not field o spatial positons is given
-        if (!D) {
-          t_strain(0, 0) -= 1;
-          t_strain(1, 1) -= 1;
-          t_strain(2, 2) -= 1;
-        }
-
-        ++t_strain;
-        ++t_h;
-      }
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   private:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -186,44 +152,9 @@ struct HookeElement {
   template <int S = 0> struct OpCalculateStress : public VolUserDataOperator {
 
     OpCalculateStress(const std::string row_field, const std::string col_field,
-                      boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          dataAtPts(data_at_pts) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+                      boost::shared_ptr<DataAtIntegrationPts> data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-      // get number of integration points
-      const int nb_integration_pts = getGaussPts().size2();
-      auto t_strain =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
-      dataAtPts->cauchyStressMat->resize(6, nb_integration_pts, false);
-      auto t_cauchy_stress =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        t_cauchy_stress(i, j) = t_D(i, j, k, l) * t_strain(k, l);
-        ++t_strain;
-        ++t_cauchy_stress;
-        ++t_D;
-      }
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   protected:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -262,71 +193,9 @@ struct HookeElement {
     OpCalculateHomogeneousStiffness(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
-        boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-          lastEvaluatedId(-1) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-
-      for (auto &m : (*blockSetsPtr)) {
-        if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
-            m.second.tEts.end())
-          // NOTE: The stiffness Matrix is calculated only once, since is
-          // constant for
-          // all integration points and all elements in the block.
-          if (lastEvaluatedId != m.second.iD) {
-
-            lastEvaluatedId = m.second.iD;
-
-            dataAtPts->stiffnessMat->resize(36, 1, false);
-            FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-                MAT_TO_DDG(dataAtPts->stiffnessMat));
-            const double young = m.second.E;
-            const double poisson = m.second.PoissonRatio;
-
-            // coefficient used in intermediate calculation
-            const double coefficient =
-                young / ((1 + poisson) * (1 - 2 * poisson));
-
-            FTensor::Index<'i', 3> i;
-            FTensor::Index<'j', 3> j;
-            FTensor::Index<'k', 3> k;
-            FTensor::Index<'l', 3> l;
-
-            t_D(i, j, k, l) = 0.;
-
-            t_D(0, 0, 0, 0) = 1 - poisson;
-            t_D(1, 1, 1, 1) = 1 - poisson;
-            t_D(2, 2, 2, 2) = 1 - poisson;
-
-            t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-            t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-            t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
-
-            t_D(0, 0, 1, 1) = poisson;
-            t_D(1, 1, 0, 0) = poisson;
-            t_D(0, 0, 2, 2) = poisson;
-            t_D(2, 2, 0, 0) = poisson;
-            t_D(1, 1, 2, 2) = poisson;
-            t_D(2, 2, 1, 1) = poisson;
-
-            t_D(i, j, k, l) *= coefficient;
-
-            break;
-          }
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   protected:
     boost::shared_ptr<map<int, BlockData>>
@@ -353,79 +222,9 @@ struct HookeElement {
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts, const double rho_n,
-        const double rho_0)
+        const double rho_0);
 
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-          rhoAtGaussPtsPtr(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
-
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-
-      if (!rhoAtGaussPtsPtr)
-        SETERRQ(PETSC_COMM_SELF, 1, "Calculate density with MWLS first.");
-
-      for (auto &m : (*blockSetsPtr)) {
-
-        if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-            m.second.tEts.end()) {
-          continue;
-        }
-
-        const int nb_integration_pts = getGaussPts().size2();
-        dataAtPts->stiffnessMat->resize(36, nb_integration_pts, false);
-
-        FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
-            MAT_TO_DDG(dataAtPts->stiffnessMat));
-        const double young = m.second.E;
-        const double poisson = m.second.PoissonRatio;
-
-        auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
-
-        // coefficient used in intermediate calculation
-        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
-
-        FTensor::Index<'i', 3> i;
-        FTensor::Index<'j', 3> j;
-        FTensor::Index<'k', 3> k;
-        FTensor::Index<'l', 3> l;
-
-        for (int gg = 0; gg != nb_integration_pts; ++gg) {
-
-          t_D(i, j, k, l) = 0.;
-
-          t_D(0, 0, 0, 0) = 1 - poisson;
-          t_D(1, 1, 1, 1) = 1 - poisson;
-          t_D(2, 2, 2, 2) = 1 - poisson;
-
-          t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-          t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-          t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
-
-          t_D(0, 0, 1, 1) = poisson;
-          t_D(1, 1, 0, 0) = poisson;
-          t_D(0, 0, 2, 2) = poisson;
-          t_D(2, 2, 0, 0) = poisson;
-          t_D(1, 1, 2, 2) = poisson;
-          t_D(2, 2, 1, 1) = poisson;
-          // here the coefficient is modified to take density into account for
-          // porous materials: E(p) = E * (p / p_0)^n
-          t_D(i, j, k, l) *= coefficient * pow(rho / rHo0, rhoN);
-
-          ++t_D;
-          ++rho;
-        }
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
   };
 
   struct OpAssemble : public VolUserDataOperator {
@@ -535,7 +334,7 @@ struct HookeElement {
      * @return error code
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
-    };
+  };
 
   template <int S = 0> struct OpAleLhs_dx_dX : public OpAssemble {
 
@@ -698,6 +497,48 @@ private:
   MatrixDouble invJac;
 };
 
+template <bool D>
+HookeElement::OpCalculateStrain<D>::OpCalculateStrain(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      dataAtPts(data_at_pts) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <bool D>
+MoFEMErrorCode HookeElement::OpCalculateStrain<D>::doWork(int row_side,
+                                                          EntityType row_type,
+                                                          EntData &row_data) {
+  MoFEMFunctionBegin;
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  // get number of integration points
+  const int nb_integration_pts = getGaussPts().size2();
+  dataAtPts->smallStrainMat->resize(6, nb_integration_pts, false);
+  auto t_strain = getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
+  auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
+
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    t_strain(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
+
+    // If displacement field, not field o spatial positons is given
+    if (!D) {
+      t_strain(0, 0) -= 1;
+      t_strain(1, 1) -= 1;
+      t_strain(2, 2) -= 1;
+    }
+
+    ++t_strain;
+    ++t_h;
+  }
+  MoFEMFunctionReturn(0);
+}
+
 template <int S>
 HookeElement::OpAleLhs_dx_dx<S>::OpAleLhs_dx_dx(
     const std::string row_field, const std::string col_field,
@@ -795,6 +636,120 @@ MoFEMErrorCode HookeElement::OpAleLhs_dx_dx<S>::iNtegrate(EntData &row_data,
     ++t_invH;
   }
 
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpCalculateHomogeneousStiffness<S>::
+    OpCalculateHomogeneousStiffness(
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
+      lastEvaluatedId(-1) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpCalculateHomogeneousStiffness<S>::doWork(
+    int row_side, EntityType row_type, EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  for (auto &m : (*blockSetsPtr)) {
+    if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
+        m.second.tEts.end())
+      // NOTE: The stiffness Matrix is calculated only once, since is
+      // constant for
+      // all integration points and all elements in the block.
+      if (lastEvaluatedId != m.second.iD) {
+
+        lastEvaluatedId = m.second.iD;
+
+        dataAtPts->stiffnessMat->resize(36, 1, false);
+        FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+            MAT_TO_DDG(dataAtPts->stiffnessMat));
+        const double young = m.second.E;
+        const double poisson = m.second.PoissonRatio;
+
+        // coefficient used in intermediate calculation
+        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+        FTensor::Index<'l', 3> l;
+
+        t_D(i, j, k, l) = 0.;
+
+        t_D(0, 0, 0, 0) = 1 - poisson;
+        t_D(1, 1, 1, 1) = 1 - poisson;
+        t_D(2, 2, 2, 2) = 1 - poisson;
+
+        t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+        t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+        t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+
+        t_D(0, 0, 1, 1) = poisson;
+        t_D(1, 1, 0, 0) = poisson;
+        t_D(0, 0, 2, 2) = poisson;
+        t_D(2, 2, 0, 0) = poisson;
+        t_D(1, 1, 2, 2) = poisson;
+        t_D(2, 2, 1, 1) = poisson;
+
+        t_D(i, j, k, l) *= coefficient;
+
+        break;
+      }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpCalculateStress<S>::OpCalculateStress(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      dataAtPts(data_at_pts) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpCalculateStress<S>::doWork(int row_side,
+                                                          EntityType row_type,
+                                                          EntData &row_data) {
+  MoFEMFunctionBegin;
+  // get number of integration points
+  const int nb_integration_pts = getGaussPts().size2();
+  auto t_strain = getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
+  dataAtPts->cauchyStressMat->resize(6, nb_integration_pts, false);
+  auto t_cauchy_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    t_cauchy_stress(i, j) = t_D(i, j, k, l) * t_strain(k, l);
+    ++t_strain;
+    ++t_cauchy_stress;
+    ++t_D;
+  }
   MoFEMFunctionReturn(0);
 }
 

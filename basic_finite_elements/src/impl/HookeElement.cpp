@@ -1106,3 +1106,83 @@ HookeElement::OpAleLhsWithDensity_dx_dX::iNtegrate(EntData &row_data,
 
   MoFEMFunctionReturn(0);
 }
+
+HookeElement::OpCalculateStiffnessScaledByDensityField::
+    OpCalculateStiffnessScaledByDensityField(
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+        boost::shared_ptr<VectorDouble> rho_at_gauss_pts, const double rho_n,
+        const double rho_0)
+
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
+      rhoAtGaussPtsPtr(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+MoFEMErrorCode HookeElement::OpCalculateStiffnessScaledByDensityField::doWork(
+    int row_side, EntityType row_type, EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  if (!rhoAtGaussPtsPtr)
+    SETERRQ(PETSC_COMM_SELF, 1, "Calculate density with MWLS first.");
+
+  for (auto &m : (*blockSetsPtr)) {
+
+    if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+        m.second.tEts.end()) {
+      continue;
+    }
+
+    const int nb_integration_pts = getGaussPts().size2();
+    dataAtPts->stiffnessMat->resize(36, nb_integration_pts, false);
+
+    FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
+        MAT_TO_DDG(dataAtPts->stiffnessMat));
+    const double young = m.second.E;
+    const double poisson = m.second.PoissonRatio;
+
+    auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
+
+    // coefficient used in intermediate calculation
+    const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
+
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+      t_D(i, j, k, l) = 0.;
+
+      t_D(0, 0, 0, 0) = 1 - poisson;
+      t_D(1, 1, 1, 1) = 1 - poisson;
+      t_D(2, 2, 2, 2) = 1 - poisson;
+
+      t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+      t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+      t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+
+      t_D(0, 0, 1, 1) = poisson;
+      t_D(1, 1, 0, 0) = poisson;
+      t_D(0, 0, 2, 2) = poisson;
+      t_D(2, 2, 0, 0) = poisson;
+      t_D(1, 1, 2, 2) = poisson;
+      t_D(2, 2, 1, 1) = poisson;
+      // here the coefficient is modified to take density into account for
+      // porous materials: E(p) = E * (p / p_0)^n
+      t_D(i, j, k, l) *= coefficient * pow(rho / rHo0, rhoN);
+
+      ++t_D;
+      ++rho;
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
