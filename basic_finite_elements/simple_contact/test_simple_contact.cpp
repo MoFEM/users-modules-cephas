@@ -477,10 +477,11 @@ int main(int argc, char *argv[]) {
     CHKERR MatZeroEntries(A);
 
     if (model_number == 0) {
-      contact_problem->setContactOperatorsActiveSet("SPATIAL_POSITION",
-                                                    "LAGMULT");
+      contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
+                                                       "LAGMULT");
 
-      contact_problem->setContactOperators("SPATIAL_POSITION", "LAGMULT", A);
+      contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
+                                                       "LAGMULT", A);
 
       CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
                                     contact_problem->feRhsSimpleContact.get(),
