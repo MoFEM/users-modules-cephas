@@ -210,21 +210,18 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
+    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                             MB_TAG_SPARSE, MF_ZERO);
 
-        CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                                 MB_TAG_SPARSE, MF_ZERO);
-      
-
-      CHKERR m_field.add_ents_to_field_by_type(range_surf_slave, MBTRI,
-                                               "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
-    
+    CHKERR m_field.add_ents_to_field_by_type(range_surf_slave, MBTRI,
+                                             "LAGMULT");
+    CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
     Range range_slave_master_prisms;
 
-    //create prism
+    // create prism
     //@todo : Andrei here we need the conforming prism creations
 
     EntityHandle slave_master_1prism;
@@ -235,32 +232,32 @@ int main(int argc, char *argv[]) {
     int num_nodes_master;
     const EntityHandle *conn_master = NULL;
     CHKERR m_field.get_moab().get_connectivity(*tri_it_master, conn_master,
-                                              num_nodes_master);
+                                               num_nodes_master);
 
     VectorDouble v_coords_master;
     v_coords_master.resize(9, false);
     CHKERR m_field.get_moab().get_coords(conn_master, 3,
-                                        &*v_coords_master.data().begin());
+                                         &*v_coords_master.data().begin());
 
     Range::iterator tri_it_slave = range_surf_slave.begin();
 
     int num_nodes_slave;
     const EntityHandle *conn_slave = NULL;
     CHKERR m_field.get_moab().get_connectivity(*tri_it_slave, conn_slave,
-                                              num_nodes_slave);
+                                               num_nodes_slave);
 
     VectorDouble v_coords_slave;
     v_coords_slave.resize(9, false);
     CHKERR m_field.get_moab().get_coords(conn_slave, 3,
-                                        &*v_coords_slave.data().begin());
+                                         &*v_coords_slave.data().begin());
 
     for (int ii = 0; ii != 3; ++ii) {
       prism_nodes[ii] = conn_master[ii];
-      prism_nodes[ii+3] = conn_slave[ii];
+      prism_nodes[ii + 3] = conn_slave[ii];
     }
 
     CHKERR m_field.get_moab().create_element(MBPRISM, prism_nodes, 6,
-                                            slave_master_1prism);
+                                             slave_master_1prism);
 
     range_slave_master_prisms.insert(slave_master_1prism);
 
@@ -289,8 +286,7 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<SimpleContactProblem> contact_problem;
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(
-            m_field,r_value, cn_value));
+        new SimpleContactProblem(m_field, r_value, cn_value));
 
     // ContactProblemSmallDispNoFriction contact_problem(
     //     m_field, contact_commondata_multi_index, r_value, cn_value);
@@ -318,7 +314,7 @@ int main(int argc, char *argv[]) {
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
       Range range_tris, range_vertices;
-      
+
       CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBVERTEX,
                                                      range_vertices, true);
 
@@ -407,11 +403,8 @@ int main(int argc, char *argv[]) {
               }
               printf("After U : %e\n", dof.getFieldData());
             }
-            
           }
-
         }
-
       }
     }
 
@@ -468,13 +461,34 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
 
-
     Mat A, fdA;
     CHKERR DMCreateMatrix_MoFEM(dm, &A);
     CHKERR MatZeroEntries(A);
 
-    contact_problem->setContactOperatorsActiveSet("SPATIAL_POSITION",
-                                                  "LAGMULT");
+    contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
+                                                     "LAGMULT");
+
+    contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
+                                                     "LAGMULT", A);
+
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                  contact_problem->feRhsSimpleContact.get(),
+                                  PETSC_NULL, PETSC_NULL);
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                  contact_problem->feLhsSimpleContact.get(),
+                                  NULL, NULL);
+
+    // printf("---------Penalty element-----------1\n");
+    // contact_problem->setContactPenaltyRhsOperators("SPATIAL_POSITION",
+    //                                                "SPATIAL_POSITION");
+
+    // contact_problem->setPenaltyLhsOperatorsSimple(
+    //     "SPATIAL_POSITION", "SPATIAL_POSITION", A);
+
+    // CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+    //                               contact_problem->feRhsSimpleContact.get(),
+    //                               PETSC_NULL, PETSC_NULL);
 
     contact_problem->setContactOperators("SPATIAL_POSITION", "LAGMULT", A);
 
