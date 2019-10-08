@@ -905,9 +905,11 @@ struct OpError : public OpFaceEle {
         const double a = vol * t_w;
         double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
         double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
-
-        double local_error = pow(mass_exact - t_mass_value, 2) + pow(flux_exact - t_flux_div, 2); 
-
+        double local_error = pow(mass_exact - t_mass_value, 2); // + pow(flux_exact - t_flux_div, 2); 
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "flux_div : %3.4e\n",
+                  t_flux_div);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "flux_exact : %3.4e\n",
+                  flux_exact);
         data.getFieldData()[0] += a * local_error;
         eRror += a * local_error;
 
