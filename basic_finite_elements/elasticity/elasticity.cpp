@@ -769,6 +769,12 @@ int main(int argc, char *argv[]) {
         m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
         post_proc.commonData, block_sets_ptr.get()));
 
+    PostProcFatPrismOnRefinedMesh prism_post_proc(m_field);
+    CHKERR prism_post_proc.generateReferenceElementMesh();
+    CHKERR prism_post_proc.addFieldValuesPostProc("DISPLACEMENT");
+    CHKERR prism_post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+    CHKERR prism_post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
 
@@ -932,10 +938,12 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
       // Post-process results
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &prism_post_proc);
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
       CHKERR post_proc.writeFile("out.h5m");
+      CHKERR prism_post_proc.writeFile("prism_out.h5m");
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
 

@@ -45,7 +45,6 @@ NeumannForcesSurface::OpNeumannForce::OpNeumannForce(
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -60,28 +59,32 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
   Nf.resize(data.getIndices().size(), false);
   Nf.clear();
 
+  EntityType fe_type = getNumeredEntFiniteElementPtr()->getEntType();
+
   for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
 
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2, gg);
-    if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
-      val *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
-    } else {
+    if (hoGeometry || fe_type == MBQUAD) {
+      val *= cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
+      if (fe_type == MBTRI)
+        val /= 2;
+    } else
       val *= getArea();
-    }
 
     // use data from module
     for (int rr = 0; rr < rank; rr++) {
       double force;
-      if (rr == 0) {
+      if (rr == 0)
         force = dAta.data.data.value3;
-      } else if (rr == 1) {
+      else if (rr == 1)
         force = dAta.data.data.value4;
-      } else if (rr == 2) {
+      else if (rr == 2)
         force = dAta.data.data.value5;
-      } else {
-        SETERRQ(PETSC_COMM_SELF, 1, "data inconsistency");
-      }
+      else
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                "data inconsistency");
+
       force *= dAta.data.data.value1;
       cblas_daxpy(nb_row_dofs, val * force, &data.getN()(gg, 0), 1, &Nf[rr],
                   rank);
@@ -91,9 +94,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
   // Scale force using user defined scaling operator
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
-  {
+  auto get_f = [&]() {
     Vec my_f;
-    // If user vector is not set, use vector from snes or ts solvers
     if (F == PETSC_NULL) {
       switch (getFEMethod()->ts_ctx) {
       case FEMethod::CTX_TSSETIFUNCTION: {
@@ -110,11 +112,11 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
     } else {
       my_f = F;
     }
+    return my_f;
+  };
 
-    // Assemble force into vector
-    CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
-                        &Nf[0], ADD_VALUES);
-  }
+  // Assemble force into vector
+  CHKERR VecSetValues(get_f(), data, &*Nf.data().begin(), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -145,6 +147,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
   nF.resize(data.getIndices().size(), false);
   nF.clear();
 
+  EntityType fe_type = getNumeredEntFiniteElementPtr()->getEntType();
+
   VectorDouble3 coords(3);
   VectorDouble3 normal(3);
   VectorDouble3 force(3);
@@ -153,12 +157,15 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
 
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2, gg);
-    if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
-      val *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
+    if (hoGeometry || fe_type == MBQUAD) {
+      val *= cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
+      if (fe_type == MBTRI)
+        val /= 2;
       for (int dd = 0; dd != 3; dd++) {
         coords[dd] = getHoCoordsAtGaussPts()(gg, dd);
         normal[dd] = getNormalsAtGaussPts()(gg, dd);
       }
+
     } else {
       val *= getArea();
       for (int dd = 0; dd != 3; dd++) {
@@ -181,9 +188,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
   // Scale force using user defined scaling operator
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, nF);
 
-  {
+  auto get_f = [&]() {
     Vec my_f;
-    // If user vector is not set, use vector from snes or ts solvers
     if (F == PETSC_NULL) {
       switch (getFEMethod()->ts_ctx) {
       case FEMethod::CTX_TSSETIFUNCTION: {
@@ -200,12 +206,11 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
     } else {
       my_f = F;
     }
+    return my_f;
+  };
 
-    // Assemble force into vector
-    CHKERR VecSetValues(my_f, data.getIndices().size(),
-                        &*data.getIndices().data().begin(), &*nF.data().begin(),
-                        ADD_VALUES);
-  }
+  // Assemble force into vector
+  CHKERR VecSetValues(get_f(), data, &*nF.data().begin(), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -224,10 +229,11 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
 
   if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
-  if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-      dAta.tRis.end()) {
+
+  EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
+  EntityType fe_type = getNumeredEntFiniteElementPtr()->getEntType();
+  if (dAta.tRis.find(fe_ent) == dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
-  }
 
   int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
   int nb_row_dofs = data.getIndices().size() / rank;
@@ -238,21 +244,25 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
   for (unsigned int gg = 0; gg != data.getN().size1(); ++gg) {
 
     double val = getGaussPts()(2, gg);
+    if (fe_type == MBTRI)
+      val /= 2;
+
     for (int rr = 0; rr != rank; ++rr) {
 
       double force;
-      if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
+      if (hoGeometry || fe_type == MBQUAD)
         force = dAta.data.data.value1 * getNormalsAtGaussPts()(gg, rr);
-      } else {
+      else
         force = dAta.data.data.value1 * getNormal()[rr];
-      }
-      cblas_daxpy(nb_row_dofs, 0.5 * val * force, &data.getN()(gg, 0), 1,
-                  &Nf[rr], rank);
+
+      cblas_daxpy(nb_row_dofs, val * force, &data.getN()(gg, 0), 1, &Nf[rr],
+                  rank);
     }
   }
 
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
-  {
+
+  auto get_f = [&]() {
     Vec my_f;
     if (F == PETSC_NULL) {
       switch (getFEMethod()->ts_ctx) {
@@ -270,9 +280,10 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
     } else {
       my_f = F;
     }
-    CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
-                        &Nf[0], ADD_VALUES);
-  }
+    return my_f;
+  };
+
+  CHKERR VecSetValues(get_f(), data, &*Nf.data().begin(), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -301,22 +312,28 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
   Nf.resize(data.getIndices().size(), false);
   Nf.clear();
 
+  EntityType fe_type = getNumeredEntFiniteElementPtr()->getEntType();
+
   for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
 
     double val = getGaussPts()(2, gg);
     double flux;
-    if (hoGeometry || getNumeredEntFiniteElementPtr()->getEntType() == MBQUAD) {
-      double area = 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
+    if (hoGeometry || fe_type == MBQUAD) {
+      double area = cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
+      if (fe_type == MBTRI)
+        area /= 2;
       flux = dAta.data.data.value1 * area;
     } else {
       flux = dAta.data.data.value1 * getArea();
     }
+
     cblas_daxpy(nb_row_dofs, val * flux, &data.getN()(gg, 0), 1,
                 &*Nf.data().begin(), 1);
   }
 
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
-  {
+
+  auto get_f = [&]() {
     Vec my_f;
     if (F == PETSC_NULL) {
       switch (getFEMethod()->ts_ctx) {
@@ -334,9 +351,10 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
     } else {
       my_f = F;
     }
-    CHKERR VecSetValues(my_f, data.getIndices().size(), &data.getIndices()[0],
-                        &Nf[0], ADD_VALUES);
-  }
+    return my_f;
+  };
+
+  CHKERR VecSetValues(get_f(), data, &*Nf.data().begin(), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -386,8 +404,8 @@ MoFEMErrorCode NeumannForcesSurface::addForce(const std::string field_name,
     mapForce[ms_id].data.data.zero[2] = 0;
     mapForce[ms_id].data.data.zero2 = 0;
 
-    CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapForce[ms_id].tRis, true);
+    CHKERR mField.get_moab().get_entities_by_dimension(
+        cubit_meshset_ptr->meshset, 2, mapForce[ms_id].tRis, true);
     fe.getOpPtrVector().push_back(new OpNeumannForce(
         field_name, F, mapForce[ms_id], methodsOp, ho_geometry));
 
@@ -395,8 +413,8 @@ MoFEMErrorCode NeumannForcesSurface::addForce(const std::string field_name,
   } else {
     CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, NODESET, &cubit_meshset_ptr);
     CHKERR cubit_meshset_ptr->getBcDataStructure(mapForce[ms_id].data);
-    CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapForce[ms_id].tRis, true);
+    CHKERR mField.get_moab().get_entities_by_dimension(
+        cubit_meshset_ptr->meshset, 2, mapForce[ms_id].tRis, true);
     fe.getOpPtrVector().push_back(new OpNeumannForce(
         field_name, F, mapForce[ms_id], methodsOp, ho_geometry));
   }
@@ -431,15 +449,15 @@ MoFEMErrorCode NeumannForcesSurface::addPressure(const std::string field_name,
     mapPressure[ms_id].data.data.flag2 = 1;
     mapPressure[ms_id].data.data.value1 = pressure[0];
     mapPressure[ms_id].data.data.zero = 0;
-    CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+    CHKERR mField.get_moab().get_entities_by_dimension(
+        cubit_meshset_ptr->meshset, 2, mapPressure[ms_id].tRis, true);
     fe.getOpPtrVector().push_back(new OpNeumannPressure(
         field_name, F, mapPressure[ms_id], methodsOp, ho_geometry));
   } else {
     CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, SIDESET, &cubit_meshset_ptr);
     CHKERR cubit_meshset_ptr->getBcDataStructure(mapPressure[ms_id].data);
-    CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+    CHKERR mField.get_moab().get_entities_by_dimension(
+        cubit_meshset_ptr->meshset, 2, mapPressure[ms_id].tRis, true);
     fe.getOpPtrVector().push_back(new OpNeumannPressure(
         field_name, F, mapPressure[ms_id], methodsOp, ho_geometry));
   }
@@ -467,8 +485,8 @@ NeumannForcesSurface::addLinearPressure(const std::string field_name, Vec F,
   const double pressure_shift = mydata[3];
 
   Range tris;
-  CHKERR mField.get_moab().get_entities_by_type(cubit_meshset_ptr->meshset,
-                                                MBTRI, tris, true);
+  CHKERR mField.get_moab().get_entities_by_dimension(cubit_meshset_ptr->meshset,
+                                                     2, tris, true);
   boost::shared_ptr<MethodForAnalyticalForce> analytical_force_op(
       new LinearVaringPresssure(pressure_coeffs, pressure_shift));
   fe.getOpPtrVector().push_back(new OpNeumannForceAnalytical(
@@ -494,8 +512,8 @@ MoFEMErrorCode NeumannForcesSurface::addFlux(const std::string field_name,
   CHKERR mField.getInterface(mmanager_ptr);
   CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, SIDESET, &cubit_meshset_ptr);
   CHKERR cubit_meshset_ptr->getBcDataStructure(mapPressure[ms_id].data);
-  CHKERR mField.get_moab().get_entities_by_type(
-      cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+  CHKERR mField.get_moab().get_entities_by_dimension(
+      cubit_meshset_ptr->meshset, 2, mapPressure[ms_id].tRis, true);
   fe.getOpPtrVector().push_back(new OpNeumannFlux(
       field_name, F, mapPressure[ms_id], methodsOp, ho_geometry));
   MoFEMFunctionReturn(0);
@@ -521,11 +539,11 @@ MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                   it)) {
     Range tris;
-    CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                   true);
+    CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 2, tris,
+                                                        true);
     if (intersect_ptr)
       tris = intersect(tris, *intersect_ptr);
-    CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI, "FORCE_FE");
+    CHKERR m_field.add_ents_to_finite_element_by_dim(tris, 2, "FORCE_FE");
   }
 
   CHKERR m_field.add_finite_element("PRESSURE_FE", MF_ZERO);
@@ -541,12 +559,11 @@ MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                   SIDESET | PRESSURESET, it)) {
     Range tris;
-    CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                   true);
+    CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 2, tris,
+                                                        true);
     if (intersect_ptr)
       tris = intersect(tris, *intersect_ptr);
-    CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                      "PRESSURE_FE");
+    CHKERR m_field.add_ents_to_finite_element_by_dim(tris, 2, "PRESSURE_FE");
   }
 
   // Reading forces from BLOCKSET
@@ -557,12 +574,11 @@ MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
     if (it->getName().compare(0, block_set_force_name.length(),
                               block_set_force_name) == 0) {
       Range tris;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                     true);
+      CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 2, tris,
+                                                          true);
       if (intersect_ptr)
         tris = intersect(tris, *intersect_ptr);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "FORCE_FE");
+      CHKERR m_field.add_ents_to_finite_element_by_dim(tris, 2, "FORCE_FE");
     }
   }
   // search for block named PRESSURE and add its attributes to PRESSURE_FE
@@ -572,12 +588,11 @@ MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
     if (it->getName().compare(0, block_set_pressure_name.length(),
                               block_set_pressure_name) == 0) {
       Range tris;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                     true);
+      CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 2, tris,
+                                                          true);
       if (intersect_ptr)
         tris = intersect(tris, *intersect_ptr);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "PRESSURE_FE");
+      CHKERR m_field.add_ents_to_finite_element_by_dim(tris, 2, "PRESSURE_FE");
     }
   }
 
@@ -588,12 +603,11 @@ MoFEMErrorCode MetaNeumannForces::addNeumannBCElements(
     if (it->getName().compare(0, block_set_linear_pressure_name.length(),
                               block_set_linear_pressure_name) == 0) {
       Range tris;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                     true);
+      CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 2, tris,
+                                                          true);
       if (intersect_ptr)
         tris = intersect(tris, *intersect_ptr);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI,
-                                                        "PRESSURE_FE");
+      CHKERR m_field.add_ents_to_finite_element_by_dim(tris, 2, "PRESSURE_FE");
     }
   }
 
@@ -673,9 +687,9 @@ MoFEMErrorCode MetaNeumannForces::addNeumannFluxBCElements(
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                   SIDESET | PRESSURESET, it)) {
     Range tris;
-    CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI, tris,
-                                                   true);
-    CHKERR m_field.add_ents_to_finite_element_by_type(tris, MBTRI, "FLUX_FE");
+    CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 2, tris,
+                                                        true);
+    CHKERR m_field.add_ents_to_finite_element_by_dim(tris, 2, "FLUX_FE");
   }
 
   MoFEMFunctionReturn(0);

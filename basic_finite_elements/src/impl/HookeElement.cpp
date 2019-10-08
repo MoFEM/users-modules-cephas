@@ -750,36 +750,68 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   boost::shared_ptr<ForcesAndSourcesCore> fe_ptr(
       new VolumeElementForcesAndSourcesCore(*m_field_ptr));
 
-  if (ale == PETSC_FALSE) {
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
-    fe_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
-        x_field, x_field, block_sets_ptr, data_at_pts));
-    if (field_disp) {
+  struct PrismFE : public FatPrismElementForcesAndSourcesCore {
+
+    using FatPrismElementForcesAndSourcesCore::
+        FatPrismElementForcesAndSourcesCore;
+    int getRuleTrianglesOnly(int order) { return 2 * order; }
+    int getRuleThroughThickness(int order) { return 2 * order; }
+  };
+
+  boost::shared_ptr<ForcesAndSourcesCore> prism_fe_ptr(
+      new PrismFE(*m_field_ptr));
+
+  auto push_ops = [&](boost::shared_ptr<ForcesAndSourcesCore> fe_ptr,
+                      EntityType type) {
+    MoFEMFunctionBeginHot;
+    boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+    if (ale == PETSC_FALSE) {
+      if (type == MBPRISM) {
+        fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+        fe_ptr->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      }
       fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
+          new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+      fe_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
+          x_field, x_field, block_sets_ptr, data_at_pts));
+      if (field_disp) {
+        fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
+      } else {
+        fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateStrain<false>(x_field, x_field, data_at_pts));
+      }
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
     } else {
+      if (type == MBPRISM) {
+        fe_ptr->getOpPtrVector().push_back(
+            new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+        fe_ptr->getOpPtrVector().push_back(
+            new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      }
       fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateStrain<false>(x_field, x_field, data_at_pts));
+          new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
+      fe_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
+          x_field, x_field, block_sets_ptr, data_at_pts));
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateStrainAle(x_field, x_field, data_at_pts));
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+      fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
     }
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateStress<0>(x_field, x_field, data_at_pts));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
-  } else {
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
-    fe_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
-        x_field, x_field, block_sets_ptr, data_at_pts));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateStrainAle(x_field, x_field, data_at_pts));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateStress<0>(x_field, x_field, data_at_pts));
-    fe_ptr->getOpPtrVector().push_back(
-        new OpCalculateEnergy(X_field, X_field, data_at_pts, *v_energy_ptr));
-  }
+    MoFEMFunctionReturnHot(0);
+  };
+
+  CHKERR push_ops(fe_ptr, MBTET);
+  CHKERR push_ops(prism_fe_ptr, MBPRISM);
 
   CHKERR VecZeroEntries(*v_energy_ptr);
   CHKERR VecGhostUpdateBegin(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
@@ -788,6 +820,7 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   fe_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
   PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
   CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_ptr);
+  CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_ptr);
   PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
   CHKERR VecAssemblyBegin(*v_energy_ptr);
