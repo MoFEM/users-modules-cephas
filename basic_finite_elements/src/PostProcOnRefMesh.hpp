@@ -230,11 +230,10 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
 
    */
   MoFEMErrorCode writeFile(const std::string file_name) {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
     // #ifdef MOAB_HDF5_PARALLEL
-    rval = postProcMesh.write_file(file_name.c_str(), "MOAB",
+    CHKERR postProcMesh.write_file(file_name.c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");
-    CHKERRG(rval);
     // #else
     //  #warning "No parallel HDF5, not most efficient way of writing files"
     //  if(mField.get_comm_rank()==0) {
@@ -242,7 +241,7 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
     //    CHKERRG(rval);
     //  }
     // #endif
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
 };
 
