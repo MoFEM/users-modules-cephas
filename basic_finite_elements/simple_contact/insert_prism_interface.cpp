@@ -170,6 +170,7 @@ int main(int argc, char *argv[]) {
         bit_levels.back(), BitRefLevel().set(), MBTET, out_meshset_tet);
     Range tets;
     CHKERR moab.get_entities_by_handle(out_meshset_tet, tets, true);
+    tets.print();
 
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
         bit_levels.back(), BitRefLevel().set(), MBPRISM, out_meshset_prism);
@@ -192,7 +193,7 @@ int main(int argc, char *argv[]) {
     CHKERR moab.write_file("out_tets_and_prisms.vtk", "VTK", "",
                            &out_meshset_tets_and_prism, 1);
 
-    CHKERR moab.write_file("out.h5m");
+    CHKERR moab.write_file("out.h5m", "MOAB", "", &out_meshset_tets_and_prism, 1);
   }
   CATCH_ERRORS;
 
