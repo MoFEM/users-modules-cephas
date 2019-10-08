@@ -350,16 +350,16 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
       
-      const double ct = getFEMethod()->ts_t;
+      const double ct = getFEMethod()->ts_t - 0.01;
       auto t_coords = getFTensor1CoordsAtGaussPts();
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        // double x = getCoordsAtGaussPts()(gg, 0);
-        // double y = getCoordsAtGaussPts()(gg, 1);
+        
         double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
         double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
-        double f = u_dot - u_lap;
+        // double f = u_dot - u_lap;
+        double f = 0;
         for (int rr = 0; rr != nb_dofs; ++rr) {
           auto t_col_v_base = data.getFTensor0N(gg, 0);
           // vecF[rr] += a * t_slow_value * t_row_v_base;
@@ -541,10 +541,12 @@ struct OpAssembleStiffRhsV : OpFaceEle // F_V
                       FVal exact_value,
                       FVal exact_dot, 
                       FVal exact_lap)
-      : OpFaceEle(flux_field, OpFaceEle::OPROW), commonData(data) {
-
-    // cerr << "OpAssembleStiffRhsV()" << endl;
-  }
+      : OpFaceEle(flux_field, OpFaceEle::OPROW)
+      , commonData(data) 
+      , exactValue(exact_value)
+      , exactDot(exact_dot)
+      , exactLap(exact_lap)
+      {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -560,22 +562,22 @@ struct OpAssembleStiffRhsV : OpFaceEle // F_V
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
 
-      // const double ct = getFEMethod()->ts_t;
-      // auto t_coords = getFTensor1CoordsAtGaussPts();
+      const double ct = getFEMethod()->ts_t;
+      auto t_coords = getFTensor1CoordsAtGaussPts();
       for (int gg = 0; gg < nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        // double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
-        // double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
+        double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
+        double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
-        // double f = u_dot + u_lap;
+        double f = u_dot - u_lap;
         for (int rr = 0; rr < nb_dofs; ++rr) {
-          vecF[rr] += (t_row_v_base * (t_mass_dot + t_flux_div)) * a;
+          vecF[rr] += (t_row_v_base * (t_mass_dot + t_flux_div - f)) * a;
           ++t_row_v_base;
         }
         ++t_mass_dot;
         ++t_flux_div;
         ++t_w;
-        // ++t_coords;
+        ++t_coords;
       }
       CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
                           PETSC_TRUE);
@@ -589,12 +591,12 @@ private:
   boost::shared_ptr<PreviousData> commonData;
   VectorDouble vecF;
 
-  // FVal exactValue;
-  // FVal exactDot;
-  // FVal exactLap;
+  FVal exactValue;
+  FVal exactDot;
+  FVal exactLap;
 
-  // FTensor::Number<0> NX;
-  // FTensor::Number<1> NY;
+  FTensor::Number<0> NX;
+  FTensor::Number<1> NY;
 };
 
 // Tangent operator
@@ -875,12 +877,14 @@ struct OpError : public OpFaceEle {
   typedef boost::function<FTensor::Tensor1<double, 3>(
       const double, const double, const double)>
       FGrad;
+  double &eRror;
   OpError(FVal exact_value, FVal exact_lap,
-          boost::shared_ptr<PreviousData> &prev_data)
+          boost::shared_ptr<PreviousData> &prev_data, double &err)
       : OpFaceEle("ERROR", OpFaceEle::OPROW)
       , exactVal(exact_value)
       , exactLap(exact_lap)
       , prevData(prev_data)
+      , eRror(err)
       {}
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -893,26 +897,27 @@ struct OpError : public OpFaceEle {
       const double vol = getMeasure();
       const int nb_integration_pts = getGaussPts().size2();
       auto t_w = getFTensor0IntegrationWeight();
-      double ct = getFEMethod()->ts_t - 0.01;
-      // cout << "ct : " << ct << endl;
-      // const double tstep = getFEMethod()->ts_step;
-      // ct = ct - tstep;
-      // cout << "time : " << ct << endl;
+      double dt;
+      CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
+      double ct = getFEMethod()->ts_t - dt;
       auto t_coords = getFTensor1CoordsAtGaussPts();
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
-        double u_val = exactVal(t_coords(NX), t_coords(NY), ct);
-        double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
+        double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
+        double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
 
-        double error = pow(u_val - t_mass_value, 2) + pow(u_lap - t_flux_div, 2); 
-        data.getFieldData()[0] += a * error;
+        double local_error = pow(mass_exact - t_mass_value, 2) + pow(flux_exact - t_flux_div, 2); 
+
+        data.getFieldData()[0] += a * local_error;
+        eRror += a * local_error;
+
         ++t_w;
         ++t_mass_value;
         ++t_flux_div;
         ++t_coords;
       }
-      // cout << "Error : " << data.getFieldData()[0] << endl;
-      data.getFieldDofs()[0]->getFieldData() = sqrt(data.getFieldData()[0]);  
+
+      data.getFieldDofs()[0]->getFieldData() = data.getFieldData()[0];  
     }
       MoFEMFunctionReturn(0);
   }
@@ -926,9 +931,15 @@ struct OpError : public OpFaceEle {
     FTensor::Number<1> NY;
 };
 struct Monitor : public FEMethod {
-  Monitor(SmartPetscObj<DM> &dm,
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
-      : dM(dm), postProc(post_proc){};
+  double &eRror;
+  Monitor(MPI_Comm &comm, const int &rank, SmartPetscObj<DM> &dm,
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc, double &err)
+      : cOmm(comm)
+      , rAnk(rank)
+      , dM(dm)
+      , postProc(post_proc)
+      , eRror(err)
+      {};
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
   MoFEMErrorCode postProcess() {
@@ -938,13 +949,32 @@ struct Monitor : public FEMethod {
       CHKERR postProc->writeFile(
           "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
     }
-    // cerr << "ts_step : " << ts_step << endl;
-    MoFEMFunctionReturn(0);
+  Vec error_per_proc;
+  CHKERR VecCreateMPI(cOmm, 1, PETSC_DECIDE, &error_per_proc);
+  auto get_global_error = [&]() {
+  MoFEMFunctionBegin;  
+  CHKERR VecSetValue(error_per_proc, rAnk, eRror, INSERT_VALUES);
+  MoFEMFunctionReturn(0);
+  };
+  CHKERR get_global_error();
+  CHKERR VecAssemblyBegin(error_per_proc);
+  CHKERR VecAssemblyEnd(error_per_proc);
+  double error_sum;
+  CHKERR VecSum(error_per_proc, &error_sum);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Error : %3.4e \n",
+                    error_sum);
+  eRror = 0;
+  // PetscPrintf(PETSC_COMM_SELF, "global_error : %3.4e\n", eRror);
+  // eRror = 0;
+  MoFEMFunctionReturn(0);
   }
 
 private:
   SmartPetscObj<DM> dM;
+
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
+  MPI_Comm cOmm;
+  const int rAnk;
 };
 
 }; // namespace ReactionDiffusion

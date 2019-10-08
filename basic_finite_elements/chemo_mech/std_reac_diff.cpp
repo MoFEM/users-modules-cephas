@@ -10,7 +10,12 @@ static char help[] = "...\n\n";
 struct RDProblem {
 public:
   RDProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order, const int n_species)
-      : moab(mb_instance), m_field(core), order(order), nb_species(n_species) {
+      : moab(mb_instance)
+      , m_field(core)
+      , order(order)
+      , nb_species(n_species)
+      , cOmm(m_field.get_comm())
+      , rAnk(m_field.get_comm_rank()) {
     vol_ele_slow_rhs = boost::shared_ptr<Ele>(new Ele(m_field));
     vol_ele_stiff_rhs = boost::shared_ptr<Ele>(new Ele(m_field));
     vol_ele_stiff_lhs = boost::shared_ptr<Ele>(new Ele(m_field));
@@ -100,6 +105,11 @@ private:
 
   std::vector<Range> inner_surface;
 
+  double global_error;
+
+  MPI_Comm cOmm;
+  const int rAnk;
+
   int order;
   int nb_species;
 
@@ -127,7 +137,7 @@ private:
 
 struct ExactFunction {
   double operator()(const double x, const double y, const double t) const {
-    return sin(2 * M_PI * x) * sin(2 * M_PI * y) * sin(2 * M_PI * t);
+    return sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
   }
 };
 
@@ -136,9 +146,9 @@ struct ExactFunctionGrad {
                                          const double t) const {
     FTensor::Tensor1<double, 3> grad;
     grad(0) =
-        2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y) * sin(2 * M_PI * t);
+        2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y) * t;
     grad(1) =
-        2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y) * sin(2 * M_PI * t);
+        2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y) * t;
     grad(2) = 0.0;
     return grad;
   }
@@ -146,14 +156,13 @@ struct ExactFunctionGrad {
 
 struct ExactFunctionLap {
   double operator()(const double x, const double y, const double t) const {
-    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) *
-           sin(2 * M_PI * t);
+    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
   }
 };
 
 struct ExactFunctionDot {
   double operator()(const double x, const double y, const double t) const {
-    return 2 * M_PI * sin(2 * M_PI * x) * sin(2 * M_PI * y) * cos(2 * M_PI * t);
+    return sin(2 * M_PI * x) * sin(2 * M_PI * y);
   }
 };
 
@@ -167,9 +176,13 @@ MoFEMErrorCode RDProblem::setup_system() {
 MoFEMErrorCode RDProblem::add_fe(std::string field_name) {
   MoFEMFunctionBegin;
   CHKERR simple_interface->addDomainField(field_name, H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple_interface->addDataField("ERROR", L2, AINSWORTH_LEGENDRE_BASE,
+                                        1);
   // CHKERR simple_interface->addBoundaryField(field_name, H1,
   //                                           AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple_interface->setFieldOrder(field_name, order);
+  CHKERR simple_interface->setFieldOrder("ERROR", 0);
+
   MoFEMFunctionReturn(0);
 }
 
@@ -245,9 +258,9 @@ MoFEMErrorCode RDProblem::push_slow_rhs(std::string field_name,
                                         boost::shared_ptr<PreviousData> &data) {
   MoFEMFunctionBegin;
 
-  vol_ele_slow_rhs->getOpPtrVector().push_back(
-      new OpAssembleSlowRhs(field_name, data, ExactFunction(),
-                            ExactFunctionDot(), ExactFunctionLap()));
+  // vol_ele_slow_rhs->getOpPtrVector().push_back(
+  //     new OpAssembleSlowRhs(field_name, data, ExactFunction(),
+  //                           ExactFunctionDot(), ExactFunctionLap()));
 
   MoFEMFunctionReturn(0);
 }
@@ -286,7 +299,8 @@ MoFEMErrorCode RDProblem::push_stiff_rhs(std::string field_name,
   MoFEMFunctionBegin;
 
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
-      new OpAssembleStiffRhs<2>(field_name, data, block_map));
+      new OpAssembleStiffRhs<2>(field_name, data, block_map, ExactFunction(),
+                                ExactFunctionDot(), ExactFunctionLap()));
   MoFEMFunctionReturn(0);
 }
 
@@ -395,6 +409,7 @@ MoFEMErrorCode RDProblem::solve() {
 
 MoFEMErrorCode RDProblem::run_analysis() {
   MoFEMFunctionBegin;
+  global_error = 0;
   std::vector<std::string> mass_names(nb_species);
 
   for(int i = 0; i < nb_species; ++i){
@@ -507,6 +522,8 @@ MoFEMErrorCode RDProblem::run_analysis() {
       CHKERR push_stiff_lhs(mass_names[i], data[i],
                             material_blocks); // nb_species times
     }
+    vol_ele_stiff_lhs->getOpPtrVector().push_back(
+      new OpError(ExactFunction(), ExactFunctionLap(), data[0], global_error));
       
     CHKERR set_integration_rule();
 
@@ -520,10 +537,11 @@ MoFEMErrorCode RDProblem::run_analysis() {
 
         for (int i = 0; i < nb_species; ++i) {
           CHKERR post_proc_fields(mass_names[i]);
-    }
+        }
+        post_proc->addFieldValuesPostProc("ERROR");
       
       monitor_ptr = boost::shared_ptr<Monitor>(
-          new Monitor(dm, post_proc)); // nb_species times
+          new Monitor(cOmm, rAnk, dm, post_proc, global_error)); // nb_species times
       CHKERR output_result();          // only once
       
       CHKERR solve();                  // only once
@@ -542,7 +560,8 @@ int main(int argc, char *argv[]) {
     CHKERR DMRegister_MoFEM(dm_name);
 
   
-    int order = 3;
+    int order = 1;
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
     int nb_species = 1;
     RDProblem reac_diff_problem(mb_instance, core, order, nb_species);
     CHKERR reac_diff_problem.run_analysis();

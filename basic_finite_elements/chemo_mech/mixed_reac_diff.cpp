@@ -11,7 +11,11 @@ static char help[] = "...\n\n";
 
 struct RDProblem {
 public:
-  RDProblem(MoFEM::Core &core, const int order) : m_field(core), order(order) {
+  RDProblem(MoFEM::Core &core, const int order) 
+  : m_field(core)
+  , order(order)
+  , cOmm(m_field.get_comm())
+  , rAnk(m_field.get_comm_rank()) {
     vol_ele_slow_rhs = boost::shared_ptr<FaceEle>(new FaceEle(m_field));
     natural_bdry_ele_slow_rhs =
         boost::shared_ptr<BoundaryEle>(new BoundaryEle(m_field));
@@ -54,6 +58,8 @@ public:
 
   // RDProblem(const int order) : order(order){}
   MoFEMErrorCode run_analysis(int nb_sp);
+
+  double global_error;
 
 private:
   MoFEMErrorCode setup_system();
@@ -106,6 +112,9 @@ private:
   Range inner_surface2;
   Range inner_surface3;
 
+  MPI_Comm cOmm;
+  const int rAnk;
+
   int order;
   int nb_species;
 
@@ -143,15 +152,15 @@ private:
 
 struct ExactFunction {
 double operator()(const double x, const double y, const double t) const {
-  return sin(2 * M_PI * x) * sin(2 * M_PI * y) * sin(2 * M_PI * t);
+  return sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
 }
 };
 
 struct ExactFunctionGrad{
 FTensor::Tensor1<double, 3> operator()(const double x, const double y, const double t) const {
 FTensor::Tensor1<double, 3> grad;
-grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y) * sin(2 * M_PI * t);
-grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y) * sin(2 * M_PI * t);
+grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y) * t;
+grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y) * t;
 grad(2) = 0.0;
 return grad;
 }
@@ -159,14 +168,13 @@ return grad;
 
 struct ExactFunctionLap{
   double operator()(const double x, const double y, const double t) const {
-    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) *
-           sin(2 * M_PI * t);
+    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
   }
 };
 
 struct ExactFunctionDot{
   double operator()(const double x, const double y, const double t) const {
-    return 2 * M_PI * sin(2 * M_PI * x) * sin(2 * M_PI * y) * cos(2 * M_PI * t);
+    return sin(2 * M_PI * x) * sin(2 * M_PI * y);
   }
 };
 
@@ -273,14 +281,14 @@ MoFEMErrorCode RDProblem::push_slow_rhs(std::string mass_field,
                                         boost::shared_ptr<PreviousData> &data) {
   MoFEMFunctionBegin;
 
-  vol_ele_slow_rhs->getOpPtrVector().push_back(
-      new OpAssembleSlowRhsV(mass_field, data, ExactFunction(), ExactFunctionDot(), ExactFunctionLap()));
+  // vol_ele_slow_rhs->getOpPtrVector().push_back(
+  //     new OpAssembleSlowRhsV(mass_field, data, ExactFunction(), ExactFunctionDot(), ExactFunctionLap()));
 
   natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
       new OpAssembleNaturalBCRhsTau(flux_field, natural_bdry_ents));
 
-  natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
-      new OpEssentialBC(flux_field, essential_bdry_ents));
+  // natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
+  //     new OpEssentialBC(flux_field, essential_bdry_ents));
   MoFEMFunctionReturn(0);
 }
 
@@ -389,8 +397,8 @@ MoFEMErrorCode RDProblem::apply_IC(std::string mass_field, Range &surface,
 
 MoFEMErrorCode RDProblem::apply_BC(std::string flux_field) {
   MoFEMFunctionBegin;
-  CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      "SimpleProblem", flux_field, essential_bdry_ents);
+  // CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
+  //     "SimpleProblem", flux_field, essential_bdry_ents);
 
   MoFEMFunctionReturn(0);
 }
@@ -444,6 +452,7 @@ MoFEMErrorCode RDProblem::solve() {
 
 MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
   MoFEMFunctionBegin;
+  global_error = 0;
   // set nb_species
   CHKERR setup_system(); // only once
   nb_species = nb_sp;
@@ -535,7 +544,7 @@ MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
     }
   }
   vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpError(ExactFunction(), ExactFunctionLap(), data1));
+      new OpError(ExactFunction(), ExactFunctionLap(), data1, global_error));
   CHKERR set_integration_rule();
   dm = simple_interface->getDM();
   ts = createTS(m_field.get_comm());
@@ -577,18 +586,57 @@ MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
       }
     }
   }
-  // int step = 0;
-  // auto increment = [&]() -> int {
+
+  //the double global_vector is a global_vector which sums errors in each element
+
+  // Vec gVec;
+  // CHKERR VecCreateMPI(PETSC_COMM_WORLD, 1, 1, &gVec);
+  // double err_per_step = 0;
+
+  // auto compute_global_error = [&gVec](double &g_err, double &err_out) {
   //   MoFEMFunctionBegin;
-  //   ++step;
-  //   cout << "step : " << step << endl;
+
+  //   CHKERR VecZeroEntries(gVec);
+  //   CHKERR VecAssemblyBegin(gVec);
+  //   CHKERR VecAssemblyEnd(gVec);
+
+  //   int ind[1] = {0};
+  //   CHKERR VecSetValues(gVec, 1, ind, &err_out, ADD_VALUES);
+  //   CHKERR VecAssemblyBegin(gVec);
+  //   CHKERR VecAssemblyEnd(gVec);
+
+  //   CHKERR VecGetValues(gVec, 1, ind, &err_out);
+
   //   MoFEMFunctionReturn(0);
   // };
 
-  // vol_ele_slow_rhs->postProcessHook = increment;
+  // Vec error_per_proc;
+  // CHKERR VecCreateMPI(cOmm, 1, PETSC_DECIDE, &error_per_proc);
+  // auto get_global_error = [&]() {
+  //   MoFEMFunctionBegin;  
+  //   CHKERR VecSetValue(error_per_proc, m_field.get_comm_rank(), global_error, INSERT_VALUES);
+  //   MoFEMFunctionReturn(0);
+  // };
 
-      monitor_ptr = boost::shared_ptr<Monitor>(
-          new Monitor(dm, post_proc)); // nb_species times
+  // auto reinitialize_global = [&]() { 
+  //   MoFEMFunctionBegin;
+  //   CHKERR get_global_error();
+  //   CHKERR VecAssemblyBegin(error_per_proc);
+  //   CHKERR VecAssemblyEnd(error_per_proc);
+  //   double error_sum;
+  //   CHKERR VecSum(error_per_proc, &error_sum);
+  //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Error : %3.4e \n",
+  //                     error_sum);
+  //   global_error = 0;
+  //   MoFEMFunctionReturn(0);
+  //  };
+
+  // vol_ele_stiff_lhs->postProcessHook = reinitialize_global;
+
+
+
+  monitor_ptr = boost::shared_ptr<Monitor>(
+      new Monitor(cOmm, rAnk, dm, post_proc, global_error)); // nb_species times
   CHKERR output_result();          // only once
   CHKERR solve();                  // only once
   MoFEMFunctionReturn(0);
@@ -604,9 +652,10 @@ int main(int argc, char *argv[]) {
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
 
-    int order = 3;
+    int order = 2;
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
     int nb_species = 1;
-    RDProblem reac_diff_problem(core, order);
+    RDProblem reac_diff_problem(core, order+1);
     CHKERR reac_diff_problem.run_analysis(nb_species);
   }
   CATCH_ERRORS;

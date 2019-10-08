@@ -229,7 +229,8 @@ namespace StdRDOperators {
 
         auto t_base = data.getFTensor0N();
         auto t_w = getFTensor0IntegrationWeight();
-        const double vol = getMeasure();
+        const double vol = getMeasure()/2.0;
+        // cout << "measure : " << getMeasure() << endl;
         const double ct = getFEMethod()->ts_t;
         auto t_coords = getFTensor1CoordsAtGaussPts();
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
@@ -238,8 +239,8 @@ namespace StdRDOperators {
           double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
           double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
-          double f = u_dot - u_lap;
-
+          // double f = u_dot - u_lap;
+            double f = 0;
           // const double f = a * t_slow_value;  
 
           for (int rr = 0; rr != nb_dofs; ++rr) {
@@ -281,12 +282,16 @@ namespace StdRDOperators {
       
     OpAssembleStiffRhs(std::string field, 
                        boost::shared_ptr<PreviousData> &data,
-                       std::map<int, BlockData> &block_map
-                      //  FVal exact_value, 
-                      //  FVal exact_dot, 
-                      //  FVal exact_lap
+                       std::map<int, BlockData> &block_map,
+                       FVal exact_value, 
+                       FVal exact_dot, 
+                       FVal exact_lap
                        )
-        : OpEle(field, OpEle::OPROW), commonData(data), setOfBlock(block_map) {}
+        : OpEle(field, OpEle::OPROW), commonData(data)
+        , setOfBlock(block_map) 
+        , exactValue(exact_value)
+        , exactDot(exact_dot)
+        , exactLap(exact_lap){}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
@@ -327,11 +332,21 @@ namespace StdRDOperators {
         // cout << "B0 : " << block_data.B0 << endl;
 
         const double vol = getMeasure();
+
+        const double ct = getFEMethod()->ts_t;
+        auto t_coords = getFTensor1CoordsAtGaussPts();
+        
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
+
+          double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
+          double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
+
+          double f = u_dot - u_lap;
+
           for (int rr = 0; rr != nb_dofs; ++rr) {
             vecF[rr] += a * (t_base * t_dot_val + (block_data.B0 + B * t_val) *
-            t_diff_base(i) * t_grad(i));
+            t_diff_base(i) * t_grad(i) - t_base * f);
             ++t_diff_base;
             ++t_base;
           }
@@ -339,6 +354,7 @@ namespace StdRDOperators {
           ++t_grad;
           ++t_val;
           ++t_w;
+          ++t_coords;
         }
         CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
                             PETSC_TRUE);
@@ -353,6 +369,14 @@ namespace StdRDOperators {
     std::map<int, BlockData> setOfBlock;
     VectorDouble vecF;
     std::string field;
+
+    FVal exactValue;
+    FVal exactDot;
+    FVal exactLap;
+
+    FTensor::Number<0> NX;
+    FTensor::Number<1> NY;
+    FTensor::Number<2> NZ;
   };
 
   template <int DIM> struct OpAssembleStiffLhs : OpEle {
@@ -509,10 +533,75 @@ namespace StdRDOperators {
     Range natural_bd_ents;
   };
 
+  struct OpError : public OpEle {
+  typedef boost::function<double(const double, const double, const double)>
+      FVal;
+  typedef boost::function<FTensor::Tensor1<double, 3>(
+      const double, const double, const double)>
+      FGrad;
+  double &eRror;
+  OpError(FVal exact_value, FVal exact_lap,
+          boost::shared_ptr<PreviousData> &prev_data, double &err)
+      : OpEle("ERROR", OpEle::OPROW)
+      , exactVal(exact_value)
+      , exactLap(exact_lap)
+      , prevData(prev_data)
+      , eRror(err)
+      {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+    const int nb_dofs = data.getFieldData().size();
+    // cout << "nb_error_dofs : " << nb_dofs << endl;
+    if (nb_dofs) {
+      auto t_value = getFTensor0FromVec(prevData->values);
+      // auto t_grad = getFTensor1FromMat<3>(prevData->grads);
+      data.getFieldData().clear();
+      const double vol = getMeasure();
+      const int nb_integration_pts = getGaussPts().size2();
+      auto t_w = getFTensor0IntegrationWeight();
+      double dt;
+      CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
+      double ct = getFEMethod()->ts_t - dt;
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+        const double a = vol * t_w;
+        
+        double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
+        double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
+
+        double local_error = pow(mass_exact - t_value, 2);// + pow(flux_exact - div_c, 2); 
+
+        data.getFieldData()[0] += a * local_error;
+        eRror += a * local_error;
+
+        ++t_w;
+        ++t_value;
+        ++t_coords;
+      }
+
+      data.getFieldDofs()[0]->getFieldData() = data.getFieldData()[0];  
+    }
+      MoFEMFunctionReturn(0);
+  }
+
+  private:
+    FVal exactVal;
+    FVal exactLap;
+    boost::shared_ptr<PreviousData> prevData;
+
+    FTensor::Number<0> NX;
+    FTensor::Number<1> NY;
+};
+
   struct Monitor : public FEMethod {
-    Monitor(SmartPetscObj<DM> &dm,
-            boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
-        : dM(dm), postProc(post_proc){};
+    double &eRror;
+    Monitor(MPI_Comm &comm, const int &rank, SmartPetscObj<DM> &dm,
+            boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc, double &err)
+        : cOmm(comm)
+        , rAnk(rank) 
+        , dM(dm)
+        , postProc(post_proc)
+        , eRror(err){};
     MoFEMErrorCode preProcess() { return 0; }
     MoFEMErrorCode operator()() { return 0; }
     MoFEMErrorCode postProcess() {
@@ -522,13 +611,29 @@ namespace StdRDOperators {
         CHKERR postProc->writeFile(
             "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       }
-      // cout << "ct : " << ts_t << endl;
+      Vec error_per_proc;
+      CHKERR VecCreateMPI(cOmm, 1, PETSC_DECIDE, &error_per_proc);
+      auto get_global_error = [&]() {
+      MoFEMFunctionBegin;  
+      CHKERR VecSetValue(error_per_proc, rAnk, eRror, INSERT_VALUES);
+      MoFEMFunctionReturn(0);
+      };
+      CHKERR get_global_error();
+      CHKERR VecAssemblyBegin(error_per_proc);
+      CHKERR VecAssemblyEnd(error_per_proc);
+      double error_sum;
+      CHKERR VecSum(error_per_proc, &error_sum);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Error : %3.4e \n",
+                        error_sum);
+      eRror = 0;
       MoFEMFunctionReturn(0);
     }
 
   private:
     SmartPetscObj<DM> dM;
     boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
+    MPI_Comm cOmm;
+    const int rAnk;
   };
 
 }; // end StdRDOperators namespace
