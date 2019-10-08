@@ -34,8 +34,32 @@ using namespace MoFEM;
 static char help[] = "\n";
 int main(int argc, char *argv[]) {
 
+  const string default_options = "-ksp_type fgmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-ksp_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type basic \n"
+                                 "-snes_max_it 100 \n"
+                                 "-snes_atol 1e-8 \n"
+                                 "-snes_rtol 1e-8 \n"
+                                 "-snes_monitor \n"
+                                 "-my_order 3 \n"
+                                 "-my_order_lambda 3 \n"
+                                 "-my_r_value 1. \n"
+                                 "-my_cn_value 1e3 \n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+
   // Initialize MoFEM
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   // Create mesh database
   moab::Core mb_instance;              // create database
@@ -49,7 +73,6 @@ int main(int argc, char *argv[]) {
     //                 2 - gap
     PetscInt test_case_u = 0;
     PetscInt test_case_lambda = 0;
-    PetscInt model_number = 0;
     char mesh_file_name[255];
     PetscInt order = 1;
 
@@ -63,21 +86,13 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
-    CHKERR PetscOptionsInt("-test_case_u", "test case", "", 0, &test_case_u,
-                           PETSC_NULL);
-
-    CHKERR PetscOptionsInt("-test_case_lambda", "test case", "", 0,
-                           &test_case_lambda, PETSC_NULL);
-
-    CHKERR PetscOptionsInt("-model_number", "model number", "", 0,
-                           &model_number, PETSC_NULL);
 
     CHKERR PetscOptionsInt("-my_order", "default approximation order", "", 1,
                            &order, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
+                            "process keeps only part of the mesh",
                             "", PETSC_FALSE, &is_partitioned, PETSC_NULL);
 
     CHKERR PetscOptionsInt("-my_master_move", "Move master?", "", 0,
@@ -195,23 +210,17 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-    if (model_number == 0 || model_number == 2) {
 
-      if (model_number == 0){
         CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
                                  MB_TAG_SPARSE, MF_ZERO);
-      }
-      else{
-        CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                                 MB_TAG_SPARSE, MF_ZERO);
-      }
+      
 
       CHKERR m_field.add_ents_to_field_by_type(range_surf_slave, MBTRI,
                                                "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
-    }
+    
 
     Range range_slave_master_prisms;
 
@@ -286,16 +295,9 @@ int main(int argc, char *argv[]) {
     // ContactProblemSmallDispNoFriction contact_problem(
     //     m_field, contact_commondata_multi_index, r_value, cn_value);
 
-    if (model_number == 0) {
-      // add fields to the global matrix by adding the element
-      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                         "LAGMULT", range_slave_master_prisms);
-    } else if (model_number == 1) {
-      cerr << "PENALTYYYY =====++++++====\n";
-      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                         "SPATIAL_POSITION",
-                                         range_slave_master_prisms, false);
-    } 
+    // add fields to the global matrix by adding the element
+    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                       "LAGMULT", range_slave_master_prisms);
 
     // Forces
     boost::shared_ptr<boost::ptr_map<string, NodalForce>> neumann_forces =
@@ -413,53 +415,48 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    
-    if (model_number == 0) {
-      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, it)) {
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, it)) {
 
-        if (it->getName().compare(0, 5, "Slave") == 0) {
+      if (it->getName().compare(0, 5, "Slave") == 0) {
 
-          Range range_tris, range_vertices;
-          CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI,
-                                                         range_tris, true);
-          CHKERR m_field.get_moab().get_adjacencies(
-              range_tris, 0, false, range_vertices, moab::Interface::UNION);
+        Range range_tris, range_vertices;
+        CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI,
+                                                       range_tris, true);
+        CHKERR m_field.get_moab().get_adjacencies(
+            range_tris, 0, false, range_vertices, moab::Interface::UNION);
 
-          for (Range::iterator it_vertices = range_vertices.begin();
-               it_vertices != range_vertices.end(); it_vertices++) {
+        for (Range::iterator it_vertices = range_vertices.begin();
+             it_vertices != range_vertices.end(); it_vertices++) {
 
-            for (DofEntityByNameAndEnt::iterator itt =
-                     m_field.get_dofs_by_name_and_ent_begin("LAGMULT",
-                                                            *it_vertices);
-                 itt !=
-                 m_field.get_dofs_by_name_and_ent_end("LAGMULT", *it_vertices);
-                 ++itt) {
+          for (DofEntityByNameAndEnt::iterator itt =
+                   m_field.get_dofs_by_name_and_ent_begin("LAGMULT",
+                                                          *it_vertices);
+               itt !=
+               m_field.get_dofs_by_name_and_ent_end("LAGMULT", *it_vertices);
+               ++itt) {
 
-              auto &dof = **itt;
+            auto &dof = **itt;
 
-              EntityHandle ent = dof.getEnt();
-              int dof_rank = dof.getDofCoeffIdx();
-              // VectorDouble3 coords(3);
+            EntityHandle ent = dof.getEnt();
+            int dof_rank = dof.getDofCoeffIdx();
+            // VectorDouble3 coords(3);
 
-              // CHKERR moab.get_coords(&ent, 1, &coords[0]);
+            // CHKERR moab.get_coords(&ent, 1, &coords[0]);
 
-              // if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
-              if (model_number == 0) {
-                printf("Before Lambda: %e\n", dof.getFieldData());
+            // if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+            printf("Before Lambda: %e\n", dof.getFieldData());
 
-                switch (test_case_lambda) {
+            switch (test_case_lambda) {
 
-                case 1:
-                  dof.getFieldData() = -2.5;
-                  break;
-                case 2:
-                  dof.getFieldData() = +2.5;
-                  break;
-                }
-
-                printf("After  Lambda: %e\n", dof.getFieldData());
-                 }
+            case 1:
+              dof.getFieldData() = -2.5;
+              break;
+            case 2:
+              dof.getFieldData() = +2.5;
+              break;
             }
+
+            printf("After  Lambda: %e\n", dof.getFieldData());
           }
         }
       }
@@ -476,38 +473,18 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix_MoFEM(dm, &A);
     CHKERR MatZeroEntries(A);
 
-    if (model_number == 0) {
-      contact_problem->setContactOperatorsActiveSet("SPATIAL_POSITION",
-                                                    "LAGMULT");
+    contact_problem->setContactOperatorsActiveSet("SPATIAL_POSITION",
+                                                  "LAGMULT");
 
-      contact_problem->setContactOperators("SPATIAL_POSITION", "LAGMULT", A);
+    contact_problem->setContactOperators("SPATIAL_POSITION", "LAGMULT", A);
 
-      CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                    contact_problem->feRhsSimpleContact.get(),
-                                    PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                  contact_problem->feRhsSimpleContact.get(),
+                                  PETSC_NULL, PETSC_NULL);
 
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM", contact_problem->feLhsSimpleContact.get(), NULL, NULL);
-
-    } else if (model_number == 1) {
-
-      // printf("---------Penalty element-----------1\n");
-      // contact_problem->setContactPenaltyRhsOperators("SPATIAL_POSITION",
-      //                                                "SPATIAL_POSITION");
-
-      // contact_problem->setPenaltyLhsOperatorsSimple(
-      //     "SPATIAL_POSITION", "SPATIAL_POSITION", A);
-
-      // CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-      //                               contact_problem->feRhsSimpleContact.get(),
-      //                               PETSC_NULL, PETSC_NULL);
-
-      // CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-      //                               contact_problem->feLhsSimpleContact.get(), NULL, NULL);
-
-      // printf("---------Penalty element-----------2\n");
-
-    } 
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                  contact_problem->feLhsSimpleContact.get(),
+                                  NULL, NULL);
 
     SNES snes;
     CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
