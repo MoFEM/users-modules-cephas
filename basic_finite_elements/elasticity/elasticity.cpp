@@ -254,10 +254,8 @@ int main(int argc, char *argv[]) {
 
     // Add entities (by tets) to the field (all entities in the mesh, root_set
     // = 0 )
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "DISPLACEMENT");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBPRISM, "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_field_by_dim(0, 3, "DISPLACEMENT");
+    CHKERR m_field.add_ents_to_field_by_dim(0, 3, "MESH_NODE_POSITIONS");
 
     // Set approximation order.
     // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
@@ -467,10 +465,9 @@ int main(int argc, char *argv[]) {
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, BLOCKSET | BODYFORCESSET, it)) {
       Range tets;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTET, tets,
-                                                     true);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tets, MBTET,
-                                                        "BODY_FORCE");
+      CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 3, tets,
+                                                          true);
+      CHKERR m_field.add_ents_to_finite_element_by_dim(tets, 3, "BODY_FORCE");
     }
 
     // Add Neumann forces, i.e. pressure or traction forces applied on body
