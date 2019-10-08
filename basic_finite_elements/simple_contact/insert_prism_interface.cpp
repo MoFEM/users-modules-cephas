@@ -71,12 +71,18 @@ int main(int argc, char *argv[]) {
     std::vector<BitRefLevel> bit_levels;
     bit_levels.push_back(BitRefLevel().set(0));
 
+    Range master_tris;
+
     int ll = 1;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
       if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
         CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert $s (id: %d)\n",
                            cit->getName().c_str(), cit->getMeshsetId());
         EntityHandle cubit_meshset = cit->getMeshset();
+        Range tris;
+        CHKERR moab.get_entities_by_type(cubit_meshset, MBTRI, tris, true);
+        master_tris.merge(tris);
+
         {
           // get tet enties form back bit_level
           EntityHandle ref_level_meshset = 0;
@@ -93,11 +99,11 @@ int main(int argc, char *argv[]) {
           CHKERR moab.get_entities_by_handle(ref_level_meshset, ref_level_tets,
                                              true);
           ref_level_tets.print();
-          // get faces and test to split
+          // get faces and tets to split
           CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true, 0);
           // set new bit level
           bit_levels.push_back(BitRefLevel().set(ll++));
-          // split faces and
+          // split faces and tets
           CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
                                        cubit_meshset, true, true, 0);
           // clean meshsets
@@ -152,20 +158,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // if (output_vtk) {
-    //   EntityHandle meshset;
-    //   CHKERR moab.create_meshset(MESHSET_SET, meshset);
-    //   BitRefLevel bit;
-    //   bit = bit_levels.back();
-    //   CHKERR m_field.getInterface<BitRefManager>()
-    //       ->getEntitiesByTypeAndRefLevel(bit, BitRefLevel().set(), MBTET,
-    //                                      meshset);
-    //   CHKERR moab.write_file("out.vtk", "VTK", "", &meshset, 1);
-    //   CHKERR moab.delete_entities(&meshset, 1);
-    // }
-
-    // CHKERR moab.write_file("out.h5m");
-    
     EntityHandle out_meshset_tet;
     EntityHandle out_meshset_prism;
     EntityHandle out_meshset_tets_and_prism;
@@ -186,6 +178,14 @@ int main(int argc, char *argv[]) {
 
     CHKERR moab.add_entities(out_meshset_tets_and_prism, tets);
     CHKERR moab.add_entities(out_meshset_tets_and_prism, prisms);
+
+    Range tris;
+    CHKERR moab.get_adjacencies(prisms, 2, false, tris, moab::Interface::UNION);
+    tris = tris.subset_by_type(MBTRI);
+
+    Range slave_tris;
+    slave_tris = subtract(tris, master_tris);
+    //slave_tris.print();
 
     CHKERR moab.write_file("out_tet.vtk", "VTK", "", &out_meshset_tet, 1);
     CHKERR moab.write_file("out_prism.vtk", "VTK", "", &out_meshset_prism, 1);
