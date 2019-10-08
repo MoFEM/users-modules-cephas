@@ -41,11 +41,13 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
 #  DESTINATION ${BFE_MOD_DIR}
 #  PERMISSIONS OWNER_READ OWNER_WRITE)
 
-if(ADOL-C_LIBRARY)
+# bfe_build_and_install(test_simple_contact
+#   ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
 
-  bfe_build_and_install(test_simple_contact
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
+bfe_build_and_install(insert_prism_interface
+  ${CMAKE_CURRENT_SOURCE_DIR}/insert_prism_interface.cpp)
 
+# if(ADOL-C_LIBRARY)
 
   #testing
 #  add_test(ArcLengthInterfaceTest
@@ -57,4 +59,4 @@ if(ADOL-C_LIBRARY)
 #    -snes_max_it 16 -snes_atol 1e-8 -snes_rtol 1e-8 -my_sr 1e-1 -my_ms 3 -snes_converged_reason
 #    -log_view)
 
-endif(ADOL-C_LIBRARY)
+# endif(ADOL-C_LIBRARY)
