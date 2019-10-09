@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
     int ll = 1;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
       if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert $s (id: %d)\n",
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
                            cit->getName().c_str(), cit->getMeshsetId());
         EntityHandle cubit_meshset = cit->getMeshset();
         Range tris;

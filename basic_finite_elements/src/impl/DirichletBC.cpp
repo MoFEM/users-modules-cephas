@@ -328,12 +328,12 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
           Range edges;
           CHKERR mField.get_moab().get_adjacencies(
               bc_ents[dim], 1, false, edges, moab::Interface::UNION);
-          bc_ents[dim].insert(edges.begin(), edges.end());
+          bc_ents[1].insert(edges.begin(), edges.end());
         }
         if (dim > 0) {
           Range nodes;
           CHKERR mField.get_moab().get_connectivity(bc_ents[dim], nodes, true);
-          bc_ents[dim].insert(nodes.begin(), nodes.end());
+          bc_ents[0].insert(nodes.begin(), nodes.end());
         }
       }
       MoFEMFunctionReturn(0);

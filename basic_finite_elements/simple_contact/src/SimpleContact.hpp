@@ -26,6 +26,17 @@ extern "C" {
 #define __SIMPLE_CONTACT__
 struct SimpleContactProblem {
 
+  struct LoadScale : public MethodForForceScaling {
+
+    static double scale;
+
+    MoFEMErrorCode scaleNf(const FEMethod *fe, VectorDouble &nf) {
+      MoFEMFunctionBegin;
+      nf *= scale;
+      MoFEMFunctionReturn(0);
+    }
+  };
+
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
   };
