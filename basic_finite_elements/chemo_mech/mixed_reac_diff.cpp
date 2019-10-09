@@ -7,14 +7,15 @@ using namespace ReactionDiffusion;
 
 static char help[] = "...\n\n";
 
+// #define M_PI 3.14159265358979323846 /* pi */
+
 struct RDProblem {
 public:
-  RDProblem(MoFEM::Core &core, const int order, const int nb_spec) 
+  RDProblem(MoFEM::Core &core, const int order) 
   : m_field(core)
   , order(order)
   , cOmm(m_field.get_comm())
-  , rAnk(m_field.get_comm_rank())
-  , nb_species(nb_spec) {
+  , rAnk(m_field.get_comm_rank()) {
     vol_ele_slow_rhs = boost::shared_ptr<FaceEle>(new FaceEle(m_field));
     natural_bdry_ele_slow_rhs =
         boost::shared_ptr<BoundaryEle>(new BoundaryEle(m_field));
@@ -23,59 +24,40 @@ public:
     post_proc = boost::shared_ptr<PostProcFaceOnRefinedMesh>(
         new PostProcFaceOnRefinedMesh(m_field));
 
+    data1 = boost::shared_ptr<PreviousData>(new PreviousData());
+    data2 = boost::shared_ptr<PreviousData>(new PreviousData());
+    data3 = boost::shared_ptr<PreviousData>(new PreviousData());
 
-    data.resize(nb_species);
-    mass_values_ptr.resize(nb_species);
-    flux_values_ptr.resize(nb_species);
-    mass_dots_ptr.resize(nb_species);
-    flux_divs_ptr.resize(nb_species);
+    flux_values_ptr1 =
+        boost::shared_ptr<MatrixDouble>(data1, &data1->flux_values);
 
-    inner_surface.resize(nb_species);
+    flux_divs_ptr1 = boost::shared_ptr<VectorDouble>(data1, &data1->flux_divs);
 
-    for(int i = 0; i < nb_species; ++i){
-      data[i] = boost::shared_ptr<PreviousData>(new PreviousData());
-      mass_values_ptr[i] = boost::shared_ptr<VectorDouble>(data[i], &data[i]->mass_values);
-      flux_values_ptr[i] = boost::shared_ptr<MatrixDouble>(data[i], &data[i]->flux_values);
-      flux_divs_ptr[i] = boost::shared_ptr<VectorDouble>(data[i], &data[i]->flux_divs);
-      mass_dots_ptr[i] = boost::shared_ptr<VectorDouble>(data[i], &data[i]->mass_dots);
-    }
+    mass_values_ptr1 =
+        boost::shared_ptr<VectorDouble>(data1, &data1->mass_values);
 
-    // data1 = boost::shared_ptr<PreviousData>(new PreviousData());
-    // data2 = boost::shared_ptr<PreviousData>(new PreviousData());
-    // data3 = boost::shared_ptr<PreviousData>(new PreviousData());
+    mass_dots_ptr1 = boost::shared_ptr<VectorDouble>(data1, &data1->mass_dots);
 
+    flux_values_ptr2 =
+        boost::shared_ptr<MatrixDouble>(data2, &data2->flux_values);
+    flux_divs_ptr2 = boost::shared_ptr<VectorDouble>(data2, &data2->flux_divs);
 
+    mass_values_ptr2 =
+        boost::shared_ptr<VectorDouble>(data2, &data2->mass_values);
+    mass_dots_ptr2 = boost::shared_ptr<VectorDouble>(data2, &data2->mass_dots);
 
-    // flux_values_ptr1 =
-    //     boost::shared_ptr<MatrixDouble>(data1, &data1->flux_values);
+    flux_values_ptr3 =
+        boost::shared_ptr<MatrixDouble>(data3, &data3->flux_values);
+    flux_divs_ptr3 = boost::shared_ptr<VectorDouble>(data3, &data3->flux_divs);
 
-    // flux_divs_ptr1 = boost::shared_ptr<VectorDouble>(data1, &data1->flux_divs);
+    mass_values_ptr3 =
+        boost::shared_ptr<VectorDouble>(data3, &data3->mass_values);
 
-    // mass_values_ptr1 =
-    //     boost::shared_ptr<VectorDouble>(data1, &data1->mass_values);
-
-    // mass_dots_ptr1 = boost::shared_ptr<VectorDouble>(data1, &data1->mass_dots);
-
-    // flux_values_ptr2 =
-    //     boost::shared_ptr<MatrixDouble>(data2, &data2->flux_values);
-    // flux_divs_ptr2 = boost::shared_ptr<VectorDouble>(data2, &data2->flux_divs);
-
-    // mass_values_ptr2 =
-    //     boost::shared_ptr<VectorDouble>(data2, &data2->mass_values);
-    // mass_dots_ptr2 = boost::shared_ptr<VectorDouble>(data2, &data2->mass_dots);
-
-    // flux_values_ptr3 =
-    //     boost::shared_ptr<MatrixDouble>(data3, &data3->flux_values);
-    // flux_divs_ptr3 = boost::shared_ptr<VectorDouble>(data3, &data3->flux_divs);
-
-    // mass_values_ptr3 =
-    //     boost::shared_ptr<VectorDouble>(data3, &data3->mass_values);
-
-    // mass_dots_ptr3 = boost::shared_ptr<VectorDouble>(data3, &data3->mass_dots);
+    mass_dots_ptr3 = boost::shared_ptr<VectorDouble>(data3, &data3->mass_dots);
   }
 
   // RDProblem(const int order) : order(order){}
-  MoFEMErrorCode run_analysis();
+  MoFEMErrorCode run_analysis(int nb_sp);
 
   double global_error;
 
@@ -130,8 +112,6 @@ private:
   Range inner_surface2;
   Range inner_surface3;
 
-  std::vector<Range> inner_surface;
-
   MPI_Comm cOmm;
   const int rAnk;
 
@@ -147,35 +127,25 @@ private:
   boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc;
   boost::shared_ptr<Monitor> monitor_ptr;
 
-  // boost::shared_ptr<PreviousData> data1; // nb_species times
-  // boost::shared_ptr<PreviousData> data2;
-  // boost::shared_ptr<PreviousData> data3;
+  boost::shared_ptr<PreviousData> data1; // nb_species times
+  boost::shared_ptr<PreviousData> data2;
+  boost::shared_ptr<PreviousData> data3;
 
-  std::vector<boost::shared_ptr<PreviousData>> data;
+  boost::shared_ptr<MatrixDouble> flux_values_ptr1; // nb_species times
+  boost::shared_ptr<MatrixDouble> flux_values_ptr2;
+  boost::shared_ptr<MatrixDouble> flux_values_ptr3;
 
-  std::vector<boost::shared_ptr<MatrixDouble>> flux_values_ptr;
+  boost::shared_ptr<VectorDouble> flux_divs_ptr1; // nb_species times
+  boost::shared_ptr<VectorDouble> flux_divs_ptr2;
+  boost::shared_ptr<VectorDouble> flux_divs_ptr3;
 
-  // boost::shared_ptr<MatrixDouble> flux_values_ptr1; // nb_species times
-  // boost::shared_ptr<MatrixDouble> flux_values_ptr2;
-  // boost::shared_ptr<MatrixDouble> flux_values_ptr3;
+  boost::shared_ptr<VectorDouble> mass_values_ptr1; // nb_species times
+  boost::shared_ptr<VectorDouble> mass_values_ptr2;
+  boost::shared_ptr<VectorDouble> mass_values_ptr3;
 
-  std::vector<boost::shared_ptr<VectorDouble>> flux_divs_ptr;
-
-  // boost::shared_ptr<VectorDouble> flux_divs_ptr1; // nb_species times
-  // boost::shared_ptr<VectorDouble> flux_divs_ptr2;
-  // boost::shared_ptr<VectorDouble> flux_divs_ptr3;
-
-  std::vector<boost::shared_ptr<VectorDouble>> mass_values_ptr;
-
-  // boost::shared_ptr<VectorDouble> mass_values_ptr1; // nb_species times
-  // boost::shared_ptr<VectorDouble> mass_values_ptr2;
-  // boost::shared_ptr<VectorDouble> mass_values_ptr3;
-
-  std::vector<boost::shared_ptr<VectorDouble>> mass_dots_ptr;
-
-  // boost::shared_ptr<VectorDouble> mass_dots_ptr1; // nb_species times
-  // boost::shared_ptr<VectorDouble> mass_dots_ptr2;
-  // boost::shared_ptr<VectorDouble> mass_dots_ptr3;
+  boost::shared_ptr<VectorDouble> mass_dots_ptr1; // nb_species times
+  boost::shared_ptr<VectorDouble> mass_dots_ptr2;
+  boost::shared_ptr<VectorDouble> mass_dots_ptr3;
 
   boost::shared_ptr<ForcesAndSourcesCore> null;
 };
@@ -198,7 +168,7 @@ return grad;
 
 struct ExactFunctionLap{
   double operator()(const double x, const double y, const double t) const {
-    return - 8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
+    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
   }
 };
 
@@ -382,7 +352,7 @@ RDProblem::update_stiff_lhs(std::string mass_field, std::string flux_field,
       new OpCalculateScalarFieldValues(mass_field, mass_ptr));
 
   vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpCalculateHdivVectorField<3>(flux_field, flux_ptr));
+      new OpCalculateHdivVectorField<3>(flux_field, flux_ptr));    
   MoFEMFunctionReturn(0);
 }
 
@@ -480,31 +450,21 @@ MoFEMErrorCode RDProblem::solve() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode RDProblem::run_analysis() {
+MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
   MoFEMFunctionBegin;
   global_error = 0;
   // set nb_species
   CHKERR setup_system(); // only once
-  std::vector<std::string> mass_names(nb_species);
-  std::vector<std::string> flux_names(nb_species);
-  for(int i = 0; i < nb_species; ++i){
-    mass_names[i] = "MASS" + boost::lexical_cast<std::string>(i+1);
-    flux_names[i] = "FLUX" + boost::lexical_cast<std::string>(i+1);
+  nb_species = nb_sp;
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR add_fe("MASS1", "FLUX1"); // nb_species times
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR add_fe("MASS2", "FLUX2");
+      if (nb_species == 3) {
+        CHKERR add_fe("MASS3", "FLUX3");
+      }
+    }
   }
-
-  for (int i = 0; i < nb_species; ++i) {
-    add_fe(mass_names[i], flux_names[i]);
-  }
-
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR add_fe("MASS1", "FLUX1"); // nb_species times
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR add_fe("MASS2", "FLUX2");
-  //     if (nb_species == 3) {
-  //       CHKERR add_fe("MASS3", "FLUX3");
-  //     }
-  //   }
-  // }
 
   CHKERR simple_interface->setUp();
 
@@ -512,169 +472,168 @@ MoFEMErrorCode RDProblem::run_analysis() {
 
   CHKERR extract_bd_ents("ESSENTIAL", "NATURAL"); // nb_species times
 
-  for (int i = 0; i < nb_species; ++i) {
-    CHKERR extract_initial_ents(i+2, inner_surface[i]);
-    CHKERR update_slow_rhs(mass_names[i], mass_values_ptr[i]);
-  }
-
-  if (nb_species == 1) {
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR extract_initial_ents(2, inner_surface1);
+    CHKERR update_slow_rhs("MASS1", mass_values_ptr1);
+    if (nb_species == 1) {
       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[0], data[0], data[0], data[0], material_blocks));
-    } else if(nb_species == 2){
-      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[0], data[0], data[1], data[1], material_blocks));
-    } else if(nb_species == 3){
-      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[0], data[0], data[1], data[2], material_blocks));
+          "MASS1", data1, data1, data1, material_blocks));
+    } else if (nb_species == 2 || nb_species == 3) {
+      CHKERR extract_initial_ents(3, inner_surface2);
+      CHKERR update_slow_rhs("MASS2", mass_values_ptr2);
+      if (nb_species == 2) {
+        vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+            "MASS1", data1, data2, data2, material_blocks));
+      } else if (nb_species == 3) {
+        CHKERR extract_initial_ents(4, inner_surface3);
+        CHKERR update_slow_rhs("MASS3", mass_values_ptr3);
+        vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+            "MASS1", data1, data2, data3, material_blocks));
+      }
     }
-
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR extract_initial_ents(2, inner_surface1);
-  //   CHKERR update_slow_rhs("MASS1", mass_values_ptr1);
-  //   if (nb_species == 1) {
-  //     vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-  //         "MASS1", data1, data1, data1, material_blocks));
-  //   } else if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR extract_initial_ents(3, inner_surface2);
-  //     CHKERR update_slow_rhs("MASS2", mass_values_ptr2);
-  //     if (nb_species == 2) {
-  //       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-  //           "MASS1", data1, data2, data2, material_blocks));
-  //     } else if (nb_species == 3) {
-  //       CHKERR extract_initial_ents(4, inner_surface3);
-  //       CHKERR update_slow_rhs("MASS3", mass_values_ptr3);
-  //       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-  //           "MASS1", data1, data2, data3, material_blocks));
-  //     }
-  //   }
-  // }
+  }
   natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
       new OpSetContrariantPiolaTransformOnEdge());
 
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR push_slow_rhs("MASS1", "FLUX1", data1); // nb_species times
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR push_slow_rhs("MASS2", "FLUX2", data2);
-  //     if (nb_species == 3) {
-  //       CHKERR push_slow_rhs("MASS3", "FLUX3", data3);
-  //     }
-  //   }
-  // }
-  for(int i = 0; i < nb_species; ++i){
-    CHKERR push_slow_rhs(mass_names[i], flux_names[i], data[i]);
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR push_slow_rhs("MASS1", "FLUX1", data1); // nb_species times
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR push_slow_rhs("MASS2", "FLUX2", data2);
+      if (nb_species == 3) {
+        CHKERR push_slow_rhs("MASS3", "FLUX3", data3);
+      }
+    }
   }
 
-  CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
+  CHKERR update_vol_fe(vol_ele_stiff_rhs, data1);
 
-  for(int i = 0; i != nb_species; ++i){
-    CHKERR update_stiff_rhs(mass_names[i], flux_names[i], mass_values_ptr[i],
-                            flux_values_ptr[i], mass_dots_ptr[i], flux_divs_ptr[i]);
-    CHKERR push_stiff_rhs(mass_names[i], flux_names[i], data[i],
-                          material_blocks);
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR update_stiff_rhs("MASS1", "FLUX1", mass_values_ptr1,
+                            flux_values_ptr1, mass_dots_ptr1, flux_divs_ptr1);
+    CHKERR push_stiff_rhs("MASS1", "FLUX1", data1,
+                          material_blocks); // nb_species times
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR update_stiff_rhs("MASS2", "FLUX2", mass_values_ptr2,
+                              flux_values_ptr2, mass_dots_ptr2, flux_divs_ptr2);
+      CHKERR push_stiff_rhs("MASS2", "FLUX2", data2, material_blocks);
+      if (nb_species == 3) {
+        CHKERR update_stiff_rhs("MASS3", "FLUX3", mass_values_ptr3,
+                                flux_values_ptr3, mass_dots_ptr3,
+                                flux_divs_ptr3);
+        CHKERR push_stiff_rhs("MASS3", "FLUX3", data3, material_blocks);
+      }
+    }
   }
 
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR update_stiff_rhs("MASS1", "FLUX1", mass_values_ptr1,
-  //                           flux_values_ptr1, mass_dots_ptr1, flux_divs_ptr1);
-  //   CHKERR push_stiff_rhs("MASS1", "FLUX1", data1,
-  //                         material_blocks); // nb_species times
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR update_stiff_rhs("MASS2", "FLUX2", mass_values_ptr2,
-  //                             flux_values_ptr2, mass_dots_ptr2, flux_divs_ptr2);
-  //     CHKERR push_stiff_rhs("MASS2", "FLUX2", data2, material_blocks);
-  //     if (nb_species == 3) {
-  //       CHKERR update_stiff_rhs("MASS3", "FLUX3", mass_values_ptr3,
-  //                               flux_values_ptr3, mass_dots_ptr3,
-  //                               flux_divs_ptr3);
-  //       CHKERR push_stiff_rhs("MASS3", "FLUX3", data3, material_blocks);
-  //     }
-  //   }
-  // }
+  CHKERR update_vol_fe(vol_ele_stiff_lhs, data1);
 
-  CHKERR update_vol_fe(vol_ele_stiff_lhs, data[0]);
-
-  for(int i = 0; i != nb_species; ++i){
-    CHKERR update_stiff_lhs(mass_names[i], flux_names[i], mass_values_ptr[i],
-                            flux_values_ptr[i]);
-    CHKERR push_stiff_lhs(mass_names[i], flux_names[i], data[i],
-                          material_blocks);
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR update_stiff_lhs("MASS1", "FLUX1", mass_values_ptr1,
+                            flux_values_ptr1);
+    CHKERR push_stiff_lhs("MASS1", "FLUX1", data1,
+                          material_blocks); // nb_species times
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR update_stiff_lhs("MASS2", "FLUX2", mass_values_ptr2,
+                              flux_values_ptr2);
+      CHKERR push_stiff_lhs("MASS2", "FLUX2", data2, material_blocks);
+      if (nb_species == 3) {
+        CHKERR update_stiff_lhs("MASS3", "FLUX3", mass_values_ptr3,
+                                flux_values_ptr3);
+        CHKERR push_stiff_lhs("MASS3", "FLUX3", data3, material_blocks);
+      }
+    }
   }
-
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR update_stiff_lhs("MASS1", "FLUX1", mass_values_ptr1,
-  //                           flux_values_ptr1);
-  //   CHKERR push_stiff_lhs("MASS1", "FLUX1", data1,
-  //                         material_blocks); // nb_species times
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR update_stiff_lhs("MASS2", "FLUX2", mass_values_ptr2,
-  //                             flux_values_ptr2);
-  //     CHKERR push_stiff_lhs("MASS2", "FLUX2", data2, material_blocks);
-  //     if (nb_species == 3) {
-  //       CHKERR update_stiff_lhs("MASS3", "FLUX3", mass_values_ptr3,
-  //                               flux_values_ptr3);
-  //       CHKERR push_stiff_lhs("MASS3", "FLUX3", data3, material_blocks);
-  //     }
-  //   }
-  // }
+  
 
   vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpError(ExactFunction(), ExactFunctionLap(), data[0], global_error));
+      new OpError(ExactFunction(), ExactFunctionLap(), data1, global_error));
   CHKERR set_integration_rule();
   dm = simple_interface->getDM();
   ts = createTS(m_field.get_comm());
   boost::shared_ptr<FaceEle> initial_mass_ele(new FaceEle(m_field));
 
-  for(int i = 0; i != nb_species; ++i){
-  CHKERR apply_IC(mass_names[i], inner_surface[i],
-                    initial_mass_ele);
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR apply_IC("MASS1", inner_surface1,
+                    initial_mass_ele); // nb_species times
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR apply_IC("MASS2", inner_surface2, initial_mass_ele);
+      if (nb_species == 3) {
+        CHKERR apply_IC("MASS3", inner_surface3, initial_mass_ele);
+      }
+    }
   }
-
-
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR apply_IC("MASS1", inner_surface1,
-  //                   initial_mass_ele); // nb_species times
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR apply_IC("MASS2", inner_surface2, initial_mass_ele);
-  //     if (nb_species == 3) {
-  //       CHKERR apply_IC("MASS3", inner_surface3, initial_mass_ele);
-  //     }
-  //   }
-  // }
   CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
                                   initial_mass_ele);
 
-  for(int i = 0; i != nb_species; ++i){
-    CHKERR apply_BC(mass_names[i]);
-  }                             
-
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR apply_BC("MASS1"); // nb_species times
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR apply_BC("MASS2");
-  //     if (nb_species == 3) {
-  //       CHKERR apply_BC("MASS3");
-  //     }
-  //   }
-  // }
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR apply_BC("MASS1"); // nb_species times
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR apply_BC("MASS2");
+      if (nb_species == 3) {
+        CHKERR apply_BC("MASS3");
+      }
+    }
+  }
 
   CHKERR loop_fe();                          // only once
   post_proc->generateReferenceElementMesh(); // only once
 
-  for(int i = 0; i != nb_species; ++i){
-    CHKERR post_proc_fields(mass_names[i], flux_names[i]);
+  if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
+    CHKERR post_proc_fields("MASS1", "FLUX1");
+    post_proc->addFieldValuesPostProc("ERROR");
+    if (nb_species == 2 || nb_species == 3) {
+      CHKERR post_proc_fields("MASS2", "FLUX2");
+      if (nb_species == 3) {
+        CHKERR post_proc_fields("MASS3", "FLUX3");
+      }
+    }
   }
-  post_proc->addFieldValuesPostProc("ERROR");
 
-  // if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-  //   CHKERR post_proc_fields("MASS1", "FLUX1");
-  //   post_proc->addFieldValuesPostProc("ERROR");
-  //   if (nb_species == 2 || nb_species == 3) {
-  //     CHKERR post_proc_fields("MASS2", "FLUX2");
-  //     if (nb_species == 3) {
-  //       CHKERR post_proc_fields("MASS3", "FLUX3");
-  //     }
-  //   }
-  // }
+  //the double global_vector is a global_vector which sums errors in each element
+
+  // Vec gVec;
+  // CHKERR VecCreateMPI(PETSC_COMM_WORLD, 1, 1, &gVec);
+  // double err_per_step = 0;
+
+  // auto compute_global_error = [&gVec](double &g_err, double &err_out) {
+  //   MoFEMFunctionBegin;
+
+  //   CHKERR VecZeroEntries(gVec);
+  //   CHKERR VecAssemblyBegin(gVec);
+  //   CHKERR VecAssemblyEnd(gVec);
+
+  //   int ind[1] = {0};
+  //   CHKERR VecSetValues(gVec, 1, ind, &err_out, ADD_VALUES);
+  //   CHKERR VecAssemblyBegin(gVec);
+  //   CHKERR VecAssemblyEnd(gVec);
+
+  //   CHKERR VecGetValues(gVec, 1, ind, &err_out);
+
+  //   MoFEMFunctionReturn(0);
+  // };
+
+  // Vec error_per_proc;
+  // CHKERR VecCreateMPI(cOmm, 1, PETSC_DECIDE, &error_per_proc);
+  // auto get_global_error = [&]() {
+  //   MoFEMFunctionBegin;  
+  //   CHKERR VecSetValue(error_per_proc, m_field.get_comm_rank(), global_error, INSERT_VALUES);
+  //   MoFEMFunctionReturn(0);
+  // };
+
+  // auto reinitialize_global = [&]() { 
+  //   MoFEMFunctionBegin;
+  //   CHKERR get_global_error();
+  //   CHKERR VecAssemblyBegin(error_per_proc);
+  //   CHKERR VecAssemblyEnd(error_per_proc);
+  //   double error_sum;
+  //   CHKERR VecSum(error_per_proc, &error_sum);
+  //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Error : %3.4e \n",
+  //                     error_sum);
+  //   global_error = 0;
+  //   MoFEMFunctionReturn(0);
+  //  };
+
+  // vol_ele_stiff_lhs->postProcessHook = reinitialize_global;
 
 
 
@@ -695,11 +654,11 @@ int main(int argc, char *argv[]) {
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
 
-    int order = 2;
+    int order = 1;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
     int nb_species = 1;
-    RDProblem reac_diff_problem(core, order+1, nb_species);
-    CHKERR reac_diff_problem.run_analysis();
+    RDProblem reac_diff_problem(core, order+1);
+    CHKERR reac_diff_problem.run_analysis(nb_species);
   }
   CATCH_ERRORS;
   MoFEM::Core::Finalize();

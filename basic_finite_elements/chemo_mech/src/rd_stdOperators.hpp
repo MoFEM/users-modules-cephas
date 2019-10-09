@@ -569,7 +569,7 @@ namespace StdRDOperators {
         double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
         double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
 
-        double local_error = pow(mass_exact - t_value, 2);// + pow(flux_exact - div_c, 2); 
+        double local_error = pow(mass_exact - t_value, 2);
 
         data.getFieldData()[0] += a * local_error;
         eRror += a * local_error;

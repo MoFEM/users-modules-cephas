@@ -891,6 +891,8 @@ struct OpError : public OpFaceEle {
     const int nb_dofs = data.getFieldData().size();
     // cout << "nb_error_dofs : " << nb_dofs << endl;
     if (nb_dofs) {
+      auto t_flux_value = getFTensor1FromMat<3>(prevData->flux_values);
+      auto t_mass_dot = getFTensor0FromVec(prevData->mass_dots);
       auto t_mass_value = getFTensor0FromVec(prevData->mass_values);
       auto t_flux_div = getFTensor0FromVec(prevData->flux_divs);
       data.getFieldData().clear();
@@ -906,16 +908,15 @@ struct OpError : public OpFaceEle {
         double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
         double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
         double local_error = pow(mass_exact - t_mass_value, 2); // + pow(flux_exact - t_flux_div, 2); 
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "flux_div : %3.4e\n",
-                  t_flux_div);
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "flux_exact : %3.4e\n",
-                  flux_exact);
+        // cout << "flux_div : " << t_flux_div << "   flux_exact : " << flux_exact << endl;
         data.getFieldData()[0] += a * local_error;
         eRror += a * local_error;
 
         ++t_w;
         ++t_mass_value;
         ++t_flux_div;
+        ++t_flux_value;
+        ++t_mass_dot;
         ++t_coords;
       }
 
