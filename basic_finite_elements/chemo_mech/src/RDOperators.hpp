@@ -891,8 +891,8 @@ struct OpError : public OpFaceEle {
     const int nb_dofs = data.getFieldData().size();
     // cout << "nb_error_dofs : " << nb_dofs << endl;
     if (nb_dofs) {
-      auto t_flux_value = getFTensor1FromMat<3>(prevData->flux_values);
-      auto t_mass_dot = getFTensor0FromVec(prevData->mass_dots);
+      // auto t_flux_value = getFTensor1FromMat<3>(prevData->flux_values);
+      // auto t_mass_dot = getFTensor0FromVec(prevData->mass_dots);
       auto t_mass_value = getFTensor0FromVec(prevData->mass_values);
       auto t_flux_div = getFTensor0FromVec(prevData->flux_divs);
       data.getFieldData().clear();
@@ -915,8 +915,8 @@ struct OpError : public OpFaceEle {
         ++t_w;
         ++t_mass_value;
         ++t_flux_div;
-        ++t_flux_value;
-        ++t_mass_dot;
+        // ++t_flux_value;
+        // ++t_mass_dot;
         ++t_coords;
       }
 

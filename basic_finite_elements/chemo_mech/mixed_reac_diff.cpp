@@ -152,29 +152,47 @@ private:
 
 struct ExactFunction {
 double operator()(const double x, const double y, const double t) const {
-  return sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
+  if(t <= 0.1){
+    return sin(2 * M_PI * x) * sin(2 * M_PI * y)*t;
+  }else{
+    return sin(2 * M_PI * x) * sin(2 * M_PI * y);
+  }
 }
 };
 
 struct ExactFunctionGrad{
 FTensor::Tensor1<double, 3> operator()(const double x, const double y, const double t) const {
 FTensor::Tensor1<double, 3> grad;
-grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y) * t;
-grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y) * t;
-grad(2) = 0.0;
-return grad;
+  if(t <= 0.1){
+    grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)*t;
+    grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y)*t;
+  }else {
+    grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y);
+    grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y);
+  }
+  grad(2) = 0.0;
+  return grad;
 }
 };
 
 struct ExactFunctionLap{
   double operator()(const double x, const double y, const double t) const {
-    return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
+    if(t <= 0.1){
+      return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
+    }else{
+      return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y); 
+    }
   }
 };
 
 struct ExactFunctionDot{
   double operator()(const double x, const double y, const double t) const {
-    return sin(2 * M_PI * x) * sin(2 * M_PI * y);
+    // return sin(2 * M_PI * x) * sin(2 * M_PI * y);
+    if(t <= 0.1){
+      return sin(2 * M_PI * x) * sin(2 * M_PI * y);
+    } else{
+      return 0;
+    }  
   }
 };
 
