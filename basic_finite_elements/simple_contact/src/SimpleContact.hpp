@@ -57,7 +57,7 @@ struct SimpleContactProblem {
 
       ~SimpleContactElement() {} 
 
-      int getRule(int order) { return 2 * (order - 1); };
+      int getRule(int order) { return 2 * order; };
 
 };
 
