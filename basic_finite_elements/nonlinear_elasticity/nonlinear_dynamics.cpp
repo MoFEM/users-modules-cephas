@@ -276,7 +276,7 @@ int main(int argc, char *argv[]) {
       PetscBool flg = PETSC_TRUE;
       CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
                                    mesh_file_name, 255, &flg);
-      if (flg != PETSC_TRUE) 
+      if (flg != PETSC_TRUE)
         SETERRQ(PETSC_COMM_SELF, 1, "Error -my_file (mesh file needed)");
 
       // use this if your mesh is partitioned and you run code on parts,
@@ -301,19 +301,17 @@ int main(int argc, char *argv[]) {
 
       CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_disp_order",
                                 &disp_order, &flg);
-      if (flg != PETSC_TRUE) 
+      if (flg != PETSC_TRUE)
         disp_order = 1;
-      
-      PetscInt vel_order = disp_order;
+
       CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_vel_order",
                                 &vel_order, &flg);
-      if (flg != PETSC_TRUE) 
+      if (flg != PETSC_TRUE)
         vel_order = disp_order;
 
       CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL,
                                  "-my_solve_at_time_zero",
                                  &is_solve_at_time_zero, &flg);
-
 
       MoFEMFunctionReturn(0);
     };
