@@ -747,6 +747,7 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragTraction::doWork(int side,
     MoFEMFunctionReturnHot(0);
   }
 
+
   CHKERR loopSideVolumes(sideFeName, *sideFe);
 
   // const int nb_gauss_pts = commonData->gradDispPtr->size2();

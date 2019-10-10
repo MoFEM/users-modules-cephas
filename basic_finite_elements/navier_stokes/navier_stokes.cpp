@@ -408,6 +408,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe(
         new VolumeElementForcesAndSourcesCoreOnSide(m_field));
 
+    cout << sideDragFe.get() << endl;
+
     dragFe->getRuleHook = NavierStokesElement::FaceRule();
 
     if (!solid_faces.empty()) {
