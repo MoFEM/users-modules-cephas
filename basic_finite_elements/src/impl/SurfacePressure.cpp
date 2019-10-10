@@ -1,5 +1,8 @@
 /* \file SurfacePressure.cpp
   \brief Implementation of pressure and forces on triangles surface
+
+  \todo Note that ALE version was not tested for quad elements, and is not
+  guarantee that will work.   
 */
 
 /* This file is part of MoFEM.
@@ -1278,14 +1281,14 @@ MoFEMErrorCode NeumannForcesSurface::addPressureAle(
     mapPressure[ms_id].data.data.flag2 = 1;
     mapPressure[ms_id].data.data.value1 = pressure[0];
     mapPressure[ms_id].data.data.zero = 0;
-    CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+    CHKERR mField.get_moab().get_entities_by_dimension(
+        cubit_meshset_ptr->meshset, 2, mapPressure[ms_id].tRis, true);
 
   } else {
     CHKERR mmanager_ptr->getCubitMeshsetPtr(ms_id, SIDESET, &cubit_meshset_ptr);
     CHKERR cubit_meshset_ptr->getBcDataStructure(mapPressure[ms_id].data);
-    CHKERR mField.get_moab().get_entities_by_type(
-        cubit_meshset_ptr->meshset, MBTRI, mapPressure[ms_id].tRis, true);
+    CHKERR mField.get_moab().get_entities_by_dimension(
+        cubit_meshset_ptr->meshset, 2, mapPressure[ms_id].tRis, true);
   }
 
   /*  LEFT-HAND SIDE (SPATIAL) */
