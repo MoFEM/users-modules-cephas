@@ -45,8 +45,6 @@ int main(int argc, char *argv[]) {
     PetscInt order_X = 2;
     PetscBool flg = PETSC_TRUE;
 
-    //PetscBool ale = PETSC_TRUE;
-    //CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-ale", &ale, PETSC_NULL);
     PetscBool test_jacobian = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
@@ -92,18 +90,7 @@ int main(int argc, char *argv[]) {
        MoFEMFunctionReturn(0);
     };
 
-    // Projection on "x" field
-    // {
-    //   Projection10NodeCoordsOnField ent_method(m_field, "x");
-    //   CHKERR m_field.loop_dofs("x", ent_method);
-    // }
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
-
-    // Project coordinates on "X" field
-    // {
-    //   Projection10NodeCoordsOnField ent_method(m_field, "X");
-    //   CHKERR m_field.loop_dofs("X", ent_method);
-    // }
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "X");
 
     PetscRandomDestroy(&rctx);
@@ -126,8 +113,7 @@ int main(int argc, char *argv[]) {
     fe_mat_lhs_ptr->meshPositionsFieldName = "X";
 
     Range nodes;
-    rval = moab.get_entities_by_type(0, MBVERTEX, nodes, false);
-    MOAB_THROW(rval);
+    CHKERR moab.get_entities_by_type(0, MBVERTEX, nodes, false);
 
     nodes.pop_front();
     nodes.pop_back();
