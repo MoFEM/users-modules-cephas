@@ -260,6 +260,7 @@ int main(int argc, char *argv[]) {
     // Set approximation order.
     // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
     // Meshes.
+    CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
