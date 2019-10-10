@@ -101,23 +101,40 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
 
-  for (auto &sit : common_data->setOfFacesData) {
-    if (sideDragFe->getOpPtrVector().empty()) {
-      sideDragFe->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
-                                                   common_data->gradDispPtr));
+  struct TestOp : public VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator  {
+
+    using VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator::
+        UserDataOperator;
+
+    MoFEMErrorCode doWork(int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
+      cerr << side << " " << type << " : " << getGaussPts().size2() << " "
+           << data.getN().size1() << " " << data.getFieldData().size() << " "
+           << data.getN().size2() << endl;
+      MoFEMFunctionReturn(0);
     }
-    dragFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(common_data->invJac));
-    dragFe->getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFace(common_data->invJac));
-    dragFe->getOpPtrVector().push_back(
-        new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
-    dragFe->getOpPtrVector().push_back(
-        new NavierStokesElement::OpCalcDragTraction(sideDragFe, side_fe_name,
-                                                    common_data, sit.second));
-    dragFe->getOpPtrVector().push_back(
-        new NavierStokesElement::OpCalcDragForce(common_data, sit.second));
+
+  };
+
+  for (auto &sit : common_data->setOfFacesData) {
+   // if (sideDragFe->getOpPtrVector().empty()) {
+   sideDragFe->getOpPtrVector().push_back(
+       new TestOp(velocity_field, UserDataOperator::OPROW));
+   sideDragFe->getOpPtrVector().push_back(
+       new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
+                                                common_data->gradDispPtr));
+   //  }
+   dragFe->getOpPtrVector().push_back(
+       new OpCalculateInvJacForFace(common_data->invJac));
+   dragFe->getOpPtrVector().push_back(
+       new OpSetInvJacH1ForFace(common_data->invJac));
+   dragFe->getOpPtrVector().push_back(
+       new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
+   dragFe->getOpPtrVector().push_back(
+       new NavierStokesElement::OpCalcDragTraction(sideDragFe, side_fe_name,
+                                                   common_data, sit.second));
+   dragFe->getOpPtrVector().push_back(
+       new NavierStokesElement::OpCalcDragForce(common_data, sit.second));
   }
   MoFEMFunctionReturn(0);
 };
@@ -131,11 +148,11 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
   MoFEMFunctionBegin;
 
   for (auto &sit : common_data->setOfFacesData) {
-   if (sideDragFe->getOpPtrVector().empty()) {
+   //if (sideDragFe->getOpPtrVector().empty()) {
       sideDragFe->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                    common_data->gradDispPtr));
-    }
+   // }
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(common_data->invJac));
     postProcDragPtr->getOpPtrVector().push_back(
@@ -730,10 +747,14 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragTraction::doWork(int side,
   CHKERR loopSideVolumes(sideFeName, *sideFe);
 
   const int nb_gauss_pts = commonData->gradDispPtr->size2();
+  const int NB_GP = getGaussPts().size2();
+
+  cout << "nb_gp: " << nb_gauss_pts << endl;
+  cout << "NB_GP: " << NB_GP << endl;
 
   auto t_p = getFTensor0FromVec(*commonData->pPtr);
   auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradDispPtr);
-  
+
   auto t_normal = getFTensor1NormalsAtGaussPts();
   // auto t_normal = getFTensor1Normal();
 

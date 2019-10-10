@@ -728,7 +728,7 @@ int main(int argc, char *argv[]) {
 
         if (!solid_faces.empty()) {
 
-          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", postProcDragPtr);
+          //CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", postProcDragPtr);
           string out_file_name;
           std::ostringstream stm;
           stm << "out_drag_" << ss << ".h5m";

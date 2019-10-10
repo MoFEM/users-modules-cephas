@@ -173,11 +173,11 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBQUAD, "U", order_u);
     CHKERR m_field.set_field_order(0, MBPRISM, "U", order_u);
 
-    CHKERR m_field.set_field_order(0, MBVERTEX, "P", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "P", order_p);
     CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);
     CHKERR m_field.set_field_order(0, MBTRI, "P", order_p);
     CHKERR m_field.set_field_order(0, MBQUAD, "P", order_p);
-    CHKERR m_field.set_field_order(0, MBPRISM, "P", order_p);
+    CHKERR m_field.set_field_order(0, MBPRISM, "P", 1);
 
     // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
     //   if (bit->getName().compare(0, 5, "SOLID") == 0) {
@@ -386,10 +386,10 @@ int main(int argc, char *argv[]) {
     //   }
     // }
 
-    CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
-                                                         commonData);
-    // CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
-    //                                          commonData);
+    // CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U", "P",
+    //                                                      commonData);
+    CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
+                                             commonData);
 
     Mat Aij;  // Stiffness matrix
     Vec D, F; //, D0; // Vector of DOFs and the RHS
