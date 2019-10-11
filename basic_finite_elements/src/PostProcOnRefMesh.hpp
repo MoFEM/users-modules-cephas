@@ -497,7 +497,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
     const double *t_coords_ele_x = &T::coords[0];
     const double *t_coords_ele_y = &T::coords[1];
     const double *t_coords_ele_z = &T::coords[2];
-    for (unsigned int gg = 0; gg != num_nodes; ++gg) {
+    for (int gg = 0; gg != num_nodes; ++gg) {
       FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
           t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
       t_coords(i) = 0;
