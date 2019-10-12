@@ -186,7 +186,7 @@ private:
 /**
  * \depracted do not use name with spelling mistake.
  */
-DEPRECATED typedef NeumannForcesSurfaceComplexForLazy
+DEPRECATED typedef NeummanForcesSurfaceComplexForLazy 
     NeumannForcesSurfaceComplexForLazy;
 
 #endif //__COMPLEX_FOR_LAZY_NEUMANN_FORCES_HPP__
