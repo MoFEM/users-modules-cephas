@@ -35,7 +35,6 @@ const double k = 1;    ///< caring capacity
 
 const double u0 = 0.1; ///< inital vale on blocksets
 
-const int order = 4; ///< approximation order
 const int save_every_nth_step = 4;
 
 /**
@@ -331,6 +330,9 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface(simple_interface);
     CHKERR simple_interface->getOptions();
     CHKERR simple_interface->loadFile();
+
+    int order = 4; ///< approximation order
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
 
     // add fields
     CHKERR simple_interface->addDomainField("u", H1, AINSWORTH_LEGENDRE_BASE,
