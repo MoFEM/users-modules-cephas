@@ -334,8 +334,8 @@ struct OpAssembleK
   MatrixDouble translocK;
   FTensor::Tensor2<double, 3, 3> diffDiff;
 
-  BlockData &dAta;
   DataAtIntegrationPts &commonData;
+  BlockData &dAta;
 
   OpAssembleK(DataAtIntegrationPts &common_data, BlockData &data,
               bool symm = true)
@@ -379,9 +379,6 @@ struct OpAssembleK
     const int row_nb_base_functions = row_data.getN().size2();
 
     auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
-
-    const double mu = commonData.mU;
-    const double lambda = commonData.lAmbda;
 
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
@@ -501,9 +498,6 @@ struct OpPostProcStress
     auto p = getFTensor0FromVec(*commonData.pPtr);
 
     const int nb_gauss_pts = commonData.gradDispPtr->size2();
-    const int nb_gauss_pts2 = commonData.pPtr->size();
-
-    const double lambda = commonData.lAmbda;
     const double mu = commonData.mU;
 
     FTensor::Index<'i', 3> i;
@@ -513,7 +507,6 @@ struct OpPostProcStress
 
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       strain(i, j) = 0.5 * (grad(i, j) + grad(j, i));
-      double trace = strain(i, i);
       double psi = 0.5 * p * p + mu * strain(i, j) * strain(i, j);
 
       stress(i, j) = 2 * mu * strain(i, j);
