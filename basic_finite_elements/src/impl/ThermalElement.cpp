@@ -237,8 +237,7 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
     double flux;
     if (hoGeometry) {
       const double area = norm_2(getNormalsAtGaussPts(gg));
-      flux = flux = dAta.dAta.data.value1 *
-                    area; // FluxData.HeatFluxCubitBcData.data.value1 * area
+      flux = dAta.dAta.data.value1 * area; 
     } else {
       flux = dAta.dAta.data.value1 * getArea();
     }

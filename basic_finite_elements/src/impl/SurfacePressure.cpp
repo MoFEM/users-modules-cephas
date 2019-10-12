@@ -404,8 +404,6 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   MatrixDouble der_normal_mat;
   der_normal_mat.resize(3, 3, false);
 
-  const bool diagonal_block = (row_type == col_type) && (row_side == col_side);
-
   MatrixDouble spin;
   spin.resize(3, 3, false);
 

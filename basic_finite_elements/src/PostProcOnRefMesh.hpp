@@ -775,11 +775,10 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideOpFe;
-    const std::string tagName;
-    const bool saveOnTag;
-
     const std::string feVolName;
     boost::shared_ptr<MatrixDouble> gradMatPtr;
+    const std::string tagName;
+    const bool saveOnTag;
 
     OpGetFieldGradientValuesOnSkin(
         moab::Interface &post_proc_mesh,
@@ -791,8 +790,8 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          tagName(tag_name), sideOpFe(side_fe), feVolName(vol_fe_name),
-          gradMatPtr(grad_mat_ptr), saveOnTag(save_on_tag) {}
+          sideOpFe(side_fe), feVolName(vol_fe_name),
+	  gradMatPtr(grad_mat_ptr), tagName(tag_name), saveOnTag(save_on_tag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);

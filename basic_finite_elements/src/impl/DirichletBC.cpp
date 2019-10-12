@@ -73,8 +73,6 @@ DirichletDisplacementBc::DirichletDisplacementBc(MoFEM::Interface &m_field,
 MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              mField, NODESET | DISPLACEMENTSET, it)) {
       DisplacementCubitBcData mydata;
@@ -461,8 +459,6 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              mField, NODESET | TEMPERATURESET, it)) {
       TemperatureCubitBcData mydata;
@@ -621,8 +617,6 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
 MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
         std::vector<double> mydata;
@@ -693,8 +687,6 @@ MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
 MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
         std::vector<double> mydata;
