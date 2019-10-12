@@ -171,7 +171,6 @@ struct OpAssembleP
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     const double lambda = commonData.lAmbda;
-    const double mu = commonData.mU;
 
     double coefficient = commonData.pOisson == 0.5 ? 0. : 1 / lambda;
 
@@ -272,9 +271,6 @@ struct OpAssembleG
     const int row_nb_base_functions = row_data.getN().size2();
     auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
 
-    const double lambda = commonData.lAmbda;
-    const double mu = commonData.mU;
-
     FTensor::Tensor1<double, 3> t1;
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
@@ -336,12 +332,13 @@ struct OpAssembleK
 
   MatrixDouble locK;
   MatrixDouble translocK;
-  BlockData &dAta;
   FTensor::Tensor2<double, 3, 3> diffDiff;
 
+  BlockData &dAta;
   DataAtIntegrationPts &commonData;
 
-  OpAssembleK(DataAtIntegrationPts &common_data, BlockData &data, bool symm = true)
+  OpAssembleK(DataAtIntegrationPts &common_data, BlockData &data,
+              bool symm = true)
       : VolumeElementForcesAndSourcesCore::UserDataOperator("U", "U", OPROWCOL,
                                                             symm),
         commonData(common_data), dAta(data) {}
