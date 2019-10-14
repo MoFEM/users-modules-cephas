@@ -102,11 +102,11 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
   MoFEMFunctionBegin;
 
   for (auto &sit : common_data->setOfFacesData) {
-    if (sideDragFe->getOpPtrVector().empty()) {
+   // if (sideDragFe->getOpPtrVector().empty()) {
       sideDragFe->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                    common_data->gradDispPtr));
-    }
+  //  }
     dragFe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(common_data->invJac));
     dragFe->getOpPtrVector().push_back(
@@ -131,11 +131,11 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
   MoFEMFunctionBegin;
 
   for (auto &sit : common_data->setOfFacesData) {
-   if (sideDragFe->getOpPtrVector().empty()) {
+   //if (sideDragFe->getOpPtrVector().empty()) {
       sideDragFe->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                    common_data->gradDispPtr));
-    }
+   // }
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(common_data->invJac));
     postProcDragPtr->getOpPtrVector().push_back(
