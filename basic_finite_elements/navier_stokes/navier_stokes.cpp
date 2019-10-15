@@ -63,11 +63,19 @@ int main(int argc, char *argv[]) {
     int order_u = 3; // default approximation order_u
     int nb_ho_levels = 0;
 
+    int desired_iteration_number = 6;
+
     int nbSubSteps = 1;   // default number of steps
-    double lambda0 = 1.0; // default step size
+    double lambda0 = 0;   // initial lambda
+    double lambda1 = 1.0; // multiplier
     double stepRed = 0.5; // stepsize reduction while diverging
     int maxDivStep = 10;  // maximum number of diverged steps
     int outPutStep = 1;   // how often post processing data is saved to h5m file
+    int restartStep = 1;  // how often post restart data is saved to h5m file
+
+    double adapt_step_exp = 0.5;
+
+    double step_size = 0.0;
 
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
@@ -87,18 +95,32 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-ho_levels", "number of ho levels", "",
                            nb_ho_levels, &nb_ho_levels, PETSC_NULL);
 
-    CHKERR PetscOptionsInt("-output_prt",
-                           "frequncy how often results are dumped on hard disk",
-                           "", 1, &outPutStep, NULL);
+    CHKERR PetscOptionsInt(
+        "-output_step", "frequency how often results are dumped on hard disk",
+        "", 1, &outPutStep, NULL);
+    CHKERR PetscOptionsInt("-restart_step",
+                           "frequency how often restrt file is written", "", 1,
+                           &restartStep, NULL);
 
     CHKERR PetscOptionsInt("-steps", "number of steps", "", nbSubSteps,
                            &nbSubSteps, PETSC_NULL);
 
+    CHKERR PetscOptionsInt("-desired_it_num", "desired number of iterations",
+                           "", desired_iteration_number,
+                           &desired_iteration_number, PETSC_NULL);
+
     CHKERR PetscOptionsInt("-steps_max_div", "number of steps", "", maxDivStep,
                            &maxDivStep, PETSC_NULL);
 
-    CHKERR PetscOptionsScalar("-lambda", "lambda", "", lambda0, &lambda0,
+    CHKERR PetscOptionsScalar("-lambda", "lambda", "", lambda1, &lambda1,
                               PETSC_NULL);
+    CHKERR PetscOptionsScalar("-lambda_init", "initial lambda", "", lambda0,
+                              &lambda0, PETSC_NULL);
+    CHKERR PetscOptionsScalar("-lambda_step", "initial step in lambda", "",
+                              step_size, &step_size, PETSC_NULL);
+
+    CHKERR PetscOptionsScalar("-adapt_step_exp", "adaptive step exponent", "",
+                              adapt_step_exp, &adapt_step_exp, PETSC_NULL);
 
     CHKERR PetscOptionsString("-load_table", "load history file name", "",
                               "load_table.txt", load_file_name, 255,
@@ -141,6 +163,8 @@ int main(int argc, char *argv[]) {
       CHKERR moab.load_file(mesh_file_name, 0, option);
     }
 
+    bool is_restart = string(mesh_file_name).compare(0, 8, "restart_") == 0;
+
     // Create MoFEM database and link it to MoAB
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
@@ -158,16 +182,16 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
 
-    // **** ADD FIELDS **** //
-
-    CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
-    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
-                             3);
-
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    if (!is_restart) {
+      // **** ADD FIELDS **** //
+      CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
+      CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+      CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1,
+                               AINSWORTH_LEGENDRE_BASE, 3);
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    }
 
     CHKERR m_field.set_field_order(0, MBVERTEX, "U", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
@@ -226,16 +250,6 @@ int main(int argc, char *argv[]) {
     // CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.build_fields();
 
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBVERTEX, "P");
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBEDGE, "P");
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTRI, "P");
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTET, "P");
-
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBVERTEX, "U");
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBEDGE, "U");
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTRI, "U");
-    // CHKERR m_field.getInterface<FieldBlas>()->setField(0, MBTET, "U");
-
     Projection10NodeCoordsOnField ent_method_material(m_field,
                                                       "MESH_NODE_POSITIONS");
     CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
@@ -246,32 +260,33 @@ int main(int argc, char *argv[]) {
 
     // **** ADD ELEMENTS **** //
 
-    // Add finite element (this defines element, declaration comes later)
-    CHKERR m_field.add_finite_element("NAVIER_STOKES");
-    CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES", "U");
-    CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES", "U");
-    CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES", "U");
+    if (!is_restart) {
+      // Add finite element (this defines element, declaration comes later)
+      CHKERR m_field.add_finite_element("NAVIER_STOKES");
+      CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES", "U");
+      CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES", "U");
+      CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES", "U");
 
-    CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES", "P");
-    CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES", "P");
-    CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES", "P");
-    CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES",
-                                                        "MESH_NODE_POSITIONS");
+      CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES", "P");
+      CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES", "P");
+      CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES", "P");
+      CHKERR m_field.modify_finite_element_add_field_data(
+          "NAVIER_STOKES", "MESH_NODE_POSITIONS");
 
-    CHKERR m_field.add_finite_element("DRAG");
-    CHKERR m_field.modify_finite_element_add_field_row("DRAG", "U");
-    CHKERR m_field.modify_finite_element_add_field_col("DRAG", "U");
-    CHKERR m_field.modify_finite_element_add_field_data("DRAG", "U");
+      CHKERR m_field.add_finite_element("DRAG");
+      CHKERR m_field.modify_finite_element_add_field_row("DRAG", "U");
+      CHKERR m_field.modify_finite_element_add_field_col("DRAG", "U");
+      CHKERR m_field.modify_finite_element_add_field_data("DRAG", "U");
 
-    CHKERR m_field.modify_finite_element_add_field_row("DRAG", "P");
-    CHKERR m_field.modify_finite_element_add_field_col("DRAG", "P");
-    CHKERR m_field.modify_finite_element_add_field_data("DRAG", "P");
-    CHKERR m_field.modify_finite_element_add_field_data("DRAG",
-                                                        "MESH_NODE_POSITIONS");
-
-    // Add entities to that element
-    CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
-                                                      "NAVIER_STOKES");
+      CHKERR m_field.modify_finite_element_add_field_row("DRAG", "P");
+      CHKERR m_field.modify_finite_element_add_field_col("DRAG", "P");
+      CHKERR m_field.modify_finite_element_add_field_data("DRAG", "P");
+      CHKERR m_field.modify_finite_element_add_field_data(
+          "DRAG", "MESH_NODE_POSITIONS");
+      // Add entities to that element
+      CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
+                                                        "NAVIER_STOKES");
+    }
 
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>();
@@ -356,6 +371,8 @@ int main(int argc, char *argv[]) {
     double Re;
     double P;
 
+    cout << "L: " << L << endl;
+
     auto scale_problem = [&](double U, double L, double P) {
       MoFEMFunctionBegin;
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
@@ -426,25 +443,31 @@ int main(int argc, char *argv[]) {
     Mat Aij;      // Stiffness matrix
     Vec D, D0, F; //, D0; // Vector of DOFs and the RHS
 
-    {
-      CHKERR DMCreateGlobalVector(dm, &D);
+    CHKERR DMCreateGlobalVector(dm, &D);
+    CHKERR VecDuplicate(D, &D0);
+    CHKERR VecDuplicate(D, &F);
+    CHKERR DMCreateMatrix(dm, &Aij);
+    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
-      CHKERR VecDuplicate(D, &D0);
-      // CHKERR VecDuplicate(D, &D0);
-      CHKERR VecDuplicate(D, &F);
-      CHKERR DMCreateMatrix(dm, &Aij);
-      CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+    CHKERR VecZeroEntries(F);
+    CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
 
-      CHKERR VecZeroEntries(F);
-      CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-      // CHKERR VecZeroEntries(D);
-      // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-      // CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-      // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES,
-      // SCATTER_REVERSE);
-      CHKERR MatZeroEntries(Aij);
+    if (is_restart) {
+      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+    } else {
+      CHKERR VecZeroEntries(D);
     }
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+    CHKERR VecZeroEntries(D0);
+    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
+
+    CHKERR MatZeroEntries(Aij);
+
+    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
 
     // STANDARD DIRICHLET BC
     boost::shared_ptr<DirichletDisplacementBc> dirichlet_bc_ptr(
@@ -475,25 +498,18 @@ int main(int argc, char *argv[]) {
     // dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_pres_bc_ptr->snes_x = D;
 
-    CHKERR VecZeroEntries(D);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-    CHKERR VecZeroEntries(D0);
-    CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
-
-    // CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
-    // CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    // CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_pres_bc_ptr.get());
+    // CHKERR DMoFEMPreProcessFiniteElements(dm,
+    // dirichlet_vel_bc_ptr.get()); CHKERR
+    // DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get()); CHKERR
+    // DMoFEMPreProcessFiniteElements(dm, dirichlet_pres_bc_ptr.get());
 
     // CHKERR VecAssemblyBegin(D);
     // CHKERR VecAssemblyEnd(D);
 
     // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     // CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES,
+    // SCATTER_REVERSE);
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
@@ -571,21 +587,30 @@ int main(int argc, char *argv[]) {
     SNESConvergedReason snes_reason;
     int number_of_diverges = 0;
 
-    // TODO: improve adaptivity
-    int desired_iteration_number = 5;
-    double step_size = lambda0 / nbSubSteps;
+    if (fabs(step_size) < 1e-14)
+      step_size = lambda1 / nbSubSteps;
 
     boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProcPtr;
     boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr;
 
-    double lambda = 0;
+    double lambda = lambda0;
+    double frac = 0;
     // if (flg_load_file == PETSC_TRUE)
     //   NavierStokesElement::LoadScale::lambda = lambda0;
     // else
     //   NavierStokesElement::LoadScale::lambda = 0;
 
+    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+
     int ss = 0;
-    while (lambda < lambda0) {
+    if (is_restart) {
+      string str(mesh_file_name);
+      stringstream sstream(str.substr(8));
+      sstream >> ss;
+      ss++;
+    }
+
+    while (lambda < lambda1 - 1e-12) {
 
       if (flg_load_file == PETSC_TRUE) {
         dirichlet_vel_bc_ptr->ts_t = ss;
@@ -614,15 +639,9 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Step: %d | U: %6.4e | Re: %6.4e \n",
-                         ss, U, Re);
-
-      // dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-      // dirichlet_vel_bc_ptr->snes_x = D;
-      // dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-      // dirichlet_bc_ptr->snes_x = D;
-      // dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-      // dirichlet_pres_bc_ptr->snes_x = D;
+      CHKERR PetscPrintf(PETSC_COMM_WORLD,
+                         "Step: %d | Size: %6.4e | U: %6.4e | Re: %6.4e \n", ss,
+                         step_size, U, Re);
 
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
@@ -661,9 +680,15 @@ int main(int argc, char *argv[]) {
           break;
         }
       }
+
+      number_of_diverges = 0;
+
       // ADAPTIVE STEPPING
-      // const double frac = (double)desired_iteration_number / its;
-      // step_size *= sqrt(frac);
+      if (its > 0)
+        frac = (double)desired_iteration_number / its;
+      else
+        frac = (double)desired_iteration_number / (its + 1);
+      step_size *= pow(frac, adapt_step_exp);
 
       CHKERR VecCopy(D, D0);
 
@@ -711,7 +736,6 @@ int main(int argc, char *argv[]) {
           CHKERR NavierStokesElement::setPostProcDragOperators(
               postProcDragPtr, sideDragFe, "NAVIER_STOKES", "U", "P",
               commonData);
-
         }
 
         CHKERR scale_problem(U, L, P);
@@ -761,6 +785,16 @@ int main(int argc, char *argv[]) {
 
         CHKERR scale_problem(1.0 / U, 1.0 / L, 1.0 / P);
       }
+
+      if (ss % restartStep == 0) {
+        const std::string file_name =
+            "restart_" + boost::lexical_cast<std::string>(ss) + ".h5m";
+        CHKERR m_field.get_moab().write_mesh(file_name.c_str());
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "restart file %s\n",
+                           file_name.c_str());
+      }
+
+      // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
 
       ss++;
     }
