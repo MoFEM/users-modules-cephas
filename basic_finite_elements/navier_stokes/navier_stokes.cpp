@@ -73,6 +73,8 @@ int main(int argc, char *argv[]) {
     int outPutStep = 1;   // how often post processing data is saved to h5m file
     int restartStep = 1;  // how often post restart data is saved to h5m file
 
+    double length_scale = 0;
+
     double adapt_step_exp = 0.5;
 
     double step_size = 0.0;
@@ -121,6 +123,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsScalar("-adapt_step_exp", "adaptive step exponent", "",
                               adapt_step_exp, &adapt_step_exp, PETSC_NULL);
+    CHKERR PetscOptionsScalar("-length_scale", "length scale", "", length_scale,
+                              &length_scale, PETSC_NULL);
 
     CHKERR PetscOptionsString("-load_table", "load history file name", "",
                               "load_table.txt", load_file_name, 255,
@@ -339,7 +343,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    double length_scale = 0;
+
 
     EntityHandle tree_root;
     AdaptiveKDTree myTree(&moab);
@@ -356,11 +360,13 @@ int main(int argc, char *argv[]) {
       CHKERR myTree.build_tree(tets, &tree_root);
     }
 
-    // get the overall bounding box corners
-    CHKERR myTree.get_bounding_box(box, &tree_root);
-    length_scale =
-        max(max(box.bMax[0] - box.bMin[0], box.bMax[1] - box.bMin[1]),
-            box.bMax[2] - box.bMin[2]);
+    if (fabs(length_scale) < 1e-12) {
+      // get the overall bounding box corners
+      CHKERR myTree.get_bounding_box(box, &tree_root);
+      length_scale =
+          max(max(box.bMax[0] - box.bMin[0], box.bMax[1] - box.bMin[1]),
+              box.bMax[2] - box.bMin[2]);
+    }
 
     CHKERR m_field.getInterface<FieldBlas>()->fieldScale((1.0 / length_scale),
                                                          "MESH_NODE_POSITIONS");
@@ -370,8 +376,6 @@ int main(int argc, char *argv[]) {
     double L = length_scale;
     double Re;
     double P;
-
-    cout << "L: " << L << endl;
 
     auto scale_problem = [&](double U, double L, double P) {
       MoFEMFunctionBegin;
@@ -610,6 +614,8 @@ int main(int argc, char *argv[]) {
       ss++;
     }
 
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "L: %6.4e\n", L);
+
     while (lambda < lambda1 - 1e-12) {
 
       if (flg_load_file == PETSC_TRUE) {
@@ -787,11 +793,13 @@ int main(int argc, char *argv[]) {
       }
 
       if (ss % restartStep == 0) {
-        const std::string file_name =
-            "restart_" + boost::lexical_cast<std::string>(ss) + ".h5m";
-        CHKERR m_field.get_moab().write_mesh(file_name.c_str());
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "restart file %s\n",
-                           file_name.c_str());
+        if (m_field.get_comm_rank() == 0) {
+          const std::string file_name =
+              "restart_" + boost::lexical_cast<std::string>(ss) + ".h5m";
+          CHKERR m_field.get_moab().write_mesh(file_name.c_str());
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "restart file %s\n",
+                             file_name.c_str());
+        }
       }
 
       // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
