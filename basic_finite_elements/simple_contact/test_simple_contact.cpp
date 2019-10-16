@@ -146,6 +146,8 @@ int main(int argc, char *argv[]) {
 
     auto add_prism_interface = [&](Range &tets, Range &prisms,
                                    Range &slave_tris,
+                                   EntityHandle &meshset_tets,
+                                   EntityHandle &meshset_prisms,
                                    std::vector<BitRefLevel> &bit_levels) {
       MoFEMFunctionBegin;
       PrismInterface *interface;
@@ -219,13 +221,8 @@ int main(int argc, char *argv[]) {
             bit_levels.size() - 1);
       }
 
-      EntityHandle meshset_tets;
-      EntityHandle meshset_prisms;
-      // EntityHandle out_meshset_tets_and_prism;
-
       CHKERR moab.create_meshset(MESHSET_SET, meshset_tets);
       CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
-      // CHKERR moab.create_meshset(MESHSET_SET, out_meshset_tets_and_prism);
 
       CHKERR m_field.getInterface<BitRefManager>()
           ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
@@ -237,9 +234,6 @@ int main(int argc, char *argv[]) {
                                          MBPRISM, meshset_prisms);
       CHKERR moab.get_entities_by_handle(meshset_prisms, prisms);
 
-      // CHKERR moab.add_entities(out_meshset_tets_and_prism, tets);
-      // CHKERR moab.add_entities(out_meshset_tets_and_prism, prisms);
-
       Range tris;
       CHKERR moab.get_adjacencies(prisms, 2, false, tris,
                                   moab::Interface::UNION);
@@ -250,6 +244,7 @@ int main(int argc, char *argv[]) {
     };
 
     Range all_tets, contact_prisms, slave_tris;
+    EntityHandle meshset_tets, meshset_prisms;
     std::vector<BitRefLevel> bit_levels;
 
     bit_levels.push_back(BitRefLevel().set(0));
@@ -257,15 +252,14 @@ int main(int argc, char *argv[]) {
         0, 3, bit_levels[0]);
 
     CHKERR add_prism_interface(all_tets, contact_prisms, slave_tris,
-                               bit_levels);
+                               meshset_tets, meshset_prisms, bit_levels);
 
-    cout << "all tets size: " << all_tets.size() << endl;
-    all_tets.print();
-    cout << "contact prisms size: " << contact_prisms.size() << endl;
-    contact_prisms.print();
-    cout << "slave tris size: " << slave_tris.size() << endl;
-    slave_tris.print();
-    Range tets_verts;
+    // cout << "all tets size: " << all_tets.size() << endl;
+    // all_tets.print();
+    // cout << "contact prisms size: " << contact_prisms.size() << endl;
+    // contact_prisms.print();
+    // cout << "slave tris size: " << slave_tris.size() << endl;
+    // slave_tris.print();
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -359,21 +353,22 @@ int main(int argc, char *argv[]) {
 
     Mat Aij;  // Stiffness matrix
     Vec D, F; //, D0; // Vector of DOFs and the RHS
-    {
-      CHKERR DMCreateGlobalVector(dm, &D);
-      CHKERR VecZeroEntries(D);
-      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
 
-      CHKERR VecDuplicate(D, &F);
-      CHKERR VecZeroEntries(F);
-      CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMCreateGlobalVector(dm, &D);
 
-      CHKERR DMCreateMatrix(dm, &Aij);
-      CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
-      CHKERR MatZeroEntries(Aij);
-    }
+    //CHKERR VecZeroEntries(D);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+    CHKERR VecDuplicate(D, &F);
+    CHKERR VecZeroEntries(F);
+    CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+
+    CHKERR DMCreateMatrix(dm, &Aij);
+    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+    CHKERR MatZeroEntries(Aij);
 
     // Dirichlet BC
     boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
@@ -387,9 +382,10 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
                                                      "LAGMULT");
@@ -444,14 +440,11 @@ int main(int argc, char *argv[]) {
           sit->second, post_proc.commonData));
     }
 
-    CHKERR VecAssemblyBegin(D);
-    CHKERR VecAssemblyEnd(D);
-    int vec_size;
-    VecGetSize(D, &vec_size);
-    cout << "D size: " << vec_size << endl;
-    //CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+    //CHKERR VecAssemblyBegin(D);
+    //CHKERR VecAssemblyEnd(D);
+
     CHKERR SNESSolve(snes, PETSC_NULL, D);
-    //CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+
     CHKERR SNESGetConvergedReason(snes, &snes_reason);
 
     int its;
@@ -460,11 +453,17 @@ int main(int argc, char *argv[]) {
                        its);
 
     // save on mesh
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    //CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
 
     elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
     elastic.getLoopFeEnergy().eNergy = 0;
+    PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
     // Print elastic energy
     PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
@@ -479,6 +478,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
                                              "PARALLEL=WRITE_PART");
+
+    //CHKERR moab.write_file("out_prism.vtk", "VTK", "", &meshset_prisms, 1);
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);
