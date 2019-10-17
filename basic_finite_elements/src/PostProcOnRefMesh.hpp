@@ -719,7 +719,7 @@ struct PostProcFatPrismOnRefinedMesh
   MoFEMErrorCode preProcess();
   MoFEMErrorCode postProcess();
 
-  struct CommonData : PostProcCommonOnRefMesh::CommonData {};
+  struct CommonData : PostProcCommonOnRefMesh::CommonDataForVolume {};
   CommonData commonData;
 
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {

@@ -157,8 +157,8 @@ int main(int argc, char *argv[]) {
                              LASBASETOP, list_bases[choice_base_value],
                              &choice_base_value, PETSC_NULL);
 
-    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "",
-                           test_nb, &test_nb, PETSC_NULL);
+    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "", test_nb,
+                           &test_nb, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -221,6 +221,20 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_mng_ptr->printForceSet();
     CHKERR meshsets_mng_ptr->printMaterialsSet();
 
+    auto check_type = [&](EntityType type, bool &flag) {
+      MoFEMFunctionBegin;
+      Range ents;
+      CHKERR moab.get_entities_by_type(0, type, ents, true);
+      flag = ents.size() > 0;
+      MoFEMFunctionReturn(0);
+    };
+
+    bool mesh_has_tets = false;
+    bool mesh_has_prisms = false;
+
+    CHKERR check_type(MBTET, mesh_has_tets);
+    CHKERR check_type(MBPRISM, mesh_has_prisms);
+
     // Set bit refinement level to all entities (we do not refine mesh in this
     // example so all entities have the same bit refinement level)
     BitRefLevel bit_level0;
@@ -243,8 +257,8 @@ int main(int argc, char *argv[]) {
     default:
       SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED, "Base not implemented");
     };
-    CHKERR m_field.add_field("DISPLACEMENT", H1, base, 3,
-                             MB_TAG_DENSE, MF_ZERO);
+    CHKERR m_field.add_field("DISPLACEMENT", H1, base, 3, MB_TAG_DENSE,
+                             MF_ZERO);
 
     // We can use higher oder geometry to define body
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
@@ -265,7 +279,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
-    if(base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
     else
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
@@ -428,12 +442,16 @@ int main(int argc, char *argv[]) {
     CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
                                            "DISPLACEMENT",
                                            "MESH_NODE_POSITIONS", false);
-    CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
-                                      "DISPLACEMENT", "MESH_NODE_POSITIONS",
-                                      false, true);
-    CHKERR HookeElement::setOperators(
-        prism_fe_lhs_ptr, prism_fe_rhs_ptr, block_sets_ptr, "DISPLACEMENT",
-        "MESH_NODE_POSITIONS", false, true, MBPRISM);
+    if (mesh_has_tets) {
+      CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
+                                        "DISPLACEMENT", "MESH_NODE_POSITIONS",
+                                        false, true);
+    }
+    if (mesh_has_prisms) {
+      CHKERR HookeElement::setOperators(
+          prism_fe_lhs_ptr, prism_fe_rhs_ptr, block_sets_ptr, "DISPLACEMENT",
+          "MESH_NODE_POSITIONS", false, true, MBPRISM);
+    }
 
     // Add spring boundary condition applied on surfaces.
     // This is only declaration not implementation.
@@ -769,9 +787,19 @@ int main(int argc, char *argv[]) {
 
     PostProcFatPrismOnRefinedMesh prism_post_proc(m_field);
     CHKERR prism_post_proc.generateReferenceElementMesh();
+
+    boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+    prism_post_proc.getOpPtrVector().push_back(
+        new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+    prism_post_proc.getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+
     CHKERR prism_post_proc.addFieldValuesPostProc("DISPLACEMENT");
     CHKERR prism_post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR prism_post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+    prism_post_proc.getOpPtrVector().push_back(new PostProcHookStress(
+        m_field, prism_post_proc.postProcMesh, prism_post_proc.mapGaussPts,
+        "DISPLACEMENT", prism_post_proc.commonData, block_sets_ptr.get()));
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
@@ -940,8 +968,12 @@ int main(int argc, char *argv[]) {
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
-      CHKERR post_proc.writeFile("out.h5m");
-      CHKERR prism_post_proc.writeFile("prism_out.h5m");
+      if (mesh_has_tets) {
+        CHKERR post_proc.writeFile("out.h5m");
+      }
+      if (mesh_has_prisms) {
+        CHKERR prism_post_proc.writeFile("prism_out.h5m");
+      }
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
 
