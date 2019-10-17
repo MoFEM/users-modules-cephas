@@ -221,22 +221,19 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_mng_ptr->printForceSet();
     CHKERR meshsets_mng_ptr->printMaterialsSet();
 
-    auto check_type = [&](EntityType type, bool &flag) {
-      MoFEMFunctionBegin;
-      Range ents;
-      CHKERR moab.get_entities_by_type(0, type, ents, true);
-      flag = ents.size() > 0;
-      MoFEMFunctionReturn(0);
-    };
-
     bool mesh_has_tets = false;
     bool mesh_has_prisms = false;
+    int nb_tets = 0;
+    int nb_prisms = 0;
 
-    CHKERR check_type(MBTET, mesh_has_tets);
-    CHKERR check_type(MBPRISM, mesh_has_prisms);
+    CHKERR moab.get_number_entities_by_type(0, MBTET, nb_tets, true);
+    CHKERR moab.get_number_entities_by_type(0, MBPRISM, nb_prisms, true);
 
-    // Set bit refinement level to all entities (we do not refine mesh in this
-    // example so all entities have the same bit refinement level)
+    mesh_has_tets = nb_tets > 0;
+    mesh_has_prisms = nb_prisms > 0;
+
+    // Set bit refinement level to all entities (we do not refine mesh in
+    // this example so all entities have the same bit refinement level)
     BitRefLevel bit_level0;
     bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
