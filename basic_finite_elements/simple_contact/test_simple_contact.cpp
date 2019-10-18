@@ -480,6 +480,27 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
                                              "PARALLEL=WRITE_PART");
 
+    // moab_instance
+    moab::Core mb_post;                   // create database
+    moab::Interface &moab_proc = mb_post; // create interface to database
+    contact_problem->setContactOperatorsForPostProc(m_field, "SPATIAL_POSITION",
+                                                    "LAGMULT", mb_post);
+
+    mb_post.delete_mesh();
+    
+    CHKERR DMoFEMLoopFiniteElements(
+        dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
+    
+    std::ostringstream ostrm;
+    // ostrm << "plast_out_" << step << ".vtk";
+    ostrm << "contact_out_" << ".h5m";
+    
+    out_file_name = ostrm.str();
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                       out_file_name.c_str());
+    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                              "PARALLEL=WRITE_PART");
+
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);
     CHKERR MatDestroy(&Aij);
