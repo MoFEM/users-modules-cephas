@@ -111,20 +111,99 @@ struct CommonDataSimpleContact {
   boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
   boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
   boost::shared_ptr<VectorDouble> gapPtr;
+  boost::shared_ptr<VectorDouble> lagGapProdPtr;
   boost::shared_ptr<VectorDouble> tildeCFunPtr;
   boost::shared_ptr<VectorDouble> lambdaGapDiffProductPtr;
   boost::shared_ptr<VectorDouble> normalVectorPtr;
+  Tag thGap;
+  Tag thLagrangeMultiplier;
+  Tag thLagGapProd;
+
   double areaCommon;
 
-  CommonDataSimpleContact() {
+  CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
     positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
     positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
     lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
     gapPtr = boost::make_shared<VectorDouble>();
+    lagGapProdPtr = boost::make_shared<VectorDouble>();
     tildeCFunPtr = boost::make_shared<VectorDouble>();
     lambdaGapDiffProductPtr = boost::make_shared<VectorDouble>();
     normalVectorPtr = boost::make_shared<VectorDouble>();
-    // areaPtr = boost::make_shared<double>();
+
+    ierr = createTags(thGap, "PLASTIC_STRAIN", 1);
+    ierr = createTags(thLagrangeMultiplier, "HARDENING_PARAMETER", 1);
+    ierr = createTags(thLagGapProd, "BACK_STRESS", 1);
+    CHKERRABORT(PETSC_COMM_WORLD, ierr);
+  }
+
+  MoFEMErrorCode getContactTags(const EntityHandle fe_ent, const int nb_gauss_pts,
+                         boost::shared_ptr<MatrixDouble> tag_ptr, Tag tag_ref) {
+    MoFEMFunctionBegin;
+    double *tag_data;
+    int tag_size;
+    CHKERR mField.get_moab().tag_get_by_ptr(
+        tag_ref, &fe_ent, 1, (const void **)&tag_data, &tag_size);
+
+    if (tag_size == 1) {
+      tag_ptr->resize(9, nb_gauss_pts, false);
+      tag_ptr->clear();
+      void const *tag_data[] = {&*tag_ptr->data().begin()};
+      const int tag_size = tag_ptr->data().size();
+      CHKERR mField.get_moab().tag_set_by_ptr(tag_ref, &fe_ent, 1, tag_data,
+                                              &tag_size);
+    } else if (tag_size != nb_gauss_pts * 9) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Wrong size of the tag, data inconsistency");
+    } else {
+      MatrixAdaptor tag_vec = MatrixAdaptor(
+          9, nb_gauss_pts,
+          ublas::shallow_array_adaptor<double>(tag_size, tag_data));
+
+      *tag_ptr = tag_vec;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode getContactTags(const EntityHandle fe_ent, const int nb_gauss_pts,
+                         boost::shared_ptr<VectorDouble> &tag_ptr, Tag tag_ref) {
+    MoFEMFunctionBegin;
+    double *tag_data;
+    int tag_size;
+    CHKERR mField.get_moab().tag_get_by_ptr(
+        tag_ref, &fe_ent, 1, (const void **)&tag_data, &tag_size);
+
+    if (tag_size == 1) {
+      tag_ptr->resize(nb_gauss_pts);
+      tag_ptr->clear();
+      void const *tag_data[] = {&*tag_ptr->begin()};
+      const int tag_size = tag_ptr->size();
+      CHKERR mField.get_moab().tag_set_by_ptr(tag_ref, &fe_ent, 1, tag_data,
+                                              &tag_size);
+    } else if (tag_size != nb_gauss_pts) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Wrong size of the tag, data inconsistency");
+    } else {
+      VectorAdaptor tag_vec = VectorAdaptor(
+          tag_size, ublas::shallow_array_adaptor<double>(tag_size, tag_data));
+      *tag_ptr = tag_vec;
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+  private:
+    MoFEM::Interface &mField;
+
+    MoFEMErrorCode createTags(Tag &tag_ref, const string tag_string,
+                              const int &dim) {
+
+      MoFEMFunctionBegin;
+      std::vector<double> def_val(dim, 0);
+      CHKERR mField.get_moab().tag_get_handle(
+          tag_string.c_str(), 1, MB_TYPE_DOUBLE, tag_ref,
+          MB_TAG_CREAT | MB_TAG_VARLEN | MB_TAG_SPARSE, &def_val[0]);
+      MoFEMFunctionReturn(0);
   }
 };
 
@@ -132,15 +211,17 @@ double rValue;
 double cnValue;
 boost::shared_ptr<SimpleContactElement> feRhsSimpleContact;
 boost::shared_ptr<SimpleContactElement> feLhsSimpleContact;
+boost::shared_ptr<SimpleContactElement> fePostProcSimpleContact;
 boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
 MoFEM::Interface &mField;
 
 SimpleContactProblem(MoFEM::Interface &m_field, double &r_value_regular,
                      double &cn_value)
     : mField(m_field), rValue(r_value_regular), cnValue(cn_value) {
-  commonDataSimpleContact = boost::make_shared<CommonDataSimpleContact>();
+  commonDataSimpleContact = boost::make_shared<CommonDataSimpleContact>(mField);
   feRhsSimpleContact = boost::make_shared<SimpleContactElement>(mField);
   feLhsSimpleContact = boost::make_shared<SimpleContactElement>(mField);
+  fePostProcSimpleContact  = boost::make_shared<SimpleContactElement>(mField);
 }
 
 /// \brief tangents t1 and t2 to face f4 at all gauss points
@@ -405,6 +486,52 @@ struct OpGetLagMulAtGaussPtsSlave
         ++t_base_lambda;
         ++t_field_data_slave;
       }
+      ++ lagrange_slave;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+struct OpLagGapProdGaussPtsSlave
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpLagGapProdGaussPtsSlave(
+      const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            lagrang_field_name, UserDataOperator::OPROW,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVE),
+        commonDataSimpleContact(common_data_contact) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (type != MBVERTEX)
+      MoFEMFunctionReturnHot(0);
+
+    const int nb_gauss_pts = data.getN().size1();
+
+      commonDataSimpleContact->lagGapProdPtr.get()->resize(nb_gauss_pts);
+      commonDataSimpleContact->lagGapProdPtr.get()->clear();
+
+    int nb_base_fun_row = data.getFieldData().size();
+
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+    auto lag_gap_prod_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
+
+    auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      lag_gap_prod_slave += gap_ptr * lagrange_slave;
+      ++gap_ptr;
+      ++lag_gap_prod_slave;
       ++lagrange_slave;
     }
 
@@ -1197,6 +1324,105 @@ struct OpDerivativeBarTildeCFunODisplacementsSlaveSlave
   }
 };
 
+struct OpMakeVtkSlave
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  MoFEM::Interface &mField;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  moab::Interface &moabOut;
+
+  OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
+                 boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                 moab::Interface &moab_out)
+      : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            field_name, UserDataOperator::OPROW,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVE),
+        mField(m_field), commonDataSimpleContact(common_data),
+        moabOut(moab_out) {}
+
+  PetscErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (type != MBVERTEX)
+      MoFEMFunctionReturnHot(0);
+
+    int nb_dofs = data.getFieldData().size();
+    if (nb_dofs == 0)
+      MoFEMFunctionReturnHot(0);
+    int nb_gauss_pts = data.getN().size1();
+
+    // double def_vals[9];
+    // bzero(def_vals, 9 * sizeof(double));
+
+    // Tag th_strain;
+    // CHKERR moabOut.tag_get_handle("PLASTIC_STRAIN0", 9, MB_TYPE_DOUBLE,
+    //                               th_strain, MB_TAG_CREAT | MB_TAG_SPARSE,
+    //                               def_vals);
+    
+    double def_vals;
+    def_vals = 0;
+
+    Tag th_gap;
+    CHKERR moabOut.tag_get_handle("GAP", 1, MB_TYPE_DOUBLE, th_gap,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+
+    Tag th_lag_mult;
+    CHKERR moabOut.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
+                                  th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                  &def_vals);
+    Tag th_lag_gap_prod;
+    CHKERR moabOut.tag_get_handle("LAG_GAP_PROD", 1, MB_TYPE_DOUBLE,
+                                  th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                  &def_vals);
+
+    double coords[3];
+    EntityHandle new_vertex = getFEEntityHandle();
+    // CHKERR commonDataSimpleContact->getContactTags(
+    //     new_vertex, nb_gauss_pts, commonDataSimpleContact->gapPtr,
+    //     commonDataSimpleContact->thGap);
+
+    // CHKERR commonDataSimpleContact->getContactTags(
+    //     new_vertex, nb_gauss_pts, commonDataSimpleContact->lagMultAtGaussPtsPtr,
+    //     commonDataSimpleContact->thLagrangeMultiplier);
+
+    // CHKERR commonDataSimpleContact->getContactTags(
+    //     new_vertex, nb_gauss_pts,
+    //     commonDataSimpleContact->lagGapProdPtr,
+    //     commonDataSimpleContact->thLagGapProd);
+
+    auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+    auto lag_gap_prod_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      for (int dd = 0; dd != 3; dd++) {
+        coords[dd] = getCoordsAtGaussPtsSlave()(gg, dd);
+      }
+
+      VectorDouble &data_disp = data.getFieldData();
+      CHKERR moabOut.create_vertex(&coords[0], new_vertex);
+
+      CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &gap_ptr);
+
+      CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &lagrange_slave);
+
+      CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
+                                  &lag_gap_prod_slave);
+      
+      ++gap_ptr;
+      ++lagrange_slave;
+      ++lag_gap_prod_slave;
+
+    }
+    MoFEMFunctionReturn(0);
+  }
+};
+
 // setup operators for calculation of active set
 MoFEMErrorCode setContactOperatorsRhsOperators(string field_name,
                                                string lagrang_field_name,
@@ -1286,5 +1512,40 @@ MoFEMErrorCode setContactOperatorsLhsOperators(string field_name,
   }
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode
+setContactOperatorsForPostProc(MoFEM::Interface &m_field, string field_name,
+                               string lagrang_field_name,
+                               moab::Interface &moab_out) {
+  MoFEMFunctionBegin;
+  map<int, SimpleContactPrismsData>::iterator sit =
+      setOfSimpleContactPrism.begin();
+  for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetNormalSlave(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsMaster(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsSlave(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetGapSlave(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+                                       commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpLagGapProdGaussPtsSlave(lagrang_field_name,
+                                       commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(new OpMakeVtkSlave(
+        m_field, field_name, commonDataSimpleContact, moab_out));
+  }
+  MoFEMFunctionReturn(0);
+                                               }
 };
 #endif
