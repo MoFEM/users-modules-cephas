@@ -289,6 +289,20 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
+    // build field
+    CHKERR m_field.build_fields();
+
+    // Projection on "x" field
+    {
+      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
+      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
+    }
+    // MESH_NODE_POSITIONS
+    {
+      Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
+      CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
+    }
+
     // Add elastic element
     boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
     boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
@@ -307,19 +321,11 @@ int main(int argc, char *argv[]) {
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
 
-    // build field
-    CHKERR m_field.build_fields();
+    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
-    // Projection on "x" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
-      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
-    }
-    // MESH_NODE_POSITIONS
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
-      CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
-    }
+    // Add spring boundary condition applied on surfaces.
+    CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
+                                           "MESH_NODE_POSITIONS");
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
@@ -349,6 +355,9 @@ int main(int argc, char *argv[]) {
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+    CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
+    CHKERR DMMoFEMAddElement(dm, "SPRING");
+
     CHKERR DMSetUp(dm);
 
     Mat Aij;  // Stiffness matrix
@@ -382,16 +391,39 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
     contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
                                                      "LAGMULT");
 
     contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
                                                      "LAGMULT", Aij);
+
+    // Assemble pressure and traction forces
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
+                                                       NULL, "SPATIAL_POSITION");
+
+    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+        neumann_forces.begin();
+    for (; mit != neumann_forces.end(); mit++) {
+      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
+                                    &mit->second->getLoopFe(), NULL, NULL);
+    }
+
+    // Implementation of spring element
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    CHKERR MetaSpringBC::setSpringOperators(
+        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS");
+
+    CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
@@ -399,6 +431,8 @@ int main(int argc, char *argv[]) {
                                   contact_problem->feRhsSimpleContact.get(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
+                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr.get(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
@@ -410,6 +444,8 @@ int main(int argc, char *argv[]) {
                                   contact_problem->feLhsSimpleContact.get(),
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
+                                  NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr.get(), NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
