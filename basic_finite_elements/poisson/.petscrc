@@ -6,6 +6,7 @@
 -ksp_rtol 0
 -ksp_monitor ascii
 
+
 ## Use LU and mumps
 -pc_fieldsplit_type schur
 -pc_fieldsplit_schur_precondition self
