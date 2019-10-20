@@ -6,7 +6,7 @@
 -ksp_rtol 0
 -ksp_monitor ascii
 
-## superlu_dist
+## Use LU and mumps
 -pc_fieldsplit_type schur
 -pc_fieldsplit_schur_precondition self
 -fieldsplit_0_ksp_type fgmres
