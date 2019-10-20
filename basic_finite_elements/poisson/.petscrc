@@ -6,9 +6,9 @@
 -ksp_rtol 0
 -ksp_monitor ascii
 
-## Use LU and mumps for block solver
+# Use LU and mumps for block solver
 
-## fs 0
+# fs 0
 -pc_fieldsplit_type schur
 -pc_fieldsplit_schur_precondition self
 -fieldsplit_0_ksp_type fgmres
