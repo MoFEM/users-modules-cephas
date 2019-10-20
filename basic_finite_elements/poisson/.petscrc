@@ -17,7 +17,6 @@
 -fieldsplit_0_ksp_atol 1e-6
 -fieldsplit_0_ksp_rtol 1e-6
 
-
 -fieldsplit_1_ksp_type minres
 -fieldsplit_1_pc_type lsc
 -fieldsplit_1_lsc_ksp_type preonly
