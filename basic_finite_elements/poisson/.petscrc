@@ -8,7 +8,6 @@
 
 # Use LU and mumps for block solver
 
-
 # fs 0
 -pc_fieldsplit_type schur
 -pc_fieldsplit_schur_precondition self
