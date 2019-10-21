@@ -89,9 +89,9 @@ struct DataAtIntegrationPtsSimpleRods {
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 3) {
+        if (attributes.size() < 3) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                   "Input mesh should have 2 attributes but there is %d",
+                   "Input mesh should have min. 3 attributes but there is %d",
                    attributes.size());
         }
         mapSimpleRod[id].iD = id;
