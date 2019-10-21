@@ -444,6 +444,12 @@ struct OpGetGapSlave
       ++gap_ptr;
     } // for gauss points
 
+    auto gap_ptr_2 = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      cerr << "Get Gap " << gap_ptr_2 << "\n";
+      ++gap_ptr_2;
+    } // for gauss points
     MoFEMFunctionReturn(0);
   }
 };
@@ -812,8 +818,26 @@ struct OpCalIntTildeCFunSlave
       ++tilde_c_fun;
     } // for gauss points
 
+    auto tilde_c_fun_2 =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      cerr << "Tilde C " << tilde_c_fun_2 << "\n";
+      ++tilde_c_fun_2;
+    } // for gauss points
+
     CHKERR VecSetValues(getFEMethod()->snes_f, nb_base_fun_col,
                         &data.getIndices()[0], &vecR[0], ADD_VALUES);
+
+    VectorDouble help_vec;
+    help_vec.resize(nb_base_fun_col, false); // the last false in ublas
+                                             // resize will destroy (not
+                                             // preserved) the old values
+    help_vec.clear();
+    CHKERR VecGetValues(getFEMethod()->snes_f, nb_base_fun_col,
+                        &data.getIndices()[0], &help_vec[0]);
+    cerr << "RHS C " << help_vec << "\n";
+
     MoFEMFunctionReturn(0);
   }
 };
@@ -1400,7 +1424,7 @@ struct OpMakeVtkSlave
         getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      for (int dd = 0; dd != 3; dd++) {
+      for (int dd = 0; dd != 3; ++dd) {
         coords[dd] = getCoordsAtGaussPtsSlave()(gg, dd);
       }
 
@@ -1413,7 +1437,9 @@ struct OpMakeVtkSlave
 
       CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
                                   &lag_gap_prod_slave);
-      
+
+      //cerr << "Post proc gap " << gap_ptr<<"\n";
+
       ++gap_ptr;
       ++lagrange_slave;
       ++lag_gap_prod_slave;

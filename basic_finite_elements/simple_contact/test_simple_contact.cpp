@@ -459,8 +459,18 @@ int main(int argc, char *argv[]) {
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
                        its);
 
+    // cerr << "Before Scater\n";
+    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+
     // save on mesh
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+    // cerr << "After Scater\n";
+    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
 
     elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
