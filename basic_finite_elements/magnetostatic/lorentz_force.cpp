@@ -63,10 +63,6 @@ int main(int argc, char *argv[]) {
     // Read parameters from line command
     PetscBool flg_file;
     char mesh_file_name[255];
-    PetscInt order = 2;
-    PetscBool is_partitioned = PETSC_FALSE;
-    PetscBool regression_test = PETSC_FALSE;
-
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Lorenz force configure",
                              "none");
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "solution.h5m",
@@ -100,8 +96,8 @@ int main(int argc, char *argv[]) {
 
     using VolEle = VolumeElementForcesAndSourcesCore;
     using VolOp = VolumeElementForcesAndSourcesCore::UserDataOperator;
-    using SetPtsData = FieldEvaluatorInterface::SetPtsData;
-    using SetPts = FieldEvaluatorInterface::SetPts;
+    // using SetPtsData = FieldEvaluatorInterface::SetPtsData;
+    // using SetPts = FieldEvaluatorInterface::SetPts;
 
     /**
      * @brief Only for debuging
@@ -246,16 +242,16 @@ int main(int argc, char *argv[]) {
       return t_lhs;
     };
 
-    auto set_periodicity = [&](auto &t_p, auto &t_init_p) {
-      for (int i : {0, 1, 2})
-        if (t_p(i) > bMax) {
-          t_p(i) -= 2 * bMax;
-          t_init_p(i) -= 2 * bMax;
-        } else if (t_p(i) < bMin) {
-          t_p(i) -= 2 * bMin;
-          t_init_p(i) -= 2 * bMin;
-        }
-    };
+    // auto set_periodicity = [&](auto &t_p, auto &t_init_p) {
+    //   for (int i : {0, 1, 2})
+    //     if (t_p(i) > bMax) {
+    //       t_p(i) -= 2 * bMax;
+    //       t_init_p(i) -= 2 * bMax;
+    //     } else if (t_p(i) < bMin) {
+    //       t_p(i) -= 2 * bMin;
+    //       t_init_p(i) -= 2 * bMin;
+    //     }
+    // };
 
     auto is_out = [&](auto &t_p) {
       for (int i : {0, 1, 2})

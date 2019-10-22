@@ -217,20 +217,22 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    // add_quad_set(ID_INLET_EDGE, ID_INLET_PRESS, "MESHSET_INLET_PRESS");
-    // add_quad_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "MESHSET_OUTLET_PRESS");
+    add_quad_set(ID_INLET_EDGE, ID_INLET_PRESS, "MESHSET_INLET_PRESS");
+    add_quad_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "MESHSET_OUTLET_PRESS");
 
     add_quad_set(ID_SYMMETRY_EDGE, ID_SYMMETRY_DISP, "SYMMETRY_DISP");
     add_quad_set(ID_INLET_EDGE, ID_INLET_DISP, "INLET_DISP");
     add_quad_set(ID_OUTLET_EDGE, ID_OUTLET_DISP, "OUTLET_DISP");
 
-    add_top_tris_set(ID_FAR_FIELD_DISP, "FAR_FIELD_DISP");
+    add_skin_tris_set(ID_FIXED_DISP, "FIXED_DISP");
 
-    CHKERR mmanager_ptr->addMeshset(BLOCKSET, ID_FIXED_DISP, "FIXED_DISP");
-    CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, ID_FIXED_DISP,
-    tris); cout << "FIXED_DISP"
-         << ": " << tris.size() << " faces(s)" << endl;
-    tris.print();
+    // add_top_tris_set(ID_FAR_FIELD_DISP, "FAR_FIELD_DISP");
+
+    // CHKERR mmanager_ptr->addMeshset(BLOCKSET, ID_FIXED_DISP,
+    // "FIXED_DISP"); CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET,
+    // ID_FIXED_DISP, tris); cout << "FIXED_DISP"
+    //      << ": " << tris.size() << " faces(s)" << endl;
+    // tris.print();
 
     CHKERR mmanager_ptr->setMeshsetFromFile("bc.cfg");
 
@@ -238,8 +240,8 @@ int main(int argc, char *argv[]) {
     // meshset); CHKERR moab.add_entities(meshset, prisms);
 
     CHKERR mmanager_ptr->printDisplacementSet();
-    // CHKERR mmanager_ptr->printMaterialsSet();
-    // CHKERR mmanager_ptr->printPressureSet();
+    CHKERR mmanager_ptr->printMaterialsSet();
+    CHKERR mmanager_ptr->printPressureSet();
 
     EntityHandle rootset = moab.get_root_set();
 

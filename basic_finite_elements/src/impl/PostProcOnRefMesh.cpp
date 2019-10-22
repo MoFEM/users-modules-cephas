@@ -26,14 +26,6 @@ using namespace MoFEM;
 using namespace boost::numeric;
 #include <PostProcOnRefMesh.hpp>
 
-// #ifdef __cplusplus
-// extern "C" {
-// #endif
-//   #include <gm_rule.h>
-// #ifdef __cplusplus
-// }
-// #endif
-
 MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
@@ -79,11 +71,10 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
             "field with that space is not implemented");
   }
 
-  if (tag_length > 1 && tag_length < 3) {
+  if (tag_length > 1 && tag_length < 3)
     tag_length = 3;
-  } else if (tag_length > 3 && tag_length < 9) {
+  else if (tag_length > 3 && tag_length < 9)
     tag_length = 9;
-  }
 
   double def_VAL[tag_length];
   bzero(def_VAL, tag_length * sizeof(double));
@@ -559,79 +550,151 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
 MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
   MoFEMFunctionBegin;
 
-  gaussPts.resize(3, 3, false);
-  gaussPts.clear();
-  gaussPts(0, 0) = 0;
-  gaussPts(1, 0) = 0;
-  gaussPts(0, 1) = 1;
-  gaussPts(1, 1) = 0;
-  gaussPts(0, 2) = 0;
-  gaussPts(1, 2) = 1;
-  mapGaussPts.resize(gaussPts.size2());
+  auto generate_tri = [&](auto &gauss_pts) {
+    MoFEMFunctionBegin;
+    gauss_pts.resize(3, 3, false);
+    gauss_pts.clear();
+    gauss_pts(0, 0) = 0;
+    gauss_pts(1, 0) = 0;
+    gauss_pts(0, 1) = 1;
+    gauss_pts(1, 1) = 0;
+    gauss_pts(0, 2) = 0;
+    gauss_pts(1, 2) = 1;
 
-  moab::Core core_ref;
-  moab::Interface &moab_ref = core_ref;
-  const EntityHandle *conn;
-  int num_nodes;
-  EntityHandle tri_conn[3];
-  MatrixDouble coords(6, 3);
-  for (int gg = 0; gg != 3; gg++) {
-    coords(gg, 0) = gaussPts(0, gg);
-    coords(gg, 1) = gaussPts(1, gg);
-    coords(gg, 2) = 0;
-    CHKERR moab_ref.create_vertex(&coords(gg, 0), tri_conn[gg]);
-  }
+    moab::Core core_ref;
+    moab::Interface &moab_ref = core_ref;
+    const EntityHandle *conn;
+    int num_nodes;
+    EntityHandle tri_conn[3];
+    MatrixDouble coords(6, 3);
+    for (int gg = 0; gg != 3; gg++) {
+      coords(gg, 0) = gauss_pts(0, gg);
+      coords(gg, 1) = gauss_pts(1, gg);
+      coords(gg, 2) = 0;
+      CHKERR moab_ref.create_vertex(&coords(gg, 0), tri_conn[gg]);
+    }
 
-  EntityHandle tri;
-  CHKERR moab_ref.create_element(MBTRI, tri_conn, 3, tri);
-  Range edges;
-  CHKERR moab_ref.get_adjacencies(&tri, 1, 1, true, edges);
-  EntityHandle meshset;
-  CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
-  CHKERR moab_ref.add_entities(meshset, &tri, 1);
-  CHKERR moab_ref.add_entities(meshset, edges);
-  if (sixNodePostProcTris) {
-    CHKERR moab_ref.convert_entities(meshset, true, false, false);
-  }
-  CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
-  CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+    EntityHandle tri;
+    CHKERR moab_ref.create_element(MBTRI, tri_conn, 3, tri);
 
-  gaussPts.resize(3, num_nodes, false);
-  gaussPts.clear();
-  for (int nn = 0; nn < 3; nn++) {
-    gaussPts(0, nn) = coords(nn, 0);
-    gaussPts(1, nn) = coords(nn, 1);
-    gaussPts(0, 3 + nn) = coords(3 + nn, 0);
-    gaussPts(1, 3 + nn) = coords(3 + nn, 1);
-  }
+    if (sixNodePostProcTris) {
+      Range edges;
+      CHKERR moab_ref.get_adjacencies(&tri, 1, 1, true, edges);
+      EntityHandle meshset;
+      CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
+      CHKERR moab_ref.add_entities(meshset, &tri, 1);
+      CHKERR moab_ref.add_entities(meshset, edges);
+      CHKERR moab_ref.convert_entities(meshset, true, false, false);
+      CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn < 3; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+        gauss_pts(0, 3 + nn) = coords(3 + nn, 0);
+        gauss_pts(1, 3 + nn) = coords(3 + nn, 1);
+      }
+    } else {
+      CHKERR moab_ref.get_connectivity(tri, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn < 3; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+      }
+    }
+    MoFEMFunctionReturn(0);
+  };
+
+  auto generate_quad = [&](auto &gauss_pts) {
+    MoFEMFunctionBegin;
+
+    gauss_pts.resize(3, 4, false);
+    gauss_pts.clear();
+
+    gauss_pts(0, 0) = 0;
+    gauss_pts(1, 0) = 0;
+    gauss_pts(0, 1) = 1;
+    gauss_pts(1, 1) = 0;
+    gauss_pts(0, 2) = 1;
+    gauss_pts(1, 2) = 1;
+    gauss_pts(0, 3) = 0;
+    gauss_pts(1, 3) = 1;
+
+    moab::Core core_ref;
+    moab::Interface &moab_ref = core_ref;
+
+    const EntityHandle *conn;
+    int num_nodes;
+    std::array<EntityHandle, 4> quad_conn;
+    MatrixDouble coords(8, 3);
+    for (int gg = 0; gg != 4; gg++) {
+      coords(gg, 0) = gauss_pts(0, gg);
+      coords(gg, 1) = gauss_pts(1, gg);
+      coords(gg, 2) = 0;
+      CHKERR moab_ref.create_vertex(&coords(gg, 0), quad_conn[gg]);
+    }
+
+    EntityHandle quad;
+    CHKERR moab_ref.create_element(MBQUAD, quad_conn.data(), 4, quad);
+
+    if (sixNodePostProcTris) {
+      Range edges;
+      CHKERR moab_ref.get_adjacencies(&quad, 1, 1, true, edges);
+      EntityHandle meshset;
+      CHKERR moab_ref.create_meshset(MESHSET_SET, meshset);
+      CHKERR moab_ref.add_entities(meshset, &quad, 1);
+      CHKERR moab_ref.add_entities(meshset, edges);
+      CHKERR moab_ref.convert_entities(meshset, true, false, false);
+      CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn != 4; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+        gauss_pts(0, 4 + nn) = coords(4 + nn, 0);
+        gauss_pts(1, 4 + nn) = coords(4 + nn, 1);
+      }
+    } else {
+      CHKERR moab_ref.get_connectivity(quad, conn, num_nodes, false);
+      CHKERR moab_ref.get_coords(conn, num_nodes, &coords(0, 0));
+      gauss_pts.resize(3, num_nodes, false);
+      gauss_pts.clear();
+      for (int nn = 0; nn != 4; nn++) {
+        gauss_pts(0, nn) = coords(nn, 0);
+        gauss_pts(1, nn) = coords(nn, 1);
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR generate_tri(gaussPtsTri);
+  CHKERR generate_quad(gaussPtsQuad);
 
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
   MoFEMFunctionBegin;
-  if (gaussPts.size1() == 0) {
+  if (gaussPtsTri.size1() == 0 && gaussPtsQuad.size1() == 0) 
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "post-process mesh not generated");
-  }
 
-  const EntityHandle *conn;
-  int num_nodes;
-  EntityHandle tri;
-
-  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
-      elementsMap.end()) {
-    tri = elementsMap[numeredEntFiniteElementPtr->getEnt()];
-  } else {
-    ublas::vector<EntityHandle> tri_conn(3);
-    MatrixDouble coords_tri(3, 3);
-    VectorDouble coords(3);
+  auto create_tri = [&](auto &gauss_pts) {
+    EntityHandle tri;
+    std::array<EntityHandle, 3> tri_conn;
+    MatrixDouble3by3 coords_tri(3, 3);
+    VectorDouble3 coords(3);
     CHKERR mField.get_moab().get_connectivity(
         numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
     CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_tri(0, 0));
     for (int gg = 0; gg != 3; gg++) {
-      double ksi = gaussPts(0, gg);
-      double eta = gaussPts(1, gg);
+      double ksi = gauss_pts(0, gg);
+      double eta = gauss_pts(1, gg);
       double n0 = N_MBTRI0(ksi, eta);
       double n1 = N_MBTRI1(ksi, eta);
       double n2 = N_MBTRI2(ksi, eta);
@@ -647,28 +710,100 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
       CHKERR postProcMesh.create_vertex(&coords[0], tri_conn[gg]);
     }
     CHKERR postProcMesh.create_element(MBTRI, &tri_conn[0], 3, tri);
-    elementsMap[numeredEntFiniteElementPtr->getEnt()] = tri;
+    return tri;
+  };
+
+  auto create_quad = [&](auto &gauss_pts) {
+    EntityHandle quad;
+    std::array<EntityHandle, 4> quad_conn;
+    MatrixDouble coords_quad(4, 3);
+    VectorDouble coords(4);
+    CHKERR mField.get_moab().get_connectivity(
+        numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
+    CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_quad(0, 0));
+    for (int gg = 0; gg != 4; gg++) {
+      double ksi = gauss_pts(0, gg);
+      double eta = gauss_pts(1, gg);
+      double n0 = N_MBQUAD0(ksi, eta);
+      double n1 = N_MBQUAD1(ksi, eta);
+      double n2 = N_MBQUAD2(ksi, eta);
+      double n3 = N_MBQUAD3(ksi, eta);
+      double x = n0 * coords_quad(0, 0) + n1 * coords_quad(1, 0) +
+                 n2 * coords_quad(2, 0) + n3 * coords_quad(3, 0);
+      double y = n0 * coords_quad(0, 1) + n1 * coords_quad(1, 1) +
+                 n2 * coords_quad(2, 1) + n3 * coords_quad(3, 1);
+      double z = n0 * coords_quad(0, 2) + n1 * coords_quad(1, 2) +
+                 n2 * coords_quad(2, 2) + n3 * coords_quad(3, 2);
+      coords[0] = x;
+      coords[1] = y;
+      coords[2] = z;
+      CHKERR postProcMesh.create_vertex(&coords[0], quad_conn[gg]);
+    }
+    CHKERR postProcMesh.create_element(MBQUAD, &quad_conn[0], 4, quad);
+    return quad;
+  };
+
+  auto add_mid_nodes = [&](auto tri) {
+    MoFEMFunctionBeginHot;
     Range edges;
     CHKERR postProcMesh.get_adjacencies(&tri, 1, 1, true, edges);
     EntityHandle meshset;
     CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
     CHKERR postProcMesh.add_entities(meshset, &tri, 1);
     CHKERR postProcMesh.add_entities(meshset, edges);
-    if (sixNodePostProcTris) {
-      CHKERR postProcMesh.convert_entities(meshset, true, false, false);
-    }
+    CHKERR postProcMesh.convert_entities(meshset, true, false, false);
     CHKERR postProcMesh.delete_entities(&meshset, 1);
     CHKERR postProcMesh.delete_entities(edges);
+    MoFEMFunctionReturnHot(0);
+  };
+
+  EntityHandle tri;
+
+  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
+      elementsMap.end()) {
+    tri = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+    switch (numeredEntFiniteElementPtr->getEntType()) {
+    case MBTRI:
+      gaussPts.resize(gaussPtsTri.size1(), gaussPtsTri.size2(), false);
+      noalias(gaussPts) = gaussPtsTri;
+      break;
+    case MBQUAD:
+      gaussPts.resize(gaussPtsQuad.size1(), gaussPtsQuad.size2(), false);
+      noalias(gaussPts) = gaussPtsQuad;
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Not implemented element type");
+    }
+  } else {
+    switch (numeredEntFiniteElementPtr->getEntType()) {
+    case MBTRI:
+      gaussPts.resize(gaussPtsTri.size1(), gaussPtsTri.size2(), false);
+      noalias(gaussPts) = gaussPtsTri;
+      tri = create_tri(gaussPtsTri);
+      break;
+    case MBQUAD:
+      gaussPts.resize(gaussPtsQuad.size1(), gaussPtsQuad.size2(), false);
+      noalias(gaussPts) = gaussPtsQuad;
+      tri = create_quad(gaussPtsQuad);
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Not implemented element type");
+    }
+    if (sixNodePostProcTris)
+      CHKERR add_mid_nodes(tri);
+    elementsMap[numeredEntFiniteElementPtr->getEnt()] = tri;
   }
 
   // Set values which map nodes with integration points on the prism
-  {
-    CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
-    mapGaussPts.resize(num_nodes);
-    for (int nn = 0; nn < num_nodes; nn++) {
-      mapGaussPts[nn] = conn[nn];
-    }
-  }
+  const EntityHandle *conn;
+  int num_nodes;
+
+  CHKERR postProcMesh.get_connectivity(tri, conn, num_nodes, false);
+  mapGaussPts.resize(num_nodes);
+  for (int nn = 0; nn != num_nodes; nn++)
+    mapGaussPts[nn] = conn[nn];
 
   MoFEMFunctionReturn(0);
 }

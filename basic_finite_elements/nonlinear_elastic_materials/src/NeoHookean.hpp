@@ -94,7 +94,6 @@ struct NeoHookean: public NonlinearElasticElement::FunctionsToCalculatePiolaKirc
             this->eNergy += this->C(ii,ii);
         }
         this->eNergy = 0.5*this->mu*(this->eNergy-3);
-        // logJ = log(this->J);
         logJ = log(sqrt(this->J*this->J));
         this->eNergy += -this->mu*logJ + 0.5*this->lambda*pow(logJ,2);
         MoFEMFunctionReturnHot(0);
