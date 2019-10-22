@@ -254,12 +254,12 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(all_tets, contact_prisms, slave_tris,
                                meshset_tets, meshset_prisms, bit_levels);
 
-    // cout << "all tets size: " << all_tets.size() << endl;
-    // all_tets.print();
-    // cout << "contact prisms size: " << contact_prisms.size() << endl;
-    // contact_prisms.print();
-    // cout << "slave tris size: " << slave_tris.size() << endl;
-    // slave_tris.print();
+    cout << "all tets size: " << all_tets.size() << endl;
+    all_tets.print();
+    cout << "contact prisms size: " << contact_prisms.size() << endl;
+    contact_prisms.print();
+    cout << "slave tris size: " << slave_tris.size() << endl;
+    slave_tris.print();
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -515,9 +515,6 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
                                              "PARALLEL=WRITE_PART");
 
-<<<<<<< HEAD
-    //CHKERR moab.write_file("out_prism.vtk", "VTK", "", &meshset_prisms, 1);
-=======
     // moab_instance
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
@@ -530,15 +527,14 @@ int main(int argc, char *argv[]) {
         dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
     
     std::ostringstream ostrm;
-    // ostrm << "plast_out_" << step << ".vtk";
-    ostrm << "contact_out_" << ".h5m";
+
+    ostrm << "out_contact" << ".h5m";
     
     out_file_name = ostrm.str();
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
                        out_file_name.c_str());
     CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                               "PARALLEL=WRITE_PART");
->>>>>>> ignatios/simple_contact
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);
