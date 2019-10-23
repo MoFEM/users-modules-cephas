@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "NAVIER_STOKES problem",
                              "none");
 
-    CHKERR PetscOptionsString("-file", "mesh file name", "", "mesh.h5m",
+    CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_mesh_file);
     // Set approximation order
     CHKERR PetscOptionsInt("-order_p", "approximation order_p", "", order_p,
@@ -114,7 +114,8 @@ int main(int argc, char *argv[]) {
     // Set testing (used by CTest)
     CHKERR PetscOptionsBool("-test", "if true is ctest", "", flg_test,
                             &flg_test, PETSC_NULL);
-    ierr = PetscOptionsEnd();
+    int ierr = PetscOptionsEnd();
+    CHKERRG(ierr);
 
     if (flg_mesh_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
@@ -171,7 +172,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
     CHKERR m_field.set_field_order(0, MBTRI, "U", order_u);
     CHKERR m_field.set_field_order(0, MBQUAD, "U", order_u);
-    CHKERR m_field.set_field_order(0, MBPRISM, "U", order_u);
+    CHKERR m_field.set_field_order(0, MBPRISM, "U", 5);
 
     CHKERR m_field.set_field_order(0, MBVERTEX, "P", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);

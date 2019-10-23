@@ -395,7 +395,6 @@ add_test(
   -file_name mesh_for_testing_elastic_jacobian.h5m -ale
   )
 
-<<<<<<< HEAD
 bfe_add_executable(testing_jacobian_of_navier_stokes_element
   ${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_navier_stokes_element.cpp
 )
@@ -428,7 +427,6 @@ target_link_libraries(testing_jacobian_of_navier_stokes_element_with_prisms
   mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
-=======
 # Surface pressure element (ALE)
 
 bfe_add_executable(testing_jacobian_of_surface_pressure_element
@@ -454,4 +452,3 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
   -file_name mesh_for_testing_surface_pressure_element.h5m
   )
->>>>>>> develop
