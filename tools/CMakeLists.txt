@@ -131,6 +131,19 @@ target_link_libraries(uniform_mesh_refinement
 )
 install(TARGETS uniform_mesh_refinement DESTINATION bin)
 
+add_executable(extrude_prisms ${CMAKE_CURRENT_SOURCE_DIR}/extrude_prisms.cpp)
+target_link_libraries(extrude_prisms
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS extrude_prisms DESTINATION bin)
+
 if(ADOL-C_LIBRARY)
 
   include_directories(

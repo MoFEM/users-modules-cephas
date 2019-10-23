@@ -44,8 +44,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
-    CHKERR PetscOptionsString("-output_file", "output mesh file name", "", "mesh.h5m",
-                              mesh_out_file, 255, PETSC_NULL);
+    CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
+                              "out.h5m", mesh_out_file, 255, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_nparts", "number of parts", "", n_partas,
                            &n_partas, &flg_n_part);
     CHKERR PetscOptionsInt("-dim", "adjacency dim", "", dim, &dim, PETSC_NULL);
