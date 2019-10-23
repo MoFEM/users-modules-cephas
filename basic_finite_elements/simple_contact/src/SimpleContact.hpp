@@ -263,7 +263,7 @@ struct OpGetNormalSlave
     for (int ii = 0; ii != 3; ++ii)
       normal(ii) = normal_slave_ptr[ii];
 
-    const double normal_length = pow(normal(i) * normal(i), 2);
+    const double normal_length = sqrt(normal(i) * normal(i));
     normal(i) = normal(i) / normal_length;
     commonDataSimpleContact->areaCommon = 0.5 * normal_length;
 
@@ -443,6 +443,8 @@ struct OpGetGapSlave
       ++position_master_gp;
       ++gap_ptr;
     } // for gauss points
+
+    auto gap_ptr_2 = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     MoFEMFunctionReturn(0);
   }
@@ -812,11 +814,17 @@ struct OpCalIntTildeCFunSlave
       ++tilde_c_fun;
     } // for gauss points
 
+    auto tilde_c_fun_2 =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+   
     CHKERR VecSetValues(getFEMethod()->snes_f, nb_base_fun_col,
                         &data.getIndices()[0], &vecR[0], ADD_VALUES);
+
     MoFEMFunctionReturn(0);
   }
 };
+
 
 struct OpContactConstraintMatrixMasterSlave
     : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
@@ -1400,7 +1408,7 @@ struct OpMakeVtkSlave
         getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      for (int dd = 0; dd != 3; dd++) {
+      for (int dd = 0; dd != 3; ++dd) {
         coords[dd] = getCoordsAtGaussPtsSlave()(gg, dd);
       }
 
@@ -1413,7 +1421,9 @@ struct OpMakeVtkSlave
 
       CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
                                   &lag_gap_prod_slave);
-      
+
+      //cerr << "Post proc gap " << gap_ptr<<"\n";
+
       ++gap_ptr;
       ++lagrange_slave;
       ++lag_gap_prod_slave;
@@ -1542,6 +1552,7 @@ setContactOperatorsForPostProc(MoFEM::Interface &m_field, string field_name,
         new OpLagGapProdGaussPtsSlave(lagrang_field_name,
                                        commonDataSimpleContact));
 
+    
     fePostProcSimpleContact->getOpPtrVector().push_back(new OpMakeVtkSlave(
         m_field, field_name, commonDataSimpleContact, moab_out));
   }

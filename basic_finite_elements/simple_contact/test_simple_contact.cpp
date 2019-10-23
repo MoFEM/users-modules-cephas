@@ -488,6 +488,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
                        its);
 
+    // cerr << "Before Scater\n";
+    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
