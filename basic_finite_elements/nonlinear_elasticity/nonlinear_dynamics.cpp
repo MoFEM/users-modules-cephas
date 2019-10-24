@@ -263,49 +263,78 @@ int main(int argc, char *argv[]) {
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
-    PetscBool flg = PETSC_TRUE;
-    char mesh_file_name[255];
-    CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
-                                 mesh_file_name, 255, &flg);
-    if (flg != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
-    }
-
-    // use this if your mesh is partitioned and you run code on parts,
-    // you can solve very big problems
-    PetscBool is_partitioned = PETSC_FALSE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_is_partitioned",
-                               &is_partitioned, &flg);
-
-    PetscBool linear = PETSC_TRUE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
-                               PETSC_NULL);
-
-    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
-    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
-    PetscInt choice_base_value = BERNSTEIN_BEZIER;
-    CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases,
-                                LASBASETOP, &choice_base_value, PETSC_NULL);
     FieldApproximationBase base = NOBASE;
-    if (choice_base_value == LEGENDRE)
-      base = AINSWORTH_LEGENDRE_BASE;
-    else if (choice_base_value == LOBATTO)
-      base = AINSWORTH_LOBATTO_BASE;
-    else if (choice_base_value == BERNSTEIN_BEZIER)
-      base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+    char mesh_file_name[255];
+    PetscBool is_partitioned = PETSC_FALSE;
+    PetscBool linear = PETSC_TRUE;
+    PetscInt disp_order = 1;
+    PetscInt vel_order = 1;
+    PetscBool is_solve_at_time_zero = PETSC_FALSE;
 
-    if (is_partitioned == PETSC_TRUE) {
-      // Read mesh to MOAB
-      const char *option;
-      option = "PARALLEL=BCAST_DELETE;"
-               "PARALLEL_RESOLVE_SHARED_ENTS;"
-               "PARTITION=PARALLEL_PARTITION;";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
-    } else {
-      const char *option;
-      option = "";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
-    }
+    auto read_command_line_parameters = [&]() {
+      MoFEMFunctionBegin;
+      PetscBool flg = PETSC_TRUE;
+      CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
+                                   mesh_file_name, 255, &flg);
+      if (flg != PETSC_TRUE)
+        SETERRQ(PETSC_COMM_SELF, 1, "Error -my_file (mesh file needed)");
+
+      // use this if your mesh is partitioned and you run code on parts,
+      // you can solve very big problems
+      CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_is_partitioned",
+                                 &is_partitioned, &flg);
+
+      CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-is_linear", &linear,
+                                 PETSC_NULL);
+
+      enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
+      const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+      PetscInt choice_base_value = BERNSTEIN_BEZIER;
+      CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases,
+                                  LASBASETOP, &choice_base_value, PETSC_NULL);
+      if (choice_base_value == LEGENDRE)
+        base = AINSWORTH_LEGENDRE_BASE;
+      else if (choice_base_value == LOBATTO)
+        base = AINSWORTH_LOBATTO_BASE;
+      else if (choice_base_value == BERNSTEIN_BEZIER)
+        base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+
+      CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_disp_order",
+                                &disp_order, &flg);
+      if (flg != PETSC_TRUE)
+        disp_order = 1;
+
+      CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_vel_order",
+                                &vel_order, &flg);
+      if (flg != PETSC_TRUE)
+        vel_order = disp_order;
+
+      CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL,
+                                 "-my_solve_at_time_zero",
+                                 &is_solve_at_time_zero, &flg);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto read_mesh = [&]() {
+      MoFEMFunctionBegin;
+      if (is_partitioned == PETSC_TRUE) {
+        // Read mesh to MOAB
+        const char *option;
+        option = "PARALLEL=BCAST_DELETE;"
+                 "PARALLEL_RESOLVE_SHARED_ENTS;"
+                 "PARTITION=PARALLEL_PARTITION;";
+        CHKERR moab.load_file(mesh_file_name, 0, option);
+      } else {
+        const char *option;
+        option = "";
+        CHKERR moab.load_file(mesh_file_name, 0, option);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR read_command_line_parameters();
+    CHKERR read_mesh();
 
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
@@ -336,19 +365,6 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
 
     // set app. order
-    PetscInt disp_order;
-    CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_disp_order",
-                              &disp_order, &flg);
-    if (flg != PETSC_TRUE) {
-      disp_order = 1;
-    }
-    PetscInt vel_order = disp_order;
-    CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-my_vel_order",
-                              &vel_order, &flg);
-    if (flg != PETSC_TRUE) {
-      vel_order = disp_order;
-    }
-
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", disp_order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", disp_order);
@@ -767,9 +783,6 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
 
     // Solve problem at time Zero
-    PetscBool is_solve_at_time_zero = PETSC_FALSE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, PETSC_NULL, "-my_solve_at_time_zero",
-                               &is_solve_at_time_zero, &flg);
     if (is_solve_at_time_zero) {
 
       Mat Aij = shellAij_ctx->K;

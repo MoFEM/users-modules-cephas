@@ -854,22 +854,6 @@ struct EdgeSlidingConstrains : public GenericSliding {
         else
           CHKERR get_base_for_not_planar_faces();
 
-        auto get_edge_length = [&]() {
-          int num_nodes;
-          const EntityHandle *conn;
-          CHKERR moab.get_connectivity(edge, conn, num_nodes, true);
-          VectorDouble6 coords(6);
-          CHKERR moab.get_coords(conn, 2, &*coords.begin());
-          for (auto n : {0, 1, 2}) {
-            coords[n] -= coords[n + 3];
-            coords[n] *= coords[n];
-          }
-          return sqrt(coords[0] + coords[1] + coords[2]);
-        };
-        // const double edge_length = get_edge_length();
-        // t_n0(i) *= edge_length;
-        // t_n1(i) *= edge_length;
-
         VectorDouble3 &v0 = v[0];
         VectorDouble3 &v1 = v[1];
         CHKERR moab.tag_set_data(th0, &edge, 1, &v0[0]);
