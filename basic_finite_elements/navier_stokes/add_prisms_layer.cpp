@@ -179,21 +179,6 @@ int main(int argc, char *argv[]) {
       cout << "first layer faces: " << quads.size() << endl;
       quads.print();
 
-      // Range prev_layer, prism_layer_tris, next_prism_layer,
-      //     next_prism_layer_faces;
-
-      // {
-      //   Range nodes;
-      //   CHKERR moab.get_connectivity(faces, nodes);
-      //   double *coords;
-      //   CHKERR moab.get_coords(nodes, coords);
-
-      //   for (int i = 0; i < nodes.size(); i++) {
-      //     cout << coords[i * 3] << " " << coords[i * 3 + 1] << " "
-      //          << coords[i * 3 + 2] << endl;
-      //     }
-      //   }
-      // }
       quads_layer = quads;
       for (int i = 1; i < nb_layers; i++) {
         Range prisms_layer, prisms_next_layer, tris_layer;
@@ -216,11 +201,12 @@ int main(int argc, char *argv[]) {
         cout << "prism layer tris: " << tris_layer.size() << endl;
         tris_layer.print();
 
-        quads_layer.clear();
-
         CHKERR moab.get_adjacencies(tris_layer, 3, true, prisms_next_layer,
                                     moab::Interface::UNION);
         prisms_next_layer = subtract(prisms_next_layer, prisms_layer);
+
+        quads_layer.clear();
+
         CHKERR moab.get_adjacencies(prisms_next_layer, 2, true, quads_layer,
                                     moab::Interface::UNION);
         quads_layer = quads_layer.subset_by_type(MBQUAD);
@@ -260,7 +246,7 @@ int main(int argc, char *argv[]) {
       faces = faces.subset_by_type(MBTRI);
 
       cout << new_set_name << ": " << faces.size() << " faces(s)" << endl;
-      // faces.print();
+      faces.print();
 
       CHKERR mmanager_ptr->addMeshset(BLOCKSET, new_set_id, new_set_name);
       CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, new_set_id, faces);
@@ -308,9 +294,9 @@ int main(int argc, char *argv[]) {
     // CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
     // meshset); CHKERR moab.add_entities(meshset, prisms);
 
-    // CHKERR mmanager_ptr->printDisplacementSet();
-    // CHKERR mmanager_ptr->printMaterialsSet();
-    // CHKERR mmanager_ptr->printPressureSet();
+    CHKERR mmanager_ptr->printDisplacementSet();
+    CHKERR mmanager_ptr->printMaterialsSet();
+    CHKERR mmanager_ptr->printPressureSet();
 
     EntityHandle rootset = moab.get_root_set();
 

@@ -172,7 +172,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
     CHKERR m_field.set_field_order(0, MBTRI, "U", order_u);
     CHKERR m_field.set_field_order(0, MBQUAD, "U", order_u);
-    CHKERR m_field.set_field_order(0, MBPRISM, "U", 5);
+    CHKERR m_field.set_field_order(0, MBPRISM, "U", order_u);
 
     CHKERR m_field.set_field_order(0, MBVERTEX, "P", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);
