@@ -150,58 +150,93 @@ private:
   boost::shared_ptr<ForcesAndSourcesCore> null;
 };
 
+const double ramp_t = 1.0;
+const double sml = 0.0;
+const double T = 2 * M_PI;
+
 struct ExactFunction {
-double operator()(const double x, const double y, const double t) const {
-  if(t <= 0.1){
-    return sin(2 * M_PI * x) * sin(2 * M_PI * y)*t;
-  }else{
-    return sin(2 * M_PI * x) * sin(2 * M_PI * y);
-  }
-}
-};
-
-struct ExactFunctionGrad{
-FTensor::Tensor1<double, 3> operator()(const double x, const double y, const double t) const {
-FTensor::Tensor1<double, 3> grad;
-  if(t <= 0.1){
-    grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y)*t;
-    grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y)*t;
-  }else {
-    grad(0) = 2 * M_PI * cos(2 * M_PI * x) * sin(2 * M_PI * y);
-    grad(1) = 2 * M_PI * sin(2 * M_PI * x) * cos(2 * M_PI * y);
-  }
-  grad(2) = 0.0;
-  return grad;
-}
-};
-
-struct ExactFunctionLap{
   double operator()(const double x, const double y, const double t) const {
-    if(t <= 0.1){
-      return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y) * t;
-    }else{
-      return -8 * pow(M_PI, 2) * sin(2 * M_PI * x) * sin(2 * M_PI * y); 
+    double g = sin(T * x) * sin(T * y);
+    double val = 0;
+    if (x > -sml) {
+      val = 1.0 * g;
+    }else {
+      val = g;
+    }
+    if (t <= ramp_t) {
+      return val * t;
+    } else {
+      return val * ramp_t;
     }
   }
 };
 
-struct ExactFunctionDot{
-  double operator()(const double x, const double y, const double t) const {
-    // return sin(2 * M_PI * x) * sin(2 * M_PI * y);
-    if(t <= 0.1){
-      return sin(2 * M_PI * x) * sin(2 * M_PI * y);
-    } else{
-      return 0;
-    }  
+struct ExactFunctionGrad {
+  FTensor::Tensor1<double, 3> operator()(const double x, const double y,
+                                         const double t) const {
+    FTensor::Tensor1<double, 3> grad;
+    double mx = T * cos(T * x) * sin(T * y);
+    double my = T * sin(T * x) * cos(T * y);
+    double hx, hy;
+    if (x > -sml) {
+      hx = 1.0 * mx;
+      hy = 1.0 * my;
+    } else {
+      hx = mx;
+      hy = my;
+    }
+    if (t <= ramp_t) {
+      grad(0) = hx * t;
+      grad(1) = hy * t;
+    } else {
+      grad(0) = hx * ramp_t;
+      grad(1) = hy * ramp_t;
+    }
+    grad(2) = 0.0;
+    return grad;
   }
 };
 
-  MoFEMErrorCode RDProblem::setup_system() {
-    MoFEMFunctionBegin;
-    CHKERR m_field.getInterface(simple_interface);
-    CHKERR simple_interface->getOptions();
-    CHKERR simple_interface->loadFile();
-    MoFEMFunctionReturn(0);
+struct ExactFunctionLap {
+  double operator()(const double x, const double y, const double t) const {
+    double glap = -2.0 * pow(T, 2) * sin(T * x) * sin(T * y);
+    double lap;
+    if (x > -sml) {
+      lap = 1.0 * glap;
+    } else {
+      lap = glap;
+    }
+    if (t <= ramp_t) {
+      return lap * t;
+    } else {
+      return lap * ramp_t;
+    }
+  }
+};
+
+struct ExactFunctionDot {
+  double operator()(const double x, const double y, const double t) const {
+    double gdot = sin(T * x) * sin(T * y);
+    double dot;
+    if (x > -sml) {
+      dot = 1.0 * gdot;
+    } else {
+      dot = gdot;
+    }
+    if (t <= ramp_t) {
+      return dot;
+    } else {
+      return 0;
+    }
+  }
+};
+
+MoFEMErrorCode RDProblem::setup_system() {
+  MoFEMFunctionBegin;
+  CHKERR m_field.getInterface(simple_interface);
+  CHKERR simple_interface->getOptions();
+  CHKERR simple_interface->loadFile();
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode RDProblem::add_fe(std::string mass_field,
@@ -232,22 +267,22 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 1e-0;
+      block_map[id].B0 = 1e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 5e-4;
+      block_map[id].B0 = 1e-1;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION3") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 1e-3;
+      block_map[id].B0 = 1e-1;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION4") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 5e-3;
+      block_map[id].B0 = 1e-2;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION5") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -299,14 +334,14 @@ MoFEMErrorCode RDProblem::push_slow_rhs(std::string mass_field,
                                         boost::shared_ptr<PreviousData> &data) {
   MoFEMFunctionBegin;
 
-  // vol_ele_slow_rhs->getOpPtrVector().push_back(
-  //     new OpAssembleSlowRhsV(mass_field, data, ExactFunction(), ExactFunctionDot(), ExactFunctionLap()));
+  vol_ele_slow_rhs->getOpPtrVector().push_back(
+      new OpAssembleSlowRhsV(mass_field, data, ExactFunction(), ExactFunctionDot(), ExactFunctionLap()));
 
   natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
       new OpAssembleNaturalBCRhsTau(flux_field, natural_bdry_ents));
 
-  // natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
-  //     new OpEssentialBC(flux_field, essential_bdry_ents));
+  natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
+      new OpEssentialBC(flux_field, essential_bdry_ents));
   MoFEMFunctionReturn(0);
 }
 
@@ -356,7 +391,7 @@ MoFEMErrorCode RDProblem::push_stiff_rhs(std::string mass_field,
       new OpAssembleStiffRhsTau<3>(flux_field, data, block_map));
 
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
-      new OpAssembleStiffRhsV<3>(mass_field, data, ExactFunction(),
+      new OpAssembleStiffRhsV<3>(mass_field, data, block_map, ExactFunction(),
                                  ExactFunctionDot(), ExactFunctionLap()));
   MoFEMFunctionReturn(0);
 }
@@ -415,8 +450,8 @@ MoFEMErrorCode RDProblem::apply_IC(std::string mass_field, Range &surface,
 
 MoFEMErrorCode RDProblem::apply_BC(std::string flux_field) {
   MoFEMFunctionBegin;
-  // CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
-  //     "SimpleProblem", flux_field, essential_bdry_ents);
+  CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      "SimpleProblem", flux_field, essential_bdry_ents);
 
   MoFEMFunctionReturn(0);
 }
@@ -563,8 +598,8 @@ MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
   }
   
 
-  vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpError(ExactFunction(), ExactFunctionLap(), data1, global_error));
+  // vol_ele_stiff_lhs->getOpPtrVector().push_back(
+  //     new OpError(ExactFunction(), ExactFunctionLap(), ExactFunctionGrad(), data1, material_blocks, global_error));
   CHKERR set_integration_rule();
   dm = simple_interface->getDM();
   ts = createTS(m_field.get_comm());
@@ -584,17 +619,19 @@ MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
                                   initial_mass_ele);
 
   if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
-    CHKERR apply_BC("MASS1"); // nb_species times
+    CHKERR apply_BC("FLUX1"); // nb_species times
     if (nb_species == 2 || nb_species == 3) {
-      CHKERR apply_BC("MASS2");
+      CHKERR apply_BC("FLUX2");
       if (nb_species == 3) {
-        CHKERR apply_BC("MASS3");
+        CHKERR apply_BC("FLUX3");
       }
     }
   }
 
   CHKERR loop_fe();                          // only once
   post_proc->generateReferenceElementMesh(); // only once
+
+
 
   if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
     CHKERR post_proc_fields("MASS1", "FLUX1");

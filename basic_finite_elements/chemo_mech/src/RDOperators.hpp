@@ -26,8 +26,8 @@ const double B = 0.0;
 const double B_epsilon = 0.0;
 
 const int save_every_nth_step = 1;
-const int order = 3; ///< approximation order
-const double init_value = 0;
+// const int order = 3; ///< approximation order
+const double init_value = 0.5;
 const double essen_value = 0;
 const double natu_value = 0;
 // const int dim = 3;
@@ -63,7 +63,7 @@ struct BlockData {
 
   BlockData()
       : a11(1), a12(0), a13(0), a21(0), a22(1), a23(0), a31(0), a32(0), a33(1),
-        B0(1e-0), r1(1), r2(1), r3(1) {}
+        B0(1e0), r1(1), r2(1), r3(1) {}
 };
 
 double compute_init_val(const double x, const double y, const double z) {
@@ -80,7 +80,7 @@ double compute_essen_bc(const double x, const double y, const double z) {
 
   
 
-      struct OpComputeSlowValue : public OpFaceEle {
+struct OpComputeSlowValue : public OpFaceEle {
     OpComputeSlowValue(std::string mass_field,
                        boost::shared_ptr<PreviousData> &data1,
                        boost::shared_ptr<PreviousData> &data2,
@@ -140,7 +140,7 @@ double compute_essen_bc(const double x, const double y, const double z) {
         auto t_mass_values1 = getFTensor0FromVec(commonData1->mass_values);
         auto t_mass_values2 = getFTensor0FromVec(commonData2->mass_values);
         auto t_mass_values3 = getFTensor0FromVec(commonData3->mass_values);
-
+        // cout << "r1 : " << block_data.r1 << endl;
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           t_slow_values1 = block_data.r1 * t_mass_values1 *
                            (1.0 - block_data.a11 * t_mass_values1 -
@@ -250,7 +250,6 @@ private:
 struct OpInitialMass : public OpFaceEle {
   OpInitialMass(const std::string &mass_field, Range &inner_surface)
       : OpFaceEle(mass_field, OpFaceEle::OPROW), innerSurface(inner_surface) {
-    cerr << "OpInitialMass()" << endl;
   }
   MatrixDouble nN;
   VectorDouble nF;
@@ -326,9 +325,7 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
       , exactValue(exact_value)
       , exactDot(exact_dot)
       , exactLap(exact_lap)
-  {
-    cerr << "OpAssembleSlowRhsV()" << endl;
-  }
+  {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -359,11 +356,11 @@ struct OpAssembleSlowRhsV : OpFaceEle // R_V
         double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
         // double f = u_dot - u_lap;
-        double f = 0;
+        // double f = 0;
         for (int rr = 0; rr != nb_dofs; ++rr) {
           auto t_col_v_base = data.getFTensor0N(gg, 0);
-          // vecF[rr] += a * t_slow_value * t_row_v_base;
-          vecF[rr] +=  a * f * t_row_v_base;
+          vecF[rr] += a * t_slow_value * t_row_v_base;
+          // vecF[rr] +=  a * f * t_row_v_base;
           for (int cc = 0; cc != nb_dofs; ++cc) {
             mat(rr, cc) += a * t_row_v_base * t_col_v_base;
             ++t_col_v_base;
@@ -404,9 +401,7 @@ struct OpAssembleNaturalBCRhsTau : OpBoundaryEle // R_tau_2
 {
   OpAssembleNaturalBCRhsTau(std::string flux_field, Range &natural_bd_ents)
       : OpBoundaryEle(flux_field, OpBoundaryEle::OPROW),
-        natural_bd_ents(natural_bd_ents) {
-    cerr << "OpAssembleNaturalBCRhsTau()" << endl;
-  }
+        natural_bd_ents(natural_bd_ents) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -461,9 +456,7 @@ struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
                         boost::shared_ptr<PreviousData> &data,
                         std::map<int, BlockData> &block_map)
       : OpFaceEle(flux_field, OpFaceEle::OPROW), commonData(data),
-        setOfBlock(block_map) {
-    cerr << "OpAssembleStiffRhsTau()" << endl;
-  }
+        setOfBlock(block_map) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -537,12 +530,14 @@ struct OpAssembleStiffRhsV : OpFaceEle // F_V
   typedef boost::function<double(const double, const double, const double)>
       FVal;
   OpAssembleStiffRhsV(std::string flux_field,
-                      boost::shared_ptr<PreviousData> &data, 
+                      boost::shared_ptr<PreviousData> &data,
+                      std::map<int, BlockData> &block_map, 
                       FVal exact_value,
                       FVal exact_dot, 
                       FVal exact_lap)
       : OpFaceEle(flux_field, OpFaceEle::OPROW)
       , commonData(data) 
+      , setOfBlock(block_map)
       , exactValue(exact_value)
       , exactDot(exact_dot)
       , exactLap(exact_lap)
@@ -553,6 +548,24 @@ struct OpAssembleStiffRhsV : OpFaceEle // F_V
     const int nb_dofs = data.getIndices().size();
     // cerr << "In StiffRhsV ..." << endl;
     if (nb_dofs) {
+      auto find_block_data = [&]() {
+        EntityHandle fe_ent = getFEEntityHandle();
+        BlockData *block_raw_ptr = nullptr;
+        for (auto &m : setOfBlock) {
+          if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+            block_raw_ptr = &m.second;
+            break;
+          }
+        }
+        return block_raw_ptr;
+      };
+
+      auto block_data_ptr = find_block_data();
+      if (!block_data_ptr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+      auto &block_data = *block_data_ptr;
+
+
       vecF.resize(nb_dofs, false);
       vecF.clear();
       const int nb_integration_pts = getGaussPts().size2();
@@ -569,9 +582,9 @@ struct OpAssembleStiffRhsV : OpFaceEle // F_V
         double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
         double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
-        double f = u_dot - u_lap;
+        double f = u_dot - block_data.B0 * u_lap;
         for (int rr = 0; rr < nb_dofs; ++rr) {
-          vecF[rr] += (t_row_v_base * (t_mass_dot + t_flux_div - f)) * a;
+          vecF[rr] += (t_row_v_base * (t_mass_dot + t_flux_div)) * a;
           ++t_row_v_base;
         }
         ++t_mass_dot;
@@ -590,6 +603,7 @@ struct OpAssembleStiffRhsV : OpFaceEle // F_V
 private:
   boost::shared_ptr<PreviousData> commonData;
   VectorDouble vecF;
+  std::map<int, BlockData> setOfBlock;
 
   FVal exactValue;
   FVal exactDot;
@@ -609,9 +623,9 @@ struct OpAssembleLhsTauTau : OpFaceEle // A_TauTau_1
                       boost::shared_ptr<PreviousData> &commonData,
                       std::map<int, BlockData> &block_map)
       : OpFaceEle(flux_field, flux_field, OpFaceEle::OPROWCOL),
-        setOfBlock(block_map), commonData(commonData) {
+        setOfBlock(block_map), commonData(commonData) 
+  {
     sYmm = true;
-    cerr << "OpAssembleLhsTauTau()" << endl;
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -691,9 +705,9 @@ struct OpAssembleLhsTauV : OpFaceEle // E_TauV
                     boost::shared_ptr<PreviousData> &data,
                     std::map<int, BlockData> &block_map)
       : OpFaceEle(flux_field, mass_field, OpFaceEle::OPROWCOL),
-        commonData(data), setOfBlock(block_map) {
+        commonData(data), setOfBlock(block_map)
+  {
     sYmm = false;
-    cerr << "OpAssembleLhsTauV()" << endl;
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -770,9 +784,9 @@ private:
 struct OpAssembleLhsVTau : OpFaceEle // C_VTau
 {
   OpAssembleLhsVTau(std::string mass_field, std::string flux_field)
-      : OpFaceEle(mass_field, flux_field, OpFaceEle::OPROWCOL) {
+      : OpFaceEle(mass_field, flux_field, OpFaceEle::OPROWCOL) 
+  {
     sYmm = false;
-    cerr << "OpAssembleLhsVTau()" << endl;
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -817,9 +831,9 @@ private:
 struct OpAssembleLhsVV : OpFaceEle // D
 {
   OpAssembleLhsVV(std::string mass_field)
-      : OpFaceEle(mass_field, mass_field, OpFaceEle::OPROWCOL) {
+      : OpFaceEle(mass_field, mass_field, OpFaceEle::OPROWCOL) 
+  {
     sYmm = true;
-    cerr << "OpAssembleLhsVV()" << endl;
   }
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -878,12 +892,17 @@ struct OpError : public OpFaceEle {
       const double, const double, const double)>
       FGrad;
   double &eRror;
-  OpError(FVal exact_value, FVal exact_lap,
-          boost::shared_ptr<PreviousData> &prev_data, double &err)
+  OpError(FVal exact_value, 
+          FVal exact_lap, FGrad exact_grad,
+          boost::shared_ptr<PreviousData> &prev_data, 
+          std::map<int, BlockData> &block_map,
+          double &err)
       : OpFaceEle("ERROR", OpFaceEle::OPROW)
       , exactVal(exact_value)
       , exactLap(exact_lap)
+      , exactGrad(exact_grad)
       , prevData(prev_data)
+      , setOfBlock(block_map)
       , eRror(err)
       {}
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -891,10 +910,30 @@ struct OpError : public OpFaceEle {
     const int nb_dofs = data.getFieldData().size();
     // cout << "nb_error_dofs : " << nb_dofs << endl;
     if (nb_dofs) {
-      // auto t_flux_value = getFTensor1FromMat<3>(prevData->flux_values);
+      auto find_block_data = [&]() {
+          EntityHandle fe_ent = getFEEntityHandle();
+          BlockData *block_raw_ptr = nullptr;
+          for (auto &m : setOfBlock) {
+            if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+              block_raw_ptr = &m.second;
+              break;
+            }
+          }
+          return block_raw_ptr;
+        };
+
+      auto block_data_ptr = find_block_data();
+      if (!block_data_ptr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+
+      auto &block_data = *block_data_ptr;
+
+
+
+      auto t_flux_value = getFTensor1FromMat<3>(prevData->flux_values);
       // auto t_mass_dot = getFTensor0FromVec(prevData->mass_dots);
       auto t_mass_value = getFTensor0FromVec(prevData->mass_values);
-      auto t_flux_div = getFTensor0FromVec(prevData->flux_divs);
+      // auto t_flux_div = getFTensor0FromVec(prevData->flux_divs);
       data.getFieldData().clear();
       const double vol = getMeasure();
       const int nb_integration_pts = getGaussPts().size2();
@@ -903,19 +942,26 @@ struct OpError : public OpFaceEle {
       CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
       double ct = getFEMethod()->ts_t - dt;
       auto t_coords = getFTensor1CoordsAtGaussPts();
+
+      FTensor::Tensor1<double, 3> t_exact_flux, t_flux_error;
+
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
         double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
-        double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
-        double local_error = pow(mass_exact - t_mass_value, 2); // + pow(flux_exact - t_flux_div, 2); 
+        // double flux_lap = - block_data.B0 * exactLap(t_coords(NX), t_coords(NY), ct);
+        t_exact_flux(i) = - block_data.B0 * exactGrad(t_coords(NX), t_coords(NY), ct)(i);
+        t_flux_error(0) = t_flux_value(0) - t_exact_flux(0);
+        t_flux_error(1) = t_flux_value(1) - t_exact_flux(1);
+        t_flux_error(2) = t_flux_value(2) - t_exact_flux(2);
+        double local_error = pow(mass_exact - t_mass_value, 2) + t_flux_error(i) * t_flux_error(i); 
         // cout << "flux_div : " << t_flux_div << "   flux_exact : " << flux_exact << endl;
         data.getFieldData()[0] += a * local_error;
         eRror += a * local_error;
 
         ++t_w;
         ++t_mass_value;
-        ++t_flux_div;
-        // ++t_flux_value;
+        // ++t_flux_div;
+        ++t_flux_value;
         // ++t_mass_dot;
         ++t_coords;
       }
@@ -928,11 +974,25 @@ struct OpError : public OpFaceEle {
   private:
     FVal exactVal;
     FVal exactLap;
+    FGrad exactGrad;
     boost::shared_ptr<PreviousData> prevData;
+    std::map<int, BlockData> setOfBlock;
 
     FTensor::Number<0> NX;
     FTensor::Number<1> NY;
 };
+
+// struct ExactMass : public OpFaceEle {
+//   typedef boost::function<double(const double, const double, const double)>
+//       FVal;
+
+//   ExacMass(FVal exact_value)
+//       : OpFaceEle("EXACT_M", OpFaceEle::OPROWCOL), exactVal(exact_value),
+//         exactLap(exact_lap), exactGrad(exact_grad), prevData(prev_data),
+//         setOfBlock(block_map), eRror(err) {}
+
+// }
+
 struct Monitor : public FEMethod {
   double &eRror;
   Monitor(MPI_Comm &comm, const int &rank, SmartPetscObj<DM> &dm,

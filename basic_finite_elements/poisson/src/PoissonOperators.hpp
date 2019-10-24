@@ -918,7 +918,7 @@ struct CreateFiniteElements {
   /**
    * \brief Create finite element to calculate error
    */
-  MoFEMErrorCode createFEToEvaluateError(
+  MoFEMErrorCode VecCreateGhost(
       boost::function<double(const double, const double, const double)> f_u,
       boost::function<FTensor::Tensor1<double, 3>(const double, const double,
                                                   const double)>

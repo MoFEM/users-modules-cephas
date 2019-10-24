@@ -165,6 +165,9 @@ namespace StdRDOperators {
         auto t_mass_values2 = getFTensor0FromVec(commonData2->values);
         auto t_mass_values3 = getFTensor0FromVec(commonData3->values);
 
+        // cout << "r1 : " << block_data.rate[0] << endl;
+
+
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           t_slow_values1 = block_data.rate[0] * t_mass_values1 *
                            (1.0 - block_data.coef(0, 0) * t_mass_values1 -
@@ -229,7 +232,7 @@ namespace StdRDOperators {
 
         auto t_base = data.getFTensor0N();
         auto t_w = getFTensor0IntegrationWeight();
-        const double vol = getMeasure()/2.0;
+        const double vol = getMeasure();
         // cout << "measure : " << getMeasure() << endl;
         const double ct = getFEMethod()->ts_t;
         auto t_coords = getFTensor1CoordsAtGaussPts();
@@ -240,8 +243,8 @@ namespace StdRDOperators {
           double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
           // double f = u_dot - u_lap;
-            double f = 0;
-          // const double f = a * t_slow_value;  
+            // double f = 0;
+          const double f = t_slow_value;  
 
           for (int rr = 0; rr != nb_dofs; ++rr) {
             const double b = a * f * t_base;
@@ -340,13 +343,13 @@ namespace StdRDOperators {
           const double a = vol * t_w;
 
           double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
-          double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
-
-          double f = u_dot - u_lap;
+          double u_lap = - block_data.B0 * exactLap(t_coords(NX), t_coords(NY), ct);
+          // cout << "B0 : " << block_data.B0 << endl;
+          double f = u_dot + u_lap;
 
           for (int rr = 0; rr != nb_dofs; ++rr) {
             vecF[rr] += a * (t_base * t_dot_val + (block_data.B0 + B * t_val) *
-            t_diff_base(i) * t_grad(i) - t_base * f);
+            t_diff_base(i) * t_grad(i));
             ++t_diff_base;
             ++t_base;
           }
@@ -540,12 +543,18 @@ namespace StdRDOperators {
       const double, const double, const double)>
       FGrad;
   double &eRror;
-  OpError(FVal exact_value, FVal exact_lap,
-          boost::shared_ptr<PreviousData> &prev_data, double &err)
+  OpError(FVal exact_value, 
+          FVal exact_lap, 
+          FGrad exact_grad,
+          boost::shared_ptr<PreviousData> &prev_data, 
+          std::map<int, BlockData> &block_map, 
+          double &err)
       : OpEle("ERROR", OpEle::OPROW)
       , exactVal(exact_value)
       , exactLap(exact_lap)
+      , exactGrad(exact_grad)
       , prevData(prev_data)
+      , setOfBlock(block_map)
       , eRror(err)
       {}
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -553,7 +562,30 @@ namespace StdRDOperators {
     const int nb_dofs = data.getFieldData().size();
     // cout << "nb_error_dofs : " << nb_dofs << endl;
     if (nb_dofs) {
+
+      auto find_block_data = [&]() {
+          EntityHandle fe_ent = getFEEntityHandle();
+          BlockData *block_raw_ptr = nullptr;
+          for (auto &m : setOfBlock) {
+            if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+              block_raw_ptr = &m.second;
+              break;
+            }
+          }
+          return block_raw_ptr;
+        };
+
+      auto block_data_ptr = find_block_data();
+      if (!block_data_ptr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+
+      auto &block_data = *block_data_ptr;
+
+
+
       auto t_value = getFTensor0FromVec(prevData->values);
+      auto t_grad = getFTensor1FromMat<2>(prevData->grads);
+      // cout << "t_grad : " << t_grad << endl;
       // auto t_grad = getFTensor1FromMat<3>(prevData->grads);
       data.getFieldData().clear();
       const double vol = getMeasure();
@@ -563,19 +595,32 @@ namespace StdRDOperators {
       CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
       double ct = getFEMethod()->ts_t - dt;
       auto t_coords = getFTensor1CoordsAtGaussPts();
+      
+      FTensor::Index<'j', 2> j;
+      // cout << "B0 : " << block_data.B0 << endl;
+
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
         
         double mass_exact =  exactVal(t_coords(NX), t_coords(NY), ct);
-        double flux_exact = - exactLap(t_coords(NX), t_coords(NY), ct);
+        double flux_lap = - block_data.B0 * exactLap(t_coords(NX), t_coords(NY), ct);
+        auto flux_exact = exactGrad(t_coords(NX), t_coords(NY), ct);
 
-        double local_error = pow(mass_exact - t_value, 2);
+        // cout << "grad_exact : " << flux_exact << endl;
+        // cout << "grad_value : " << t_grad << endl;
+        // cout << "--------------------" << endl;
+
+        double flux_error = pow(block_data.B0, 2) * (pow(flux_exact(0) - t_grad(0), 2) +
+                            pow(flux_exact(1) - t_grad(1), 2));
+
+        double local_error = pow(mass_exact - t_value, 2);// + flux_error;
 
         data.getFieldData()[0] += a * local_error;
         eRror += a * local_error;
 
         ++t_w;
         ++t_value;
+        ++t_grad;
         ++t_coords;
       }
 
@@ -587,7 +632,9 @@ namespace StdRDOperators {
   private:
     FVal exactVal;
     FVal exactLap;
+    FGrad exactGrad;
     boost::shared_ptr<PreviousData> prevData;
+    std::map<int, BlockData> setOfBlock;
 
     FTensor::Number<0> NX;
     FTensor::Number<1> NY;
