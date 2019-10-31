@@ -15,6 +15,7 @@
 include_directories(${MoFEM_PROJECT_SOURCE_DIR}/third_party)
 include_directories(${MoFEM_PROJECT_SOURCE_DIR}/third_party/phg-quadrule)
 include_directories(${MoFEM_PROJECT_SOURCE_DIR}/third_party/cblas)
+include_directories(${MoFEM_PROJECT_SOURCE_DIR}/third_party)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../elasticity/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elasticity)

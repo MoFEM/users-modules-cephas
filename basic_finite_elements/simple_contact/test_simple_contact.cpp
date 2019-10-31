@@ -49,7 +49,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
-                                 "-my_cn_value 1e3 \n";
+                                 "-my_cn_value 1e3 \n"
+                                 "-my_is_newton_cotes PETSC_FALSE";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -77,6 +78,7 @@ int main(int argc, char *argv[]) {
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
+    PetscBool is_newton_cotes = PETSC_FALSE;
     PetscInt master_move = 0;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
@@ -100,6 +102,11 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_is_newton_cotes",
+                            "set if mesh is partitioned (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
 
     CHKERR PetscOptionsInt(
         "-my_order_lambda",
@@ -315,7 +322,7 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<SimpleContactProblem> contact_problem;
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, r_value, cn_value));
+        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
 
     //add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
