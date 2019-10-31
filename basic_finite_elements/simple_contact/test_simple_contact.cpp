@@ -1,5 +1,5 @@
-/** \file test_contact.cpp
- * \example test_contact.cpp
+/** \file test_simple_contact.cpp
+ * \example test_simple_contact.cpp
 
 Testing implementation of Hook element by verifying tangent stiffness matrix.
 Test like this is an example of how to verify the implementation of Jacobian.
@@ -145,15 +145,13 @@ int main(int argc, char *argv[]) {
     CHKERR mmanager_ptr->printMaterialsSet();
 
     auto add_prism_interface = [&](Range &tets, Range &prisms,
-                                   Range &slave_tris,
+                                   Range &master_tris, Range &slave_tris,
                                    EntityHandle &meshset_tets,
                                    EntityHandle &meshset_prisms,
                                    std::vector<BitRefLevel> &bit_levels) {
       MoFEMFunctionBegin;
       PrismInterface *interface;
       CHKERR m_field.getInterface(interface);
-
-      Range master_tris;
 
       int ll = 1;
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
@@ -243,7 +241,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    Range all_tets, contact_prisms, slave_tris;
+    Range all_tets, contact_prisms, master_tris, slave_tris;
     EntityHandle meshset_tets, meshset_prisms;
     std::vector<BitRefLevel> bit_levels;
 
@@ -251,15 +249,8 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels[0]);
 
-    CHKERR add_prism_interface(all_tets, contact_prisms, slave_tris,
+    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris, slave_tris,
                                meshset_tets, meshset_prisms, bit_levels);
-
-    cout << "all tets size: " << all_tets.size() << endl;
-    all_tets.print();
-    cout << "contact prisms size: " << contact_prisms.size() << endl;
-    contact_prisms.print();
-    cout << "slave tris size: " << slave_tris.size() << endl;
-    slave_tris.print();
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -488,9 +479,6 @@ int main(int argc, char *argv[]) {
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
                        its);
 
-    // cerr << "Before Scater\n";
-    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
-
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -538,6 +526,20 @@ int main(int argc, char *argv[]) {
                        out_file_name.c_str());
     CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                               "PARALLEL=WRITE_PART");
+
+    EntityHandle out_meshset_slave_tris;
+    EntityHandle out_meshset_master_tris;
+
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+
+    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+
+    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                           &out_meshset_slave_tris, 1);
+    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                           &out_meshset_master_tris, 1);
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);
