@@ -19,6 +19,7 @@ extern "C" {
 // #include <lapack_wrap.h>
 // #include <gm_rule.h>
 #include <quad.h>
+#include <triangle_ncc_rule.h>
 #ifdef __cplusplus
 }
 #endif
@@ -49,15 +50,63 @@ struct SimpleContactProblem {
 
       MoFEM::Interface &mField;
       // map<int, SimpleContactPrismsData> &setOfSimpleContactPrisms;
+      bool newtonCotes;
+      SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false )
+          : MoFEM::ContactPrismElementForcesAndSourcesCore(m_field),
+            mField(m_field), newtonCotes(newton_cotes){}
 
-      SimpleContactElement(
-          MoFEM::Interface &m_field)
-          : MoFEM::ContactPrismElementForcesAndSourcesCore(m_field), mField(m_field) {   
-            }
+      int getRule(int order) {
+        if (newtonCotes)
+          return -1; 
+        else 
+          return 2 * order;
+        }
+
+      double area2D(double *a, double *b, double *c) {
+        // (b-a)x(c-a) / 2
+        return ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) /
+               2;
+      }
+
+      MoFEMErrorCode setGaussPts(int order) {
+        MoFEMFunctionBegin;
+        int rule = order /*+ addToRule*/ + 1;
+        int nb_gauss_pts = triangle_ncc_order_num(rule);
+        gaussPtsMaster.resize(3, nb_gauss_pts, false);
+        gaussPtsSlave.resize(3, nb_gauss_pts, false);
+        double xy_coords[2 * nb_gauss_pts];
+        double w_array[nb_gauss_pts];
+        triangle_ncc_rule(rule, nb_gauss_pts, xy_coords,
+                          w_array);
+
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          gaussPtsMaster(0, gg) = xy_coords[gg*2];
+          gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
+          gaussPtsMaster(2, gg) = w_array[gg];
+          gaussPtsSlave(0, gg) = xy_coords[gg * 2];
+          gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
+          gaussPtsSlave(2, gg) = w_array[gg];
+        }
+
+        // triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsMaster(0, 0),
+        //                   &gaussPtsMaster(2, 0));
+        // triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsSlave(0, 0),
+        //                   &gaussPtsSlave(2, 0));
+
+        // for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+        //   gaussPtsMaster(2, gg) =
+        //       gaussPts(2, gg) * area_integration_tri_master_loc *
+        //       2; // 2 here is due to as for ref tri A=1/2 and w=1  or w=2*A
+        //   gaussPtsSlave(2, gg) =
+        //       gaussPts(2, gg) * area_integration_tri_slave_loc * 2;
+        // }
+
+        MoFEMFunctionReturn(0);
+}
 
       ~SimpleContactElement() {} 
 
-      int getRule(int order) { return 2 * order; };
+      //int getRule(int order) { return 2 * order; };
 
 };
 
@@ -209,6 +258,7 @@ struct CommonDataSimpleContact {
 
 double rValue;
 double cnValue;
+bool newtonCotes;
 boost::shared_ptr<SimpleContactElement> feRhsSimpleContact;
 boost::shared_ptr<SimpleContactElement> feLhsSimpleContact;
 boost::shared_ptr<SimpleContactElement> fePostProcSimpleContact;
@@ -216,12 +266,13 @@ boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
 MoFEM::Interface &mField;
 
 SimpleContactProblem(MoFEM::Interface &m_field, double &r_value_regular,
-                     double &cn_value)
-    : mField(m_field), rValue(r_value_regular), cnValue(cn_value) {
+                     double &cn_value, bool newton_cotes = false)
+    : mField(m_field), rValue(r_value_regular), cnValue(cn_value),
+      newtonCotes(newton_cotes) {
   commonDataSimpleContact = boost::make_shared<CommonDataSimpleContact>(mField);
-  feRhsSimpleContact = boost::make_shared<SimpleContactElement>(mField);
-  feLhsSimpleContact = boost::make_shared<SimpleContactElement>(mField);
-  fePostProcSimpleContact  = boost::make_shared<SimpleContactElement>(mField);
+  feRhsSimpleContact = boost::make_shared<SimpleContactElement>(mField, newtonCotes);
+  feLhsSimpleContact = boost::make_shared<SimpleContactElement>(mField, newtonCotes);
+  fePostProcSimpleContact  = boost::make_shared<SimpleContactElement>(mField, newtonCotes);
 }
 
 /// \brief tangents t1 and t2 to face f4 at all gauss points
