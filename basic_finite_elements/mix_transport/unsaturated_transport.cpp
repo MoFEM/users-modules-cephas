@@ -44,7 +44,21 @@ map<std::string, CommonMaterialData::RegisterHook>
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type fgmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-ksp_monitor\n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   // Register DM Manager
   CHKERR DMRegister_MoFEM("DMMOFEM"); // register MoFEM DM in PETSc

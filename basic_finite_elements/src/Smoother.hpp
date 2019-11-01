@@ -357,9 +357,8 @@ struct Smoother {
                                                    ->getPetscLocalDofIdx()] *
                     k(3 * nn + diit->get()->getDofCoeffIdx(), ddd);
                 int lambda_idx = dit->get()->getPetscGlobalDofIdx();
-                ierr = MatSetValues(getFEMethod()->snes_B, 1, &lambda_idx, 1,
+                CHKERR MatSetValues(getFEMethod()->snes_B, 1, &lambda_idx, 1,
                                     &col_indices_ptr[ddd], &g, ADD_VALUES);
-                CHKERRG(ierr);
               }
             }
           }

@@ -287,8 +287,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (!row_nb_gauss_pts) // check if number of Gauss point <> 0
       MoFEMFunctionReturnHot(0);
 
-    const int row_nb_base_functions = row_data.getN().size2();
-
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
 

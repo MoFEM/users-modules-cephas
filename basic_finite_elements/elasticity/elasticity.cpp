@@ -70,6 +70,8 @@ namespace po = boost::program_options;
 using namespace boost::numeric;
 
 static char help[] = "-my_block_config set block data\n"
+                     "-my_order approximation order\n"
+                     "-my_is_partitioned set if mesh is partitioned\n"
                      "\n";
 
 struct BlockOptionData {
@@ -92,10 +94,41 @@ struct VolRule {
   int operator()(int, int, int order) const { return 2 * (order - 1); }
 };
 
+struct PrismFE : public FatPrismElementForcesAndSourcesCore {
+
+  using FatPrismElementForcesAndSourcesCore::
+      FatPrismElementForcesAndSourcesCore;
+  int getRuleTrianglesOnly(int order);
+  int getRuleThroughThickness(int order);
+};
+
+int PrismFE::getRuleTrianglesOnly(int order) { return 2 * order; };
+int PrismFE::getRuleThroughThickness(int order) { return 2 * order; };
+
 int main(int argc, char *argv[]) {
 
-  // Initialize PETSCc
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type gmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-ksp_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type basic \n"
+                                 "-snes_atol 1e-8 \n"
+                                 "-snes_rtol 1e-8 \n"
+                                 "-snes_monitor \n"
+                                 "-ts_monitor \n"
+                                 "-ts_type beuler \n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   try {
 
@@ -106,6 +139,11 @@ int main(int argc, char *argv[]) {
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
 
+    // Select base
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
+    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+    PetscInt choice_base_value = LOBATTO;
+
     // Read options from command line
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
     CHKERR(ierr);
@@ -115,8 +153,12 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-my_order", "default approximation order", "",
                            order, &order, PETSC_NULL);
 
-    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "",
-                           test_nb, &test_nb, PETSC_NULL);
+    CHKERR PetscOptionsEList("-base", "approximation base", "", list_bases,
+                             LASBASETOP, list_bases[choice_base_value],
+                             &choice_base_value, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-is_atom_test", "ctest number", "", test_nb,
+                           &test_nb, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -179,16 +221,41 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_mng_ptr->printForceSet();
     CHKERR meshsets_mng_ptr->printMaterialsSet();
 
-    // Set bit refinement level to all entities (we do not refine mesh in this
-    // example so all entities have the same bit refinement level)
+    bool mesh_has_tets = false;
+    bool mesh_has_prisms = false;
+    int nb_tets = 0;
+    int nb_prisms = 0;
+
+    CHKERR moab.get_number_entities_by_type(0, MBTET, nb_tets, true);
+    CHKERR moab.get_number_entities_by_type(0, MBPRISM, nb_prisms, true);
+
+    mesh_has_tets = nb_tets > 0;
+    mesh_has_prisms = nb_prisms > 0;
+
+    // Set bit refinement level to all entities (we do not refine mesh in
+    // this example so all entities have the same bit refinement level)
     BitRefLevel bit_level0;
     bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
 
     // Declare approximation fields
-    CHKERR m_field.add_field("DISPLACEMENT", H1, AINSWORTH_LOBATTO_BASE, 3,
-                             MB_TAG_DENSE, MF_ZERO);
+    FieldApproximationBase base = NOBASE;
+    switch (choice_base_value) {
+    case LEGENDRE:
+      base = AINSWORTH_LEGENDRE_BASE;
+      break;
+    case LOBATTO:
+      base = AINSWORTH_LOBATTO_BASE;
+      break;
+    case BERNSTEIN_BEZIER:
+      base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+      break;
+    default:
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_NOT_IMPLEMENTED, "Base not implemented");
+    };
+    CHKERR m_field.add_field("DISPLACEMENT", H1, base, 3, MB_TAG_DENSE,
+                             MF_ZERO);
 
     // We can use higher oder geometry to define body
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
@@ -198,15 +265,21 @@ int main(int argc, char *argv[]) {
 
     // Add entities (by tets) to the field (all entities in the mesh, root_set
     // = 0 )
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "DISPLACEMENT");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_field_by_dim(0, 3, "DISPLACEMENT");
+    CHKERR m_field.add_ents_to_field_by_dim(0, 3, "MESH_NODE_POSITIONS");
 
     // Set approximation order.
-    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral Meshes.
+    // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
+    // Meshes.
+    CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
+    if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
+    else
+      CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in whole body)
@@ -214,7 +287,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Setting geometry order everywhere
       Range tets, edges;
-      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+      CHKERR m_field.get_moab().get_entities_by_dimension(0, 3, tets);
       CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
                                                 moab::Interface::UNION);
 
@@ -235,8 +308,8 @@ int main(int argc, char *argv[]) {
     };
     CHKERR setting_second_order_geometry();
 
-    // Configure blocks by parsing config file. It allows setting approximation
-    // order for each block independently.
+    // Configure blocks by parsing config file. It allows setting
+    // approximation order for each block independently.
     std::map<int, BlockOptionData> block_data;
     auto setting_blocks_data_and_order_from_config_file =
         [&m_field, &moab, &block_data, flg_block_config, block_config_file,
@@ -298,7 +371,7 @@ int main(int argc, char *argv[]) {
               CHKERR moab.get_adjacencies(block_ents, 3, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
-              ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
+              ents_to_set_order = ents_to_set_order.subset_by_dimension(3);
               CHKERR moab.get_adjacencies(block_ents, 2, false,
                                           ents_to_set_order,
                                           moab::Interface::UNION);
@@ -324,7 +397,8 @@ int main(int argc, char *argv[]) {
             }
           }
 
-          // Update material parameters. Set material parameters block by block.
+          // Update material parameters. Set material parameters block by
+          // block.
           for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                    m_field, BLOCKSET | MAT_ELASTICSET, it)) {
             const int id = it->getMeshsetId();
@@ -357,12 +431,24 @@ int main(int argc, char *argv[]) {
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
 
+    boost::shared_ptr<ForcesAndSourcesCore> prism_fe_lhs_ptr(
+        new PrismFE(m_field));
+    boost::shared_ptr<ForcesAndSourcesCore> prism_fe_rhs_ptr(
+        new PrismFE(m_field));
+
     CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
                                            "DISPLACEMENT",
                                            "MESH_NODE_POSITIONS", false);
-    CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
-                                      "DISPLACEMENT", "MESH_NODE_POSITIONS",
-                                      false, true);
+    if (mesh_has_tets) {
+      CHKERR HookeElement::setOperators(fe_lhs_ptr, fe_rhs_ptr, block_sets_ptr,
+                                        "DISPLACEMENT", "MESH_NODE_POSITIONS",
+                                        false, true);
+    }
+    if (mesh_has_prisms) {
+      CHKERR HookeElement::setOperators(
+          prism_fe_lhs_ptr, prism_fe_rhs_ptr, block_sets_ptr, "DISPLACEMENT",
+          "MESH_NODE_POSITIONS", false, true, MBPRISM);
+    }
 
     // Add spring boundary condition applied on surfaces.
     // This is only declaration not implementation.
@@ -395,14 +481,14 @@ int main(int argc, char *argv[]) {
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, BLOCKSET | BODYFORCESSET, it)) {
       Range tets;
-      CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTET, tets,
-                                                     true);
-      CHKERR m_field.add_ents_to_finite_element_by_type(tets, MBTET, "BODY_FORCE");
+      CHKERR m_field.get_moab().get_entities_by_dimension(it->meshset, 3, tets,
+                                                          true);
+      CHKERR m_field.add_ents_to_finite_element_by_dim(tets, 3, "BODY_FORCE");
     }
 
     // Add Neumann forces, i.e. pressure or traction forces applied on body
     // surface. This is only declaration not implementation.
-    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "DISPLACEMENT");
+    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "DISPLACEMENT");
     CHKERR MetaNodalForces::addElement(m_field, "DISPLACEMENT");
     CHKERR MetaEdgeForces::addElement(m_field, "DISPLACEMENT");
 
@@ -566,13 +652,17 @@ int main(int argc, char *argv[]) {
     // in that case. We run NonlinearElasticElement with hook material.
     // Calculate right hand side vector
     fe_rhs_ptr->snes_f = F;
+    prism_fe_rhs_ptr->snes_f = F;
     PetscPrintf(PETSC_COMM_WORLD, "Assemble external force vector  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_rhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_rhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
     // Assemble matrix
     fe_lhs_ptr->snes_B = Aij;
+    prism_fe_lhs_ptr->snes_B = Aij;
     PetscPrintf(PETSC_COMM_WORLD, "Calculate stiffness matrix  ...");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_lhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_lhs_ptr);
     PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
     // Assemble springs
@@ -581,13 +671,13 @@ int main(int argc, char *argv[]) {
 
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
-    // MetaNeummanForces how this is implemented.
-    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
-    CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
+    // MetaNeumannForces how this is implemented.
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
                                                        F, "DISPLACEMENT");
 
     {
-      boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+      boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
         CHKERR DMoFEMLoopFiniteElements(dm, mit->first.c_str(),
@@ -691,6 +781,22 @@ int main(int argc, char *argv[]) {
     post_proc.getOpPtrVector().push_back(new PostProcHookStress(
         m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
         post_proc.commonData, block_sets_ptr.get()));
+
+    PostProcFatPrismOnRefinedMesh prism_post_proc(m_field);
+    CHKERR prism_post_proc.generateReferenceElementMesh();
+
+    boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+    prism_post_proc.getOpPtrVector().push_back(
+        new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+    prism_post_proc.getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+
+    CHKERR prism_post_proc.addFieldValuesPostProc("DISPLACEMENT");
+    CHKERR prism_post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+    CHKERR prism_post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+    prism_post_proc.getOpPtrVector().push_back(new PostProcHookStress(
+        m_field, prism_post_proc.postProcMesh, prism_post_proc.mapGaussPts,
+        "DISPLACEMENT", prism_post_proc.commonData, block_sets_ptr.get()));
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
@@ -855,10 +961,16 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
       // Post-process results
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &prism_post_proc);
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
-      CHKERR post_proc.writeFile("out.h5m");
+      if (mesh_has_tets) {
+        CHKERR post_proc.writeFile("out.h5m");
+      }
+      if (mesh_has_prisms) {
+        CHKERR prism_post_proc.writeFile("prism_out.h5m");
+      }
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
 

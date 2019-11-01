@@ -23,10 +23,21 @@ bfe_build_and_install(
  cm_export_file("README" export_reaction_diffusion_equation)
  cm_export_file("mesh.jou" export_reaction_diffusion_equation)
  cm_export_file("mesh.cub" export_reaction_diffusion_equation)
+ cm_export_file("mesh_quad.cub" export_reaction_diffusion_equation)
+ cm_export_file("mesh_quad_2part.h5m" export_reaction_diffusion_equation)
+
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/param_file.petsc
   DESTINATION ${BFE_MOD_DIR})
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.jou
    DESTINATION ${BFE_MOD_DIR})
  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cub
    DESTINATION ${BFE_MOD_DIR})
+ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh_quad_2part.h5m
+   DESTINATION ${BFE_MOD_DIR})
+
+add_test(reaction_diffusion_equation
+   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+   ${CMAKE_CURRENT_BINARY_DIR}/reaction_diffusion_equation
+   -file_name mesh_quad_2part.h5m
+   -ts_final_time 0.4)
     

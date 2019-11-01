@@ -118,43 +118,9 @@ struct HookeElement {
   struct OpCalculateStrain : public VolUserDataOperator {
 
     OpCalculateStrain(const std::string row_field, const std::string col_field,
-                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          dataAtPts(data_at_pts) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      // get number of integration points
-      const int nb_integration_pts = getGaussPts().size2();
-      dataAtPts->smallStrainMat->resize(6, nb_integration_pts, false);
-      auto t_strain =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
-      auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
-
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        t_strain(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
-
-        // If displacement field, not field o spatial positons is given
-        if (!D) {
-          t_strain(0, 0) -= 1;
-          t_strain(1, 1) -= 1;
-          t_strain(2, 2) -= 1;
-        }
-
-        ++t_strain;
-        ++t_h;
-      }
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   private:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -186,44 +152,9 @@ struct HookeElement {
   template <int S = 0> struct OpCalculateStress : public VolUserDataOperator {
 
     OpCalculateStress(const std::string row_field, const std::string col_field,
-                      boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          dataAtPts(data_at_pts) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+                      boost::shared_ptr<DataAtIntegrationPts> data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-      // get number of integration points
-      const int nb_integration_pts = getGaussPts().size2();
-      auto t_strain =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
-      dataAtPts->cauchyStressMat->resize(6, nb_integration_pts, false);
-      auto t_cauchy_stress =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        t_cauchy_stress(i, j) = t_D(i, j, k, l) * t_strain(k, l);
-        ++t_strain;
-        ++t_cauchy_stress;
-        ++t_D;
-      }
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   protected:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -262,71 +193,9 @@ struct HookeElement {
     OpCalculateHomogeneousStiffness(
         const std::string row_field, const std::string col_field,
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
-        boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-          lastEvaluatedId(-1) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-
-      for (auto &m : (*blockSetsPtr)) {
-        if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
-            m.second.tEts.end())
-          // NOTE: The stiffness Matrix is calculated only once, since is
-          // constant for
-          // all integration points and all elements in the block.
-          if (lastEvaluatedId != m.second.iD) {
-
-            lastEvaluatedId = m.second.iD;
-
-            dataAtPts->stiffnessMat->resize(36, 1, false);
-            FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-                MAT_TO_DDG(dataAtPts->stiffnessMat));
-            const double young = m.second.E;
-            const double poisson = m.second.PoissonRatio;
-
-            // coefficient used in intermediate calculation
-            const double coefficient =
-                young / ((1 + poisson) * (1 - 2 * poisson));
-
-            FTensor::Index<'i', 3> i;
-            FTensor::Index<'j', 3> j;
-            FTensor::Index<'k', 3> k;
-            FTensor::Index<'l', 3> l;
-
-            t_D(i, j, k, l) = 0.;
-
-            t_D(0, 0, 0, 0) = 1 - poisson;
-            t_D(1, 1, 1, 1) = 1 - poisson;
-            t_D(2, 2, 2, 2) = 1 - poisson;
-
-            t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-            t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-            t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
-
-            t_D(0, 0, 1, 1) = poisson;
-            t_D(1, 1, 0, 0) = poisson;
-            t_D(0, 0, 2, 2) = poisson;
-            t_D(2, 2, 0, 0) = poisson;
-            t_D(1, 1, 2, 2) = poisson;
-            t_D(2, 2, 1, 1) = poisson;
-
-            t_D(i, j, k, l) *= coefficient;
-
-            break;
-          }
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   protected:
     boost::shared_ptr<map<int, BlockData>>
@@ -353,80 +222,9 @@ struct HookeElement {
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts, const double rho_n,
-        const double rho_0)
+        const double rho_0);
 
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-          rhoAtGaussPtsPtr(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
-
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-
-      if (!rhoAtGaussPtsPtr)
-        SETERRQ(PETSC_COMM_SELF, 1, "Calculate density with MWLS first.");
-
-      for (auto &m : (*blockSetsPtr)) {
-
-        if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-            m.second.tEts.end()) {
-          continue;
-        }
-
-        const int nb_integration_pts = getGaussPts().size2();
-        dataAtPts->stiffnessMat->resize(36, nb_integration_pts, false);
-
-        FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
-            MAT_TO_DDG(dataAtPts->stiffnessMat));
-        const double young = m.second.E;
-        const double poisson = m.second.PoissonRatio;
-
-        auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
-
-        // coefficient used in intermediate calculation
-        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
-
-        FTensor::Index<'i', 3> i;
-        FTensor::Index<'j', 3> j;
-        FTensor::Index<'k', 3> k;
-        FTensor::Index<'l', 3> l;
-
-        for (int gg = 0; gg != nb_integration_pts; ++gg) {
-
-          t_D(i, j, k, l) = 0.;
-
-          t_D(0, 0, 0, 0) = 1 - poisson;
-          t_D(1, 1, 1, 1) = 1 - poisson;
-          t_D(2, 2, 2, 2) = 1 - poisson;
-
-          t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-          t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-          t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
-
-          t_D(0, 0, 1, 1) = poisson;
-          t_D(1, 1, 0, 0) = poisson;
-          t_D(0, 0, 2, 2) = poisson;
-          t_D(2, 2, 0, 0) = poisson;
-          t_D(1, 1, 2, 2) = poisson;
-          t_D(2, 2, 1, 1) = poisson;
-          // here the coefficient is modified to take density into account for
-          // porous materials: E(p) = E * (p / p_0)^n
-          t_D(i, j, k, l) *= coefficient * pow(rho / rHo0, rhoN);
-
-          ++t_D;
-          ++rho;
-        }
-      }
-
-      MoFEMFunctionReturn(0);
-    }
-
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
   };
 
   struct OpAssemble : public VolUserDataOperator {
@@ -502,8 +300,7 @@ struct HookeElement {
   template <int S = 0> struct OpLhs_dx_dx : public OpAssemble {
 
     OpLhs_dx_dx(const std::string row_field, const std::string col_field,
-                boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+                boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
   protected:
     /**
@@ -512,90 +309,7 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol;
-        if (getHoGaussPtsDetJac().size()) {
-          a *= getHoGaussPtsDetJac()[gg];
-        }
-
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          // get derivatives of base functions for columns
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-
-          FTensor::Christof<double, 3, 3> t_rowD;
-          // I mix up the indices here so that it behaves like a
-          // Dg.  That way I don't have to have a separate wrapper
-          // class Christof_Expr, which simplifies things.
-          t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base(i));
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            // integrate block local stiffens matrix
-            t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
-
-            // move to next column base function
-            ++t_col_diff_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        ++t_D;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   struct OpAleRhs_dx : public OpAssemble {
@@ -610,8 +324,7 @@ struct HookeElement {
   template <int S = 0> struct OpAleLhs_dx_dx : public OpAssemble {
 
     OpAleLhs_dx_dx(const std::string row_field, const std::string col_field,
-                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
   protected:
     /**
@@ -620,104 +333,13 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-
-      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
-      auto &det_H = *dataAtPts->detHVec;
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol * det_H[gg];
-
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
-
-          FTensor::Christof<double, 3, 3> t_rowD;
-          // I mix up the indices here so that it behaves like a
-          // Dg.  That way I don't have to have a separate wrapper
-          // class Christof_Expr, which simplifies things.
-          t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base_pulled(i));
-
-          // get derivatives of base functions for columns
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            FTensor::Tensor1<double, 3> t_col_diff_base_pulled;
-            t_col_diff_base_pulled(j) = t_col_diff_base(i) * t_invH(i, j);
-
-            // integrate block local stiffens matrix
-            t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base_pulled(k);
-
-            // move to next column base function
-            ++t_col_diff_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        ++t_D;
-        ++t_invH;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   template <int S = 0> struct OpAleLhs_dx_dX : public OpAssemble {
 
     OpAleLhs_dx_dX(const std::string row_field, const std::string col_field,
-                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
   protected:
     /**
@@ -726,127 +348,7 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-      FTensor::Index<'m', 3> m;
-      FTensor::Index<'n', 3> n;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-
-      auto t_cauchy_stress =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-      auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
-      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
-      auto &det_H = *dataAtPts->detHVec;
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol * det_H[gg];
-
-        FTensor::Tensor4<double, 3, 3, 3, 3> t_F_dX;
-        t_F_dX(i, j, k, l) = -(t_h(i, m) * t_invH(m, k)) * t_invH(l, j);
-
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
-
-          FTensor::Tensor1<double, 3> t_row_stress;
-          t_row_stress(i) =
-              a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_diff_base_pulled_dX;
-          t_row_diff_base_pulled_dX(j, k, l) =
-              -(t_invH(i, k) * t_row_diff_base(i)) * t_invH(l, j);
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_dX_stress;
-          t_row_dX_stress(i, k, l) =
-              a * (t_row_diff_base_pulled_dX(j, k, l) * t_cauchy_stress(j, i));
-
-          FTensor::Christof<double, 3, 3> t_row_D;
-          t_row_D(l, j, k) = (a * t_row_diff_base_pulled(i)) * t_D(i, j, k, l);
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dX;
-          // FIXME: This operator is not implemented, doing operation by hand
-          // t_row_stress_dX(i, m, n) = t_row_D(i, k, l) * t_F_dX(k, l, m, n);
-          t_row_stress_dX(i, j, k) = 0;
-          for (int ii = 0; ii != 3; ++ii)
-            for (int mm = 0; mm != 3; ++mm)
-              for (int nn = 0; nn != 3; ++nn) {
-                auto &v = t_row_stress_dX(ii, mm, nn);
-                for (int kk = 0; kk != 3; ++kk)
-                  for (int ll = 0; ll != 3; ++ll)
-                    v += t_row_D(ii, kk, ll) * t_F_dX(kk, ll, mm, nn);
-              }
-
-          // get derivatives of base functions for columns
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            t_m(i, k) += t_row_stress(i) * (t_invH(j, k) * t_col_diff_base(j));
-            t_m(i, k) += t_row_dX_stress(i, k, l) * t_col_diff_base(l);
-            t_m(i, k) += t_row_stress_dX(i, k, l) * t_col_diff_base(l);
-
-            // move to next column base function
-            ++t_col_diff_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        ++t_D;
-        ++t_cauchy_stress;
-        ++t_invH;
-        ++t_h;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   struct OpAleLhsWithDensity_dx_dX : public OpAssemble {
@@ -861,11 +363,7 @@ struct HookeElement {
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
         boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
-        const double rho_n, const double rho_0)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
-          rhoAtGaussPtsPtr(rho_at_gauss_pts),
-          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n),
-          rHo0(rho_0) {}
+        const double rho_n, const double rho_0);
 
   protected:
     /**
@@ -874,96 +372,7 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get integration weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
-      auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
-      auto t_cauchy_stress =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-      // auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
-      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
-      auto &det_H = *dataAtPts->detHVec;
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol * det_H[gg];
-
-        const double stress_dho_coef = (rhoN / rho);
-        // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0,
-        // rhoN)); iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
-
-          FTensor::Tensor1<double, 3> t_row_stress;
-          t_row_stress(i) =
-              a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
-
-          // get derivatives of base functions for columns
-          auto t_col_base = col_data.getFTensor0N(gg, 0);
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            t_m(i, k) +=
-                t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
-
-            ++t_col_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        // ++t_D;
-        ++t_cauchy_stress;
-        ++t_invH;
-        // ++t_h;
-        ++rho;
-        ++t_grad_rho;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   struct OpAleLhsWithDensity_dX_dX : public OpAssemble {
@@ -978,11 +387,7 @@ struct HookeElement {
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         boost::shared_ptr<VectorDouble> rho_at_gauss_pts,
         boost::shared_ptr<MatrixDouble> rho_grad_at_gauss_pts,
-        const double rho_n, const double rho_0)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false),
-          rhoAtGaussPtsPtr(rho_at_gauss_pts),
-          rhoGradAtGaussPtsPtr(rho_grad_at_gauss_pts), rhoN(rho_n),
-          rHo0(rho_0) {}
+        const double rho_n, const double rho_0);
 
   protected:
     /**
@@ -991,101 +396,7 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      auto rho = getFTensor0FromVec(*rhoAtGaussPtsPtr);
-      auto t_grad_rho = getFTensor1FromMat<3>(*rhoGradAtGaussPtsPtr);
-
-      auto t_eshelby_stress =
-          getFTensor2FromMat<3, 3>(*dataAtPts->eshelbyStressMat);
-      // auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
-      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
-      auto &det_H = *dataAtPts->detHVec;
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol * det_H[gg];
-
-        const double stress_dho_coef = (rhoN / rho);
-        // (rhoN / rHo0) * pow(rho / rHo0, rhoN - 1.) * (1. / pow(rho / rHo0,
-        // rhoN));
-
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
-
-          FTensor::Tensor1<double, 3> t_row_stress;
-          t_row_stress(i) =
-              a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
-
-          // get derivatives of base functions for columns
-          // auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-          auto t_col_base = col_data.getFTensor0N(gg, 0);
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            t_m(i, k) +=
-                t_row_stress(i) * stress_dho_coef * t_grad_rho(k) * t_col_base;
-            // move to next column base function
-            ++t_col_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        ++t_eshelby_stress;
-        ++t_invH;
-        ++rho;
-        ++t_grad_rho;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   struct OpAleRhs_dX : public OpAssemble {
@@ -1100,8 +411,7 @@ struct HookeElement {
   template <int S = 0> struct OpAleLhs_dX_dX : public OpAssemble {
 
     OpAleLhs_dX_dX(const std::string row_field, const std::string col_field,
-                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+                   boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
   protected:
     /**
@@ -1110,246 +420,15 @@ struct HookeElement {
      * @param  col_data column data (consist base functions on column entity)
      * @return error code
      */
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-      MoFEMFunctionBegin;
-
-      // get sub-block (3x3) of local stiffens matrix, here represented by
-      // second order tensor
-      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
-            &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
-            &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
-            &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-      FTensor::Index<'m', 3> m;
-      FTensor::Index<'n', 3> n;
-
-      // get element volume
-      double vol = getVolume();
-
-      // get intergrayion weights
-      auto t_w = getFTensor0IntegrationWeight();
-
-      // get derivatives of base functions on rows
-      auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-      const int row_nb_base_fun = row_data.getN().size2();
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-      auto t_cauchy_stress =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-      auto t_strain =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
-      auto t_eshelby_stress =
-          getFTensor2FromMat<3, 3>(*dataAtPts->eshelbyStressMat);
-      auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
-      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
-      auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
-      auto &det_H = *dataAtPts->detHVec;
-
-      // iterate over integration points
-      for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-
-        // calculate scalar weight times element volume
-        double a = t_w * vol * det_H[gg];
-
-        FTensor::Tensor4<double, 3, 3, 3, 3> t_F_dX;
-        t_F_dX(i, j, k, l) = -(t_h(i, m) * t_invH(m, k)) * t_invH(l, j);
-
-        FTensor::Tensor4<double, 3, 3, 3, 3> t_D_strain_dX;
-        t_D_strain_dX(i, j, m, n) = 0.;
-        for (int ii = 0; ii != 3; ++ii)
-          for (int jj = 0; jj != 3; ++jj)
-            for (int ll = 0; ll != 3; ++ll)
-              for (int kk = 0; kk != 3; ++kk) {
-                auto &v = t_D_strain_dX(ii, jj, kk, ll);
-                for (int mm = 0; mm != 3; ++mm)
-                  for (int nn = 0; nn != 3; ++nn)
-                    v += t_D(ii, jj, mm, nn) * t_F_dX(mm, nn, kk, ll);
-              }
-
-        FTensor::Tensor4<double, 3, 3, 3, 3> t_eshelby_stress_dX;
-        t_eshelby_stress_dX(i, j, m, n) = t_F(k, i) * t_D_strain_dX(k, j, m, n);
-
-        for (int ii = 0; ii != 3; ++ii)
-          for (int jj = 0; jj != 3; ++jj)
-            for (int mm = 0; mm != 3; ++mm)
-              for (int nn = 0; nn != 3; ++nn) {
-                auto &v = t_eshelby_stress_dX(ii, jj, mm, nn);
-                for (int kk = 0; kk != 3; ++kk)
-                  v += t_F_dX(kk, ii, mm, nn) * t_cauchy_stress(kk, jj);
-              }
-
-        t_eshelby_stress_dX(i, j, k, l) *= -1;
-
-        FTensor::Tensor2<double, 3, 3> t_energy_dX;
-        t_energy_dX(k, l) = t_F_dX(i, j, k, l) * t_cauchy_stress(i, j);
-        t_energy_dX(k, l) +=
-            (t_strain(m, n) * t_D(m, n, i, j)) * t_F_dX(i, j, k, l);
-        t_energy_dX(k, l) /= 2.;
-
-        for (int kk = 0; kk != 3; ++kk)
-          for (int ll = 0; ll != 3; ++ll) {
-            auto v = t_energy_dX(kk, ll);
-            for (int ii = 0; ii != 3; ++ii)
-              t_eshelby_stress_dX(ii, ii, kk, ll) += v;
-          }
-
-        // iterate over row base functions
-        int rr = 0;
-        for (; rr != nbRows / 3; ++rr) {
-
-          // get sub matrix for the row
-          auto t_m = get_tensor2(K, 3 * rr, 0);
-
-          FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
-          t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
-
-          FTensor::Tensor1<double, 3> t_row_stress;
-          t_row_stress(i) =
-              a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_diff_base_pulled_dX;
-          t_row_diff_base_pulled_dX(j, k, l) =
-              -(t_row_diff_base(i) * t_invH(i, k)) * t_invH(l, j);
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_dX_stress;
-          t_row_dX_stress(i, k, l) =
-              a * (t_row_diff_base_pulled_dX(j, k, l) * t_eshelby_stress(i, j));
-
-          FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dX;
-          t_row_stress_dX(i, m, n) =
-              a * t_row_diff_base_pulled(j) * t_eshelby_stress_dX(i, j, m, n);
-
-          // get derivatives of base functions for columns
-          auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
-
-          // iterate column base functions
-          for (int cc = 0; cc != nbCols / 3; ++cc) {
-
-            t_m(i, k) += t_row_stress(i) * (t_invH(j, k) * t_col_diff_base(j));
-            t_m(i, k) += t_row_dX_stress(i, k, l) * t_col_diff_base(l);
-            t_m(i, k) += t_row_stress_dX(i, k, l) * t_col_diff_base(l);
-
-            // move to next column base function
-            ++t_col_diff_base;
-
-            // move to next block of local stiffens matrix
-            ++t_m;
-          }
-
-          // move to next row base function
-          ++t_row_diff_base;
-        }
-
-        for (; rr != row_nb_base_fun; ++rr)
-          ++t_row_diff_base;
-
-        // move to next integration weight
-        ++t_w;
-        ++t_D;
-        ++t_cauchy_stress;
-        ++t_strain;
-        ++t_eshelby_stress;
-        ++t_h;
-        ++t_invH;
-        ++t_F;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
   template <int S = 0> struct OpAleLhsPre_dX_dx : public VolUserDataOperator {
 
     OpAleLhsPre_dX_dx(const std::string row_field, const std::string col_field,
-                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
-        : VolUserDataOperator(row_field, col_field, OPROW, true),
-          dataAtPts(data_at_pts) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    }
+                      boost::shared_ptr<DataAtIntegrationPts> &data_at_pts);
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type,
-                          EntData &row_data) {
-      MoFEMFunctionBegin;
-
-      const int nb_integration_pts = row_data.getN().size1();
-
-      auto get_eshelby_stress_dx = [this, nb_integration_pts]() {
-        FTensor::Tensor4<FTensor::PackPtr<double *, 1>, 3, 3, 3, 3>
-            t_eshelby_stress_dx;
-        dataAtPts->eshelbyStress_dx->resize(81, nb_integration_pts, false);
-        int mm = 0;
-        for (int ii = 0; ii != 3; ++ii)
-          for (int jj = 0; jj != 3; ++jj)
-            for (int kk = 0; kk != 3; ++kk)
-              for (int ll = 0; ll != 3; ++ll)
-                t_eshelby_stress_dx.ptr(ii, jj, kk, ll) =
-                    &(*dataAtPts->eshelbyStress_dx)(mm++, 0);
-        return t_eshelby_stress_dx;
-      };
-
-      auto t_eshelby_stress_dx = get_eshelby_stress_dx();
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-      FTensor::Index<'m', 3> m;
-      FTensor::Index<'n', 3> n;
-
-      // Elastic stiffness tensor (4th rank tensor with minor and major
-      // symmetry)
-      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-      auto t_cauchy_stress =
-          getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
-      auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
-      auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
-
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-
-        t_eshelby_stress_dx(i, j, m, n) =
-            (t_F(k, i) * t_D(k, j, m, l)) * t_invH(n, l);
-        for (int ii = 0; ii != 3; ++ii)
-          for (int jj = 0; jj != 3; ++jj)
-            for (int mm = 0; mm != 3; ++mm)
-              for (int nn = 0; nn != 3; ++nn) {
-                auto &v = t_eshelby_stress_dx(ii, jj, mm, nn);
-                v += t_invH(nn, ii) * t_cauchy_stress(mm, jj);
-              }
-        t_eshelby_stress_dx(i, j, k, l) *= -1;
-
-        FTensor::Tensor2<double, 3, 3> t_energy_dx;
-        t_energy_dx(m, n) = t_invH(n, j) * t_cauchy_stress(m, j);
-
-        for (int mm = 0; mm != 3; ++mm)
-          for (int nn = 0; nn != 3; ++nn) {
-            auto v = t_energy_dx(mm, nn);
-            for (int ii = 0; ii != 3; ++ii)
-              t_eshelby_stress_dx(ii, ii, mm, nn) += v;
-          }
-
-        ++t_D;
-        ++t_invH;
-        ++t_cauchy_stress;
-        ++t_eshelby_stress_dx;
-        ++t_F;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   private:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -1385,109 +464,10 @@ struct HookeElement {
                            map<int, BlockData> &block_sets_ptr,
                            moab::Interface &post_proc_mesh,
                            std::vector<EntityHandle> &map_gauss_pts,
-                           bool is_ale = false)
-        : ELEMENT::UserDataOperator(row_field, UserDataOperator::OPROW),
-          dataAtPts(data_at_pts), blockSetsPtr(block_sets_ptr),
-          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          isALE(is_ale) {}
+                           bool is_ale = false);
 
     MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
-
-      if (type != MBVERTEX) {
-        MoFEMFunctionReturnHot(0);
-      }
-
-      auto tensor_to_tensor = [](const auto &t1, auto &t2) {
-        t2(0, 0) = t1(0, 0);
-        t2(1, 1) = t1(1, 1);
-        t2(2, 2) = t1(2, 2);
-        t2(0, 1) = t2(1, 0) = t1(1, 0);
-        t2(0, 2) = t2(2, 0) = t1(2, 0);
-        t2(1, 2) = t2(2, 1) = t1(2, 1);
-      };
-
-      double def_VAL[9];
-      bzero(def_VAL, 9 * sizeof(double));
-
-      Tag th_stress;
-      CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
-                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-      Tag th_psi;
-      CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
-                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-
-      const int nb_integration_pts = mapGaussPts.size();
-
-      FTensor::Index<'i', 3> i;
-      FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 3> k;
-      FTensor::Index<'l', 3> l;
-
-      auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
-      auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
-
-      dataAtPts->stiffnessMat->resize(36, 1, false);
-      FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
-          MAT_TO_DDG(dataAtPts->stiffnessMat));
-      for (auto &m : (blockSetsPtr)) {
-        const double young = m.second.E;
-        const double poisson = m.second.PoissonRatio;
-
-        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
-
-        t_D(i, j, k, l) = 0.;
-        t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
-        t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
-            0.5 * (1 - 2 * poisson);
-        t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
-            t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
-        t_D(i, j, k, l) *= coefficient;
-
-        break; // FIXME: calculates only first block
-      }
-
-      double detH = 0.;
-      FTensor::Tensor2<double, 3, 3> t_invH;
-      FTensor::Tensor2<double, 3, 3> t_F;
-      FTensor::Tensor2<double, 3, 3> t_stress;
-      FTensor::Tensor2<double, 3, 3> t_small_strain;
-      FTensor::Tensor2_symmetric<double, 3> t_stress_symm;
-      FTensor::Tensor2_symmetric<double, 3> t_small_strain_symm;
-
-      for (int gg = 0; gg != nb_integration_pts; ++gg) {
-
-        if (!isALE) {
-          t_small_strain_symm(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
-        } else {
-          CHKERR determinantTensor3by3(t_H, detH);
-          CHKERR invertTensor3by3(t_H, detH, t_invH);
-          t_F(i, j) = t_h(i, k) * t_invH(k, j);
-          t_small_strain_symm(i, j) = (t_F(i, j) || t_F(j, i)) / 2.;
-
-          t_small_strain_symm(0, 0) -= 1;
-          t_small_strain_symm(1, 1) -= 1;
-          t_small_strain_symm(2, 2) -= 1;
-          ++t_H;
-        }
-
-        // symmetric tensors need improvement
-        t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
-        tensor_to_tensor(t_stress_symm, t_stress);
-
-        const double psi =
-            0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
-
-        CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
-        CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
-                                         &t_stress(0, 0));
-
-        ++t_h;
-      }
-
-      MoFEMFunctionReturn(0);
-    }
+                          DataForcesAndSourcesCore::EntData &data);
   };
 
   static MoFEMErrorCode
@@ -1501,16 +481,853 @@ struct HookeElement {
                     const std::string X_field, const bool ale);
 
   static MoFEMErrorCode
-  setOperators(boost::shared_ptr<ForcesAndSourcesCore> &fe_lhs_ptr,
-               boost::shared_ptr<ForcesAndSourcesCore> &fe_rhs_ptr,
-               boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+  setOperators(boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr,
+               boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,
+               boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
                const std::string x_field, const std::string X_field,
-               const bool ale, const bool field_disp);
+               const bool ale, const bool field_disp,
+               const EntityType type = MBTET);
 
   static MoFEMErrorCode
-  calculateEnergy(DM dm, boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+  calculateEnergy(DM dm, boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
                   const std::string x_field, const std::string X_field,
                   const bool ale, const bool field_disp, Vec *v_energy_ptr);
+
+private:
+  MatrixDouble invJac;
 };
+
+template <bool D>
+HookeElement::OpCalculateStrain<D>::OpCalculateStrain(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      dataAtPts(data_at_pts) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <bool D>
+MoFEMErrorCode HookeElement::OpCalculateStrain<D>::doWork(int row_side,
+                                                          EntityType row_type,
+                                                          EntData &row_data) {
+  MoFEMFunctionBegin;
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  // get number of integration points
+  const int nb_integration_pts = getGaussPts().size2();
+  dataAtPts->smallStrainMat->resize(6, nb_integration_pts, false);
+  auto t_strain = getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
+  auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
+
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    t_strain(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
+
+    // If displacement field, not field o spatial positons is given
+    if (!D) {
+      t_strain(0, 0) -= 1;
+      t_strain(1, 1) -= 1;
+      t_strain(2, 2) -= 1;
+    }
+
+    ++t_strain;
+    ++t_h;
+  }
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpAleLhs_dx_dx<S>::OpAleLhs_dx_dx(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpAleLhs_dx_dx<S>::iNtegrate(EntData &row_data,
+                                                          EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto &det_H = *dataAtPts->detHVec;
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol * det_H[gg];
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+      FTensor::Christof<double, 3, 3> t_rowD;
+      // I mix up the indices here so that it behaves like a
+      // Dg.  That way I don't have to have a separate wrapper
+      // class Christof_Expr, which simplifies things.
+      t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base_pulled(i));
+
+      // get derivatives of base functions for columns
+      auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        FTensor::Tensor1<double, 3> t_col_diff_base_pulled;
+        t_col_diff_base_pulled(j) = t_col_diff_base(i) * t_invH(i, j);
+
+        // integrate block local stiffens matrix
+        t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base_pulled(k);
+
+        // move to next column base function
+        ++t_col_diff_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    ++t_D;
+    ++t_invH;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpCalculateHomogeneousStiffness<S>::
+    OpCalculateHomogeneousStiffness(
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
+      lastEvaluatedId(-1) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpCalculateHomogeneousStiffness<S>::doWork(
+    int row_side, EntityType row_type, EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  for (auto &m : (*blockSetsPtr)) {
+    if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
+        m.second.tEts.end())
+      // NOTE: The stiffness Matrix is calculated only once, since is
+      // constant for
+      // all integration points and all elements in the block.
+      if (lastEvaluatedId != m.second.iD) {
+
+        lastEvaluatedId = m.second.iD;
+
+        dataAtPts->stiffnessMat->resize(36, 1, false);
+        FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+            MAT_TO_DDG(dataAtPts->stiffnessMat));
+        const double young = m.second.E;
+        const double poisson = m.second.PoissonRatio;
+
+        // coefficient used in intermediate calculation
+        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+        FTensor::Index<'l', 3> l;
+
+        t_D(i, j, k, l) = 0.;
+
+        t_D(0, 0, 0, 0) = 1 - poisson;
+        t_D(1, 1, 1, 1) = 1 - poisson;
+        t_D(2, 2, 2, 2) = 1 - poisson;
+
+        t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+        t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+        t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+
+        t_D(0, 0, 1, 1) = poisson;
+        t_D(1, 1, 0, 0) = poisson;
+        t_D(0, 0, 2, 2) = poisson;
+        t_D(2, 2, 0, 0) = poisson;
+        t_D(1, 1, 2, 2) = poisson;
+        t_D(2, 2, 1, 1) = poisson;
+
+        t_D(i, j, k, l) *= coefficient;
+
+        break;
+      }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpCalculateStress<S>::OpCalculateStress(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      dataAtPts(data_at_pts) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpCalculateStress<S>::doWork(int row_side,
+                                                          EntityType row_type,
+                                                          EntData &row_data) {
+  MoFEMFunctionBegin;
+  // get number of integration points
+  const int nb_integration_pts = getGaussPts().size2();
+  auto t_strain = getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
+  dataAtPts->cauchyStressMat->resize(6, nb_integration_pts, false);
+  auto t_cauchy_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    t_cauchy_stress(i, j) = t_D(i, j, k, l) * t_strain(k, l);
+    ++t_strain;
+    ++t_cauchy_stress;
+    ++t_D;
+  }
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpLhs_dx_dx<S>::OpLhs_dx_dx(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpLhs_dx_dx<S>::iNtegrate(EntData &row_data,
+                                                       EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol;
+    if (getHoGaussPtsDetJac().size()) {
+      a *= getHoGaussPtsDetJac()[gg];
+    }
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      // get derivatives of base functions for columns
+      auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+      FTensor::Christof<double, 3, 3> t_rowD;
+      // I mix up the indices here so that it behaves like a
+      // Dg.  That way I don't have to have a separate wrapper
+      // class Christof_Expr, which simplifies things.
+      t_rowD(l, j, k) = t_D(i, j, k, l) * (a * t_row_diff_base(i));
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        // integrate block local stiffens matrix
+        t_m(i, j) += t_rowD(i, j, k) * t_col_diff_base(k);
+
+        // move to next column base function
+        ++t_col_diff_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    ++t_D;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpAleLhs_dx_dX<S>::OpAleLhs_dx_dX(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, false) {}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpAleLhs_dx_dX<S>::iNtegrate(EntData &row_data,
+                                                          EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
+  FTensor::Index<'n', 3> n;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+
+  auto t_cauchy_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+  auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto &det_H = *dataAtPts->detHVec;
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol * det_H[gg];
+
+    FTensor::Tensor4<double, 3, 3, 3, 3> t_F_dX;
+    t_F_dX(i, j, k, l) = -(t_h(i, m) * t_invH(m, k)) * t_invH(l, j);
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+      FTensor::Tensor1<double, 3> t_row_stress;
+      t_row_stress(i) = a * t_row_diff_base_pulled(j) * t_cauchy_stress(i, j);
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_diff_base_pulled_dX;
+      t_row_diff_base_pulled_dX(j, k, l) =
+          -(t_invH(i, k) * t_row_diff_base(i)) * t_invH(l, j);
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_dX_stress;
+      t_row_dX_stress(i, k, l) =
+          a * (t_row_diff_base_pulled_dX(j, k, l) * t_cauchy_stress(j, i));
+
+      FTensor::Christof<double, 3, 3> t_row_D;
+      t_row_D(l, j, k) = (a * t_row_diff_base_pulled(i)) * t_D(i, j, k, l);
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dX;
+      // FIXME: This operator is not implemented, doing operation by hand
+      // t_row_stress_dX(i, m, n) = t_row_D(i, k, l) * t_F_dX(k, l, m, n);
+      t_row_stress_dX(i, j, k) = 0;
+      for (int ii = 0; ii != 3; ++ii)
+        for (int mm = 0; mm != 3; ++mm)
+          for (int nn = 0; nn != 3; ++nn) {
+            auto &v = t_row_stress_dX(ii, mm, nn);
+            for (int kk = 0; kk != 3; ++kk)
+              for (int ll = 0; ll != 3; ++ll)
+                v += t_row_D(ii, kk, ll) * t_F_dX(kk, ll, mm, nn);
+          }
+
+      // get derivatives of base functions for columns
+      auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        t_m(i, k) += t_row_stress(i) * (t_invH(j, k) * t_col_diff_base(j));
+        t_m(i, k) += t_row_dX_stress(i, k, l) * t_col_diff_base(l);
+        t_m(i, k) += t_row_stress_dX(i, k, l) * t_col_diff_base(l);
+
+        // move to next column base function
+        ++t_col_diff_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    ++t_D;
+    ++t_cauchy_stress;
+    ++t_invH;
+    ++t_h;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpAleLhs_dX_dX<S>::OpAleLhs_dX_dX(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : OpAssemble(row_field, col_field, data_at_pts, OPROWCOL, true) {}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpAleLhs_dX_dX<S>::iNtegrate(EntData &row_data,
+                                                          EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // get sub-block (3x3) of local stiffens matrix, here represented by
+  // second order tensor
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
+  FTensor::Index<'n', 3> n;
+
+  // get element volume
+  double vol = getVolume();
+
+  // get intergrayion weights
+  auto t_w = getFTensor0IntegrationWeight();
+
+  // get derivatives of base functions on rows
+  auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+  const int row_nb_base_fun = row_data.getN().size2();
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+  auto t_cauchy_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+  auto t_strain = getFTensor2SymmetricFromMat<3>(*(dataAtPts->smallStrainMat));
+  auto t_eshelby_stress =
+      getFTensor2FromMat<3, 3>(*dataAtPts->eshelbyStressMat);
+  auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
+  auto &det_H = *dataAtPts->detHVec;
+
+  // iterate over integration points
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+    // calculate scalar weight times element volume
+    double a = t_w * vol * det_H[gg];
+
+    FTensor::Tensor4<double, 3, 3, 3, 3> t_F_dX;
+    t_F_dX(i, j, k, l) = -(t_h(i, m) * t_invH(m, k)) * t_invH(l, j);
+
+    FTensor::Tensor4<double, 3, 3, 3, 3> t_D_strain_dX;
+    t_D_strain_dX(i, j, m, n) = 0.;
+    for (int ii = 0; ii != 3; ++ii)
+      for (int jj = 0; jj != 3; ++jj)
+        for (int ll = 0; ll != 3; ++ll)
+          for (int kk = 0; kk != 3; ++kk) {
+            auto &v = t_D_strain_dX(ii, jj, kk, ll);
+            for (int mm = 0; mm != 3; ++mm)
+              for (int nn = 0; nn != 3; ++nn)
+                v += t_D(ii, jj, mm, nn) * t_F_dX(mm, nn, kk, ll);
+          }
+
+    FTensor::Tensor4<double, 3, 3, 3, 3> t_eshelby_stress_dX;
+    t_eshelby_stress_dX(i, j, m, n) = t_F(k, i) * t_D_strain_dX(k, j, m, n);
+
+    for (int ii = 0; ii != 3; ++ii)
+      for (int jj = 0; jj != 3; ++jj)
+        for (int mm = 0; mm != 3; ++mm)
+          for (int nn = 0; nn != 3; ++nn) {
+            auto &v = t_eshelby_stress_dX(ii, jj, mm, nn);
+            for (int kk = 0; kk != 3; ++kk)
+              v += t_F_dX(kk, ii, mm, nn) * t_cauchy_stress(kk, jj);
+          }
+
+    t_eshelby_stress_dX(i, j, k, l) *= -1;
+
+    FTensor::Tensor2<double, 3, 3> t_energy_dX;
+    t_energy_dX(k, l) = t_F_dX(i, j, k, l) * t_cauchy_stress(i, j);
+    t_energy_dX(k, l) +=
+        (t_strain(m, n) * t_D(m, n, i, j)) * t_F_dX(i, j, k, l);
+    t_energy_dX(k, l) /= 2.;
+
+    for (int kk = 0; kk != 3; ++kk)
+      for (int ll = 0; ll != 3; ++ll) {
+        auto v = t_energy_dX(kk, ll);
+        for (int ii = 0; ii != 3; ++ii)
+          t_eshelby_stress_dX(ii, ii, kk, ll) += v;
+      }
+
+    // iterate over row base functions
+    int rr = 0;
+    for (; rr != nbRows / 3; ++rr) {
+
+      // get sub matrix for the row
+      auto t_m = get_tensor2(K, 3 * rr, 0);
+
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+
+      FTensor::Tensor1<double, 3> t_row_stress;
+      t_row_stress(i) = a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_diff_base_pulled_dX;
+      t_row_diff_base_pulled_dX(j, k, l) =
+          -(t_row_diff_base(i) * t_invH(i, k)) * t_invH(l, j);
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_dX_stress;
+      t_row_dX_stress(i, k, l) =
+          a * (t_row_diff_base_pulled_dX(j, k, l) * t_eshelby_stress(i, j));
+
+      FTensor::Tensor3<double, 3, 3, 3> t_row_stress_dX;
+      t_row_stress_dX(i, m, n) =
+          a * t_row_diff_base_pulled(j) * t_eshelby_stress_dX(i, j, m, n);
+
+      // get derivatives of base functions for columns
+      auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+      // iterate column base functions
+      for (int cc = 0; cc != nbCols / 3; ++cc) {
+
+        t_m(i, k) += t_row_stress(i) * (t_invH(j, k) * t_col_diff_base(j));
+        t_m(i, k) += t_row_dX_stress(i, k, l) * t_col_diff_base(l);
+        t_m(i, k) += t_row_stress_dX(i, k, l) * t_col_diff_base(l);
+
+        // move to next column base function
+        ++t_col_diff_base;
+
+        // move to next block of local stiffens matrix
+        ++t_m;
+      }
+
+      // move to next row base function
+      ++t_row_diff_base;
+    }
+
+    for (; rr != row_nb_base_fun; ++rr)
+      ++t_row_diff_base;
+
+    // move to next integration weight
+    ++t_w;
+    ++t_D;
+    ++t_cauchy_stress;
+    ++t_strain;
+    ++t_eshelby_stress;
+    ++t_h;
+    ++t_invH;
+    ++t_F;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpAleLhsPre_dX_dx<S>::OpAleLhsPre_dX_dx(
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      dataAtPts(data_at_pts) {
+  doEdges = false;
+  doQuads = false;
+  doTris = false;
+  doTets = false;
+  doPrisms = false;
+}
+
+template <int S>
+MoFEMErrorCode HookeElement::OpAleLhsPre_dX_dx<S>::doWork(int row_side,
+                                                          EntityType row_type,
+                                                          EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  const int nb_integration_pts = row_data.getN().size1();
+
+  auto get_eshelby_stress_dx = [this, nb_integration_pts]() {
+    FTensor::Tensor4<FTensor::PackPtr<double *, 1>, 3, 3, 3, 3>
+        t_eshelby_stress_dx;
+    dataAtPts->eshelbyStress_dx->resize(81, nb_integration_pts, false);
+    int mm = 0;
+    for (int ii = 0; ii != 3; ++ii)
+      for (int jj = 0; jj != 3; ++jj)
+        for (int kk = 0; kk != 3; ++kk)
+          for (int ll = 0; ll != 3; ++ll)
+            t_eshelby_stress_dx.ptr(ii, jj, kk, ll) =
+                &(*dataAtPts->eshelbyStress_dx)(mm++, 0);
+    return t_eshelby_stress_dx;
+  };
+
+  auto t_eshelby_stress_dx = get_eshelby_stress_dx();
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
+  FTensor::Index<'n', 3> n;
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+  auto t_cauchy_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
+
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+    t_eshelby_stress_dx(i, j, m, n) =
+        (t_F(k, i) * t_D(k, j, m, l)) * t_invH(n, l);
+    for (int ii = 0; ii != 3; ++ii)
+      for (int jj = 0; jj != 3; ++jj)
+        for (int mm = 0; mm != 3; ++mm)
+          for (int nn = 0; nn != 3; ++nn) {
+            auto &v = t_eshelby_stress_dx(ii, jj, mm, nn);
+            v += t_invH(nn, ii) * t_cauchy_stress(mm, jj);
+          }
+    t_eshelby_stress_dx(i, j, k, l) *= -1;
+
+    FTensor::Tensor2<double, 3, 3> t_energy_dx;
+    t_energy_dx(m, n) = t_invH(n, j) * t_cauchy_stress(m, j);
+
+    for (int mm = 0; mm != 3; ++mm)
+      for (int nn = 0; nn != 3; ++nn) {
+        auto v = t_energy_dx(mm, nn);
+        for (int ii = 0; ii != 3; ++ii)
+          t_eshelby_stress_dx(ii, ii, mm, nn) += v;
+      }
+
+    ++t_D;
+    ++t_invH;
+    ++t_cauchy_stress;
+    ++t_eshelby_stress_dx;
+    ++t_F;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <class ELEMENT>
+HookeElement::OpPostProcHookeElement<ELEMENT>::OpPostProcHookeElement(
+    const string row_field, boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+    map<int, BlockData> &block_sets_ptr, moab::Interface &post_proc_mesh,
+    std::vector<EntityHandle> &map_gauss_pts, bool is_ale)
+    : ELEMENT::UserDataOperator(row_field, UserDataOperator::OPROW),
+      dataAtPts(data_at_pts), blockSetsPtr(block_sets_ptr),
+      postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), isALE(is_ale) {}
+
+template <class ELEMENT>
+MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX) {
+    MoFEMFunctionReturnHot(0);
+  }
+
+  auto tensor_to_tensor = [](const auto &t1, auto &t2) {
+    t2(0, 0) = t1(0, 0);
+    t2(1, 1) = t1(1, 1);
+    t2(2, 2) = t1(2, 2);
+    t2(0, 1) = t2(1, 0) = t1(1, 0);
+    t2(0, 2) = t2(2, 0) = t1(2, 0);
+    t2(1, 2) = t2(2, 1) = t1(2, 1);
+  };
+
+  double def_VAL[9];
+  bzero(def_VAL, 9 * sizeof(double));
+
+  Tag th_stress;
+  CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+  Tag th_psi;
+  CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+  const int nb_integration_pts = mapGaussPts.size();
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
+  auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
+
+  dataAtPts->stiffnessMat->resize(36, 1, false);
+  FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+  for (auto &m : (blockSetsPtr)) {
+    const double young = m.second.E;
+    const double poisson = m.second.PoissonRatio;
+
+    const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+
+    t_D(i, j, k, l) = 0.;
+    t_D(0, 0, 0, 0) = t_D(1, 1, 1, 1) = t_D(2, 2, 2, 2) = 1 - poisson;
+    t_D(0, 1, 0, 1) = t_D(0, 2, 0, 2) = t_D(1, 2, 1, 2) =
+        0.5 * (1 - 2 * poisson);
+    t_D(0, 0, 1, 1) = t_D(1, 1, 0, 0) = t_D(0, 0, 2, 2) = t_D(2, 2, 0, 0) =
+        t_D(1, 1, 2, 2) = t_D(2, 2, 1, 1) = poisson;
+    t_D(i, j, k, l) *= coefficient;
+
+    break; // FIXME: calculates only first block
+  }
+
+  double detH = 0.;
+  FTensor::Tensor2<double, 3, 3> t_invH;
+  FTensor::Tensor2<double, 3, 3> t_F;
+  FTensor::Tensor2<double, 3, 3> t_stress;
+  FTensor::Tensor2<double, 3, 3> t_small_strain;
+  FTensor::Tensor2_symmetric<double, 3> t_stress_symm;
+  FTensor::Tensor2_symmetric<double, 3> t_small_strain_symm;
+
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+    if (!isALE) {
+      t_small_strain_symm(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
+    } else {
+      CHKERR determinantTensor3by3(t_H, detH);
+      CHKERR invertTensor3by3(t_H, detH, t_invH);
+      t_F(i, j) = t_h(i, k) * t_invH(k, j);
+      t_small_strain_symm(i, j) = (t_F(i, j) || t_F(j, i)) / 2.;
+
+      t_small_strain_symm(0, 0) -= 1;
+      t_small_strain_symm(1, 1) -= 1;
+      t_small_strain_symm(2, 2) -= 1;
+      ++t_H;
+    }
+
+    // symmetric tensors need improvement
+    t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
+    tensor_to_tensor(t_stress_symm, t_stress);
+
+    const double psi = 0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
+
+    CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
+    CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
+                                     &t_stress(0, 0));
+
+    ++t_h;
+  }
+
+  MoFEMFunctionReturn(0);
+}
 
 #endif // __HOOKE_ELEMENT_HPP

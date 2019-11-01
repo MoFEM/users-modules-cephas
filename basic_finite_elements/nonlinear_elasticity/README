@@ -16,19 +16,14 @@ Example run
 
 mpirun -np 4 ./arc_length_nonlinear_elasticity \
   -my_file dome_thin_symm.h5m \
-  -ksp_type fgmres -pc_type asm -sub_pc_type lu -ksp_atol 1e-10 -ksp_rtol 1e-10 \
-  -snes_monitor -snes_type newtonls -snes_linesearch_type basic \
+  -pc_type asm -sub_pc_type lu \
   -snes_max_it 16 -snes_atol 1e-8 -snes_rtol 1e-8 -my_sr 1e-5 -my_ms 20 -snes_converged_reason
 
 
 * dynamic
 
 mpirun -np 4 ./nonlinear_dynamics -my_file LShape.h5m \
-  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps \
-  -ksp_atol 1e-10 -ksp_rtol 1e-10 -snes_monitor \
-  -snes_type newtonls -snes_linesearch_type basic \
-  -snes_max_it 100 -snes_atol 1e-7 -snes_rtol 1e-7 \
-  -ts_monitor -ts_type alpha -ts_dt 0.001 -ts_final_time 10 \
+  -ts_dt 0.001 -ts_final_time 10 \
   -my_time_data_file data.txt -my_output_prt 1 \
   -my_max_post_proc_ref_level 1 -my_disp_order 2 -my_vel_order 2
 
@@ -38,10 +33,26 @@ mpirun -np 4 ./nonlinear_dynamics -my_file LShape.h5m \
 
 mpirun -np 4 ./stability \
   -my_file rod.h5m \
-  -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -ksp_atol 1e-12 -ksp_rtol 1e-12 \
   -st_ksp_type preonly -st_pc_type cholesky -st_pc_factor_mat_solver_package mumps \
   -eps_monitor -eps_tol 1e-12 -eps_nev 10 -eps_ncv 40 \
   -eps_smallest_real -eps_gen_no_hermitian \
   -my_max_post_proc_ref_level 1 -st_ksp_atol 1e-12 -st_ksp_rtol 1e-12 \
   -my_order 3 \
   -help
+
+Parameters set by default from param_file.petsc file
+============================
+
+-ksp_type fgmres
+-pc_type lu
+-pc_factor_mat_solver_package mumps
+-ksp_atol 1e-10
+-ksp_rtol 1e-10
+-snes_monitor
+-snes_type newtonls
+-snes_linesearch_type basic
+-snes_max_it 100
+-snes_atol 1e-7
+-snes_rtol 1e-7
+-ts_monitor
+-ts_type alpha
