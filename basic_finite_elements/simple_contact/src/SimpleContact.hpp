@@ -74,10 +74,24 @@ struct SimpleContactProblem {
         int nb_gauss_pts = triangle_ncc_order_num(rule);
         gaussPtsMaster.resize(3, nb_gauss_pts, false);
         gaussPtsSlave.resize(3, nb_gauss_pts, false);
-        triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsMaster(0, 0),
-                          &gaussPtsMaster(2, 0));
-        triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsSlave(0, 0),
-                          &gaussPtsSlave(2, 0));
+        double xy_coords[2 * nb_gauss_pts];
+        double w_array[nb_gauss_pts];
+        triangle_ncc_rule(rule, nb_gauss_pts, xy_coords,
+                          w_array);
+
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          gaussPtsMaster(0, gg) = xy_coords[gg*2];
+          gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
+          gaussPtsMaster(2, gg) = w_array[gg];
+          gaussPtsSlave(0, gg) = xy_coords[gg * 2];
+          gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
+          gaussPtsSlave(2, gg) = w_array[gg];
+        }
+
+        // triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsMaster(0, 0),
+        //                   &gaussPtsMaster(2, 0));
+        // triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsSlave(0, 0),
+        //                   &gaussPtsSlave(2, 0));
 
         // for (int gg = 0; gg != nb_gauss_pts; ++gg) {
         //   gaussPtsMaster(2, gg) =
