@@ -217,14 +217,14 @@ int main(int argc, char *argv[]) {
                                                   cubit_meshset, MBTET, true);
           }
         }
-
-        for (unsigned int ll = 0; ll != bit_levels.size() - 1; ll++) {
-          CHKERR m_field.delete_ents_by_bit_ref(bit_levels[ll], bit_levels[ll],
-                                                true);
-        }
-        CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(
-            bit_levels.size() - 1);
       }
+
+      for (unsigned int ll = 0; ll != bit_levels.size() - 1; ll++) {
+        CHKERR m_field.delete_ents_by_bit_ref(bit_levels[ll], bit_levels[ll],
+                                              true);
+      }
+      CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(
+          bit_levels.size() - 1);
 
       CHKERR moab.create_meshset(MESHSET_SET, meshset_tets);
       CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
