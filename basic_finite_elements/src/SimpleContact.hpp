@@ -12,19 +12,21 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+#ifndef __SIMPLE_CONTACT__
+#define __SIMPLE_CONTACT__
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 #include <cblas.h>
 // #include <lapack_wrap.h>
 // #include <gm_rule.h>
-#include <quad.h>
+//#include <quad.h>
 #include <triangle_ncc_rule.h>
 #ifdef __cplusplus
 }
 #endif
-#ifndef __SIMPLE_CONTACT__
-#define __SIMPLE_CONTACT__
+
 struct SimpleContactProblem {
 
   struct SimpleContactPrismsData {
@@ -1587,4 +1589,5 @@ setContactOperatorsForPostProc(MoFEM::Interface &m_field, string field_name,
   MoFEMFunctionReturn(0);
                                                }
 };
+
 #endif

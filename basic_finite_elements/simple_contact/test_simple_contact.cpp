@@ -27,8 +27,6 @@ namespace po = boost::program_options;
 #include <Hooke.hpp>
 using namespace boost::numeric;
 
-#include <SimpleContact.hpp>
-
 using namespace MoFEM;
 
 static char help[] = "\n";
