@@ -27,17 +27,6 @@ extern "C" {
 #define __SIMPLE_CONTACT__
 struct SimpleContactProblem {
 
-  struct LoadScale : public MethodForForceScaling {
-
-    static double scale;
-
-    MoFEMErrorCode scaleNf(const FEMethod *fe, VectorDouble &nf) {
-      MoFEMFunctionBegin;
-      nf *= scale;
-      MoFEMFunctionReturn(0);
-    }
-  };
-
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
   };
@@ -70,43 +59,27 @@ struct SimpleContactProblem {
 
       MoFEMErrorCode setGaussPts(int order) {
         MoFEMFunctionBegin;
-        // int rule = order + 1 + 1;
-        // int nb_gauss_pts = triangle_ncc_order_num(rule);
-        // gaussPtsMaster.resize(3, nb_gauss_pts, false);
-        // gaussPtsSlave.resize(3, nb_gauss_pts, false);
-        // double xy_coords[2 * nb_gauss_pts];
-        // double w_array[nb_gauss_pts];
-        // triangle_ncc_rule(rule, nb_gauss_pts, xy_coords,
-        //                   w_array);
+        int rule = order + 2;
+        int nb_gauss_pts = triangle_ncc_order_num(rule);
+        gaussPtsMaster.resize(3, nb_gauss_pts, false);
+        gaussPtsSlave.resize(3, nb_gauss_pts, false);
+        double xy_coords[2 * nb_gauss_pts];
+        double w_array[nb_gauss_pts];
+        triangle_ncc_rule(rule, nb_gauss_pts, xy_coords, w_array);
 
-        // for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-        //   gaussPtsMaster(0, gg) = xy_coords[gg*2];
-        //   gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
-        //   gaussPtsMaster(2, gg) = w_array[gg];
-        //   gaussPtsSlave(0, gg) = xy_coords[gg * 2];
-        //   gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
-        //   gaussPtsSlave(2, gg) = w_array[gg];
-        // }
-
-        // triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsMaster(0, 0),
-        //                   &gaussPtsMaster(2, 0));
-        // triangle_ncc_rule(rule, nb_gauss_pts, &gaussPtsSlave(0, 0),
-        //                   &gaussPtsSlave(2, 0));
-
-        // for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-        //   gaussPtsMaster(2, gg) =
-        //       gaussPts(2, gg) * area_integration_tri_master_loc *
-        //       2; // 2 here is due to as for ref tri A=1/2 and w=1  or w=2*A
-        //   gaussPtsSlave(2, gg) =
-        //       gaussPts(2, gg) * area_integration_tri_slave_loc * 2;
-        // }
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          gaussPtsMaster(0, gg) = xy_coords[gg * 2];
+          gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
+          gaussPtsMaster(2, gg) = w_array[gg];
+          gaussPtsSlave(0, gg) = xy_coords[gg * 2];
+          gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
+          gaussPtsSlave(2, gg) = w_array[gg];
+        }
 
         MoFEMFunctionReturn(0);
-}
+      }
 
-      ~SimpleContactElement() {} 
-
-      //int getRule(int order) { return 2 * order; };
+      ~SimpleContactElement() {}
 
 };
 

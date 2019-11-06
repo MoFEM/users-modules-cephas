@@ -1,10 +1,9 @@
 /** \file test_simple_contact.cpp
  * \example test_simple_contact.cpp
-
-Testing implementation of Hook element by verifying tangent stiffness matrix.
-Test like this is an example of how to verify the implementation of Jacobian.
-
-*/
+ * 
+ * Testing implementation of simple contact element
+ * 
+ **/
 
 /* MoFEM is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the
@@ -17,7 +16,8 @@ Test like this is an example of how to verify the implementation of Jacobian.
  * License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. 
+ */
 
 #include <BasicFiniteElements.hpp>
 
@@ -30,8 +30,6 @@ using namespace boost::numeric;
 #include <SimpleContact.hpp>
 
 using namespace MoFEM;
-
-double SimpleContactProblem::LoadScale::scale = 1;
 
 static char help[] = "\n";
 int main(int argc, char *argv[]) {
@@ -171,7 +169,7 @@ int main(int argc, char *argv[]) {
           master_tris.merge(tris);
 
           {
-            // get tet enties form back bit_level
+            // get tet entities from back bit_level
             EntityHandle ref_level_meshset = 0;
             CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
             CHKERR m_field.getInterface<BitRefManager>()
@@ -258,6 +256,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR add_prism_interface(all_tets, contact_prisms, master_tris, slave_tris,
                                meshset_tets, meshset_prisms, bit_levels);
+    
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
