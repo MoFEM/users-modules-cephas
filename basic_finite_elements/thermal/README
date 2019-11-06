@@ -80,6 +80,7 @@ temperature_order = 3
 #heat_capacity = 2112000
 heat_capacity = 0
 heat_conductivity = 1.4352e-05
+initail_temperature = 1
 
 [block_6]
 
