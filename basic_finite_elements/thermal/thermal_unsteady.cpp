@@ -380,7 +380,7 @@ int main(int argc, char *argv[]) {
 
   // build field
   CHKERR m_field.build_fields();
-  // priject 10 node tet approximation of geometry on hierarchical basis
+  // project 10 node tet approximation of geometry on hierarchical basis
   Projection10NodeCoordsOnField ent_method_material(m_field,
                                                     "MESH_NODE_POSITIONS");
   CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
