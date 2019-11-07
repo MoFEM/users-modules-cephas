@@ -147,16 +147,14 @@ int main(int argc, char *argv[]) {
     // print block sets with materials
     CHKERR mmanager_ptr->printMaterialsSet();
 
-    auto add_prism_interface = [&](Range &tets, Range &prisms,
-                                   Range &master_tris, Range &slave_tris,
-                                   EntityHandle &meshset_tets,
-                                   EntityHandle &meshset_prisms,
+    auto add_prism_interface = [&](Range &contact_prisms, Range &master_tris,
+                                   Range &slave_tris,
                                    std::vector<BitRefLevel> &bit_levels) {
       MoFEMFunctionBegin;
       PrismInterface *interface;
       CHKERR m_field.getInterface(interface);
 
-      int ll = 1;
+      int lvl = 1;
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
         if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
@@ -166,32 +164,29 @@ int main(int argc, char *argv[]) {
           CHKERR moab.get_entities_by_type(cubit_meshset, MBTRI, tris, true);
           master_tris.merge(tris);
 
-          {
-            // get tet entities from back bit_level
-            EntityHandle ref_level_meshset = 0;
-            CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-                                               BitRefLevel().set(), MBTET,
-                                               ref_level_meshset);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-                                               BitRefLevel().set(), MBPRISM,
-                                               ref_level_meshset);
-            Range ref_level_tets;
-            CHKERR moab.get_entities_by_handle(ref_level_meshset,
-                                               ref_level_tets, true);
-            // get faces and tets to split
-            CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true,
-                                       0);
-            // set new bit level
-            bit_levels.push_back(BitRefLevel().set(ll++));
-            // split faces and tets
-            CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
-                                         cubit_meshset, true, true, 0);
-            // clean meshsets
-            CHKERR moab.delete_entities(&ref_level_meshset, 1);
-          }
+          // get tet entities from back bit_level
+          EntityHandle ref_level_meshset;
+          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
+                                     ref_level_meshset);
+          CHKERR m_field.getInterface<BitRefManager>()
+              ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
+                                             BitRefLevel().set(), MBTET,
+                                             ref_level_meshset);
+          CHKERR m_field.getInterface<BitRefManager>()
+              ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
+                                             BitRefLevel().set(), MBPRISM,
+                                             ref_level_meshset);
+
+          // get faces and tets to split
+          CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true, 0);
+          // set new bit level
+          bit_levels.push_back(BitRefLevel().set(lvl++));
+          // split faces and tets
+          CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
+                                       cubit_meshset, true, true, 0);
+          // clean meshsets
+          CHKERR moab.delete_entities(&ref_level_meshset, 1);
+
           // update cubit meshsets
           for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
             EntityHandle cubit_meshset = ciit->meshset;
@@ -222,39 +217,26 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(
           bit_levels.size() - 1);
 
-      CHKERR moab.create_meshset(MESHSET_SET, meshset_tets);
-      CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
-
-      CHKERR m_field.getInterface<BitRefManager>()
-          ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
-                                         MBTET, meshset_tets);
-      CHKERR moab.get_entities_by_handle(meshset_tets, tets, true);
-
-      CHKERR m_field.getInterface<BitRefManager>()
-          ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
-                                         MBPRISM, meshset_prisms);
-      CHKERR moab.get_entities_by_handle(meshset_prisms, prisms);
-
-      Range tris;
-      CHKERR moab.get_adjacencies(prisms, 2, false, tris,
+      CHKERR moab.get_adjacencies(master_tris, 3, false, contact_prisms,
                                   moab::Interface::UNION);
-      tris = tris.subset_by_type(MBTRI);
-      slave_tris = subtract(tris, master_tris);
+      contact_prisms = contact_prisms.subset_by_type(MBPRISM);
+      Range faces;
+      CHKERR moab.get_adjacencies(contact_prisms, 2, false, faces,
+                                  moab::Interface::UNION);
+      slave_tris = subtract(faces.subset_by_type(MBTRI), master_tris);
 
       MoFEMFunctionReturn(0);
     };
 
-    Range all_tets, contact_prisms, master_tris, slave_tris;
-    EntityHandle meshset_tets, meshset_prisms;
+    Range contact_prisms, master_tris, slave_tris;
     std::vector<BitRefLevel> bit_levels;
 
     bit_levels.push_back(BitRefLevel().set(0));
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels[0]);
 
-    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris, slave_tris,
-                               meshset_tets, meshset_prisms, bit_levels);
-    
+    CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
+                               bit_levels);
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
