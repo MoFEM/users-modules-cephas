@@ -243,7 +243,7 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 1e-3;
+      // block_map[id].B0 = 1e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -501,10 +501,10 @@ MoFEMErrorCode RDProblem::run_analysis() {
           mass_names[0], data[0], data[0], data[0], material_blocks));
     } else if(nb_species == 2){
       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[1], data[0], data[1], data[1], material_blocks));
+          mass_names[0], data[0], data[1], data[1], material_blocks));
     } else if(nb_species == 3){
       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[2], data[0], data[1], data[2], material_blocks));
+          mass_names[0], data[0], data[1], data[2], material_blocks));
     }
      
 
@@ -546,16 +546,16 @@ MoFEMErrorCode RDProblem::run_analysis() {
 
     for (int i = 0; i < nb_species; ++i) {
       CHKERR push_mass_ele(mass_names[i]);
-      CHKERR resolve_slow_rhs();
       }
-       
-    
+      
+      CHKERR resolve_slow_rhs();
 
-    CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
+      CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
 
-    for (int i = 0; i < nb_species; ++i) {
-      CHKERR update_stiff_rhs(mass_names[i], values_ptr[i], grads_ptr[i], dots_ptr[i]);
-      CHKERR push_stiff_rhs(mass_names[i], data[i], material_blocks);
+      for (int i = 0; i < nb_species; ++i) {
+        CHKERR update_stiff_rhs(mass_names[i], values_ptr[i], grads_ptr[i],
+                                dots_ptr[i]);
+        CHKERR push_stiff_rhs(mass_names[i], data[i], material_blocks);
     }
          
 
@@ -606,7 +606,7 @@ int main(int argc, char *argv[]) {
   
     int order = 1;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-    int nb_species = 1;
+    int nb_species = 3;
     RDProblem reac_diff_problem(mb_instance, core, order, nb_species);
     CHKERR reac_diff_problem.run_analysis();
   }

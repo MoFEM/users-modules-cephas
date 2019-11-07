@@ -49,6 +49,9 @@ bfe_build_and_install(
 bfe_build_and_install(
   std_reac_diff ${CMAKE_CURRENT_SOURCE_DIR}/std_reac_diff.cpp)
 
+bfe_build_and_install(
+  electro_physio ${CMAKE_CURRENT_SOURCE_DIR}/electro_physio.cpp)
+
 #file(
 #    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
 #    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}

@@ -25,7 +25,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
 const double B = 0.0;
 const double B_epsilon = 0.0;
 
-const int save_every_nth_step = 1;
+const int save_every_nth_step = 4;
 // const int order = 3; ///< approximation order
 const double init_value = 0.5;
 const double essen_value = 0;
@@ -62,8 +62,10 @@ struct BlockData {
   double B0; // species mobility
 
   BlockData()
-      : a11(1), a12(0), a13(0), a21(0), a22(1), a23(0), a31(0), a32(0), a33(1),
-        B0(1e0), r1(1), r2(1), r3(1) {}
+      : a11(1), a12(2), a13(7), 
+        a21(7), a22(1), a23(2), 
+        a31(2), a32(7), a33(1),
+        B0(2e-3), r1(1), r2(1), r3(1) {}
 };
 
 double compute_init_val(const double x, const double y, const double z) {

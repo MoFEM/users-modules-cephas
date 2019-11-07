@@ -267,7 +267,7 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 1e-3;
+      // block_map[id].B0 = 1e-;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -530,13 +530,13 @@ MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
     CHKERR update_slow_rhs("MASS1", mass_values_ptr1);
     if (nb_species == 1) {
       vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          "MASS1", data1, data1, data1, material_blocks));
+          "MASS1", data1, data2, data3, material_blocks));
     } else if (nb_species == 2 || nb_species == 3) {
       CHKERR extract_initial_ents(3, inner_surface2);
       CHKERR update_slow_rhs("MASS2", mass_values_ptr2);
       if (nb_species == 2) {
         vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-            "MASS1", data1, data2, data2, material_blocks));
+            "MASS1", data1, data2, data3, material_blocks));
       } else if (nb_species == 3) {
         CHKERR extract_initial_ents(4, inner_surface3);
         CHKERR update_slow_rhs("MASS3", mass_values_ptr3);
@@ -711,7 +711,7 @@ int main(int argc, char *argv[]) {
 
     int order = 1;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-    int nb_species = 1;
+    int nb_species = 3;
     RDProblem reac_diff_problem(core, order+1);
     CHKERR reac_diff_problem.run_analysis(nb_species);
   }

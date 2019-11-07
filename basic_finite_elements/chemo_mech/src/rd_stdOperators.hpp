@@ -15,7 +15,7 @@ namespace StdRDOperators {
   using EntData = DataForcesAndSourcesCore::EntData;
 
   const double B = 0;
-  const int save_every_nth_step = 1;
+  const int save_every_nth_step = 4;
   const double natural_bc_values = 0.0;
   const double essential_bc_values = 0.0;
   const int order = 2;
@@ -32,15 +32,19 @@ namespace StdRDOperators {
     double B0; // species mobility
 
     BlockData()
-      : B0(1e0) {
+      : B0(2e-3) {
       coef.resize(3, 3, false);
       rate.resize(3, false);
       coef.clear();
       rate.clear();
+      coef(0, 0) = 1.0; coef(0, 1) = 2.0;   coef(0, 2) = 7.0;
+      coef(1, 0) = 7.0; coef(1, 1) = 1.0;   coef(1, 2) = 2.0;
+      coef(2, 0) = 2.0; coef(2, 1) = 7.0;   coef(2, 2) = 1.0;
+
       for (int i = 0; i < 3; ++i) {
-        coef(i, i) = 1;
-        rate[i] = 1;
+        rate[i] = 1.0;
         }
+        
       }
 
   };
