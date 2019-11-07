@@ -546,6 +546,66 @@ struct OpGetLagMulAtGaussPtsSlave
   }
 };
 
+struct OpGetLagMulAtGaussPtsSlaveHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpGetLagMulAtGaussPtsSlaveHdiv(
+      const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            lagrang_field_name, UserDataOperator::OPROW,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVE),
+        commonDataSimpleContact(common_data_contact) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+
+    if (data.getFieldData().size() == 0)
+      PetscFunctionReturn(0);
+
+    const int nb_gauss_pts = data.getN().size1();
+
+    
+
+    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
+    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->clear();
+
+    int nb_base_fun_row = data.getFieldData().size();
+
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+    auto t_lag_base = data.getFTensor1N<3>();
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+    auto normal_at_gp =
+        get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[0]);
+      for (int bb = 0; bb != nb_base_fun_row; bb++) {
+        auto t_lag_base_help = data.getFTensor1N<3>(gg, bb);
+        lagrange_slave += t_field_data_slave * normal_at_gp(i) * t_lag_base(i);
+        ++t_field_data_slave;
+        ++t_lag_base;
+      }
+      ++lagrange_slave;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
 struct OpLagGapProdGaussPtsSlave
     : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -876,6 +936,78 @@ struct OpCalIntTildeCFunSlave
   }
 };
 
+struct OpCalIntTildeCFunSlaveHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  Vec F;
+  OpCalIntTildeCFunSlaveHdiv(
+      const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      Vec f_ = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            lagrang_field_name, UserDataOperator::OPCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVE),
+        commonDataSimpleContact(common_data_contact), F(f_) {}
+
+  VectorDouble vecR;
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+
+    if (type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+
+    if (data.getIndices().size() == 0)
+      MoFEMFunctionReturnHot(0);
+
+    const int nb_gauss_pts = data.getN().size1();
+
+    int nb_base_fun_col = data.getFieldData().size();
+    const double area_s =
+        commonDataSimpleContact->areaCommon; // same area in master and slave
+
+    vecR.resize(nb_base_fun_col, false); // the last false in ublas
+                                         // resize will destroy (not
+                                         // preserved) the old values
+    vecR.clear();
+
+    auto tilde_c_fun =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+    auto t_lag_base = data.getFTensor1N<3>();
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+    auto normal_at_gp =
+        get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      double val_s = getGaussPtsSlave()(2, gg) * area_s;
+
+      FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
+
+      for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
+        const double s = val_s * t_lag_base(i) * normal_at_gp(i) * tilde_c_fun;
+        vecR[bbr] += s;  // it is a plus since F always scales with -1
+        ++t_lag_base;
+      }
+      ++tilde_c_fun;
+    } // for gauss points
+
+    auto tilde_c_fun_2 =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+    CHKERR VecSetValues(getFEMethod()->snes_f, nb_base_fun_col,
+                        &data.getIndices()[0], &vecR[0], ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
 
 struct OpContactConstraintMatrixMasterSlave
     : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
@@ -952,6 +1084,101 @@ struct OpContactConstraintMatrixMasterSlave
           ++t_base_master; // update rows master
         }
         ++t_base_lambda; // update cols slave
+      }
+    }
+
+    if (Aij == PETSC_NULL) {
+      Aij = getFEMethod()->snes_B;
+    }
+
+    CHKERR MatSetValues(
+        getFEMethod()->snes_B, nb_row, &row_data.getIndices()[0], nb_col,
+        &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+struct OpContactConstraintMatrixMasterSlaveHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  Mat Aij;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpContactConstraintMatrixMasterSlaveHdiv(
+      const string field_name, const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      Mat aij = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACEMASTERSLAVE),
+        commonDataSimpleContact(common_data_contact), Aij(aij) {
+    sYmm = false; // This will make sure to loop over all intities (e.g.
+                  // for order=2 it will make doWork to loop 16 time)
+  }
+  MatrixDouble NN;
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+    if (col_type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+
+      // Both sides are needed since both sides contribute their shape
+      // function to the stiffness matrix
+      const int nb_row = row_data.getIndices().size();
+    if (!nb_row)
+      MoFEMFunctionReturnHot(0);
+    const int nb_col = col_data.getIndices().size();
+    if (!nb_col)
+      MoFEMFunctionReturnHot(0);
+
+      
+    const int nb_gauss_pts = row_data.getN().size1();
+
+    int nb_base_fun_row = row_data.getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size();
+
+    const double area_common =
+        commonDataSimpleContact->areaCommon; // same area in master and slave
+
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
+                                           &m(r + 2, c + 0));
+    };
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+    NN.clear();
+
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    auto t_lag_base = col_data.getFTensor1N<3>();
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      double val_m = getGaussPtsMaster()(2, gg) * area_common;
+
+      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+        FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
+
+        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+          const double m =
+              val_m * const_unit_n(i) * t_lag_base(i) * t_base_master;
+
+          auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
+          t_assemble_m(i) -= m * const_unit_n(i);
+
+          ++t_base_master; // update rows master
+        }
+        ++t_lag_base; // update cols slave
       }
     }
 
@@ -1059,6 +1286,102 @@ struct OpContactConstraintMatrixSlaveSlave
   }
 };
 
+struct OpContactConstraintMatrixSlaveSlaveHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  Mat Aij;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpContactConstraintMatrixSlaveSlaveHdiv(
+      const string field_name, const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      Mat aij = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVESLAVE),
+        commonDataSimpleContact(common_data_contact), Aij(aij) {
+    sYmm = false; // This will make sure to loop over all intities (e.g.
+                  // for order=2 it will make doWork to loop 16 time)
+  }
+  MatrixDouble NN;
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    if(col_type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+
+    // Both sides are needed since both sides contribute their shape
+    // function to the stiffness matrix
+    const int nb_row = row_data.getIndices().size();
+    if (!nb_row)
+      MoFEMFunctionReturnHot(0);
+    const int nb_col = col_data.getIndices().size();
+    if (!nb_col)
+      MoFEMFunctionReturnHot(0);
+    const int nb_gauss_pts = row_data.getN().size1();
+
+    int nb_base_fun_row = row_data.getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size();
+
+    const double area_common =
+        commonDataSimpleContact->areaCommon; // same area in master and slave
+
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
+                                           &m(r + 2, c + 0));
+    };
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+    NN.clear();
+
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    auto t_lag_base = col_data.getFTensor1N<3>();
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      double val_s = getGaussPtsSlave()(2, gg) * area_common;
+
+      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+
+        FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
+
+        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+          const double s =
+              val_s * t_lag_base(i) * const_unit_n(i) * t_base_slave;
+
+          auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, bbc);
+
+          t_assemble_s(i) += s * const_unit_n(i);
+
+          ++t_base_slave; // update rows
+        }
+        ++t_lag_base; // update cols slave
+      }
+    }
+
+    if (Aij == PETSC_NULL) {
+      Aij = getFEMethod()->snes_B;
+    }
+
+    CHKERR MatSetValues(
+        getFEMethod()->snes_B, nb_row, &row_data.getIndices()[0], nb_col,
+        &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
 struct OpDerivativeBarTildeCFunOLambdaSlaveSlave
     : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -1151,6 +1474,111 @@ struct OpDerivativeBarTildeCFunOLambdaSlaveSlave
   }
 };
 
+struct OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  Mat Aij;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv(
+      const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      Mat aij = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            lagrang_field_name, UserDataOperator::OPROWCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVESLAVE),
+        Aij(aij), commonDataSimpleContact(common_data_contact) {
+    sYmm = false; // This will make sure to loop over all entities (e.g.
+                  // for order=2 it will make doWork to loop 16 time)
+  }
+  MatrixDouble NN;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    if (col_type != MBTRI || row_type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+
+    const int nb_row = row_data.getIndices().size();
+    if (!nb_row)
+      MoFEMFunctionReturnHot(0);
+    const int nb_col = col_data.getIndices().size();
+    if (!nb_col)
+      MoFEMFunctionReturnHot(0);
+    const int nb_gauss_pts = row_data.getN().size1();
+
+    int nb_base_fun_row = row_data.getFieldData().size();
+
+    int nb_base_fun_col = col_data.getFieldData().size();
+
+    const double area_common =
+        commonDataSimpleContact->areaCommon; // same area in master and slave
+
+    NN.resize(nb_base_fun_row, nb_base_fun_col,
+              false); // the last false in ublas resize will destroy
+                      // (not preserved) the old values
+    NN.clear();
+
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+    auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    auto lambda_gap_diff_prod =
+        getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+      const double val_s = getGaussPtsSlave()(2, gg) * area_common;
+
+      auto t_lag_base_col = col_data.getFTensor1N<3>(gg, 0);
+      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+        auto t_lag_base_row = row_data.getFTensor1N<3>(gg, 0);
+        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+          if (bbr == bbc) {
+            if (fabs(gap_gp) < 1.e-8 && fabs(lagrange_slave) < 1.e-8) {
+              NN(bbr, bbc) = 0;
+            } else {
+              NN(bbr, bbc) += (1. - lambda_gap_diff_prod) * val_s *
+                              (const_unit_n(i) * t_lag_base_row(i)) *
+                              (t_lag_base_col(i) * const_unit_n(i));
+            }
+
+          } else {
+            if (fabs(gap_gp) < 1.e-8 && fabs(lagrange_slave) < 1.e-8) {
+            } else {
+              NN(bbr, bbc) += (1. - lambda_gap_diff_prod) * val_s *
+                              (const_unit_n(i) * t_lag_base_row(i)) *
+                              (t_lag_base_col(i) * const_unit_n(i));
+            }
+          }
+          ++t_lag_base_row; // update rows
+        }
+        ++t_lag_base_col; // update cols
+      }
+      ++lagrange_slave;
+      ++gap_gp;
+      ++lambda_gap_diff_prod;
+    }
+
+    CHKERR MatSetValues(
+        getFEMethod()->snes_B, nb_base_fun_row, &row_data.getIndices()[0],
+        nb_base_fun_col, // ign: is shift row right here?
+        &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
 struct OpDerivativeBarTildeCFunODisplacementsSlaveMaster
     : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -1185,22 +1613,12 @@ struct OpDerivativeBarTildeCFunODisplacementsSlaveMaster
       MoFEMFunctionReturnHot(0);
     const int nb_gauss_pts = row_data.getN().size1();
 
-    VectorDouble3 n4 = getNormalSlave();
-    VectorDouble3 n4_unit(3);
-    noalias(n4_unit) = n4 / norm_2(n4);
-
-    VectorDouble3 n3 = getNormalMaster();
-    VectorDouble3 n3_unit(3);
-    noalias(n3_unit) = n3 / norm_2(n3);
-
     int nb_base_fun_row = row_data.getFieldData().size();
 
     int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
     const double area_common =
         commonDataSimpleContact->areaCommon; // same area in master and slave
-
-    const double mesh_dot_prod = cblas_ddot(3, &n4_unit[0], 1, &n3_unit[0], 1);
 
     NN.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
     NN.clear();
@@ -1251,6 +1669,121 @@ struct OpDerivativeBarTildeCFunODisplacementsSlaveMaster
               const_unit_n(i) * cN * (1. + lambda_gap_diff_prod) * m;
 
           ++t_base_lambda; // update rows
+        }
+
+        ++t_base_master; // update cols master
+
+        ++t_field_data_master;
+      }
+
+      ++tilde_c_fun;
+      ++lagrange_slave;
+      ++gap_gp;
+      ++lambda_gap_diff_prod;
+    }
+
+    // Assemble NN to final Aij vector based on its global indices
+    CHKERR MatSetValues(
+        getFEMethod()->snes_B, nb_base_fun_row, &row_data.getIndices()[0],
+        nb_col, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+struct OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  double cN; //@todo: ign: to become input parameter
+  Mat Aij;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv(
+      const string field_name, const string lagrang_field_name,
+      double &cn_value,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      Mat aij = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVEMASTER),
+        cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+    sYmm = false; // This will make sure to loop over all entities (e.g.
+                  // for order=2 it will make doWork to loop 16 time)
+  }
+  MatrixDouble NN;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    if (row_type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+
+    const int nb_row = row_data.getIndices().size();
+    if (!nb_row)
+      MoFEMFunctionReturnHot(0);
+    const int nb_col = col_data.getIndices().size();
+    if (!nb_col)
+      MoFEMFunctionReturnHot(0);
+    const int nb_gauss_pts = row_data.getN().size1();
+
+    int nb_base_fun_row = row_data.getFieldData().size();
+
+    int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+    const double area_common =
+        commonDataSimpleContact->areaCommon; // same area in master and slave
+
+    NN.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
+    NN.clear();
+
+    auto get_tensor_from_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    auto get_vec_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 0, c + 1),
+                                           &m(r + 0, c + 2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+    auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    auto lambda_gap_diff_prod =
+        getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
+
+    auto tilde_c_fun =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+    auto const_unit_n =
+        get_tensor_from_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      double val_m = getGaussPtsMaster()(2, gg) * area_common;
+
+      FTensor::Tensor0<double *> t_base_master(&col_data.getN()(gg, 0));
+
+      FTensor::Tensor1<double *, 3> t_field_data_master(
+          &col_data.getFieldData()[0], &col_data.getFieldData()[1],
+          &col_data.getFieldData()[2], 3);
+
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+        auto t_lag_base_row = row_data.getFTensor1N<3>(gg, 0);
+        for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+          const double m =
+              val_m * t_lag_base_row(i) * const_unit_n(i) * t_base_master;
+
+          auto assemble_mat = get_vec_from_mat(NN, bbr, 3 * bbc);
+
+          assemble_mat(i) +=
+              const_unit_n(i) * cN * (1. + lambda_gap_diff_prod) * m;
+
+          ++t_lag_base_row; // update rows
         }
 
         ++t_base_master; // update cols master
@@ -1361,6 +1894,119 @@ struct OpDerivativeBarTildeCFunODisplacementsSlaveSlave
               const_unit_n(i) * cN * (1. + lambda_gap_diff_prod) * s;
 
           ++t_base_lambda; // update rows
+        }
+
+        ++t_base_slave; // update cols slave
+      }
+
+      ++x_m;
+      ++x_s;
+      ++lagrange_slave;
+      ++gap_gp;
+      ++lambda_gap_diff_prod;
+      ++tilde_c_fun;
+    }
+
+    // Assemble NN to final Aij vector based on its global indices
+    CHKERR MatSetValues(
+        getFEMethod()->snes_B, nb_base_fun_row, &row_data.getIndices()[0],
+        nb_col, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+struct OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  double cN; //@todo: ign: to become input parameter
+  Mat Aij;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv(
+      const string field_name, const string lagrang_field_name,
+      double &cn_value,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      Mat aij = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVESLAVE),
+        cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+    sYmm = false; // This will make sure to loop over all entities (e.g.
+                  // for order=2 it will make doWork to loop 16 time)
+  }
+  MatrixDouble NN;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    if (row_type != MBTRI)
+      MoFEMFunctionReturnHot(0);
+    const int nb_row = row_data.getIndices().size();
+    if (!nb_row)
+      MoFEMFunctionReturnHot(0);
+    const int nb_col = col_data.getIndices().size();
+    if (!nb_col)
+      MoFEMFunctionReturnHot(0);
+    const int nb_gauss_pts = row_data.getN().size1();
+    int nb_base_fun_row = row_data.getFieldData().size();
+    int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+    const double area_common =
+        commonDataSimpleContact->areaCommon; // same area in master and slave
+
+    NN.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
+    NN.clear();
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    auto get_vec_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 0, c + 1),
+                                           &m(r + 0, c + 2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    auto x_m = getFTensor1FromMat<3>(
+        *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
+    auto x_s = getFTensor1FromMat<3>(
+        *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+    auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    auto lambda_gap_diff_prod =
+        getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
+
+    auto tilde_c_fun =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      double val_s = getGaussPtsSlave()(2, gg) * area_common;
+
+      FTensor::Tensor0<double *> t_base_slave(&col_data.getN()(gg, 0));
+
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+        auto t_lag_base_row = row_data.getFTensor1N<3>(gg, 0);
+
+        for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+          const double s =
+              val_s * t_lag_base_row(i) * const_unit_n(i) * t_base_slave;
+
+          auto assemble_mat = get_vec_from_mat(NN, bbr, 3 * bbc);
+
+          assemble_mat(i) -=
+              const_unit_n(i) * cN * (1. + lambda_gap_diff_prod) * s;
+
+          ++t_lag_base_row; // update rows
         }
 
         ++t_base_slave; // update cols slave
@@ -1525,6 +2171,46 @@ MoFEMErrorCode setContactOperatorsRhsOperators(string field_name,
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv(string field_name,
+                                               string lagrang_field_name,
+                                               Vec f_ = PETSC_NULL) {
+  MoFEMFunctionBegin;
+
+  map<int, SimpleContactPrismsData>::iterator sit =
+      setOfSimpleContactPrism.begin();
+  for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetNormalSlave(field_name, commonDataSimpleContact));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsMaster(field_name, commonDataSimpleContact));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsSlave(field_name, commonDataSimpleContact));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetGapSlave(field_name, commonDataSimpleContact));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
+                                       commonDataSimpleContact));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpCalFReConMaster(field_name, commonDataSimpleContact, f_));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(
+        new OpCalFReConSlave(field_name, commonDataSimpleContact, f_));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+        field_name, commonDataSimpleContact, rValue, cnValue));
+
+    feRhsSimpleContact->getOpPtrVector().push_back(new OpCalIntTildeCFunSlaveHdiv(
+        lagrang_field_name, commonDataSimpleContact, f_));
+  }
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode setContactOperatorsLhsOperators(string field_name,
                                                string lagrang_field_name,
                                                Mat aij) {
@@ -1545,6 +2231,10 @@ MoFEMErrorCode setContactOperatorsLhsOperators(string field_name,
 
     feLhsSimpleContact->getOpPtrVector().push_back(
         new OpGetGapSlave(field_name, commonDataSimpleContact));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+                                       commonDataSimpleContact));
 
     feLhsSimpleContact->getOpPtrVector().push_back(
         new OpContactConstraintMatrixMasterSlave(field_name, lagrang_field_name,
@@ -1568,6 +2258,59 @@ MoFEMErrorCode setContactOperatorsLhsOperators(string field_name,
 
     feLhsSimpleContact->getOpPtrVector().push_back(
         new OpDerivativeBarTildeCFunODisplacementsSlaveSlave(
+            field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
+            aij));
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode setContactOperatorsLhsOperatorsHdiv(string field_name,
+                                               string lagrang_field_name,
+                                               Mat aij) {
+  MoFEMFunctionBegin;
+
+  map<int, SimpleContactPrismsData>::iterator sit =
+      setOfSimpleContactPrism.begin();
+  for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetNormalSlave(field_name, commonDataSimpleContact));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsMaster(field_name, commonDataSimpleContact));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsSlave(field_name, commonDataSimpleContact));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetGapSlave(field_name, commonDataSimpleContact));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
+                                       commonDataSimpleContact));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpContactConstraintMatrixMasterSlaveHdiv(field_name, lagrang_field_name,
+                                                 commonDataSimpleContact, aij));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpContactConstraintMatrixSlaveSlaveHdiv(field_name, lagrang_field_name,
+                                                commonDataSimpleContact, aij));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+        field_name, commonDataSimpleContact, rValue, cnValue));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv(
+            lagrang_field_name, commonDataSimpleContact, aij));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv(
+            field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
+            aij));
+
+    feLhsSimpleContact->getOpPtrVector().push_back(
+        new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv(
             field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
             aij));
   }
@@ -1608,6 +2351,41 @@ setContactOperatorsForPostProc(MoFEM::Interface &m_field, string field_name,
         m_field, field_name, commonDataSimpleContact, moab_out));
   }
   MoFEMFunctionReturn(0);
-                                               }
+}
+
+MoFEMErrorCode setContactOperatorsForPostProcHdiv(MoFEM::Interface &m_field,
+                                              string field_name,
+                                              string lagrang_field_name,
+                                              moab::Interface &moab_out) {
+  MoFEMFunctionBegin;
+  map<int, SimpleContactPrismsData>::iterator sit =
+      setOfSimpleContactPrism.begin();
+  for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetNormalSlave(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsMaster(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsSlave(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetGapSlave(field_name, commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
+                                       commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(
+        new OpLagGapProdGaussPtsSlave(lagrang_field_name,
+                                      commonDataSimpleContact));
+
+    fePostProcSimpleContact->getOpPtrVector().push_back(new OpMakeVtkSlave(
+        m_field, field_name, commonDataSimpleContact, moab_out));
+  }
+  MoFEMFunctionReturn(0);
+}
 };
 #endif

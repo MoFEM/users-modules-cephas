@@ -50,7 +50,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
                                  "-my_cn_value 1e3 \n"
-                                 "-my_is_newton_cotes PETSC_FALSE";
+                                 "-my_is_newton_cotes PETSC_FALSE \n"
+                                 "-my_hdiv_trace PETSC_FALSE";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -79,6 +80,7 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
+    PetscBool is_hdiv_trace = PETSC_FALSE;
     PetscInt master_move = 0;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
@@ -107,6 +109,11 @@ int main(int argc, char *argv[]) {
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_hdiv_trace",
+                            "set if mesh is partitioned (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_FALSE, &is_hdiv_trace, PETSC_NULL);
 
     CHKERR PetscOptionsInt(
         "-my_order_lambda",
@@ -279,13 +286,20 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                             MB_TAG_SPARSE, MF_ZERO);
+    if (is_hdiv_trace) {
+      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+} else {
+  CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                           MB_TAG_SPARSE, MF_ZERO);
 
-    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-    CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-    CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+  CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+  CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+  CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+  CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+}
+
 
     // build field
     CHKERR m_field.build_fields();
@@ -389,11 +403,20 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
-                                                     "LAGMULT");
+    if(is_hdiv_trace){
 
-    contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
+        contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
+                                                         "LAGMULT");
+
+    contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
                                                      "LAGMULT", Aij);
+    } else {
+      contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
+                                                       "LAGMULT");
+
+      contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
+                                                       "LAGMULT", Aij);
+    }
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -516,45 +539,51 @@ int main(int argc, char *argv[]) {
     // moab_instance
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
-    contact_problem->setContactOperatorsForPostProc(m_field, "SPATIAL_POSITION",
-                                                    "LAGMULT", mb_post);
+    if (is_hdiv_trace) {
+      contact_problem->setContactOperatorsForPostProcHdiv(
+          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
+    } else {
+      contact_problem->setContactOperatorsForPostProc(
+          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
+    }
 
-    mb_post.delete_mesh();
-    
-    CHKERR DMoFEMLoopFiniteElements(
-        dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
-    
-    std::ostringstream ostrm;
+      mb_post.delete_mesh();
 
-    ostrm << "out_contact" << ".h5m";
-    
-    out_file_name = ostrm.str();
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                       out_file_name.c_str());
-    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                              "PARALLEL=WRITE_PART");
+      CHKERR DMoFEMLoopFiniteElements(
+          dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
 
-    EntityHandle out_meshset_slave_tris;
-    EntityHandle out_meshset_master_tris;
+      std::ostringstream ostrm;
 
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+      ostrm << "out_contact"
+            << ".h5m";
 
-    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+      out_file_name = ostrm.str();
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                         out_file_name.c_str());
+      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                                "PARALLEL=WRITE_PART");
 
-    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                           &out_meshset_slave_tris, 1);
-    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                           &out_meshset_master_tris, 1);
+      EntityHandle out_meshset_slave_tris;
+      EntityHandle out_meshset_master_tris;
 
-    CHKERR VecDestroy(&D);
-    CHKERR VecDestroy(&F);
-    CHKERR MatDestroy(&Aij);
-    CHKERR SNESDestroy(&snes);
+      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
 
-    // destroy DM
-    CHKERR DMDestroy(&dm);
+      CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+      CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+
+      CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                             &out_meshset_slave_tris, 1);
+      CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                             &out_meshset_master_tris, 1);
+
+      CHKERR VecDestroy(&D);
+      CHKERR VecDestroy(&F);
+      CHKERR MatDestroy(&Aij);
+      CHKERR SNESDestroy(&snes);
+
+      // destroy DM
+      CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 
