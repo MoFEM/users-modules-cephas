@@ -32,6 +32,7 @@
 #include <AnalyticalDirichlet.cpp>
 #include <HookeElement.cpp>
 #include <SpringElement.cpp>
+#include <SimpleContact.cpp>
 
 #ifdef WITH_ADOL_C
   #include <NonLinearElasticElement.cpp>

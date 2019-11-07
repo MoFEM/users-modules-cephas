@@ -98,7 +98,6 @@ int main(int argc, char *argv[]) {
           Range ref_level_tets;
           CHKERR moab.get_entities_by_handle(ref_level_meshset, ref_level_tets,
                                              true);
-          ref_level_tets.print();
           // get faces and tets to split
           CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true, 0);
           // set new bit level
@@ -134,43 +133,48 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByRefLevel(
         bit_levels.back(), BitRefLevel().set(), tets_back_bit_level);
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit)) {
+    // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit)) {
 
-      EntityHandle cubit_meshset = cit->getMeshset();
+    //   if (cit->getName().compare(0, 12, "MAT_ELASTIC2") == 0) {
 
-      BlockSetAttributes mydata;
-      CHKERR cit->getAttributeDataStructure(mydata);
-      std::cout << mydata << std::endl;
+    //     EntityHandle cubit_meshset = cit->getMeshset();
 
-      Range tets;
-      CHKERR moab.get_entities_by_type(cubit_meshset, MBTET, tets, true);
-      tets = intersect(tets_back_bit_level, tets);
-      Range nodes;
-      CHKERR moab.get_connectivity(tets, nodes, true);
+    //     Range tets;
+    //     CHKERR moab.get_entities_by_type(cubit_meshset, MBTET, tets, true);
+    //     tets = intersect(tets_back_bit_level, tets);
+    //     Range nodes;
+    //     CHKERR moab.get_connectivity(tets, nodes, true);
 
-      for (Range::iterator nit = nodes.begin(); nit != nodes.end(); nit++) {
-        double coords[3];
-        CHKERR moab.get_coords(&*nit, 1, coords);
-        coords[0] += mydata.data.User1;
-        coords[1] += mydata.data.User2;
-        coords[2] += mydata.data.User3;
-        CHKERR moab.set_coords(&*nit, 1, coords);
-      }
-    }
+    //     for (Range::iterator nit = nodes.begin(); nit != nodes.end(); nit++) {
+    //       double coords[3];
+    //       CHKERR moab.get_coords(&*nit, 1, coords);
+    //       double r = sqrt(coords[0] * coords[0] + coords[1] * coords[1]);
+    //       double phi = atan2(coords[1], coords[0]);
+    //       double dr;
+    //       coords[0] += 0.5 * cos(phi);
+    //       coords[1] += 0.5 * sin(phi);
+    //       CHKERR moab.set_coords(&*nit, 1, coords);
+    //     }
+    //   }
+    // }
 
     EntityHandle out_meshset_tet;
     EntityHandle out_meshset_prism;
     EntityHandle out_meshset_tets_and_prism;
+    EntityHandle out_meshset_slave_tris;
+    EntityHandle out_meshset_master_tris;
 
     CHKERR moab.create_meshset(MESHSET_SET, out_meshset_tet);
     CHKERR moab.create_meshset(MESHSET_SET, out_meshset_prism);
     CHKERR moab.create_meshset(MESHSET_SET, out_meshset_tets_and_prism);
 
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
         bit_levels.back(), BitRefLevel().set(), MBTET, out_meshset_tet);
     Range tets;
     CHKERR moab.get_entities_by_handle(out_meshset_tet, tets, true);
-    tets.print();
 
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
         bit_levels.back(), BitRefLevel().set(), MBPRISM, out_meshset_prism);
@@ -186,12 +190,20 @@ int main(int argc, char *argv[]) {
 
     Range slave_tris;
     slave_tris = subtract(tris, master_tris);
-    //slave_tris.print();
+
+    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
 
     CHKERR moab.write_file("out_tet.vtk", "VTK", "", &out_meshset_tet, 1);
     CHKERR moab.write_file("out_prism.vtk", "VTK", "", &out_meshset_prism, 1);
     CHKERR moab.write_file("out_tets_and_prisms.vtk", "VTK", "",
                            &out_meshset_tets_and_prism, 1);
+
+    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                           &out_meshset_slave_tris, 1);
+    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                           &out_meshset_master_tris, 1);
 
     CHKERR moab.write_file("out.h5m", "MOAB", "", &out_meshset_tets_and_prism, 1);
   }
