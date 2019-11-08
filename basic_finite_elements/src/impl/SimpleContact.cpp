@@ -19,50 +19,7 @@
 #include <MoFEM.hpp>
 using namespace MoFEM;
 #include <SimpleContact.hpp>
-
-MoFEMErrorCode SimpleContactProblem::addContactElement(
-    const string element_name, const string field_name,
-    const string lagrang_field_name, Range &range_slave_master_prisms,
-    bool lagrange_field) {
-  MoFEMFunctionBegin;
-
-  CHKERR mField.add_finite_element(element_name, MF_ZERO);
-
-  //============================================================================================================
-  // C row as Lagrange_mul and col as DISPLACEMENT
-  if (lagrange_field)
-    CHKERR mField.modify_finite_element_add_field_row(element_name,
-                                                      lagrang_field_name);
-
-  CHKERR mField.modify_finite_element_add_field_col(element_name, field_name);
-
-  // CT col as Lagrange_mul and row as DISPLACEMENT
-  if (lagrange_field)
-    CHKERR mField.modify_finite_element_add_field_col(element_name,
-                                                      lagrang_field_name);
-  CHKERR mField.modify_finite_element_add_field_row(element_name, field_name);
-
-  // data
-  if (lagrange_field)
-    CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                       lagrang_field_name);
-  //}
-
-  CHKERR mField.modify_finite_element_add_field_data(element_name, field_name);
-
-  CHKERR
-  mField.modify_finite_element_add_field_data(element_name,
-                                              "MESH_NODE_POSITIONS");
-
-  setOfSimpleContactPrism[1].pRisms =
-      range_slave_master_prisms;
-
-  // Adding range_slave_master_prisms to Element element_name
-  CHKERR mField.add_ents_to_finite_element_by_type(range_slave_master_prisms,
-                                                   MBPRISM, element_name);
-
-  MoFEMFunctionReturn(0);
-}
+using namespace boost::numeric;
 
 MoFEMErrorCode
 SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
@@ -308,47 +265,36 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(
 
 MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
+  MoFEMFunctionBegin;
 
-      if (data.getFieldData().size() == 0)
-        PetscFunctionReturn(0);
+  const int nb_gauss_pts = data.getN().size1();
 
-      if (type != MBVERTEX)
-        MoFEMFunctionReturnHot(0);
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
+    commonDataSimpleContact->lagMultAtGaussPtsPtr
+        .get()
+        ->clear();
+  }
 
-      auto get_tensor_vec = [](VectorDouble &n) {
-        return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-      };
+  int nb_base_fun_row = data.getFieldData().size();
 
-      const int nb_gauss_pts = data.getN().size1();
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
-      commonDataSimpleContact->gapPtr.get()->resize(nb_gauss_pts);
-      commonDataSimpleContact->gapPtr.get()->clear();
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    FTensor::Tensor0<double *> t_base_lambda(
+        &data.getN()(gg, 0));
 
-      FTensor::Index<'i', 3> i;
+    FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[0]);
+    for (int bb = 0; bb != nb_base_fun_row; bb++) {
+      lagrange_slave += t_base_lambda * t_field_data_slave;
+      ++t_base_lambda;
+      ++t_field_data_slave;
+    }
+    ++lagrange_slave;
+  }
 
-      auto position_master_gp = getFTensor1FromMat<3>(
-          *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
-      auto position_slave_gp = getFTensor1FromMat<3>(
-          *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
-
-      auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-
-      auto normal_at_gp =
-          get_tensor_vec(commonDataSimpleContact->normalVectorPtr.get()[0]);
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        gap_ptr -=
-            normal_at_gp(i) * (position_slave_gp(i) - position_master_gp(i));
-
-        ++position_slave_gp;
-        ++position_master_gp;
-        ++gap_ptr;
-      } // for gauss points
-
-      auto gap_ptr_2 = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-
-      MoFEMFunctionReturn(0);
+  MoFEMFunctionReturn(0);
     }
 
     MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlaveHdiv::doWork(
