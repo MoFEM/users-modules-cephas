@@ -46,8 +46,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
                                  "-my_cn_value 1e3 \n"
-                                 "-my_is_newton_cotes PETSC_FALSE \n"
-                                 "-my_hdiv_trace PETSC_FALSE";
+                                 "-my_is_newton_cotes 0 \n"
+                                 "-my_hdiv_trace 0";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -245,6 +245,13 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
 
+    cout << "contact_prisms:" << contact_prisms.size() << endl;
+    contact_prisms.print();
+    cout << "master_tris:" << master_tris.size() << endl;
+    master_tris.print();
+    cout << "slave_tris:" << slave_tris.size() << endl;
+    slave_tris.print();
+
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
@@ -269,16 +276,15 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-} else {
-  CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                           MB_TAG_SPARSE, MF_ZERO);
+    } else {
+      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                               MB_TAG_SPARSE, MF_ZERO);
 
-  CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-  CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-  CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-  CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
-}
-
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+    }
 
     // build field
     CHKERR m_field.build_fields();
@@ -382,17 +388,14 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    if(is_hdiv_trace){
-
-        contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
-                                                         "LAGMULT");
-
-    contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
-                                                     "LAGMULT", Aij);
+    if (is_hdiv_trace) {
+      contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
+                                                           "LAGMULT");
+      contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
+                                                           "LAGMULT", Aij);
     } else {
       contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
                                                        "LAGMULT");
-
       contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
                                                        "LAGMULT", Aij);
     }
