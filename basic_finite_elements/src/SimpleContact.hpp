@@ -67,37 +67,41 @@ MoFEMErrorCode addContactElement(const string element_name,
 
   CHKERR mField.add_finite_element(element_name, MF_ZERO);
 
-  //============================================================================================================
-  // C row as Lagrange_mul and col as DISPLACEMENT
-  if (lagrange_field)
-    CHKERR mField.modify_finite_element_add_field_row(element_name,
-                                                      lagrang_field_name);
+  if (range_slave_master_prisms.size() > 0) {
 
-  CHKERR mField.modify_finite_element_add_field_col(element_name, field_name);
+    //============================================================================================================
+    // C row as Lagrange_mul and col as DISPLACEMENT
+    if (lagrange_field)
+      CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                        lagrang_field_name);
 
-  // CT col as Lagrange_mul and row as DISPLACEMENT
-  if (lagrange_field)
-    CHKERR mField.modify_finite_element_add_field_col(element_name,
-                                                      lagrang_field_name);
-  CHKERR mField.modify_finite_element_add_field_row(element_name, field_name);
+    CHKERR mField.modify_finite_element_add_field_col(element_name, field_name);
 
-  // data
-  if (lagrange_field)
+    // CT col as Lagrange_mul and row as DISPLACEMENT
+    if (lagrange_field)
+      CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                        lagrang_field_name);
+    CHKERR mField.modify_finite_element_add_field_row(element_name, field_name);
+
+    // data
+    if (lagrange_field)
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         lagrang_field_name);
+    //}
+
     CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                       lagrang_field_name);
-  //}
+                                                       field_name);
 
-  CHKERR mField.modify_finite_element_add_field_data(element_name, field_name);
+    CHKERR
+    mField.modify_finite_element_add_field_data(element_name,
+                                                "MESH_NODE_POSITIONS");
 
-  CHKERR
-  mField.modify_finite_element_add_field_data(element_name,
-                                              "MESH_NODE_POSITIONS");
+    setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
-  setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
-
-  // Adding range_slave_master_prisms to Element element_name
-  CHKERR mField.add_ents_to_finite_element_by_type(range_slave_master_prisms,
-                                                   MBPRISM, element_name);
+    // Adding range_slave_master_prisms to Element element_name
+    CHKERR mField.add_ents_to_finite_element_by_type(range_slave_master_prisms,
+                                                     MBPRISM, element_name);
+  }
 
   MoFEMFunctionReturn(0);
 }
