@@ -409,7 +409,7 @@ int main(int argc, char *argv[]) {
                                                      "LAGMULT", Aij);
     } else {
       contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT");
+                                                       "LAGMULT"/*, "ELASTIC"*/);
 
       contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
                                                        "LAGMULT", Aij);

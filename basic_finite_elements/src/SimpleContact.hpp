@@ -196,6 +196,60 @@ struct OpGetNormalSlave
                         DataForcesAndSourcesCore::EntData &data);
 };
 
+/// \brief tangents t1 and t2 to face f4 at all gauss points
+struct OpGetNormalSlaveForSide
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+  std::string sideFeName;
+
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpGetNormalSlaveForSide(
+      const string field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+      std::string &side_fe_name)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            field_name, UserDataOperator::OPCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACESLAVE),
+        commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+        sideFeName(side_fe_name) {}
+
+  PetscErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data);
+};
+
+struct OpContactConstraintMatrixMasterSlaveForSide
+    : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+  std::string sideFeName;
+
+  Mat Aij;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  OpContactConstraintMatrixMasterSlaveForSide(
+      const string field_name, const string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+      std::string &side_fe_name, Mat aij = PETSC_NULL)
+      : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+            field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
+            ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                FACEMASTERSLAVE),
+        commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+        sideFeName(side_fe_name), Aij(aij) {
+    sYmm = false; // This will make sure to loop over all intities (e.g.
+                  // for order=2 it will make doWork to loop 16 time)
+  }
+  MatrixDouble NN;
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
+};
+
 // Calculate displacements or spatial positions at Gauss points  (Note
 // OPCOL
 // here, which is dips/sp-pos here)
@@ -432,6 +486,8 @@ struct OpContactConstraintMatrixMasterSlave
                         DataForcesAndSourcesCore::EntData &row_data,
                         DataForcesAndSourcesCore::EntData &col_data);
 };
+
+
 
 struct OpContactConstraintMatrixMasterSlaveHdiv
     : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
@@ -684,12 +740,31 @@ struct OpMakeVtkSlave
 // setup operators for calculation of active set
 MoFEMErrorCode setContactOperatorsRhsOperators(string field_name,
                                                string lagrang_field_name,
+                                               /*string side_fe_name,*/
                                                Vec f_ = PETSC_NULL) {
   MoFEMFunctionBegin;
 
   map<int, SimpleContactPrismsData>::iterator sit =
       setOfSimpleContactPrism.begin();
   for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
+        boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+    // feMatSideRhs->getOpPtrVector().push_back(
+    //     new OpCalculateVectorFieldGradient<3, 3>(X_field, data_at_pts->HMat));
+    // feMatSideRhs->getOpPtrVector().push_back(
+    //     new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+    // feMatSideRhs->getOpPtrVector().push_back(
+    //     new OpCalculateDeformation(X_field, data_at_pts, ho_geometry));
+
+    // feRhsSimpleContact->getOpPtrVector().push_back(new OpGetNormalSlaveForSide(
+    //     field_name, commonDataSimpleContact, feMatSideRhs, side_fe_name));
+
+    // feRhsSimpleContact->getOpPtrVector().push_back(
+    //     new OpContactConstraintMatrixMasterSlaveForSide(
+    //         field_name, lagrang_field_name, commonDataSimpleContact,
+    //         feMatSideRhs, side_fe_name));
 
     feRhsSimpleContact->getOpPtrVector().push_back(
         new OpGetNormalSlave(field_name, commonDataSimpleContact));
