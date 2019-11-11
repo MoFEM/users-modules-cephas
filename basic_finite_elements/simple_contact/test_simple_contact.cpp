@@ -431,7 +431,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  contact_problem->feRhsSimpleContact.get(),
+                                  contact_problem->feRhsSimpleContact,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
@@ -444,7 +444,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
     CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-                                  contact_problem->feLhsSimpleContact.get(),
+                                  contact_problem->feLhsSimpleContact,
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);

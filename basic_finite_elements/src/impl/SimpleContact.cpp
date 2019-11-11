@@ -93,7 +93,7 @@ PetscErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
   };
   
-  CHKERR loopSideVolumes(sideFeName, *sideFe, 0);
+  //CHKERR loopSideVolumes(sideFeName, *sideFe, 0);
 
   const double *normal_slave_ptr = &getNormalSlave()[0];
   commonDataSimpleContact->normalVectorPtr.get()->resize(3);
