@@ -44,62 +44,6 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::CommonDataSimpleContact::getContactTags(
-    const EntityHandle fe_ent, const int nb_gauss_pts,
-    boost::shared_ptr<MatrixDouble> tag_ptr, Tag tag_ref) {
-  MoFEMFunctionBegin;
-  double *tag_data;
-  int tag_size;
-  CHKERR mField.get_moab().tag_get_by_ptr(tag_ref, &fe_ent, 1,
-                                          (const void **)&tag_data, &tag_size);
-
-  if (tag_size == 1) {
-    tag_ptr->resize(9, nb_gauss_pts, false);
-    tag_ptr->clear();
-    void const *tag_data[] = {&*tag_ptr->data().begin()};
-    const int tag_size = tag_ptr->data().size();
-    CHKERR mField.get_moab().tag_set_by_ptr(tag_ref, &fe_ent, 1, tag_data,
-                                            &tag_size);
-  } else if (tag_size != nb_gauss_pts * 9) {
-    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-            "Wrong size of the tag, data inconsistency");
-  } else {
-    MatrixAdaptor tag_vec =
-        MatrixAdaptor(9, nb_gauss_pts,
-                      ublas::shallow_array_adaptor<double>(tag_size, tag_data));
-
-    *tag_ptr = tag_vec;
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SimpleContactProblem::CommonDataSimpleContact::getContactTags(
-    const EntityHandle fe_ent, const int nb_gauss_pts,
-    boost::shared_ptr<VectorDouble> &tag_ptr, Tag tag_ref) {
-  MoFEMFunctionBegin;
-  double *tag_data;
-  int tag_size;
-  CHKERR mField.get_moab().tag_get_by_ptr(tag_ref, &fe_ent, 1,
-                                          (const void **)&tag_data, &tag_size);
-
-  if (tag_size == 1) {
-    tag_ptr->resize(nb_gauss_pts);
-    tag_ptr->clear();
-    void const *tag_data[] = {&*tag_ptr->begin()};
-    const int tag_size = tag_ptr->size();
-    CHKERR mField.get_moab().tag_set_by_ptr(tag_ref, &fe_ent, 1, tag_data,
-                                            &tag_size);
-  } else if (tag_size != nb_gauss_pts) {
-    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-            "Wrong size of the tag, data inconsistency");
-  } else {
-    VectorAdaptor tag_vec = VectorAdaptor(
-        tag_size, ublas::shallow_array_adaptor<double>(tag_size, tag_data));
-    *tag_ptr = tag_vec;
-  }
-  MoFEMFunctionReturn(0);
-}
 
 PetscErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
@@ -1484,14 +1428,6 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       MoFEMFunctionReturnHot(0);
     int nb_gauss_pts = data.getN().size1();
 
-    // double def_vals[9];
-    // bzero(def_vals, 9 * sizeof(double));
-
-    // Tag th_strain;
-    // CHKERR moabOut.tag_get_handle("PLASTIC_STRAIN0", 9, MB_TYPE_DOUBLE,
-    //                               th_strain, MB_TAG_CREAT | MB_TAG_SPARSE,
-    //                               def_vals);
-
     double def_vals;
     def_vals = 0;
 
@@ -1510,19 +1446,6 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
 
     double coords[3];
     EntityHandle new_vertex = getFEEntityHandle();
-    // CHKERR commonDataSimpleContact->getContactTags(
-    //     new_vertex, nb_gauss_pts, commonDataSimpleContact->gapPtr,
-    //     commonDataSimpleContact->thGap);
-
-    // CHKERR commonDataSimpleContact->getContactTags(
-    //     new_vertex, nb_gauss_pts,
-    //     commonDataSimpleContact->lagMultAtGaussPtsPtr,
-    //     commonDataSimpleContact->thLagrangeMultiplier);
-
-    // CHKERR commonDataSimpleContact->getContactTags(
-    //     new_vertex, nb_gauss_pts,
-    //     commonDataSimpleContact->lagGapProdPtr,
-    //     commonDataSimpleContact->thLagGapProd);
 
     auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
