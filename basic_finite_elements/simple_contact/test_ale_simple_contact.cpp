@@ -1,9 +1,10 @@
-/** \file test_simple_contact.cpp
- * \example test_simple_contact.cpp
- * 
- * Testing implementation of simple contact element
- * 
- **/
+/** \file test_contact.cpp
+ * \example test_contact.cpp
+
+Testing implementation of Hook element by verifying tangent stiffness matrix.
+Test like this is an example of how to verify the implementation of Jacobian.
+
+*/
 
 /* MoFEM is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the
@@ -16,8 +17,7 @@
  * License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. 
- */
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 #include <BasicFiniteElements.hpp>
 
@@ -46,8 +46,11 @@ int main(int argc, char *argv[]) {
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
                                  "-my_cn_value 1e3 \n"
-                                 "-my_is_newton_cotes PETSC_FALSE \n"
-                                 "-my_hdiv_trace PETSC_FALSE";
+                                 "-test_case_lambda 0 \n"
+                                 "-x_x_test_case 0\n"
+                                 "-X_test_case 0\n"
+                                 "-my_is_newton_cotes 0 \n"
+                                 "-my_hdiv_trace 0";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -57,7 +60,6 @@ int main(int argc, char *argv[]) {
       file.close();
     }
   }
-
   // Initialize MoFEM
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
@@ -78,8 +80,12 @@ int main(int argc, char *argv[]) {
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool is_hdiv_trace = PETSC_FALSE;
     PetscInt master_move = 0;
+    PetscInt test_case_lambda = 0;
+    PetscInt test_case_x = 0;
+    PetscInt test_case_X = 0;
 
-    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
+    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config",
+                                 "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
@@ -100,6 +106,15 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-test_case_lambda", "test case", "", 0,
+                           &test_case_lambda, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-x_x_test_case", "test case", "", 0, &test_case_x,
+                           PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-X_test_case", "test case", "", 0, &test_case_X,
+                           PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if mesh is partitioned (this result that each "
@@ -259,8 +274,10 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels[0]);
 
-    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris, slave_tris,
-                               meshset_tets, meshset_prisms, bit_levels);
+    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris,
+                               slave_tris, meshset_tets, meshset_prisms,
+                               bit_levels);
+
     cout << "contact_prisms:" << contact_prisms.size() << endl;
     contact_prisms.print();
     cout << "master_tris:" << master_tris.size() << endl;
@@ -292,16 +309,45 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-} else {
-  CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                           MB_TAG_SPARSE, MF_ZERO);
+    } else {
+      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                               MB_TAG_SPARSE, MF_ZERO);
 
-  CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-  CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-  CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-  CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
-}
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+    }    
 
+    // Add these prisim (between master and slave tris) to the mofem database
+    EntityHandle meshset_slave_master_prisms;
+    CHKERR moab.create_meshset(MESHSET_SET, meshset_slave_master_prisms);
+
+    CHKERR
+    moab.add_entities(meshset_slave_master_prisms, contact_prisms);
+
+    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        meshset_slave_master_prisms, 3, bit_levels[0]);
+
+    CHKERR moab.write_mesh("slave_master_prisms.vtk",
+                           &meshset_slave_master_prisms, 1);
+    
+    DMType dm_name = "CONTACT_PROB";
+    CHKERR DMRegister_MoFEM(dm_name);
+
+    // create dm instance
+    DM dm;
+    CHKERR DMCreate(PETSC_COMM_WORLD, &dm);
+    CHKERR DMSetType(dm, dm_name);
+
+    boost::shared_ptr<SimpleContactProblem> contact_problem;
+    contact_problem = boost::shared_ptr<SimpleContactProblem>(
+        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
+
+    // add fields to the global matrix by adding the element
+    contact_problem->addContactElementALE("CONTACT_ELEM", "SPATIAL_POSITION",
+                                          "MESH_NODE_POSITIONS", "LAGMULT",
+                                          contact_prisms);
 
     // build field
     CHKERR m_field.build_fields();
@@ -317,30 +363,6 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
     }
 
-    // Add elastic element
-    boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
-    boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
-    NonlinearElasticElement elastic(m_field, 2);
-    CHKERR elastic.setBlocks(hooke_double_ptr, hooke_adouble_ptr);
-    CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
-
-    CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
-                                false, false);
-
-    boost::shared_ptr<SimpleContactProblem> contact_problem;
-    contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
-
-    //add fields to the global matrix by adding the element
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
-
-    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
-
-    // Add spring boundary condition applied on surfaces.
-    CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
-                                           "MESH_NODE_POSITIONS");
-
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
 
@@ -351,16 +373,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_problem("CONTACT_PROB");
 
     // set refinement level for problem
-    CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
-                                                    bit_levels[0]);
-
-    DMType dm_name = "CONTACT_PROB";
-    CHKERR DMRegister_MoFEM(dm_name);
-
-    // create dm instance
-    DM dm;
-    CHKERR DMCreate(PETSC_COMM_WORLD, &dm);
-    CHKERR DMSetType(dm, dm_name);
+    CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB", bit_levels[0]);
 
     // set dm datastruture which created mofem datastructures
     CHKERR DMMoFEMCreateMoFEM(dm, &m_field, dm_name, bit_levels[0]);
@@ -368,224 +381,224 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
-    CHKERR DMMoFEMAddElement(dm, "ELASTIC");
-    CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
-    CHKERR DMMoFEMAddElement(dm, "SPRING");
-
     CHKERR DMSetUp(dm);
 
-    Mat Aij;  // Stiffness matrix
-    Vec D, F; //, D0; // Vector of DOFs and the RHS
+    PetscRandom rctx;
+    PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
 
-    CHKERR DMCreateGlobalVector(dm, &D);
+    auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
+                         double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 0.5;
+      PetscRandomGetValue(rctx, &value);
+      field_data[0] = (*x) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[1] = (*y) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[2] = (*z) + (value - 0.5) * scale;
+      MoFEMFunctionReturn(0);
+    };
 
-    //CHKERR VecZeroEntries(D);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
+                                                            "SPATIAL_POSITION");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+        set_coord, "MESH_NODE_POSITIONS");
 
-    CHKERR VecDuplicate(D, &F);
-    CHKERR VecZeroEntries(F);
-    CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+    PetscRandomDestroy(&rctx);
 
-    CHKERR DMCreateMatrix(dm, &Aij);
-    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
-    CHKERR MatZeroEntries(Aij);
 
-    // Dirichlet BC
-    boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
-        boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
-            m_field, "SPATIAL_POSITION", Aij, D, F));
-    // (static_cast<DirichletSpatialPositionsBc *>(dirichlet_bc_ptr.get()))
-    //     ->methodsOp.push_back(new SimpleContactProblem::LoadScale());
+{
+        Range  range_vertices;
+        CHKERR m_field.get_moab().get_adjacencies(
+            slave_tris, 0, false, range_vertices, moab::Interface::UNION);
 
-    dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
-    dirichlet_bc_ptr->snes_x = D;
+        for (Range::iterator it_vertices = range_vertices.begin();
+             it_vertices != range_vertices.end(); it_vertices++) {
 
-    elastic.getLoopFeRhs().snes_f = F;
+          for (DofEntityByNameAndEnt::iterator itt =
+                   m_field.get_dofs_by_name_and_ent_begin("SPATIAL_POSITION",
+                                                          *it_vertices);
+               itt != m_field.get_dofs_by_name_and_ent_end("SPATIAL_POSITION",
+                                                           *it_vertices);
+               ++itt) {
 
-    if(is_hdiv_trace){
+            auto &dof = **itt;
 
-        contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
-                                                         "LAGMULT");
+            EntityHandle ent = dof.getEnt();
+            int dof_rank = dof.getDofCoeffIdx();
+            VectorDouble3 coords(3);
 
-    contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
-                                                     "LAGMULT", Aij);
-    } else {
-      contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT", "ELASTIC");
+            CHKERR moab.get_coords(&ent, 1, &coords[0]);
 
-      contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT", Aij);
+            if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+              printf("Before x: %e\n", dof.getFieldData());
+
+              switch (test_case_x) {
+
+              case 1:
+                dof.getFieldData() = coords[2] - 8.;
+                break;
+              case 2:
+                dof.getFieldData() = coords[2] + 1.;
+                break;
+              }
+              printf("After x : %e test case %d\n", dof.getFieldData(),
+                     test_case_x);
+            }
+            
+          }
+
+        }
+}
+
+{
+  Range range_vertices;
+  CHKERR m_field.get_moab().get_adjacencies(
+      slave_tris, 0, false, range_vertices, moab::Interface::UNION);
+
+  for (Range::iterator it_vertices = range_vertices.begin();
+       it_vertices != range_vertices.end(); it_vertices++) {
+
+    for (DofEntityByNameAndEnt::iterator itt =
+             m_field.get_dofs_by_name_and_ent_begin("MESH_NODE_POSITIONS",
+                                                    *it_vertices);
+         itt != m_field.get_dofs_by_name_and_ent_end("MESH_NODE_POSITIONS",
+                                                     *it_vertices);
+         ++itt) {
+
+      auto &dof = **itt;
+
+      EntityHandle ent = dof.getEnt();
+      int dof_rank = dof.getDofCoeffIdx();
+      VectorDouble3 coords(3);
+
+      CHKERR moab.get_coords(&ent, 1, &coords[0]);
+
+      if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+        printf("Before X: %e\n", dof.getFieldData());
+
+        switch (test_case_X) {
+
+        case 1:
+          dof.getFieldData() = coords[2] - 8.;
+          break;
+        case 2:
+          dof.getFieldData() = coords[2] + 1.;
+          break;
+        }
+        printf("After X : %e test case %d\n", dof.getFieldData(), test_case_X);
+      }
     }
+  }
+}
 
-    // Assemble pressure and traction forces
-    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
-                                                       NULL, "SPATIAL_POSITION");
+{
+  Range range_vertices;
+  CHKERR m_field.get_moab().get_adjacencies(
+      slave_tris, 0, false, range_vertices, moab::Interface::UNION);
 
-    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
-        neumann_forces.begin();
-    for (; mit != neumann_forces.end(); mit++) {
-      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
-                                    &mit->second->getLoopFe(), NULL, NULL);
+  for (Range::iterator it_vertices = range_vertices.begin();
+       it_vertices != range_vertices.end(); it_vertices++) {
+
+    for (DofEntityByNameAndEnt::iterator itt =
+             m_field.get_dofs_by_name_and_ent_begin("LAGMULT", *it_vertices);
+         itt != m_field.get_dofs_by_name_and_ent_end("LAGMULT", *it_vertices);
+         ++itt) {
+
+      auto &dof = **itt;
+
+      EntityHandle ent = dof.getEnt();
+      int dof_rank = dof.getDofCoeffIdx();
+
+      printf("Before Lambda: %e\n", dof.getFieldData());
+
+      switch (test_case_lambda) {
+
+      case 1:
+        dof.getFieldData() = -2.5;
+        break;
+      case 2:
+        dof.getFieldData() = +2.5;
+        break;
+      }
+
+      printf("After  Lambda: %e\n", dof.getFieldData());
     }
+  }
+   }
+        
 
-    // Implementation of spring element
-    // Create new instances of face elements for springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
-        new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
-        new FaceElementForcesAndSourcesCore(m_field));
+    Vec x, f;
+    CHKERR DMCreateGlobalVector_MoFEM(dm, &x);
+    CHKERR VecDuplicate(x, &f);
 
-    CHKERR MetaSpringBC::setSpringOperators(
-        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS");
+    CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
 
-    CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    Mat A, fdA;
+    CHKERR DMCreateMatrix_MoFEM(dm, &A);
+    CHKERR MatZeroEntries(A);
 
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
-                                  dirichlet_bc_ptr.get(), NULL);
+    contact_problem->setContactOperatorsRhsALE("SPATIAL_POSITION",
+                                               "MESH_NODE_POSITIONS",
+                                               "LAGMULT");
+
+    contact_problem->setContactOperatorsLhsALE(
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT");
+
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
                                   contact_problem->feRhsSimpleContact.get(),
                                   PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
-                                  PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr.get(),
-                                  PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
-                                  dirichlet_bc_ptr.get());
 
-    boost::shared_ptr<FEMethod> fe_null;
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
-                                  fe_null);
     CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
                                   contact_problem->feLhsSimpleContact.get(),
                                   NULL, NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
-                                  NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr.get(), NULL,
-                                  NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
-                                  dirichlet_bc_ptr);
+
     SNES snes;
-    SNESConvergedReason snes_reason;
-    SnesCtx *snes_ctx;
-    // create snes nonlinear solver
-    {
-      CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
-      CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
-      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
-      CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
-      CHKERR SNESSetFromOptions(snes);
+    CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
+    MoFEM::SnesCtx *snes_ctx;
+    CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
+    CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+    CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
+    CHKERR SNESSetFromOptions(snes);
+    CHKERR SNESSolve(snes, NULL, x);
+
+    CHKERR MatView(A, PETSC_VIEWER_STDOUT_WORLD);
+
+    double nrm_A0;
+    CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
+
+    char testing_options_fd[] = "-snes_fd";
+    CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
+
+    CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+    CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+    CHKERR SNESSetFromOptions(snes);
+
+    CHKERR SNESSolve(snes, NULL, x);
+    CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
+
+    double nrm_A;
+    CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
+    PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+                nrm_A / nrm_A0);
+    nrm_A /= nrm_A0;
+
+    const double tol = 1e-5;
+    if (nrm_A > tol) {
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+              "Difference between hand-calculated tangent matrix and finite "
+              "difference matrix is too big");
     }
 
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
-    // Add operators to the elements, starting with some generic
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("SPATIAL_POSITION");
-    CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-    CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
+    CHKERR VecDestroy(&x);
+    CHKERR VecDestroy(&f);
+    CHKERR MatDestroy(&A);
+    CHKERR MatDestroy(&fdA);
+    CHKERR SNESDestroy(&snes);
 
-    std::map<int, NonlinearElasticElement::BlockData>::iterator sit =
-        elastic.setOfBlocks.begin();
-    for (; sit != elastic.setOfBlocks.end(); sit++) {
-      post_proc.getOpPtrVector().push_back(new PostProcStress(
-          post_proc.postProcMesh, post_proc.mapGaussPts, "SPATIAL_POSITION",
-          sit->second, post_proc.commonData));
-    }
-
-    //CHKERR VecAssemblyBegin(D);
-    //CHKERR VecAssemblyEnd(D);
-
-    CHKERR SNESSolve(snes, PETSC_NULL, D);
-
-    CHKERR SNESGetConvergedReason(snes, &snes_reason);
-
-    int its;
-    CHKERR SNESGetIterationNumber(snes, &its);
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
-                       its);
-
-    // save on mesh
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-    //CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
-
-    elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
-    elastic.getLoopFeEnergy().eNergy = 0;
-    PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
-    // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
-                elastic.getLoopFeEnergy().eNergy);
-
-    string out_file_name;
-    std::ostringstream stm;
-    stm << "out" << ".h5m";
-    out_file_name = stm.str();
-    CHKERR
-    PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
-
-    CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                             "PARALLEL=WRITE_PART");
-
-    // moab_instance
-    moab::Core mb_post;                   // create database
-    moab::Interface &moab_proc = mb_post; // create interface to database
-    if (is_hdiv_trace) {
-      contact_problem->setContactOperatorsForPostProcHdiv(
-          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
-    } else {
-      contact_problem->setContactOperatorsForPostProc(
-          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
-    }
-
-      mb_post.delete_mesh();
-
-      CHKERR DMoFEMLoopFiniteElements(
-          dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
-
-      std::ostringstream ostrm;
-
-      ostrm << "out_contact"
-            << ".h5m";
-
-      out_file_name = ostrm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                         out_file_name.c_str());
-      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                                "PARALLEL=WRITE_PART");
-
-      EntityHandle out_meshset_slave_tris;
-      EntityHandle out_meshset_master_tris;
-
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
-
-      CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-      CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
-
-      CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                             &out_meshset_slave_tris, 1);
-      CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                             &out_meshset_master_tris, 1);
-
-      CHKERR VecDestroy(&D);
-      CHKERR VecDestroy(&F);
-      CHKERR MatDestroy(&Aij);
-      CHKERR SNESDestroy(&snes);
-
-      // destroy DM
-      CHKERR DMDestroy(&dm);
+    // destroy DM
+    CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 
