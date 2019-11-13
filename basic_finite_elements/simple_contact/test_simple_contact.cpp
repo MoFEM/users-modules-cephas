@@ -1,8 +1,8 @@
 /** \file test_simple_contact.cpp
  * \example test_simple_contact.cpp
- * 
+ *
  * Testing implementation of simple contact element
- * 
+ *
  **/
 
 /* MoFEM is free software: you can redistribute it and/or modify it under
@@ -16,7 +16,7 @@
  * License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. 
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <BasicFiniteElements.hpp>
@@ -314,7 +314,7 @@ int main(int argc, char *argv[]) {
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
         new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
 
-    //add fields to the global matrix by adding the element
+    // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
 
@@ -362,7 +362,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMCreateGlobalVector(dm, &D);
 
-    //CHKERR VecZeroEntries(D);
+    // CHKERR VecZeroEntries(D);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -388,22 +388,35 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_rhs_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_lhs_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_post_proc_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+
     if (is_hdiv_trace) {
-      contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
-                                                           "LAGMULT");
-      contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
-                                                           "LAGMULT", Aij);
+      contact_problem->setContactOperatorsRhsOperatorsHdiv(
+          fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
+      contact_problem->setContactOperatorsLhsOperatorsHdiv(
+          fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
     } else {
-      contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT");
-      contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT", Aij);
+      contact_problem->setContactOperatorsRhsOperators(
+          fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
+      contact_problem->setContactOperatorsLhsOperators(
+          fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
     }
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
-                                                       NULL, "SPATIAL_POSITION");
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(
+        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
 
     boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
@@ -430,12 +443,11 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  contact_problem->feRhsSimpleContact,
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr.get(),
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
@@ -443,12 +455,11 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-                                  contact_problem->feLhsSimpleContact,
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr.get(), NULL,
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
@@ -479,8 +490,8 @@ int main(int argc, char *argv[]) {
           sit->second, post_proc.commonData));
     }
 
-    //CHKERR VecAssemblyBegin(D);
-    //CHKERR VecAssemblyEnd(D);
+    // CHKERR VecAssemblyBegin(D);
+    // CHKERR VecAssemblyEnd(D);
 
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
@@ -495,7 +506,7 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-    //CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
@@ -510,7 +521,8 @@ int main(int argc, char *argv[]) {
 
     string out_file_name;
     std::ostringstream stm;
-    stm << "out" << ".h5m";
+    stm << "out"
+        << ".h5m";
     out_file_name = stm.str();
     CHKERR
     PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
@@ -523,49 +535,51 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab_proc = mb_post; // create interface to database
     if (is_hdiv_trace) {
       contact_problem->setContactOperatorsForPostProcHdiv(
-          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
+          m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
+          mb_post);
     } else {
       contact_problem->setContactOperatorsForPostProc(
-          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
+          m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
+          mb_post);
     }
 
-      mb_post.delete_mesh();
+    mb_post.delete_mesh();
 
-      CHKERR DMoFEMLoopFiniteElements(
-          dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
+    CHKERR DMoFEMLoopFiniteElements(
+        dm, "CONTACT_ELEM", fe_post_proc_simple_contact);
 
-      std::ostringstream ostrm;
+    std::ostringstream ostrm;
 
-      ostrm << "out_contact"
-            << ".h5m";
+    ostrm << "out_contact"
+          << ".h5m";
 
-      out_file_name = ostrm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                         out_file_name.c_str());
-      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                                "PARALLEL=WRITE_PART");
+    out_file_name = ostrm.str();
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                       out_file_name.c_str());
+    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                              "PARALLEL=WRITE_PART");
 
-      EntityHandle out_meshset_slave_tris;
-      EntityHandle out_meshset_master_tris;
+    EntityHandle out_meshset_slave_tris;
+    EntityHandle out_meshset_master_tris;
 
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
 
-      CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-      CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
 
-      CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                             &out_meshset_slave_tris, 1);
-      CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                             &out_meshset_master_tris, 1);
+    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                           &out_meshset_slave_tris, 1);
+    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                           &out_meshset_master_tris, 1);
 
-      CHKERR VecDestroy(&D);
-      CHKERR VecDestroy(&F);
-      CHKERR MatDestroy(&Aij);
-      CHKERR SNESDestroy(&snes);
+    CHKERR VecDestroy(&D);
+    CHKERR VecDestroy(&F);
+    CHKERR MatDestroy(&Aij);
+    CHKERR SNESDestroy(&snes);
 
-      // destroy DM
-      CHKERR DMDestroy(&dm);
+    // destroy DM
+    CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 
