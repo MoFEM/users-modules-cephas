@@ -45,7 +45,7 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
 }
 
 
-PetscErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -77,7 +77,7 @@ PetscErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -429,7 +429,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       MoFEMFunctionReturn(0);
     }
 
-    PetscErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
+    MoFEMErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
         int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
       PetscFunctionBegin;
 
@@ -492,7 +492,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       PetscFunctionReturn(0);
     }
 
-    PetscErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
+    MoFEMErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
         int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
       PetscFunctionBegin;
 
@@ -1600,7 +1600,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
     MoFEMFunctionReturn(0);
   }
 
-  PetscErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
+  MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
       int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
 

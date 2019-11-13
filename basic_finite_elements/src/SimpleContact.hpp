@@ -139,6 +139,7 @@ struct SimpleContactProblem {
   double rValue;
   double cnValue;
   bool newtonCotes;
+
   boost::shared_ptr<SimpleContactElement> feRhsSimpleContact;
   boost::shared_ptr<SimpleContactElement> feLhsSimpleContact;
   boost::shared_ptr<SimpleContactElement> fePostProcSimpleContact;
@@ -173,7 +174,7 @@ struct SimpleContactProblem {
                   FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
-    PetscErrorCode doWork(int side, EntityType type,
+    MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
@@ -197,7 +198,7 @@ struct SimpleContactProblem {
           commonDataSimpleContact(common_data_contact), sideFe(side_fe),
           sideFeName(side_fe_name) {}
 
-    PetscErrorCode doWork(int side, EntityType type,
+    MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
@@ -356,7 +357,7 @@ struct SimpleContactProblem {
           commonDataSimpleContact(common_data_contact), F(f_) {}
 
     VectorDouble vec_f;
-    PetscErrorCode doWork(int side, EntityType type,
+    MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
@@ -376,7 +377,7 @@ struct SimpleContactProblem {
           commonDataSimpleContact(common_data_contact), F(f_) {}
 
     VectorDouble vec_f;
-    PetscErrorCode doWork(int side, EntityType type,
+    MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
@@ -711,7 +712,7 @@ struct SimpleContactProblem {
           mField(m_field), commonDataSimpleContact(common_data),
           moabOut(moab_out) {}
 
-    PetscErrorCode doWork(int side, EntityType type,
+    MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
