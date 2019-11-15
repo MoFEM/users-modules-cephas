@@ -469,6 +469,7 @@ int main(int argc, char *argv[]) {
     // create snes nonlinear solver
     {
       CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
+      CHKERR SNESSetDM(snes, dm);
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
       CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);

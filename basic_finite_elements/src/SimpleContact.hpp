@@ -294,6 +294,23 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  struct OpPrintLagMulAtGaussPtsSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpPrintLagMulAtGaussPtsSlave(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
   struct OpGetLagMulAtGaussPtsSlaveHdiv
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -757,6 +774,9 @@ struct SimpleContactProblem {
       fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                          common_data_simple_contact));
+      //   fe_rhs_simple_contact->getOpPtrVector().push_back(
+      //       new OpPrintLagMulAtGaussPtsSlave(lagrang_field_name,
+      //                                      common_data_simple_contact));
 
       fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalFReConMaster(field_name, common_data_simple_contact, f_));

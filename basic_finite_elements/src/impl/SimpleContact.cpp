@@ -355,6 +355,30 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpPrintLagMulAtGaussPtsSlave::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+  auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+  cout << "-----------------------------" << endl;
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    cout << "gp: " << gg << " | gap: " << gap_ptr << " | lm: " << lagrange_slave
+         << " | gap * lm = " << gap_ptr * lagrange_slave << endl;
+    ++lagrange_slave;
+    ++gap_ptr;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlaveHdiv::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
@@ -366,8 +390,6 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlaveHdiv::doWork(
     MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
-  cerr << "skata! "
-       << "\n";
   commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
   commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->clear();
 
