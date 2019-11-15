@@ -598,7 +598,27 @@ struct OpGetTangentMaster
                           DataForcesAndSourcesCore::EntData &data);
   };
 
-  struct OpCalIntTildeCFunSlaveHdiv
+  struct OpCalIntTildeCFunSlaveALE
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    Vec F;
+    OpCalIntTildeCFunSlaveALE(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Vec f_ = PETSC_NULL)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          commonDataSimpleContact(common_data_contact), F(f_) {}
+
+    VectorDouble vecR;
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+    struct OpCalIntTildeCFunSlaveHdiv
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
@@ -842,6 +862,30 @@ struct OpGetTangentMaster
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
+  struct OpDerivativeBarTildeCFunOLambdaSlaveSlaveALE
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    Mat Aij;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDerivativeBarTildeCFunOLambdaSlaveSlaveALE(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Mat aij = PETSC_NULL)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVESLAVE),
+          Aij(aij), commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+    MatrixDouble NN;
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
   struct OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -873,6 +917,58 @@ struct OpGetTangentMaster
     Mat Aij;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpDerivativeBarTildeCFunODisplacementsSlaveMaster(
+        const string field_name, const string lagrang_field_name,
+        double &cn_value,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Mat aij = PETSC_NULL)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVEMASTER),
+          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+    MatrixDouble NN;
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
+  struct OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    double cN; //@todo: ign: to become input parameter
+    Mat Aij;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE(
+        const string field_name, const string lagrang_field_name,
+        double &cn_value,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Mat aij = PETSC_NULL)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVEMASTER),
+          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+    MatrixDouble NN;
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
+  struct OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE_dX
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    double cN; //@todo: ign: to become input parameter
+    Mat Aij;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE_dX(
         const string field_name, const string lagrang_field_name,
         double &cn_value,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
@@ -925,6 +1021,58 @@ struct OpGetTangentMaster
     Mat Aij;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpDerivativeBarTildeCFunODisplacementsSlaveSlave(
+        const string field_name, const string lagrang_field_name,
+        double &cn_value,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Mat aij = PETSC_NULL)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVESLAVE),
+          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+    MatrixDouble NN;
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
+  struct OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    double cN; //@todo: ign: to become input parameter
+    Mat Aij;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE(
+        const string field_name, const string lagrang_field_name,
+        double &cn_value,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Mat aij = PETSC_NULL)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVESLAVE),
+          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+    MatrixDouble NN;
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
+  struct OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    double cN; //@todo: ign: to become input parameter
+    Mat Aij;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
         const string field_name, const string lagrang_field_name,
         double &cn_value,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
@@ -1159,11 +1307,11 @@ struct OpGetTangentMaster
       feRhsSimpleContact->getOpPtrVector().push_back(
           new OpCalFReConSlaveALE(field_name, commonDataSimpleContact, f_));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-    //       field_name, commonDataSimpleContact, rValue, cnValue));
+      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, commonDataSimpleContact, rValue, cnValue));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(new OpCalIntTildeCFunSlave(
-    //       lagrang_field_name, commonDataSimpleContact, f_));
+      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalIntTildeCFunSlaveALE(
+          lagrang_field_name, commonDataSimpleContact, f_));
     }
     MoFEMFunctionReturn(0);
   }
@@ -1269,23 +1417,33 @@ struct OpGetTangentMaster
           new OpContactConstraintMatrixMasterSlave_dX(
               field_name, mesh_node_field_name, commonDataSimpleContact, aij));
 
-      //   feLhsSimpleContact->getOpPtrVector().push_back(new
-      //   OpCalTildeCFunSlave(
-      //       field_name, commonDataSimpleContact, rValue, cnValue));
+        feLhsSimpleContact->getOpPtrVector().push_back(new
+        OpCalTildeCFunSlave(
+            field_name, commonDataSimpleContact, rValue, cnValue));
 
-      //   feLhsSimpleContact->getOpPtrVector().push_back(
-      //       new OpDerivativeBarTildeCFunOLambdaSlaveSlave(
-      //           lagrang_field_name, commonDataSimpleContact, aij));
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpDerivativeBarTildeCFunOLambdaSlaveSlaveALE(
+                lagrang_field_name, commonDataSimpleContact, aij));
 
-      //   feLhsSimpleContact->getOpPtrVector().push_back(
-      //       new OpDerivativeBarTildeCFunODisplacementsSlaveMaster(
-      //           field_name, lagrang_field_name, cnValue,
-      //           commonDataSimpleContact, aij));
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE(
+                field_name, lagrang_field_name, cnValue,
+                commonDataSimpleContact, aij));
 
-      //   feLhsSimpleContact->getOpPtrVector().push_back(
-      //       new OpDerivativeBarTildeCFunODisplacementsSlaveSlave(
-      //           field_name, lagrang_field_name, cnValue,
-      //           commonDataSimpleContact, aij));
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE(
+                field_name, lagrang_field_name, cnValue,
+                commonDataSimpleContact, aij));
+
+        // feLhsSimpleContact->getOpPtrVector().push_back(
+        //     new OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE_dX(
+        //         mesh_node_field_name, lagrang_field_name, cnValue,
+        //         commonDataSimpleContact, aij));
+
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
+                mesh_node_field_name, lagrang_field_name, cnValue,
+                commonDataSimpleContact, aij));
     }
     MoFEMFunctionReturn(0);
   }

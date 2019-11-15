@@ -320,17 +320,17 @@ int main(int argc, char *argv[]) {
     }    
 
     // Add these prisim (between master and slave tris) to the mofem database
-    EntityHandle meshset_slave_master_prisms;
-    CHKERR moab.create_meshset(MESHSET_SET, meshset_slave_master_prisms);
+    // EntityHandle meshset_slave_master_prisms;
+    // CHKERR moab.create_meshset(MESHSET_SET, meshset_slave_master_prisms);
 
-    CHKERR
-    moab.add_entities(meshset_slave_master_prisms, contact_prisms);
+    // CHKERR
+    // moab.add_entities(meshset_slave_master_prisms, contact_prisms);
 
-    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
-        meshset_slave_master_prisms, 3, bit_levels[0]);
+    // CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+    //     meshset_slave_master_prisms, 3, bit_levels[0]);
 
-    CHKERR moab.write_mesh("slave_master_prisms.vtk",
-                           &meshset_slave_master_prisms, 1);
+    // CHKERR moab.write_mesh("slave_master_prisms.vtk",
+    //                        &meshset_slave_master_prisms, 1);
     
     DMType dm_name = "CONTACT_PROB";
     CHKERR DMRegister_MoFEM(dm_name);
@@ -363,6 +363,33 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
     }
 
+    // Add finite elements
+    CHKERR m_field.add_finite_element("MATERIAL", MF_ZERO);
+    CHKERR m_field.modify_finite_element_add_field_row("MATERIAL",
+                                                      "SPATIAL_POSITION");
+    CHKERR m_field.modify_finite_element_add_field_col("MATERIAL",
+                                                      "SPATIAL_POSITION");
+    CHKERR m_field.modify_finite_element_add_field_row("MATERIAL",
+                                                      "MESH_NODE_POSITIONS");
+    CHKERR m_field.modify_finite_element_add_field_col("MATERIAL",
+                                                      "MESH_NODE_POSITIONS");
+    CHKERR m_field.modify_finite_element_add_field_data("MATERIAL",
+                                                       "SPATIAL_POSITION");
+    CHKERR m_field.modify_finite_element_add_field_data("MATERIAL",
+                                                       "MESH_NODE_POSITIONS");
+
+    {
+      Range current_ents_with_fe;
+      CHKERR m_field.get_finite_element_entities_by_handle("MATERIAL",
+                                                          current_ents_with_fe);
+      Range ents_to_remove;
+      ents_to_remove = subtract(current_ents_with_fe, all_tets);
+      CHKERR m_field.remove_ents_from_finite_element("MATERIAL", ents_to_remove);
+      CHKERR m_field.add_ents_to_finite_element_by_type(all_tets, MBTET,
+                                                       "MATERIAL");
+      CHKERR m_field.build_finite_elements("MATERIAL", &all_tets);
+    }
+
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
 
@@ -381,6 +408,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
+    CHKERR DMMoFEMAddElement(dm, "MATERIAL");
     CHKERR DMSetUp(dm);
 
     PetscRandom rctx;
@@ -443,13 +471,55 @@ int main(int argc, char *argv[]) {
                 dof.getFieldData() = coords[2] + 1.;
                 break;
               }
-              printf("After x : %e test case %d\n", dof.getFieldData(),
+              printf("Slave After x : %e test case %d\n", dof.getFieldData(),
                      test_case_x);
             }
             
           }
 
         }
+}
+
+{
+  Range range_vertices;
+  CHKERR m_field.get_moab().get_adjacencies(
+      master_tris, 0, false, range_vertices, moab::Interface::UNION);
+
+  for (Range::iterator it_vertices = range_vertices.begin();
+       it_vertices != range_vertices.end(); it_vertices++) {
+
+    for (DofEntityByNameAndEnt::iterator itt =
+             m_field.get_dofs_by_name_and_ent_begin("SPATIAL_POSITION",
+                                                    *it_vertices);
+         itt !=
+         m_field.get_dofs_by_name_and_ent_end("SPATIAL_POSITION", *it_vertices);
+         ++itt) {
+
+      auto &dof = **itt;
+
+      EntityHandle ent = dof.getEnt();
+      int dof_rank = dof.getDofCoeffIdx();
+      VectorDouble3 coords(3);
+
+      CHKERR moab.get_coords(&ent, 1, &coords[0]);
+
+      if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+        printf("Before x: %e\n", dof.getFieldData());
+
+        switch (test_case_x) {
+
+        case 1:
+          dof.getFieldData() = coords[2] - 8.;
+          break;
+        case 2:
+          dof.getFieldData() = coords[2] + 1.;
+          break;
+        }
+        printf("Master  After x : %e test case %d\n", dof.getFieldData(),
+               test_case_x);
+      }
+    }
+  }
 }
 
 {
@@ -476,7 +546,7 @@ int main(int argc, char *argv[]) {
       CHKERR moab.get_coords(&ent, 1, &coords[0]);
 
       if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
-        printf("Before X: %e\n", dof.getFieldData());
+        printf("Before Slave X: %e\n", dof.getFieldData());
 
         switch (test_case_X) {
 
@@ -487,7 +557,48 @@ int main(int argc, char *argv[]) {
           dof.getFieldData() = coords[2] + 1.;
           break;
         }
-        printf("After X : %e test case %d\n", dof.getFieldData(), test_case_X);
+        printf("After Slave X : %e test case %d\n", dof.getFieldData(), test_case_X);
+      }
+    }
+  }
+}
+
+{
+  Range range_vertices;
+  CHKERR m_field.get_moab().get_adjacencies(
+      master_tris, 0, false, range_vertices, moab::Interface::UNION);
+
+  for (Range::iterator it_vertices = range_vertices.begin();
+       it_vertices != range_vertices.end(); it_vertices++) {
+
+    for (DofEntityByNameAndEnt::iterator itt =
+             m_field.get_dofs_by_name_and_ent_begin("MESH_NODE_POSITIONS",
+                                                    *it_vertices);
+         itt != m_field.get_dofs_by_name_and_ent_end("MESH_NODE_POSITIONS",
+                                                     *it_vertices);
+         ++itt) {
+
+      auto &dof = **itt;
+
+      EntityHandle ent = dof.getEnt();
+      int dof_rank = dof.getDofCoeffIdx();
+      VectorDouble3 coords(3);
+
+      CHKERR moab.get_coords(&ent, 1, &coords[0]);
+
+      if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+        printf("Before Master X: %e\n", dof.getFieldData());
+
+        switch (test_case_X) {
+
+        case 1:
+          dof.getFieldData() = coords[2] - 8.;
+          break;
+        case 2:
+          dof.getFieldData() = coords[2] + 1.;
+          break;
+        }
+        printf("After Master X : %e test case %d\n", dof.getFieldData(), test_case_X);
       }
     }
   }
@@ -550,10 +661,12 @@ int main(int argc, char *argv[]) {
                                   contact_problem->feRhsSimpleContact.get(),
                                   PETSC_NULL, PETSC_NULL);
 
+    
     CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
                                   contact_problem->feLhsSimpleContact.get(),
                                   NULL, NULL);
 
+    
     SNES snes;
     CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
     MoFEM::SnesCtx *snes_ctx;
