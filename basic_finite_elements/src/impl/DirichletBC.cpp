@@ -505,10 +505,13 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
         std::vector<double> mydata;
         CHKERR it->getAttributes(mydata);
-        //TODO : give error if mydata is empty SETERR
-
+       
+      if(mydata.empty())
+         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                "missing temperature attribute");
+        
         double my_temp = mydata[0];
-        insert_temp_bc(my_temp, it);
+        CHKERR insert_temp_bc(my_temp, it);
 
         is_blockset_defined = true;
          }
@@ -521,7 +524,7 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       CHKERR it->getBcDataStructure(mydata);
       VectorDouble scaled_values(1);
       scaled_values[0] = mydata.data.value1;
-      insert_temp_bc(scaled_values[0], it);
+      CHKERR insert_temp_bc(scaled_values[0], it);
 
 
 
