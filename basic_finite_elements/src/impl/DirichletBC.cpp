@@ -459,41 +459,43 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
   MoFEMFunctionBegin;
 
-  auto insert_temp_bc = [&](VectorDouble &temp) {
-    MoFEMFuctionBeginHot();
-  CHKERR MethodForForceScaling::applyScale(this, methodsOp, scaled_values);
-      for (int dim = 0; dim < 3; dim++) {
-        Range ents;
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
-                                                   true);
-        if (dim > 1) {
-          Range _edges;
-          CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-                                                   moab::Interface::UNION);
-          ents.insert(_edges.begin(), _edges.end());
-        }
-        if (dim > 0) {
-          Range _nodes;
-          CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-          ents.insert(_nodes.begin(), _nodes.end());
-        }
-
-        auto for_each_dof = [&](auto &dof) {
-          MoFEMFunctionBeginHot;
-
-          if (dof->getEntType() == MBVERTEX) {
-            mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-          } else {
-            mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          }
-          MoFEMFunctionReturnHot(0);
-        };
-
-        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
-                                        for_each_dof);
+  auto insert_temp_bc = [&](double &temp, auto &it) {
+    MoFEMFunctionBeginHot;
+    VectorDouble temp_2(1);
+    temp_2[0] = temp;
+    CHKERR MethodForForceScaling::applyScale(this, methodsOp, temp_2);
+    for (int dim = 0; dim < 3; dim++) {
+      Range ents;
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
+                                                 true);
+      if (dim > 1) {
+        Range _edges;
+        CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
+                                                 moab::Interface::UNION);
+        ents.insert(_edges.begin(), _edges.end());
+      }
+      if (dim > 0) {
+        Range _nodes;
+        CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
+        ents.insert(_nodes.begin(), _nodes.end());
       }
 
-    MoFEMFuctionReturnHot(0);
+      auto for_each_dof = [&](auto &dof) {
+        MoFEMFunctionBeginHot;
+
+        if (dof->getEntType() == MBVERTEX) {
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = temp_2[0];
+        } else {
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+        }
+        MoFEMFunctionReturnHot(0);
+      };
+
+      CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                      for_each_dof);
+      }
+
+    MoFEMFunctionReturnHot(0);
   };
 
   if (mapZeroRows.empty() || !methodsOp.empty()) {
@@ -504,8 +506,9 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
         std::vector<double> mydata;
         CHKERR it->getAttributes(mydata);
         //TODO : give error if mydata is empty SETERR
+
         double my_temp = mydata[0];
-        insert_temp_bc(my_temp);
+        insert_temp_bc(my_temp, it);
 
         is_blockset_defined = true;
          }
@@ -518,7 +521,7 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       CHKERR it->getBcDataStructure(mydata);
       VectorDouble scaled_values(1);
       scaled_values[0] = mydata.data.value1;
-      insert_temp_bc(scaled_values);
+      insert_temp_bc(scaled_values[0], it);
 
 
 
