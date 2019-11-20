@@ -1,8 +1,8 @@
 /** \file test_simple_contact.cpp
  * \example test_simple_contact.cpp
- * 
+ *
  * Testing implementation of simple contact element
- * 
+ *
  **/
 
 /* MoFEM is free software: you can redistribute it and/or modify it under
@@ -16,7 +16,7 @@
  * License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. 
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <BasicFiniteElements.hpp>
@@ -259,8 +259,9 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels[0]);
 
-    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris, slave_tris,
-                               meshset_tets, meshset_prisms, bit_levels);
+    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris,
+                               slave_tris, meshset_tets, meshset_prisms,
+                               bit_levels);
     cout << "contact_prisms:" << contact_prisms.size() << endl;
     contact_prisms.print();
     cout << "master_tris:" << master_tris.size() << endl;
@@ -292,16 +293,15 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-} else {
-  CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                           MB_TAG_SPARSE, MF_ZERO);
+    } else {
+      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                               MB_TAG_SPARSE, MF_ZERO);
 
-  CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-  CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-  CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-  CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
-}
-
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+    }
 
     // build field
     CHKERR m_field.build_fields();
@@ -331,7 +331,7 @@ int main(int argc, char *argv[]) {
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
         new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
 
-    //add fields to the global matrix by adding the element
+    // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
 
@@ -379,7 +379,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMCreateGlobalVector(dm, &D);
 
-    //CHKERR VecZeroEntries(D);
+    // CHKERR VecZeroEntries(D);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -405,13 +405,13 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    if(is_hdiv_trace){
+    if (is_hdiv_trace) {
 
-        contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
-                                                         "LAGMULT");
+      contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
+                                                           "LAGMULT");
 
-    contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
-                                                     "LAGMULT", Aij);
+      contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
+                                                           "LAGMULT", Aij);
     } else {
       contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
                                                        "LAGMULT", "ELASTIC");
@@ -422,8 +422,8 @@ int main(int argc, char *argv[]) {
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
-                                                       NULL, "SPATIAL_POSITION");
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(
+        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
 
     boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
@@ -499,8 +499,8 @@ int main(int argc, char *argv[]) {
           sit->second, post_proc.commonData));
     }
 
-    //CHKERR VecAssemblyBegin(D);
-    //CHKERR VecAssemblyEnd(D);
+    // CHKERR VecAssemblyBegin(D);
+    // CHKERR VecAssemblyEnd(D);
 
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
@@ -515,7 +515,7 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-    //CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
@@ -530,7 +530,8 @@ int main(int argc, char *argv[]) {
 
     string out_file_name;
     std::ostringstream stm;
-    stm << "out" << ".h5m";
+    stm << "out"
+        << ".h5m";
     out_file_name = stm.str();
     CHKERR
     PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
@@ -549,43 +550,43 @@ int main(int argc, char *argv[]) {
           m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
     }
 
-      mb_post.delete_mesh();
+    mb_post.delete_mesh();
 
-      CHKERR DMoFEMLoopFiniteElements(
-          dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
+    CHKERR DMoFEMLoopFiniteElements(
+        dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
 
-      std::ostringstream ostrm;
+    std::ostringstream ostrm;
 
-      ostrm << "out_contact"
-            << ".h5m";
+    ostrm << "out_contact"
+          << ".h5m";
 
-      out_file_name = ostrm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                         out_file_name.c_str());
-      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                                "PARALLEL=WRITE_PART");
+    out_file_name = ostrm.str();
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                       out_file_name.c_str());
+    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                              "PARALLEL=WRITE_PART");
 
-      EntityHandle out_meshset_slave_tris;
-      EntityHandle out_meshset_master_tris;
+    EntityHandle out_meshset_slave_tris;
+    EntityHandle out_meshset_master_tris;
 
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
 
-      CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-      CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
 
-      CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                             &out_meshset_slave_tris, 1);
-      CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                             &out_meshset_master_tris, 1);
+    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                           &out_meshset_slave_tris, 1);
+    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                           &out_meshset_master_tris, 1);
 
-      CHKERR VecDestroy(&D);
-      CHKERR VecDestroy(&F);
-      CHKERR MatDestroy(&Aij);
-      CHKERR SNESDestroy(&snes);
+    CHKERR VecDestroy(&D);
+    CHKERR VecDestroy(&F);
+    CHKERR MatDestroy(&Aij);
+    CHKERR SNESDestroy(&snes);
 
-      // destroy DM
-      CHKERR DMDestroy(&dm);
+    // destroy DM
+    CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 
