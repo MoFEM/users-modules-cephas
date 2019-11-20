@@ -459,6 +459,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
   MoFEMFunctionBegin;
 
+  // function to insert temperature boundary conditions from block
   auto insert_temp_bc = [&](double &temp, auto &it) {
     MoFEMFunctionBeginHot;
     VectorDouble temp_2(1);
@@ -493,11 +494,12 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
 
       CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
                                       for_each_dof);
-      }
+    }
 
     MoFEMFunctionReturnHot(0);
   };
 
+  // Loop over blockset to find the block TEMPERATURE.
   if (mapZeroRows.empty() || !methodsOp.empty()) {
     bool is_blockset_defined = false;
     string blocksetName = "TEMPERATURE";
@@ -505,29 +507,30 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
         std::vector<double> mydata;
         CHKERR it->getAttributes(mydata);
-       
-      if(mydata.empty())
-         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                "missing temperature attribute");
-        
+
+        if (mydata.empty())
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "missing temperature attribute");
+
         double my_temp = mydata[0];
         CHKERR insert_temp_bc(my_temp, it);
 
         is_blockset_defined = true;
-         }
-       }
-
-  if(!is_blockset_defined) {
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, NODESET | TEMPERATURESET, it)) {
-      TemperatureCubitBcData mydata;
-      CHKERR it->getBcDataStructure(mydata);
-      VectorDouble scaled_values(1);
-      scaled_values[0] = mydata.data.value1;
-      CHKERR insert_temp_bc(scaled_values[0], it);
-
+      }
     }
-  }
+
+    // If the block TEMPERATURE is not defined, then
+    // look for temperature boundary conditions
+    if (!is_blockset_defined) {
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+               mField, NODESET | TEMPERATURESET, it)) {
+        TemperatureCubitBcData mydata;
+        CHKERR it->getBcDataStructure(mydata);
+        VectorDouble scaled_values(1);
+        scaled_values[0] = mydata.data.value1;
+        CHKERR insert_temp_bc(scaled_values[0], it);
+      }
+    }
     dofsIndices.resize(mapZeroRows.size());
     dofsValues.resize(mapZeroRows.size());
     int ii = 0;
