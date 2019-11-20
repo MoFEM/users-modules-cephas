@@ -1333,6 +1333,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
           fePtr->ts_u_t, INSERT_VALUES, SCATTER_REVERSE);
       switch (fePtr->ts_ctx) {
       case TSMethod::CTX_TSSETIFUNCTION:
+        CHKERR VecSetOption(fePtr->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
+                            PETSC_TRUE);
         if (!cTx.bcIndices.empty()) {
           double scale;
           CHKERR cTx.scaleMethodFlux->getForceScale(fePtr->ts_t, scale);
@@ -1407,8 +1409,6 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         CHKERR VecAssemblyEnd(fePtr->ts_F);
         if (!cTx.bcVecIds.empty()) {
           cTx.vecValsOnBc -= cTx.bcVecVals;
-          CHKERR VecSetOption(fePtr->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
-                              PETSC_TRUE);
           CHKERR VecSetValues(fePtr->ts_F, cTx.bcVecIds.size(),
                               &*cTx.bcVecIds.begin(), &*cTx.vecValsOnBc.begin(),
                               INSERT_VALUES);
