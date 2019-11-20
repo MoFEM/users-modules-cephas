@@ -52,15 +52,15 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   if (type != MBVERTEX)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   FTensor::Index<'i', 3> i;
 
@@ -84,15 +84,15 @@ PetscErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   if (type != MBVERTEX)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   FTensor::Index<'i', 3> i;
 
@@ -116,15 +116,15 @@ PetscErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   if (type != MBVERTEX)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   FTensor::Index<'i', 3> i;
 
@@ -315,7 +315,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
@@ -359,7 +359,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlaveALE::doWork(
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
@@ -439,7 +439,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlaveHdiv::doWork(
     MoFEMFunctionReturnHot(0);
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
   commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
@@ -506,12 +506,12 @@ MoFEMErrorCode SimpleContactProblem::OpLagGapProdGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  PetscFunctionBegin;
+  MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
@@ -565,15 +565,15 @@ PetscErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
   const int nb_col = data.getIndices().size();
 
   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
-  PetscFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  PetscFunctionBegin;
+  MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
@@ -628,15 +628,15 @@ PetscErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
   }
 
   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
-  PetscFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpCalFReConSlaveALE::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalFReConSlaveALE::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  PetscFunctionBegin;
+  MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
@@ -691,15 +691,15 @@ PetscErrorCode SimpleContactProblem::OpCalFReConSlaveALE::doWork(
   }
 
   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
-  PetscFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpCalFReConMasterALE::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalFReConMasterALE::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  PetscFunctionBegin;
+  MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
@@ -754,7 +754,7 @@ PetscErrorCode SimpleContactProblem::OpCalFReConMasterALE::doWork(
   }
 
   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
-  PetscFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
@@ -763,18 +763,19 @@ MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
 
   if (type != MBTRI)
     MoFEMFunctionReturnHot(0);
-  const EntityHandle tri_master = getSideEntity(side, type);
+    
+  const EntityHandle tri_master = getSideEntity(3, type);
   CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
 
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  PetscFunctionBegin;
+  MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
@@ -828,7 +829,7 @@ PetscErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
   }
 
   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
-  PetscFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
@@ -1417,12 +1418,12 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlaveALE::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetTangentMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetTangentMaster::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int ngp = data.getN().size1(); // this is number of base functions for
                                        // vertices, 6 bases functions for prism
@@ -1453,12 +1454,12 @@ PetscErrorCode SimpleContactProblem::OpGetTangentMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetTangentSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetTangentSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   const int ngp = data.getN().size1(); // this is number of base functions for
                                        // vertices, 6 bases functions for prism
@@ -1491,15 +1492,15 @@ PetscErrorCode SimpleContactProblem::OpGetTangentSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpGetNormalSlaveALE::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetNormalSlaveALE::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   if (type != MBVERTEX)
-    PetscFunctionReturn(0);
+    MoFEMFunctionReturnHot(0);
 
   int gp_gp = data.getN().size1();
 
@@ -3060,7 +3061,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv::
   MoFEMFunctionReturn(0);
 }
 
-PetscErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
