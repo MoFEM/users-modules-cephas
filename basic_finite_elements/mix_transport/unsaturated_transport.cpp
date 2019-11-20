@@ -239,6 +239,9 @@ int main(int argc, char *argv[]) {
       // get bc value
       std::vector<double> attributes;
       CHKERR it->getAttributes(attributes);
+      if (attributes.size() != 1)
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                 "Wrong number of head parameters %d", attributes.size());
       uf.bcValueMap[block_id]->fixValue = attributes[0];
       std::string block_name =
           "head_block_" + boost::lexical_cast<std::string>(block_id);
