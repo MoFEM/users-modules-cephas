@@ -763,7 +763,7 @@ MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
 
   if (type != MBTRI)
     MoFEMFunctionReturnHot(0);
-    
+
   const EntityHandle tri_master = getSideEntity(3, type);
   CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
 
