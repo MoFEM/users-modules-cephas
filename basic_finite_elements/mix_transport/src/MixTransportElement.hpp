@@ -271,8 +271,6 @@ struct MixTransportElement {
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              mField, BLOCKSET | MAT_THERMALSET, it)) {
 
-      // cerr << *it << endl;
-
       Mat_Thermal temp_data;
       CHKERR it->getAttributeDataStructure(temp_data);
       setOfBlocks[it->getMeshsetId()].cOnductivity =
@@ -1273,9 +1271,6 @@ struct MixTransportElement {
       // solve local problem
       cholesky_solve(NN, Nf, ublas::lower());
 
-      // cerr << Nf << endl;
-      // cerr << data.getIndices() << endl;
-
       // set solution to vector
       CHKERR VecSetValues(cTx.D0, nb_dofs, &*data.getIndices().begin(),
                           &*Nf.begin(), INSERT_VALUES);
@@ -1339,7 +1334,6 @@ struct MixTransportElement {
       if (data.getFieldData().size() == 0)
         MoFEMFunctionReturnHot(0);
       int nb_gauss_pts = data.getDiffN().size1();
-      // cerr << data.getDiffN() << endl;
       cTx.valuesGradientAtGaussPts.resize(3, nb_gauss_pts);
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         ublas::matrix_column<MatrixDouble> values_grad_at_gauss_pts(

@@ -1401,21 +1401,12 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         CHKERR VecAssemblyEnd(fePtr->ts_F);
         if (!cTx.bcVecIds.empty()) {
           cTx.vecValsOnBc -= cTx.bcVecVals;
-          // cerr << mArk << endl;
-          // cerr << "a " << cTx.vecValsOnBc << endl;
-          // cerr << "a " << cTx.bcVecVals << endl;
           CHKERR VecSetValues(fePtr->ts_F, cTx.bcVecIds.size(),
                               &*cTx.bcVecIds.begin(), &*cTx.vecValsOnBc.begin(),
                               INSERT_VALUES);
         }
         CHKERR VecAssemblyBegin(fePtr->ts_F);
         CHKERR VecAssemblyEnd(fePtr->ts_F);
-        // CHKERR VecView(fePtr->ts_F,PETSC_VIEWER_STDOUT_WORLD);
-        // CHKERR
-        // fePtr->mField.getInterface<VecManager>()->setOtherLocalGhostVector(
-        //   fePtr->problemPtr,"VALUES",string("FLUXES")+"_residual",
-        //   ROW,fePtr->ts_F,INSERT_VALUES,SCATTER_REVERSE
-        // );
       } break;
       default:
         // don nothing
