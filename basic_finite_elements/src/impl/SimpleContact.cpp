@@ -109,6 +109,7 @@ PetscErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
+
 PetscErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
@@ -125,7 +126,7 @@ PetscErrorCode SimpleContactProblem::OpGetNormalSlaveForSide::doWork(
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
   };
   
-  CHKERR loopSideVolumes(sideFeName, *sideFe, 0);
+  //CHKERR loopSideVolumes(sideFeName, *sideFe, 3);
 
   const double *normal_slave_ptr = &getNormalSlave()[0];
   commonDataSimpleContact->normalVectorSlavePtr.get()->resize(3);
@@ -758,685 +759,764 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       PetscFunctionReturn(0);
     }
 
-    MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
-        int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
-
-      if (data.getFieldData().size() == 0)
-        PetscFunctionReturn(0);
-
-      if (type != MBVERTEX)
-        MoFEMFunctionReturnHot(0);
-
-      const int nb_gauss_pts = data.getN().size1();
-
-      commonDataSimpleContact->tildeCFunPtr.get()->resize(nb_gauss_pts);
-      commonDataSimpleContact->tildeCFunPtr.get()->clear();
-
-      commonDataSimpleContact->lambdaGapDiffProductPtr.get()->resize(
-          nb_gauss_pts);
-      commonDataSimpleContact->lambdaGapDiffProductPtr.get()->clear();
-
-      auto lambda_gap_diff_prod =
-          getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
-
-      auto lagrange_slave =
-          getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-
-      auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-
-      auto tilde_c_fun =
-          getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        const double cg = cN * gap_gp;
-
-        const double lambda_gap_diff = lagrange_slave - cg;
-        const double regular_abs = abs(lambda_gap_diff);
-
-        tilde_c_fun = (lagrange_slave + cg -
-                       pow(regular_abs, r) / r); // is lagMult Correct?
-
-        const double exponent = r - 1.;
-
-        double sign = 0.;
-        sign = (lambda_gap_diff == 0) ? 0 : (lambda_gap_diff < 0) ? -1 : 1;
-
-        // if (lagrange_slave == 0. && cg == 0.)
-        // sign = 1.;
-        lambda_gap_diff_prod = sign * pow(regular_abs, exponent);
-        ++lagrange_slave;
-        ++gap_gp;
-        ++lambda_gap_diff_prod;
-        ++tilde_c_fun;
-      }
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
-        int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
-
-      if (data.getIndices().size() == 0)
-        MoFEMFunctionReturnHot(0);
-
-      const int nb_gauss_pts = data.getN().size1();
-
-      int nb_base_fun_col = data.getFieldData().size();
-      const double area_s =
-          commonDataSimpleContact->areaSlave; // same area in master and slave
-
-      vecR.resize(nb_base_fun_col, false); // the last false in ublas
-                                           // resize will destroy (not
-                                           // preserved) the old values
-      vecR.clear();
-
-      auto tilde_c_fun =
-          getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        double val_s = getGaussPtsSlave()(2, gg) * area_s;
-
-        FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
-
-        for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
-          const double s = val_s * t_base_lambda * tilde_c_fun;
-          vecR[bbr] += s;  // it is a plus since F always scales with -1
-          ++t_base_lambda; // update rows
-        }
-        ++tilde_c_fun;
-      } // for gauss points
-
-      Vec f;
-      if (F == PETSC_NULL) {
-        f = getFEMethod()->snes_f;
-      } else {
-        f = F;
-      }
-
-      CHKERR VecSetValues(f, nb_base_fun_col,
-                          &data.getIndices()[0], &vecR[0], ADD_VALUES);
-
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlaveALE::doWork(
-        int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
-
-      if (data.getIndices().size() == 0)
-        MoFEMFunctionReturnHot(0);
-
-      const int nb_gauss_pts = data.getN().size1();
-
-      int nb_base_fun_col = data.getFieldData().size();
-      const double area_s =
-          commonDataSimpleContact->areaSlave; // same area in master and slave
-
-      vecR.resize(nb_base_fun_col, false); // the last false in ublas
-                                           // resize will destroy (not
-                                           // preserved) the old values
-      vecR.clear();
-
-      auto tilde_c_fun =
-          getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
-      auto length_normal =
-          getFTensor0FromVec(*commonDataSimpleContact->normalSlaveLengthALEPtr);
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        double val_s = getGaussPtsSlave()(2, gg) * 0.5 * length_normal;
-
-        FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
-
-        for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
-          const double s = val_s * t_base_lambda * tilde_c_fun;
-          vecR[bbr] += s;  // it is a plus since F always scales with -1
-          ++t_base_lambda; // update rows
-        }
-        ++tilde_c_fun;
-        ++length_normal;
-      } // for gauss points
-
-      Vec f;
-      if (F == PETSC_NULL) {
-        f = getFEMethod()->snes_f;
-      } else {
-        f = F;
-      }
-
-      CHKERR VecSetValues(f, nb_base_fun_col, &data.getIndices()[0], &vecR[0],
-                          ADD_VALUES);
-
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlaveHdiv::doWork(
+    MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
         int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
       MoFEMFunctionBegin;
 
       if (type != MBTRI)
         MoFEMFunctionReturnHot(0);
-
-      if (data.getIndices().size() == 0)
-        MoFEMFunctionReturnHot(0);
-
-      const int nb_gauss_pts = data.getN().size1();
-
-      int nb_base_fun_col = data.getFieldData().size();
-      const double area_s =
-          commonDataSimpleContact->areaSlave; // same area in master and slave
-
-      vecR.resize(nb_base_fun_col, false); // the last false in ublas
-                                           // resize will destroy (not
-                                           // preserved) the old values
-      vecR.clear();
-
-      auto tilde_c_fun =
-          getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
-      auto t_lag_base = data.getFTensor1N<3>();
-
-      auto get_tensor_vec = [](VectorDouble &n) {
-        return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-      };
-
-      FTensor::Index<'i', 3> i;
-      auto normal_at_gp =
-          get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
-
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        double val_s = getGaussPtsSlave()(2, gg) * area_s;
-
-        FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
-
-        for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
-          const double s =
-              val_s * t_lag_base(i) * normal_at_gp(i) * tilde_c_fun;
-          vecR[bbr] += s; // it is a plus since F always scales with -1
-          ++t_lag_base;
-        }
-        ++tilde_c_fun;
-      } // for gauss points
-
-      auto tilde_c_fun_2 =
-          getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
-      Vec f;
-      if (F == PETSC_NULL) {
-        f = getFEMethod()->snes_f;
-      } else {
-        f = F;
-      }
-
-      CHKERR VecSetValues(f, nb_base_fun_col,
-                          &data.getIndices()[0], &vecR[0], ADD_VALUES);
+      const EntityHandle tri_master = getSideEntity(side, type);
+      CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
 
       MoFEMFunctionReturn(0);
-    }
+      }
 
-    MoFEMErrorCode
-    SimpleContactProblem::OpContactConstraintMatrixMasterSlave::doWork(
-        int row_side, int col_side, EntityType row_type, EntityType col_type,
-        DataForcesAndSourcesCore::EntData &row_data,
-        DataForcesAndSourcesCore::EntData &col_data) {
-      MoFEMFunctionBegin;
+      PetscErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        PetscFunctionBegin;
 
-      // Both sides are needed since both sides contribute their shape
-      // function to the stiffness matrix
-      const int nb_row = row_data.getIndices().size();
-      if (!nb_row)
-        MoFEMFunctionReturnHot(0);
-      const int nb_col = col_data.getIndices().size();
-      if (!nb_col)
-        MoFEMFunctionReturnHot(0);
-      const int nb_gauss_pts = row_data.getN().size1();
+        if (data.getIndices().size() == 0)
+          PetscFunctionReturn(0);
 
-      int nb_base_fun_row = row_data.getFieldData().size() / 3;
-      int nb_base_fun_col = col_data.getFieldData().size();
+        const int nb_gauss_pts = data.getN().size1();
+        int nb_base_fun_col = data.getFieldData().size() / 3;
 
-      const double area_slave =
-          commonDataSimpleContact->areaSlave; // same area in master and slave
+        vec_f.resize(3 * nb_base_fun_col,
+                     false); // the last false in ublas
+                             // resize will destroy (not
+                             // preserved) the old
+                             // values
+        vec_f.clear();
 
-      auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-        return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                             &m(r + 2, c + 0));
-      };
+        auto get_tensor_vec = [](VectorDouble &n, const int r) {
+          return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+        };
 
-      auto get_tensor_vec = [](VectorDouble &n) {
-        return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-      };
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        auto lagrange_slave =
+            getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
-      FTensor::Index<'i', 3> i;
+        auto t_F =
+            getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMatMaster);
 
-      NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-      NN.clear();
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          auto normal_at_gp =
+              get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg], 0);
 
-      auto const_unit_n =
-          get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+          double val_s = getGaussPtsSlave()(2, gg) * 0.5;
 
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        double val_m = getGaussPtsMaster()(2, gg) * area_slave;
+          FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
 
-        FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
+          for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-        for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-          FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
+            const double s = val_s * t_base_master * lagrange_slave;
 
-          for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-            const double m = val_m * t_base_lambda * t_base_master;
+            auto t_assemble_s = get_tensor_vec(vec_f, 3 * bbc);
 
-            auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
-            t_assemble_m(i) -= m * const_unit_n(i);
-
-            ++t_base_master; // update rows master
+            t_assemble_s(i) -= s * t_F(i, j) * normal_at_gp(j);
+            ++t_base_master;
           }
-          ++t_base_lambda; // update cols slave
+
+          ++lagrange_slave;
+        } // for gauss points
+
+        const int nb_col = data.getIndices().size();
+
+        Vec f;
+        if (F == PETSC_NULL) {
+          f = getFEMethod()->snes_f;
+        } else {
+          f = F;
         }
-      }
 
-      Mat aij;
-      if (Aij == PETSC_NULL) {
-        aij = getFEMethod()->snes_B;
-      } else {
-        aij = Aij;
-      }
-
-      CHKERR MatSetValues(
-          aij, nb_row, &row_data.getIndices()[0], nb_col,
-          &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
-
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode
-    SimpleContactProblem::OpContactConstraintMatrixMasterSlaveHdiv::doWork(
-        int row_side, int col_side, EntityType row_type, EntityType col_type,
-        DataForcesAndSourcesCore::EntData &row_data,
-        DataForcesAndSourcesCore::EntData &col_data) {
-      MoFEMFunctionBegin;
-      if (col_type != MBTRI)
-        MoFEMFunctionReturnHot(0);
-
-      // Both sides are needed since both sides contribute their shape
-      // function to the stiffness matrix
-      const int nb_row = row_data.getIndices().size();
-    if (!nb_row)
-      MoFEMFunctionReturnHot(0);
-    const int nb_col = col_data.getIndices().size();
-    if (!nb_col)
-      MoFEMFunctionReturnHot(0);
-
-      
-    const int nb_gauss_pts = row_data.getN().size1();
-
-    int nb_base_fun_row = row_data.getFieldData().size() / 3;
-    int nb_base_fun_col = col_data.getFieldData().size();
-
-    const double area_slave =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
-
-    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                           &m(r + 2, c + 0));
-    };
-
-    auto get_tensor_vec = [](VectorDouble &n) {
-      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-    };
-
-    FTensor::Index<'i', 3> i;
-
-    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-    NN.clear();
-
-    auto const_unit_n =
-        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
-
-    auto t_lag_base = col_data.getFTensor1N<3>();
-
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-      double val_m = getGaussPtsMaster()(2, gg) * area_slave;
-
-      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-        FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
-
-        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-          const double m =
-              val_m * const_unit_n(i) * t_lag_base(i) * t_base_master;
-
-          auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
-          t_assemble_m(i) -= m * const_unit_n(i);
-
-          ++t_base_master; // update rows master
-        }
-        ++t_lag_base; // update cols slave
-      }
-    }
-
-    Mat aij;
-    if (Aij == PETSC_NULL) {
-      aij = getFEMethod()->snes_B;
-    } else {
-      aij = Aij;
-    }
-
-    CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
-                        &col_data.getIndices()[0], &*NN.data().begin(),
-                        ADD_VALUES);
-
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode
-  SimpleContactProblem::OpContactConstraintMatrixSlaveSlave::doWork(
-      int row_side, int col_side, EntityType row_type, EntityType col_type,
-      DataForcesAndSourcesCore::EntData &row_data,
-      DataForcesAndSourcesCore::EntData &col_data) {
-    MoFEMFunctionBegin;
-
-    // Both sides are needed since both sides contribute their shape
-    // function to the stiffness matrix
-    const int nb_row = row_data.getIndices().size();
-    if (!nb_row)
-      MoFEMFunctionReturnHot(0);
-    const int nb_col = col_data.getIndices().size();
-    if (!nb_col)
-      MoFEMFunctionReturnHot(0);
-    const int nb_gauss_pts = row_data.getN().size1();
-
-    int nb_base_fun_row = row_data.getFieldData().size() / 3;
-    int nb_base_fun_col = col_data.getFieldData().size();
-
-    const double area_slave =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
-
-    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                           &m(r + 2, c + 0));
-    };
-
-    auto get_tensor_vec = [](VectorDouble &n) {
-      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-    };
-
-    FTensor::Index<'i', 3> i;
-
-    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-    NN.clear();
-
-    auto const_unit_n =
-        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
-
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-      double val_s = getGaussPtsSlave()(2, gg) * area_slave;
-
-      FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
-
-      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-
-        FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
-
-        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-          const double s = val_s * t_base_lambda * t_base_slave;
-
-          auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, bbc);
-
-          t_assemble_s(i) += s * const_unit_n(i);
-
-          ++t_base_slave; // update rows
-        }
-        ++t_base_lambda; // update cols slave
-      }
-    }
-
-    Mat aij;
-    if (Aij == PETSC_NULL) {
-      aij = getFEMethod()->snes_B;
-    } else {
-      aij = Aij;
-    }
-
-    CHKERR MatSetValues(
-        aij, nb_row, &row_data.getIndices()[0], nb_col,
-        &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
-
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode
-  SimpleContactProblem::OpContactConstraintMatrixSlaveSlaveALE::doWork(
-      int row_side, int col_side, EntityType row_type, EntityType col_type,
-      DataForcesAndSourcesCore::EntData &row_data,
-      DataForcesAndSourcesCore::EntData &col_data) {
-    MoFEMFunctionBegin;
-
-    // Both sides are needed since both sides contribute their shape
-    // function to the stiffness matrix
-    const int nb_row = row_data.getIndices().size();
-    if (!nb_row)
-      MoFEMFunctionReturnHot(0);
-    const int nb_col = col_data.getIndices().size();
-    if (!nb_col)
-      MoFEMFunctionReturnHot(0);
-    const int nb_gauss_pts = row_data.getN().size1();
-
-    int nb_base_fun_row = row_data.getFieldData().size() / 3;
-    int nb_base_fun_col = col_data.getFieldData().size();
-
-    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                           &m(r + 2, c + 0));
-    };
-
-    auto get_tensor_vec = [](VectorDouble &n) {
-      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-    };
-
-    FTensor::Index<'i', 3> i;
-
-    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-    NN.clear();
-
-    auto length_normal =
-        getFTensor0FromVec(*commonDataSimpleContact->normalSlaveLengthALEPtr);
-      
-      for (int gg = 0; gg != nb_gauss_pts; gg++) {
-        double val_s = getGaussPtsSlave()(2, gg);
-        auto normal_at_gp =
-            get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg]);
-
-        FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
-
-        for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-
-          FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
-
-          for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-            const double s = val_s * t_base_lambda * t_base_slave;
-
-            auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, bbc);
-
-            t_assemble_s(i) += s * normal_at_gp(i) * 0.5;
-
-            ++t_base_slave; // update rows
-          }
-          ++t_base_lambda; // update cols slave
-        }
-      }
-
-      Mat aij;
-      if (Aij == PETSC_NULL) {
-        aij = getFEMethod()->snes_B;
-      } else {
-        aij = Aij;
-      }
-
-      CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
-                          &col_data.getIndices()[0], &*NN.data().begin(),
-                          ADD_VALUES);
-
-      MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode
-  SimpleContactProblem::OpContactConstraintMatrixMasterSlaveALE::doWork(
-      int row_side, int col_side, EntityType row_type, EntityType col_type,
-      DataForcesAndSourcesCore::EntData &row_data,
-      DataForcesAndSourcesCore::EntData &col_data) {
-    MoFEMFunctionBegin;
-
-    // Both sides are needed since both sides contribute their shape
-    // function to the stiffness matrix
-    const int nb_row = row_data.getIndices().size();
-    if (!nb_row)
-      MoFEMFunctionReturnHot(0);
-    const int nb_col = col_data.getIndices().size();
-    if (!nb_col)
-      MoFEMFunctionReturnHot(0);
-    const int nb_gauss_pts = row_data.getN().size1();
-
-    int nb_base_fun_row = row_data.getFieldData().size() / 3;
-    int nb_base_fun_col = col_data.getFieldData().size();
-
-    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                           &m(r + 2, c + 0));
-    };
-
-    auto get_tensor_vec = [](VectorDouble &n) {
-      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-    };
-
-    FTensor::Index<'i', 3> i;
-
-    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-    NN.clear();
-
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
-      double val_m = getGaussPtsMaster()(2, gg);
-      auto normal_at_gp =
-          get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg]);
-
-      FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
-
-      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-
-        FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
-
-        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-          const double m = val_m * t_base_lambda * t_base_master;
-
-          auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
-
-          t_assemble_m(i) -= m * normal_at_gp(i) * 0.5;
-
-          ++t_base_master; // update rows
-        }
-        ++t_base_lambda; // update cols slave
-      }
-    }
-
-    Mat aij;
-    if (Aij == PETSC_NULL) {
-      aij = getFEMethod()->snes_B;
-    } else {
-      aij = Aij;
-    }
-
-    CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
-                        &col_data.getIndices()[0], &*NN.data().begin(),
-                        ADD_VALUES);
-
-    MoFEMFunctionReturn(0);
-  }
-
-  PetscErrorCode SimpleContactProblem::OpGetTangentMaster::doWork(
-      int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
-
-    if (data.getFieldData().size() == 0)
-      PetscFunctionReturn(0);
-
-    const int ngp =
-        data.getN().size1(); // this is number of base functions for
-                             // vertices, 6 bases functions for prism
-
-    if (type == MBVERTEX)
-      commonDataSimpleContact->tangentMasterALE.resize(ngp);
-    unsigned int nb_dofs = data.getFieldData().size();
-    // tangent vectors to face F3
-    for (unsigned int gg = 0; gg != ngp; ++gg) {
-      if (type == MBVERTEX) {
-        commonDataSimpleContact->tangentMasterALE[gg].resize(2);
-        commonDataSimpleContact->tangentMasterALE[gg][0].resize(3);
-        commonDataSimpleContact->tangentMasterALE[gg][1].resize(3);
-        commonDataSimpleContact->tangentMasterALE[gg][0].clear();
-        commonDataSimpleContact->tangentMasterALE[gg][1].clear();
-      }
-
-      for (unsigned int dd = 0; dd != 3; ++dd) {
-        commonDataSimpleContact->tangentMasterALE[gg][0][dd] +=
-            cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 0), 2,
-                       &data.getFieldData()[dd], 3); // tangent-1
-        commonDataSimpleContact->tangentMasterALE[gg][1][dd] +=
-            cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 1), 2,
-                       &data.getFieldData()[dd], 3); // tangent-2
-      }
-    }
-
-    MoFEMFunctionReturn(0);
-    }
-
-
-    PetscErrorCode 
-    SimpleContactProblem::OpGetTangentSlave::doWork(
-        int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
-
-      if (data.getFieldData().size() == 0)
+        CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0],
+                            ADD_VALUES);
         PetscFunctionReturn(0);
-      
-      const int ngp = data.getN().size1(); // this is number of base functions for
+      }
+
+      MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (data.getFieldData().size() == 0)
+          MoFEMFunctionReturnHot(0);
+
+        if (type != MBVERTEX)
+          MoFEMFunctionReturnHot(0);
+
+        const int nb_gauss_pts = data.getN().size1();
+
+        commonDataSimpleContact->tildeCFunPtr.get()->resize(nb_gauss_pts);
+        commonDataSimpleContact->tildeCFunPtr.get()->clear();
+
+        commonDataSimpleContact->lambdaGapDiffProductPtr.get()->resize(
+            nb_gauss_pts);
+        commonDataSimpleContact->lambdaGapDiffProductPtr.get()->clear();
+
+        auto lambda_gap_diff_prod = getFTensor0FromVec(
+            *commonDataSimpleContact->lambdaGapDiffProductPtr);
+
+        auto lagrange_slave =
+            getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+        auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+        auto tilde_c_fun =
+            getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          const double cg = cN * gap_gp;
+
+          const double lambda_gap_diff = lagrange_slave - cg;
+          const double regular_abs = abs(lambda_gap_diff);
+
+          tilde_c_fun = (lagrange_slave + cg -
+                         pow(regular_abs, r) / r); // is lagMult Correct?
+
+          const double exponent = r - 1.;
+
+          double sign = 0.;
+          sign = (lambda_gap_diff == 0) ? 0 : (lambda_gap_diff < 0) ? -1 : 1;
+
+          // if (lagrange_slave == 0. && cg == 0.)
+          // sign = 1.;
+          lambda_gap_diff_prod = sign * pow(regular_abs, exponent);
+          ++lagrange_slave;
+          ++gap_gp;
+          ++lambda_gap_diff_prod;
+          ++tilde_c_fun;
+        }
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (data.getIndices().size() == 0)
+          MoFEMFunctionReturnHot(0);
+
+        const int nb_gauss_pts = data.getN().size1();
+
+        int nb_base_fun_col = data.getFieldData().size();
+        const double area_s =
+            commonDataSimpleContact->areaSlave; // same area in master and slave
+
+        vecR.resize(nb_base_fun_col, false); // the last false in ublas
+                                             // resize will destroy (not
+                                             // preserved) the old values
+        vecR.clear();
+
+        auto tilde_c_fun =
+            getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_s = getGaussPtsSlave()(2, gg) * area_s;
+
+          FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
+
+          for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
+            const double s = val_s * t_base_lambda * tilde_c_fun;
+            vecR[bbr] += s;  // it is a plus since F always scales with -1
+            ++t_base_lambda; // update rows
+          }
+          ++tilde_c_fun;
+        } // for gauss points
+
+        Vec f;
+        if (F == PETSC_NULL) {
+          f = getFEMethod()->snes_f;
+        } else {
+          f = F;
+        }
+
+        CHKERR VecSetValues(f, nb_base_fun_col, &data.getIndices()[0], &vecR[0],
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlaveALE::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (data.getIndices().size() == 0)
+          MoFEMFunctionReturnHot(0);
+
+        const int nb_gauss_pts = data.getN().size1();
+
+        int nb_base_fun_col = data.getFieldData().size();
+        const double area_s =
+            commonDataSimpleContact->areaSlave; // same area in master and slave
+
+        vecR.resize(nb_base_fun_col, false); // the last false in ublas
+                                             // resize will destroy (not
+                                             // preserved) the old values
+        vecR.clear();
+
+        auto tilde_c_fun =
+            getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+        auto length_normal = getFTensor0FromVec(
+            *commonDataSimpleContact->normalSlaveLengthALEPtr);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_s = getGaussPtsSlave()(2, gg) * 0.5 * length_normal;
+
+          FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
+
+          for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
+            const double s = val_s * t_base_lambda * tilde_c_fun;
+            vecR[bbr] += s;  // it is a plus since F always scales with -1
+            ++t_base_lambda; // update rows
+          }
+          ++tilde_c_fun;
+          ++length_normal;
+        } // for gauss points
+
+        Vec f;
+        if (F == PETSC_NULL) {
+          f = getFEMethod()->snes_f;
+        } else {
+          f = F;
+        }
+
+        CHKERR VecSetValues(f, nb_base_fun_col, &data.getIndices()[0], &vecR[0],
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlaveHdiv::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (type != MBTRI)
+          MoFEMFunctionReturnHot(0);
+
+        if (data.getIndices().size() == 0)
+          MoFEMFunctionReturnHot(0);
+
+        const int nb_gauss_pts = data.getN().size1();
+
+        int nb_base_fun_col = data.getFieldData().size();
+        const double area_s =
+            commonDataSimpleContact->areaSlave; // same area in master and slave
+
+        vecR.resize(nb_base_fun_col, false); // the last false in ublas
+                                             // resize will destroy (not
+                                             // preserved) the old values
+        vecR.clear();
+
+        auto tilde_c_fun =
+            getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+        auto t_lag_base = data.getFTensor1N<3>();
+
+        auto get_tensor_vec = [](VectorDouble &n) {
+          return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+        };
+
+        FTensor::Index<'i', 3> i;
+        auto normal_at_gp = get_tensor_vec(
+            commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_s = getGaussPtsSlave()(2, gg) * area_s;
+
+          FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
+
+          for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
+            const double s =
+                val_s * t_lag_base(i) * normal_at_gp(i) * tilde_c_fun;
+            vecR[bbr] += s; // it is a plus since F always scales with -1
+            ++t_lag_base;
+          }
+          ++tilde_c_fun;
+        } // for gauss points
+
+        auto tilde_c_fun_2 =
+            getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+
+        Vec f;
+        if (F == PETSC_NULL) {
+          f = getFEMethod()->snes_f;
+        } else {
+          f = F;
+        }
+
+        CHKERR VecSetValues(f, nb_base_fun_col, &data.getIndices()[0], &vecR[0],
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode
+      SimpleContactProblem::OpContactConstraintMatrixMasterSlave::doWork(
+          int row_side, int col_side, EntityType row_type, EntityType col_type,
+          DataForcesAndSourcesCore::EntData &row_data,
+          DataForcesAndSourcesCore::EntData &col_data) {
+        MoFEMFunctionBegin;
+
+        // Both sides are needed since both sides contribute their shape
+        // function to the stiffness matrix
+        const int nb_row = row_data.getIndices().size();
+        if (!nb_row)
+          MoFEMFunctionReturnHot(0);
+        const int nb_col = col_data.getIndices().size();
+        if (!nb_col)
+          MoFEMFunctionReturnHot(0);
+        const int nb_gauss_pts = row_data.getN().size1();
+
+        int nb_base_fun_row = row_data.getFieldData().size() / 3;
+        int nb_base_fun_col = col_data.getFieldData().size();
+
+        const double area_slave =
+            commonDataSimpleContact->areaSlave; // same area in master and slave
+
+        auto get_tensor_from_mat = [](MatrixDouble &m, const int r,
+                                      const int c) {
+          return FTensor::Tensor1<double *, 3>(
+              &m(r + 0, c + 0), &m(r + 1, c + 0), &m(r + 2, c + 0));
+        };
+
+        auto get_tensor_vec = [](VectorDouble &n) {
+          return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+        };
+
+        FTensor::Index<'i', 3> i;
+
+        NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+        NN.clear();
+
+        auto const_unit_n = get_tensor_vec(
+            commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_m = getGaussPtsMaster()(2, gg) * area_slave;
+
+          FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
+
+          for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+            FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
+
+            for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+              const double m = val_m * t_base_lambda * t_base_master;
+
+              auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
+              t_assemble_m(i) -= m * const_unit_n(i);
+
+              ++t_base_master; // update rows master
+            }
+            ++t_base_lambda; // update cols slave
+          }
+        }
+
+        Mat aij;
+        if (Aij == PETSC_NULL) {
+          aij = getFEMethod()->snes_B;
+        } else {
+          aij = Aij;
+        }
+
+        CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+                            &col_data.getIndices()[0], &*NN.data().begin(),
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode
+      SimpleContactProblem::OpContactConstraintMatrixMasterSlaveHdiv::doWork(
+          int row_side, int col_side, EntityType row_type, EntityType col_type,
+          DataForcesAndSourcesCore::EntData &row_data,
+          DataForcesAndSourcesCore::EntData &col_data) {
+        MoFEMFunctionBegin;
+        if (col_type != MBTRI)
+          MoFEMFunctionReturnHot(0);
+
+        // Both sides are needed since both sides contribute their shape
+        // function to the stiffness matrix
+        const int nb_row = row_data.getIndices().size();
+        if (!nb_row)
+          MoFEMFunctionReturnHot(0);
+        const int nb_col = col_data.getIndices().size();
+        if (!nb_col)
+          MoFEMFunctionReturnHot(0);
+
+        const int nb_gauss_pts = row_data.getN().size1();
+
+        int nb_base_fun_row = row_data.getFieldData().size() / 3;
+        int nb_base_fun_col = col_data.getFieldData().size();
+
+        const double area_slave =
+            commonDataSimpleContact->areaSlave; // same area in master and slave
+
+        auto get_tensor_from_mat = [](MatrixDouble &m, const int r,
+                                      const int c) {
+          return FTensor::Tensor1<double *, 3>(
+              &m(r + 0, c + 0), &m(r + 1, c + 0), &m(r + 2, c + 0));
+        };
+
+        auto get_tensor_vec = [](VectorDouble &n) {
+          return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+        };
+
+        FTensor::Index<'i', 3> i;
+
+        NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+        NN.clear();
+
+        auto const_unit_n = get_tensor_vec(
+            commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+        auto t_lag_base = col_data.getFTensor1N<3>();
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_m = getGaussPtsMaster()(2, gg) * area_slave;
+
+          for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+            FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
+
+            for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+              const double m =
+                  val_m * const_unit_n(i) * t_lag_base(i) * t_base_master;
+
+              auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
+              t_assemble_m(i) -= m * const_unit_n(i);
+
+              ++t_base_master; // update rows master
+            }
+            ++t_lag_base; // update cols slave
+          }
+        }
+
+        Mat aij;
+        if (Aij == PETSC_NULL) {
+          aij = getFEMethod()->snes_B;
+        } else {
+          aij = Aij;
+        }
+
+        CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+                            &col_data.getIndices()[0], &*NN.data().begin(),
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode
+      SimpleContactProblem::OpContactConstraintMatrixSlaveSlave::doWork(
+          int row_side, int col_side, EntityType row_type, EntityType col_type,
+          DataForcesAndSourcesCore::EntData &row_data,
+          DataForcesAndSourcesCore::EntData &col_data) {
+        MoFEMFunctionBegin;
+
+        // Both sides are needed since both sides contribute their shape
+        // function to the stiffness matrix
+        const int nb_row = row_data.getIndices().size();
+        if (!nb_row)
+          MoFEMFunctionReturnHot(0);
+        const int nb_col = col_data.getIndices().size();
+        if (!nb_col)
+          MoFEMFunctionReturnHot(0);
+        const int nb_gauss_pts = row_data.getN().size1();
+
+        int nb_base_fun_row = row_data.getFieldData().size() / 3;
+        int nb_base_fun_col = col_data.getFieldData().size();
+
+        const double area_slave =
+            commonDataSimpleContact->areaSlave; // same area in master and slave
+
+        auto get_tensor_from_mat = [](MatrixDouble &m, const int r,
+                                      const int c) {
+          return FTensor::Tensor1<double *, 3>(
+              &m(r + 0, c + 0), &m(r + 1, c + 0), &m(r + 2, c + 0));
+        };
+
+        auto get_tensor_vec = [](VectorDouble &n) {
+          return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+        };
+
+        FTensor::Index<'i', 3> i;
+
+        NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+        NN.clear();
+
+        auto const_unit_n = get_tensor_vec(
+            commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_s = getGaussPtsSlave()(2, gg) * area_slave;
+
+          FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
+
+          for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+
+            FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
+
+            for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+              const double s = val_s * t_base_lambda * t_base_slave;
+
+              auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, bbc);
+
+              t_assemble_s(i) += s * const_unit_n(i);
+
+              ++t_base_slave; // update rows
+            }
+            ++t_base_lambda; // update cols slave
+          }
+        }
+
+        Mat aij;
+        if (Aij == PETSC_NULL) {
+          aij = getFEMethod()->snes_B;
+        } else {
+          aij = Aij;
+        }
+
+        CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+                            &col_data.getIndices()[0], &*NN.data().begin(),
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode
+      SimpleContactProblem::OpContactConstraintMatrixSlaveSlaveALE::doWork(
+          int row_side, int col_side, EntityType row_type, EntityType col_type,
+          DataForcesAndSourcesCore::EntData &row_data,
+          DataForcesAndSourcesCore::EntData &col_data) {
+        MoFEMFunctionBegin;
+
+        // Both sides are needed since both sides contribute their shape
+        // function to the stiffness matrix
+        const int nb_row = row_data.getIndices().size();
+        if (!nb_row)
+          MoFEMFunctionReturnHot(0);
+        const int nb_col = col_data.getIndices().size();
+        if (!nb_col)
+          MoFEMFunctionReturnHot(0);
+        const int nb_gauss_pts = row_data.getN().size1();
+
+        int nb_base_fun_row = row_data.getFieldData().size() / 3;
+        int nb_base_fun_col = col_data.getFieldData().size();
+
+        auto get_tensor_from_mat = [](MatrixDouble &m, const int r,
+                                      const int c) {
+          return FTensor::Tensor1<double *, 3>(
+              &m(r + 0, c + 0), &m(r + 1, c + 0), &m(r + 2, c + 0));
+        };
+
+        auto get_tensor_vec = [](VectorDouble &n) {
+          return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+        };
+
+        FTensor::Index<'i', 3> i;
+
+        NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+        NN.clear();
+
+        auto length_normal = getFTensor0FromVec(
+            *commonDataSimpleContact->normalSlaveLengthALEPtr);
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_s = getGaussPtsSlave()(2, gg);
+          auto normal_at_gp =
+              get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg]);
+
+          FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
+
+          for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+
+            FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
+
+            for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+              const double s = val_s * t_base_lambda * t_base_slave;
+
+              auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, bbc);
+
+              t_assemble_s(i) += s * normal_at_gp(i) * 0.5;
+
+              ++t_base_slave; // update rows
+            }
+            ++t_base_lambda; // update cols slave
+          }
+        }
+
+        Mat aij;
+        if (Aij == PETSC_NULL) {
+          aij = getFEMethod()->snes_B;
+        } else {
+          aij = Aij;
+        }
+
+        CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+                            &col_data.getIndices()[0], &*NN.data().begin(),
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      MoFEMErrorCode
+      SimpleContactProblem::OpContactConstraintMatrixMasterSlaveALE::doWork(
+          int row_side, int col_side, EntityType row_type, EntityType col_type,
+          DataForcesAndSourcesCore::EntData &row_data,
+          DataForcesAndSourcesCore::EntData &col_data) {
+        MoFEMFunctionBegin;
+
+        // Both sides are needed since both sides contribute their shape
+        // function to the stiffness matrix
+        const int nb_row = row_data.getIndices().size();
+        if (!nb_row)
+          MoFEMFunctionReturnHot(0);
+        const int nb_col = col_data.getIndices().size();
+        if (!nb_col)
+          MoFEMFunctionReturnHot(0);
+        const int nb_gauss_pts = row_data.getN().size1();
+
+        int nb_base_fun_row = row_data.getFieldData().size() / 3;
+        int nb_base_fun_col = col_data.getFieldData().size();
+
+        auto get_tensor_from_mat = [](MatrixDouble &m, const int r,
+                                      const int c) {
+          return FTensor::Tensor1<double *, 3>(
+              &m(r + 0, c + 0), &m(r + 1, c + 0), &m(r + 2, c + 0));
+        };
+
+        auto get_tensor_vec = [](VectorDouble &n) {
+          return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+        };
+
+        FTensor::Index<'i', 3> i;
+
+        NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+        NN.clear();
+
+        for (int gg = 0; gg != nb_gauss_pts; gg++) {
+          double val_m = getGaussPtsMaster()(2, gg);
+          auto normal_at_gp =
+              get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg]);
+
+          FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
+
+          for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+
+            FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
+
+            for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+              const double m = val_m * t_base_lambda * t_base_master;
+
+              auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
+
+              t_assemble_m(i) -= m * normal_at_gp(i) * 0.5;
+
+              ++t_base_master; // update rows
+            }
+            ++t_base_lambda; // update cols slave
+          }
+        }
+
+        Mat aij;
+        if (Aij == PETSC_NULL) {
+          aij = getFEMethod()->snes_B;
+        } else {
+          aij = Aij;
+        }
+
+        CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+                            &col_data.getIndices()[0], &*NN.data().begin(),
+                            ADD_VALUES);
+
+        MoFEMFunctionReturn(0);
+      }
+
+      PetscErrorCode SimpleContactProblem::OpGetTangentMaster::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (data.getFieldData().size() == 0)
+          PetscFunctionReturn(0);
+
+        const int ngp =
+            data.getN().size1(); // this is number of base functions for
                                  // vertices, 6 bases functions for prism
 
-      if (type == MBVERTEX)
-        commonDataSimpleContact->tangentSlaveALE.resize(ngp);
+        if (type == MBVERTEX)
+          commonDataSimpleContact->tangentMasterALE.resize(ngp);
+        unsigned int nb_dofs = data.getFieldData().size();
+        // tangent vectors to face F3
+        for (unsigned int gg = 0; gg != ngp; ++gg) {
+          if (type == MBVERTEX) {
+            commonDataSimpleContact->tangentMasterALE[gg].resize(2);
+            commonDataSimpleContact->tangentMasterALE[gg][0].resize(3);
+            commonDataSimpleContact->tangentMasterALE[gg][1].resize(3);
+            commonDataSimpleContact->tangentMasterALE[gg][0].clear();
+            commonDataSimpleContact->tangentMasterALE[gg][1].clear();
+          }
 
-      unsigned int nb_dofs = data.getFieldData().size();
-      // tangent vectors to face F4
-      for (unsigned int gg = 0; gg != ngp; ++gg) {
-
-        if (type == MBVERTEX) {
-          commonDataSimpleContact->tangentSlaveALE[gg].resize(2);
-          commonDataSimpleContact->tangentSlaveALE[gg][0].resize(3);
-          commonDataSimpleContact->tangentSlaveALE[gg][1].resize(3);
-          commonDataSimpleContact->tangentSlaveALE[gg][0].clear();
-          commonDataSimpleContact->tangentSlaveALE[gg][1].clear();
+          for (unsigned int dd = 0; dd != 3; ++dd) {
+            commonDataSimpleContact->tangentMasterALE[gg][0][dd] +=
+                cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 0), 2,
+                           &data.getFieldData()[dd], 3); // tangent-1
+            commonDataSimpleContact->tangentMasterALE[gg][1][dd] +=
+                cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 1), 2,
+                           &data.getFieldData()[dd], 3); // tangent-2
+          }
         }
 
-        for (unsigned int dd = 0; dd != 3; ++dd) {
-          commonDataSimpleContact->tangentSlaveALE[gg][0][dd] +=
-              cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 0), 2,
-                         &data.getFieldData()[dd], 3); // tangent-1
-          commonDataSimpleContact->tangentSlaveALE[gg][1][dd] +=
-              cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 1), 2,
-                         &data.getFieldData()[dd], 3); // tangent-2
-        }
+        MoFEMFunctionReturn(0);
       }
 
-      MoFEMFunctionReturn(0);
-    }
+      PetscErrorCode SimpleContactProblem::OpGetTangentSlave::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
 
-    PetscErrorCode SimpleContactProblem::OpGetNormalSlaveALE::doWork(
-        int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-      MoFEMFunctionBegin;
+        if (data.getFieldData().size() == 0)
+          PetscFunctionReturn(0);
 
-      if (data.getFieldData().size() == 0)
-        PetscFunctionReturn(0);
+        const int ngp =
+            data.getN().size1(); // this is number of base functions for
+                                 // vertices, 6 bases functions for prism
 
-      if (type != MBVERTEX)
-        PetscFunctionReturn(0);
+        if (type == MBVERTEX)
+          commonDataSimpleContact->tangentSlaveALE.resize(ngp);
+
+        unsigned int nb_dofs = data.getFieldData().size();
+        // tangent vectors to face F4
+        for (unsigned int gg = 0; gg != ngp; ++gg) {
+
+          if (type == MBVERTEX) {
+            commonDataSimpleContact->tangentSlaveALE[gg].resize(2);
+            commonDataSimpleContact->tangentSlaveALE[gg][0].resize(3);
+            commonDataSimpleContact->tangentSlaveALE[gg][1].resize(3);
+            commonDataSimpleContact->tangentSlaveALE[gg][0].clear();
+            commonDataSimpleContact->tangentSlaveALE[gg][1].clear();
+          }
+
+          for (unsigned int dd = 0; dd != 3; ++dd) {
+            commonDataSimpleContact->tangentSlaveALE[gg][0][dd] +=
+                cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 0), 2,
+                           &data.getFieldData()[dd], 3); // tangent-1
+            commonDataSimpleContact->tangentSlaveALE[gg][1][dd] +=
+                cblas_ddot(nb_dofs / 3, &data.getDiffN()(gg, 1), 2,
+                           &data.getFieldData()[dd], 3); // tangent-2
+          }
+        }
+
+        MoFEMFunctionReturn(0);
+      }
+
+      PetscErrorCode SimpleContactProblem::OpGetNormalSlaveALE::doWork(
+          int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+
+        if (data.getFieldData().size() == 0)
+          PetscFunctionReturn(0);
+
+        if (type != MBVERTEX)
+          PetscFunctionReturn(0);
 
         int gp_gp = data.getN().size1();
 
@@ -2408,6 +2488,43 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
     CHKERR MatSetValues(aij, nb_base_fun_row, &row_data.getIndices()[0], nb_col,
                         &col_data.getIndices()[0], &*NN.data().begin(),
                         ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode SimpleContactProblem::OpCalculateDeformation::doWork(
+      int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+
+    MoFEMFunctionBegin;
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+
+    // get number of integration points
+    const int nb_integration_pts = getGaussPts().size2();
+    
+    auto t_h = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->hMatMaster);
+    auto t_H = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->HMatMaster);
+
+    commonDataSimpleContact->detHVecMaster->resize(nb_integration_pts, false);
+    commonDataSimpleContact->invHMatMaster->resize(9, nb_integration_pts, false);
+    commonDataSimpleContact->FMatMaster->resize(9, nb_integration_pts, false);
+
+    auto t_detH = getFTensor0FromVec(*commonDataSimpleContact->detHVecMaster);
+    auto t_invH = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->invHMatMaster);
+    auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMatMaster);
+
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+      CHKERR determinantTensor3by3(t_H, t_detH);
+      CHKERR invertTensor3by3(t_H, t_detH, t_invH);
+      t_F(i, j) = t_h(i, k) * t_invH(k, j);
+
+      ++t_h;
+      ++t_H;
+      ++t_detH;
+      ++t_invH;
+      ++t_F;
+    }
 
     MoFEMFunctionReturn(0);
   }

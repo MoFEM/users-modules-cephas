@@ -379,12 +379,12 @@ int main(int argc, char *argv[]) {
                                                        "MESH_NODE_POSITIONS");
 
     {
-      Range current_ents_with_fe;
-      CHKERR m_field.get_finite_element_entities_by_handle("MATERIAL",
-                                                          current_ents_with_fe);
-      Range ents_to_remove;
-      ents_to_remove = subtract(current_ents_with_fe, all_tets);
-      CHKERR m_field.remove_ents_from_finite_element("MATERIAL", ents_to_remove);
+      // Range current_ents_with_fe;
+      // CHKERR m_field.get_finite_element_entities_by_handle("MATERIAL",
+      //                                                     current_ents_with_fe);
+      // Range ents_to_remove;
+      // ents_to_remove = subtract(current_ents_with_fe, all_tets);
+      // CHKERR m_field.remove_ents_from_finite_element("MATERIAL", ents_to_remove);
       CHKERR m_field.add_ents_to_finite_element_by_type(all_tets, MBTET,
                                                        "MATERIAL");
       CHKERR m_field.build_finite_elements("MATERIAL", &all_tets);
@@ -652,10 +652,10 @@ int main(int argc, char *argv[]) {
 
     contact_problem->setContactOperatorsRhsALE("SPATIAL_POSITION",
                                                "MESH_NODE_POSITIONS",
-                                               "LAGMULT");
+                                               "LAGMULT", "MATERIAL");
 
     contact_problem->setContactOperatorsLhsALE(
-        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT");
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
                                   contact_problem->feRhsSimpleContact.get(),
