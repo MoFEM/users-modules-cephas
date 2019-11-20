@@ -526,39 +526,6 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       scaled_values[0] = mydata.data.value1;
       CHKERR insert_temp_bc(scaled_values[0], it);
 
-
-
-      // CHKERR MethodForForceScaling::applyScale(this, methodsOp, scaled_values);
-      // for (int dim = 0; dim < 3; dim++) {
-      //   Range ents;
-      //   CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
-      //                                              true);
-      //   if (dim > 1) {
-      //     Range _edges;
-      //     CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-      //                                              moab::Interface::UNION);
-      //     ents.insert(_edges.begin(), _edges.end());
-      //   }
-      //   if (dim > 0) {
-      //     Range _nodes;
-      //     CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-      //     ents.insert(_nodes.begin(), _nodes.end());
-      //   }
-
-      //   auto for_each_dof = [&](auto &dof) {
-      //     MoFEMFunctionBeginHot;
-
-      //     if (dof->getEntType() == MBVERTEX) {
-      //       mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-      //     } else {
-      //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-      //     }
-      //     MoFEMFunctionReturnHot(0);
-      //   };
-
-      //   CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
-      //                                   for_each_dof);
-      // }
     }
   }
     dofsIndices.resize(mapZeroRows.size());
