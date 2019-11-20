@@ -1272,9 +1272,11 @@ struct MixTransportElement {
       cholesky_solve(NN, Nf, ublas::lower());
 
       // set solution to vector
+      CHKERR VecSetOption(cTx.D0, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
       CHKERR VecSetValues(cTx.D0, nb_dofs, &*data.getIndices().begin(),
                           &*Nf.begin(), INSERT_VALUES);
-      ;
+      for (int dd = 0; dd != nb_dofs; ++dd)
+        data.getFieldDofs()[dd]->getFieldData() = Nf[dd];
 
       MoFEMFunctionReturn(0);
     }

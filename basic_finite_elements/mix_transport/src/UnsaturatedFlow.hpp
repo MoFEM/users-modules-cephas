@@ -1225,7 +1225,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
    * @param  ref_level mesh refinement on which mesh problem you like to built.
    * @return           error code
    */
-  MoFEMErrorCode buildProblem(BitRefLevel ref_level = BitRefLevel().set(0)) {
+  MoFEMErrorCode buildProblem(Range zero_flux_ents,
+                              BitRefLevel ref_level = BitRefLevel().set(0)) {
     MoFEMFunctionBegin;
 
     // Build fields
@@ -1255,6 +1256,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     CHKERR DMMoFEMAddElement(dM, "MIX_BCVALUE");
     // constructor data structures
     CHKERR DMSetUp(dM);
+
+    // remove zero flux dofs
+    CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        "MIX", "FLUXES", zero_flux_ents);
 
     PetscSection section;
     CHKERR mField.getInterface<ISManager>()->sectionCreate("MIX", &section);
@@ -1347,8 +1352,9 @@ struct UnsaturatedFlowElement : public MixTransportElement {
           const NumeredDofEntity *dof_ptr;
           for (std::vector<int>::iterator it = cTx.bcVecIds.begin();
                it != cTx.bcVecIds.end(); it++, vit++) {
-            CHKERR fePtr->problemPtr->getColDofsByPetscGlobalDofIdx(*it,
-                                                                    &dof_ptr);
+            if (auto dof_ptr =
+                    fePtr->problemPtr->getColDofsByPetscGlobalDofIdx(*it)
+                        .lock())
             dof_ptr->getFieldData() = *vit;
           }
         } else {
@@ -1401,6 +1407,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         CHKERR VecAssemblyEnd(fePtr->ts_F);
         if (!cTx.bcVecIds.empty()) {
           cTx.vecValsOnBc -= cTx.bcVecVals;
+          CHKERR VecSetOption(fePtr->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
+                              PETSC_TRUE);
           CHKERR VecSetValues(fePtr->ts_F, cTx.bcVecIds.size(),
                               &*cTx.bcVecIds.begin(), &*cTx.vecValsOnBc.begin(),
                               INSERT_VALUES);

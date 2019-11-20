@@ -282,8 +282,10 @@ int main(int argc, char *argv[]) {
     }
 
     // Add zero flux on the rest of the boundary
-    Range zero_flux_ents;
-    {
+    auto get_zero_flux_entities = [&m_field,
+                                   &pcomm](const auto &domain_ents,
+                                           const auto &bc_boundary_ents) {
+      Range zero_flux_ents;
       Skinner skin(&m_field.get_moab());
       Range domain_skin;
       CHKERR skin.find_skin(0, domain_ents, false, domain_skin);
@@ -292,18 +294,13 @@ int main(int argc, char *argv[]) {
                                    PSTATUS_SHARED | PSTATUS_MULTISHARED,
                                    PSTATUS_NOT, -1, &zero_flux_ents);
       zero_flux_ents = subtract(zero_flux_ents, bc_boundary_ents);
-      uf.bcFluxMap[max_flux_id] =
-          boost::shared_ptr<UnsaturatedFlowElement::BcData>(
-              new UnsaturatedFlowElement::BcData());
-      uf.bcFluxMap[max_flux_id]->fixValue = 0;
-      uf.bcFluxMap[max_flux_id]->eNts = zero_flux_ents;
-    }
+      return zero_flux_ents;
+    };
 
     CHKERR uf.addFields("VALUES", "FLUXES", order);
     CHKERR uf.addFiniteElements("FLUXES", "VALUES");
-    CHKERR m_field.add_ents_to_finite_element_by_type(zero_flux_ents, MBTRI,
-                                                      "MIX_BCFLUX");
-    CHKERR uf.buildProblem();
+    CHKERR uf.buildProblem(
+        get_zero_flux_entities(domain_ents, bc_boundary_ents));
     CHKERR uf.createMatrices();
     CHKERR uf.setFiniteElements();
     CHKERR uf.calculateEssentialBc();
