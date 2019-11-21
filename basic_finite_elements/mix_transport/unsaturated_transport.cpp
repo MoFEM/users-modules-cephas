@@ -38,7 +38,7 @@ static char help[] = "...\n\n";
 
 double GenericMaterial::ePsilon0 = 0;
 double GenericMaterial::ePsilon1 = 0;
-double GenericMaterial::scaleZ = 0;
+double GenericMaterial::scaleZ = 1;
 
 map<std::string, CommonMaterialData::RegisterHook>
     RegisterMaterials::mapOfRegistredMaterials;
