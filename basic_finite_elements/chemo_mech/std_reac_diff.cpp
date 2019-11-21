@@ -51,7 +51,7 @@ private:
   MoFEMErrorCode set_blockData(std::map<int, BlockData> &block_data_map);
 
   MoFEMErrorCode set_initial_values(std::string field_name, int block_id,
-                                    Range &surface);
+                                    Range &surface, double &init_val);
 
   MoFEMErrorCode update_slow_rhs(std::string mass_fiedl,
                                  boost::shared_ptr<VectorDouble> &mass_ptr);
@@ -215,6 +215,25 @@ struct ExactFunctionDot {
     }
   }
 };
+
+// struct ReactionTerms {
+//   void operator()(const double u1, const double u2, const double u3, BlockData &coeffs, VectorDouble &vec){
+//     vec.resize(3, false);
+//     vec.clear();
+    
+//     vec[0] = coeffs.rate[0] * u1 * (1.0 - coeffs.coef(0, 0) * u1 
+//                                         - coeffs.coef(0, 1) * u2 
+//                                         - coeffs.coef(0, 2) * u3);
+
+//     vec[1] = coeffs.rate[1] * u1 * (1.0 - coeffs.coef(1, 0) * u1 
+//                                         - coeffs.coef(1, 1) * u2 
+//                                         - coeffs.coef(1, 2) * u3);
+//     vec[2] = coeffs.rate[2] * (u1 * u2 + u3) * (1.0 - coeffs.coef(0, 0) * u1 
+//                                         - coeffs.coef(0, 1) * u2 
+//                                         - coeffs.coef(0, 2) * u3);                                  
+//   }
+
+// };
 MoFEMErrorCode RDProblem::setup_system() {
   MoFEMFunctionBegin;
   CHKERR m_field.getInterface(simple_interface);
@@ -243,7 +262,7 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      // block_map[id].B0 = 1e-3;
+      block_map[id].B0 = 1e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -270,10 +289,10 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
   MoFEMFunctionReturn(0);
 }
 
+
 MoFEMErrorCode RDProblem::set_initial_values(std::string field_name,
-                                             int block_id, Range &surface) {
+                                             int block_id, Range &surface, double &init_val) {
   MoFEMFunctionBegin;
-  double init_val_ver = 0.5;
   if (m_field.getInterface<MeshsetsManager>()->checkMeshset(block_id,
                                                             BLOCKSET)) {
     CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -283,7 +302,7 @@ MoFEMErrorCode RDProblem::set_initial_values(std::string field_name,
     Range surface_verts;
     CHKERR moab.get_connectivity(surface, surface_verts, false);
     CHKERR m_field.getInterface<FieldBlas>()->setField(
-        init_val_ver, MBVERTEX, surface_verts, field_name);
+        init_val, MBVERTEX, surface_verts, field_name);
   }
 
     MoFEMFunctionReturn(0);
@@ -489,8 +508,16 @@ MoFEMErrorCode RDProblem::run_analysis() {
 
   CHKERR set_blockData(material_blocks);
 
+  VectorDouble initVals;
+  initVals.resize(3, false);
+  initVals.clear();
+
+  initVals[0] = 3;
+  initVals[1] = 3;
+  initVals[2] = 0.0;
+
   for (int i = 0; i < nb_species; ++i) {
-    CHKERR set_initial_values(mass_names[i], i + 2, inner_surface[i]);
+    CHKERR set_initial_values(mass_names[i], i + 2, inner_surface[i], initVals[i]);
     CHKERR update_slow_rhs(mass_names[i], values_ptr[i]);
     }
 

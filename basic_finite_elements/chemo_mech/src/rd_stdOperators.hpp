@@ -14,7 +14,7 @@ namespace StdRDOperators {
 
   using EntData = DataForcesAndSourcesCore::EntData;
 
-  const double B = 0;
+  const double B = 1e-2;
   const int save_every_nth_step = 4;
   const double natural_bc_values = 0.0;
   const double essential_bc_values = 0.0;
@@ -37,9 +37,9 @@ namespace StdRDOperators {
       rate.resize(3, false);
       coef.clear();
       rate.clear();
-      coef(0, 0) = 1.0; coef(0, 1) = 2.0;   coef(0, 2) = 7.0;
-      coef(1, 0) = 7.0; coef(1, 1) = 1.0;   coef(1, 2) = 2.0;
-      coef(2, 0) = 2.0; coef(2, 1) = 7.0;   coef(2, 2) = 1.0;
+      coef(0, 0) = 1.0; coef(0, 1) = 1.0;   coef(0, 2) = 2.0;
+      coef(1, 0) = 1.0; coef(1, 1) = 1.0;   coef(1, 2) = 2.0;
+      coef(2, 0) = 1.0; coef(2, 1) = 1.0;   coef(2, 2) = 1.0;
 
       for (int i = 0; i < 3; ++i) {
         rate[i] = 1.0;
@@ -171,21 +171,38 @@ namespace StdRDOperators {
 
         // cout << "r1 : " << block_data.rate[0] << endl;
 
+        double a11 = block_data.coef(0, 0);
+        double a12 = block_data.coef(0, 1);
+        double a13 = block_data.coef(0, 2);
+
+        double a21 = block_data.coef(1, 0);
+        double a22 = block_data.coef(1, 1);
+        double a23 = block_data.coef(1, 2);
+
+        double a31 = block_data.coef(2, 0);
+        double a32 = block_data.coef(2, 1);
+        double a33 = block_data.coef(2, 2);
+
+        double r1 = block_data.rate[0];
+        double r2 = block_data.rate[1];
+        double r3 = block_data.rate[2];
+
 
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
-          t_slow_values1 = block_data.rate[0] * t_mass_values1 *
-                           (1.0 - block_data.coef(0, 0) * t_mass_values1 -
-                                  block_data.coef(0, 1) * t_mass_values2 -
-                                  block_data.coef(0, 2) * t_mass_values3);
-          t_slow_values2 = block_data.rate[1] * t_mass_values2 *
-                           (1.0 - block_data.coef(1, 0) * t_mass_values1 -
-                                  block_data.coef(1, 1) * t_mass_values2 -
-                                  block_data.coef(1, 2) * t_mass_values3);
+          t_slow_values1 = -  t_mass_values3 * t_mass_values1;
+                          //  (1.0 - a11 * t_mass_values1 -
+                          //         a12 * t_mass_values2 -
+                          //         a13 * t_mass_values3);
+          t_slow_values2 = - t_mass_values3 * t_mass_values2;
+                          //  (1.0 - a21 * t_mass_values1 -
+                          //         a22 * t_mass_values2 -
+                          //         a23 * t_mass_values3);
 
-          t_slow_values3 = block_data.rate[2] * t_mass_values3 *
-                           (1.0 - block_data.coef(2, 0) * t_mass_values1 -
-                                  block_data.coef(2, 1) * t_mass_values2 -
-                                  block_data.coef(2, 2) * t_mass_values3);
+          t_slow_values3 = t_mass_values1 * t_mass_values2;
+            // + t_mass_values3 * 
+            //                (1.0 - a31 * t_mass_values1 -
+            //                       a32 * t_mass_values2 -
+            //                       a33 * t_mass_values3);
           ++t_slow_values1;
           ++t_slow_values2;
           ++t_slow_values3;
@@ -346,13 +363,15 @@ namespace StdRDOperators {
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
 
+          const double K = block_data.B0 + B * t_val;
+
           double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
-          double u_lap = - block_data.B0 * exactLap(t_coords(NX), t_coords(NY), ct);
+          double u_lap = - K * exactLap(t_coords(NX), t_coords(NY), ct);
           // cout << "B0 : " << block_data.B0 << endl;
           double f = u_dot + u_lap;
 
           for (int rr = 0; rr != nb_dofs; ++rr) {
-            vecF[rr] += a * (t_base * t_dot_val + (block_data.B0 + B * t_val) *
+            vecF[rr] += a * (t_base * t_dot_val + K *
             t_diff_base(i) * t_grad(i));
             ++t_diff_base;
             ++t_base;
@@ -442,14 +461,14 @@ namespace StdRDOperators {
 
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
-          
+          const double K = block_data.B0 + B * t_val;
           for (int rr = 0; rr != nb_row_dofs; ++rr) {
             auto t_col_base = col_data.getFTensor0N(gg, 0);
             auto t_col_diff_base = col_data.getFTensor1DiffN<DIM>(gg, 0);
             for (int cc = 0; cc != nb_col_dofs; ++cc) {
 
               mat(rr, cc) +=
-                  a * (t_row_base * t_col_base * ts_a + (block_data.B0 + B * t_val) *
+                  a * (t_row_base * t_col_base * ts_a + K *
                   t_row_diff_base(i) * t_col_diff_base(i)
                         + B * t_col_base * t_grad(i) * t_row_diff_base(i));
 

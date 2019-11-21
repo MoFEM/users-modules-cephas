@@ -25,7 +25,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
 const double B = 0.0;
 const double B_epsilon = 0.0;
 
-const int save_every_nth_step = 4;
+const int save_every_nth_step = 8;
 // const int order = 3; ///< approximation order
 const double init_value = 0.5;
 const double essen_value = 0;
@@ -62,9 +62,9 @@ struct BlockData {
   double B0; // species mobility
 
   BlockData()
-      : a11(1), a12(2), a13(7), 
-        a21(7), a22(1), a23(2), 
-        a31(2), a32(7), a33(1),
+      : a11(1), a12(3), a13(3), 
+        a21(3), a22(1), a23(3), 
+        a31(3), a32(3), a33(1),
         B0(2e-3), r1(1), r2(1), r3(1) {}
 };
 
@@ -243,6 +243,77 @@ private:
   Range &essential_bd_ents;
 };
 
+struct OpSkeletonSource : public OpBoundaryEle {
+  typedef boost::function<double(const double)> FVal;
+  typedef boost::function<double(const double, const double, const double)> ExactFunVal;
+  OpSkeletonSource(const std::string &mass_field, 
+                   FVal skeleton_fun, 
+                   ExactFunVal smooth_fun,
+                   Range &internal_edge_ents)
+      : OpBoundaryEle(mass_field, OpBoundaryEle::OPROW),
+        internalEdges(internal_edge_ents), 
+        smoothFun(smooth_fun),
+        skeletonFun(skeleton_fun) {}
+
+  
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+    int nb_dofs = data.getIndices().size();
+    if (nb_dofs) {
+      EntityHandle fe_ent = getFEEntityHandle();
+      bool is_intEdge =
+          (internalEdges.find(fe_ent) != internalEdges.end());
+      if (is_intEdge) {
+        int nb_gauss_pts = getGaussPts().size2();
+        int size2 = data.getN().size2();
+        if (3 * nb_dofs != static_cast<int>(data.getN().size2()))
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "wrong number of dofs");
+        vecF.resize(nb_dofs, false);
+
+        vecF.clear();
+
+        auto t_row_v_base = data.getFTensor0N();
+
+        auto t_w = getFTensor0IntegrationWeight();
+        const double vol = getMeasure();
+        double dt;
+        CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
+        double ct = getFEMethod()->ts_t - dt;
+        auto t_coords = getFTensor1CoordsAtGaussPts();
+
+        for (int gg = 0; gg < nb_gauss_pts; gg++) {
+          const double a = t_w * vol;
+          double trace_val = -2.0 * skeletonFun(t_coords(NX)) * 
+                            smoothFun(t_coords(NX), t_coords(NY), ct);
+          for (int rr = 0; rr != nb_dofs; ++rr) {
+
+            vecF[rr] += a * trace_val * t_row_v_base;
+            }
+            ++t_row_v_base;
+          }
+          ++t_w;
+        }
+      CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
+                          PETSC_TRUE);
+      CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(),
+                          ADD_VALUES);
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  FVal skeletonFun;
+  ExactFunVal smoothFun;
+  VectorDouble vecF;
+  Range &internalEdges;
+
+  FTensor::Number<0> NX;
+  FTensor::Number<1> NY;
+  FTensor::Number<2> NZ;
+};
+
 // Assembly of system mass matrix
 // //***********************************************
 
@@ -278,9 +349,10 @@ struct OpInitialMass : public OpFaceEle {
 
         for (int gg = 0; gg < nb_gauss_pts; gg++) {
           const double a = t_w * vol;
+          double r = ((double) rand() / (RAND_MAX));
           for (int rr = 0; rr != nb_dofs; rr++) {
             auto t_col_mass = data.getFTensor0N(gg, 0);
-            nF[rr] += a * init_value * t_row_mass;
+            nF[rr] += a * r * t_row_mass;
             for (int cc = 0; cc != nb_dofs; cc++) {
               nN(rr, cc) += a * t_row_mass * t_col_mass;
               ++t_col_mass;

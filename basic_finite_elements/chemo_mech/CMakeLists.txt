@@ -52,6 +52,12 @@ bfe_build_and_install(
 bfe_build_and_install(
   electro_physio ${CMAKE_CURRENT_SOURCE_DIR}/electro_physio.cpp)
 
+bfe_build_and_install(
+  elec_pys_new ${CMAKE_CURRENT_SOURCE_DIR}/elec_pys_new.cpp)
+
+bfe_build_and_install(
+  unsaturate_flow ${CMAKE_CURRENT_SOURCE_DIR}/unsaturate_flow.cpp)
+
 #file(
 #    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
 #    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}

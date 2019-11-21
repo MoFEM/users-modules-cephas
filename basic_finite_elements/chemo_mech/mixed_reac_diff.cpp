@@ -65,7 +65,7 @@ private:
   MoFEMErrorCode setup_system();
   MoFEMErrorCode add_fe(std::string mass_field, std::string flux_field);
   MoFEMErrorCode set_blockData(std::map<int, BlockData> &block_data_map);
-  MoFEMErrorCode extract_bd_ents(std::string ESSENTIAL, std::string NATURAL);
+  MoFEMErrorCode extract_bd_ents(std::string ESSENTIAL, std::string NATURAL, std::string internal);
   MoFEMErrorCode extract_initial_ents(int block_id, Range &surface);
   MoFEMErrorCode update_slow_rhs(std::string mass_fiedl,
                                  boost::shared_ptr<VectorDouble> &mass_ptr);
@@ -108,6 +108,8 @@ private:
   Range essential_bdry_ents;
   Range natural_bdry_ents;
 
+  Range internal_edge_ents;
+
   Range inner_surface1; // nb_species times
   Range inner_surface2;
   Range inner_surface3;
@@ -124,6 +126,7 @@ private:
   boost::shared_ptr<FaceEle> vol_ele_stiff_rhs;
   boost::shared_ptr<FaceEle> vol_ele_stiff_lhs;
   boost::shared_ptr<BoundaryEle> natural_bdry_ele_slow_rhs;
+
   boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc;
   boost::shared_ptr<Monitor> monitor_ptr;
 
@@ -152,21 +155,30 @@ private:
 
 const double ramp_t = 1.0;
 const double sml = 0.0;
-const double T = 2 * M_PI;
+const double T = M_PI / 2.0;
+
+struct KinkFunction {
+  double operator() (const double x) const {
+    return 1 - abs(x);
+  }
+};
+
+struct DerKinkFunction{
+  double operator()(const double x) const {
+    if(x > 0)
+      {return -1;}
+    else 
+      {return 1;}
+}
+};
 
 struct ExactFunction {
   double operator()(const double x, const double y, const double t) const {
-    double g = sin(T * x) * sin(T * y);
-    double val = 0;
-    if (x > -sml) {
-      val = 1.0 * g;
-    }else {
-      val = g;
-    }
+    double g = cos(T * x) * cos(T * y);
     if (t <= ramp_t) {
-      return val * t;
+      return g * t;
     } else {
-      return val * ramp_t;
+      return g * ramp_t;
     }
   }
 };
@@ -175,22 +187,16 @@ struct ExactFunctionGrad {
   FTensor::Tensor1<double, 3> operator()(const double x, const double y,
                                          const double t) const {
     FTensor::Tensor1<double, 3> grad;
-    double mx = T * cos(T * x) * sin(T * y);
-    double my = T * sin(T * x) * cos(T * y);
-    double hx, hy;
-    if (x > -sml) {
-      hx = 1.0 * mx;
-      hy = 1.0 * my;
-    } else {
-      hx = mx;
-      hy = my;
-    }
+    double mx = - T * sin(T * x) * cos(T * y);
+    double my = - T * cos(T * x) * sin(T * y);
+    
+
     if (t <= ramp_t) {
-      grad(0) = hx * t;
-      grad(1) = hy * t;
+      grad(0) = mx * t;
+      grad(1) = my * t;
     } else {
-      grad(0) = hx * ramp_t;
-      grad(1) = hy * ramp_t;
+      grad(0) = mx * ramp_t;
+      grad(1) = my * ramp_t;
     }
     grad(2) = 0.0;
     return grad;
@@ -199,32 +205,20 @@ struct ExactFunctionGrad {
 
 struct ExactFunctionLap {
   double operator()(const double x, const double y, const double t) const {
-    double glap = -2.0 * pow(T, 2) * sin(T * x) * sin(T * y);
-    double lap;
-    if (x > -sml) {
-      lap = 1.0 * glap;
-    } else {
-      lap = glap;
-    }
+    double glap = -2.0 * pow(T, 2) * cos(T * x) * cos(T * y);
     if (t <= ramp_t) {
-      return lap * t;
+      return glap * t;
     } else {
-      return lap * ramp_t;
+      return glap * ramp_t;
     }
   }
 };
 
 struct ExactFunctionDot {
   double operator()(const double x, const double y, const double t) const {
-    double gdot = sin(T * x) * sin(T * y);
-    double dot;
-    if (x > -sml) {
-      dot = 1.0 * gdot;
-    } else {
-      dot = gdot;
-    }
+    double gdot = cos(T * x) * cos(T * y);
     if (t <= ramp_t) {
-      return dot;
+      return gdot;
     } else {
       return 0;
     }
@@ -267,7 +261,7 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      // block_map[id].B0 = 1e-;
+      block_map[id].B0 = 1e-3;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -295,7 +289,8 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
 }
 
 MoFEMErrorCode RDProblem::extract_bd_ents(std::string essential,
-                                          std::string natural) {
+                                          std::string natural,
+                                          std::string internal) {
   MoFEMFunctionBegin;
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     string name = it->getName();
@@ -306,6 +301,9 @@ MoFEMErrorCode RDProblem::extract_bd_ents(std::string essential,
     } else if (name.compare(0, 14, essential) == 0) {
       CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), 1,
                                                  essential_bdry_ents, true);
+    } else if (name.compare(0, 14, internal) == 0) {
+      CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), 1,
+                                                 internal_edge_ents, true);
     }
   }
   MoFEMFunctionReturn(0);
@@ -336,6 +334,12 @@ MoFEMErrorCode RDProblem::push_slow_rhs(std::string mass_field,
 
   vol_ele_slow_rhs->getOpPtrVector().push_back(
       new OpAssembleSlowRhsV(mass_field, data, ExactFunction(), ExactFunctionDot(), ExactFunctionLap()));
+
+  natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
+      new OpSkeletonSource(mass_field, 
+                           KinkFunction(),
+                           ExactFunction(), 
+                           internal_edge_ents));
 
   natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
       new OpAssembleNaturalBCRhsTau(flux_field, natural_bdry_ents));
@@ -523,7 +527,7 @@ MoFEMErrorCode RDProblem::run_analysis(int nb_sp) {
 
   CHKERR set_blockData(material_blocks);
 
-  CHKERR extract_bd_ents("ESSENTIAL", "NATURAL"); // nb_species times
+  CHKERR extract_bd_ents("ESSENTIAL", "NATURAL", "INTERNAL"); // nb_species times
 
   if (nb_species == 1 || nb_species == 2 || nb_species == 3) {
     CHKERR extract_initial_ents(2, inner_surface1);

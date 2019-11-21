@@ -37,87 +37,87 @@ Params()
       : U_0(0.0), U_u(1.58), theta_v(0.3), theta_w(0.015), theta_vMinus(0.015), theta_0(0.006), tau_v1Minus(60),
         tau_v2Minus(1150.0), tau_vPlus(1.4506), tau_w1Minus(70.0), tau_w2Minus(20.0), K_wMinus(65.0), U_wMinus(0.03), tau_wPlus(280),
         tau_fi(0.11), tau_01(6.0), tau_02(6.0), tau_s01(43.0), tau_s02(0.2), K_s0(2.0), U_s0(0.65), tau_s1(2.7342), tau_s2(3),
-        K_s(2.0994), U_s(0.9087), tau_si(2.8723), tau_wInf(0.07), W_infStar(0.94), D_tilde() {}
+        K_s(2.0994), U_s(0.9087), tau_si(2.8723), tau_wInf(0.07), W_infStar(0.94), D_tilde(1.19) {}
 
-double get_v_inf(const double u) const {
-    if (u < theta_vMinus) {
-      return 1;
-    } else {
-      return 0;
-    }
+inline double get_v_inf(const double u) const {
+  if (u < theta_vMinus) {
+    return 1;
+  } else {
+    return 0;
+  }
   }
 
 
-double get_w_inf(const double u) const {
+inline double get_w_inf(const double u) const {
     return (1 - Heaviside(u - theta_0)) * (1 - u / tau_wInf) +
            Heaviside(u - theta_0) * W_infStar;
   }
 
-double get_tau_vMinus (const double u) const {
+inline double get_tau_vMinus (const double u) const {
     return (1 - Heaviside(u - theta_vMinus)) * tau_v1Minus +
            Heaviside(u - theta_vMinus) * tau_v2Minus;
   }
 
 
-double get_tau_wMinus(const double u) const {
+inline double get_tau_wMinus(const double u) const {
     return tau_w1Minus +
            (tau_w2Minus - tau_w1Minus) *
                (1 + tanh(K_wMinus * (u - U_wMinus))) * 0.5;
   }
 
-double get_tau_so(const double u) const {
+inline double get_tau_so(const double u) const {
     return tau_s01 + (tau_s02 - tau_s01) *
                                 (1 + tanh(K_s0 * (u - U_s0))) *
                                 0.5;
   }
 
-double get_tau_s(const double u) const {
+inline double get_tau_s(const double u) const {
     return (1 - Heaviside(u - theta_w)) * tau_s1 +
            Heaviside(u - theta_w) * tau_s2;
   }
 
-double get_tau_0(const double u) const {
+inline double get_tau_0(const double u) const {
     return (1 - Heaviside(u - theta_0)) * tau_s2 +
            Heaviside(u - theta_0) * tau_02;
   }
 
-double get_J_fi(const double u, const double v, const double w,
+inline double get_J_fi(const double u, const double v, const double w,
                     const double s) const {
     return -v * Heaviside(u - theta_v) * (u - theta_v) *
            (U_u - u) / tau_fi;
   }
 
-double get_J_so(const double u, const double v, const double w,
+inline double get_J_so(const double u, const double v, const double w,
                     const double s) const {
     return (u - U_0) * (1 - Heaviside(u - theta_w)) / get_tau_0(u) +
            Heaviside(u - theta_w) / get_tau_so(u);
   }
 
-double get_J_si(const double u, const double v, const double w,
+inline double get_J_si(const double u, const double v, const double w,
                     const double s) const {
     return -Heaviside(u - theta_w) * w * s / tau_si;
   }
 
-double get_rhs_u(const double u, const double v, const double w,
+inline double get_rhs_u(const double u, const double v, const double w,
                     const double s) const {
     return -(get_J_fi(u, v, w, s) + get_J_so(u, v, w, s) + get_J_si(u, v, w, s));
   }
 
-double get_rhs_v(const double u, const double v, const double w,
+inline double get_rhs_v(const double u, const double v, const double w,
                     const double s) const {
     return (1 - Heaviside(u - theta_v)) * (get_v_inf(u) - v) /
                get_tau_vMinus(u) -
            Heaviside(u - theta_v) * v / tau_vPlus;
   }
 
-double get_rhs_w(const double u, const double v, const double w,
+inline double get_rhs_w(const double u, const double v, const double w,
                     const double s) const {
     return (1 - Heaviside(u - theta_w)) * (get_w_inf(u) - w) /
                get_tau_wMinus(u) -
            Heaviside(u - theta_w) * w / tau_wPlus;
   }
 
-double get_rhs_s(const double u, const double v, const double w,
+inline double get_rhs_s(const double u, const double v, const double w,
                     const double s) const {
     return ((1 + tanh(K_s * (u - U_s))) * 0.5 - s) / get_tau_s(u);
   }
@@ -136,12 +136,14 @@ struct PreviousData {
   MatrixDouble inv_jac;
 
   PreviousData() {
-    jac.resize(2, 2, false);
-    inv_jac.resize(2, 2, false);
+    jac.resize(3, 3, false);
+    inv_jac.resize(3, 3, false);
   }
 };
 
 Params params;
+
+
 
 
 
@@ -171,6 +173,7 @@ struct OpEssentialBC : public OpFaceEle {
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
     int nb_dofs = data.getIndices().size();
+    
     if (nb_dofs) {
       EntityHandle fe_ent = getFEEntityHandle();
       bool is_essential =
@@ -247,31 +250,34 @@ private:
 };
 
 struct OpInitialMass : public OpVolEle {
-  OpInitialMass(std::vector<Range> &inner_surfaces, std::vector<double> &inits)
-      : OpVolEle("u", OpVolEle::OPROW), innerSurfaces(inner_surfaces), iNits(inits) {}
+  OpInitialMass(std::string field_name, Range &inner_surface, double &inits)
+      : OpVolEle(field_name, OpVolEle::OPROW), innerSurface(inner_surface), iNits(inits) 
+      , fieldName(field_name) {
+        
+      }
   MatrixDouble nN;
   VectorDouble nF;
-  Range innerSurface;
-  std::vector<Range> &innerSurfaces;
-  std::vector<double> &iNits;
+  Range &innerSurface;
+  double iNits;
+  std::string fieldName;
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
+   
     int nb_dofs = data.getFieldData().size();
+    // cout << "Field \t init_val" << endl;
+    // cout << fieldName << " \t " << iNits << endl;
     if (nb_dofs) {
-      unsigned int nstep = getFEMethod()->ts_step;
-      if ( nstep < 5){
-        CHKERR solveInitial(nstep, data);
-      } 
+        CHKERR solveInitial(data);
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode solveInitial(const int nstep, EntData &data) {
-    MoFEMFunctionBegin;
+  MoFEMErrorCode solveInitial(EntData &data) {
+    MoFEMFunctionBegin; 
     int nb_dofs = data.getFieldData().size();
-    EntityHandle fe_ent = getFEEntityHandle();
-    innerSurface = innerSurfaces[nstep-1];
-    bool is_inner_side = (innerSurface.find(fe_ent) != innerSurface.end());
+    // EntityHandle fe_ent = getFEEntityHandle();
+    // bool is_inner_side = (innerSurface.find(fe_ent) != innerSurface.end());
+    bool is_inner_side = true;
     if (is_inner_side) {
       int nb_gauss_pts = getGaussPts().size2();
       if (nb_dofs != static_cast<int>(data.getN().size2()))
@@ -282,15 +288,16 @@ struct OpInitialMass : public OpVolEle {
       nN.clear();
       nF.clear();
 
+      
+
       auto t_row_mass = data.getFTensor0N();
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
-      double init_value = iNits[nstep];
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         const double a = t_w * vol;
         for (int rr = 0; rr != nb_dofs; rr++) {
           auto t_col_mass = data.getFTensor0N(gg, 0);
-          nF[rr] += a * init_value * t_row_mass;
+          nF[rr] += a * iNits * t_row_mass;
           for (int cc = 0; cc != nb_dofs; cc++) {
             nN(rr, cc) += a * t_row_mass * t_col_mass;
             ++t_col_mass;
@@ -302,7 +309,6 @@ struct OpInitialMass : public OpVolEle {
 
       cholesky_decompose(nN);
       cholesky_solve(nN, nF, ublas::lower());
-
       for (auto &dof : data.getFieldDofs()) {
         dof->getFieldData() = nF[dof->getEntDofIdx()];
       }
@@ -318,7 +324,8 @@ struct OpAssembleSlowRhsV : OpVolEle // R_V
                      boost::shared_ptr<PreviousData> &data_w,
                      boost::shared_ptr<PreviousData> &data_s)
       : OpVolEle("u", OpVolEle::OPROW), dataU(data_u)
-      , dataV(data_v), dataW(data_w), dataS(data_s) {}
+      , dataV(data_v), dataW(data_w), dataS(data_s) {
+      }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -345,6 +352,11 @@ struct OpAssembleSlowRhsV : OpVolEle // R_V
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
 
+      bool is_u = ((nstep + 0) % 4) == 0;
+      bool is_v = ((nstep + 3) % 4) == 0;
+      bool is_w = ((nstep + 2) % 4) == 0;
+      bool is_s = ((nstep + 1) % 4) == 0;
+
       auto t_coords = getFTensor1CoordsAtGaussPts();
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
         const double a = vol * t_w;
@@ -353,17 +365,30 @@ struct OpAssembleSlowRhsV : OpVolEle // R_V
         double rhs_v = params.get_rhs_v(t_val_u, t_val_v, t_val_w, t_val_s);
         double rhs_w = params.get_rhs_w(t_val_u, t_val_v, t_val_w, t_val_s);
         double rhs_s = params.get_rhs_s(t_val_u, t_val_v, t_val_w, t_val_s);
+
+        // cout << "rhs_u : " << rhs_u << endl;
+        // cout << "rhs_v : " << rhs_v << endl;
+        // cout << "rhs_w : " << rhs_w << endl;
+        // cout << "rhs_s : " << rhs_s << endl;
         for (int rr = 0; rr != nb_dofs; ++rr) {
           auto t_col_v_base = data.getFTensor0N(gg, 0);
-          if (((nstep + 3) % 4) == 0) {
+          
+          if (is_u) {
             vecF[rr] += a * rhs_u * t_row_v_base;
-          } else if (((nstep + 2) % 4) == 0) {
+            // cout << "U" << "  rhs_u : " << rhs_u << endl;
+          } 
+          else if (is_v) {
             vecF[rr] += a * rhs_v * t_row_v_base;
-          } else if (((nstep + 1) % 4) == 0) {
+            // cout << "V" << "  rhs_v : " << rhs_v << endl;
+          } 
+          else if (is_w) {
             vecF[rr] += a * rhs_w * t_row_v_base;
-          } else if ((nstep % 4) == 0) {
+            // cout << "W" << "  rhs_w : " << rhs_w << endl;
+          } 
+          else if (is_s) {
             vecF[rr] += a * rhs_s * t_row_v_base;
-          }
+            // cout << "S" << "  rhs_s : " << rhs_s << endl;
+          } 
           for (int cc = 0; cc != nb_dofs; ++cc) {
             mat(rr, cc) += a * t_row_v_base * t_col_v_base;
             ++t_col_v_base;
@@ -378,7 +403,17 @@ struct OpAssembleSlowRhsV : OpVolEle // R_V
       }
       cholesky_decompose(mat);
       cholesky_solve(mat, vecF, ublas::lower());
+      if(is_u){
+        cout << "U ---> ";
+      } else if (is_v) {
+        cout << "V ---> ";
+      } else if (is_w) {
+        cout << "W ---> ";
+      } else if (is_s) {
+        cout << "S ---> ";
+      }
 
+      cout << "nstep : " << nstep << "  vecF : " << vecF << endl;
       CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
                           PETSC_TRUE);
       CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(),
@@ -405,28 +440,42 @@ private:
 template <int dim>
 struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
 {
-  OpAssembleStiffRhsTau(boost::shared_ptr<PreviousData> &data_u)
-      : OpFaceEle("f", OpFaceEle::OPROW), dataU(data_u) {}
+  OpAssembleStiffRhsTau(boost::shared_ptr<PreviousData> &data_u,
+                        boost::shared_ptr<PreviousData> &data_v,
+                        boost::shared_ptr<PreviousData> &data_w,
+                        boost::shared_ptr<PreviousData> &data_s)
+      : OpFaceEle("f", OpFaceEle::OPROW), dataU(data_u), dataV(data_v),
+        dataW(data_w), dataS(data_s) {
+        }
 
   // VectorDouble div_base;
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
     unsigned int nstep = getFEMethod()->ts_step;
+    bool is_u = ((nstep + 0) % 4) == 0;
+    bool is_v = ((nstep + 3) % 4) == 0;
+    bool is_w = ((nstep + 2) % 4) == 0;
+    bool is_s = ((nstep + 1) % 4) == 0;
+
 
     const int nb_dofs = data.getIndices().size();
-    if (nb_dofs && ((nstep + 3) % 4) == 0) {
+    if (nb_dofs) {
       vecF.resize(nb_dofs, false);
       vecF.clear();
-      // div_base.resize(data.getN().size2() / 3, 0);
-      // if (div_base.size() != data.getIndices().size()) {
-      //   SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-      //           "data inconsistency");
-      // }
 
       const int nb_integration_pts = getGaussPts().size2();
       auto t_flux_u = getFTensor1FromMat<3>(dataU->flux_values);
+      auto t_flux_v = getFTensor1FromMat<3>(dataV->flux_values);
+      auto t_flux_w = getFTensor1FromMat<3>(dataW->flux_values);
+      auto t_flux_s = getFTensor1FromMat<3>(dataS->flux_values);
+
       auto t_val_u = getFTensor0FromVec(dataU->mass_values);
+      auto t_val_v = getFTensor0FromVec(dataV->mass_values);
+      auto t_val_w = getFTensor0FromVec(dataW->mass_values);
+      auto t_val_s = getFTensor0FromVec(dataS->mass_values);
+
+      
 
       auto t_tau_base = data.getFTensor1N<3>();
 
@@ -436,26 +485,45 @@ struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
       const double vol = getMeasure();
 
       for (int gg = 0; gg < nb_integration_pts; ++gg) {
-
-        // double w = getGaussPts()(3, gg) * getVolume();
-        // if (getHoGaussPtsDetJac().size() > 0) {
-        //   w *= getHoGaussPtsDetJac()(gg);
-        // }
-
         const double K_inv = 1. / params.D_tilde;
         const double a = vol * t_w;
 
-        // CHKERR getDivergenceOfHDivBaseFunctions(side, type, data, gg, div_base);
+        
 
         for (int rr = 0; rr < nb_dofs; ++rr) {
           double div_base = t_tau_grad(0, 0) + t_tau_grad(1, 1) + t_tau_grad(2, 2);
-          vecF[rr] += (K_inv * t_tau_base(i) * t_flux_u(i) -
+          if(is_u){
+            vecF[rr] += (K_inv * t_tau_base(i) * t_flux_u(i) -
                        div_base * t_val_u) * a;
+          }
+          else if(is_v){
+            vecF[rr] += (K_inv * t_tau_base(i) * t_flux_v(i) -
+                       div_base * t_val_v) * a;
+          }
+          else if(is_w){
+            vecF[rr] +=
+                (K_inv * t_tau_base(i) * t_flux_w(i) - div_base * t_val_w) * a;
+          }
+          else if(is_s){
+            vecF[rr] += (K_inv * t_tau_base(i) * t_flux_s(i) -
+                       div_base * t_val_s) * a;
+          }
+
+          // cout << "U\tV\tW\tS" << endl;
+          // cout << t_val_u << "\t" << t_val_v << "\t" << t_val_w << "\t" << t_val_s << "\t" << vecF[rr] << endl;
+
           ++t_tau_base;
           ++t_tau_grad;
         }
         ++t_flux_u;
+        ++t_flux_v;
+        ++t_flux_w;
+        ++t_flux_s;
+
         ++t_val_u;
+        ++t_val_v;
+        ++t_val_w;
+        ++t_val_s;
         ++t_w;
       }
       CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
@@ -468,6 +536,9 @@ struct OpAssembleStiffRhsTau : OpFaceEle //  F_tau_1
 
 private:
   boost::shared_ptr<PreviousData> dataU;
+  boost::shared_ptr<PreviousData> dataV;
+  boost::shared_ptr<PreviousData> dataW;
+  boost::shared_ptr<PreviousData> dataS;
   VectorDouble vecF;
 };
 
@@ -478,7 +549,7 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
                       boost::shared_ptr<PreviousData> &data_v,
                       boost::shared_ptr<PreviousData> &data_w,
                       boost::shared_ptr<PreviousData> &data_s)
-      : OpVolEle("f", OpVolEle::OPROW), dataU(data_u), dataV(data_v), dataW(data_w),
+      : OpVolEle("u", OpVolEle::OPROW), dataU(data_u), dataV(data_v), dataW(data_w),
         dataS(data_s) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -507,20 +578,26 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
       const double vol = getMeasure();
 
       auto t_coords = getFTensor1CoordsAtGaussPts();
+
+      bool is_u = ((nstep + 0) % 4) == 0;
+      bool is_v = ((nstep + 3) % 4) == 0;
+      bool is_w = ((nstep + 2) % 4) == 0;
+      bool is_s = ((nstep + 1) % 4) == 0;
+
       for (int gg = 0; gg < nb_integration_pts; ++gg) {
         const double a = vol * t_w;
         
         for (int rr = 0; rr < nb_dofs; ++rr) {
 
-          if (((nstep + 3) % 4) == 0) {
+          if (is_u) {
             vecF[rr] += (t_row_v_base * (t_dot_u + t_div_u)) * a;
-          } else if (((nstep + 2) % 4) == 0) {
-            vecF[rr] += (t_row_v_base * (t_dot_v + t_div_v)) * a;
-          } else if (((nstep + 1) % 4) == 0) {
-            vecF[rr] += (t_row_v_base * (t_dot_w + t_div_w)) * a;
-          } else if ((nstep % 4) == 0) {
-            vecF[rr] += (t_row_v_base * (t_dot_s + t_div_s)) * a;
-          }
+          } else if (is_v) {
+            vecF[rr] += (t_row_v_base * t_dot_v) * a;
+          } else if (is_w) {
+            vecF[rr] += (t_row_v_base * t_dot_w) * a;
+          } else if (is_s) {
+            vecF[rr] += (t_row_v_base * t_dot_s) * a;
+          } 
           ++t_row_v_base;
         }
         ++t_dot_u;
@@ -534,6 +611,7 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
         ++t_div_s;
         ++t_w;
       }
+      // cout << "VecF : " << vecF << endl;
       CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
                           PETSC_TRUE);
       CHKERR VecSetValues(getFEMethod()->ts_F, data, &*vecF.begin(),
@@ -566,10 +644,8 @@ struct OpAssembleLhsTauTau : OpVolEle // A_TauTau_1
     unsigned int nstep = getFEMethod()->ts_step;
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
-    
-    bool is_u = ((nstep + 3) % 4) == 0;
 
-    if (nb_row_dofs && nb_col_dofs && is_u) {
+    if (nb_row_dofs && nb_col_dofs) {
       
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
@@ -612,7 +688,7 @@ private:
 template <int dim>
 struct OpAssembleLhsTauV : OpVolEle // E_TauV
 {
-  OpAssembleLhsTauV(boost::shared_ptr<PreviousData> &data)
+  OpAssembleLhsTauV()
       : OpVolEle("f", "u", OpVolEle::OPROWCOL){
     sYmm = false;
   }
@@ -625,9 +701,7 @@ struct OpAssembleLhsTauV : OpVolEle // E_TauV
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
 
-    bool is_u = ((nstep + 3) % 4) == 0;
-
-    if (nb_row_dofs && nb_col_dofs && is_u) {
+    if (nb_row_dofs && nb_col_dofs) {
       
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
@@ -675,11 +749,11 @@ struct OpAssembleLhsVTau : OpVolEle // C_VTau
                         EntData &col_data) {
     MoFEMFunctionBegin;
     unsigned int nstep = getFEMethod()->ts_step;
-    bool is_u = ((nstep + 3) % 4) == 0;
+    bool is_u = ((nstep + 0) % 4) == 0;
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
 
-    if (nb_row_dofs && nb_col_dofs && is_u) {
+    if (nb_row_dofs && nb_col_dofs) {
       mat.resize(nb_row_dofs, nb_col_dofs, false);
       mat.clear();
       const int nb_integration_pts = getGaussPts().size2();
@@ -694,7 +768,12 @@ struct OpAssembleLhsVTau : OpVolEle // C_VTau
           for (int cc = 0; cc != nb_col_dofs; ++cc) {
             double div_col_base =
                 t_col_tau_grad(0, 0) + t_col_tau_grad(1, 1) + t_col_tau_grad(2, 2);
-            mat(rr, cc) += (t_row_v_base * div_col_base) * a;
+                if(is_u){
+                  mat(rr, cc) += (t_row_v_base * div_col_base) * a;
+                }else{
+                  mat(rr, cc) = 0;
+                }
+            
             ++t_col_tau_grad;
           }
           ++t_row_v_base;
@@ -722,7 +801,7 @@ struct OpAssembleLhsVV : OpVolEle // D
                         EntityType col_type, EntData &row_data,
                         EntData &col_data) {
     MoFEMFunctionBegin;
-
+    // cout << "in VV()" << endl;
     const int nb_row_dofs = row_data.getIndices().size();
     const int nb_col_dofs = col_data.getIndices().size();
     if (nb_row_dofs && nb_col_dofs) {
@@ -767,15 +846,56 @@ private:
   MatrixDouble mat, transMat;
 };
 
+// this operator takes care of copying the "u" dofs to the data fields "U", "V", "W", or "S"
+// depending of the time step number  
+struct OpDamp_dofs_to_field_data : OpVolEle{
+  OpDamp_dofs_to_field_data(std::string data_field_name)
+      : OpVolEle("u", data_field_name, OpVolEle::OPROWCOL)
+      , dataFieldName(data_field_name) {
+    // cout << "In OpDamp() " << endl;
+  }
+  std::string dataFieldName;
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+    MoFEMFunctionBegin;
+    // cout << "in doWork() of OpDamp()" << endl;
+    unsigned int nstep = getFEMethod()->ts_step;
+    bool is_u_U = (((nstep + 0) % 4) == 0) && (dataFieldName == "U");
+    bool is_u_V = (((nstep + 3) % 4) == 0) && (dataFieldName == "V");
+    bool is_u_W = (((nstep + 2) % 4) == 0) && (dataFieldName == "W");
+    bool is_u_S = (((nstep + 1) % 4) == 0) && (dataFieldName == "S");
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_col_dofs = col_data.getIndices().size();
+    bool are_equal = (nb_row_dofs == nb_col_dofs);
+    if (nb_row_dofs && nb_col_dofs && are_equal) {
+      if ((nstep > 0) && (is_u_U || is_u_V || is_u_W || is_u_S)) {
+        for (int ind = 0; ind < nb_row_dofs; ++ind) {
+          col_data.getFieldDofs()[ind]->getFieldData() =
+              row_data.getFieldData()[ind];
+
+          // cout << "u : " << col_data.getFieldDofs()[ind]->getFieldData() << endl;
+          // cout <<  dataFieldName <<" : " << col_data.getFieldDofs()[ind]->getFieldData() << endl;
+        }
+      } 
+    }
+    MoFEMFunctionReturn(0);
+  }
+};
+
 struct Monitor : public FEMethod {
   Monitor(MPI_Comm &comm, const int &rank, SmartPetscObj<DM> &dm,
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc)
+          boost::shared_ptr<PostProcVolumeOnRefinedMesh> &post_proc)
       : cOmm(comm), rAnk(rank), dM(dm), postProc(post_proc){};
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    if (ts_step % save_every_nth_step == 0) {
+    bool is_u = ((ts_step + 0) % 4) == 0;
+    
+
+    if (is_u) {
+      int step = (int)((ts_step) / 4);
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
@@ -786,7 +906,7 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
 
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProc;
+  boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProc;
   MPI_Comm cOmm;
   const int rAnk;
 };
