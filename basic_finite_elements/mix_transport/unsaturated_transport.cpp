@@ -38,16 +38,16 @@ static char help[] = "...\n\n";
 
 double GenericMaterial::ePsilon0 = 0;
 double GenericMaterial::ePsilon1 = 0;
+double GenericMaterial::scaleZ = 0;
 
 map<std::string, CommonMaterialData::RegisterHook>
     RegisterMaterials::mapOfRegistredMaterials;
 
 int main(int argc, char *argv[]) {
 
-  const string default_options = "-ksp_type fgmres \n"
+  const string default_options = "-ksp_type fgmres\n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
-                                 "-ksp_monitor\n";
+                                 "-pc_factor_mat_solver_package mumps \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {

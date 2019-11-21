@@ -38,8 +38,9 @@ struct GenericMaterial {
 
   static double ePsilon0; ///< Regularization parameter
   static double ePsilon1; ///< Regularization parameter
+  static double scaleZ; ///< Scale z direction
+  
   double sCale;           ///< Scale time dependent eq.
-  // double Ks;                 ///< Saturated hydraulic conductivity [m/day]
 
   double h;   ///< hydraulic head
   double h_t; ///< rate of hydraulic head
@@ -59,7 +60,7 @@ struct GenericMaterial {
    * \brief Initialize head
    * @return value of head
    */
-  virtual double initalPcEval() const = 0;
+  virtual double initialPcEval() const = 0;
   virtual void printMatParameters(const int id,
                                   const std::string &prefix) const = 0;
 
@@ -366,9 +367,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         block_data->z = t_coords(2);
         CHKERR block_data->calK();
         const double K = block_data->K;
+        const double scaleZ = block_data->scaleZ;
         const double z = t_coords(2); /// z-coordinate at Gauss pt
         // Calculate pressure gradient
-        noalias(nF) -= alpha * (t_h - z) * divVec;
+        noalias(nF) -= alpha * (t_h - z * scaleZ) * divVec;
         // Calculate presure gradient from flux
         FTensor::Tensor0<double *> t_nf(&*nF.begin());
         for (int rr = 0; rr != nb_dofs; rr++) {
@@ -880,7 +882,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         // get weight for integration rule
         double alpha = getGaussPts()(2, gg) * getVolume();
         nN += alpha * outer_prod(data.getN(gg), data.getN(gg));
-        nF += alpha * block_data->initalPcEval() * data.getN(gg);
+        nF += alpha * block_data->initialPcEval() * data.getN(gg);
       }
 
       // factor matrix
