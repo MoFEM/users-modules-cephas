@@ -183,8 +183,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<VectorDouble> detHVec;
     boost::shared_ptr<MatrixDouble> invHMat;
 
-    DataForcesAndSourcesCore::EntData *faceRowDataMaster;
-    DataForcesAndSourcesCore::EntData *faceRowDataSlave;
+    DataForcesAndSourcesCore::EntData *faceRowData;
 
     double areaSlave;
 
@@ -207,9 +206,11 @@ struct SimpleContactProblem {
       detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
-      faceRowDataMaster = nullptr;
-      faceRowDataSlave = nullptr;
+      faceRowData = nullptr;
     }
+    
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
 
   private:
     MoFEM::Interface &mField;
@@ -352,7 +353,7 @@ struct SimpleContactProblem {
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
             side_fe,
-        std::string &side_fe_name)
+        const std::string &side_fe_name)
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
@@ -446,6 +447,56 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  struct OpLoopMasterForSideLhs
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide> sideFe;
+    std::string sideFeName;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpLoopMasterForSideLhs(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTERMASTER),
+          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+          sideFeName(side_fe_name) {}
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
+  struct OpLoopSlaveForSideLhs
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide> sideFe;
+    std::string sideFeName;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpLoopSlaveForSideLhs(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVESLAVE),
+          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+          sideFeName(side_fe_name) {}
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+  };
+
   struct OpContactConstraintMatrixMasterSlaveForSide
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -459,7 +510,7 @@ struct SimpleContactProblem {
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
             side_fe,
-        std::string &side_fe_name, Mat aij = PETSC_NULL)
+        const std::string &side_fe_name, Mat aij = PETSC_NULL)
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
@@ -1293,6 +1344,302 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+
+//Material Forces begin
+  struct OpContactMaterialVolOnSideLhs
+      : public MoFEM::VolumeElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator {
+
+    MatrixDouble NN;
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    Mat Aij;
+    
+    bool hoGeometry;
+
+    VectorInt rowIndices;
+    VectorInt colIndices;
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+    virtual MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+    MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialVolOnSideLhs(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact, Mat aij,
+        bool ho_geometry = false)
+        : MoFEM::VolumeElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator(field_name_1, field_name_2,
+                                    UserDataOperator::OPROWCOL),
+          commonDataSimpleContact(common_data_contact), Aij(aij), hoGeometry(ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    }
+  };
+
+  struct OpContactMaterialVolOnSideLhs_dX_dx
+      : public OpContactMaterialVolOnSideLhs {
+
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialVolOnSideLhs_dX_dx(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact, Mat aij,
+        bool ho_geometry = false)
+        : OpContactMaterialVolOnSideLhs(field_name_1, field_name_2,
+                                                common_data_contact, aij, ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  struct OpContactMaterialVolOnSideLhs_dX_dX
+      : public OpContactMaterialVolOnSideLhs {
+
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialVolOnSideLhs_dX_dX(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact, Mat aij,
+        bool ho_geometry = false)
+        : OpContactMaterialVolOnSideLhs(field_name_1, field_name_2,
+                                                common_data_contact, aij, ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+//   struct OpContactMaterialVolOnSideLhs_dX_dLagmult
+//       : public OpContactMaterialVolOnSideLhs {
+
+//     MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+//                              DataForcesAndSourcesCore::EntData &col_data);
+
+//     OpContactMaterialVolOnSideLhs_dX_dLagmult(
+//         const string field_name_1, const string lag_field,
+//         boost::shared_ptr<CommonDataSimpleContact> common_data_contact, Mat aij,
+//         bool ho_geometry = false)
+//         : OpContactMaterialVolOnSideLhs(field_name_1, lag_field,
+//                                         common_data_contact, aij, ho_geometry) {
+//       sYmm = false; // This will make sure to loop over all entities
+//     };
+//   };
+
+  struct OpContactMaterialMasterLhs
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide> sideFe;
+    std::string sideFeName;
+    Mat Aij;
+    bool hoGeometry;
+
+    MatrixDouble NN;
+    VectorInt rowIndices;
+    VectorInt colIndices;
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+    virtual MoFEMErrorCode doWork(int row_side, int col_side,
+                                  EntityType row_type, EntityType col_type,
+                                  DataForcesAndSourcesCore::EntData &row_data,
+                                  DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+
+    virtual MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialMasterLhs(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name, Mat aij, bool ho_geometry = false)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name_1, field_name_2, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTERMASTER),
+          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+          sideFeName(side_fe_name), Aij(aij), hoGeometry(ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    }
+  };
+
+  struct OpContactMaterialMasterSlaveLhs
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide> sideFe;
+    std::string sideFeName;
+    Mat Aij;
+    bool hoGeometry;
+
+    MatrixDouble NN;
+    VectorInt rowIndices;
+    VectorInt colIndices;
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+    virtual MoFEMErrorCode doWork(int row_side, int col_side,
+                                  EntityType row_type, EntityType col_type,
+                                  DataForcesAndSourcesCore::EntData &row_data,
+                                  DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+
+    virtual MoFEMErrorCode
+    iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+              DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
+                            DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialMasterSlaveLhs(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name, Mat aij, bool ho_geometry = false)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name_1, field_name_2, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTERSLAVE),
+          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+          sideFeName(side_fe_name), Aij(aij), hoGeometry(ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    }
+  };
+
+  struct OpContactMaterialMasterLhs_dX_dX
+      : public OpContactMaterialMasterLhs {
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialMasterLhs_dX_dX(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name, Mat aij, bool ho_geometry = false)
+        : OpContactMaterialMasterLhs(field_name_1, field_name_2,
+                                       common_data_contact, side_fe,
+                                       side_fe_name, aij, ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  struct OpContactMaterialMasterSlaveLhs_dX_dLagmult : public OpContactMaterialMasterSlaveLhs {
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                             DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialMasterSlaveLhs_dX_dLagmult(
+        const string field_name_1, const string lag_field,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name, Mat aij, bool ho_geometry = false)
+        : OpContactMaterialMasterSlaveLhs(field_name_1, lag_field,
+                                     common_data_contact, side_fe, side_fe_name,
+                                     aij, ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  struct OpContactMaterialMasterSlaveLhs_dX_dX
+      : public OpContactMaterialMasterSlaveLhs {
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                             DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialMasterSlaveLhs_dX_dX(
+        const string field_name_1, const string lag_field,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+            side_fe,
+        const std::string &side_fe_name, Mat aij, bool ho_geometry = false)
+        : OpContactMaterialMasterSlaveLhs(field_name_1, lag_field,
+                                          common_data_contact, side_fe,
+                                          side_fe_name, aij, ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  struct OpContactMaterialMasterLhs_dX_dx
+      : public OpContactMaterialMasterLhs {
+
+    /*
+     * Triggers loop over operators from the side volume
+     *
+     */
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    OpContactMaterialMasterLhs_dX_dx(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide> side_fe,
+        const std::string &side_fe_name, Mat aij, bool ho_geometry = false)
+        : OpContactMaterialMasterLhs(field_name_1, field_name_2,
+                                       common_data_contact, side_fe,
+                                       side_fe_name, aij, ho_geometry) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  // Material Forces end
+  
   // setup operators for calculation of active set
   MoFEMErrorCode setContactOperatorsRhsOperators(string field_name,
                                                  string lagrang_field_name,
@@ -1501,9 +1848,9 @@ struct SimpleContactProblem {
       feRhsSimpleContact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
           mesh_node_field_name, feMatSideRhsSlave, side_fe_name));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalMatForcesALESlave(mesh_node_field_name,
-                                      commonDataSimpleContact));
+    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //       new OpCalMatForcesALESlave(mesh_node_field_name,
+    //                                   commonDataSimpleContact));
     }
     MoFEMFunctionReturn(0);
   }
@@ -1637,6 +1984,115 @@ struct SimpleContactProblem {
           new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
               mesh_node_field_name, lagrang_field_name, cnValue,
               commonDataSimpleContact, aij));
+
+      // Side volume element computes linearisation with spatial coordinates
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          feMatSideLhs_dx =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+      // Side volume element computes linearisation with material coordinates
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          feMatSideLhs_dX =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          feMatSideLhs_dLambda =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+
+      feMatSideLhs_dx->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(mesh_node_field_name, commonDataSimpleContact->HMat));
+      feMatSideLhs_dx->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(field_name, commonDataSimpleContact->hMat));
+
+      // Master derivative over spatial
+      feMatSideLhs_dx->getOpPtrVector().push_back(
+          new OpCalculateDeformation(mesh_node_field_name, commonDataSimpleContact, false));
+      feMatSideLhs_dx->getOpPtrVector().push_back(
+          new OpContactMaterialVolOnSideLhs_dX_dx(
+              mesh_node_field_name, field_name, commonDataSimpleContact, aij, false));
+
+    //   feLhsSimpleContact->getOpPtrVector().push_back(new OpLoopMasterForSideLhs(
+    //       mesh_node_field_name, commonDataSimpleContact, feMatSideLhs_dx,
+    //       side_fe_name));
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpContactMaterialMasterLhs_dX_dx(
+                mesh_node_field_name, field_name, commonDataSimpleContact,
+                feMatSideLhs_dx, side_fe_name, aij, false));
+
+        // Master derivative over mesh_nodes
+        feMatSideLhs_dX->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldGradient<3, 3>(
+                mesh_node_field_name, commonDataSimpleContact->HMat));
+
+        feMatSideLhs_dX->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldGradient<3, 3>(
+                field_name, commonDataSimpleContact->hMat));
+
+        feMatSideLhs_dX->getOpPtrVector().push_back(new OpCalculateDeformation(
+            mesh_node_field_name, commonDataSimpleContact, false));
+
+        feMatSideLhs_dX->getOpPtrVector().push_back(
+            new OpContactMaterialVolOnSideLhs_dX_dX(
+                mesh_node_field_name, mesh_node_field_name,
+                commonDataSimpleContact, aij, false));
+        // feLhsSimpleContact->getOpPtrVector().push_back(
+        //     new OpLoopMasterForSideLhs(mesh_node_field_name,
+        //                                commonDataSimpleContact, feMatSideLhs_dX,
+        //                                side_fe_name));
+       
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpContactMaterialMasterLhs_dX_dX(
+                mesh_node_field_name, mesh_node_field_name,
+                commonDataSimpleContact, feMatSideLhs_dX, side_fe_name, aij,
+                false));
+
+        // feMatSideLhs_dLambda->getOpPtrVector().push_back(
+        //     new OpContactMaterialVolOnSideLhs_dX_dLagmult(
+        //         mesh_node_field_name, lagrang_field_name,
+        //         commonDataSimpleContact, aij, false));
+
+        feLhsSimpleContact->getOpPtrVector().push_back(
+            new OpContactMaterialMasterSlaveLhs_dX_dLagmult(
+                mesh_node_field_name, lagrang_field_name,
+                commonDataSimpleContact, feMatSideLhs_dLambda, side_fe_name,
+                aij, false));
+
+        // feLhsSimpleContact->getOpPtrVector().push_back(
+        //     new OpContactMaterialMasterSlaveLhs_dX_dX(
+        //         mesh_node_field_name, mesh_node_field_name,
+        //         commonDataSimpleContact, feMatSideLhs_dLambda, side_fe_name,
+        //         aij, false));
+
+        // Slave
+        //   feMatSideLhs_dx->getOpPtrVector().push_back(new
+        //   OpCalculateDeformation(
+        //       mesh_node_field_name, commonDataSimpleContact, false));
+        //   //   feMatSideLhs_dx->getOpPtrVector().push_back(
+        //   //       new OpContactMaterialVolOnSideLhs_dX_dx(
+        //   //           mesh_node_field_name, field_name,
+        //   commonDataSimpleContact,
+        //   //           aij, mapPressure[ms_id], surface_pressure, false));
+        //   feLhsSimpleContact->getOpPtrVector().push_back(new
+        //   OpLoopSlaveForSideLhs(
+        //       mesh_node_field_name, commonDataSimpleContact,
+        //       feMatSideLhs_dx, side_fe_name));
+
+        //   //   feMatLhs.getOpPtrVector().push_back(
+        //   //       new OpContactMaterialMasterLhs_dX_dx(
+        //   //           mesh_node_field_name, field_name,
+        //   commonDataSimpleContact,
+        //   //           feMatSideLhs_dx, side_fe_name, aij,
+        //   mapPressure[ms_id],
+        //   //           surface_pressure, false));
+
+
+
+
+
+
+
     }
     MoFEMFunctionReturn(0);
   }
