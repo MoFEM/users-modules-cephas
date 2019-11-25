@@ -327,6 +327,90 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
+    //if (flg_block_config) {
+      // try {
+      //   ifstream ini_file(block_config_file);
+
+      //   po::variables_map vm;
+      //   po::options_description config_file_options;
+      //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      //     std::ostringstream str_order;
+      //     str_order << "block_" << it->getMeshsetId() << ".displacement_order";
+      //     config_file_options.add_options()(
+      //         str_order.str().c_str(),
+      //         po::value<int>(&block_data[it->getMeshsetId()].oRder)
+      //             ->default_value(order));
+      //     std::ostringstream str_cond;
+      //     str_cond << "block_" << it->getMeshsetId() << ".young_modulus";
+      //     config_file_options.add_options()(
+      //         str_cond.str().c_str(),
+      //         po::value<double>(&block_data[it->getMeshsetId()].yOung)
+      //             ->default_value(-1));
+      //     std::ostringstream str_capa;
+      //     str_capa << "block_" << it->getMeshsetId() << ".poisson_ratio";
+      //     config_file_options.add_options()(
+      //         str_capa.str().c_str(),
+      //         po::value<double>(&block_data[it->getMeshsetId()].pOisson)
+      //             ->default_value(-2));
+      //     std::ostringstream str_init_temp;
+      //     str_init_temp << "block_" << it->getMeshsetId()
+      //                   << ".initial_temperature";
+      //     config_file_options.add_options()(
+      //         str_init_temp.str().c_str(),
+      //         po::value<double>(&block_data[it->getMeshsetId()].initTemp)
+      //             ->default_value(0));
+      //   }
+      //   po::parsed_options parsed =
+      //       parse_config_file(ini_file, config_file_options, true);
+      //   store(parsed, vm);
+      //   po::notify(vm);
+      //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      //     if (block_data[it->getMeshsetId()].oRder == -1)
+      //       continue;
+      //     if (block_data[it->getMeshsetId()].oRder == order)
+      //       continue;
+      //     PetscPrintf(PETSC_COMM_WORLD, "Set block %d order to %d\n",
+      //                 it->getMeshsetId(), block_data[it->getMeshsetId()].oRder);
+      //     Range block_ents;
+      //     CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
+      //                                        true);
+
+      //     Range ents_to_set_order;
+      //     CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
+      //                                 moab::Interface::UNION);
+
+      //     ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
+      //     CHKERR moab.get_adjacencies(block_ents, 2, false, ents_to_set_order,
+      //                                 moab::Interface::UNION);
+
+      //     CHKERR moab.get_adjacencies(block_ents, 1, false, ents_to_set_order,
+      //                                 moab::Interface::UNION);
+
+      //     CHKERR m_field.synchronise_entities(ents_to_set_order);
+      //     CHKERR m_field.set_field_order(ents_to_set_order, "SPATIAL_POSITION",
+      //                                    block_data[it->getMeshsetId()].oRder);
+
+      //     CHKERR m_field.set_field_order(ents_to_set_order,
+      //                                    "PREVIOUS_CONVERGED_SP",
+      //                                    block_data[it->getMeshsetId()].oRder);
+      //   }
+      //   std::vector<std::string> additional_parameters;
+      //   additional_parameters =
+      //       collect_unrecognized(parsed.options, po::include_positional);
+      //   for (std::vector<std::string>::iterator vit =
+      //            additional_parameters.begin();
+      //        vit != additional_parameters.end(); ++vit) {
+      //     CHKERR PetscPrintf(PETSC_COMM_WORLD,
+      //                        "** WARNING Unrecognized option %s\n",
+      //                        vit->c_str());
+      //   }
+      // } catch (const std::exception &ex) {
+      //   std::ostringstream ss;
+      //   ss << ex.what() << std::endl;
+      //   SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
+      // }
+    //}
+
     boost::shared_ptr<SimpleContactProblem> contact_problem;
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
         new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
@@ -554,6 +638,42 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMoFEMLoopFiniteElements(
         dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
+
+    //
+    Range solid_faces;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 12, "MAT_ELASTIC1") == 0) {
+        Range tets, tet;
+        const int id = bit->getMeshsetId();
+        contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
+            .eNts = master_tris;
+        // CHKERR m_field.get_moab().get_entities_by_type(
+        //     bit->getMeshset(), MBTRI, commonData->setOfFacesData[id].eNts,
+        //     true);
+        // solid_faces.merge(commonData->setOfFacesData[id].eNts);
+        CHKERR moab.get_adjacencies(
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
+                .eNts,
+            3, true, tets, moab::Interface::UNION);
+        tet = Range(tets.front(), tets.front());
+        for (auto &bit : elastic.setOfBlocks) {
+          if (bit.second.tEts.contains(tet)) {
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
+                .yOung = bit.second.E;
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
+                .pOisson = bit.second.PoissonRatio;
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
+                .iD = id;
+            break;
+          }
+        }
+        if (contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
+                .yOung < 0) {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "Cannot find a fluid block adjacent to a given solid face");
+        }
+      }
+    }
 
     std::ostringstream ostrm;
 

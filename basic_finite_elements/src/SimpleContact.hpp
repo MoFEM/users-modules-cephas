@@ -157,6 +157,16 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
+  struct BlockData {
+    int iD;
+    int oRder;
+    double yOung;
+    double pOisson;
+    double initTemp;
+    Range eNts;
+    BlockData() : iD(-1), oRder(-1), yOung(-1), pOisson(-2), initTemp(0) {}
+  };
+
   struct CommonDataSimpleContact {
     vector<vector<VectorDouble>> tangentSlaveALE;
     vector<vector<VectorDouble>> tangentMasterALE;
@@ -182,6 +192,9 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> HMat;
     boost::shared_ptr<VectorDouble> detHVec;
     boost::shared_ptr<MatrixDouble> invHMat;
+
+    std::map<int, BlockData> setOfMasterFacesData;
+    std::map<int, BlockData> setOfSlaveFacesData;
 
     DataForcesAndSourcesCore::EntData *faceRowData;
 
