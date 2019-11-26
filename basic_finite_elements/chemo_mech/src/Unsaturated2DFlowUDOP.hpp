@@ -1,27 +1,29 @@
-#ifndef __UFOPERATORS_HPP__
-#define __UFOPERATORS_HPP__
+#ifndef __UFOPERATORS2D_HPP__
+#define __UFOPERATORS2D_HPP__
 
 #include <stdlib.h>
 #include <BasicFiniteElements.hpp>
 
-namespace UFOperators {
+namespace UFOperators2D {
+  
 
-using VolEle = MoFEM::VolumeElementForcesAndSourcesCore;
+  using VolEle = MoFEM::FaceElementForcesAndSourcesCore;
+  using FaceEle = MoFEM::EdgeElementForcesAndSourcesCore;
 
-using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
+  using OpVolEle = VolEle::UserDataOperator;
+  using OpFaceEle = FaceEle::UserDataOperator;
 
-using OpVolEle = VolEle::UserDataOperator;
-using OpFaceEle = FaceEle::UserDataOperator;
+  using EntData = DataForcesAndSourcesCore::EntData;
 
-using EntData = DataForcesAndSourcesCore::EntData;
+  using PostProc = PostProcFaceOnRefinedMesh;
+
 
   const int save_every_nth_step = 4;
   const double natural_bc_values = -1;
   const double essential_bc_values = 0.0;
-  const int order = 2;
 
 
-  // const int dim = 3;
+  // const int 2 = 3;
   FTensor::Index<'i', 3> i;
 
   struct BlockData {
@@ -169,7 +171,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
   };
 
 
-  template <int DIM> struct OpAssembleStiffRhs : OpVolEle {
+  struct OpAssembleStiffRhs : OpVolEle {
       
     OpAssembleStiffRhs(std::string field, 
                        boost::shared_ptr<PreviousData> &data,
@@ -205,13 +207,13 @@ using EntData = DataForcesAndSourcesCore::EntData;
         
         auto t_dot_val = getFTensor0FromVec(commonData->dot_values);
         auto t_val = getFTensor0FromVec(commonData->values);
-        auto t_grad = getFTensor1FromMat<DIM>(commonData->grads);
+        auto t_grad = getFTensor1FromMat<2>(commonData->grads);
 
         auto t_base = data.getFTensor0N();
-        auto t_diff_base = data.getFTensor1DiffN<DIM>();
+        auto t_diff_base = data.getFTensor1DiffN<2>();
         auto t_w = getFTensor0IntegrationWeight();
       
-        FTensor::Index<'i', DIM> i;
+        FTensor::Index<'i', 2> i;
 
 
         const double vol = getMeasure();
@@ -220,14 +222,10 @@ using EntData = DataForcesAndSourcesCore::EntData;
           const double a = vol * t_w;
 
           const double K_h = block_data.get_conductivity(t_val);
-          const double C_h = block_data.get_capacity(t_val);
-
-          
-
-          
+          const double C_h = block_data.get_capacity(t_val); 
           for (int rr = 0; rr != nb_dofs; ++rr) {
             vecF[rr] += a * (t_base * C_h * t_dot_val + K_h *
-            (t_diff_base(i) * t_grad(i) - 0.*t_diff_base(2)));
+            t_diff_base(i) * t_grad(i));
             ++t_diff_base;
             ++t_base;
           }
@@ -252,7 +250,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
     std::string field;
   };
 
-  template <int DIM> struct OpAssembleStiffLhs : OpVolEle {
+  struct OpAssembleStiffLhs : OpVolEle {
 
     OpAssembleStiffLhs(std::string fieldu,
                        boost::shared_ptr<PreviousData> &data,
@@ -296,14 +294,14 @@ using EntData = DataForcesAndSourcesCore::EntData;
 
         auto t_val = getFTensor0FromVec(commonData->values);
         auto t_dot_val = getFTensor0FromVec(commonData->dot_values);
-        auto t_grad = getFTensor1FromMat<DIM>(commonData->grads);
+        auto t_grad = getFTensor1FromMat<2>(commonData->grads);
 
-        auto t_row_diff_base = row_data.getFTensor1DiffN<DIM>();
+        auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
         auto t_w = getFTensor0IntegrationWeight();
         const double ts_a = getFEMethod()->ts_a;
         const double vol = getMeasure();
 
-        FTensor::Index<'i', DIM> i;
+        FTensor::Index<'i', 2> i;
 
         // cout << "B0 : " << block_data.B0 << endl;
 
@@ -315,10 +313,9 @@ using EntData = DataForcesAndSourcesCore::EntData;
           const double DC_h = block_data.get_diffCapacity(t_val);
 
           // cout << "C_h : " << C_h << endl; 
-          // t_grad(2) = t_grad(2) - 1;
           for (int rr = 0; rr != nb_row_dofs; ++rr) {
             auto t_col_base = col_data.getFTensor0N(gg, 0);
-            auto t_col_diff_base = col_data.getFTensor1DiffN<DIM>(gg, 0);
+            auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
             for (int cc = 0; cc != nb_col_dofs; ++cc) {
 
               mat(rr, cc) +=
@@ -411,7 +408,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
   struct Monitor : public FEMethod {
     double &eRror;
     Monitor(MPI_Comm &comm, const int &rank, SmartPetscObj<DM> &dm,
-            boost::shared_ptr<PostProcVolumeOnRefinedMesh> &post_proc, double &err)
+            boost::shared_ptr<PostProc> &post_proc, double &err)
         : cOmm(comm)
         , rAnk(rank) 
         , dM(dm)
@@ -432,11 +429,11 @@ using EntData = DataForcesAndSourcesCore::EntData;
 
   private:
     SmartPetscObj<DM> dM;
-    boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProc;
+    boost::shared_ptr<PostProc> postProc;
     MPI_Comm cOmm;
     const int rAnk;
   };
 
-}; // end UFOperators namespace
+}; // end UFOperators2D namespace
 
 #endif

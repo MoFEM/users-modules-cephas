@@ -17,17 +17,22 @@ using EntData = DataForcesAndSourcesCore::EntData;
 
 
 
-const int save_every_nth_step = 1;
+const int save_every_nth_step = 4;
 
 const double essen_value = 0;
 
 FTensor::Index<'i', 3> i;
 
+
 // problem parameters
-const double alpha = -0.08; 
-const double gma = 3; 
-const double ep = 0.005;
-const double D_tilde = 0.5;
+const double alpha = 0.01; 
+const double gma = 0.002; 
+const double b = 0.15;
+const double c = 8.00;
+const double mu1 = 0.20;
+const double mu2 = 0.30;
+
+const double D_tilde = 0.0258;
 
 
 
@@ -279,22 +284,17 @@ struct OpSolveRecovery : public OpVolEle {
 // 2. RHS for explicit part of the mass balance equation
 struct OpAssembleSlowRhsV : OpVolEle // R_V
 {
-  typedef boost::function<double(const double, const double, const double, const double)>
-      Feval_stim;
-  typedef boost::function<double(const double, const double, const double)>
+  typedef boost::function<double(const double, const double)>
       Feval_u;
   OpAssembleSlowRhsV(std::string mass_field,
                      boost::shared_ptr<PreviousData> &data_u,
                      boost::shared_ptr<PreviousData> &data_v,
-                     Feval_stim i_stimulus,
                      Feval_u rhs_u)
       : OpVolEle(mass_field, OpVolEle::OPROW)
       , dataU(data_u)
       , dataV(data_v)
-      , iStimulus(i_stimulus)
       , rhsU(rhs_u) {}
 
-  Feval_stim iStimulus;
   Feval_u rhsU;
   FTensor::Number<0> NX;
   FTensor::Number<1> NY;
@@ -320,13 +320,11 @@ struct OpAssembleSlowRhsV : OpVolEle // R_V
       auto t_row_v_base = data.getFTensor0N();
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
-      auto t_coords = getFTensor1CoordsAtGaussPts();
-      const double c_time = getFEMethod()->ts_t;
+      
 
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
-        double stim = iStimulus(t_coords(NX), t_coords(NY), t_coords(NZ),  c_time);
-        double rhs = rhsU(t_val_u, t_val_v, stim);
-        // double rhs = t_val_u * (1 - t_val_u);
+        
+        double rhs = rhsU(t_val_u, t_val_v);
         const double a = vol * t_w;
 
         for (int rr = 0; rr != nb_dofs; ++rr) {
@@ -340,7 +338,6 @@ struct OpAssembleSlowRhsV : OpVolEle // R_V
         }
         ++t_val_u;
         ++t_val_v;
-        ++t_coords;
         ++t_w;
       
       }
@@ -477,9 +474,13 @@ template <int dim>
 struct OpAssembleStiffRhsV : OpVolEle // F_V
 {
   OpAssembleStiffRhsV(std::string mass_field,
-                      boost::shared_ptr<PreviousData> &data_u)
+                      boost::shared_ptr<PreviousData> &data_u,
+                      Range &stim_region)
       : OpVolEle(mass_field, OpVolEle::OPROW)
-      , dataU(data_u){}
+      , dataU(data_u)
+      , stimRegion(stim_region) {}
+
+  Range &stimRegion;
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -497,10 +498,24 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
       auto t_row_v_base = data.getFTensor0N();
       auto t_w = getFTensor0IntegrationWeight();
       const double vol = getMeasure();
+      const double c_time = getFEMethod()->ts_t;
+
+      double dt;
+      CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
+
+      double stim = 0.0;
+
+      if (14.3 < c_time && c_time <= 14.3 + dt) {
+        EntityHandle stim_ent = getFEEntityHandle();
+        if (stimRegion.find(stim_ent) != stimRegion.end())
+          stim = 30.0;
+      } else {
+        stim = 0.0;
+      }
       for (int gg = 0; gg < nb_integration_pts; ++gg) {
         const double a = vol * t_w;
         for (int rr = 0; rr < nb_dofs; ++rr) {
-            vecF[rr] += t_row_v_base * (t_dot_u + t_div_u) * a; 
+            vecF[rr] += t_row_v_base * (t_dot_u + t_div_u - stim) * a; 
           ++t_row_v_base;
         }
         ++t_dot_u;
@@ -517,6 +532,7 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
 
 private:
   boost::shared_ptr<PreviousData> dataU;
+  boost::shared_ptr<PreviousData> dataV;
   VectorDouble vecF;
 };
 

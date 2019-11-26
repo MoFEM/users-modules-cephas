@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Site BuildName="(empty)"
+	BuildStamp="20191109-0914-Experimental"
+	Name="(empty)"
+	Generator="ctest-3.15.2"
+	CompilerName=""
+	CompilerVersion=""
+	OSName="Mac OS X"
+	Hostname="Mebratus-MacBook-Pro.local"
+	OSRelease="10.14.5"
+	OSVersion="18F203"
+	OSPlatform="x86_64"
+	Is64Bits="1"
+	VendorString="GenuineIntel"
+	VendorID="Intel Corporation"
+	FamilyID="6"
+	ModelID="158"
+	ProcessorCacheSize="32768"
+	NumberOfLogicalCPU="12"
+	NumberOfPhysicalCPU="6"
+	TotalVirtualMemory="4096"
+	TotalPhysicalMemory="32768"
+	LogicalProcessorsPerPhysical="8"
+	ProcessorClockFrequency="2900"
+	>
+	<Testing>
+		<StartDateTime>Nov 09 09:14 GMT</StartDateTime>
+		<StartTestTime>1573290872</StartTestTime>
+		<TestList/>
+		<EndDateTime>Nov 09 09:14 GMT</EndDateTime>
+		<EndTestTime>1573290872</EndTestTime>
+		<ElapsedMinutes>0</ElapsedMinutes>
+	</Testing>
+</Site>

@@ -1,12 +1,12 @@
 #include <stdlib.h>
 #include <BasicFiniteElements.hpp>
-#include <UnsaturatedFlowOperators.hpp>
+#include <Unsaturated2DFlowUDOP.hpp>
 
 using namespace MoFEM;
-using namespace UFOperators;
+using namespace UFOperators2D;
 
 static char help[] = "...\n\n";
-
+template <int dim>
 struct UFProblem {
 public: 
   UFProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order, const int n_species)
@@ -22,8 +22,8 @@ public:
     boundary_ele_rhs = boost::shared_ptr<FaceEle>(new FaceEle(m_field));
 
 
-    post_proc = boost::shared_ptr<PostProcVolumeOnRefinedMesh>(
-        new PostProcVolumeOnRefinedMesh(m_field));
+    post_proc = boost::shared_ptr<PostProc>(
+        new PostProc(m_field));
 
     data.resize(nb_species);
     values_ptr.resize(nb_species);
@@ -114,7 +114,7 @@ private:
 
   boost::shared_ptr<VolEle> vol_mass_ele;
 
-  boost::shared_ptr<PostProcVolumeOnRefinedMesh> post_proc;
+  boost::shared_ptr<PostProc> post_proc;
   boost::shared_ptr<Monitor> monitor_ptr;
 
 
@@ -126,15 +126,17 @@ private:
 
   boost::shared_ptr<ForcesAndSourcesCore> null;
 };
-
-MoFEMErrorCode UFProblem::setup_system() {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::setup_system() {
   MoFEMFunctionBegin; 
   CHKERR m_field.getInterface(simple_interface);
   CHKERR simple_interface->getOptions();
   CHKERR simple_interface->loadFile();
   MoFEMFunctionReturn(0);
 }
-MoFEMErrorCode UFProblem::add_fe(std::string field_name) {
+
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::add_fe(std::string field_name) {
   MoFEMFunctionBegin; 
   CHKERR simple_interface->addDomainField(field_name, H1, AINSWORTH_LEGENDRE_BASE, 1);
   
@@ -146,14 +148,15 @@ MoFEMErrorCode UFProblem::add_fe(std::string field_name) {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode UFProblem::set_blockData(std::map<int, BlockData> &block_map) {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::set_blockData(std::map<int, BlockData> &block_map) {
   MoFEMFunctionBegin; 
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     string name = it->getName();
     const int id = it->getMeshsetId();
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
-          id, BLOCKSET, 3, block_map[id].block_ents, true);
+          id, BLOCKSET, dim, block_map[id].block_ents, true);
 
       block_map[id].block_id = id;
       block_map[id].K_s = 1.000;
@@ -166,22 +169,22 @@ MoFEMErrorCode UFProblem::set_blockData(std::map<int, BlockData> &block_map) {
 
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
-          id, BLOCKSET, 3, block_map[id].block_ents, true);
+          id, BLOCKSET, dim, block_map[id].block_ents, true);
     
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION3") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
-          id, BLOCKSET, 3, block_map[id].block_ents, true);
+          id, BLOCKSET, dim, block_map[id].block_ents, true);
   
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION4") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
-          id, BLOCKSET, 3, block_map[id].block_ents, true);
+          id, BLOCKSET, dim, block_map[id].block_ents, true);
 
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION5") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
-          id, BLOCKSET, 3, block_map[id].block_ents, true);
+          id, BLOCKSET, dim, block_map[id].block_ents, true);
 
       block_map[id].block_id = id;
     }
@@ -189,14 +192,14 @@ MoFEMErrorCode UFProblem::set_blockData(std::map<int, BlockData> &block_map) {
   MoFEMFunctionReturn(0);
 }
 
-
-MoFEMErrorCode UFProblem::set_initial_values(std::string field_name,
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::set_initial_values(std::string field_name,
                                               int block_id, Range &surface, double &init_val) {
   MoFEMFunctionBegin;
   if (m_field.getInterface<MeshsetsManager>()->checkMeshset(block_id,
                                                             BLOCKSET)) {
     CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
-        block_id, BLOCKSET, 3, surface, true);
+        block_id, BLOCKSET, dim, surface, true);
   }
   if (!surface.empty()) {
     Range surface_verts;
@@ -211,8 +214,8 @@ MoFEMErrorCode UFProblem::set_initial_values(std::string field_name,
 
 
 
-
-MoFEMErrorCode UFProblem::update_vol_fe(boost::shared_ptr<VolEle> &vol_ele,
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::update_vol_fe(boost::shared_ptr<VolEle> &vol_ele,
                                          boost::shared_ptr<PreviousData> &data) {
   MoFEMFunctionBegin;
  
@@ -224,8 +227,8 @@ MoFEMErrorCode UFProblem::update_vol_fe(boost::shared_ptr<VolEle> &vol_ele,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-UFProblem::update_stiff_rhs(std::string field_name,
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::update_stiff_rhs(std::string field_name,
                              boost::shared_ptr<VectorDouble> &values_ptr,
                             boost::shared_ptr<MatrixDouble> &grads_ptr,
                             boost::shared_ptr<VectorDouble> &dots_ptr) {
@@ -237,23 +240,24 @@ UFProblem::update_stiff_rhs(std::string field_name,
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
       new OpCalculateScalarValuesDot(field_name, dots_ptr));
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldGradient<3>(field_name, grads_ptr));
+      new OpCalculateScalarFieldGradient<dim>(field_name, grads_ptr));
   MoFEMFunctionReturn(0);
 }
-MoFEMErrorCode UFProblem::push_stiff_rhs(std::string field_name,
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::push_stiff_rhs(std::string field_name,
                                           boost::shared_ptr<PreviousData> &data,
                                          std::map<int, BlockData> &block_map) {
   MoFEMFunctionBegin;
 
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
-      new OpAssembleStiffRhs<3>(field_name, data, block_map));
+      new OpAssembleStiffRhs(field_name, data, block_map));
   // boundary_ele_rhs->getOpPtrVector().push_back(
   //     new OpAssembleNaturalBCRhs(field_name,natural_bdry_ents));
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-UFProblem::update_stiff_lhs(std::string field_name, 
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::update_stiff_lhs(std::string field_name, 
                              boost::shared_ptr<VectorDouble> &values_ptr,
                             boost::shared_ptr<MatrixDouble> &grads_ptr) {
   MoFEMFunctionBegin;
@@ -261,22 +265,22 @@ UFProblem::update_stiff_lhs(std::string field_name,
       new OpCalculateScalarFieldValues(field_name, values_ptr));
 
   vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldGradient<3>(field_name, grads_ptr));
+      new OpCalculateScalarFieldGradient<dim>(field_name, grads_ptr));
   MoFEMFunctionReturn(0);
 }
-
-MoFEMErrorCode UFProblem::push_stiff_lhs(std::string field_name,
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::push_stiff_lhs(std::string field_name,
                                           boost::shared_ptr<PreviousData> &data,
                                          std::map<int, BlockData> &block_map) {
   MoFEMFunctionBegin;
 
   vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpAssembleStiffLhs<3>(field_name, data, block_map));
+      new OpAssembleStiffLhs(field_name, data, block_map));
 
   MoFEMFunctionReturn(0);
 }
-
-MoFEMErrorCode UFProblem::set_integration_rule() {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::set_integration_rule() {
   MoFEMFunctionBegin; 
   auto vol_rule = [](int, int, int p) -> int { return 2 * p; };
 
@@ -289,8 +293,8 @@ MoFEMErrorCode UFProblem::set_integration_rule() {
 }
 
 
-
-MoFEMErrorCode UFProblem::set_fe_in_loop() {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::set_fe_in_loop() {
   MoFEMFunctionBegin; 
   CHKERR TSSetType(ts, TSARKIMEX);
   CHKERR TSARKIMEXSetType(ts, TSARKIMEXA2);
@@ -306,21 +310,22 @@ MoFEMErrorCode UFProblem::set_fe_in_loop() {
 
   MoFEMFunctionReturn(0);
 }
-
-MoFEMErrorCode UFProblem::post_proc_fields(std::string field_name) {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::post_proc_fields(std::string field_name) {
   MoFEMFunctionBegin; 
   post_proc->addFieldValuesPostProc(field_name);
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode UFProblem::output_result() {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::output_result() {
   MoFEMFunctionBegin; 
   CHKERR DMMoFEMTSSetMonitor(dm, ts, simple_interface->getDomainFEName(),
                              monitor_ptr, null, null);
   MoFEMFunctionReturn(0);
 }
-
-MoFEMErrorCode UFProblem::solve() {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::solve() {
   MoFEMFunctionBegin; 
   // Create solution vector
   SmartPetscObj<Vec> X;
@@ -335,8 +340,8 @@ MoFEMErrorCode UFProblem::solve() {
   CHKERR TSSolve(ts, X);
   MoFEMFunctionReturn(0);
 }
-
-MoFEMErrorCode UFProblem::run_analysis() {
+template <int dim>
+MoFEMErrorCode UFProblem<dim>::run_analysis() {
   MoFEMFunctionBegin; 
   global_error = 0;
   std::vector<std::string> mass_names(nb_species);
@@ -356,20 +361,20 @@ MoFEMErrorCode UFProblem::run_analysis() {
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     string name = it->getName();
     if (name.compare(0, 14, "ESSENTIAL") == 0) {
-      CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), 2,
+      CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), dim-1,
                                                   natural_bdry_ents, true);
     }
   }  
-  Range face_edges;
+  // Range face_edges;
 
-  CHKERR moab.get_adjacencies(natural_bdry_ents, 2, false, face_edges, moab::Interface::UNION);
+  // CHKERR moab.get_adjacencies(natural_bdry_ents, dim-1, false, face_edges, moab::Interface::UNION);
 
-  Range face_edges_verts;
-  CHKERR moab.get_connectivity(face_edges, face_edges_verts, false);
+  Range edges_verts;
+  CHKERR moab.get_connectivity(natural_bdry_ents, edges_verts, false);
 
   Range bdry_ents;
-  bdry_ents = unite(natural_bdry_ents, face_edges_verts);
-  bdry_ents = unite(bdry_ents, face_edges_verts);
+  bdry_ents = unite(natural_bdry_ents, edges_verts);
+  // bdry_ents = unite(bdry_ents, face_edges_verts);
   
   bdry_ents.print();
   cout << "size: " <<endl;
@@ -410,7 +415,7 @@ MoFEMErrorCode UFProblem::run_analysis() {
 
     dm = simple_interface->getDM();
 
-      // CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
+      CHKERR update_vol_fe(vol_ele_stiff_rhs, data[0]);
 
       for (int i = 0; i < nb_species; ++i) {
         CHKERR update_stiff_rhs(mass_names[i], values_ptr[i], grads_ptr[i],
@@ -419,15 +424,14 @@ MoFEMErrorCode UFProblem::run_analysis() {
     }
          
 
-    // CHKERR update_vol_fe(vol_ele_stiff_lhs, data[0]);
+    CHKERR update_vol_fe(vol_ele_stiff_lhs, data[0]);
 
     for (int i = 0; i < nb_species; ++i) {
       CHKERR update_stiff_lhs(mass_names[i], values_ptr[i], grads_ptr[i]);
       CHKERR push_stiff_lhs(mass_names[i], data[i],
                             material_blocks); // nb_species times
     }
-    // vol_ele_stiff_lhs->getOpPtrVector().push_back(
-    //   new OpError(ExactFunction(), ExactFunctionLap(), ExactFunctionGrad(), data[0], material_blocks, global_error));
+  
       
     CHKERR set_integration_rule();
 
@@ -464,7 +468,7 @@ int main(int argc, char *argv[]) {
     int order = 1;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
     int nb_species = 1;
-    UFProblem unsatu_flow_problem(mb_instance, core, order, nb_species);
+    UFProblem<2> unsatu_flow_problem(mb_instance, core, order, nb_species);
     CHKERR unsatu_flow_problem.run_analysis();
   }
   CATCH_ERRORS;

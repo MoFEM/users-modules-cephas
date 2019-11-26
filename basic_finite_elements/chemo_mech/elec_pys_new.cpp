@@ -9,7 +9,7 @@ static char help[] = "...\n\n";
 
 // #define M_PI 3.14159265358979323846 /* pi */
 
-double init_val_u = 0.0;
+double init_val_u = 0.4;
 double init_val_v = 0.0;
 
 // double alpha = -0.08; 
@@ -29,14 +29,14 @@ struct Istimulus{
 };
 
 struct RhsU {
-double operator() (const double u, const double v, const double Istim) const {
-    return u * (u - alpha) * (1 - u) - v + Istim;
+double operator() (const double u, const double v) const {
+    return c * u * (u - alpha) * (1.0 - u) - u * v;
   }
 };
 
 struct RhsV {
 double operator() (const double u, const double v) const {
-    return ep * (u - gma * v);
+    return (gma + mu1*v/(mu2 + u)) * (-v - c * u * (u - b -1.0));
   }
 };
 
@@ -240,17 +240,15 @@ MoFEMErrorCode
 RDProblem::push_slow_rhs() {
   MoFEMFunctionBegin;
 
-      vol_ele_slow_rhs->getOpPtrVector().push_back(
-        new OpAssembleSlowRhsV("U", data_u, data_v, Istimulus(), RhsU()));
-      
-    
+  vol_ele_slow_rhs->getOpPtrVector().push_back(
+      new OpAssembleSlowRhsV("U", data_u, data_v,RhsU()));
 
-      // natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
-      //     new OpAssembleNaturalBCRhsTau("F", natural_bdry_ents));
+  // natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
+  //     new OpAssembleNaturalBCRhsTau("F", natural_bdry_ents));
 
-      natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
-          new OpEssentialBC("F", essential_bdry_ents));
-      MoFEMFunctionReturn(0);
+  natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
+      new OpEssentialBC("F", essential_bdry_ents));
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode
@@ -285,7 +283,7 @@ RDProblem::push_stiff_rhs() {
       new OpAssembleStiffRhsTau<3>("F", data_u));
 
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
-      new OpAssembleStiffRhsV<3>("U", data_u));
+      new OpAssembleStiffRhsV<3>("U", data_u, inner_surface2));
 
   MoFEMFunctionReturn(0);
 }
@@ -368,7 +366,7 @@ MoFEMErrorCode RDProblem::loop_fe() {
 MoFEMErrorCode RDProblem::post_proc_fields() {
   MoFEMFunctionBegin;
   post_proc->addFieldValuesPostProc("U");
-  post_proc->addFieldValuesPostProc("F");
+  // post_proc->addFieldValuesPostProc("F");
   post_proc->addFieldValuesPostProc("V");
 
 
@@ -414,6 +412,8 @@ MoFEMErrorCode RDProblem::run_analysis() {
   CHKERR extract_bd_ents("ESSENTIAL", "NATURAL"); // nb_species times
 
   CHKERR extract_initial_ents(2, inner_surface1);
+  CHKERR extract_initial_ents(3, inner_surface2);
+
   CHKERR update_slow_rhs("U", mass_values_ptr_u);
   CHKERR update_slow_rhs("V", mass_values_ptr_v);
 
