@@ -384,6 +384,18 @@ int main(int argc, char *argv[]) {
   Projection10NodeCoordsOnField ent_method_material(m_field,
                                                     "MESH_NODE_POSITIONS");
   CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+
+  // set initial temperature from Cubit blocksets
+  mit = thermal_elements.setOfBlocks.begin();
+  for (; mit != thermal_elements.setOfBlocks.end(); mit++) {
+    if (mit->second.initTemp != 0) {
+      Range vertices;
+      CHKERR moab.get_connectivity(mit->second.tEts, vertices, true);
+      CHKERR m_field.getInterface<FieldBlas>()->setField(
+          mit->second.initTemp, MBVERTEX, vertices, "TEMP");
+    }
+  }
+
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     if (block_data[it->getMeshsetId()].initTemp != 0) {
       Range block_ents;
