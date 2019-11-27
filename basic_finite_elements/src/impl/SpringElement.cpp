@@ -87,11 +87,19 @@ struct DataAtIntegrationPtsSprings {
         bit->getAttributes(attributes);
         if (attributes.size() != 2) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                   "should be 2 attributes but is %d", attributes.size());
+                   "Springs should have 2 attributes but there is %d",
+                   attributes.size());
         }
         mapSpring[id].iD = id;
         mapSpring[id].springStiffnessNormal = attributes[0];
         mapSpring[id].springStiffnessTangent = attributes[1];
+
+        // Print spring blocks after being read
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
+                           attributes[0]);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
+                           attributes[1]);
       }
     }
 
@@ -286,8 +294,6 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     const int row_nb_gauss_pts = row_data.getN().size1();
     if (!row_nb_gauss_pts) // check if number of Gauss point <> 0
       MoFEMFunctionReturnHot(0);
-
-    const int row_nb_base_functions = row_data.getN().size2();
 
     // get intergration weights
     auto t_w = getFTensor0IntegrationWeight();
