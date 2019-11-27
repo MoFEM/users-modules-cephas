@@ -463,82 +463,11 @@ MoFEMErrorCode AssembleFlambda::postProcess() {
       MoFEMFunctionReturn(0);
     };
 
-    // auto create_fe_meshset = [&](auto fe_name) {
-    //   auto fe_ptr = problemPtr->getNumeredFiniteElements();
-    //   auto miit = fe_ptr->get<Composite_Name_And_Part_mi_tag>().lower_bound(
-    //       boost::make_tuple(fe_name, arcPtr->mField.get_comm_rank()));
-    //   auto hi_miit = fe_ptr->get<Composite_Name_And_Part_mi_tag>().upper_bound(
-    //       boost::make_tuple(fe_name, arcPtr->mField.get_comm_rank()));
-    //   EntityHandle meshset;
-    //   CHKERR arcPtr->mField.get_moab().create_meshset(MESHSET_SET, meshset);
-    //   for (; miit != hi_miit; ++miit) {
-    //     auto e = (*miit)->getEnt();
-    //     arcPtr->mField.get_moab().add_entities(meshset, &e, 1);
-    //   }
-    //   return meshset;
-    // };
-
-    // auto save_tag = [&](auto l_snes_f, auto l_f_lambda) {
-    //   MoFEMFunctionBegin;
-    //   Tag th0, th1, th2;
-    //   double def_val[] = {0, 0, 0};
-    //   CHKERR arcPtr->mField.get_moab().tag_get_handle(
-    //       "RES0", 1, MB_TYPE_DOUBLE, th0, MB_TAG_CREAT | MB_TAG_SPARSE,
-    //       &def_val);
-    //   CHKERR arcPtr->mField.get_moab().tag_get_handle(
-    //       "RES1", 1, MB_TYPE_DOUBLE, th1, MB_TAG_CREAT | MB_TAG_SPARSE,
-    //       &def_val);
-    //   CHKERR arcPtr->mField.get_moab().tag_get_handle(
-    //       "RES2", 1, MB_TYPE_DOUBLE, th2, MB_TAG_CREAT | MB_TAG_SPARSE,
-    //       &def_val);
-    //   double *f_array, *f_lambda_array;
-    //   CHKERR VecGetArray(l_snes_f, &f_array);
-    //   CHKERR VecGetArray(l_f_lambda, &f_lambda_array);
-
-    //   auto dofs = problemPtr->getNumeredDofsRows();
-    //   auto lo = dofs->get<FieldName_mi_tag>().lower_bound("SPATIAL_POSITION");
-    //   auto hi = dofs->get<FieldName_mi_tag>().upper_bound("SPATIAL_POSITION");
-    //   for (; lo != hi; ++lo) {
-    //     auto e = (*lo)->getEnt();
-    //     auto rank = (*lo)->getDofCoeffIdx();
-    //     auto val = std::abs(f_lambda_array[(*lo)->getPetscLocalDofIdx()]);
-    //     if (rank == 0)
-    //       CHKERR arcPtr->mField.get_moab().tag_set_data(th0, &e, 1, &val);
-    //     else if (rank == 1)
-    //       CHKERR arcPtr->mField.get_moab().tag_set_data(th1, &e, 1, &val);
-    //     else
-    //       CHKERR arcPtr->mField.get_moab().tag_set_data(th2, &e, 1, &val);
-    //   }
-    //   CHKERR VecRestoreArray(l_snes_f, &f_array);
-    //   CHKERR VecRestoreArray(l_f_lambda, &f_lambda_array);
-    //   MoFEMFunctionReturn(0);
-    // };
-
-    // auto write_meshset = [&](EntityHandle meshset, std::string fe_name) {
-    //   MoFEMFunctionBegin;
-    //   CHKERR arcPtr->mField.get_moab().write_file(
-    //       ("test_" + fe_name +
-    //        boost::lexical_cast<std::string>(arcPtr->mField.get_comm_rank()) +
-    //        ".vtk")
-    //           .c_str(),
-    //       "VTK", "", &meshset, 1);
-    //   MoFEMFunctionReturn(0);
-    // };
-
     Vec l_snes_f, l_f_lambda;
     CHKERR VecGhostGetLocalForm(snes_f, &l_snes_f);
     CHKERR VecGhostGetLocalForm(arcPtr->F_lambda, &l_f_lambda);
     CHKERR add_f_lambda(l_snes_f, l_f_lambda);
     CHKERR set_bc(l_snes_f, l_f_lambda);
-    // CHKERR VecGhostUpdateBegin(snes_f, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateEnd(snes_f, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateBegin(arcPtr->F_lambda, INSERT_VALUES,
-    // SCATTER_FORWARD); CHKERR VecGhostUpdateEnd(arcPtr->F_lambda,
-    // INSERT_VALUES, SCATTER_FORWARD); CHKERR save_tag(l_snes_f, l_f_lambda);
-    // CHKERR write_meshset(create_fe_meshset("ELASTIC"), "elastic");
-    // CHKERR write_meshset(create_fe_meshset("MATERIAL"), "material");
-    // CHKERR write_meshset(create_fe_meshset("FORCE_FE"), "force");
-    // CHKERR write_meshset(create_fe_meshset("EDGE"), "edge");
     CHKERR zero_ghost(l_snes_f, l_f_lambda);
 
     CHKERR VecGhostRestoreLocalForm(snes_f, &l_snes_f);
