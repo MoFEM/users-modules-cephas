@@ -697,8 +697,9 @@ MoFEMErrorCode HookeElement::OpCalculateHomogeneousStiffness<S>::doWork(
 
       break;
     }
+  }
 
-    MoFEMFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
 template <int S>
