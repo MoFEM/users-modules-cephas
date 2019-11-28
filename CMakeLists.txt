@@ -36,6 +36,13 @@ endif(NOT MPI_RUN_FLAGS)
 # when you spot it in your code.
 set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
+# Get user module commit id and pass to cpp for logging
+find_package(Git)
+include(cmake/GetGitRevisionDescription.cmake)
+get_git_head_revision(GIT_REFSPEC GIT_UM_SHA1_NAME)
+add_definitions(-DGIT_UM_SHA1_NAME="${GIT_UM_SHA1_NAME}")
+message( STATUS "User Module commit id: " ${GIT_UM_SHA1_NAME})
+
 if(NOT_PRECOMPILED_HEADRES) 
   set(MoFEM_PRECOMPILED_HEADRES OFF CACHE FORCE)
 endif(NOT_PRECOMPILED_HEADRES)
