@@ -17,7 +17,7 @@ using EntData = DataForcesAndSourcesCore::EntData;
 
 
 
-const int save_every_nth_step = 4;
+const int save_every_nth_step = 1;
 
 const double essen_value = 0;
 
@@ -32,7 +32,7 @@ const double c = 8.00;
 const double mu1 = 0.20;
 const double mu2 = 0.30;
 
-const double D_tilde = 0.0258;
+const double D_tilde = 0.01;
 
 
 
@@ -505,13 +505,17 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
 
       double stim = 0.0;
 
-      if (14.3 < c_time && c_time <= 14.3 + dt) {
+      double T = 16;
+
+      if (T < c_time && c_time <= T + 5*dt) {
         EntityHandle stim_ent = getFEEntityHandle();
-        if (stimRegion.find(stim_ent) != stimRegion.end())
+        if (stimRegion.find(stim_ent) != stimRegion.end()){
           stim = 30.0;
-      } else {
-        stim = 0.0;
+        } else {
+            stim = 0.0;
+        }
       }
+      
       for (int gg = 0; gg < nb_integration_pts; ++gg) {
         const double a = vol * t_w;
         for (int rr = 0; rr < nb_dofs; ++rr) {

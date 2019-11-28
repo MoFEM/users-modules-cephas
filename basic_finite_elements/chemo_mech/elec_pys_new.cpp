@@ -44,10 +44,10 @@ struct RK4{
   RhsV rhs_v;
   double operator()(const double u, const double v, const double dt) const {
     double k1 = dt * rhs_v(u, v);
-    double k2 = dt * rhs_v(u, v + 0.5 * k1);
-    double k3 = dt * rhs_v(u, v + 0.5 * k2);
-    double k4 = dt * rhs_v(u, v + k3);
-    return v + 1.0 / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4);
+    // double k2 = dt * rhs_v(u, v + 0.5 * k1);
+    // double k3 = dt * rhs_v(u, v + 0.5 * k2);
+    double k4 = dt * rhs_v(u, v + k1);
+    return v + 0.5 * (k1 + k4);
   }
 };
 
@@ -246,8 +246,8 @@ RDProblem::push_slow_rhs() {
   // natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
   //     new OpAssembleNaturalBCRhsTau("F", natural_bdry_ents));
 
-  natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
-      new OpEssentialBC("F", essential_bdry_ents));
+  // natural_bdry_ele_slow_rhs->getOpPtrVector().push_back(
+  //     new OpEssentialBC("F", essential_bdry_ents));
   MoFEMFunctionReturn(0);
 }
 
@@ -322,7 +322,7 @@ MoFEMErrorCode RDProblem::set_integration_rule() {
   MoFEMFunctionBegin;
   auto vol_rule = [](int, int, int p) -> int { return 2 * p; };
   vol_ele_slow_rhs->getRuleHook = vol_rule;
-  natural_bdry_ele_slow_rhs->getRuleHook = vol_rule;
+  // natural_bdry_ele_slow_rhs->getRuleHook = vol_rule;
 
   vol_ele_stiff_rhs->getRuleHook = vol_rule;
 
@@ -358,8 +358,8 @@ MoFEMErrorCode RDProblem::loop_fe() {
 
   CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getDomainFEName(),
                                  vol_ele_slow_rhs, null, null);
-  CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getBoundaryFEName(),
-                                 natural_bdry_ele_slow_rhs, null, null);
+  // CHKERR DMMoFEMTSSetRHSFunction(dm, simple_interface->getBoundaryFEName(),
+  //                                natural_bdry_ele_slow_rhs, null, null);
   MoFEMFunctionReturn(0);
 }
 
