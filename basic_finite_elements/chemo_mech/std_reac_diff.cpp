@@ -7,6 +7,18 @@ using namespace StdRDOperators;
 
 static char help[] = "...\n\n";
 
+struct RhsU {
+  double operator()(const double u, const double v) const {
+    return c * u * (u - alpha) * (1.0 - u) - u * v;
+  }
+};
+
+struct RhsV {
+  double operator()(const double u, const double v) const {
+    return (gma + mu1 * v / (mu2 + u)) * (-v - c * u * (u - b - 1.0));
+  }
+};
+
 struct RDProblem {
 public:
   RDProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order, const int n_species)
@@ -57,7 +69,8 @@ private:
                                  boost::shared_ptr<VectorDouble> &mass_ptr);
 
   MoFEMErrorCode push_slow_rhs(std::string field_name,
-                               boost::shared_ptr<PreviousData> &data);
+                               boost::shared_ptr<PreviousData> &dataU,
+                               boost::shared_ptr<PreviousData> &dataV);
 
   MoFEMErrorCode push_mass_ele(std::string field_name);
 
@@ -104,6 +117,9 @@ private:
   Range bdry_ents;
 
   std::vector<Range> inner_surface;
+  Range stimulation_surface;
+
+
 
   double global_error;
 
@@ -262,7 +278,7 @@ MoFEMErrorCode RDProblem::set_blockData(std::map<int, BlockData> &block_map) {
     if (name.compare(0, 14, "REGION1") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
           id, BLOCKSET, 2, block_map[id].block_ents, true);
-      block_map[id].B0 = 1e-3;
+      block_map[id].B0 = 1e-2;
       block_map[id].block_id = id;
     } else if (name.compare(0, 14, "REGION2") == 0) {
       CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
@@ -317,13 +333,15 @@ RDProblem::update_slow_rhs(std::string mass_field,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode RDProblem::push_slow_rhs(std::string field_name,
-                                        boost::shared_ptr<PreviousData> &data) {
+MoFEMErrorCode
+RDProblem::push_slow_rhs(std::string field_name,
+                         boost::shared_ptr<PreviousData> &dataU,
+                         boost::shared_ptr<PreviousData> &dataV ) {
   MoFEMFunctionBegin;
 
   vol_ele_slow_rhs->getOpPtrVector().push_back(
-      new OpAssembleSlowRhs(field_name, data, ExactFunction(),
-                            ExactFunctionDot(), ExactFunctionLap()));
+      new OpAssembleSlowRhs(field_name, dataU, dataV, RhsU(),
+                            RhsV(), stimulation_surface));
 
   MoFEMFunctionReturn(0);
 }
@@ -512,31 +530,36 @@ MoFEMErrorCode RDProblem::run_analysis() {
   initVals.resize(3, false);
   initVals.clear();
 
-  initVals[0] = 3;
+  initVals[0] = 0.4;
   initVals[1] = 3;
   initVals[2] = 0.0;
 
-  for (int i = 0; i < nb_species; ++i) {
+  for (int i = 0; i < 1; ++i) {
     CHKERR set_initial_values(mass_names[i], i + 2, inner_surface[i], initVals[i]);
     CHKERR update_slow_rhs(mass_names[i], values_ptr[i]);
     }
 
+  if (m_field.getInterface<MeshsetsManager>()->checkMeshset(3,
+                                                            BLOCKSET)) {
+    CHKERR m_field.getInterface<MeshsetsManager>()->getEntitiesByDimension(
+        3, BLOCKSET, 2, stimulation_surface, true);
+  }
 
-
-    if (nb_species == 1) {
-      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[0], data[0], data[0], data[0], material_blocks));
-    } else if(nb_species == 2){
-      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[0], data[0], data[1], data[1], material_blocks));
-    } else if(nb_species == 3){
-      vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
-          mass_names[0], data[0], data[1], data[2], material_blocks));
-    }
+    // if (nb_species == 1) {
+    //   vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+    //       mass_names[0], data[0], data[0], data[0], material_blocks));
+    // } else if(nb_species == 2){
+    //   vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+    //       mass_names[0], data[0], data[1], data[1], material_blocks));
+    // } else if(nb_species == 3){
+    //   vol_ele_slow_rhs->getOpPtrVector().push_back(new OpComputeSlowValue(
+    //       mass_names[0], data[0], data[1], data[2], material_blocks));
+    // }
      
 
     for (int i = 0; i < nb_species; ++i) {
-      CHKERR push_slow_rhs(mass_names[i], data[i]);
+      CHKERR push_slow_rhs(mass_names[i], data[0], data[1]);
+      CHKERR push_slow_rhs(mass_names[i], data[0], data[1]);
       // boundary_ele_rhs->getOpPtrVector().push_back(
       //     new OpAssembleNaturalBCRhs(mass_names[i], bdry_ents));
     }
@@ -633,7 +656,7 @@ int main(int argc, char *argv[]) {
   
     int order = 1;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-    int nb_species = 3;
+    int nb_species = 2;
     RDProblem reac_diff_problem(mb_instance, core, order, nb_species);
     CHKERR reac_diff_problem.run_analysis();
   }

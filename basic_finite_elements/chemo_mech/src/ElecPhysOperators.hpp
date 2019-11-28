@@ -505,9 +505,10 @@ struct OpAssembleStiffRhsV : OpVolEle // F_V
 
       double stim = 0.0;
 
-      double T = 16;
+      double T = 0;
+      double duration = 1.0;
 
-      if (T < c_time && c_time <= T + 5*dt) {
+      if (T-dt < c_time && c_time <= T + duration) {
         EntityHandle stim_ent = getFEEntityHandle();
         if (stimRegion.find(stim_ent) != stimRegion.end()){
           stim = 30.0;

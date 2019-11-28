@@ -19,7 +19,7 @@ set(BFE_DIRS
   thermal
   cohesive_interface
   magnetostatic
-  poisson
+  #poisson
   hello_world
   hierarchical_approximation
   reaction_diffusion_equation

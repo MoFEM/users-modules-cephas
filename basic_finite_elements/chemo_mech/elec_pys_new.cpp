@@ -410,7 +410,7 @@ MoFEMErrorCode RDProblem::run_analysis() {
   // CHKERR set_blockData(material_blocks);
 
   CHKERR extract_bd_ents("ESSENTIAL", "NATURAL"); // nb_species times
-
+  
   CHKERR extract_initial_ents(2, inner_surface1);
   CHKERR extract_initial_ents(3, inner_surface2);
 

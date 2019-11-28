@@ -14,7 +14,14 @@ namespace StdRDOperators {
 
   using EntData = DataForcesAndSourcesCore::EntData;
 
-  const double B = 1e-2;
+  const double alpha = 0.01;
+  const double gma = 0.002;
+  const double b = 0.15;
+  const double c = 8.00;
+  const double mu1 = 0.20;
+  const double mu2 = 0.30;
+
+  const double B = 0.0;
   const int save_every_nth_step = 4;
   const double natural_bc_values = 0.0;
   const double essential_bc_values = 0.0;
@@ -224,22 +231,32 @@ namespace StdRDOperators {
   };
 
   struct OpAssembleSlowRhs : OpEle {
-    typedef boost::function<double(const double, const double, const double)>
+    typedef boost::function<double(const double, const double)>
         FVal;
-    typedef boost::function<FTensor::Tensor1<double, 3>(
-        const double, const double, const double)>
-        FGrad;
+    // typedef boost::function<FTensor::Tensor1<double, 3>(
+    //     const double, const double, const double)>
+    //     FGrad;
     OpAssembleSlowRhs(std::string field, 
-                      boost::shared_ptr<PreviousData> &data,
-                      FVal exact_value, 
-                      FVal exact_dot, 
-                      FVal exact_lap)
+                      boost::shared_ptr<PreviousData> &data_u,
+                      boost::shared_ptr<PreviousData> &data_v,
+                      FVal rhs_u, 
+                      FVal rhs_v, 
+                      Range &stim_ents)
         : OpEle(field, OpEle::OPROW)
-        , commonData(data)
-        , exactValue(exact_value)
-        , exactDot(exact_dot)
-        , exactLap(exact_lap) {}
+        , commonDataU(data_u)
+        , commonDataV(data_v)
+        // , exactValue(exact_value)
+        // , exactDot(exact_dot)
+        // , exactLap(exact_lap)
+        , rhsU(rhs_u)
+        , rhsV(rhs_v)
+        , stimEnts(stim_ents)
+        , fieldName(field) {}
 
+    FVal rhsU;
+    FVal rhsV;
+    Range &stimEnts;
+    std::string fieldName;
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
    
@@ -249,32 +266,57 @@ namespace StdRDOperators {
         vecF.clear();
         const int nb_integration_pts = getGaussPts().size2();
 
-        auto t_slow_value = getFTensor0FromVec(commonData->slow_values);
+        auto t_u_value = getFTensor0FromVec(commonDataU->values);
+        auto t_v_value = getFTensor0FromVec(commonDataV->values);
 
         auto t_base = data.getFTensor0N();
         auto t_w = getFTensor0IntegrationWeight();
         const double vol = getMeasure();
         // cout << "measure : " << getMeasure() << endl;
         const double ct = getFEMethod()->ts_t;
-        auto t_coords = getFTensor1CoordsAtGaussPts();
+        // auto t_coords = getFTensor1CoordsAtGaussPts();
+        double rhs_val = 0.0;
+
+        double stim = 0.0;
+
+        const double c_time = getFEMethod()->ts_t;
+
+        double dt;
+        CHKERR TSGetTimeStep(getFEMethod()->ts, &dt);
+
+        double T = 14;
+        double duration = 1.0;
+
+        if (T - dt < c_time && c_time <= T + duration) {
+          EntityHandle stim_ent = getFEEntityHandle();
+          if (stimEnts.find(stim_ent) != stimEnts.end()) {
+            stim = 30.0;
+          } 
+        }
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
+          if(fieldName == "MASS1"){
+            rhs_val = rhsU(t_u_value, t_v_value) + stim;
+          } else if (fieldName == "MASS2") {
+            rhs_val = rhsV(t_u_value, t_v_value);
+          }
 
-          double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
-          double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
+          // double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
+          // double u_lap = exactLap(t_coords(NX), t_coords(NY), ct);
 
           // double f = u_dot - u_lap;
             // double f = 0;
-          const double f = t_slow_value;  
+          // const double f = t_slow_value;  
 
           for (int rr = 0; rr != nb_dofs; ++rr) {
-            const double b = a * f * t_base;
+            const double b = a * rhs_val * t_base;
             vecF[rr] += b;
             ++t_base;
           }
-          ++t_slow_value;
+          ++t_u_value;
+          ++t_v_value;
           ++t_w;
-          ++t_coords;
+          // ++t_coords;
         }
         CHKERR VecSetOption(getFEMethod()->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
                             PETSC_TRUE);
@@ -285,12 +327,13 @@ namespace StdRDOperators {
     }
 
   private:
-    boost::shared_ptr<PreviousData> commonData;
+    boost::shared_ptr<PreviousData> commonDataU;
+    boost::shared_ptr<PreviousData> commonDataV;
     VectorDouble vecF;
 
-    FVal exactValue;
-    FVal exactDot;
-    FVal exactLap;
+    // FVal exactValue;
+    // FVal exactDot;
+    // FVal exactLap;
 
     FTensor::Number<0> NX;
     FTensor::Number<1> NY;
@@ -315,7 +358,10 @@ namespace StdRDOperators {
         , setOfBlock(block_map) 
         , exactValue(exact_value)
         , exactDot(exact_dot)
-        , exactLap(exact_lap){}
+        , exactLap(exact_lap)
+        , fieldName(field){}
+
+    std::string fieldName;
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
@@ -359,11 +405,14 @@ namespace StdRDOperators {
 
         const double ct = getFEMethod()->ts_t;
         auto t_coords = getFTensor1CoordsAtGaussPts();
+        double K = 0.0;
         
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
-
-          const double K = block_data.B0 + B * t_val;
+          
+          if(fieldName == "MASS1"){
+            K = block_data.B0 + B * t_val;
+          }
 
           double u_dot = exactDot(t_coords(NX), t_coords(NY), ct);
           double u_lap = - K * exactLap(t_coords(NX), t_coords(NY), ct);
@@ -394,7 +443,6 @@ namespace StdRDOperators {
     boost::shared_ptr<PreviousData> commonData;
     std::map<int, BlockData> setOfBlock;
     VectorDouble vecF;
-    std::string field;
 
     FVal exactValue;
     FVal exactDot;
@@ -410,9 +458,13 @@ namespace StdRDOperators {
     OpAssembleStiffLhs(std::string fieldu,
                        boost::shared_ptr<PreviousData> &data,
                        std::map<int, BlockData> &block_map)
-        : OpEle(fieldu, fieldu, OpEle::OPROWCOL), commonData(data), setOfBlock(block_map) {
+        : OpEle(fieldu, fieldu, OpEle::OPROWCOL)
+        , commonData(data)
+        , setOfBlock(block_map)
+        , fieldName(fieldu) {
       sYmm = true;
     }
+    std::string fieldName;
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data) {
@@ -455,13 +507,18 @@ namespace StdRDOperators {
         const double ts_a = getFEMethod()->ts_a;
         const double vol = getMeasure();
 
+        double K = 0.0;
+
         FTensor::Index<'i', DIM> i;
 
         // cout << "B0 : " << block_data.B0 << endl;
 
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
-          const double K = block_data.B0 + B * t_val;
+          if (fieldName == "MASS1") {
+            K = block_data.B0 + B * t_val;
+          }
+          // const double K = block_data.B0 + B * t_val;
           for (int rr = 0; rr != nb_row_dofs; ++rr) {
             auto t_col_base = col_data.getFTensor0N(gg, 0);
             auto t_col_diff_base = col_data.getFTensor1DiffN<DIM>(gg, 0);
