@@ -16,149 +16,152 @@
 using namespace MoFEM;
 
 namespace bio = boost::iostreams;
-using bio::tee_device;
 using bio::stream;
+using bio::tee_device;
 
 static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc,&argv,(char *)0,help);
+  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
 
   try {
 
     moab::Core mb_instance;
-    moab::Interface& moab = mb_instance;
+    moab::Interface &moab = mb_instance;
     int rank;
-    MPI_Comm_rank(PETSC_COMM_WORLD,&rank);
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
 
     PetscBool flg = PETSC_TRUE;
     char mesh_file_name[255];
-    ierr = PetscOptionsGetString(PETSC_NULL,PETSC_NULL,"-my_file",mesh_file_name,255,&flg); CHKERRG(ierr);
-    if(flg != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF,1,"*** ERROR -my_file (MESH FILE NEEDED)");
+    CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
+                                 mesh_file_name, 255, &flg);
+    if (flg != PETSC_TRUE) {
+      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    ParallelComm* pcomm = ParallelComm::get_pcomm(&moab,MYPCOMM_INDEX);
-    if(pcomm == NULL) pcomm =  new ParallelComm(&moab,PETSC_COMM_WORLD);
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    if (pcomm == NULL)
+      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     const char *option;
-    option = "";//"PARALLEL=BCAST;";//;DEBUG_IO";
+    option = ""; //"PARALLEL=BCAST;";//;DEBUG_IO";
     BARRIER_PCOMM_RANK_START(pcomm)
-    rval = moab.load_file(mesh_file_name, 0, option); CHKERRG(rval);
+    CHKERR moab.load_file(mesh_file_name, 0, option);
     BARRIER_PCOMM_RANK_END(pcomm)
 
-    //Create MoFEM (Joseph) database
+    // Create MoFEM (Joseph) database
     MoFEM::Core core(moab);
-    MoFEM::Interface& m_field = core;
+    MoFEM::Interface &m_field = core;
 
-    //set entitities bit level
+    // set entitities bit level
     BitRefLevel bit_level0;
     bit_level0.set(0);
     EntityHandle meshset_level0;
-    rval = moab.create_meshset(MESHSET_SET,meshset_level0); CHKERRG(rval);
-    ierr = m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(0,3,bit_level0); CHKERRG(ierr);
+    CHKERR moab.create_meshset(MESHSET_SET, meshset_level0);
+    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        0, 3, bit_level0);
 
-    //Fields
-    ierr = m_field.add_field("DISP",H1,AINSWORTH_LEGENDRE_BASE,3); CHKERRG(ierr);
-    ierr = m_field.add_field("TEMP",H1,AINSWORTH_LEGENDRE_BASE,1); CHKERRG(ierr);
+    // Fields
+    CHKERR m_field.add_field("DISP", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR m_field.add_field("TEMP", H1, AINSWORTH_LEGENDRE_BASE, 1);
 
-    //Problem
-    ierr = m_field.add_problem("PROB"); CHKERRG(ierr);
+    // Problem
+    CHKERR m_field.add_problem("PROB");
 
-    //set refinement level for problem
-    ierr = m_field.modify_problem_ref_level_add_bit("PROB",bit_level0); CHKERRG(ierr);
+    // set refinement level for problem
+    CHKERR m_field.modify_problem_ref_level_add_bit("PROB", bit_level0);
 
-    //meshset consisting all entities in mesh
+    // meshset consisting all entities in mesh
     EntityHandle root_set = moab.get_root_set();
-    //add entities to field
-    ierr = m_field.add_ents_to_field_by_type(root_set,MBTET,"TEMP"); CHKERRG(ierr);
-    ierr = m_field.add_ents_to_field_by_type(root_set,MBTET,"DISP"); CHKERRG(ierr);
+    // add entities to field
+    CHKERR m_field.add_ents_to_field_by_type(root_set, MBTET, "TEMP");
+    CHKERR m_field.add_ents_to_field_by_type(root_set, MBTET, "DISP");
 
-    //set app. order
-    //see Hierarchic Finite Element Bases on Unstructured Tetrahedral Meshes (Mark Ainsworth & Joe Coyle)
+    // set app. order
+    // see Hierarchic Finite Element Bases on Unstructured Tetrahedral Meshes
+    // (Mark Ainsworth & Joe Coyle)
     int order_temp = 2;
-    ierr = m_field.set_field_order(root_set,MBTET,"TEMP",order_temp); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTRI,"TEMP",order_temp); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBEDGE,"TEMP",order_temp); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBVERTEX,"TEMP",1); CHKERRG(ierr);
+    CHKERR m_field.set_field_order(root_set, MBTET, "TEMP", order_temp);
+    CHKERR m_field.set_field_order(root_set, MBTRI, "TEMP", order_temp);
+    CHKERR m_field.set_field_order(root_set, MBEDGE, "TEMP", order_temp);
+    CHKERR m_field.set_field_order(root_set, MBVERTEX, "TEMP", 1);
 
     int order_disp = 3;
-    ierr = m_field.set_field_order(root_set,MBTET,"DISP",order_disp); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTRI,"DISP",order_disp); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBEDGE,"DISP",order_disp); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBVERTEX,"DISP",1); CHKERRG(ierr);
+    CHKERR m_field.set_field_order(root_set, MBTET, "DISP", order_disp);
+    CHKERR m_field.set_field_order(root_set, MBTRI, "DISP", order_disp);
+    CHKERR m_field.set_field_order(root_set, MBEDGE, "DISP", order_disp);
+    CHKERR m_field.set_field_order(root_set, MBVERTEX, "DISP", 1);
 
     ThermalStressElement thermal_stress_elem(m_field);
-    ierr = thermal_stress_elem.addThermalStressElement("ELAS","DISP","TEMP"); CHKERRG(ierr);
-    ierr = m_field.modify_problem_add_finite_element("PROB","ELAS"); CHKERRG(ierr);
+    CHKERR thermal_stress_elem.addThermalStressElement("ELAS", "DISP", "TEMP");
+    CHKERR m_field.modify_problem_add_finite_element("PROB", "ELAS");
 
     /****/
-    //build database
-    //build field
-    ierr = m_field.build_fields(); CHKERRG(ierr);
-    //build finite elemnts
-    ierr = m_field.build_finite_elements(); CHKERRG(ierr);
-    //build adjacencies
-    ierr = m_field.build_adjacencies(bit_level0); CHKERRG(ierr);
+    // build database
+    // build field
+    CHKERR m_field.build_fields();
+    // build finite elemnts
+    CHKERR m_field.build_finite_elements();
+    // build adjacencies
+    CHKERR m_field.build_adjacencies(bit_level0);
 
-    //build problem
+    // build problem
     ProblemsManager *prb_mng_ptr;
-    ierr = m_field.getInterface(prb_mng_ptr); CHKERRG(ierr);
-    ierr = prb_mng_ptr->buildProblem("PROB",true); CHKERRG(ierr);
-    //mesh partitioning
-    //partition
-    ierr = prb_mng_ptr->partitionSimpleProblem("PROB"); CHKERRG(ierr);
-    ierr = prb_mng_ptr->partitionFiniteElements("PROB"); CHKERRG(ierr);
-    //what are ghost nodes, see Petsc Manual
-    ierr = prb_mng_ptr->partitionGhostDofs("PROB"); CHKERRG(ierr);
+    CHKERR m_field.getInterface(prb_mng_ptr);
+    CHKERR prb_mng_ptr->buildProblem("PROB", true);
+    // mesh partitioning
+    // partition
+    CHKERR prb_mng_ptr->partitionSimpleProblem("PROB");
+    CHKERR prb_mng_ptr->partitionFiniteElements("PROB");
+    // what are ghost nodes, see Petsc Manual
+    CHKERR prb_mng_ptr->partitionGhostDofs("PROB");
 
-    //set temerature at nodes
-    for(_IT_GET_DOFS_FIELD_BY_NAME_AND_TYPE_FOR_LOOP_(m_field,"TEMP",MBVERTEX,dof)) {
+    // set temerature at nodes
+    for (_IT_GET_DOFS_FIELD_BY_NAME_AND_TYPE_FOR_LOOP_(m_field, "TEMP",
+                                                       MBVERTEX, dof)) {
       EntityHandle ent = dof->get()->getEnt();
       VectorDouble coords(3);
-      rval = moab.get_coords(&ent,1,&coords[0]); CHKERRG(rval);
+      CHKERR moab.get_coords(&ent, 1, &coords[0]);
       dof->get()->getFieldData() = 1;
     }
 
     Vec F;
-    ierr = m_field.getInterface<VecManager>()->vecCreateGhost("PROB",ROW,&F); CHKERRG(ierr);
-    ierr = thermal_stress_elem.setThermalStressRhsOperators("DISP","TEMP",F,1); CHKERRG(ierr);
+    CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("PROB", ROW, &F);
+    CHKERR thermal_stress_elem.setThermalStressRhsOperators("DISP", "TEMP", F,
+                                                            1);
 
-    ierr = m_field.loop_finite_elements("PROB","ELAS",thermal_stress_elem.getLoopThermalStressRhs()); CHKERRG(ierr);
-    ierr = VecAssemblyBegin(F); CHKERRG(ierr);
-    ierr = VecAssemblyEnd(F); CHKERRG(ierr);
+    CHKERR m_field.loop_finite_elements(
+        "PROB", "ELAS", thermal_stress_elem.getLoopThermalStressRhs());
+    CHKERR VecAssemblyBegin(F);
+    CHKERR VecAssemblyEnd(F);
 
     // PetscViewer viewer;
-    // ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"forces_and_sources_thermal_stress_elem.txt",&viewer); CHKERRG(ierr);
-    // ierr = VecChop(F,1e-4); CHKERRG(ierr);
-    // ierr = VecView(F,viewer); CHKERRG(ierr);
-    // ierr = PetscViewerDestroy(&viewer); CHKERRG(ierr);
+    // CHKERR
+    // PetscViewerASCIIOpen(PETSC_COMM_WORLD,"forces_and_sources_thermal_stress_elem.txt",&viewer);
+    // CHKERR VecChop(F,1e-4);
+    // CHKERR VecView(F,viewer);
+    // CHKERR PetscViewerDestroy(&viewer);
 
     double sum = 0;
-    ierr = VecSum(F,&sum); CHKERRG(ierr);
-    ierr = PetscPrintf(PETSC_COMM_WORLD,"sum  = %9.8f\n",sum); CHKERRG(ierr);
+    CHKERR VecSum(F, &sum);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "sum  = %9.8f\n", sum);
     double fnorm;
-    ierr = VecNorm(F,NORM_2,&fnorm); CHKERRG(ierr);
-    ierr = PetscPrintf(PETSC_COMM_WORLD,"fnorm  = %9.8e\n",fnorm); CHKERRG(ierr);
-    if(fabs(sum)>1e-7) {
-      SETERRQ(PETSC_COMM_WORLD,MOFEM_ATOM_TEST_INVALID,"Failed to pass test");
+    CHKERR VecNorm(F, NORM_2, &fnorm);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "fnorm  = %9.8e\n", fnorm);
+    if (fabs(sum) > 1e-7) {
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "Failed to pass test");
     }
-    if(fabs(fnorm-2.64638118e+00)>1e-7) {
-      SETERRQ(PETSC_COMM_WORLD,MOFEM_ATOM_TEST_INVALID,"Failed to pass test");
+    if (fabs(fnorm - 2.64638118e+00) > 1e-7) {
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID, "Failed to pass test");
     }
 
-
-    ierr = VecZeroEntries(F); CHKERRG(ierr);
-
-    ierr = VecDestroy(&F); CHKERRG(ierr);
-
-
-  } 
+    CHKERR VecZeroEntries(F);
+    CHKERR VecDestroy(&F);
+  }
   CATCH_ERRORS;
 
   MoFEM::Core::Finalize();
 
   return 0;
-
 }

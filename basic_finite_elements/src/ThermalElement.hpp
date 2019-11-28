@@ -106,6 +106,7 @@ struct ThermalElement {
     // double cOnductivity;
     MatrixDouble cOnductivity_mat; // This is (3x3) conductivity matrix
     double cApacity; // rou * c_p == material density multiple heat capacity
+    double initTemp; ///< initial temperature
     Range tEts;      ///< contains elements in block set
   };
   std::map<int, BlockData>

@@ -434,10 +434,9 @@ struct PostProcTemplateVolumeOnRefinedMesh
     };
 
     const int dof_max_order = get_element_max_dofs_order();
-    int level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
-    if (level > levelGaussPtsOnRefMesh.size() - 1) {
+    size_t level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
+    if (level > (levelGaussPtsOnRefMesh.size() - 1)) 
       level = levelGaussPtsOnRefMesh.size() - 1;
-    }
 
     auto &level_ref_gauss_pts = levelGaussPtsOnRefMesh[level];
     auto &level_ref_tets = levelRefTets[level];
