@@ -2,7 +2,7 @@ Check before run
 ================
 
 * Check where is your mesh file
-* Check what verion of openmpi (or other MPI library) are you using
+* Check what version of openmpi (or other MPI library) are you using
 
 First partition mesh (in this case it is partitioned in two: -my_nparts 2)
 ==========================================================================
