@@ -277,7 +277,7 @@ int main(int argc, char *argv[]) {
 
         std::ostringstream str_init_temp;
         str_init_temp << "block_" << it->getMeshsetId()
-                      << ".initail_temperature";
+                      << ".initial_temperature";
         config_file_options.add_options()(
             str_init_temp.str().c_str(),
             po::value<double>(&block_data[it->getMeshsetId()].initTemp)
