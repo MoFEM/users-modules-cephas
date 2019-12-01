@@ -47,6 +47,8 @@ int main(int argc, char *argv[]) {
                                  "-my_r_value 1. \n"
                                  "-my_cn_value 1e3 \n"
                                  "-my_is_newton_cotes PETSC_FALSE \n"
+                                 "-is_lag PETSC_TRUE \n"
+                                 "-is_nitsche PETSC_FALSE \n"
                                  "-my_hdiv_trace PETSC_FALSE";
 
   string param_file = "param_file.petsc";
@@ -76,6 +78,8 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
+    PetscBool is_lag = PETSC_TRUE;
+    PetscBool is_nitsche = PETSC_FALSE;
     PetscBool is_hdiv_trace = PETSC_FALSE;
     PetscInt master_move = 0;
 
@@ -105,6 +109,16 @@ int main(int argc, char *argv[]) {
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-is_lag",
+                            "set if mesh is partitioned (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_TRUE, &is_lag, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-is_nitsche",
+                            "set if mesh is partitioned (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_FALSE, &is_nitsche, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_hdiv_trace",
                             "set if mesh is partitioned (this result that each "
@@ -289,6 +303,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
+if(is_lag){
     if (is_hdiv_trace) {
       CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
@@ -302,6 +317,7 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
     }
+}
 
     // build field
     CHKERR m_field.build_fields();
@@ -417,13 +433,122 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+                                       "LAGMULT", contact_prisms, is_lag);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
     // Add spring boundary condition applied on surfaces.
     CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
                                            "MESH_NODE_POSITIONS");
+
+    Range solid_faces;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 12, "MAT_ELASTIC2") == 0) {
+
+        Range tets, tet, tris, tet_first;
+        const int id = bit->getMeshsetId();
+        CHKERR m_field.get_moab().get_entities_by_type(
+            bit->getMeshset(), MBTET, tet_first,
+            true);
+        CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
+                                    moab::Interface::UNION);
+        tris = intersect(tris, master_tris);
+        if (tris.size() == 0)
+        {
+          cerr << "M 2 with slave\n";
+          tris = intersect(tris, slave_tris);
+        }
+        CHKERR moab.get_adjacencies(tris, 3, false, tets,
+                                    moab::Interface::UNION);
+        tets = tets.subset_by_type(MBTET);
+        contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+            .tEts = tets;
+
+        for (auto &bit : elastic.setOfBlocks) {
+          if (bit.second.tEts.contains(tets)) {
+            // Range edges, nodes, faces;
+            // CHKERR moab.get_adjacencies(tets, 2, false, faces,
+            //                             moab::Interface::UNION);
+            // CHKERR moab.get_adjacencies(tets, 1, false, edges,
+            //                             moab::Interface::UNION);
+            // CHKERR moab.get_adjacencies(tets, 0, false, nodes,
+            //                             moab::Interface::UNION);
+
+            // contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+            //     .forcesOnlyOnEntitiesRow.insert(slave_tris.begin(), slave_tris.end());
+
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+                .E = bit.second.E;
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+                .PoissonRatio = bit.second.PoissonRatio;
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+                .iD = id;
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+                .materialDoublePtr = bit.second.materialDoublePtr;
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+                .materialAdoublePtr = bit.second.materialAdoublePtr;
+            break;
+          }
+        }
+        if (contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
+                .E < 0) {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "Cannot find a fluid block adjacent to a given solid face");
+        }
+      }
+    }
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 12, "MAT_ELASTIC1") == 0) {
+        Range tets, tet, tris, tet_first;
+        const int id = bit->getMeshsetId();
+
+        CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(), MBTET,
+                                                       tet_first, true);
+        CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
+                                    moab::Interface::UNION);
+        tris = intersect(tris, master_tris);
+        if (tris.size() == 0) {
+          cerr << "M 1 with slave\n";
+          tris = intersect(tris, slave_tris);
+        }
+        CHKERR moab.get_adjacencies(tris, 3, false, tets,
+                                    moab::Interface::UNION);
+        tets = tets.subset_by_type(MBTET);
+        contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1].tEts =
+            tets;
+
+        // CHKERR moab.get_adjacencies(slave_tris, 3, true, tets,
+        //                             moab::Interface::UNION);
+        // tet = Range(tets.front(), tets.front());
+        for (auto &bit : elastic.setOfBlocks) {
+          if (bit.second.tEts.contains(tet)) {
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
+                .E = bit.second.E;
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
+                .PoissonRatio = bit.second.PoissonRatio;
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
+                .iD = id;
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
+                .materialDoublePtr = bit.second.materialDoublePtr;
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
+                .materialAdoublePtr = bit.second.materialAdoublePtr;
+            break;
+          }
+        }
+        if (contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
+                .E < 0) {
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "Cannot find a fluid block adjacent to a given solid face");
+        }
+      }
+    }
+
+    // contact_problem->commonDataSimpleContact->elasticityCommonData
+    //     .forcesOnlyOnEntitiesRow();
+
+    // contact_problem->commonDataSimpleContact->elasticityCommonData.setOfBlocks[1].tEts
+    // = elastic.setOfBlocks[1].tEts;
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
@@ -489,31 +614,46 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    if (is_hdiv_trace) {
+    if (is_lag) {
+      if (is_hdiv_trace) {
 
-      contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
-                                                           "LAGMULT");
+        contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
+                                                             "LAGMULT");
 
-      contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
-                                                           "LAGMULT", Aij);
-    } else {
-      contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT", "ELASTIC");
+        contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
+                                                             "LAGMULT", Aij);
+      } else {
+        contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
+                                                         "LAGMULT", "ELASTIC");
 
-      contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
-                                                       "LAGMULT", Aij);
-    }
+        contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
+                                                         "LAGMULT", Aij);
+      }
+} else {
+  if (is_nitsche){
+    contact_problem->setContactNitschePenaltyRhsOperators(
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "ELASTIC");
+    contact_problem->setContactNitschePenaltyLhsOperators(
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "ELASTIC", Aij);
+  }else {
+    contact_problem->setContactPenaltyRhsOperators("SPATIAL_POSITION");
 
-    // Assemble pressure and traction forces
-    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(
-        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
+  contact_problem->setContactPenaltyLhsOperators("SPATIAL_POSITION",
+                                                  Aij);
+  }
 
-    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
-        neumann_forces.begin();
-    for (; mit != neumann_forces.end(); mit++) {
-      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
-                                    &mit->second->getLoopFe(), NULL, NULL);
+}
+
+// Assemble pressure and traction forces
+boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
+                                                   NULL, "SPATIAL_POSITION");
+
+boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+    neumann_forces.begin();
+for (; mit != neumann_forces.end(); mit++) {
+  CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
+                                &mit->second->getLoopFe(), NULL, NULL);
     }
 
     // Implementation of spring element
@@ -626,12 +766,13 @@ int main(int argc, char *argv[]) {
     // moab_instance
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
+    
     if (is_hdiv_trace) {
       contact_problem->setContactOperatorsForPostProcHdiv(
           m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
     } else {
       contact_problem->setContactOperatorsForPostProc(
-          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC", mb_post, is_lag);
     }
 
     mb_post.delete_mesh();
@@ -639,41 +780,6 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(
         dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
 
-    //
-    Range solid_faces;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 12, "MAT_ELASTIC1") == 0) {
-        Range tets, tet;
-        const int id = bit->getMeshsetId();
-        contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
-            .eNts = master_tris;
-        // CHKERR m_field.get_moab().get_entities_by_type(
-        //     bit->getMeshset(), MBTRI, commonData->setOfFacesData[id].eNts,
-        //     true);
-        // solid_faces.merge(commonData->setOfFacesData[id].eNts);
-        CHKERR moab.get_adjacencies(
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
-                .eNts,
-            3, true, tets, moab::Interface::UNION);
-        tet = Range(tets.front(), tets.front());
-        for (auto &bit : elastic.setOfBlocks) {
-          if (bit.second.tEts.contains(tet)) {
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
-                .yOung = bit.second.E;
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
-                .pOisson = bit.second.PoissonRatio;
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
-                .iD = id;
-            break;
-          }
-        }
-        if (contact_problem->commonDataSimpleContact->setOfMasterFacesData[id]
-                .yOung < 0) {
-          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                  "Cannot find a fluid block adjacent to a given solid face");
-        }
-      }
-    }
 
     std::ostringstream ostrm;
 
