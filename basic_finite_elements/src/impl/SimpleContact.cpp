@@ -872,18 +872,18 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
   auto t_w = getFTensor0IntegrationWeightMaster();
   auto proj_normal_stress_master =
       getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
-  auto proj_normal_stress_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
+  // auto proj_normal_stress_slave =
+  //     getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
 
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (gap_gp > 0) {
-        ++gap_gp;
-        continue;
-      }
-      ++gap_gp;
+      // if (gap_gp > 0) {
+      //   ++gap_gp;
+      //   continue;
+      // }
+      // ++gap_gp;
 
       // cerr << "Stresses "
       //      << 0.5 * (proj_normal_stress_master + proj_normal_stress_slave)
@@ -891,7 +891,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
       // Here for average stress
       const double val_m =
           0.5 * t_w * area_m *
-          (proj_normal_stress_master + proj_normal_stress_slave);
+          (proj_normal_stress_master /*+ proj_normal_stress_slave*/);
 
       FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
 
@@ -905,7 +905,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
       }
       ++t_w;
       ++proj_normal_stress_master;
-      ++proj_normal_stress_slave;
+      // ++proj_normal_stress_slave;
     } // for gauss points
 
     Vec f;
@@ -1021,18 +1021,18 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsSlave::doWork(
 
   auto proj_normal_stress_master =
       getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
-  auto proj_normal_stress_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
+  // auto proj_normal_stress_slave =
+  //     getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
 
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (gap_gp > 0) {
-        ++gap_gp;
-        continue;
-      }
-      ++gap_gp;
+      // if (gap_gp > 0) {
+      //   ++gap_gp;
+      //   continue;
+      // }
+      // ++gap_gp;
 
       // cerr << "Stresses Master "
       //      << proj_normal_stress_master << " Stresses Slave "
@@ -1040,7 +1040,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsSlave::doWork(
       // 0.5 * (sigma_master + sigma_slave)
       const double val_s =
           0.5 * t_w * area_s *
-          (proj_normal_stress_master + proj_normal_stress_slave);
+          (proj_normal_stress_master /*+ proj_normal_stress_slave*/);
 
       FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
 
@@ -1054,7 +1054,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsSlave::doWork(
       }
       ++t_w;
       ++proj_normal_stress_master;
-      ++proj_normal_stress_slave;
+      // ++proj_normal_stress_slave;
     } // for gauss points
 
     Vec f;
