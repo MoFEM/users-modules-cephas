@@ -453,16 +453,25 @@ if(is_lag){
         CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
                                     moab::Interface::UNION);
         tris = intersect(tris, master_tris);
-        if (tris.size() == 0)
-        {
+
+        // boost::shared_ptr<NonlinearElasticElement::BlockData> block_data =
+        //     boost::make_shared<NonlinearElasticElement::BlockData>();
+
+        NonlinearElasticElement::BlockData *block_data;
+
+        if (tris.size() == 0) {
           cerr << "M 2 with slave\n";
           tris = intersect(tris, slave_tris);
+          block_data = &(contact_problem->commonDataSimpleContact
+                  ->setOfSlaveFacesData[1]);
+        } else {
+          block_data = &(
+              contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]);
         }
         CHKERR moab.get_adjacencies(tris, 3, false, tets,
                                     moab::Interface::UNION);
         tets = tets.subset_by_type(MBTET);
-        contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-            .tEts = tets;
+        block_data->tEts = tets;
 
         for (auto &bit : elastic.setOfBlocks) {
           if (bit.second.tEts.contains(tets)) {
@@ -477,21 +486,15 @@ if(is_lag){
             // contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
             //     .forcesOnlyOnEntitiesRow.insert(slave_tris.begin(), slave_tris.end());
 
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-                .E = bit.second.E;
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-                .PoissonRatio = bit.second.PoissonRatio;
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-                .iD = id;
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-                .materialDoublePtr = bit.second.materialDoublePtr;
-            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-                .materialAdoublePtr = bit.second.materialAdoublePtr;
+            block_data->E = bit.second.E;
+            block_data->PoissonRatio = bit.second.PoissonRatio;
+            block_data->iD = id;
+            block_data->materialDoublePtr = bit.second.materialDoublePtr;
+            block_data->materialAdoublePtr = bit.second.materialAdoublePtr;
             break;
           }
         }
-        if (contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-                .E < 0) {
+        if (block_data->E < 0) {
           SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                   "Cannot find a fluid block adjacent to a given solid face");
         }
@@ -508,36 +511,35 @@ if(is_lag){
         CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
                                     moab::Interface::UNION);
         tris = intersect(tris, master_tris);
+        NonlinearElasticElement::BlockData *block_data;
         if (tris.size() == 0) {
           cerr << "M 1 with slave\n";
           tris = intersect(tris, slave_tris);
+          block_data = &(
+              contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
+        } else {
+          block_data = &(contact_problem->commonDataSimpleContact
+                             ->setOfMasterFacesData[1]);
         }
         CHKERR moab.get_adjacencies(tris, 3, false, tets,
                                     moab::Interface::UNION);
         tets = tets.subset_by_type(MBTET);
-        contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1].tEts =
-            tets;
+        block_data->tEts = tets;
 
         // CHKERR moab.get_adjacencies(slave_tris, 3, true, tets,
         //                             moab::Interface::UNION);
         // tet = Range(tets.front(), tets.front());
         for (auto &bit : elastic.setOfBlocks) {
           if (bit.second.tEts.contains(tet)) {
-            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
-                .E = bit.second.E;
-            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
-                .PoissonRatio = bit.second.PoissonRatio;
-            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
-                .iD = id;
-            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
-                .materialDoublePtr = bit.second.materialDoublePtr;
-            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
-                .materialAdoublePtr = bit.second.materialAdoublePtr;
+            block_data->E = bit.second.E;
+            block_data->PoissonRatio = bit.second.PoissonRatio;
+            block_data->iD = id;
+            block_data->materialDoublePtr = bit.second.materialDoublePtr;
+            block_data->materialAdoublePtr = bit.second.materialAdoublePtr;
             break;
           }
         }
-        if (contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]
-                .E < 0) {
+        if (block_data->E < 0) {
           SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                   "Cannot find a fluid block adjacent to a given solid face");
         }
@@ -776,10 +778,10 @@ for (; mit != neumann_forces.end(); mit++) {
     }
 
     mb_post.delete_mesh();
-
     CHKERR DMoFEMLoopFiniteElements(
         dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
 
+   
 
     std::ostringstream ostrm;
 
