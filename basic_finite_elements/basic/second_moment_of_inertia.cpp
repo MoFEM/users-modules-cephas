@@ -156,25 +156,27 @@ int main(int argc, char *argv[]) {
     const double *array;
     CHKERR VecGetArrayRead(common_data_ptr->petsc_vec, &array);
 
-
     //! [Print results]
-    PetscPrintf(PETSC_COMM_WORLD, "Mass %6.4e\n", array[CommonData::ZERO]);
-    PetscPrintf(PETSC_COMM_WORLD,
-                "First moment of inertia [ %6.4e, %6.4e, %6.4e ] \n",
-                array[CommonData::FIRST_X], array[CommonData::FIRST_Y],
-                array[CommonData::FIRST_Z]);
-    PetscPrintf(PETSC_COMM_WORLD,
-                "Second moment of inertia [ %6.4e, %6.4e, %6.4e; %6.4e %6.4e; "
-                "%6.4e ]\n",
-                array[CommonData::SECOND_XX], array[CommonData::SECOND_XY],
-                array[CommonData::SECOND_XZ], array[CommonData::SECOND_YY],
-                array[CommonData::SECOND_YZ], array[CommonData::SECOND_ZZ]);
+    if (m_field.get_comm() == 0) {
+      PetscPrintf(PETSC_COMM_SELF, "Mass %6.4e\n", array[CommonData::ZERO]);
+      PetscPrintf(PETSC_COMM_SELF,
+                  "First moment of inertia [ %6.4e, %6.4e, %6.4e ] \n",
+                  array[CommonData::FIRST_X], array[CommonData::FIRST_Y],
+                  array[CommonData::FIRST_Z]);
+      PetscPrintf(
+          PETSC_COMM_SELF,
+          "Second moment of inertia [ %6.4e, %6.4e, %6.4e; %6.4e %6.4e; "
+          "%6.4e ]\n",
+          array[CommonData::SECOND_XX], array[CommonData::SECOND_XY],
+          array[CommonData::SECOND_XZ], array[CommonData::SECOND_YY],
+          array[CommonData::SECOND_YZ], array[CommonData::SECOND_ZZ]);
+    }
     //! [Print results]
 
     //! [Test example]
     PetscBool test = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
-    if(test) {
+    if(m_field.get_comm() == 0 && test) {
       constexpr double eps = 1e-8;
       constexpr double expected_area = 1.;
       constexpr double expected_first_moment = 0.;
