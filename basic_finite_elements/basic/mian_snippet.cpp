@@ -41,8 +41,8 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance; ///< interface
 
     // Create MoFEM
-    MoFEM::Core core(moab);
-    MoFEM::Interface &m_field = core;
+    MoFEM::Core core(moab); ///< database
+    MoFEM::Interface &m_field = core; ///< interface
 
     Simple *simple_interface = m_field.getInterface<Simple>();
     CHKERR simple_interface->getOptions();
@@ -50,8 +50,6 @@ int main(int argc, char *argv[]) {
 
     CHKERR simple_interface->addDomainField("FIELD", H1,
                                              AINSWORTH_LEGENDRE_BASE, 1);
-    CHKERR simple_interface->addBoundaryField("FIELD", H1,
-                                              AINSWORTH_LEGENDRE_BASE, 1);
 
     constexpr int order = 2;
     CHKERR simple_interface->setFieldOrder("FIELD", order);
@@ -59,9 +57,13 @@ int main(int argc, char *argv[]) {
 
     Basic *basic_interface = m_field.getInterface<Basic>();
 
-    auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+    basic_interface->getOpDomainRhsPipeline().push_back(
+        new OpCalculateScalarFieldValues(
+            "FIELD", common_data_ptr->rho_at_integration_points));
+
+    auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
     CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR basic_interface->setBoundaryRhsIntegrationRule(integration_rule);
+    CHKERR basic_interface->loopFiniteElements();
 
   }
   CATCH_ERRORS;
