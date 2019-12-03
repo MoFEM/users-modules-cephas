@@ -324,6 +324,105 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode
+SimpleContactProblem::OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference::
+    doWork(int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->relErrorLagNormalStressAtSlave.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->relErrorLagNormalStressAtSlave.get()->clear();
+
+  commonDataSimpleContact->relErrorLagNormalStressAtMaster.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->relErrorLagNormalStressAtMaster.get()->clear();
+
+  auto proj_normal_stress_master =
+      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
+
+  auto proj_normal_stress_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
+
+  auto diff_master =
+      getFTensor0FromVec(*commonDataSimpleContact->diffNormalLagMaster);
+
+  auto diff_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->diffNormalLagSlave);
+
+auto lag_mult =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+auto error_master = getFTensor0FromVec(
+    *commonDataSimpleContact->relErrorLagNormalStressAtMaster);
+
+auto error_slave = getFTensor0FromVec(
+    *commonDataSimpleContact->relErrorLagNormalStressAtSlave);
+
+for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+  error_slave = fabs(diff_slave / proj_normal_stress_slave);
+  error_master = fabs(diff_master / proj_normal_stress_master);
+
+  ++proj_normal_stress_master;
+  ++proj_normal_stress_slave;
+  ++diff_slave;
+  ++diff_master;
+  ++lag_mult;
+  ++error_slave;
+  ++error_master;
+}
+
+MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpCalNormalLagrangeMasterAndSlaveDifference::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->diffNormalLagSlave.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->diffNormalLagSlave.get()->clear();
+
+  commonDataSimpleContact->diffNormalLagMaster.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->diffNormalLagMaster.get()->clear();
+
+  auto proj_normal_stress_master =
+      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
+
+  auto proj_normal_stress_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
+
+  auto diff_master =
+      getFTensor0FromVec(*commonDataSimpleContact->diffNormalLagMaster);
+
+  auto diff_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->diffNormalLagSlave);
+
+auto lag_mult =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    diff_slave += lag_mult + proj_normal_stress_slave;
+    diff_master += lag_mult + proj_normal_stress_master;
+    ++proj_normal_stress_master;
+    ++proj_normal_stress_slave;
+    ++diff_slave;
+    ++diff_master;
+    ++lag_mult;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
@@ -4864,17 +4963,29 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
                                   th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
                                   &def_vals);
 
-  // Tag th_diff_lag_with_master_stress;
-  // if (lagFieldSet)
-  //   CHKERR moabOut.tag_get_handle("DIFF_LAG_WITH_MASTER", 1, MB_TYPE_DOUBLE,
-  //                                 th_diff_lag_with_master_stress,
-  //                                 MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+  Tag th_diff_lag_with_normal_master_traction;
+  if (lagFieldSet)
+    CHKERR moabOut.tag_get_handle("DIFF_NORMAL_LAG_WITH_MASTER", 1, MB_TYPE_DOUBLE,
+                                  th_diff_lag_with_normal_master_traction,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
 
-  // Tag th_diff_lag_with_master_stress;
-  // if (lagFieldSet)
-  //   CHKERR moabOut.tag_get_handle("DIFF_LAG_WITH_MASTER", 1, MB_TYPE_DOUBLE,
-  //                                 th_diff_lag_with_master_stress,
-  //                                 MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+  Tag th_diff_lag_with_normal_slave_traction;
+  if (lagFieldSet)
+    CHKERR moabOut.tag_get_handle("DIFF_NORMAL_LAG_WITH_SLAVE", 1,
+                                  MB_TYPE_DOUBLE, th_diff_lag_with_normal_slave_traction,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+
+  Tag th_error_lag_master;
+  if (lagFieldSet)
+    CHKERR moabOut.tag_get_handle("ERROR_LAG_MASTER", 1, MB_TYPE_DOUBLE,
+                                  th_error_lag_master,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+
+  Tag th_error_lag_slave;
+  if (lagFieldSet)
+    CHKERR moabOut.tag_get_handle("ERROR_LAG_SLAVE", 1, MB_TYPE_DOUBLE,
+                                  th_error_lag_slave,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
 
   double coords[3];
   EntityHandle new_vertex = getFEEntityHandle();
@@ -4893,7 +5004,17 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
   auto projected_stress_slave =
       getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
 
-  
+  auto diff_normal_lag_master =
+      getFTensor0FromVec(*commonDataSimpleContact->diffNormalLagMaster);
+
+  auto diff_normal_lag_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->diffNormalLagSlave);
+
+  auto rel_error_master = getFTensor0FromVec(
+      *commonDataSimpleContact->relErrorLagNormalStressAtMaster);
+
+  auto rel_error_slave = getFTensor0FromVec(
+      *commonDataSimpleContact->relErrorLagNormalStressAtSlave);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     for (int dd = 0; dd != 3; ++dd) {
@@ -4914,14 +5035,27 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
       CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
                                   &lag_gap_prod_slave);
       CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &lagrange_slave);
-    }
+
+      CHKERR moabOut.tag_set_data(th_diff_lag_with_normal_master_traction,
+                                  &new_vertex, 1, &diff_normal_lag_master);
+      CHKERR moabOut.tag_set_data(th_diff_lag_with_normal_slave_traction,
+                                  &new_vertex, 1, &diff_normal_lag_slave);
+      CHKERR moabOut.tag_set_data(th_error_lag_slave, &new_vertex, 1,
+                                  &rel_error_slave);
+      CHKERR moabOut.tag_set_data(th_error_lag_master, &new_vertex, 1,
+                                  &rel_error_master);
+        }
 
     // cerr << "Post proc gap " << gap_ptr<<"\n";
 
     ++gap_ptr;
     if (lagFieldSet) {
+      ++diff_normal_lag_master;
+      ++diff_normal_lag_slave;
       ++lagrange_slave;
       ++lag_gap_prod_slave;
+      ++rel_error_master;
+      ++rel_error_slave;
     }
   }
   MoFEMFunctionReturn(0);

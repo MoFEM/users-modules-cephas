@@ -185,6 +185,11 @@ struct SimpleContactProblem {
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
     boost::shared_ptr<VectorDouble> projNormalStressAtMaster;
     boost::shared_ptr<VectorDouble> projNormalStressAtSlave;
+    boost::shared_ptr<VectorDouble> relErrorLagNormalStressAtMaster;
+    boost::shared_ptr<VectorDouble> relErrorLagNormalStressAtSlave;
+
+    boost::shared_ptr<VectorDouble> diffNormalLagSlave;
+    boost::shared_ptr<VectorDouble> diffNormalLagMaster;
     boost::shared_ptr<VectorDouble> gapPtr;
     boost::shared_ptr<VectorDouble> lagGapProdPtr;
     boost::shared_ptr<VectorDouble> tildeCFunPtr;
@@ -211,6 +216,11 @@ struct SimpleContactProblem {
       lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
       projNormalStressAtMaster = boost::make_shared<VectorDouble>();
       projNormalStressAtSlave = boost::make_shared<VectorDouble>();
+      relErrorLagNormalStressAtMaster = boost::make_shared<VectorDouble>();
+      relErrorLagNormalStressAtSlave = boost::make_shared<VectorDouble>();
+
+      diffNormalLagSlave= boost::make_shared<VectorDouble>();
+      diffNormalLagMaster= boost::make_shared<VectorDouble>();
       gapPtr = boost::make_shared<VectorDouble>();
       normalSlaveLengthALEPtr = boost::make_shared<VectorDouble>();
       normalMasterLengthALEPtr = boost::make_shared<VectorDouble>();
@@ -587,6 +597,41 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
+
+  struct OpCalNormalLagrangeMasterAndSlaveDifference
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpCalNormalLagrangeMasterAndSlaveDifference(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
 
   struct OpCalProjStressesAtGaussPtsSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
@@ -3545,9 +3590,18 @@ struct SimpleContactProblem {
         fePostProcSimpleContact->getOpPtrVector().push_back(
             new OpLagGapProdGaussPtsSlave(lagrang_field_name,
                                           commonDataSimpleContact));
-       }
-      fePostProcSimpleContact->getOpPtrVector().push_back(new OpMakeVtkSlave(
-          m_field, field_name, commonDataSimpleContact, moab_out, lagrange_field));
+        fePostProcSimpleContact->getOpPtrVector().push_back(
+            new OpCalNormalLagrangeMasterAndSlaveDifference(
+                field_name, commonDataSimpleContact));
+
+        fePostProcSimpleContact->getOpPtrVector().push_back(
+            new OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference(
+                field_name, commonDataSimpleContact));
+      }
+
+      fePostProcSimpleContact->getOpPtrVector().push_back(
+          new OpMakeVtkSlave(m_field, field_name, commonDataSimpleContact,
+                             moab_out, lagrange_field));
     }
     MoFEMFunctionReturn(0);
   }
