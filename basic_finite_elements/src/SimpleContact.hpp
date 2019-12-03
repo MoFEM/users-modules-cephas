@@ -3502,13 +3502,14 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
               boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
                   mField);
       commonDataSimpleContact->tAg = 2;
-      //   feMatMasterSideRhs->getOpPtrVector().push_back(
-      //       new NonlinearElasticElement::OpGetDataAtGaussPts(
-      //           field_name,
-      //           commonDataSimpleContact->elasticityCommonData
-      //               .dataAtGaussPts[field_name],
-      //           commonDataSimpleContact
-      //               ->elasticityCommonData.gradAtGaussPts[field_name]));
+       
+        feMatMasterSideRhs->getOpPtrVector().push_back(
+            new NonlinearElasticElement::OpGetDataAtGaussPts(
+                field_name,
+                commonDataSimpleContact->elasticityCommonData
+                    .dataAtGaussPts[field_name],
+                commonDataSimpleContact
+                    ->elasticityCommonData.gradAtGaussPts[field_name]));
 
       cerr << "Material data Master "
            << "E " << commonDataSimpleContact->setOfMasterFacesData[1].E
@@ -3550,15 +3551,16 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
            << commonDataSimpleContact->setOfSlaveFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
-    //   feMatSlaveSideRhs->getOpPtrVector().push_back(
-    //       new NonlinearElasticElement::OpGetDataAtGaussPts(
-    //           field_name, commonDataSimpleContact->dataAtGaussPts[field_name],
-    //           commonDataSimpleContact->gradAtGaussPts[field_name]));
-
+     
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
             feMatSlaveSideRhs =
                 boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
                     mField);
+
+        feMatSlaveSideRhs->getOpPtrVector().push_back(
+            new NonlinearElasticElement::OpGetDataAtGaussPts(
+                field_name, commonDataSimpleContact->dataAtGaussPts[field_name],
+                commonDataSimpleContact->gradAtGaussPts[field_name]));
 
         feMatSlaveSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
