@@ -2,6 +2,7 @@ using Element = MoFEM::VolumeElementForcesAndSourcesCoreBase;
 using OpElement = Element::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
+//! [Operators]
 struct OpZero : public OpElement {
   OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
       : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
@@ -28,6 +29,7 @@ struct OpSecond : public OpElement {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
+//! [Operators]
 
 MoFEMErrorCode OpZero::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -83,6 +85,7 @@ MoFEMErrorCode OpFirst::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
+//! [SecondOp]
 MoFEMErrorCode OpSecond::doWork(int side, EntityType type,
                                                    EntData &data) {
   MoFEMFunctionBegin;
@@ -117,3 +120,4 @@ MoFEMErrorCode OpSecond::doWork(int side, EntityType type,
   }
   MoFEMFunctionReturn(0);
 }
+//! [SecondOp]

@@ -1,6 +1,6 @@
 /**
- * \file main_snippet.cpp
- * \example main_snippet.cpp
+ * \file second_moment_of_inertia.cpp
+ * \example second_moment_of_inertia.cpp
  *
  * Using Basic interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
@@ -27,6 +27,7 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
+//! [Common data]
 struct CommonData {
   boost::shared_ptr<VectorDouble> rhoAtIntegrationPts;
   enum VecElements {
@@ -44,6 +45,7 @@ struct CommonData {
   };
   SmartPetscObj<Vec> petscVec;
 };
+//! [Common data]
 
 #include <second_moment_of_inertia.hpp>
 
@@ -81,7 +83,7 @@ int main(int argc, char *argv[]) {
     //! [Set up problem]
 
     //! [Distributions mass]
-    auto set_distance = [&](VectorAdaptor &&field_data, double *xcoord,
+    auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
                             double *ycoord, double *zcoord) {
       MoFEMFunctionBeginHot;
       field_data[0] = 1;
@@ -89,7 +91,7 @@ int main(int argc, char *argv[]) {
     };
     FieldBlas *field_blas;
     CHKERR m_field.getInterface(field_blas);
-    CHKERR field_blas->setVertexDofs(set_distance, "rho");
+    CHKERR field_blas->setVertexDofs(set_density, "rho");
     //! [Distributions mass]
 
     //! [Create common data]
@@ -99,15 +101,14 @@ int main(int argc, char *argv[]) {
         (!m_field.get_comm_rank()) ? CommonData::LAST_ELEMENT : 0,
         CommonData::LAST_ELEMENT);
     CHKERR VecZeroEntries(common_data_ptr->petscVec);
-    common_data_ptr->rhoAtIntegrationPts =
-        boost::make_shared<VectorDouble>();
+    common_data_ptr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
     //! [Create common data]
 
     //! [Push operators to pipeline]
     Basic *basic_interface = m_field.getInterface<Basic>();
     basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpCalculateScalarFieldValues(
-            "rho", common_data_ptr->rhoAtIntegrationPts));
+        new OpCalculateScalarFieldValues("rho",
+                                         common_data_ptr->rhoAtIntegrationPts));
     basic_interface->getOpDomainRhsPipeline().push_back(
         new OpZero(common_data_ptr));
     basic_interface->getOpDomainRhsPipeline().push_back(
@@ -147,35 +148,33 @@ int main(int argc, char *argv[]) {
     //! [Test example]
     PetscBool test = PETSC_FALSE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
-    if(m_field.get_comm_rank() == 0 && test) {
+    if (m_field.get_comm_rank() == 0 && test) {
       constexpr double eps = 1e-8;
       constexpr double expected_area = 1.;
       constexpr double expected_first_moment = 0.;
       constexpr double expected_second_moment = 1. / 12.;
       if (std::abs(array[CommonData::ZERO] - expected_area) > eps)
         SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                "Wrong area %6.4e !+ %6.4e", expected_area,
-                array[CommonData::ZERO]);
+                 "Wrong area %6.4e !+ %6.4e", expected_area,
+                 array[CommonData::ZERO]);
       for (auto i :
            {CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z}) {
         if (std::abs(array[i] - expected_first_moment) > eps)
           SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                  "Wrong first moment %6.4e !+ %6.4e", expected_first_moment,
-                  array[i]);
+                   "Wrong first moment %6.4e !+ %6.4e", expected_first_moment,
+                   array[i]);
       }
       for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
                      CommonData::SECOND_ZZ}) {
         if (std::abs(array[i] - expected_second_moment) > eps)
           SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                  "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
-                  array[i]);
+                   "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
+                   array[i]);
       }
     }
     //! [Test example]
 
     CHKERR VecRestoreArrayRead(common_data_ptr->petscVec, &array);
-
-
   }
   CATCH_ERRORS;
 
