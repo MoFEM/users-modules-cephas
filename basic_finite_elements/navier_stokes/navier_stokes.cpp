@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
     if (!is_restart) {
       // **** ADD FIELDS **** //
       CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-      CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+      CHKERR m_field.add_field("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
       CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1,
                                AINSWORTH_LEGENDRE_BASE, 3);
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
@@ -523,8 +523,7 @@ int main(int argc, char *argv[]) {
       boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
           neumann_forces.begin();
       for (; mit != neumann_forces.end(); mit++) {
-        // mit->second->methodsOp.push_back(new
-        // NavierStokesElement::LoadScale());
+        mit->second->methodsOp.push_back(new NavierStokesElement::LoadScale());
         CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
                                       &mit->second->getLoopFe(), NULL, NULL);
       }
@@ -643,6 +642,7 @@ int main(int argc, char *argv[]) {
           bit.second.inertiaCoef = 1.0;
           bit.second.viscousCoef = 1.0 / Re;
         }
+        NavierStokesElement::LoadScale::lambda /= P;
       }
 
       CHKERR PetscPrintf(PETSC_COMM_WORLD,
