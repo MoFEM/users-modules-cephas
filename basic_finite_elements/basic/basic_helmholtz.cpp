@@ -277,6 +277,17 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMMeshToLocalVector(simple_interface->getDM(), D, INSERT_VALUES,
                                    SCATTER_REVERSE);
     //! [Solve]
+
+    //! [Postprocess results]
+    basic_interface->getDomainLhsFE().reset();
+    auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(m_field);
+    post_proc_fe->generateReferenceElementMesh();
+    post_proc_fe->addFieldValuesPostProc("U");
+    basic_interface->getDomainLhsFE() = post_proc_fe;
+    CHKERR basic_interface->loopFiniteElements();
+    CHKERR post_proc_fe->writeFile(
+        "out_basic_helmholtz.h5m");
+    //! [Postprocess results]
   }
   CATCH_ERRORS;
 
