@@ -73,8 +73,6 @@ DirichletDisplacementBc::DirichletDisplacementBc(MoFEM::Interface &m_field,
 MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              mField, NODESET | DISPLACEMENTSET, it)) {
       DisplacementCubitBcData mydata;
@@ -328,12 +326,12 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
           Range edges;
           CHKERR mField.get_moab().get_adjacencies(
               bc_ents[dim], 1, false, edges, moab::Interface::UNION);
-          bc_ents[dim].insert(edges.begin(), edges.end());
+          bc_ents[1].insert(edges.begin(), edges.end());
         }
         if (dim > 0) {
           Range nodes;
           CHKERR mField.get_moab().get_connectivity(bc_ents[dim], nodes, true);
-          bc_ents[dim].insert(nodes.begin(), nodes.end());
+          bc_ents[0].insert(nodes.begin(), nodes.end());
         }
       }
       MoFEMFunctionReturn(0);
@@ -460,45 +458,77 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 
 MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
   MoFEMFunctionBegin;
+
+  // function to insert temperature boundary conditions from block
+  auto insert_temp_bc = [&](double &temp, auto &it) {
+    MoFEMFunctionBeginHot;
+    VectorDouble temp_2(1);
+    temp_2[0] = temp;
+    CHKERR MethodForForceScaling::applyScale(this, methodsOp, temp_2);
+    for (int dim = 0; dim < 3; dim++) {
+      Range ents;
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
+                                                 true);
+      if (dim > 1) {
+        Range _edges;
+        CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
+                                                 moab::Interface::UNION);
+        ents.insert(_edges.begin(), _edges.end());
+      }
+      if (dim > 0) {
+        Range _nodes;
+        CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
+        ents.insert(_nodes.begin(), _nodes.end());
+      }
+
+      auto for_each_dof = [&](auto &dof) {
+        MoFEMFunctionBeginHot;
+
+        if (dof->getEntType() == MBVERTEX) {
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = temp_2[0];
+        } else {
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+        }
+        MoFEMFunctionReturnHot(0);
+      };
+
+      CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                      for_each_dof);
+    }
+
+    MoFEMFunctionReturnHot(0);
+  };
+
+  // Loop over blockset to find the block TEMPERATURE.
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, NODESET | TEMPERATURESET, it)) {
-      TemperatureCubitBcData mydata;
-      CHKERR it->getBcDataStructure(mydata);
-      VectorDouble scaled_values(1);
-      scaled_values[0] = mydata.data.value1;
-      CHKERR MethodForForceScaling::applyScale(this, methodsOp, scaled_values);
-      for (int dim = 0; dim < 3; dim++) {
-        Range ents;
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
-                                                   true);
-        if (dim > 1) {
-          Range _edges;
-          CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-                                                   moab::Interface::UNION);
-          ents.insert(_edges.begin(), _edges.end());
-        }
-        if (dim > 0) {
-          Range _nodes;
-          CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-          ents.insert(_nodes.begin(), _nodes.end());
-        }
+    bool is_blockset_defined = false;
+    string blocksetName = "TEMPERATURE";
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
+        std::vector<double> mydata;
+        CHKERR it->getAttributes(mydata);
 
-        auto for_each_dof = [&](auto &dof) {
-          MoFEMFunctionBeginHot;
+        if (mydata.empty())
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "missing temperature attribute");
 
-          if (dof->getEntType() == MBVERTEX) {
-            mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-          } else {
-            mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          }
-          MoFEMFunctionReturnHot(0);
-        };
+        double my_temp = mydata[0];
+        CHKERR insert_temp_bc(my_temp, it);
 
-        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
-                                        for_each_dof);
+        is_blockset_defined = true;
+      }
+    }
+
+    // If the block TEMPERATURE is not defined, then
+    // look for temperature boundary conditions
+    if (!is_blockset_defined) {
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+               mField, NODESET | TEMPERATURESET, it)) {
+        TemperatureCubitBcData mydata;
+        CHKERR it->getBcDataStructure(mydata);
+        VectorDouble scaled_values(1);
+        scaled_values[0] = mydata.data.value1;
+        CHKERR insert_temp_bc(scaled_values[0], it);
       }
     }
     dofsIndices.resize(mapZeroRows.size());
@@ -510,6 +540,7 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       dofsValues[ii] = mit->second;
     }
   }
+
   MoFEMFunctionReturn(0);
 }
 
@@ -621,8 +652,6 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
 MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
         std::vector<double> mydata;
@@ -693,8 +722,6 @@ MoFEMErrorCode DirichletSetFieldFromBlock::iNitalize() {
 MoFEMErrorCode DirichletSetFieldFromBlockWithFlags::iNitalize() {
   MoFEMFunctionBegin;
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
         std::vector<double> mydata;

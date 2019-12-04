@@ -118,8 +118,31 @@ struct MonitorPostProc: public FEMethod {
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type fgmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-ksp_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type basic \n"
+                                 "-snes_max_it 100 \n"
+                                 "-snes_atol 1e-8 \n"
+                                 "-snes_rtol 1e-8 \n"
+                                 "-snes_monitor \n"
+                                 "-ts_monitor \n"
+                                 "-ts_type beuler \n"
+                                 "-ts_exact_final_time stepover \n";
 
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
+  
   try {
 
   PetscBool flg = PETSC_TRUE;
@@ -254,7 +277,7 @@ int main(int argc, char *argv[]) {
 
         std::ostringstream str_init_temp;
         str_init_temp << "block_" << it->getMeshsetId()
-                      << ".initail_temperature";
+                      << ".initial_temperature";
         config_file_options.add_options()(
             str_init_temp.str().c_str(),
             po::value<double>(&block_data[it->getMeshsetId()].initTemp)
@@ -357,10 +380,22 @@ int main(int argc, char *argv[]) {
 
   // build field
   CHKERR m_field.build_fields();
-  // priject 10 node tet approximation of geometry on hierarchical basis
+  // project 10 node tet approximation of geometry on hierarchical basis
   Projection10NodeCoordsOnField ent_method_material(m_field,
                                                     "MESH_NODE_POSITIONS");
   CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+
+  // set initial temperature from Cubit blocksets
+  mit = thermal_elements.setOfBlocks.begin();
+  for (; mit != thermal_elements.setOfBlocks.end(); mit++) {
+    if (mit->second.initTemp != 0) {
+      Range vertices;
+      CHKERR moab.get_connectivity(mit->second.tEts, vertices, true);
+      CHKERR m_field.getInterface<FieldBlas>()->setField(
+          mit->second.initTemp, MBVERTEX, vertices, "TEMP");
+    }
+  }
+
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     if (block_data[it->getMeshsetId()].initTemp != 0) {
       Range block_ents;

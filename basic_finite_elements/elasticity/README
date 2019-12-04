@@ -2,21 +2,18 @@ Check before run
 ================
 
 * Check where is your mesh file
-* Check what verion of openmpi (or other MPI library) are you using
+* Check what version of openmpi (or other MPI library) are you using
 
 Example Static (elastcity)
 ==========================
 
-mpirun -np 2 ./elasticity -my_file LShape.h5m -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor -my_order 2
+mpirun -np 2 ./elasticity -my_file LShape.h5m -my_order 2
 
 Example thermo-elasticity
 =========================
 
 mpirun -np 2 ../thermal/thermal_unsteady   -my_file heat_exchange.h5m \
--ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps \
--ksp_monitor   -snes_type newtonls -snes_linesearch_type basic \
--snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor  \
--ts_monitor -ts_type beuler -ts_dt 0.0025 -ts_final_time 0.06 \
+-ts_dt 0.0025 -ts_final_time 0.06 \
 -snes_lag_jacobian -2  -my_order 1 -my_max_post_proc_ref_level 1 \
 -ts_exact_final_time stepover
 
@@ -30,7 +27,6 @@ Multi-Grid
 
 mpirun -np 2 ./elasticity \
 -my_file LShape.h5m \
--ksp_type fgmres -ksp_monitor \
 -my_order 3 \
 -pc_type mg \
 -mofem_mg_verbose 1 -mofem_mg_coarse_order 1 -mofem_mg_levels 3 \
@@ -38,3 +34,19 @@ mpirun -np 2 ./elasticity \
 -pc_mg_smoothup 10 -pc_mg_smoothdown 10 \
 -pc_mg_type multiplicative \
 -log_view
+
+
+Parameters set by default from param_file.petsc file
+============================
+
+-ksp_type gmres
+-pc_type lu
+-pc_factor_mat_solver_package mumps
+-ksp_monitor
+-snes_type newtonls
+-snes_linesearch_type basic
+-snes_atol 1e-8
+-snes_rtol 1e-8
+-snes_monitor
+-ts_monitor
+-ts_type beuler

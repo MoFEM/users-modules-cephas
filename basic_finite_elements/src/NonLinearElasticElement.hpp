@@ -100,9 +100,9 @@ struct NonlinearElasticElement {
     // Eberlein Fibres stiffness properties
     double k1, k2;
     Range tEts; ///< constrains elements in block set
-    boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<adouble> >
+    boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<adouble>>
         materialAdoublePtr;
-    boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<double> >
+    boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<double>>
         materialDoublePtr;
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
@@ -116,8 +116,8 @@ struct NonlinearElasticElement {
    */
   struct CommonData {
 
-    std::map<std::string, std::vector<VectorDouble> > dataAtGaussPts;
-    std::map<std::string, std::vector<MatrixDouble> > gradAtGaussPts;
+    std::map<std::string, std::vector<VectorDouble>> dataAtGaussPts;
+    std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPts;
     string spatialPositions;
     string meshPositions;
     std::vector<MatrixDouble3by3> sTress;
@@ -141,9 +141,9 @@ struct NonlinearElasticElement {
 
     /** \brief Calculate determinant of 3x3 matrix
      */
-    MoFEMErrorCode dEterminant(ublas::matrix<TYPE, ublas::row_major,
-                                             ublas::bounded_array<TYPE, 9> > &a,
-                               TYPE &det) {
+    MoFEMErrorCode dEterminant(
+        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> &a,
+        TYPE &det) {
       MoFEMFunctionBeginHot;
       // a11a22a33
       //+a21a32a13
@@ -161,12 +161,11 @@ struct NonlinearElasticElement {
 
     /** \brief Calculate inverse of 3x3 matrix
      */
-    MoFEMErrorCode
-    iNvert(TYPE det,
-           ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9> >
-               &a,
-           ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9> >
-               &inv_a) {
+    MoFEMErrorCode iNvert(
+        TYPE det,
+        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> &a,
+        ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>>
+            &inv_a) {
       MoFEMFunctionBeginHot;
       //
       inv_a.resize(3, 3);
@@ -186,7 +185,7 @@ struct NonlinearElasticElement {
     }
 
     double lambda, mu;
-    ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9> > F, C,
+    ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> F, C,
         E, S, invF, P, SiGma, h, H, invH;
     TYPE J, eNergy, detH;
 
@@ -349,8 +348,8 @@ struct NonlinearElasticElement {
     /** \brief Do operations when pre-process
      */
     virtual MoFEMErrorCode getDataOnPostProcessor(
-        std::map<std::string, std::vector<VectorDouble> > &field_map,
-        std::map<std::string, std::vector<MatrixDouble> > &grad_map) {
+        std::map<std::string, std::vector<VectorDouble>> &field_map,
+        std::map<std::string, std::vector<MatrixDouble>> &grad_map) {
       MoFEMFunctionBeginHot;
       MoFEMFunctionReturnHot(0);
     }
@@ -656,15 +655,16 @@ struct NonlinearElasticElement {
   };
 
   MoFEMErrorCode
-  setBlocks(boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<double> >
+  setBlocks(boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<double>>
                 materialDoublePtr,
-            boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<adouble> >
+            boost::shared_ptr<FunctionsToCalculatePiolaKirchhoffI<adouble>>
                 materialAdoublePtr);
 
-  MoFEMErrorCode
-  addElement(const std::string element_name, const std::string spatial_position_field_name,
-             const std::string material_position_field_name = "MESH_NODE_POSITIONS",
-             const bool ale = false);
+  MoFEMErrorCode addElement(
+      const std::string element_name,
+      const std::string spatial_position_field_name,
+      const std::string material_position_field_name = "MESH_NODE_POSITIONS",
+      const bool ale = false);
 
   /** \brief Set operators to calculate left hand tangent matrix and right hand
    * residual
@@ -684,8 +684,8 @@ struct NonlinearElasticElement {
 
 #endif //__NONLINEAR_ELASTIC_HPP
 
-/***************************************************************************/ /**
-* \defgroup nonlinear_elastic_elem NonLinear Elastic Element
-* \ingroup user_modules
-* \defgroup user_modules User modules
-******************************************************************************/
+/**
+ * \defgroup nonlinear_elastic_elem NonLinear Elastic Element
+ * \ingroup user_modules
+ * \defgroup user_modules User modules
+ **/
