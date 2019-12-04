@@ -159,11 +159,11 @@ template <int DIM> struct OpHelmholtzRhs : public OpBase {
 
   SourceFun sourceFun;
 
-  OpHelmholtzRhs(SourceFun source_fun) : OpBase(OPROW) {}
+  OpHelmholtzRhs(SourceFun source_fun) : OpBase(OPROW), sourceFun(source_fun) {}
 
   FTensor::Index<'i', DIM> i; ///< summit Index
 
-  MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+  MoFEMErrorCode iNtegrate(EntData &row_data) {
     MoFEMFunctionBegin;
 
     // set size of local entity bock
@@ -197,7 +197,7 @@ template <int DIM> struct OpHelmholtzRhs : public OpBase {
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode iNtegrate(EntData &row_data) {
+  MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
     MoFEMFunctionBegin;
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Should not be used");
     MoFEMFunctionReturn(0);
@@ -320,19 +320,15 @@ MoFEMErrorCode OpBase::doWork(int row_side, int col_side, EntityType row_type,
  */
 MoFEMErrorCode OpBase::aSsemble(EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
-  // get pointer to first global index on row
-  const int *row_indices = &*row_data.getIndices().data().begin();
-  // get pointer to first global index on column
-  const int *col_indices = &*col_data.getIndices().data().begin();
   // assemble local matrix
-  CHKERR MatSetValues(getFEMethod()->ksp_B, row_indices, col_indices,
+  CHKERR MatSetValues(getFEMethod()->ksp_B, row_data, col_data,
                       &*locMat.data().begin(), ADD_VALUES);
 
   if (!isDiag && sYmm) {
     // if not diagonal term and since global matrix is symmetric assemble
     // transpose term.
     locMat = trans(locMat);
-    CHKERR MatSetValues(getFEMethod()->ksp_B, col_indices, row_indices,
+    CHKERR MatSetValues(getFEMethod()->ksp_B, col_data, row_data,
                         &*locMat.data().begin(), ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
@@ -371,8 +367,6 @@ MoFEMErrorCode OpBase::doWork(int row_side, EntityType row_type,
  */
 MoFEMErrorCode OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
-  // get global indices of local vector
-  const int *indices = &*data.getIndices().data().begin();
   // get values from local vector
   const double *vals = &*locF.data().begin();
   // assemble vector
