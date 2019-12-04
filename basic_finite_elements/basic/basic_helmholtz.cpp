@@ -230,8 +230,8 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->getOptions();
     CHKERR simple_interface->loadFile("");
     // Add field
-    CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE,
-                                            1);
+    CHKERR simple_interface->addDomainField("U", H1,
+                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
     constexpr int order = 1;
     CHKERR simple_interface->setFieldOrder("U", order);
     CHKERR simple_interface->setUp();
