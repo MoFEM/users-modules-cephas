@@ -661,14 +661,22 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix_MoFEM(dm, &A);
     CHKERR MatZeroEntries(A);
 
-   
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_rhs_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_lhs_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
 
-    contact_problem->setContactOperatorsRhsALE("SPATIAL_POSITION",
-                                               "MESH_NODE_POSITIONS",
-                                               "LAGMULT", "MATERIAL");
+    contact_problem->setContactOperatorsRhsALE(
+        fe_rhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+        "LAGMULT", "MATERIAL");
 
     contact_problem->setContactOperatorsLhsALE(
-        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
+        fe_lhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+        "LAGMULT", "MATERIAL");
 
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
                                   contact_problem->feRhsSimpleContact.get(),

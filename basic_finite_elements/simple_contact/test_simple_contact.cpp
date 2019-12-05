@@ -616,32 +616,48 @@ if(is_lag){
 
     elastic.getLoopFeRhs().snes_f = F;
 
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_rhs_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_lhs_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_post_proc_simple_contact =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+
     if (is_lag) {
       if (is_hdiv_trace) {
 
-        contact_problem->setContactOperatorsRhsOperatorsHdiv("SPATIAL_POSITION",
-                                                             "LAGMULT");
+        contact_problem->setContactOperatorsRhsOperatorsHdiv(
+            fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
 
-        contact_problem->setContactOperatorsLhsOperatorsHdiv("SPATIAL_POSITION",
-                                                             "LAGMULT", Aij);
+        contact_problem->setContactOperatorsLhsOperatorsHdiv(
+            fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
       } else {
-        contact_problem->setContactOperatorsRhsOperators("SPATIAL_POSITION",
-                                                         "LAGMULT", "ELASTIC");
+        contact_problem->setContactOperatorsRhsOperators(
+            fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", "ELASTIC");
 
-        contact_problem->setContactOperatorsLhsOperators("SPATIAL_POSITION",
-                                                         "LAGMULT", Aij);
+        contact_problem->setContactOperatorsLhsOperators(
+            fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
       }
 } else {
   if (is_nitsche){
     contact_problem->setContactNitschePenaltyRhsOperators(
-        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "ELASTIC");
+        fe_rhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+        "ELASTIC");
     contact_problem->setContactNitschePenaltyLhsOperators(
-        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "ELASTIC", Aij);
+        fe_lhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+        "ELASTIC", Aij);
   }else {
-    contact_problem->setContactPenaltyRhsOperators("SPATIAL_POSITION");
+    contact_problem->setContactPenaltyRhsOperators(fe_rhs_simple_contact,
+                                                   "SPATIAL_POSITION");
 
-  contact_problem->setContactPenaltyLhsOperators("SPATIAL_POSITION",
-                                                  Aij);
+    contact_problem->setContactPenaltyLhsOperators(fe_lhs_simple_contact,
+                                                   "SPATIAL_POSITION", Aij);
   }
 
 }
@@ -676,8 +692,7 @@ for (; mit != neumann_forces.end(); mit++) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  contact_problem->feRhsSimpleContact.get(),
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
@@ -689,8 +704,7 @@ for (; mit != neumann_forces.end(); mit++) {
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-                                  contact_problem->feLhsSimpleContact.get(),
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
@@ -771,17 +785,17 @@ for (; mit != neumann_forces.end(); mit++) {
     
     if (is_hdiv_trace) {
       contact_problem->setContactOperatorsForPostProcHdiv(
-          m_field, "SPATIAL_POSITION", "LAGMULT", mb_post);
+          fe_post_proc_simple_contact, m_field, "SPATIAL_POSITION", "LAGMULT",
+          mb_post);
     } else {
       contact_problem->setContactOperatorsForPostProc(
-          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC", mb_post, is_lag);
+          fe_post_proc_simple_contact, m_field, "SPATIAL_POSITION",
+          "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC", mb_post, is_lag);
     }
 
     mb_post.delete_mesh();
-    CHKERR DMoFEMLoopFiniteElements(
-        dm, "CONTACT_ELEM", contact_problem->fePostProcSimpleContact.get());
-
-   
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
 
     std::ostringstream ostrm;
 

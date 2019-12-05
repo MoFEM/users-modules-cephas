@@ -798,6 +798,23 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  struct OpPrintLagMulAtGaussPtsSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpPrintLagMulAtGaussPtsSlave(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
   struct OpGetLagMulAtGaussPtsSlaveHdiv
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -2509,68 +2526,75 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
   };
 
   // setup operators for calculation of active set
-  MoFEMErrorCode setContactPenaltyRhsOperators(string field_name,
+  MoFEMErrorCode setContactPenaltyRhsOperators(boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact, 
+                                                 string field_name,
                                                  Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
+
+ boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+      boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalPenaltyRhsMaster(
-          field_name, commonDataSimpleContact, cnValue, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalPenaltyRhsMaster(
+          field_name, common_data_simple_contact, cnValue, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalPenaltyRhsSlave(
-          field_name, commonDataSimpleContact, cnValue, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalPenaltyRhsSlave(
+          field_name, common_data_simple_contact, cnValue, f_));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactNitschePenaltyRhsOperators(
+  MoFEMErrorCode setContactNitschePenaltyRhsOperators(boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       string field_name, const string mesh_node_position, string side_fe_name,
       Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalMaster(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalMaster(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(new OpCalPenaltyRhsMaster(
-    //       field_name, commonDataSimpleContact, cnValue, f_));
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalPenaltyRhsMaster(
+    //       field_name, common_data_simple_contact, cnValue, f_));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(new OpCalPenaltyRhsSlave(
-    //       field_name, commonDataSimpleContact, cnValue, f_));
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalPenaltyRhsSlave(
+    //       field_name, common_data_simple_contact, cnValue, f_));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatMasterStressSideRhs =
@@ -2578,38 +2602,38 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                   mField);
 
       cerr << "Material data Master "
-           << "E " << commonDataSimpleContact->setOfMasterFacesData[1].E
+           << "E " << common_data_simple_contact->setOfMasterFacesData[1].E
            << " Poisson "
-           << commonDataSimpleContact->setOfMasterFacesData[1].PoissonRatio
+           << common_data_simple_contact->setOfMasterFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
-      commonDataSimpleContact->elasticityCommonData.spatialPositions =
+      common_data_simple_contact->elasticityCommonData.spatialPositions =
           field_name;
-      commonDataSimpleContact->elasticityCommonData.meshPositions =
+      common_data_simple_contact->elasticityCommonData.meshPositions =
           mesh_node_position;
 
       feMatMasterStressSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-              field_name, commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact->elasticityCommonData));
 
       feMatMasterStressSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
               mesh_node_position,
-              commonDataSimpleContact->elasticityCommonData));
+              common_data_simple_contact->elasticityCommonData));
 
       feMatMasterStressSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-              field_name, commonDataSimpleContact->setOfMasterFacesData[1],
-              commonDataSimpleContact->elasticityCommonData,
-              commonDataSimpleContact->tAg, false, false, false));
+              field_name, common_data_simple_contact->setOfMasterFacesData[1],
+              common_data_simple_contact->elasticityCommonData,
+              common_data_simple_contact->tAg, false, false, false));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpLoopMasterForSide(field_name, feMatMasterStressSideRhs,
                                   side_fe_name));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalProjStressesAtGaussPtsMaster(field_name,
-                                                commonDataSimpleContact));
+                                                common_data_simple_contact));
 
     //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
     //       feMatMasterSideStressDerRhs =
@@ -2618,33 +2642,33 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
     //   // again
     //   feMatMasterSideStressDerRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-    //           field_name, commonDataSimpleContact->elasticityCommonData));
+    //           field_name, common_data_simple_contact->elasticityCommonData));
 
     //   feMatMasterSideStressDerRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
     //           mesh_node_position,
-    //           commonDataSimpleContact->elasticityCommonData));
+    //           common_data_simple_contact->elasticityCommonData));
 
     //   feMatMasterSideStressDerRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-    //           field_name, commonDataSimpleContact->setOfMasterFacesData[1],
-    //           commonDataSimpleContact->elasticityCommonData,
-    //           commonDataSimpleContact->tAg, true, false, false));
+    //           field_name, common_data_simple_contact->setOfMasterFacesData[1],
+    //           common_data_simple_contact->elasticityCommonData,
+    //           common_data_simple_contact->tAg, true, false, false));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
     //       new OpLoopMasterForSide(field_name, feMatMasterSideStressDerRhs, side_fe_name));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
     //       new OpStressDerivativeGapMaster_dx(
-    //           field_name, commonDataSimpleContact,
-    //           commonDataSimpleContact->setOfMasterFacesData[1],
-    //           commonDataSimpleContact->elasticityCommonData));
+    //           field_name, common_data_simple_contact,
+    //           common_data_simple_contact->setOfMasterFacesData[1],
+    //           common_data_simple_contact->elasticityCommonData));
 
       // again
       cerr << "Material 1111 dasdasdasdaasdta Slave "
-           << "E " << commonDataSimpleContact->setOfSlaveFacesData[1].E
+           << "E " << common_data_simple_contact->setOfSlaveFacesData[1].E
            << " Poisson "
-           << commonDataSimpleContact->setOfSlaveFacesData[1].PoissonRatio
+           << common_data_simple_contact->setOfSlaveFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
     //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
@@ -2654,26 +2678,26 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
     //   feMatSlaveSideStressRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-    //           field_name, commonDataSimpleContact->elasticityCommonData));
+    //           field_name, common_data_simple_contact->elasticityCommonData));
 
     //   feMatSlaveSideStressRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
     //           mesh_node_position,
-    //           commonDataSimpleContact->elasticityCommonData));
+    //           common_data_simple_contact->elasticityCommonData));
 
     //   feMatSlaveSideStressRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-    //           field_name, commonDataSimpleContact->setOfSlaveFacesData[1],
-    //           commonDataSimpleContact->elasticityCommonData,
-    //           commonDataSimpleContact->tAg, false, false, false));
+    //           field_name, common_data_simple_contact->setOfSlaveFacesData[1],
+    //           common_data_simple_contact->elasticityCommonData,
+    //           common_data_simple_contact->tAg, false, false, false));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
     //       new OpLoopSlaveForSide(field_name, feMatSlaveSideStressRhs,
     //                              side_fe_name));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
     //       new OpCalProjStressesAtGaussPtsSlave(field_name,
-    //                                            commonDataSimpleContact));
+    //                                            common_data_simple_contact));
 
 
     //   // again
@@ -2684,81 +2708,85 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
     //   feMatSlaveSideStressDerRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-    //           field_name, commonDataSimpleContact->elasticityCommonData));
+    //           field_name, common_data_simple_contact->elasticityCommonData));
 
     //   feMatSlaveSideStressDerRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
     //           mesh_node_position,
-    //           commonDataSimpleContact->elasticityCommonData));
+    //           common_data_simple_contact->elasticityCommonData));
 
     //   feMatSlaveSideStressDerRhs->getOpPtrVector().push_back(
     //       new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-    //           field_name, commonDataSimpleContact->setOfSlaveFacesData[1],
-    //           commonDataSimpleContact->elasticityCommonData,
-    //           commonDataSimpleContact->tAg, true, false, false));
+    //           field_name, common_data_simple_contact->setOfSlaveFacesData[1],
+    //           common_data_simple_contact->elasticityCommonData,
+    //           common_data_simple_contact->tAg, true, false, false));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
     //       new OpLoopSlaveForSide(field_name, feMatSlaveSideStressDerRhs, side_fe_name));
 
-    //   feRhsSimpleContact->getOpPtrVector().push_back(
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
     //       new OpStressDerivativeGapSlave_dx(
-    //           field_name, commonDataSimpleContact,
-    //           commonDataSimpleContact->setOfSlaveFacesData[1],
-    //           commonDataSimpleContact->elasticityCommonData));
+    //           field_name, common_data_simple_contact,
+    //           common_data_simple_contact->setOfSlaveFacesData[1],
+    //           common_data_simple_contact->elasticityCommonData));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalNitscheCStressRhsMaster(field_name,
-                                           commonDataSimpleContact, f_));
+                                           common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalNitscheCStressRhsSlave(field_name,
-                                           commonDataSimpleContact, f_));
+                                           common_data_simple_contact, f_));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode
-  setContactNitschePenaltyLhsOperators(string field_name,
-                                       const string mesh_node_position,
-                                       string side_fe_name, Mat aij) {
+
+  MoFEMErrorCode setContactNitschePenaltyLhsOperators(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+      string field_name, const string mesh_node_position, string side_fe_name,
+      Mat aij) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalMaster(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalMaster(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltyMasterMaster(
-              field_name, field_name, cnValue, commonDataSimpleContact, aij));
+              field_name, field_name, cnValue, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltyMasterSlave(field_name, field_name, cnValue,
-                                                commonDataSimpleContact, aij));
+                                                common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltySlaveSlave(field_name, field_name, cnValue,
-                                               commonDataSimpleContact, aij));
+                                               common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltySlaveMaster(field_name, field_name, cnValue,
-                                                commonDataSimpleContact, aij));
+                                                common_data_simple_contact, aij));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatMasterSideRhs =
@@ -2766,37 +2794,37 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                   mField);
 
       cerr << "Material data Master "
-           << "E " << commonDataSimpleContact->setOfMasterFacesData[1].E
+           << "E " << common_data_simple_contact->setOfMasterFacesData[1].E
            << " Poisson "
-           << commonDataSimpleContact->setOfMasterFacesData[1].PoissonRatio
+           << common_data_simple_contact->setOfMasterFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
-      commonDataSimpleContact->tAg = 2;
-      commonDataSimpleContact->elasticityCommonData.spatialPositions =
+      common_data_simple_contact->tAg = 2;
+      common_data_simple_contact->elasticityCommonData.spatialPositions =
           field_name;
-      commonDataSimpleContact->elasticityCommonData.meshPositions =
+      common_data_simple_contact->elasticityCommonData.meshPositions =
           mesh_node_position;
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-              field_name, commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact->elasticityCommonData));
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
               mesh_node_position,
-              commonDataSimpleContact->elasticityCommonData));
+              common_data_simple_contact->elasticityCommonData));
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-              field_name, commonDataSimpleContact->setOfMasterFacesData[1],
-              commonDataSimpleContact->elasticityCommonData,
-              commonDataSimpleContact->tAg, false, false, false));
+              field_name, common_data_simple_contact->setOfMasterFacesData[1],
+              common_data_simple_contact->elasticityCommonData,
+              common_data_simple_contact->tAg, false, false, false));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpLoopMasterForSide(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSide(
           field_name, feMatMasterSideRhs, side_fe_name));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpCalProjStressesAtGaussPtsMaster(field_name,
-                                                commonDataSimpleContact));
+                                                common_data_simple_contact));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatSlaveMasterSideRhs =
@@ -2805,38 +2833,38 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       feMatSlaveMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-              field_name, commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact->elasticityCommonData));
 
       feMatSlaveMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
               mesh_node_position,
-              commonDataSimpleContact->elasticityCommonData));
+              common_data_simple_contact->elasticityCommonData));
 
       feMatSlaveMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-              field_name, commonDataSimpleContact->setOfMasterFacesData[1],
-              commonDataSimpleContact->elasticityCommonData,
-              commonDataSimpleContact->tAg, true, false, false));
+              field_name, common_data_simple_contact->setOfMasterFacesData[1],
+              common_data_simple_contact->elasticityCommonData,
+              common_data_simple_contact->tAg, true, false, false));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpLoopMasterForSide(field_name, feMatSlaveMasterSideRhs, side_fe_name));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpStressDerivativeGapMasterMaster_dx(
-              field_name, commonDataSimpleContact,
-              commonDataSimpleContact->setOfMasterFacesData[1],
-              commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact,
+              common_data_simple_contact->setOfMasterFacesData[1],
+              common_data_simple_contact->elasticityCommonData));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpStressDerivativeGapSlaveMaster_dx(
-              field_name, commonDataSimpleContact,
-              commonDataSimpleContact->setOfMasterFacesData[1],
-              commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact,
+              common_data_simple_contact->setOfMasterFacesData[1],
+              common_data_simple_contact->elasticityCommonData));
 
       cerr << "Material daasdta Slave "
-           << "E " << commonDataSimpleContact->setOfSlaveFacesData[1].E
+           << "E " << common_data_simple_contact->setOfSlaveFacesData[1].E
            << " Poisson "
-           << commonDataSimpleContact->setOfSlaveFacesData[1].PoissonRatio
+           << common_data_simple_contact->setOfSlaveFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
@@ -2846,25 +2874,25 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       feMatSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-              field_name, commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact->elasticityCommonData));
 
       feMatSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
               mesh_node_position,
-              commonDataSimpleContact->elasticityCommonData));
+              common_data_simple_contact->elasticityCommonData));
 
       feMatSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-              field_name, commonDataSimpleContact->setOfSlaveFacesData[1],
-              commonDataSimpleContact->elasticityCommonData,
-              commonDataSimpleContact->tAg, false, false, false));
+              field_name, common_data_simple_contact->setOfSlaveFacesData[1],
+              common_data_simple_contact->elasticityCommonData,
+              common_data_simple_contact->tAg, false, false, false));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
           field_name, feMatSlaveSideRhs, side_fe_name));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpCalProjStressesAtGaussPtsSlave(field_name,
-                                               commonDataSimpleContact));
+                                               common_data_simple_contact));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatSlaveSlaveSideRhs =
@@ -2873,44 +2901,47 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       feMatSlaveSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-              field_name, commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact->elasticityCommonData));
 
       feMatSlaveSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
               mesh_node_position,
-              commonDataSimpleContact->elasticityCommonData));
+              common_data_simple_contact->elasticityCommonData));
 
       feMatSlaveSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-              field_name, commonDataSimpleContact->setOfSlaveFacesData[1],
-              commonDataSimpleContact->elasticityCommonData,
-              commonDataSimpleContact->tAg, true, false, false));
+              field_name, common_data_simple_contact->setOfSlaveFacesData[1],
+              common_data_simple_contact->elasticityCommonData,
+              common_data_simple_contact->tAg, true, false, false));
               
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpLoopSlaveForSide(field_name, feMatSlaveSlaveSideRhs, side_fe_name));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpStressDerivativeGapSlaveSlave_dx(
-              field_name, commonDataSimpleContact,
-              commonDataSimpleContact->setOfSlaveFacesData[1],
-              commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact,
+              common_data_simple_contact->setOfSlaveFacesData[1],
+              common_data_simple_contact->elasticityCommonData));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpStressDerivativeGapMasterSlave_dx(
-              field_name, commonDataSimpleContact,
-              commonDataSimpleContact->setOfSlaveFacesData[1],
-              commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact,
+              common_data_simple_contact->setOfSlaveFacesData[1],
+              common_data_simple_contact->elasticityCommonData));
     }
     MoFEMFunctionReturn(0);
   }
 
   // setup operators for calculation of active set
-  MoFEMErrorCode setContactOperatorsRhsOperators(string field_name,
+  MoFEMErrorCode setContactOperatorsRhsOperators(boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact, string field_name,
                                                  string lagrang_field_name,
                                                  string side_fe_name,
                                                  Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
@@ -2930,98 +2961,109 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
       // feMatSideRhs->getOpPtrVector().push_back(
       //     new OpCalculateDeformation(X_field, data_at_pts, ho_geometry));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlaveForSide(field_name, commonDataSimpleContact,
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlaveForSide(field_name, common_data_simple_contact,
                                       feMatSideRhs, side_fe_name));
 
-      // feRhsSimpleContact->getOpPtrVector().push_back(
+      // fe_rhs_simple_contact->getOpPtrVector().push_back(
       //     new OpContactConstraintMatrixMasterSlaveForSide(
-      //         field_name, lagrang_field_name, commonDataSimpleContact,
+      //         field_name, lagrang_field_name, common_data_simple_contact,
       //         feMatSideRhs, side_fe_name));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         commonDataSimpleContact));
+                                         common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalFReConMaster(field_name, commonDataSimpleContact, f_));
+      //   fe_rhs_simple_contact->getOpPtrVector().push_back(
+      //       new OpPrintLagMulAtGaussPtsSlave(lagrang_field_name,
+      //                                      common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalFReConSlave(field_name, commonDataSimpleContact, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConMaster(field_name, common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, commonDataSimpleContact, rValue, cnValue));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConSlave(field_name, common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalIntTildeCFunSlave(
-          lagrang_field_name, commonDataSimpleContact, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, common_data_simple_contact, rValue, cnValue));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalIntTildeCFunSlave(
+          lagrang_field_name, common_data_simple_contact, f_));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv(string field_name,
-                                                     string lagrang_field_name,
-                                                     Vec f_ = PETSC_NULL) {
+  MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv(
+      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact, string
+          field_name,
+      string lagrang_field_name, Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
-                                             commonDataSimpleContact));
+                                             common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalFReConMaster(field_name, commonDataSimpleContact, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConMaster(field_name, common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalFReConSlave(field_name, commonDataSimpleContact, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConSlave(field_name, common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, commonDataSimpleContact, rValue, cnValue));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, common_data_simple_contact, rValue, cnValue));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalIntTildeCFunSlaveHdiv(lagrang_field_name,
-                                         commonDataSimpleContact, f_));
+                                         common_data_simple_contact, f_));
     }
     MoFEMFunctionReturn(0);
   }
 
   // setup operators for calculation of active set
-  MoFEMErrorCode setContactOperatorsRhsALE(const string field_name,
-                                           const string mesh_node_field_name,
-                                           const string lagrang_field_name,
-                                           const string side_fe_name,
-                                           Vec f_ = PETSC_NULL) {
+  MoFEMErrorCode setContactOperatorsRhsALE(
+      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
+      const string field_name, const string mesh_node_field_name,
+      const string lagrang_field_name, const string side_fe_name,
+      Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
@@ -3034,10 +3076,10 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       feMatSideRhsMaster->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(
-              mesh_node_field_name, commonDataSimpleContact->HMat));
+              mesh_node_field_name, common_data_simple_contact->HMat));
       feMatSideRhsMaster->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(
-              field_name, commonDataSimpleContact->hMat));
+              field_name, common_data_simple_contact->hMat));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatSideRhsSlave =
@@ -3046,256 +3088,267 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       feMatSideRhsSlave->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(
-              mesh_node_field_name, commonDataSimpleContact->HMat));
+              mesh_node_field_name, common_data_simple_contact->HMat));
       feMatSideRhsSlave->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(
-              field_name, commonDataSimpleContact->hMat));
+              field_name, common_data_simple_contact->hMat));
 
-      // feRhsSimpleContact->getOpPtrVector().push_back(
+      // fe_rhs_simple_contact->getOpPtrVector().push_back(
       //     new OpContactConstraintMatrixMasterSlaveForSide(
-      //         field_name, lagrang_field_name, commonDataSimpleContact,
+      //         field_name, lagrang_field_name, common_data_simple_contact,
       //         feMatSideRhs, side_fe_name));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetTangentSlave(mesh_node_field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetTangentSlave(mesh_node_field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
-          mesh_node_field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
+          mesh_node_field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetTangentMaster(mesh_node_field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetTangentMaster(mesh_node_field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpGetNormalMasterALE(
-          mesh_node_field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalMasterALE(
+          mesh_node_field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlaveALE(field_name, commonDataSimpleContact));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlaveALE(field_name, common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         commonDataSimpleContact));
+                                         common_data_simple_contact));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalFReConMasterALE(field_name, commonDataSimpleContact, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConMasterALE(field_name, common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
-          new OpCalFReConSlaveALE(field_name, commonDataSimpleContact, f_));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConSlaveALE(field_name, common_data_simple_contact, f_));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, commonDataSimpleContact, rValue, cnValue));
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, common_data_simple_contact, rValue, cnValue));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalIntTildeCFunSlaveALE(lagrang_field_name,
-                                        commonDataSimpleContact, f_));
+                                        common_data_simple_contact, f_));
 
       //this is the right order
       feMatSideRhsMaster->getOpPtrVector().push_back(new OpCalculateDeformation(
-          mesh_node_field_name, commonDataSimpleContact, false));
+          mesh_node_field_name, common_data_simple_contact, false));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpLoopMasterForSide(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSide(
           mesh_node_field_name, feMatSideRhsMaster, side_fe_name));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalMatForcesALEMaster(mesh_node_field_name,
-                                      commonDataSimpleContact));
+                                      common_data_simple_contact));
 
       feMatSideRhsSlave->getOpPtrVector().push_back(new OpCalculateDeformation(
-          mesh_node_field_name, commonDataSimpleContact, false));
+          mesh_node_field_name, common_data_simple_contact, false));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
           mesh_node_field_name, feMatSideRhsSlave, side_fe_name));
 
-      feRhsSimpleContact->getOpPtrVector().push_back(
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalMatForcesALESlave(mesh_node_field_name,
-                                      commonDataSimpleContact));
+                                      common_data_simple_contact));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactPenaltyLhsOperators(string field_name,
-                                                 Mat aij) {
+  MoFEMErrorCode setContactPenaltyLhsOperators(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+      string field_name, Mat aij) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltyMasterMaster(
-              field_name, field_name, cnValue, commonDataSimpleContact, aij));
+              field_name, field_name, cnValue, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltyMasterSlave(
-              field_name, field_name, cnValue, commonDataSimpleContact, aij));
+              field_name, field_name, cnValue, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltySlaveSlave(field_name, field_name, cnValue,
-                                                commonDataSimpleContact, aij));
+                                                common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactSimplePenaltySlaveMaster(field_name, field_name, cnValue,
-                                                commonDataSimpleContact, aij));
+                                                common_data_simple_contact, aij));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsLhsOperators(string field_name,
-                                                 string lagrang_field_name,
-                                                 Mat aij) {
+  MoFEMErrorCode setContactOperatorsLhsOperators(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact, string
+          field_name,
+      string lagrang_field_name, Mat aij) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         commonDataSimpleContact));
+                                         common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactConstraintMatrixMasterSlave(
-              field_name, lagrang_field_name, commonDataSimpleContact, aij));
+              field_name, lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactConstraintMatrixSlaveSlave(
-              field_name, lagrang_field_name, commonDataSimpleContact, aij));
+              field_name, lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, commonDataSimpleContact, rValue, cnValue));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, common_data_simple_contact, rValue, cnValue));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunOLambdaSlaveSlave(
-              lagrang_field_name, commonDataSimpleContact, aij));
+              lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunODisplacementsSlaveMaster(
-              field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
+              field_name, lagrang_field_name, cnValue, common_data_simple_contact,
               aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunODisplacementsSlaveSlave(
-              field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
+              field_name, lagrang_field_name, cnValue, common_data_simple_contact,
               aij));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsLhsALE(const string field_name,
-                                           const string mesh_node_field_name,
-                                           const string lagrang_field_name,
-                                           const string side_fe_name,
-                                           Mat aij = NULL) {
+  MoFEMErrorCode setContactOperatorsLhsALE(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact, const string
+          field_name,
+      const string mesh_node_field_name, const string lagrang_field_name,
+      const string side_fe_name, Mat aij = NULL) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetTangentSlave(mesh_node_field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetTangentSlave(mesh_node_field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
-          mesh_node_field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
+          mesh_node_field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpGetTangentMaster(
-          mesh_node_field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetTangentMaster(
+          mesh_node_field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpGetNormalMasterALE(
-          mesh_node_field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalMasterALE(
+          mesh_node_field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlaveALE(field_name, commonDataSimpleContact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlaveALE(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         commonDataSimpleContact));
+                                         common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactConstraintMatrixMasterSlaveALE(
-              field_name, lagrang_field_name, commonDataSimpleContact, aij));
+              field_name, lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactConstraintMatrixSlaveSlaveALE(
-              field_name, lagrang_field_name, commonDataSimpleContact, aij));
+              field_name, lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactConstraintMatrixSlaveSlave_dX(
-              field_name, mesh_node_field_name, commonDataSimpleContact, aij));
+              field_name, mesh_node_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpContactConstraintMatrixMasterSlave_dX(
-              field_name, mesh_node_field_name, commonDataSimpleContact, aij));
+              field_name, mesh_node_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, commonDataSimpleContact, rValue, cnValue));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, common_data_simple_contact, rValue, cnValue));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunOLambdaSlaveSlaveALE(
-              lagrang_field_name, commonDataSimpleContact, aij));
+              lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE(
-              field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
+              field_name, lagrang_field_name, cnValue, common_data_simple_contact,
               aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE(
-              field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
+              field_name, lagrang_field_name, cnValue, common_data_simple_contact,
               aij));
 
-      // feLhsSimpleContact->getOpPtrVector().push_back(
+      // fe_lhs_simple_contact->getOpPtrVector().push_back(
       //     new OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE_dX(
       //         mesh_node_field_name, lagrang_field_name, cnValue,
-      //         commonDataSimpleContact, aij));
+      //         common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
               mesh_node_field_name, lagrang_field_name, cnValue,
-              commonDataSimpleContact, aij));
+              common_data_simple_contact, aij));
 
       // Side volume element computes linearisation with spatial coordinates
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
@@ -3314,64 +3367,64 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                   mField);
 
       feMatSideLhs_dx->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(mesh_node_field_name, commonDataSimpleContact->HMat));
+          new OpCalculateVectorFieldGradient<3, 3>(mesh_node_field_name, common_data_simple_contact->HMat));
       feMatSideLhs_dx->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(field_name, commonDataSimpleContact->hMat));
+          new OpCalculateVectorFieldGradient<3, 3>(field_name, common_data_simple_contact->hMat));
 
       // Master derivative over spatial
       feMatSideLhs_dx->getOpPtrVector().push_back(
-          new OpCalculateDeformation(mesh_node_field_name, commonDataSimpleContact, false));
+          new OpCalculateDeformation(mesh_node_field_name, common_data_simple_contact, false));
       feMatSideLhs_dx->getOpPtrVector().push_back(
           new OpContactMaterialVolOnMasterSideLhs_dX_dx(
-              mesh_node_field_name, field_name, commonDataSimpleContact, aij, false));
+              mesh_node_field_name, field_name, common_data_simple_contact, aij, false));
 
-    //   feLhsSimpleContact->getOpPtrVector().push_back(new OpLoopMasterForSideLhs(
-    //       mesh_node_field_name, commonDataSimpleContact, feMatSideLhs_dx,
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSideLhs(
+    //       mesh_node_field_name, common_data_simple_contact, feMatSideLhs_dx,
     //       side_fe_name));
 
-        feLhsSimpleContact->getOpPtrVector().push_back(
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
             new OpContactMaterialMasterLhs_dX_dx(
-                mesh_node_field_name, field_name, commonDataSimpleContact,
+                mesh_node_field_name, field_name, common_data_simple_contact,
                 feMatSideLhs_dx, side_fe_name, aij, false));
 
         // Master derivative over mesh_nodes
         feMatSideLhs_dX->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>(
-                mesh_node_field_name, commonDataSimpleContact->HMat));
+                mesh_node_field_name, common_data_simple_contact->HMat));
 
         feMatSideLhs_dX->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>(
-                field_name, commonDataSimpleContact->hMat));
+                field_name, common_data_simple_contact->hMat));
 
         feMatSideLhs_dX->getOpPtrVector().push_back(new OpCalculateDeformation(
-            mesh_node_field_name, commonDataSimpleContact, false));
+            mesh_node_field_name, common_data_simple_contact, false));
 
         feMatSideLhs_dX->getOpPtrVector().push_back(
             new OpContactMaterialVolOnMasterSideLhs_dX_dX(
                 mesh_node_field_name, mesh_node_field_name,
-                commonDataSimpleContact, aij, false));
+                common_data_simple_contact, aij, false));
         
-        // feLhsSimpleContact->getOpPtrVector().push_back(
+        // fe_lhs_simple_contact->getOpPtrVector().push_back(
         //     new OpLoopMasterForSideLhs(mesh_node_field_name,
-        //                                commonDataSimpleContact, feMatSideLhs_dX,
+        //                                common_data_simple_contact, feMatSideLhs_dX,
         //                                side_fe_name));
        
-        feLhsSimpleContact->getOpPtrVector().push_back(
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
             new OpContactMaterialMasterLhs_dX_dX(
                 mesh_node_field_name, mesh_node_field_name,
-                commonDataSimpleContact, feMatSideLhs_dX, side_fe_name, aij,
+                common_data_simple_contact, feMatSideLhs_dX, side_fe_name, aij,
                 false));
 
         // feMatSideLhs_dLambda->getOpPtrVector().push_back(
         //     new OpContactMaterialVolOnMasterSideLhs_dX_dLagmult(
         //         mesh_node_field_name, lagrang_field_name,
-        //         commonDataSimpleContact, aij, false));
+        //         common_data_simple_contact, aij, false));
 
 
-        feLhsSimpleContact->getOpPtrVector().push_back(
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
             new OpContactMaterialMasterSlaveLhs_dX_dLagmult(
                 mesh_node_field_name, lagrang_field_name,
-                commonDataSimpleContact, feMatSideLhs_dLambda, side_fe_name,
+                common_data_simple_contact, feMatSideLhs_dLambda, side_fe_name,
                 aij, false));
 
 //Slave ALE!
@@ -3391,65 +3444,65 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
         feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>(
-                mesh_node_field_name, commonDataSimpleContact->HMat));
+                mesh_node_field_name, common_data_simple_contact->HMat));
         feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>(
-                field_name, commonDataSimpleContact->hMat));
+                field_name, common_data_simple_contact->hMat));
 
         // Master derivative over spatial
         feMatSideLhs_Slave_dx->getOpPtrVector().push_back(new OpCalculateDeformation(
-            mesh_node_field_name, commonDataSimpleContact, false));
+            mesh_node_field_name, common_data_simple_contact, false));
         
         //error 1
         feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
             new OpContactMaterialVolOnSlaveSideLhs_dX_dx(
-                mesh_node_field_name, field_name, commonDataSimpleContact, aij,
+                mesh_node_field_name, field_name, common_data_simple_contact, aij,
                 false));
 
-        //   feLhsSimpleContact->getOpPtrVector().push_back(new
+        //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
         //   OpLoopMasterForSideLhs(
-        //       mesh_node_field_name, commonDataSimpleContact, feMatSideLhs_Slave_dx,
+        //       mesh_node_field_name, common_data_simple_contact, feMatSideLhs_Slave_dx,
         //       side_fe_name));
 
 //Not error?!
-        feLhsSimpleContact->getOpPtrVector().push_back(
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
             new OpContactMaterialSlaveLhs_dX_dx(
-                mesh_node_field_name, field_name, commonDataSimpleContact,
+                mesh_node_field_name, field_name, common_data_simple_contact,
                 feMatSideLhs_Slave_dx, side_fe_name, aij, false));
 
         // Slave derivative over mesh_nodes
         feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>(
-                mesh_node_field_name, commonDataSimpleContact->HMat));
+                mesh_node_field_name, common_data_simple_contact->HMat));
 
         feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>(
-                field_name, commonDataSimpleContact->hMat));
+                field_name, common_data_simple_contact->hMat));
 
         feMatSideLhs_Slave_dX->getOpPtrVector().push_back(new OpCalculateDeformation(
-            mesh_node_field_name, commonDataSimpleContact, false));
+            mesh_node_field_name, common_data_simple_contact, false));
 
 //Error2!!!
         feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
             new OpContactMaterialVolOnSlaveSideLhs_dX_dX(
                 mesh_node_field_name, mesh_node_field_name,
-                commonDataSimpleContact, aij, false));
+                common_data_simple_contact, aij, false));
 
-        // feLhsSimpleContact->getOpPtrVector().push_back(
+        // fe_lhs_simple_contact->getOpPtrVector().push_back(
         //     new OpLoopSlaveForSideLhs(mesh_node_field_name,
-        //                                commonDataSimpleContact,
+        //                                common_data_simple_contact,
         //                                feMatSideLhs_Slave_dX, side_fe_name));
 
-        feLhsSimpleContact->getOpPtrVector().push_back(
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
             new OpContactMaterialSlaveLhs_dX_dX(
                 mesh_node_field_name, mesh_node_field_name,
-                commonDataSimpleContact, feMatSideLhs_Slave_dX, side_fe_name, aij,
+                common_data_simple_contact, feMatSideLhs_Slave_dX, side_fe_name, aij,
                 false));
 
-        feLhsSimpleContact->getOpPtrVector().push_back(
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
             new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
                 mesh_node_field_name, lagrang_field_name,
-                commonDataSimpleContact, feMatSideLhs_Slave_dLambda, side_fe_name,
+                common_data_simple_contact, feMatSideLhs_Slave_dLambda, side_fe_name,
                 aij, false));
 
                 //End
@@ -3502,128 +3555,137 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsLhsOperatorsHdiv(string field_name,
+  MoFEMErrorCode setContactOperatorsLhsOperatorsHdiv(boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+                                                     string field_name,
                                                      string lagrang_field_name,
                                                      Mat aij) {
     MoFEMFunctionBegin;
 
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
+   boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+       boost::make_shared<CommonDataSimpleContact>(mField);
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+   map<int, SimpleContactPrismsData>::iterator sit =
+       setOfSimpleContactPrism.begin();
+   for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpGetPositionAtGaussPtsMaster(field_name,
+                                           common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
-                                             commonDataSimpleContact));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpContactConstraintMatrixMasterSlaveHdiv(
-              field_name, lagrang_field_name, commonDataSimpleContact, aij));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
+                                            common_data_simple_contact));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpContactConstraintMatrixSlaveSlaveHdiv(
-              field_name, lagrang_field_name, commonDataSimpleContact, aij));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpContactConstraintMatrixMasterSlaveHdiv(
+             field_name, lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, commonDataSimpleContact, rValue, cnValue));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpContactConstraintMatrixSlaveSlaveHdiv(
+             field_name, lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv(
-              lagrang_field_name, commonDataSimpleContact, aij));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+         field_name, common_data_simple_contact, rValue, cnValue));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv(
-              field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
-              aij));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv(
+             lagrang_field_name, common_data_simple_contact, aij));
 
-      feLhsSimpleContact->getOpPtrVector().push_back(
-          new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv(
-              field_name, lagrang_field_name, cnValue, commonDataSimpleContact,
-              aij));
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv(
+             field_name, lagrang_field_name, cnValue, common_data_simple_contact,
+             aij));
+
+     fe_lhs_simple_contact->getOpPtrVector().push_back(
+         new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv(
+             field_name, lagrang_field_name, cnValue, common_data_simple_contact,
+             aij));
     }
     MoFEMFunctionReturn(0);
   }
 
   MoFEMErrorCode setContactOperatorsForPostProc(
-      MoFEM::Interface &m_field, string field_name, string mesh_node_position,
-      string lagrang_field_name, string side_fe_name, moab::Interface &moab_out,
+      boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
+          MoFEM::Interface &m_field,
+      string field_name, string mesh_node_position, string lagrang_field_name,
+      string side_fe_name, moab::Interface &moab_out,
       bool lagrange_field = true) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
+
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalMaster(field_name, commonDataSimpleContact));
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalMaster(field_name, common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatMasterSideRhs =
               boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
                   mField);
-      commonDataSimpleContact->tAg = 2;
+      common_data_simple_contact->tAg = 2;
        
         feMatMasterSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpGetDataAtGaussPts(
                 field_name,
-                commonDataSimpleContact->elasticityCommonData
+                common_data_simple_contact->elasticityCommonData
                     .dataAtGaussPts[field_name],
-                commonDataSimpleContact
+                common_data_simple_contact
                     ->elasticityCommonData.gradAtGaussPts[field_name]));
 
       cerr << "Material data Master "
-           << "E " << commonDataSimpleContact->setOfMasterFacesData[1].E
+           << "E " << common_data_simple_contact->setOfMasterFacesData[1].E
            << " Poisson "
-           << commonDataSimpleContact->setOfMasterFacesData[1].PoissonRatio
+           << common_data_simple_contact->setOfMasterFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
-      commonDataSimpleContact->elasticityCommonData.spatialPositions =
+      common_data_simple_contact->elasticityCommonData.spatialPositions =
           field_name;
-      commonDataSimpleContact->elasticityCommonData.meshPositions =
+      common_data_simple_contact->elasticityCommonData.meshPositions =
           mesh_node_position;
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-              field_name, commonDataSimpleContact->elasticityCommonData));
+              field_name, common_data_simple_contact->elasticityCommonData));
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
               mesh_node_position,
-              commonDataSimpleContact->elasticityCommonData));
+              common_data_simple_contact->elasticityCommonData));
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-                  field_name, commonDataSimpleContact->setOfMasterFacesData[1],
-                  commonDataSimpleContact->elasticityCommonData,
-                  commonDataSimpleContact->tAg, false, false, false));
+                  field_name, common_data_simple_contact->setOfMasterFacesData[1],
+                  common_data_simple_contact->elasticityCommonData,
+                  common_data_simple_contact->tAg, false, false, false));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpLoopMasterForSide(mesh_node_position, feMatMasterSideRhs,
                                   side_fe_name));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpCalProjStressesAtGaussPtsMaster(mesh_node_position,
-                                              commonDataSimpleContact));
+                                              common_data_simple_contact));
 
       cerr << "Material data Slave "
-           << "E " << commonDataSimpleContact->setOfSlaveFacesData[1].E
+           << "E " << common_data_simple_contact->setOfSlaveFacesData[1].E
            << " Poisson "
-           << commonDataSimpleContact->setOfSlaveFacesData[1].PoissonRatio
+           << common_data_simple_contact->setOfSlaveFacesData[1].PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
      
@@ -3634,31 +3696,31 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
         feMatSlaveSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpGetDataAtGaussPts(
-                field_name, commonDataSimpleContact->dataAtGaussPts[field_name],
-                commonDataSimpleContact->gradAtGaussPts[field_name]));
+                field_name, common_data_simple_contact->dataAtGaussPts[field_name],
+                common_data_simple_contact->gradAtGaussPts[field_name]));
 
         feMatSlaveSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
-                field_name, commonDataSimpleContact->elasticityCommonData));
+                field_name, common_data_simple_contact->elasticityCommonData));
 
         feMatSlaveSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpGetCommonDataAtGaussPts(
                 mesh_node_position,
-                commonDataSimpleContact->elasticityCommonData));
+                common_data_simple_contact->elasticityCommonData));
 
         feMatSlaveSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-                field_name, commonDataSimpleContact->setOfSlaveFacesData[1],
-                commonDataSimpleContact->elasticityCommonData,
-                commonDataSimpleContact->tAg, false, false, false));
+                field_name, common_data_simple_contact->setOfSlaveFacesData[1],
+                common_data_simple_contact->elasticityCommonData,
+                common_data_simple_contact->tAg, false, false, false));
 
-        fePostProcSimpleContact->getOpPtrVector().push_back(
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
             new OpLoopSlaveForSide(mesh_node_position, feMatSlaveSideRhs,
                                     side_fe_name));
 
-        fePostProcSimpleContact->getOpPtrVector().push_back(
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
             new OpCalProjStressesAtGaussPtsSlave(mesh_node_position,
-                                                  commonDataSimpleContact));
+                                                  common_data_simple_contact));
 
       //   if (mField.check_field(material_position_field_name)) {
       //     feRhs.getOpPtrVector().push_back(new OpGetCommonDataAtGaussPts(
@@ -3674,75 +3736,79 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
       //         spatial_position_field_name, sit->second, commonData));
       //   }
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
       
       if (lagrange_field) {
         cerr << "LAGRAAANGE!\n";
-        fePostProcSimpleContact->getOpPtrVector().push_back(
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
             new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-        fePostProcSimpleContact->getOpPtrVector().push_back(
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
             new OpLagGapProdGaussPtsSlave(lagrang_field_name,
-                                          commonDataSimpleContact));
-        fePostProcSimpleContact->getOpPtrVector().push_back(
+                                          common_data_simple_contact));
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
             new OpCalNormalLagrangeMasterAndSlaveDifference(
-                field_name, commonDataSimpleContact));
+                field_name, common_data_simple_contact));
 
-        fePostProcSimpleContact->getOpPtrVector().push_back(
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
             new OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference(
-                field_name, commonDataSimpleContact));
+                field_name, common_data_simple_contact));
       }
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
-          new OpMakeVtkSlave(m_field, field_name, commonDataSimpleContact,
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
                              moab_out, lagrange_field));
     }
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsForPostProcHdiv(MoFEM::Interface &m_field,
-                                                    string field_name,
-                                                    string lagrang_field_name,
-                                                    moab::Interface &moab_out) {
+  MoFEMErrorCode setContactOperatorsForPostProcHdiv(
+      boost::shared_ptr<SimpleContactElement>
+          fe_post_proc_simple_contact, MoFEM::Interface &m_field,
+      string field_name, string lagrang_field_name, moab::Interface &moab_out) {
     MoFEMFunctionBegin;
+
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
+
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, commonDataSimpleContact));
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsMaster(field_name,
-                                            commonDataSimpleContact));
+                                            common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetPositionAtGaussPtsSlave(field_name,
-                                           commonDataSimpleContact));
+                                           common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, commonDataSimpleContact));
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
-                                             commonDataSimpleContact));
+                                             common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpLagGapProdGaussPtsSlave(lagrang_field_name,
-                                        commonDataSimpleContact));
+                                        common_data_simple_contact));
 
-      fePostProcSimpleContact->getOpPtrVector().push_back(new OpMakeVtkSlave(
-          m_field, field_name, commonDataSimpleContact, moab_out));
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(new OpMakeVtkSlave(
+          m_field, field_name, common_data_simple_contact, moab_out));
     }
     MoFEMFunctionReturn(0);
   }
