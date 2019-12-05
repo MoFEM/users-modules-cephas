@@ -23,8 +23,10 @@ extern "C" {
 // #include <gm_rule.h>
 //#include <quad.h>
 #include <triangle_ncc_rule.h>
+
 #ifdef __cplusplus
 }
+#include <boost/enable_shared_from_this.hpp>
 #endif
 
 struct SimpleContactProblem {
@@ -157,7 +159,8 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
-  struct CommonDataSimpleContact {
+  struct CommonDataSimpleContact
+      : public boost::enable_shared_from_this<CommonDataSimpleContact> {
 
     NonlinearElasticElement::CommonData elasticityCommonData;
     short int tAg;
