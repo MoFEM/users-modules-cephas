@@ -33,166 +33,147 @@ using Ele = FaceElementForcesAndSourcesCoreBase;
 using EleOp = Ele::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
-struct OpBase : public EleOp {
+#include <BaseOps.hpp>
+struct Example {
 
-  OpBase(const EleOp::OpType type) : EleOp("U", "U", type, true) {}
+  Example(MoFEM::Interface &m_field): mField(m_field) {}
 
-  /**
-   * \brief Do calculations for the left hand side
-   * @param  row_side row side number (local number) of entity on element
-   * @param  col_side column side number (local number) of entity on element
-   * @param  row_type type of row entity MBVERTEX, MBEDGE, MBTRI or MBTET
-   * @param  col_type type of column entity MBVERTEX, MBEDGE, MBTRI or MBTET
-   * @param  row_data data for row
-   * @param  col_data data for column
-   * @return          error code
-   */
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+  MoFEMErrorCode runProblem();
 
-  /**
-   * @brief Do calculations for the right hand side
-   *
-   * @param row_side
-   * @param row_type
-   * @param row_data
-   * @return MoFEMErrorCode
-   */
-  MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
+  private:
 
-protected:
-  int nbRows;           ///< number of dofs on rows
-  int nbCols;           ///< number if dof on column
-  int nbIntegrationPts; ///< number of integration points
-  bool isDiag;          ///< true if this block is on diagonal
+  MoFEM::Interface &mField;
 
-  MatrixDouble locMat; ///< local entity block matrix
-  VectorDouble locF;   ///< local entity vector
+  MoFEMErrorCode setUP();
+  MoFEMErrorCode bC();
 
-  /**
-   * \brief Integrate grad-grad operator
-   * @param  row_data row data (consist base functions on row entity)
-   * @param  col_data column data (consist base functions on column entity)
-   * @return          error code
-   */
-  virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) = 0;
+  static double sourceFunction(const double x, const double y, const double z) {
+    const double xc = 0;
+    const double yc = 0;
+    const double xs = x - xc;
+    const double ys = y - yc;
+    constexpr double eps = 50;
+    return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
+  };
 
-  virtual MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+  MoFEMErrorCode OPs();
+  MoFEMErrorCode kspSolve();
+  MoFEMErrorCode postProcess(); 
 
-  /**
-   * \brief Class dedicated to integrate operator
-   * @param  data entity data on element row
-   * @return      error code
-   */
-  virtual MoFEMErrorCode iNtegrate(EntData &data) = 0;
+  SmartPetscObj<DM> dM;
+  SmartPetscObj<Vec> D;
+  SmartPetscObj<Vec> F;
+  MatrixDouble invJac;
 
-  /**
-   * \brief Class dedicated to assemble operator to global system vector
-   * @param  data entity data (indices, base functions, etc. ) on element row
-   * @return      error code
-   */
-  virtual MoFEMErrorCode aSsemble(EntData &data);
 };
 
-template <int DIM> struct OpHelmholtzLhs : public OpBase {
+MoFEMErrorCode Example::runProblem() {
+  MoFEMFunctionBegin;
+  CHKERR setUP();
+  CHKERR bC();
+  CHKERR OPs();
+  CHKERR kspSolve();
+  CHKERR postProcess();
+  MoFEMFunctionReturn(0);
+}
 
-  const double k;
-  OpHelmholtzLhs(const double k) : OpBase(OPROWCOL), k(k) {}
+//! [Set up problem]
+MoFEMErrorCode Example::setUP() {
+  MoFEMFunctionBegin;
+  Simple *simple_interface = mField.getInterface<Simple>();
+  // Add field
+  CHKERR simple_interface->addDomainField("U", H1,
+                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  constexpr int order = 1;
+  CHKERR simple_interface->setFieldOrder("U", order);
+  CHKERR simple_interface->setUp();
+  dM = simple_interface->getDM();
+  MoFEMFunctionReturn(0);
+}
+//! [Set up problem]
 
-  FTensor::Index<'i', DIM> i; ///< summit Index
+//! [Applying essential BC]
+MoFEMErrorCode Example::bC() {
+  MoFEMFunctionBegin;
+  Simple *simple_interface = mField.getInterface<Simple>();
+  // Get skin on the body, i.e. body boundary, and apply homogenous
+  // Dirichlet conditions on that boundary.
+  Range surface;
+  CHKERR mField.get_moab().get_entities_by_dimension(0, 2, surface, false);
+  Skinner skin(&mField.get_moab());
+  Range edges;
+  CHKERR skin.find_skin(0, surface, false, edges);
+  Range edges_part;
+  ParallelComm *pcomm = ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                               PSTATUS_NOT, -1, &edges_part);
+  Range edges_verts;
+  CHKERR mField.get_moab().get_connectivity(edges_part, edges_verts, false);
+  // Since Dirichlet b.c. are essential boundary conditions, remove DOFs
+  // from the problem.
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      simple_interface->getProblemName(), "U", unite(edges_verts, edges_part));
+  MoFEMFunctionReturn(0);
+}
+//! [Applying essential BC]
 
-  MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-    MoFEMFunctionBegin;
-    // get element volume
-    double vol = getMeasure();
-    // get integration weights
-    auto t_w = getFTensor0IntegrationWeight();
-    // get base function gradient on rows
-    auto t_row_base = row_data.getFTensor0N();
-    auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
-    // loop over integration points
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
-      // take into account Jacobean
-      const double alpha = t_w * vol;
-      // fist element to local matrix
-      FTensor::Tensor0<double *> a(&*locMat.data().begin());
-      // loop over rows base functions
-      for (int rr = 0; rr != nbRows; rr++) {
-        // get column base functions gradient at gauss point gg
-        auto t_col_base = col_data.getFTensor0N(gg, 0);
-        auto t_col_grad = col_data.getFTensor1DiffN<DIM>(gg, 0);
-        // loop over columns
-        for (int cc = 0; cc != nbCols; cc++) {
-          // calculate element of local matrix
-          a -= alpha * (t_row_grad(i) * t_col_grad(i));
-          a += alpha * (k * k) * (t_row_base * t_col_base);
-          ++t_col_base;
-          ++t_col_grad; // move to another gradient of base function on column
-          ++a;          // move to another element of local matrix in column
-        }
-        ++t_row_base;
-        ++t_row_grad; // move to another element of gradient of base function on
-                      // row
-      }
-      ++t_w; // move to another integration weight
-    }
+
+//! [Push operators to pipeline]
+MoFEMErrorCode Example::OPs() {
+  MoFEMFunctionBegin;
+  Basic *basic_interface = mField.getInterface<Basic>();
+  basic_interface->getOpDomainLhsPipeline().push_back(
+      new OpCalculateInvJacForFace(invJac));
+  basic_interface->getOpDomainLhsPipeline().push_back(
+      new OpSetInvJacH1ForFace(invJac));
+  basic_interface->getOpDomainLhsPipeline().push_back(new OpGradGrad<2>(-1));
+  basic_interface->getOpDomainLhsPipeline().push_back(
+      new OpGradGrad<2>(pow(50, 2)));
+
+  basic_interface->getOpDomainRhsPipeline().push_back(
+      new OpSource<2>(sourceFunction));
+
+  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+  CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR basic_interface->setDomainLhsIntegrationRule(integration_rule);
+  MoFEMFunctionReturn(0);
+}
+//! [Push operators to pipeline]
+
+//! [Solve]
+MoFEMErrorCode Example::kspSolve() {
+  MoFEMFunctionBegin;
+  Simple *simple_interface = mField.getInterface<Simple>();
+  Basic *basic_interface = mField.getInterface<Basic>();
+  auto solver = basic_interface->createKSP();
+  CHKERR KSPSetFromOptions(solver);
+  CHKERR KSPSetUp(solver);
+
+  D = smartCreateDMDVector(dM);
+  F = smartVectorDuplicate(D);
+
+  CHKERR KSPSolve(solver, F, D);
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dM, D, INSERT_VALUES, SCATTER_REVERSE);
+  MoFEMFunctionReturn(0);
+}
+
+//! [Solve]
+MoFEMErrorCode Example::postProcess() {
+  MoFEMFunctionBegin;
+  Basic *basic_interface = mField.getInterface<Basic>();
+    basic_interface->getDomainLhsFE().reset();
+    auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    post_proc_fe->generateReferenceElementMesh();
+    post_proc_fe->addFieldValuesPostProc("U");
+    basic_interface->getDomainLhsFE() = post_proc_fe;
+    CHKERR basic_interface->loopFiniteElements();
+    CHKERR post_proc_fe->writeFile(
+        "out_basic_helmholtz.h5m");
     MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode iNtegrate(EntData &data) {
-    MoFEMFunctionBegin;
-    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Should not be used");
-    MoFEMFunctionReturn(0);
-  }
-};
-
-typedef boost::function<double(const double, const double, const double)>
-    SourceFun;
-
-template <int DIM> struct OpHelmholtzRhs : public OpBase {
-
-  SourceFun sourceFun;
-
-  OpHelmholtzRhs(SourceFun source_fun) : OpBase(OPROW), sourceFun(source_fun) {}
-
-  FTensor::Index<'i', DIM> i; ///< summit Index
-
-  MoFEMErrorCode iNtegrate(EntData &row_data) {
-    MoFEMFunctionBegin;
-    // get element volume
-    double vol = getMeasure();
-    // get integration weights
-    auto t_w = getFTensor0IntegrationWeight();
-    // get base function gradient on rows
-    auto t_row_base = row_data.getFTensor0N();
-    // get coordinate at integration points
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    // loop over integration points
-    for (int gg = 0; gg != nbIntegrationPts; gg++) {
-      // take into account Jacobean
-      const double alpha = t_w * vol;
-      // fist element to local matrix
-      FTensor::Tensor0<double *> a(&*locF.data().begin());
-      // loop over rows base functions
-      for (int rr = 0; rr != nbRows; rr++) {
-        a += alpha * t_row_base *
-             sourceFun(t_coords(0), t_coords(1), t_coords(2));
-        ++a; // move to another element of local matrix in column
-        ++t_row_base;
-      }
-      ++t_coords;
-      ++t_w; // move to another integration weight
-    }
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
-    MoFEMFunctionBegin;
-    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED, "Should not be used");
-    MoFEMFunctionReturn(0);
-  }
-};
+}
+//! [Postprocess results]
 
 int main(int argc, char *argv[]) {
 
@@ -215,209 +196,20 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; ///< finite element database insterface
     //! [Create MoFEM]
 
-    //! [Set up problem]
+    //! [Load mesh]
     Simple *simple_interface = m_field.getInterface<Simple>();
     CHKERR simple_interface->getOptions();
     CHKERR simple_interface->loadFile();
-    // Add field
-    CHKERR simple_interface->addDomainField("U", H1,
-                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-    constexpr int order = 8;
-    CHKERR simple_interface->setFieldOrder("U", order);
-    CHKERR simple_interface->setUp();
-    //! [Set up problem]
+    //! [Load mesh]
 
-    //! [Applying essential BC]
-    auto apply_essential_conditions = [&]() {
-      MoFEMFunctionBegin;
-      // Get skin on the body, i.e. body boundary, and apply homogenous
-      // Dirichlet conditions on that boundary.
-      Range surface;
-      CHKERR moab.get_entities_by_dimension(0, 2, surface, false);
-      Skinner skin(&m_field.get_moab());
-      Range edges;
-      CHKERR skin.find_skin(0, surface, false, edges);
-      Range edges_part;
-      ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-      CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                   PSTATUS_NOT, -1, &edges_part);
-      Range edges_verts;
-      CHKERR moab.get_connectivity(edges_part, edges_verts, false);
-      // Since Dirichlet b.c. are essential boundary conditions, remove DOFs
-      // from the problem.
-      CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
-          simple_interface->getProblemName(), "U",
-          unite(edges_verts, edges_part));
-      MoFEMFunctionReturn(0);
-    };
-    // CHKERR apply_essential_conditions();
-    //! [Applying essential BC]
-
-    //! [Push operators to pipeline]
-    Basic *basic_interface = m_field.getInterface<Basic>();
-    MatrixDouble inv_jac;
-    basic_interface->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(inv_jac));
-    basic_interface->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(inv_jac));
-    basic_interface->getOpDomainLhsPipeline().push_back(
-        new OpHelmholtzLhs<2>(50));
-
-    auto source_function_left = [](const double x, const double y,
-                                   const double z) {
-      const double xc = 0;
-      const double yc = 0;
-      const double xs = x - xc;
-      const double ys = y - yc;
-      constexpr double eps = 50;
-      return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
-    };
-
-    auto source_function_right = [](const double x, const double y,
-                                   const double z) {
-      const double xc = 0.4;
-      const double yc = 0;
-      const double xs = x - xc;
-      const double ys = y - yc;
-      constexpr double eps = 50;
-      return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
-    };
-
-    basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpHelmholtzRhs<2>(source_function_left));
-    // basic_interface->getOpDomainRhsPipeline().push_back(
-    //     new OpHelmholtzRhs<2>(source_function_right));
-
-    auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
-    CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR basic_interface->setDomainLhsIntegrationRule(integration_rule);
-
-    //! [Push operators to pipeline]
-
-    //! [Solve]
-    auto solver = basic_interface->createKSP();
-    CHKERR KSPSetFromOptions(solver);
-    CHKERR KSPSetUp(solver);
-
-    auto D = smartCreateDMDVector(simple_interface->getDM());
-    auto F = smartVectorDuplicate(D);
-
-    CHKERR KSPSolve(solver, F, D);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(simple_interface->getDM(), D, INSERT_VALUES,
-                                   SCATTER_REVERSE);
-    //! [Solve]
-
-    //! [Postprocess results]
-    basic_interface->getDomainLhsFE().reset();
-    auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(m_field);
-    post_proc_fe->generateReferenceElementMesh();
-    post_proc_fe->addFieldValuesPostProc("U");
-    basic_interface->getDomainLhsFE() = post_proc_fe;
-    CHKERR basic_interface->loopFiniteElements();
-    CHKERR post_proc_fe->writeFile(
-        "out_basic_helmholtz.h5m");
-    //! [Postprocess results]
+    //! [Example]
+    Example ex(m_field);
+    CHKERR ex.runProblem();
+    //! [Example]
+    
   }
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
 }
 
-MoFEMErrorCode OpBase::doWork(int row_side, int col_side, EntityType row_type,
-                              EntityType col_type, EntData &row_data,
-                              EntData &col_data) {
-  MoFEMFunctionBegin;
-  // get number of dofs on row
-  nbRows = row_data.getIndices().size();
-  // if no dofs on row, exit that work, nothing to do here
-  if (!nbRows)
-    MoFEMFunctionReturnHot(0);
-  // get number of dofs on column
-  nbCols = col_data.getIndices().size();
-  // if no dofs on Columbia, exit nothing to do here
-  if (!nbCols)
-    MoFEMFunctionReturnHot(0);
-  // get number of integration points
-  nbIntegrationPts = getGaussPts().size2();
-  // set size of local entity bock
-  locMat.resize(nbRows, nbCols, false);
-  // clear matrix
-  locMat.clear();
-  // check if entity block is on matrix diagonal
-  if (row_side == col_side && row_type == col_type) {
-    isDiag = true; // yes, it is
-  } else {
-    isDiag = false;
-  }
-  // integrate local matrix for entity block
-  CHKERR iNtegrate(row_data, col_data);
-  // assemble local matrix
-  CHKERR aSsemble(row_data, col_data);
-  MoFEMFunctionReturn(0);
-}
-
-/**
- * \brief Assemble local entity block matrix
- * @param  row_data row data (consist base functions on row entity)
- * @param  col_data column data (consist base functions on column entity)
- * @return          error code
- */
-MoFEMErrorCode OpBase::aSsemble(EntData &row_data, EntData &col_data) {
-  MoFEMFunctionBegin;
-  // assemble local matrix
-  CHKERR MatSetValues(getFEMethod()->ksp_B, row_data, col_data,
-                      &*locMat.data().begin(), ADD_VALUES);
-
-  if (!isDiag && sYmm) {
-    // if not diagonal term and since global matrix is symmetric assemble
-    // transpose term.
-    locMat = trans(locMat);
-    CHKERR MatSetValues(getFEMethod()->ksp_B, col_data, row_data,
-                        &*locMat.data().begin(), ADD_VALUES);
-  }
-  MoFEMFunctionReturn(0);
-}
-
-/**
- * \brief This function is called by finite element
- *
- * Do work is composed from two operations, integrate and assembly. Also,
- * it set values nbRows, and nbIntegrationPts.
- *
- */
-MoFEMErrorCode OpBase::doWork(int row_side, EntityType row_type,
-                              EntData &row_data) {
-  MoFEMFunctionBegin;
-  // get number of dofs on row
-  nbRows = row_data.getIndices().size();
-  if (!nbRows)
-    MoFEMFunctionReturnHot(0);
-  // get number of integration points
-  nbIntegrationPts = getGaussPts().size2();
-  // resize and clear the right hand side vector
-  locF.resize(nbRows);
-  locF.clear();
-  // integrate local vector
-  CHKERR iNtegrate(row_data);
-  // assemble local vector
-  CHKERR aSsemble(row_data);
-  MoFEMFunctionReturn(0);
-}
-
-/**
- * \brief assemble local entity vector to the global right hand side
- * @param  data entity data, i.e. global indices of local vector
- * @return      error code
- */
-MoFEMErrorCode OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
-  MoFEMFunctionBegin;
-  // get values from local vector
-  const double *vals = &*locF.data().begin();
-  // assemble vector
-  CHKERR VecSetOption(getFEMethod()->ksp_f, VEC_IGNORE_NEGATIVE_INDICES,
-                      PETSC_TRUE);
-  CHKERR VecSetValues(getFEMethod()->ksp_f, data, vals, ADD_VALUES);
-  MoFEMFunctionReturn(0);
-}
