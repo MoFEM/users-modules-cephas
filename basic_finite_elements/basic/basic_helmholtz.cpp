@@ -104,11 +104,6 @@ template <int DIM> struct OpHelmholtzLhs : public OpBase {
 
   MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
     MoFEMFunctionBegin;
-
-    // set size of local entity bock
-    locMat.resize(nbRows, nbCols, false);
-    // clear matrix
-    locMat.clear();
     // get element volume
     double vol = getMeasure();
     // get integration weights
@@ -125,13 +120,13 @@ template <int DIM> struct OpHelmholtzLhs : public OpBase {
       // loop over rows base functions
       for (int rr = 0; rr != nbRows; rr++) {
         // get column base functions gradient at gauss point gg
-        auto t_col_base = col_data.getFTensor0N();
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
         auto t_col_grad = col_data.getFTensor1DiffN<DIM>(gg, 0);
         // loop over columns
         for (int cc = 0; cc != nbCols; cc++) {
           // calculate element of local matrix
-          a += alpha *
-               (k * t_row_base * t_col_base - (t_row_grad(i) * t_col_grad(i)));
+          a -= alpha * (t_row_grad(i) * t_col_grad(i));
+          a += alpha * (k * k) * (t_row_base * t_col_base);
           ++t_col_base;
           ++t_col_grad; // move to another gradient of base function on column
           ++a;          // move to another element of local matrix in column
@@ -165,11 +160,6 @@ template <int DIM> struct OpHelmholtzRhs : public OpBase {
 
   MoFEMErrorCode iNtegrate(EntData &row_data) {
     MoFEMFunctionBegin;
-
-    // set size of local entity bock
-    locMat.resize(nbRows, nbCols, false);
-    // clear matrix
-    locMat.clear();
     // get element volume
     double vol = getMeasure();
     // get integration weights
@@ -228,14 +218,40 @@ int main(int argc, char *argv[]) {
     //! [Set up problem]
     Simple *simple_interface = m_field.getInterface<Simple>();
     CHKERR simple_interface->getOptions();
-    CHKERR simple_interface->loadFile("");
+    CHKERR simple_interface->loadFile();
     // Add field
     CHKERR simple_interface->addDomainField("U", H1,
                                             AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-    constexpr int order = 1;
+    constexpr int order = 8;
     CHKERR simple_interface->setFieldOrder("U", order);
     CHKERR simple_interface->setUp();
     //! [Set up problem]
+
+    //! [Applying essential BC]
+    auto apply_essential_conditions = [&]() {
+      MoFEMFunctionBegin;
+      // Get skin on the body, i.e. body boundary, and apply homogenous
+      // Dirichlet conditions on that boundary.
+      Range surface;
+      CHKERR moab.get_entities_by_dimension(0, 2, surface, false);
+      Skinner skin(&m_field.get_moab());
+      Range edges;
+      CHKERR skin.find_skin(0, surface, false, edges);
+      Range edges_part;
+      ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+      CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                   PSTATUS_NOT, -1, &edges_part);
+      Range edges_verts;
+      CHKERR moab.get_connectivity(edges_part, edges_verts, false);
+      // Since Dirichlet b.c. are essential boundary conditions, remove DOFs
+      // from the problem.
+      CHKERR m_field.getInterface<ProblemsManager>()->removeDofsOnEntities(
+          simple_interface->getProblemName(), "U",
+          unite(edges_verts, edges_part));
+      MoFEMFunctionReturn(0);
+    };
+    // CHKERR apply_essential_conditions();
+    //! [Applying essential BC]
 
     //! [Push operators to pipeline]
     Basic *basic_interface = m_field.getInterface<Basic>();
@@ -245,21 +261,36 @@ int main(int argc, char *argv[]) {
     basic_interface->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(inv_jac));
     basic_interface->getOpDomainLhsPipeline().push_back(
-        new OpHelmholtzLhs<2>(1.));
+        new OpHelmholtzLhs<2>(50));
 
-    auto source_function = [](const double x, const double y, const double z) {
+    auto source_function_left = [](const double x, const double y,
+                                   const double z) {
       const double xc = 0;
       const double yc = 0;
-      const double zc = 0;
       const double xs = x - xc;
       const double ys = y - yc;
-      const double zs = z - zc;
-      constexpr double eps = 1;
-      return exp(-pow(eps * sqrt(xs * xs + ys * ys + zs * zs), 2));
+      constexpr double eps = 50;
+      return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
+    };
+
+    auto source_function_right = [](const double x, const double y,
+                                   const double z) {
+      const double xc = 0.4;
+      const double yc = 0;
+      const double xs = x - xc;
+      const double ys = y - yc;
+      constexpr double eps = 50;
+      return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
     };
 
     basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpHelmholtzRhs<2>(source_function));
+        new OpHelmholtzRhs<2>(source_function_left));
+    // basic_interface->getOpDomainRhsPipeline().push_back(
+    //     new OpHelmholtzRhs<2>(source_function_right));
+
+    auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+    CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR basic_interface->setDomainLhsIntegrationRule(integration_rule);
 
     //! [Push operators to pipeline]
 
@@ -310,6 +341,10 @@ MoFEMErrorCode OpBase::doWork(int row_side, int col_side, EntityType row_type,
     MoFEMFunctionReturnHot(0);
   // get number of integration points
   nbIntegrationPts = getGaussPts().size2();
+  // set size of local entity bock
+  locMat.resize(nbRows, nbCols, false);
+  // clear matrix
+  locMat.clear();
   // check if entity block is on matrix diagonal
   if (row_side == col_side && row_type == col_type) {
     isDiag = true; // yes, it is
@@ -381,6 +416,8 @@ MoFEMErrorCode OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
   // get values from local vector
   const double *vals = &*locF.data().begin();
   // assemble vector
+  CHKERR VecSetOption(getFEMethod()->ksp_f, VEC_IGNORE_NEGATIVE_INDICES,
+                      PETSC_TRUE);
   CHKERR VecSetValues(getFEMethod()->ksp_f, data, vals, ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
