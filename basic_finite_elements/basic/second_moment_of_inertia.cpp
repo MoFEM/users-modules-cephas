@@ -27,59 +27,228 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-//! [Common data]
-struct CommonData {
-  boost::shared_ptr<VectorDouble> rhoAtIntegrationPts;
-  enum VecElements {
-    ZERO = 0,
-    FIRST_X,
-    FIRST_Y,
-    FIRST_Z,
-    SECOND_XX,
-    SECOND_XY,
-    SECOND_XZ,
-    SECOND_YY,
-    SECOND_YZ,
-    SECOND_ZZ,
-    LAST_ELEMENT
-  };
-  SmartPetscObj<Vec> petscVec;
-};
-//! [Common data]
-
-
-//! [Operators]
 using Element = MoFEM::VolumeElementForcesAndSourcesCoreBase;
 using OpElement = Element::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
-struct OpZero : public OpElement {
-  OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
-      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+struct Example {
+
+  Example(MoFEM::Interface &m_field) : mField(m_field) {}
+
+  MoFEMErrorCode runProblem();
 
 private:
+  MoFEM::Interface &mField;
+
+  MoFEMErrorCode setUP();
+  MoFEMErrorCode createCommonData();
+  MoFEMErrorCode bC();
+  MoFEMErrorCode OPs();
+  MoFEMErrorCode integrateElements();
+  MoFEMErrorCode postProcess();
+  MoFEMErrorCode checkResults();
+
+  //! [Common data]
+  struct CommonData {
+    boost::shared_ptr<VectorDouble> rhoAtIntegrationPts;
+    enum VecElements {
+      ZERO = 0,
+      FIRST_X,
+      FIRST_Y,
+      FIRST_Z,
+      SECOND_XX,
+      SECOND_XY,
+      SECOND_XZ,
+      SECOND_YY,
+      SECOND_YZ,
+      SECOND_ZZ,
+      LAST_ELEMENT
+    };
+    SmartPetscObj<Vec> petscVec;
+  };
   boost::shared_ptr<CommonData> commonDataPtr;
+  //! [Common data]
+
+  //! [Operators]
+  struct OpZero : public OpElement {
+    OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
+        : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
+
+  struct OpFirst : public OpElement {
+    OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
+        : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
+
+  struct OpSecond : public OpElement {
+    OpSecond(boost::shared_ptr<CommonData> &common_data_ptr)
+        : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonData> commonDataPtr;
+  };
+  //! [Operators]
 };
 
-struct OpFirst : public OpElement {
-  OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
-      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+//! [Run all]
+MoFEMErrorCode Example::runProblem() {
+  MoFEMFunctionBegin;
+  CHKERR setUP();
+  CHKERR createCommonData();
+  CHKERR bC();
+  CHKERR OPs();
+  CHKERR integrateElements();
+  CHKERR postProcess();
+  CHKERR checkResults();
+  MoFEMFunctionReturn(0);
+}
+//! [Run all]
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+//! [Set up problem]
+MoFEMErrorCode Example::setUP() {
+  MoFEMFunctionBegin;
+  Simple *simple_interface = mField.getInterface<Simple>();
+  CHKERR simple_interface->getOptions();
+  CHKERR simple_interface->loadFile("");
+  // Add field
+  CHKERR simple_interface->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE,
+                                          1);
+  constexpr int order = 1;
+  CHKERR simple_interface->setFieldOrder("rho", order);
+  CHKERR simple_interface->setUp();
+  MoFEMFunctionReturn(0);
+}
+//! [Set up problem]
 
-struct OpSecond : public OpElement {
-  OpSecond(boost::shared_ptr<CommonData> &common_data_ptr)
-      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+//! [Create common data]
+MoFEMErrorCode Example::createCommonData() {
+  MoFEMFunctionBegin;
+  commonDataPtr = boost::make_shared<CommonData>();
+  commonDataPtr->petscVec = createSmartVectorMPI(
+      mField.get_comm(),
+      (!mField.get_comm_rank()) ? CommonData::LAST_ELEMENT : 0,
+      CommonData::LAST_ELEMENT);
+  CHKERR VecZeroEntries(commonDataPtr->petscVec);
+  commonDataPtr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
+  MoFEMFunctionReturn(0);
+}
+//! [Create common data]
+MoFEMErrorCode Example::bC() {
+  MoFEMFunctionBegin;
+  auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
+                         double *ycoord, double *zcoord) {
+    MoFEMFunctionBeginHot;
+    field_data[0] = 1;
+    MoFEMFunctionReturnHot(0);
+  };
+  FieldBlas *field_blas;
+  CHKERR mField.getInterface(field_blas);
+  CHKERR field_blas->setVertexDofs(set_density, "rho");
+  MoFEMFunctionReturn(0);
+}
+//! [Distributions mass]
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-//! [Operators]
+//! [Push operators to pipeline]
+MoFEMErrorCode Example::OPs() {
+  MoFEMFunctionBegin;
+  Basic *basic_interface = mField.getInterface<Basic>();
+  basic_interface->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("rho",
+                                       commonDataPtr->rhoAtIntegrationPts));
+  basic_interface->getOpDomainRhsPipeline().push_back(
+      new OpZero(commonDataPtr));
+  basic_interface->getOpDomainRhsPipeline().push_back(
+      new OpFirst(commonDataPtr));
+  basic_interface->getOpDomainRhsPipeline().push_back(
+      new OpSecond(commonDataPtr));
+  auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
+  CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
+  MoFEMFunctionReturn(0);
+}
+//! [Push operators to pipeline]
+
+//! [Do calculations]
+
+MoFEMErrorCode Example::integrateElements() {
+  MoFEMFunctionBegin;
+  Basic *basic_interface = mField.getInterface<Basic>();
+  CHKERR basic_interface->loopFiniteElements();
+  CHKERR VecAssemblyBegin(commonDataPtr->petscVec);
+  CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
+  MoFEMFunctionReturn(0);
+}
+//! [Do calculations]
+
+//! [Print results]
+MoFEMErrorCode Example::postProcess() {
+  MoFEMFunctionBegin;
+  const double *array;
+  CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
+  //! [Print results]
+  if (mField.get_comm_rank() == 0) {
+    PetscPrintf(PETSC_COMM_SELF, "Mass %6.4e\n", array[CommonData::ZERO]);
+    PetscPrintf(PETSC_COMM_SELF,
+                "First moment of inertia [ %6.4e, %6.4e, %6.4e ] \n",
+                array[CommonData::FIRST_X], array[CommonData::FIRST_Y],
+                array[CommonData::FIRST_Z]);
+    PetscPrintf(PETSC_COMM_SELF,
+                "Second moment of inertia [ %6.4e, %6.4e, %6.4e; %6.4e %6.4e; "
+                "%6.4e ]\n",
+                array[CommonData::SECOND_XX], array[CommonData::SECOND_XY],
+                array[CommonData::SECOND_XZ], array[CommonData::SECOND_YY],
+                array[CommonData::SECOND_YZ], array[CommonData::SECOND_ZZ]);
+  }
+  CHKERR VecRestoreArrayRead(commonDataPtr->petscVec, &array);
+  MoFEMFunctionReturn(0);
+}
+//! [Print results]
+
+//! [Test example]
+MoFEMErrorCode Example::checkResults() {
+  MoFEMFunctionBegin;
+  const double *array;
+  CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
+
+  PetscBool test = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
+  if (mField.get_comm_rank() == 0 && test) {
+    constexpr double eps = 1e-8;
+    constexpr double expected_area = 1.;
+    constexpr double expected_first_moment = 0.;
+    constexpr double expected_second_moment = 1. / 12.;
+    if (std::abs(array[CommonData::ZERO] - expected_area) > eps)
+      SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+               "Wrong area %6.4e !+ %6.4e", expected_area,
+               array[CommonData::ZERO]);
+    for (auto i :
+         {CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z}) {
+      if (std::abs(array[i] - expected_first_moment) > eps)
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong first moment %6.4e !+ %6.4e", expected_first_moment,
+                 array[i]);
+    }
+    for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
+                   CommonData::SECOND_ZZ}) {
+      if (std::abs(array[i] - expected_second_moment) > eps)
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
+                 array[i]);
+    }
+  }
+  CHKERR VecRestoreArrayRead(commonDataPtr->petscVec, &array);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Test example]
 
 int main(int argc, char *argv[]) {
 
@@ -102,126 +271,22 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; ///< finite element database insterface
     //! [Create MoFEM]
 
-    //! [Set up problem]
-    Simple *simple_interface = m_field.getInterface<Simple>();
-    CHKERR simple_interface->getOptions();
-    CHKERR simple_interface->loadFile("");
-    // Add field
-    CHKERR simple_interface->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE,
-                                            1);
-    constexpr int order = 1;
-    CHKERR simple_interface->setFieldOrder("rho", order);
-    CHKERR simple_interface->setUp();
-    //! [Set up problem]
+    Example ex(m_field);
+    CHKERR ex.runProblem();
 
-    //! [Distributions mass]
-    auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
-                            double *ycoord, double *zcoord) {
-      MoFEMFunctionBeginHot;
-      field_data[0] = 1;
-      MoFEMFunctionReturnHot(0);
-    };
-    FieldBlas *field_blas;
-    CHKERR m_field.getInterface(field_blas);
-    CHKERR field_blas->setVertexDofs(set_density, "rho");
-    //! [Distributions mass]
-
-    //! [Create common data]
-    auto common_data_ptr = boost::make_shared<CommonData>();
-    common_data_ptr->petscVec = createSmartVectorMPI(
-        m_field.get_comm(),
-        (!m_field.get_comm_rank()) ? CommonData::LAST_ELEMENT : 0,
-        CommonData::LAST_ELEMENT);
-    CHKERR VecZeroEntries(common_data_ptr->petscVec);
-    common_data_ptr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
-    //! [Create common data]
-
-    //! [Push operators to pipeline]
-    Basic *basic_interface = m_field.getInterface<Basic>();
-    basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpCalculateScalarFieldValues("rho",
-                                         common_data_ptr->rhoAtIntegrationPts));
-    basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpZero(common_data_ptr));
-    basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpFirst(common_data_ptr));
-    basic_interface->getOpDomainRhsPipeline().push_back(
-        new OpSecond(common_data_ptr));
-    //! [Push operators to pipeline]
-
-    //! [Do calculations]
-    auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
-    CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR basic_interface->loopFiniteElements();
-    CHKERR VecAssemblyBegin(common_data_ptr->petscVec);
-    CHKERR VecAssemblyEnd(common_data_ptr->petscVec);
-    //! [Do calculations]
-
-    const double *array;
-    CHKERR VecGetArrayRead(common_data_ptr->petscVec, &array);
-
-    //! [Print results]
-    if (m_field.get_comm_rank() == 0) {
-      PetscPrintf(PETSC_COMM_SELF, "Mass %6.4e\n", array[CommonData::ZERO]);
-      PetscPrintf(PETSC_COMM_SELF,
-                  "First moment of inertia [ %6.4e, %6.4e, %6.4e ] \n",
-                  array[CommonData::FIRST_X], array[CommonData::FIRST_Y],
-                  array[CommonData::FIRST_Z]);
-      PetscPrintf(
-          PETSC_COMM_SELF,
-          "Second moment of inertia [ %6.4e, %6.4e, %6.4e; %6.4e %6.4e; "
-          "%6.4e ]\n",
-          array[CommonData::SECOND_XX], array[CommonData::SECOND_XY],
-          array[CommonData::SECOND_XZ], array[CommonData::SECOND_YY],
-          array[CommonData::SECOND_YZ], array[CommonData::SECOND_ZZ]);
-    }
-    //! [Print results]
-
-    //! [Test example]
-    PetscBool test = PETSC_FALSE;
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
-    if (m_field.get_comm_rank() == 0 && test) {
-      constexpr double eps = 1e-8;
-      constexpr double expected_area = 1.;
-      constexpr double expected_first_moment = 0.;
-      constexpr double expected_second_moment = 1. / 12.;
-      if (std::abs(array[CommonData::ZERO] - expected_area) > eps)
-        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                 "Wrong area %6.4e !+ %6.4e", expected_area,
-                 array[CommonData::ZERO]);
-      for (auto i :
-           {CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z}) {
-        if (std::abs(array[i] - expected_first_moment) > eps)
-          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                   "Wrong first moment %6.4e !+ %6.4e", expected_first_moment,
-                   array[i]);
-      }
-      for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
-                     CommonData::SECOND_ZZ}) {
-        if (std::abs(array[i] - expected_second_moment) > eps)
-          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                   "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
-                   array[i]);
-      }
-    }
-    //! [Test example]
-
-    CHKERR VecRestoreArrayRead(common_data_ptr->petscVec, &array);
   }
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
 }
 
-
 //! [FirstOp]
-MoFEMErrorCode OpZero::doWork(int side, EntityType type, EntData &data) {
+MoFEMErrorCode Example::OpZero::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   if (type == MBVERTEX) {
     const int nb_integration_pts = getGaussPts().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_rho =
-        getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
+    auto t_rho = getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
     FTensor::Index<'i', 3> i;
     const double volume = getVolume();
     double element_local_value = 0;
@@ -238,14 +303,12 @@ MoFEMErrorCode OpZero::doWork(int side, EntityType type, EntData &data) {
 }
 //! [FirstOps]
 
-MoFEMErrorCode OpFirst::doWork(int side, EntityType type,
-                                                  EntData &data) {
+MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   if (type == MBVERTEX) {
     const int nb_integration_pts = getGaussPts().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_rho =
-        getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
+    auto t_rho = getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
     auto t_coords = getFTensor1CoordsAtGaussPts();
     const double volume = getVolume();
 
@@ -265,20 +328,18 @@ MoFEMErrorCode OpFirst::doWork(int side, EntityType type,
     constexpr std::array<int, 3> indices = {
         CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z};
     CHKERR VecSetValues(commonDataPtr->petscVec, 3, indices.data(),
-                          &element_local_value[0], ADD_VALUES);
+                        &element_local_value[0], ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
 
 //! [SecondOp]
-MoFEMErrorCode OpSecond::doWork(int side, EntityType type,
-                                                   EntData &data) {
+MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   if (type == MBVERTEX) {
     const int nb_integration_pts = getGaussPts().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_rho =
-        getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
+    auto t_rho = getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
     auto t_coords = getFTensor1CoordsAtGaussPts();
     const double volume = getVolume();
 
