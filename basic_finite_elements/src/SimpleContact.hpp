@@ -440,12 +440,49 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+//   struct OpCalMatForcesALEMaster
+//       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+//     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+//     VectorDouble vec_f;
+//     Vec F;
+//     OpCalMatForcesALEMaster(
+//         const string field_name,
+//         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+//         Vec f_ = PETSC_NULL)
+//         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+//               field_name, UserDataOperator::OPCOL,
+//               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+//                   FACEMASTER),
+//           commonDataSimpleContact(common_data_contact), F(f_) {}
+
+//     MoFEMErrorCode doWork(int side, EntityType type,
+//                           DataForcesAndSourcesCore::EntData &data);
+//   };
+
+  /**
+   * @brief RHS-operator for the pressure element (material configuration)
+   *
+   * Integrates pressure in the material configuration.
+   *
+   */
   struct OpCalMatForcesALEMaster
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    VectorInt rowIndices;
+
+    int nbRows;           ///< number of dofs on rows
+    int nbIntegrationPts; ///< number of integration points
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     VectorDouble vec_f;
     Vec F;
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
+    MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data);
+
     OpCalMatForcesALEMaster(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
@@ -456,16 +493,54 @@ struct SimpleContactProblem {
                   FACEMASTER),
           commonDataSimpleContact(common_data_contact), F(f_) {}
 
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
+    // OpCalMatForcesALEMaster(
+    //     const string material_field,
+    //     boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+    //     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+    //     std::string &side_fe_name, Vec f, bCPressure &data,
+    //     bool ho_geometry = false)
+    //     : UserDataOperator(material_field, UserDataOperator::OPROW),
+    //       dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
+    //       F(f), dAta(data), hoGeometry(ho_geometry){};
   };
+
+//   struct OpCalMatForcesALESlave
+//       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+//     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+//     VectorDouble vec_f;
+//     Vec F;
+//     OpCalMatForcesALESlave(
+//         const string field_name,
+//         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+//         Vec f_ = PETSC_NULL)
+//         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+//               field_name, UserDataOperator::OPCOL,
+//               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+//                   FACESLAVE),
+//           commonDataSimpleContact(common_data_contact), F(f_) {}
+
+//     MoFEMErrorCode doWork(int side, EntityType type,
+//                           DataForcesAndSourcesCore::EntData &data);
+//   };
 
   struct OpCalMatForcesALESlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
+    VectorInt rowIndices;
+
+    int nbRows;           ///< number of dofs on rows
+    int nbIntegrationPts; ///< number of integration points
+
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     VectorDouble vec_f;
     Vec F;
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
+    MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data);
+
     OpCalMatForcesALESlave(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
@@ -473,11 +548,8 @@ struct SimpleContactProblem {
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
+                  FACEMASTER),
           commonDataSimpleContact(common_data_contact), F(f_) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
   };
 
   struct OpLoopMasterForSideLhs

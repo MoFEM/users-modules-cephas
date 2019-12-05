@@ -2161,22 +2161,102 @@ MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSide::doWork(
   MoFEMFunctionReturn(0);
 }
 
+// MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
+//     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+//   MoFEMFunctionBegin;
+
+//   if (data.getIndices().size() == 0)
+//     MoFEMFunctionReturnHot(0);
+
+//   const int nb_gauss_pts = data.getN().size1();
+//   int nb_base_fun_col = data.getFieldData().size() / 3;
+
+//   vec_f.resize(3 * nb_base_fun_col,
+//                false); // the last false in ublas
+//                        // resize will destroy (not
+//                        // preserved) the old
+//                        // values
+//   vec_f.clear();
+
+//   auto get_tensor_vec = [](VectorDouble &n, const int r) {
+//     return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+//   };
+
+//   FTensor::Index<'i', 3> i;
+//   FTensor::Index<'j', 3> j;
+//   auto lagrange_slave =
+//       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+//   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
+
+//   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+//     auto normal_at_gp =
+//         get_tensor_vec(commonDataSimpleContact->normalMasterALE[gg], 0);
+
+//     double val_s = getGaussPtsMaster()(2, gg) * 0.5;
+
+//     FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+//     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+//       const double s = val_s * t_base_master * lagrange_slave;
+
+//       auto t_assemble_s = get_tensor_vec(vec_f, 3 * bbc);
+
+//       t_assemble_s(i) -= s * t_F(j, i) * normal_at_gp(j);
+//       ++t_base_master;
+//     }
+//     ++t_F;
+//     ++lagrange_slave;
+//   } // for gauss points
+
+//   const int nb_col = data.getIndices().size();
+
+//   Vec f;
+//   if (F == PETSC_NULL) {
+//     f = getFEMethod()->snes_f;
+//   } else {
+//     f = F;
+//   }
+
+//   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
+//   MoFEMFunctionReturn(0);
+// }
+
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+
+  MoFEMFunctionBegin;
+
+  // get number of dofs on row
+  nbRows = row_data.getIndices().size();
+  // if no dofs on row, exit that work, nothing to do here
+  if (!nbRows)
+    MoFEMFunctionReturnHot(0);
+
+  vec_f.resize(nbRows, false);
+  vec_f.clear();
+
+  // get number of integration points
+  nbIntegrationPts = getGaussPts().size2();
+
+  // integrate local matrix for entity block
+  CHKERR iNtegrate(row_data);
+
+  // assemble local matrix
+  CHKERR aSsemble(row_data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::iNtegrate(
+    DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
 
-  const int nb_gauss_pts = data.getN().size1();
-  int nb_base_fun_col = data.getFieldData().size() / 3;
-
-  vec_f.resize(3 * nb_base_fun_col,
-               false); // the last false in ublas
-                       // resize will destroy (not
-                       // preserved) the old
-                       // values
-  vec_f.clear();
+  const int nb_base_fun_col = nbRows / 3;
 
   auto get_tensor_vec = [](VectorDouble &n, const int r) {
     return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
@@ -2189,7 +2269,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
 
   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
     auto normal_at_gp =
         get_tensor_vec(commonDataSimpleContact->normalMasterALE[gg], 0);
 
@@ -2210,35 +2290,159 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
     ++lagrange_slave;
   } // for gauss points
 
-  const int nb_col = data.getIndices().size();
-
-  Vec f;
-  if (F == PETSC_NULL) {
-    f = getFEMethod()->snes_f;
-  } else {
-    f = F;
-  }
-
-  CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::aSsemble(
+    DataForcesAndSourcesCore::EntData &row_data) {
   MoFEMFunctionBegin;
 
-  if (data.getIndices().size() == 0)
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+
+  auto &data = *commonDataSimpleContact;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(nbRows, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
+  auto get_f = [&]() {
+    Vec my_f;
+    if (F == PETSC_NULL) {
+      switch (getFEMethod()->ts_ctx) {
+      case FEMethod::CTX_TSSETIFUNCTION: {
+        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
+            FEMethod::CTX_SNESSETFUNCTION;
+        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
+        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
+        break;
+      }
+      default:
+        break;
+      }
+      my_f = getFEMethod()->snes_f;
+    } else {
+      my_f = F;
+    }
+    return my_f;
+  };
+
+  auto vec_assemble = [&](Vec my_f) {
+    MoFEMFunctionBegin;
+    CHKERR VecSetOption(my_f, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+    CHKERR VecSetValues(my_f, nbRows, row_indices, &*vec_f.data().begin(),
+                        ADD_VALUES);
+    MoFEMFunctionReturn(0);
+  };
+
+  // assemble local matrix
+  CHKERR vec_assemble(get_f());
+
+  MoFEMFunctionReturn(0);
+}
+
+// MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
+//     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+//   MoFEMFunctionBegin;
+
+//   if (data.getIndices().size() == 0)
+//     MoFEMFunctionReturnHot(0);
+
+//   const int nb_gauss_pts = data.getN().size1();
+//   int nb_base_fun_col = data.getFieldData().size() / 3;
+
+//   vec_f.resize(3 * nb_base_fun_col,
+//                false); // the last false in ublas
+//                        // resize will destroy (not
+//                        // preserved) the old
+//                        // values
+//   vec_f.clear();
+
+//   auto get_tensor_vec = [](VectorDouble &n, const int r) {
+//     return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+//   };
+
+//   FTensor::Index<'i', 3> i;
+//   FTensor::Index<'j', 3> j;
+//   auto lagrange_slave =
+//       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+//   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
+
+//   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+//     auto normal_at_gp =
+//         get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg], 0);
+
+//     double val_s = getGaussPtsSlave()(2, gg) * 0.5;
+
+//     FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+//     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+//       const double s = val_s * t_base_master * lagrange_slave;
+
+//       auto t_assemble_s = get_tensor_vec(vec_f, 3 * bbc);
+
+//       t_assemble_s(i) -= s * t_F(j, i) * normal_at_gp(j);
+//       ++t_base_master;
+//     }
+//     ++t_F;
+//     ++lagrange_slave;
+//   } // for gauss points
+
+//   const int nb_col = data.getIndices().size();
+
+//   Vec f;
+//   if (F == PETSC_NULL) {
+//     f = getFEMethod()->snes_f;
+//   } else {
+//     f = F;
+//   }
+
+//   CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
+//   MoFEMFunctionReturn(0);
+// }
+
+MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+
+  MoFEMFunctionBegin;
+
+  // get number of dofs on row
+  nbRows = row_data.getIndices().size();
+  // if no dofs on row, exit that work, nothing to do here
+  if (!nbRows)
     MoFEMFunctionReturnHot(0);
 
-  const int nb_gauss_pts = data.getN().size1();
-  int nb_base_fun_col = data.getFieldData().size() / 3;
-
-  vec_f.resize(3 * nb_base_fun_col,
-               false); // the last false in ublas
-                       // resize will destroy (not
-                       // preserved) the old
-                       // values
+  vec_f.resize(nbRows, false);
   vec_f.clear();
+
+  // get number of integration points
+  nbIntegrationPts = getGaussPts().size2();
+
+  // integrate local matrix for entity block
+  CHKERR iNtegrate(row_data);
+
+  // assemble local matrix
+  CHKERR aSsemble(row_data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::iNtegrate(
+    DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  int nb_base_fun_col = nbRows / 3;
 
   auto get_tensor_vec = [](VectorDouble &n, const int r) {
     return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
@@ -2251,7 +2455,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
 
   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+  for (int gg = 0; gg != nbIntegrationPts; ++gg) {
     auto normal_at_gp =
         get_tensor_vec(commonDataSimpleContact->normalSlaveALE[gg], 0);
 
@@ -2272,16 +2476,63 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
     ++lagrange_slave;
   } // for gauss points
 
-  const int nb_col = data.getIndices().size();
+  MoFEMFunctionReturn(0);
+}
 
-  Vec f;
-  if (F == PETSC_NULL) {
-    f = getFEMethod()->snes_f;
-  } else {
-    f = F;
+MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::aSsemble(
+    DataForcesAndSourcesCore::EntData &row_data) {
+  MoFEMFunctionBegin;
+
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+
+  auto &data = *commonDataSimpleContact;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(nbRows, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
   }
 
-  CHKERR VecSetValues(f, nb_col, &data.getIndices()[0], &vec_f[0], ADD_VALUES);
+  auto get_f = [&]() {
+    Vec my_f;
+    if (F == PETSC_NULL) {
+      switch (getFEMethod()->ts_ctx) {
+      case FEMethod::CTX_TSSETIFUNCTION: {
+        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
+            FEMethod::CTX_SNESSETFUNCTION;
+        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
+        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
+        break;
+      }
+      default:
+        break;
+      }
+      my_f = getFEMethod()->snes_f;
+    } else {
+      my_f = F;
+    }
+    return my_f;
+  };
+
+  auto vec_assemble = [&](Vec my_f) {
+    MoFEMFunctionBegin;
+    CHKERR VecSetOption(my_f, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+    CHKERR VecSetValues(my_f, nbRows, row_indices, &*vec_f.data().begin(),
+                        ADD_VALUES);
+    MoFEMFunctionReturn(0);
+  };
+
+  // assemble local matrix
+  CHKERR vec_assemble(get_f());
+
   MoFEMFunctionReturn(0);
 }
 
