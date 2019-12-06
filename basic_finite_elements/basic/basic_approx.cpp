@@ -46,6 +46,7 @@ private:
   static double approxFunction(const double x, const double y, const double z) {
     return sin(x * 10.) * cos(y * 10.);
   }
+  static int integrationRule(int, int, int p_data) { return 2 * p_data; };
 
   MoFEMErrorCode setUP();
   MoFEMErrorCode createCommonData();
@@ -77,7 +78,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR OPs();
   CHKERR kspSolve();
   CHKERR postProcess();
-  // CHKERR checkResults();
+  CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 
@@ -87,7 +88,7 @@ MoFEMErrorCode Example::setUP() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  constexpr int order = 5;
+  constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -114,9 +115,8 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(new OpMass<2>(1));
   basic->getOpDomainRhsPipeline().push_back(
       new OpSource<2>(Example::approxFunction));
-  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
+  CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -161,19 +161,29 @@ MoFEMErrorCode Example::checkResults() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
   basic->getDomainLhsFE().reset();
+  basic->getDomainRhsFE().reset();
   basic->getOpDomainRhsPipeline().clear();
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
   basic->getOpDomainRhsPipeline().push_back(new OpError(commonDataPtr));
-  CHKERR VecZeroEntries(commonDataPtr->L2Vec);
+  CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
   CHKERR basic->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->L2Vec);
   CHKERR VecAssemblyEnd(commonDataPtr->L2Vec);
+  CHKERR VecAssemblyBegin(commonDataPtr->resVec);
+  CHKERR VecAssemblyEnd(commonDataPtr->resVec);
+  double nrm2;
+  CHKERR VecNorm(commonDataPtr->resVec, NORM_2, &nrm2);
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->L2Vec, &array);
   if (mField.get_comm_rank() == 0)
-    PetscPrintf(PETSC_COMM_SELF, "Error %6.4e\n", array[0]);
+    PetscPrintf(PETSC_COMM_SELF, "Error %6.4e Vec norm %6.4e\n", sqrt(array[0]),
+                nrm2);
   CHKERR VecRestoreArrayRead(commonDataPtr->L2Vec, &array);
+  constexpr double eps = 1e-8;
+  if(nrm2 > eps)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Not converged solution");
   MoFEMFunctionReturn(0);
 }
 //! [Solver]
@@ -218,41 +228,43 @@ int main(int argc, char *argv[]) {
 MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
                                         EntData &data) {
   MoFEMFunctionBegin;
-  const int nb_integration_pts = getGaussPts().size2();
-  auto t_w = getFTensor0IntegrationWeight();
-  auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
-  auto t_coords = getFTensor1CoordsAtGaussPts();
 
-  const size_t nb_dofs = data.getIndices().size();
-  VectorDouble nf(nb_dofs, false);
-  nf.clear();
+  if (const size_t nb_dofs = data.getIndices().size()) {
 
-  FTensor::Index<'i', 3> i;
-  const double volume = getMeasure();
+    const int nb_integration_pts = getGaussPts().size2();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
+    auto t_coords = getFTensor1CoordsAtGaussPts();
 
-  auto t_row_base = data.getFTensor0N();
-  double error = 0;
-  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    VectorDouble nf(nb_dofs, false);
+    nf.clear();
 
-    const double alpha = t_w * volume;
-    double diff =
-        t_val - Example::approxFunction(t_coords(0), t_coords(1), t_coords(2));
-    error += alpha * pow(diff, 2);
+    FTensor::Index<'i', 3> i;
+    const double volume = getMeasure();
 
-    double *a = &nf[0];
-    for (size_t r = 0; r != nb_dofs; ++r) {
-      *a += alpha * t_row_base * diff;
-      ++a;
+    auto t_row_base = data.getFTensor0N();
+    double error = 0;
+    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+      const double alpha = t_w * volume;
+      double diff = t_val - Example::approxFunction(t_coords(0), t_coords(1),
+                                                    t_coords(2));
+      error += alpha * pow(diff, 2);
+
+      for (size_t r = 0; r != nb_dofs; ++r) {
+        nf[r] += alpha * t_row_base * diff;
+        ++t_row_base;
+      }      
+
+      ++t_w;
+      ++t_val;
+      ++t_coords;
     }
 
-    ++t_w;
-    ++t_val;
-    ++t_coords;
+    const int index = 0;
+    CHKERR VecSetValue(commonDataPtr->L2Vec, index, error, ADD_VALUES);
+    CHKERR VecSetValues(commonDataPtr->resVec, data, &nf[0], ADD_VALUES);
   }
-
-  const int index = 0;
-  CHKERR VecSetValue(commonDataPtr->L2Vec, index, error, ADD_VALUES);
-  CHKERR VecSetValues(commonDataPtr->resVec, data, &nf[0], ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
