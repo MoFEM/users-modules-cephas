@@ -648,10 +648,14 @@ if(is_lag){
   if (is_nitsche){
     contact_problem->setContactNitschePenaltyRhsOperators(
         fe_rhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
-        "ELASTIC");
+        "ELASTIC",
+        contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+        contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
     contact_problem->setContactNitschePenaltyLhsOperators(
         fe_lhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
-        "ELASTIC", Aij);
+        "ELASTIC",
+        contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+        contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1], Aij);
   }else {
     contact_problem->setContactPenaltyRhsOperators(fe_rhs_simple_contact,
                                                    "SPATIAL_POSITION");
