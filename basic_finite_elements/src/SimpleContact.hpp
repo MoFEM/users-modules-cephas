@@ -3615,10 +3615,11 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
   MoFEMErrorCode setContactOperatorsForPostProc(
       boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
-          MoFEM::Interface &m_field,
-      string field_name, string mesh_node_position, string lagrang_field_name,
-      string side_fe_name, moab::Interface &moab_out,
-      bool lagrange_field = true) {
+      MoFEM::Interface &m_field, string field_name, string mesh_node_position,
+      string lagrang_field_name, string side_fe_name, moab::Interface &moab_out,
+      NonlinearElasticElement::BlockData &master_block,
+      NonlinearElasticElement::BlockData &slave_block, bool lagrange_field =
+          true) {
     MoFEMFunctionBegin;
 
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
@@ -3640,18 +3641,17 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                   mField);
       common_data_simple_contact->tAg = 2;
        
-        feMatMasterSideRhs->getOpPtrVector().push_back(
-            new NonlinearElasticElement::OpGetDataAtGaussPts(
-                field_name,
-                common_data_simple_contact->elasticityCommonData
-                    .dataAtGaussPts[field_name],
-                common_data_simple_contact
-                    ->elasticityCommonData.gradAtGaussPts[field_name]));
+        // feMatMasterSideRhs->getOpPtrVector().push_back(
+        //     new NonlinearElasticElement::OpGetDataAtGaussPts(
+        //         field_name,
+        //         common_data_simple_contact->elasticityCommonData
+        //             .dataAtGaussPts[field_name],
+        //         common_data_simple_contact
+        //             ->elasticityCommonData.gradAtGaussPts[field_name]));
 
       cerr << "Material data Master "
-           << "E " << common_data_simple_contact->setOfMasterFacesData[1].E
-           << " Poisson "
-           << common_data_simple_contact->setOfMasterFacesData[1].PoissonRatio
+           << "E " << master_block.E << " Poisson "
+           << master_block.PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
       common_data_simple_contact->elasticityCommonData.spatialPositions =
@@ -3670,7 +3670,7 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       feMatMasterSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-                  field_name, common_data_simple_contact->setOfMasterFacesData[1],
+                  field_name, master_block,
                   common_data_simple_contact->elasticityCommonData,
                   common_data_simple_contact->tAg, false, false, false));
 
@@ -3683,9 +3683,9 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                                               common_data_simple_contact));
 
       cerr << "Material data Slave "
-           << "E " << common_data_simple_contact->setOfSlaveFacesData[1].E
+           << "E " << slave_block.E
            << " Poisson "
-           << common_data_simple_contact->setOfSlaveFacesData[1].PoissonRatio
+           << slave_block.PoissonRatio
            << " Element name " << side_fe_name << "\n";
 
      
@@ -3710,7 +3710,7 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
         feMatSlaveSideRhs->getOpPtrVector().push_back(
             new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-                field_name, common_data_simple_contact->setOfSlaveFacesData[1],
+                field_name, slave_block,
                 common_data_simple_contact->elasticityCommonData,
                 common_data_simple_contact->tAg, false, false, false));
 

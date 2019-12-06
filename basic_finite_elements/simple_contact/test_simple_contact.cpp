@@ -790,7 +790,10 @@ for (; mit != neumann_forces.end(); mit++) {
     } else {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, m_field, "SPATIAL_POSITION",
-          "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC", mb_post, is_lag);
+          "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC", mb_post,
+          contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+          contact_problem->commonDataSimpleContact
+              ->setOfSlaveFacesData[1], is_lag);
     }
 
     mb_post.delete_mesh();
