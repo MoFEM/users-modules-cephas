@@ -194,7 +194,7 @@ template <int DIM> struct OpSource : public OpBase {
   MoFEMErrorCode iNtegrate(EntData &row_data) {
     MoFEMFunctionBegin;
     // get element volume
-    double vol = getMeasure();
+    const double vol = getMeasure();
     // get integration weights
     auto t_w = getFTensor0IntegrationWeight();
     // get base function gradient on rows
@@ -205,13 +205,10 @@ template <int DIM> struct OpSource : public OpBase {
     for (int gg = 0; gg != nbIntegrationPts; gg++) {
       // take into account Jacobean
       const double alpha = t_w * vol;
-      // fist element to local matrix
-      FTensor::Tensor0<double *> a(&*locF.data().begin());
       // loop over rows base functions
-      for (int rr = 0; rr != nbRows; rr++) {
-        a += alpha * t_row_base *
-             sourceFun(t_coords(0), t_coords(1), t_coords(2));
-        ++a; // move to another element of local matrix in column
+      for (int rr = 0; rr != nbRows; ++rr) {
+        locF[rr] += alpha * t_row_base *
+                    sourceFun(t_coords(0), t_coords(1), t_coords(2));
         ++t_row_base;
       }
       ++t_coords;

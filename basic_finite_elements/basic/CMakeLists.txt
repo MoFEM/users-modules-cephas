@@ -19,5 +19,16 @@ bfe_build_and_install(
   ${CMAKE_CURRENT_SOURCE_DIR}/second_moment_of_inertia.cpp)
 
 bfe_build_and_install(
+    basic_approx
+    ${CMAKE_CURRENT_SOURCE_DIR}/basic_approx.cpp)  
+
+bfe_build_and_install(
   basic_hemholtz
   ${CMAKE_CURRENT_SOURCE_DIR}/basic_helmholtz.cpp)
+
+set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
+
+  bfe_copy_and_install(".petscrc" "${permissions_default}")

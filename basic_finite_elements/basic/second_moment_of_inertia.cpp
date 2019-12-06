@@ -116,15 +116,15 @@ MoFEMErrorCode Example::runProblem() {
 //! [Set up problem]
 MoFEMErrorCode Example::setUP() {
   MoFEMFunctionBegin;
-  Simple *simple_interface = mField.getInterface<Simple>();
-  CHKERR simple_interface->getOptions();
-  CHKERR simple_interface->loadFile("");
+  Simple *simple = mField.getInterface<Simple>();
+  CHKERR simple->getOptions();
+  CHKERR simple->loadFile("");
   // Add field
-  CHKERR simple_interface->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE,
+  CHKERR simple->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE,
                                           1);
   constexpr int order = 1;
-  CHKERR simple_interface->setFieldOrder("rho", order);
-  CHKERR simple_interface->setUp();
+  CHKERR simple->setFieldOrder("rho", order);
+  CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -137,11 +137,12 @@ MoFEMErrorCode Example::createCommonData() {
       mField.get_comm(),
       (!mField.get_comm_rank()) ? CommonData::LAST_ELEMENT : 0,
       CommonData::LAST_ELEMENT);
-  CHKERR VecZeroEntries(commonDataPtr->petscVec);
   commonDataPtr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
+
+//! [Distributions mass
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
   auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
@@ -160,28 +161,28 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic_interface = mField.getInterface<Basic>();
-  basic_interface->getOpDomainRhsPipeline().push_back(
+  Basic *basic = mField.getInterface<Basic>();
+  basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("rho",
                                        commonDataPtr->rhoAtIntegrationPts));
-  basic_interface->getOpDomainRhsPipeline().push_back(
+  basic->getOpDomainRhsPipeline().push_back(
       new OpZero(commonDataPtr));
-  basic_interface->getOpDomainRhsPipeline().push_back(
+  basic->getOpDomainRhsPipeline().push_back(
       new OpFirst(commonDataPtr));
-  basic_interface->getOpDomainRhsPipeline().push_back(
+  basic->getOpDomainRhsPipeline().push_back(
       new OpSecond(commonDataPtr));
   auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
-  CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
 
 //! [Do calculations]
-
 MoFEMErrorCode Example::integrateElements() {
   MoFEMFunctionBegin;
-  Basic *basic_interface = mField.getInterface<Basic>();
-  CHKERR basic_interface->loopFiniteElements();
+  Basic *basic = mField.getInterface<Basic>();
+  CHKERR VecZeroEntries(commonDataPtr->petscVec);
+  CHKERR basic->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->petscVec);
   CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
   MoFEMFunctionReturn(0);

@@ -1,6 +1,6 @@
 /**
- * \file basic_helmholtz.cpp
- * \example basic_helmholtz.cpp
+ * \file basic_approx.cpp
+ * \example basic_approx.cpp
  *
  * Using Basic interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
@@ -36,40 +36,48 @@ using EntData = DataForcesAndSourcesCore::EntData;
 #include <BaseOps.hpp>
 struct Example {
 
-  Example(MoFEM::Interface &m_field): mField(m_field) {}
+  Example(MoFEM::Interface &m_field) : mField(m_field) {}
 
   MoFEMErrorCode runProblem();
 
-  private:
-
+private:
   MoFEM::Interface &mField;
 
-  static double sourceFunction(const double x, const double y, const double z) {
-    const double xc = 0;
-    const double yc = 0;
-    const double xs = x - xc;
-    const double ys = y - yc;
-    constexpr double eps = 50;
-    return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
-  };
+  static double approxFunction(const double x, const double y, const double z) {
+    return sin(x * 10.) * cos(y * 10.);
+  }
 
   MoFEMErrorCode setUP();
+  MoFEMErrorCode createCommonData();
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
   MoFEMErrorCode kspSolve();
   MoFEMErrorCode postProcess();
+  MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
+  struct CommonData {
+    boost::shared_ptr<VectorDouble> approxVals;
+    SmartPetscObj<Vec> L2Vec;
+    SmartPetscObj<Vec> resVec;
+  };
+  boost::shared_ptr<CommonData> commonDataPtr;
 
+  struct OpError : public EleOp {
+    boost::shared_ptr<CommonData> commonDataPtr;
+    OpError(boost::shared_ptr<CommonData> &common_data_ptr)
+        : EleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
 };
 
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR setUP();
-  CHKERR bC();
+  CHKERR createCommonData();
   CHKERR OPs();
   CHKERR kspSolve();
   CHKERR postProcess();
+  // CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 
@@ -78,56 +86,34 @@ MoFEMErrorCode Example::setUP() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1,
-                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  constexpr int order = 1;
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  constexpr int order = 5;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
 
-//! [Applying essential BC]
-MoFEMErrorCode Example::bC() {
+//! [Create common data]
+MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  // Get skin on the body, i.e. body boundary, and apply homogenous
-  // Dirichlet conditions on that boundary.
-  Range surface;
-  CHKERR mField.get_moab().get_entities_by_dimension(0, 2, surface, false);
-  Skinner skin(&mField.get_moab());
-  Range edges;
-  CHKERR skin.find_skin(0, surface, false, edges);
-  Range edges_part;
-  ParallelComm *pcomm = ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                               PSTATUS_NOT, -1, &edges_part);
-  Range edges_verts;
-  CHKERR mField.get_moab().get_connectivity(edges_part, edges_verts, false);
-  // Since Dirichlet b.c. are essential boundary conditions, remove DOFs
-  // from the problem.
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simple->getProblemName(), "U", unite(edges_verts, edges_part));
+  commonDataPtr = boost::make_shared<CommonData>();
+  commonDataPtr->resVec = smartCreateDMDVector(simple->getDM());
+  commonDataPtr->L2Vec = createSmartVectorMPI(
+      mField.get_comm(), (!mField.get_comm_rank()) ? 1 : 0, 1);
+  commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
   MoFEMFunctionReturn(0);
 }
-//! [Applying essential BC]
-
+//! [Create common data]
 
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpGradGrad<2>(-1));
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpGradGrad<2>(pow(50, 2)));
-
+  basic->getOpDomainLhsPipeline().push_back(new OpMass<2>(1));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpSource<2>(sourceFunction));
-
+      new OpSource<2>(Example::approxFunction));
   auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
@@ -154,23 +140,43 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
   MoFEMFunctionReturn(0);
 }
-//! [Solve]
 
-//! [Postprocess results]
+//! [Solve]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
-    basic->getDomainLhsFE().reset();
-    auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-    post_proc_fe->generateReferenceElementMesh();
-    post_proc_fe->addFieldValuesPostProc("U");
-    basic->getDomainRhsFE() = post_proc_fe;
-    CHKERR basic->loopFiniteElements();
-    CHKERR post_proc_fe->writeFile(
-        "out_basic_helmholtz.h5m");
-    MoFEMFunctionReturn(0);
+  basic->getDomainLhsFE().reset();
+  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc("U");
+  basic->getDomainRhsFE() = post_proc_fe;
+  CHKERR basic->loopFiniteElements();
+  CHKERR post_proc_fe->writeFile("out_approx.h5m");
+  MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
+
+//! [Solve]
+MoFEMErrorCode Example::checkResults() {
+  MoFEMFunctionBegin;
+  Basic *basic = mField.getInterface<Basic>();
+  basic->getDomainLhsFE().reset();
+  basic->getOpDomainRhsPipeline().clear();
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
+  basic->getOpDomainRhsPipeline().push_back(new OpError(commonDataPtr));
+  CHKERR VecZeroEntries(commonDataPtr->L2Vec);
+  CHKERR basic->loopFiniteElements();
+  CHKERR VecAssemblyBegin(commonDataPtr->L2Vec);
+  CHKERR VecAssemblyEnd(commonDataPtr->L2Vec);
+  const double *array;
+  CHKERR VecGetArrayRead(commonDataPtr->L2Vec, &array);
+  if (mField.get_comm_rank() == 0)
+    PetscPrintf(PETSC_COMM_SELF, "Error %6.4e\n", array[0]);
+  CHKERR VecRestoreArrayRead(commonDataPtr->L2Vec, &array);
+  MoFEMFunctionReturn(0);
+}
+//! [Solver]
 
 int main(int argc, char *argv[]) {
 
@@ -196,17 +202,57 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
-    CHKERR simple->loadFile();
+    CHKERR simple->loadFile("");
     //! [Load mesh]
 
     //! [Example]
     Example ex(m_field);
     CHKERR ex.runProblem();
     //! [Example]
-    
   }
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
 }
 
+MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
+                                        EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_integration_pts = getGaussPts().size2();
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+
+  const size_t nb_dofs = data.getIndices().size();
+  VectorDouble nf(nb_dofs, false);
+  nf.clear();
+
+  FTensor::Index<'i', 3> i;
+  const double volume = getMeasure();
+
+  auto t_row_base = data.getFTensor0N();
+  double error = 0;
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+
+    const double alpha = t_w * volume;
+    double diff =
+        t_val - Example::approxFunction(t_coords(0), t_coords(1), t_coords(2));
+    error += alpha * pow(diff, 2);
+
+    double *a = &nf[0];
+    for (size_t r = 0; r != nb_dofs; ++r) {
+      *a += alpha * t_row_base * diff;
+      ++a;
+    }
+
+    ++t_w;
+    ++t_val;
+    ++t_coords;
+  }
+
+  const int index = 0;
+  CHKERR VecSetValue(commonDataPtr->L2Vec, index, error, ADD_VALUES);
+  CHKERR VecSetValues(commonDataPtr->resVec, data, &nf[0], ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}

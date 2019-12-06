@@ -44,26 +44,26 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab); ///< database
     MoFEM::Interface &m_field = core; ///< interface
 
-    Simple *simple_interface = m_field.getInterface<Simple>();
-    CHKERR simple_interface->getOptions();
-    CHKERR simple_interface->loadFile("");
+    Simple *simple = m_field.getInterface<Simple>();
+    CHKERR simple->getOptions();
+    CHKERR simple->loadFile("");
 
-    CHKERR simple_interface->addDomainField("FIELD", H1,
+    CHKERR simple->addDomainField("FIELD", H1,
                                              AINSWORTH_LEGENDRE_BASE, 1);
 
     constexpr int order = 2;
-    CHKERR simple_interface->setFieldOrder("FIELD", order);
-    CHKERR simple_interface->setUp();
+    CHKERR simple->setFieldOrder("FIELD", order);
+    CHKERR simple->setUp();
 
-    Basic *basic_interface = m_field.getInterface<Basic>();
+    Basic *basic = m_field.getInterface<Basic>();
 
-    basic_interface->getOpDomainRhsPipeline().push_back(
+    basic->getOpDomainRhsPipeline().push_back(
         new OpCalculateScalarFieldValues(
             "FIELD", common_data_ptr->rho_at_integration_points));
 
     auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
-    CHKERR basic_interface->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR basic_interface->loopFiniteElements();
+    CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR basic->loopFiniteElements();
 
   }
   CATCH_ERRORS;
