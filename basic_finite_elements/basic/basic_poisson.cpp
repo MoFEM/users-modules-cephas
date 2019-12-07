@@ -56,7 +56,7 @@ private:
     return sin(x * 10.) * cos(y * 10.);
   }
   static double nablaFunction(const double x, const double y, const double z) {
-    return -200 * sin(x * 10.) * cos(y * 10.);
+    return 200 * sin(x * 10.) * cos(y * 10.);
   }
 
   static int integrationRule(int, int, int p_data) { return 2 * p_data; };
@@ -94,7 +94,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR OPs();
   CHKERR kspSolve();
   CHKERR postProcess();
-  // CHKERR checkResults();
+  CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 
@@ -140,7 +140,6 @@ MoFEMErrorCode Example::bC() {
     Range skin_verts;
     CHKERR mField.get_moab().get_connectivity(skin_edges, skin_verts, true);
     skin_edges.merge(skin_verts);
-    cerr << skin_edges << endl;
     return skin_edges;
   };
 
