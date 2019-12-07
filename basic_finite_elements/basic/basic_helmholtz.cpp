@@ -29,11 +29,16 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using Ele = FaceElementForcesAndSourcesCoreBase;
-using EleOp = Ele::UserDataOperator;
+using VolEle = FaceElementForcesAndSourcesCoreBase;
+using VolEleOp = VolEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 #include <BaseOps.hpp>
+
+using OpVolGradGrad = OpTools<VolEleOp>::OpGradGrad<2>;
+using OpVolMass = OpTools<VolEleOp>::OpMass;
+using OpVolSource = OpTools<VolEleOp>::OpSource<2>;
+
 struct Example {
 
   Example(MoFEM::Interface &m_field): mField(m_field) {}
@@ -121,12 +126,12 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpGradGrad<2>(-1));
+  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad(-1));
   basic->getOpDomainLhsPipeline().push_back(
-      new OpGradGrad<2>(pow(50, 2)));
+      new OpVolGradGrad(pow(50, 2)));
 
   basic->getOpDomainRhsPipeline().push_back(
-      new OpSource<2>(sourceFunction));
+      new OpVolSource(sourceFunction));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);

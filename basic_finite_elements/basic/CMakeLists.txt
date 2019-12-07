@@ -23,6 +23,10 @@ bfe_build_and_install(
     ${CMAKE_CURRENT_SOURCE_DIR}/basic_approx.cpp)  
 
 bfe_build_and_install(
+    basic_poisson
+    ${CMAKE_CURRENT_SOURCE_DIR}/basic_poisson.cpp)  
+
+bfe_build_and_install(
   basic_hemholtz
   ${CMAKE_CURRENT_SOURCE_DIR}/basic_helmholtz.cpp)
 

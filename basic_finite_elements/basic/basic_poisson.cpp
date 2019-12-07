@@ -31,12 +31,17 @@ static char help[] = "...\n\n";
 
 using VolEle = FaceElementForcesAndSourcesCoreBase;
 using VolEleOp = VolEle::UserDataOperator;
+using FaceEle = EdgeElementForcesAndSourcesCoreBase;
+using FaceEleOp = FaceEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 #include <BaseOps.hpp>
 
+using OpVolGradGrad = OpTools<VolEleOp>::OpGradGrad<2>;
 using OpVolMass = OpTools<VolEleOp>::OpMass;
 using OpVolSource = OpTools<VolEleOp>::OpSource<2>;
+using OpFaceMass = OpTools<FaceEleOp>::OpMass;
+using OpFaceSource = OpTools<FaceEleOp>::OpSource<2>;
 
 struct Example {
 
@@ -50,6 +55,10 @@ private:
   static double approxFunction(const double x, const double y, const double z) {
     return sin(x * 10.) * cos(y * 10.);
   }
+  static double nablaFunction(const double x, const double y, const double z) {
+    return -200 * sin(x * 10.) * cos(y * 10.);
+  }
+
   static int integrationRule(int, int, int p_data) { return 2 * p_data; };
 
   MoFEMErrorCode setUP();
@@ -60,12 +69,14 @@ private:
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
+  MatrixDouble invJac;
   struct CommonData {
     boost::shared_ptr<VectorDouble> approxVals;
     SmartPetscObj<Vec> L2Vec;
     SmartPetscObj<Vec> resVec;
   };
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<std::vector<bool>> boundaryMarker;
 
   struct OpError : public VolEleOp {
     boost::shared_ptr<CommonData> commonDataPtr;
@@ -83,7 +94,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR OPs();
   CHKERR kspSolve();
   CHKERR postProcess();
-  CHKERR checkResults();
+  // CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 
@@ -92,8 +103,9 @@ MoFEMErrorCode Example::setUP() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  constexpr int order = 4;
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  constexpr int order = 5;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -114,18 +126,59 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Create common data]
 
 //! [Boundary condition]
-MoFEMErrorCode Example::bC() { return 0; }
+MoFEMErrorCode Example::bC() {
+  MoFEMFunctionBegin;
+
+  Simple *simple = mField.getInterface<Simple>();
+
+  auto get_ents_on_mesh_skin = [&]() {
+    Range faces;
+    CHKERR mField.get_moab().get_entities_by_type(0, MBTRI, faces);
+    Skinner skin(&mField.get_moab());
+    Range skin_edges;
+    CHKERR skin.find_skin(0, faces, false, skin_edges);
+    Range skin_verts;
+    CHKERR mField.get_moab().get_connectivity(skin_edges, skin_verts, true);
+    skin_edges.merge(skin_verts);
+    cerr << skin_edges << endl;
+    return skin_edges;
+  };
+
+  auto mark_boundary_dofs = [&](Range &&skin_edges) {
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    auto marker_ptr = boost::make_shared<std::vector<bool>>();
+    problem_manager->markDofs(simple->getProblemName(), ROW, skin_edges,
+                              *marker_ptr);
+    return marker_ptr;
+  };
+
+  // Get global local vector of marked DOFs. Is global, since is set for all
+  // DOFs on processor. Is local since only DOFs on processor are in the
+  // vector. To access DOFs use local indices.
+  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+
+  MoFEMFunctionReturn(0);
+}
 //! [Boundary condition]
+
 
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
-  basic->getOpDomainLhsPipeline().push_back(new OpVolMass(1));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateInvJacForFace(invJac));
+  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpVolGradGrad(1, boundaryMarker));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource(Example::approxFunction));
+      new OpVolSource(Example::nablaFunction, boundaryMarker));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
+  basic->getOpBoundaryLhsPipeline().push_back(new OpFaceMass(1));
+  basic->getOpBoundaryRhsPipeline().push_back(new OpFaceSource(approxFunction));
+  CHKERR basic->setBoundaryRhsIntegrationRule(integrationRule);
+  CHKERR basic->setBoundaryLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -155,12 +208,14 @@ MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
   basic->getDomainLhsFE().reset();
+  basic->getBoundaryLhsFE().reset();
+  basic->getBoundaryRhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("U");
   basic->getDomainRhsFE() = post_proc_fe;
   CHKERR basic->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_approx.h5m");
+  CHKERR post_proc_fe->writeFile("out_poisson.h5m");
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
@@ -171,6 +226,8 @@ MoFEMErrorCode Example::checkResults() {
   Basic *basic = mField.getInterface<Basic>();
   basic->getDomainLhsFE().reset();
   basic->getDomainRhsFE().reset();
+  basic->getBoundaryLhsFE().reset();
+  basic->getBoundaryRhsFE().reset();
   basic->getOpDomainRhsPipeline().clear();
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
@@ -190,7 +247,7 @@ MoFEMErrorCode Example::checkResults() {
                 nrm2);
   CHKERR VecRestoreArrayRead(commonDataPtr->L2Vec, &array);
   constexpr double eps = 1e-8;
-  if (nrm2 > eps)
+  if(nrm2 > eps)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "Not converged solution");
   MoFEMFunctionReturn(0);
@@ -263,7 +320,7 @@ MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
       for (size_t r = 0; r != nb_dofs; ++r) {
         nf[r] += alpha * t_row_base * diff;
         ++t_row_base;
-      }
+      }      
 
       ++t_w;
       ++t_val;
