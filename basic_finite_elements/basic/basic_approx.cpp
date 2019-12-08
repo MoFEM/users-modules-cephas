@@ -121,7 +121,8 @@ MoFEMErrorCode Example::bC() { return 0; }
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
-  basic->getOpDomainLhsPipeline().push_back(new OpVolMass(1));
+  auto beta = [](const double, const double, const double) { return 1; };
+  basic->getOpDomainLhsPipeline().push_back(new OpVolMass(beta));
   basic->getOpDomainRhsPipeline().push_back(
       new OpVolSource(Example::approxFunction));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);

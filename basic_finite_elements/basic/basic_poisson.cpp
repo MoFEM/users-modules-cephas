@@ -168,13 +168,14 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  auto beta = [](const double, const double, const double) { return 1; };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpVolGradGrad(1, boundaryMarker));
+      new OpVolGradGrad(beta, boundaryMarker));
   basic->getOpDomainRhsPipeline().push_back(
       new OpVolSource(Example::nablaFunction, boundaryMarker));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
-  basic->getOpBoundaryLhsPipeline().push_back(new OpFaceMass(1));
+  basic->getOpBoundaryLhsPipeline().push_back(new OpFaceMass(beta));
   basic->getOpBoundaryRhsPipeline().push_back(new OpFaceSource(approxFunction));
   CHKERR basic->setBoundaryRhsIntegrationRule(integrationRule);
   CHKERR basic->setBoundaryLhsIntegrationRule(integrationRule);

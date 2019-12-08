@@ -126,9 +126,11 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad(-1));
+  auto beta = [](const double, const double, const double) { return -1; };
+  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad(beta));
+  auto k = [](const double, const double, const double) { return pow(50, 2); };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpVolGradGrad(pow(50, 2)));
+      new OpVolMass(k));
 
   basic->getOpDomainRhsPipeline().push_back(
       new OpVolSource(sourceFunction));

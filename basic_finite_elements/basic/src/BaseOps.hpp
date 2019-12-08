@@ -134,12 +134,12 @@ template <typename EleOp> struct OpTools {
   //! [Grad operator]
   template <int DIM> struct OpGradGrad : public OpBase {
 
-    const double betaCoeff;
-
-    OpGradGrad(const double beta,
+    OpGradGrad(ScalarFun beta,
                boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
         : OpBase(OpBase::OPROWCOL, boundary_marker), betaCoeff(beta) {}
 
+  private:
+    ScalarFun betaCoeff;
     FTensor::Index<'i', DIM> i; ///< summit Index
 
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
@@ -150,13 +150,14 @@ template <typename EleOp> struct OpTools {
       auto t_w = OpBase::getFTensor0IntegrationWeight();
       // get base function gradient on rows
       auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
-      double beta = vol * betaCoeff;
+      // get coordinate at integration points
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts(); 
+
       // loop over integration points
       for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+        const double beta = vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
         // take into account Jacobean
         const double alpha = t_w * beta;
-        // fist element to local matrix
-        FTensor::Tensor0<double *> a(&*OpBase::locMat.data().begin());
         // loop over rows base functions
         for (int rr = 0; rr != OpBase::nbRows; rr++) {
           // get column base functions gradient at gauss point gg
@@ -164,13 +165,13 @@ template <typename EleOp> struct OpTools {
           // loop over columns
           for (int cc = 0; cc != OpBase::nbCols; cc++) {
             // calculate element of local matrix
-            a += alpha * (t_row_grad(i) * t_col_grad(i));
+            OpBase::locMat(rr, cc) += alpha * (t_row_grad(i) * t_col_grad(i));
             ++t_col_grad; // move to another gradient of base function on column
-            ++a;          // move to another element of local matrix in column
           }
           ++t_row_grad; // move to another element of gradient of base function
                         // on row
         }
+        ++t_coords;
         ++t_w; // move to another integration weight
       }
       MoFEMFunctionReturn(0);
@@ -181,15 +182,15 @@ template <typename EleOp> struct OpTools {
   //! [Grad residual operator]
   template <int DIM> struct OpGradGradResidual : public OpBase {
 
-    boost::shared_ptr<MatrixDouble> approxGradVals;
-    const double betaCoeff;
-
     OpGradGradResidual(
-        const double beta, boost::shared_ptr<MatrixDouble> &approx_grad_vals,
+        ScalarFun beta, boost::shared_ptr<MatrixDouble> &approx_grad_vals,
         boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
         : OpBase(OpBase::OPROW, boundary_marker),
           approxGradVals(approx_grad_vals), betaCoeff(beta) {}
 
+  private:
+    ScalarFun betaCoeff;
+    boost::shared_ptr<MatrixDouble> approxGradVals;
     FTensor::Index<'i', DIM> i; ///< summit Index
 
     MoFEMErrorCode iNtegrate(EntData &row_data) {
@@ -200,10 +201,15 @@ template <typename EleOp> struct OpTools {
       auto t_w = OpBase::getFTensor0IntegrationWeight();
       // get base function gradient on rows
       auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
+      // get filed gradient values
       auto t_val_grad = getFTensor1FromMat<DIM>(*(approxGradVals));
-      double beta = vol * betaCoeff;
+      // get coordinate at integration points
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts(); 
+
       // loop over integration points
       for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+        const double beta =
+            vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
         // take into account Jacobean
         const double alpha = t_w * beta;
         // loop over rows base functions
@@ -213,6 +219,7 @@ template <typename EleOp> struct OpTools {
           ++t_row_grad; // move to another element of gradient of base function
                         // on row
         }
+        ++t_coords;
         ++t_val_grad;
         ++t_w; // move to another integration weight
       }
@@ -224,11 +231,12 @@ template <typename EleOp> struct OpTools {
   //! [Mass operator]
   struct OpMass : public OpBase {
 
-    const double betaCoeff;
-
-    OpMass(const double beta,
+    OpMass(ScalarFun beta,
            boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
         : OpBase(OpBase::OPROWCOL, boundary_marker), betaCoeff(beta) {}
+
+  private:
+    ScalarFun betaCoeff;
 
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
       MoFEMFunctionBegin;
@@ -238,13 +246,15 @@ template <typename EleOp> struct OpTools {
       auto t_w = OpBase::getFTensor0IntegrationWeight();
       // get base function gradient on rows
       auto t_row_base = row_data.getFTensor0N();
-      double beta = vol * betaCoeff;
+      // get coordinate at integration points
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts(); 
+
       // loop over integration points
       for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+        const double beta =
+            vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
         // take into account Jacobean
         const double alpha = t_w * beta;
-        // fist element to local matrix
-        FTensor::Tensor0<double *> a(&*OpBase::locMat.data().begin());
         // loop over rows base functions
         for (int rr = 0; rr != OpBase::nbRows; rr++) {
           // get column base functions gradient at gauss point gg
@@ -252,12 +262,12 @@ template <typename EleOp> struct OpTools {
           // loop over columns
           for (int cc = 0; cc != OpBase::nbCols; cc++) {
             // calculate element of local matrix
-            a += alpha * (t_row_base * t_col_base);
+            OpBase::locMat(rr, cc) += alpha * (t_row_base * t_col_base);
             ++t_col_base;
-            ++a; // move to another element of local matrix in column
           }
           ++t_row_base;
         }
+        ++t_coords; 
         ++t_w; // move to another integration weight
       }
       MoFEMFunctionReturn(0);
