@@ -169,7 +169,7 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double r, const double, const double) {
-    return 2e3 * 2 * M_PI * pow(r, 2);
+    return 2e3 * 2 * M_PI * r;
   };
   basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad("U", beta));
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
