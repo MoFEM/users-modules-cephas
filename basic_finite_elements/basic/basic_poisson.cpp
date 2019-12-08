@@ -160,7 +160,6 @@ MoFEMErrorCode Example::bC() {
 }
 //! [Boundary condition]
 
-
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
@@ -170,13 +169,14 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double, const double, const double) { return 1; };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpVolGradGrad(beta, boundaryMarker));
+      new OpVolGradGrad("U", beta, boundaryMarker));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource(Example::nablaFunction, boundaryMarker));
+      new OpVolSource("U", Example::nablaFunction, boundaryMarker));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
-  basic->getOpBoundaryLhsPipeline().push_back(new OpFaceMass(beta));
-  basic->getOpBoundaryRhsPipeline().push_back(new OpFaceSource(approxFunction));
+  basic->getOpBoundaryLhsPipeline().push_back(new OpFaceMass("U", beta));
+  basic->getOpBoundaryRhsPipeline().push_back(
+      new OpFaceSource("U", approxFunction));
   CHKERR basic->setBoundaryRhsIntegrationRule(integrationRule);
   CHKERR basic->setBoundaryLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
@@ -247,7 +247,7 @@ MoFEMErrorCode Example::checkResults() {
                 nrm2);
   CHKERR VecRestoreArrayRead(commonDataPtr->L2Vec, &array);
   constexpr double eps = 1e-8;
-  if(nrm2 > eps)
+  if (nrm2 > eps)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "Not converged solution");
   MoFEMFunctionReturn(0);
@@ -320,7 +320,7 @@ MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
       for (size_t r = 0; r != nb_dofs; ++r) {
         nf[r] += alpha * t_row_base * diff;
         ++t_row_base;
-      }      
+      }
 
       ++t_w;
       ++t_val;

@@ -83,10 +83,13 @@ MoFEMErrorCode Example::setUP() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1,
-                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simple->addDomainField("U_REAL", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
+                                1);
+  CHKERR simple->addDomainField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
+                                1);
   constexpr int order = 1;
-  CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("U_REAL", order);
+  CHKERR simple->setFieldOrder("U_IMAG", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -127,13 +130,12 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double, const double, const double) { return -1; };
-  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad(beta));
+  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad("U", beta));
   auto k = [](const double, const double, const double) { return pow(50, 2); };
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpVolMass(k));
+  basic->getOpDomainLhsPipeline().push_back(new OpVolMass("U", k));
 
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource(sourceFunction));
+      new OpVolSource("U", sourceFunction));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);

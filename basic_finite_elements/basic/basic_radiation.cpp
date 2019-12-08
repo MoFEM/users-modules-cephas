@@ -79,7 +79,7 @@ private:
 
   public:
     OpRadiationLhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpFaceBase(OpFaceBase::OPROWCOL), approxVals(approx_vals) {}
+        : OpFaceBase("U", OpFaceBase::OPROWCOL), approxVals(approx_vals) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
@@ -92,7 +92,7 @@ private:
 
   public:
     OpRadiationRhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpFaceBase(OpFaceBase::OPROW), approxVals(approx_vals) {}
+        : OpFaceBase("U", OpFaceBase::OPROW), approxVals(approx_vals) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
@@ -103,7 +103,7 @@ private:
     FTensor::Index<'i', 2> i; ///< summit Index
 
   public:
-    OpFluxRhs() : OpFaceBase(OpFaceBase::OPROW) {}
+    OpFluxRhs() : OpFaceBase("U", OpFaceBase::OPROW) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
@@ -171,7 +171,7 @@ MoFEMErrorCode Example::OPs() {
   auto beta = [](const double r, const double, const double) {
     return 2e3 * 2 * M_PI * pow(r, 2);
   };
-  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad(beta));
+  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad("U", beta));
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
 
   basic->getOpDomainRhsPipeline().push_back(
@@ -180,7 +180,7 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>("U", approxGradVals));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolGradGradResidual(beta, approxGradVals));
+      new OpVolGradGradResidual("U", beta, approxGradVals));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
 
   basic->getOpBoundaryRhsPipeline().push_back(

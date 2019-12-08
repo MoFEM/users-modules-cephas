@@ -19,9 +19,10 @@ template <typename EleOp> struct OpTools {
 
   struct OpBase : public EleOp {
 
-    OpBase(const typename EleOp::OpType type,
+    OpBase(const std::string field_name, const typename EleOp::OpType type,
            boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : EleOp("U", "U", type, true), boundaryMarker(boundary_marker) {}
+        : EleOp(field_name, field_name, type, true),
+          boundaryMarker(boundary_marker) {}
 
     /**
      * \brief Do calculations for the left hand side
@@ -95,12 +96,13 @@ template <typename EleOp> struct OpTools {
   //! [Source operator]
   template <int DIM> struct OpSource : public OpBase {
 
-    ScalarFun sourceFun;
-
-    OpSource(ScalarFun source_fun,
+    OpSource(std::string field_name, ScalarFun source_fun,
              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(OpBase::OPROW, boundary_marker), sourceFun(source_fun) {}
+        : OpBase(field_name, OpBase::OPROW, boundary_marker),
+          sourceFun(source_fun) {}
 
+  private:
+    ScalarFun sourceFun;
     FTensor::Index<'i', DIM> i; ///< summit Index
 
     MoFEMErrorCode iNtegrate(EntData &row_data) {
@@ -134,9 +136,10 @@ template <typename EleOp> struct OpTools {
   //! [Grad operator]
   template <int DIM> struct OpGradGrad : public OpBase {
 
-    OpGradGrad(ScalarFun beta,
+    OpGradGrad(const std::string field_name, ScalarFun beta,
                boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(OpBase::OPROWCOL, boundary_marker), betaCoeff(beta) {}
+        : OpBase(field_name, OpBase::OPROWCOL, boundary_marker),
+          betaCoeff(beta) {}
 
   private:
     ScalarFun betaCoeff;
@@ -151,11 +154,12 @@ template <typename EleOp> struct OpTools {
       // get base function gradient on rows
       auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
       // get coordinate at integration points
-      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts(); 
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts();
 
       // loop over integration points
       for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
-        const double beta = vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
+        const double beta =
+            vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
         // take into account Jacobean
         const double alpha = t_w * beta;
         // loop over rows base functions
@@ -183,9 +187,10 @@ template <typename EleOp> struct OpTools {
   template <int DIM> struct OpGradGradResidual : public OpBase {
 
     OpGradGradResidual(
-        ScalarFun beta, boost::shared_ptr<MatrixDouble> &approx_grad_vals,
+        const std::string field_name, ScalarFun beta,
+        boost::shared_ptr<MatrixDouble> &approx_grad_vals,
         boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(OpBase::OPROW, boundary_marker),
+        : OpBase(field_name, OpBase::OPROW, boundary_marker),
           approxGradVals(approx_grad_vals), betaCoeff(beta) {}
 
   private:
@@ -204,7 +209,7 @@ template <typename EleOp> struct OpTools {
       // get filed gradient values
       auto t_val_grad = getFTensor1FromMat<DIM>(*(approxGradVals));
       // get coordinate at integration points
-      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts(); 
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts();
 
       // loop over integration points
       for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
@@ -231,9 +236,10 @@ template <typename EleOp> struct OpTools {
   //! [Mass operator]
   struct OpMass : public OpBase {
 
-    OpMass(ScalarFun beta,
+    OpMass(const std::string field_name, ScalarFun beta,
            boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(OpBase::OPROWCOL, boundary_marker), betaCoeff(beta) {}
+        : OpBase(field_name, OpBase::OPROWCOL, boundary_marker),
+          betaCoeff(beta) {}
 
   private:
     ScalarFun betaCoeff;
@@ -247,7 +253,7 @@ template <typename EleOp> struct OpTools {
       // get base function gradient on rows
       auto t_row_base = row_data.getFTensor0N();
       // get coordinate at integration points
-      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts(); 
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts();
 
       // loop over integration points
       for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
@@ -267,7 +273,7 @@ template <typename EleOp> struct OpTools {
           }
           ++t_row_base;
         }
-        ++t_coords; 
+        ++t_coords;
         ++t_w; // move to another integration weight
       }
       MoFEMFunctionReturn(0);
