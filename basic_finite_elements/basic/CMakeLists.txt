@@ -27,6 +27,10 @@ bfe_build_and_install(
     ${CMAKE_CURRENT_SOURCE_DIR}/basic_poisson.cpp)  
 
 bfe_build_and_install(
+      basic_radiation
+      ${CMAKE_CURRENT_SOURCE_DIR}/basic_radiation.cpp)    
+
+bfe_build_and_install(
   basic_hemholtz
   ${CMAKE_CURRENT_SOURCE_DIR}/basic_helmholtz.cpp)
 

@@ -92,6 +92,7 @@ template <typename EleOp> struct OpTools {
     virtual MoFEMErrorCode aSsemble(EntData &data);
   };
 
+  //! [Source operator]
   template <int DIM> struct OpSource : public OpBase {
 
     ScalarFun sourceFun;
@@ -148,7 +149,6 @@ template <typename EleOp> struct OpTools {
       // get integration weights
       auto t_w = OpBase::getFTensor0IntegrationWeight();
       // get base function gradient on rows
-      auto t_row_base = row_data.getFTensor0N();
       auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
       double beta = vol * betaCoeff;
       // loop over integration points
@@ -160,17 +160,14 @@ template <typename EleOp> struct OpTools {
         // loop over rows base functions
         for (int rr = 0; rr != OpBase::nbRows; rr++) {
           // get column base functions gradient at gauss point gg
-          auto t_col_base = col_data.getFTensor0N(gg, 0);
           auto t_col_grad = col_data.getFTensor1DiffN<DIM>(gg, 0);
           // loop over columns
           for (int cc = 0; cc != OpBase::nbCols; cc++) {
             // calculate element of local matrix
             a += alpha * (t_row_grad(i) * t_col_grad(i));
-            ++t_col_base;
             ++t_col_grad; // move to another gradient of base function on column
             ++a;          // move to another element of local matrix in column
           }
-          ++t_row_base;
           ++t_row_grad; // move to another element of gradient of base function
                         // on row
         }
@@ -180,6 +177,49 @@ template <typename EleOp> struct OpTools {
     }
   };
   //! [Grad operator]
+
+  //! [Grad residual operator]
+  template <int DIM> struct OpGradGradResidual : public OpBase {
+
+    boost::shared_ptr<MatrixDouble> approxGradVals;
+    const double betaCoeff;
+
+    OpGradGradResidual(
+        const double beta, boost::shared_ptr<MatrixDouble> &approx_grad_vals,
+        boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+        : OpBase(OpBase::OPROW, boundary_marker),
+          approxGradVals(approx_grad_vals), betaCoeff(beta) {}
+
+    FTensor::Index<'i', DIM> i; ///< summit Index
+
+    MoFEMErrorCode iNtegrate(EntData &row_data) {
+      MoFEMFunctionBegin;
+      // get element volume
+      const double vol = OpBase::getMeasure();
+      // get integration weights
+      auto t_w = OpBase::getFTensor0IntegrationWeight();
+      // get base function gradient on rows
+      auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
+      auto t_val_grad = getFTensor1FromMat<DIM>(*(approxGradVals));
+      double beta = vol * betaCoeff;
+      // loop over integration points
+      for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+        // take into account Jacobean
+        const double alpha = t_w * beta;
+        // loop over rows base functions
+        for (int rr = 0; rr != OpBase::nbRows; rr++) {
+          // calculate element of local matrix
+          OpBase::locF[rr] += alpha * (t_row_grad(i) * t_val_grad(i));
+          ++t_row_grad; // move to another element of gradient of base function
+                        // on row
+        }
+        ++t_val_grad;
+        ++t_w; // move to another integration weight
+      }
+      MoFEMFunctionReturn(0);
+    }
+  };
+  //! [Grad residual operator]
 
   //! [Mass operator]
   struct OpMass : public OpBase {
@@ -214,7 +254,7 @@ template <typename EleOp> struct OpTools {
             // calculate element of local matrix
             a += alpha * (t_row_base * t_col_base);
             ++t_col_base;
-            ++a;          // move to another element of local matrix in column
+            ++a; // move to another element of local matrix in column
           }
           ++t_row_base;
         }
@@ -285,11 +325,15 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
                                                 EntData &col_data) {
   MoFEMFunctionBegin;
 
+  Mat B = OpBase::getFEMethod()->ksp_B;
+  if (OpBase::getFEMethod()->ts_ctx == FEMethod::CTX_TSSETIJACOBIAN)
+    B = OpBase::getFEMethod()->ts_B;
+
   auto row_indices = row_data.getIndices();
   CHKERR OpBase::applyBoundaryMarker(row_data);
   // assemble local matrix
-  CHKERR MatSetValues(OpBase::getFEMethod()->ksp_B, row_data, col_data,
-                      &*locMat.data().begin(), ADD_VALUES);
+  CHKERR MatSetValues(B, row_data, col_data, &*locMat.data().begin(),
+                      ADD_VALUES);
   row_data.getIndices().data().swap(row_indices.data());
 
   if (!OpBase::isDiag) {
@@ -298,8 +342,8 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
     auto col_indices = col_data.getIndices();
     CHKERR OpBase::applyBoundaryMarker(col_data);
     OpBase::locMat = trans(OpBase::locMat);
-    CHKERR MatSetValues(OpBase::getFEMethod()->ksp_B, col_data, row_data,
-                        &*locMat.data().begin(), ADD_VALUES);
+    CHKERR MatSetValues(B, col_data, row_data, &*locMat.data().begin(),
+                        ADD_VALUES);
     col_data.getIndices().data().swap(col_indices.data());
   }
   MoFEMFunctionReturn(0);
@@ -341,12 +385,15 @@ template <typename EleOp>
 MoFEMErrorCode
 OpTools<EleOp>::OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
+  Vec F = OpBase::getFEMethod()->ksp_f;
+  if (OpBase::getFEMethod()->ts_ctx == FEMethod::CTX_TSSETIFUNCTION)
+    F = OpBase::getFEMethod()->ts_F;
+
   CHKERR applyBoundaryMarker(data);
   // get values from local vector
   const double *vals = &*locF.data().begin();
   // assemble vector
-  CHKERR VecSetOption(OpBase::getFEMethod()->ksp_f, VEC_IGNORE_NEGATIVE_INDICES,
-                      PETSC_TRUE);
-  CHKERR VecSetValues(OpBase::getFEMethod()->ksp_f, data, vals, ADD_VALUES);
+  CHKERR VecSetOption(F, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+  CHKERR VecSetValues(F, data, vals, ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
