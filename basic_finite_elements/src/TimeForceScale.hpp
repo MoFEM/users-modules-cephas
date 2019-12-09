@@ -28,8 +28,6 @@
 /** \brief Force scale operator for reading two columns
  */
 struct TimeForceScale : public MethodForForceScaling {
-  // Hassan: This function to read data file (once) and save it in a pair vector
-  // ts
 
   std::map<double, double> tSeries;
   int readFile, debug;
