@@ -41,12 +41,11 @@ using OpVolSource = OpTools<VolEleOp>::OpSource<2>;
 
 struct Example {
 
-  Example(MoFEM::Interface &m_field): mField(m_field) {}
+  Example(MoFEM::Interface &m_field) : mField(m_field) {}
 
   MoFEMErrorCode runProblem();
 
-  private:
-
+private:
   MoFEM::Interface &mField;
 
   static double sourceFunction(const double x, const double y, const double z) {
@@ -65,7 +64,6 @@ struct Example {
   MoFEMErrorCode postProcess();
 
   MatrixDouble invJac;
-
 };
 
 MoFEMErrorCode Example::runProblem() {
@@ -87,7 +85,7 @@ MoFEMErrorCode Example::setUP() {
                                 1);
   CHKERR simple->addDomainField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 1);
-  constexpr int order = 1;
+  constexpr int order = 5;
   CHKERR simple->setFieldOrder("U_REAL", order);
   CHKERR simple->setFieldOrder("U_IMAG", order);
   CHKERR simple->setUp();
@@ -107,7 +105,8 @@ MoFEMErrorCode Example::bC() {
   Range edges;
   CHKERR skin.find_skin(0, surface, false, edges);
   Range edges_part;
-  ParallelComm *pcomm = ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
                                PSTATUS_NOT, -1, &edges_part);
   Range edges_verts;
@@ -120,23 +119,21 @@ MoFEMErrorCode Example::bC() {
 }
 //! [Applying essential BC]
 
-
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(invJac));
+  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double, const double, const double) { return -1; };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpTools<VolEleOp>::OpAssembleComplex<OpVolGradGrad>("U_REAL",
-                                                              "U_IMAG", beta));
+      new OpTools<VolEleOp>::OpAssembleComplexLhs<OpVolGradGrad>(
+          "U_REAL", "U_IMAG", beta));
   auto k = [](const double, const double, const double) { return pow(50, 2); };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpTools<VolEleOp>::OpAssembleComplex<OpVolMass>("U_REAL", "U_IMAG",
-                                                          k));
+      new OpTools<VolEleOp>::OpAssembleComplexLhs<OpVolMass>("U_REAL", "U_IMAG",
+                                                             k));
 
   basic->getOpDomainRhsPipeline().push_back(
       new OpVolSource("U_REAL", sourceFunction));
@@ -173,16 +170,15 @@ MoFEMErrorCode Example::kspSolve() {
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
-    basic->getDomainLhsFE().reset();
-    auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-    post_proc_fe->generateReferenceElementMesh();
-    post_proc_fe->addFieldValuesPostProc("U_REAL");
-    post_proc_fe->addFieldValuesPostProc("U_IMAG");
-    basic->getDomainRhsFE() = post_proc_fe;
-    CHKERR basic->loopFiniteElements();
-    CHKERR post_proc_fe->writeFile(
-        "out_basic_helmholtz.h5m");
-    MoFEMFunctionReturn(0);
+  basic->getDomainLhsFE().reset();
+  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc("U_REAL");
+  post_proc_fe->addFieldValuesPostProc("U_IMAG");
+  basic->getDomainRhsFE() = post_proc_fe;
+  CHKERR basic->loopFiniteElements();
+  CHKERR post_proc_fe->writeFile("out_helmholtz.h5m");
+  MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
 
@@ -217,10 +213,8 @@ int main(int argc, char *argv[]) {
     Example ex(m_field);
     CHKERR ex.runProblem();
     //! [Example]
-    
   }
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
 }
-

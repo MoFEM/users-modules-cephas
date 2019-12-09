@@ -93,11 +93,11 @@ template <typename EleOp> struct OpTools {
     virtual MoFEMErrorCode aSsemble(EntData &data);
   };
 
-  template <typename OpBase> struct OpAssembleComplex : public OpBase {
+  template <typename OpRealLhs> struct OpAssembleComplexLhs : public OpRealLhs {
 
-    OpAssembleComplex(const std::string real_field_name,
-                      const std::string imag_field_name)
-        : OpBase(real_field_name, OpBase::OPROWCOL), realField(real_field_name),
+    OpAssembleComplexLhs(const std::string real_field_name,
+                         const std::string imag_field_name, ScalarFun beta)
+        : OpRealLhs(real_field_name, beta), realField(real_field_name),
           imagField(imag_field_name) {}
 
   protected:
@@ -108,26 +108,26 @@ template <typename EleOp> struct OpTools {
                           EntData &col_data) {
       MoFEMFunctionBegin;
       // get number of dofs on row
-      OpBase::nbRows = row_data.getIndices().size();
+      OpRealLhs::nbRows = row_data.getIndices().size();
       // if no dofs on row, exit that work, nothing to do here
-      if (!OpBase::nbRows)
+      if (!OpRealLhs::nbRows)
         MoFEMFunctionReturnHot(0);
       // get number of dofs on column
-      OpBase::nbCols = col_data.getIndices().size();
+      OpRealLhs::nbCols = col_data.getIndices().size();
       // if no dofs on Columbia, exit nothing to do here
-      if (!OpBase::nbCols)
+      if (!OpRealLhs::nbCols)
         MoFEMFunctionReturnHot(0);
       // get number of integration points
-      OpBase::nbIntegrationPts = OpBase::getGaussPts().size2();
+      OpRealLhs::nbIntegrationPts = OpRealLhs::getGaussPts().size2();
       // set size of local entity bock
-      OpBase::locMat.resize(OpBase::nbRows, OpBase::nbCols, false);
+      OpRealLhs::locMat.resize(OpRealLhs::nbRows, OpRealLhs::nbCols, false);
       // clear matrix
-      OpBase::locMat.clear();
+      OpRealLhs::locMat.clear();
       // check if entity block is on matrix diagonal
       if (row_side == col_side && row_type == col_type) {
-        OpBase::isDiag = true; // yes, it is
+        OpRealLhs::isDiag = true; // yes, it is
       } else {
-        OpBase::isDiag = false;
+        OpRealLhs::isDiag = false;
       }
       // integrate local matrix for entity block
       CHKERR this->iNtegrate(row_data, col_data);
@@ -143,47 +143,47 @@ template <typename EleOp> struct OpTools {
       MoFEMFunctionBegin;
       Mat B = OpBase::getFEMethod()->ksp_B;
 
-      auto real_row_indices = row_data.getIndices();
-      auto real_col_indices = col_data.getIndices();
+      auto &real_row_indices = row_data.getIndices();
+      auto &real_col_indices = col_data.getIndices();
       VectorInt imag_row_indices, imag_col_indices;
-      CHKERR getProblemRowIndices(imagField, row_type, row_side,
-                                  imag_row_indices);
-      CHKERR getProblemRowIndices(imagField, col_type, col_side,
-                                  imag_col_indices);
+      CHKERR OpRealLhs::getProblemRowIndices(imagField, row_type, row_side,
+                                             imag_row_indices);
+      CHKERR OpRealLhs::getProblemRowIndices(imagField, col_type, col_side,
+                                             imag_col_indices);
 
       // assemble local matrix
 
-      CHKERR MatSetValues(B, OpBase::nbRows, &real_row_indices[0],
-                          OpBase::nbCols, &real_col_indices[0],
-                          &OpBase::locMat(0, 0), ADD_VALUES);
-      CHKERR MatSetValues(B, OpBase::nbRows, &real_row_indices[0],
-                          OpBase::nbCols, &imag_col_indices[0],
-                          &OpBase::locMat(0, 0), ADD_VALUES);
-      CHKERR MatSetValues(B, OpBase::nbRows, &imag_row_indices[0],
-                          OpBase::nbCols, &real_col_indices[0],
-                          &OpBase::locMat(0, 0), ADD_VALUES);
-      OpBase::locMat *= -1;
-      CHKERR MatSetValues(B, OpBase::nbRows, &imag_row_indices[0],
-                          OpBase::nbCols, &imag_col_indices[0],
-                          &OpBase::locMat(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
+                          OpRealLhs::nbCols, &real_col_indices[0],
+                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
+                          OpRealLhs::nbCols, &imag_col_indices[0],
+                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
+                          OpRealLhs::nbCols, &real_col_indices[0],
+                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
+      OpRealLhs::locMat *= -1;
+      CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
+                          OpRealLhs::nbCols, &imag_col_indices[0],
+                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
 
-      if (!OpBase::isDiag) {
+      if (!OpRealLhs::isDiag) {
         // if not diagonal term and since global matrix is symmetric assemble
         // transpose term.
-        OpBase::locMat = trans(OpBase::locMat);
-        CHKERR MatSetValues(B, OpBase::nbCols, &imag_col_indices[0],
-                            OpBase::nbRows, &imag_row_indices[0],
-                            &OpBase::locMat(0, 0), ADD_VALUES);
-        OpBase::locMat *= -1;
-        CHKERR MatSetValues(B, OpBase::nbCols, &real_col_indices[0],
-                            OpBase::nbRows, &real_row_indices[0],
-                            &OpBase::locMat(0, 0), ADD_VALUES);
-        CHKERR MatSetValues(B, OpBase::nbCols, &imag_col_indices[0],
-                            OpBase::nbRows, &real_row_indices[0],
-                            &OpBase::locMat(0, 0), ADD_VALUES);
-        CHKERR MatSetValues(B, OpBase::nbCols, &real_col_indices[0],
-                            OpBase::nbRows, &imag_row_indices[0],
-                            &OpBase::locMat(0, 0), ADD_VALUES);
+        OpRealLhs::locMat = trans(OpRealLhs::locMat);
+        CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
+                            OpRealLhs::nbRows, &imag_row_indices[0],
+                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
+        OpRealLhs::locMat *= -1;
+        CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
+                            OpRealLhs::nbRows, &real_row_indices[0],
+                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
+        CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
+                            OpRealLhs::nbRows, &real_row_indices[0],
+                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
+        CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
+                            OpRealLhs::nbRows, &imag_row_indices[0],
+                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
       }
       MoFEMFunctionReturn(0);
     }
@@ -197,7 +197,7 @@ template <typename EleOp> struct OpTools {
         : OpBase(field_name, OpBase::OPROW, boundary_marker),
           sourceFun(source_fun) {}
 
-  private:
+  protected:
     ScalarFun sourceFun;
     FTensor::Index<'i', DIM> i; ///< summit Index
 
@@ -237,7 +237,7 @@ template <typename EleOp> struct OpTools {
         : OpBase(field_name, OpBase::OPROWCOL, boundary_marker),
           betaCoeff(beta) {}
 
-  private:
+  protected:
     ScalarFun betaCoeff;
     FTensor::Index<'i', DIM> i; ///< summit Index
 
@@ -289,7 +289,7 @@ template <typename EleOp> struct OpTools {
         : OpBase(field_name, OpBase::OPROW, boundary_marker),
           approxGradVals(approx_grad_vals), betaCoeff(beta) {}
 
-  private:
+  protected:
     ScalarFun betaCoeff;
     boost::shared_ptr<MatrixDouble> approxGradVals;
     FTensor::Index<'i', DIM> i; ///< summit Index
@@ -337,7 +337,7 @@ template <typename EleOp> struct OpTools {
         : OpBase(field_name, OpBase::OPROWCOL, boundary_marker),
           betaCoeff(beta) {}
 
-  private:
+  protected:
     ScalarFun betaCoeff;
 
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
