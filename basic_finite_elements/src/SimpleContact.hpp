@@ -548,7 +548,7 @@ struct SimpleContactProblem {
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACEMASTER),
+                  FACESLAVE),
           commonDataSimpleContact(common_data_contact), F(f_) {}
   };
 

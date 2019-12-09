@@ -2262,7 +2262,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
   vec_f.clear();
 
   // get number of integration points
-  nbIntegrationPts = getGaussPts().size2();
+  nbIntegrationPts = getGaussPtsMaster().size2();
 
   // integrate local matrix for entity block
   CHKERR iNtegrate(row_data);
@@ -2451,7 +2451,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
   vec_f.clear();
 
   // get number of integration points
-  nbIntegrationPts = getGaussPts().size2();
+  nbIntegrationPts = getGaussPtsSlave().size2();
 
   // integrate local matrix for entity block
   CHKERR iNtegrate(row_data);
