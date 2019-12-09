@@ -51,6 +51,9 @@ bfe_build_and_install(test_simple_contact
 bfe_build_and_install(test_ale_simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact.cpp)
 
+bfe_build_and_install(test_ale_simple_contact_andrei
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact_andrei.cpp)
+
 #if(ADOL-C_LIBRARY)
 
   #testing

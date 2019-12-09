@@ -677,7 +677,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
 
-    CHKERR VecView(x, PETSC_VIEWER_STDOUT_WORLD);
+    //CHKERR VecView(x, PETSC_VIEWER_STDOUT_WORLD);
 
     Mat A, fdA;
     CHKERR DMCreateMatrix_MoFEM(dm, &A);
