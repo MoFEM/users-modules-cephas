@@ -202,7 +202,7 @@ struct TimeAccelerogram : public MethodForForceScaling {
   MoFEMErrorCode scaleNf(const FEMethod *fe, VectorDouble &Nf) {
     MoFEMFunctionBeginHot;
     if (readFile == 0) {
-      SETERRQ(PETSC_COMM_SELF, 1, "data file not read");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data file not read");
     }
     double ts_t = fe->ts_t;
     VectorDouble acc(3);
