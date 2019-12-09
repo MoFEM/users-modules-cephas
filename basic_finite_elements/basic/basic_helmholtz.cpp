@@ -130,12 +130,16 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double, const double, const double) { return -1; };
-  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad("U", beta));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpTools<VolEleOp>::OpAssembleComplex<OpVolGradGrad>("U_REAL",
+                                                              "U_IMAG", beta));
   auto k = [](const double, const double, const double) { return pow(50, 2); };
-  basic->getOpDomainLhsPipeline().push_back(new OpVolMass("U", k));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpTools<VolEleOp>::OpAssembleComplex<OpVolMass>("U_REAL", "U_IMAG",
+                                                          k));
 
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource("U", sourceFunction));
+      new OpVolSource("U_REAL", sourceFunction));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
@@ -172,7 +176,8 @@ MoFEMErrorCode Example::postProcess() {
     basic->getDomainLhsFE().reset();
     auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
     post_proc_fe->generateReferenceElementMesh();
-    post_proc_fe->addFieldValuesPostProc("U");
+    post_proc_fe->addFieldValuesPostProc("U_REAL");
+    post_proc_fe->addFieldValuesPostProc("U_IMAG");
     basic->getDomainRhsFE() = post_proc_fe;
     CHKERR basic->loopFiniteElements();
     CHKERR post_proc_fe->writeFile(

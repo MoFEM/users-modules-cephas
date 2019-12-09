@@ -93,6 +93,102 @@ template <typename EleOp> struct OpTools {
     virtual MoFEMErrorCode aSsemble(EntData &data);
   };
 
+  template <typename OpBase> struct OpAssembleComplex : public OpBase {
+
+    OpAssembleComplex(const std::string real_field_name,
+                      const std::string imag_field_name)
+        : OpBase(real_field_name, OpBase::OPROWCOL), realField(real_field_name),
+          imagField(imag_field_name) {}
+
+  protected:
+    const std::string realField, imagField;
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data) {
+      MoFEMFunctionBegin;
+      // get number of dofs on row
+      OpBase::nbRows = row_data.getIndices().size();
+      // if no dofs on row, exit that work, nothing to do here
+      if (!OpBase::nbRows)
+        MoFEMFunctionReturnHot(0);
+      // get number of dofs on column
+      OpBase::nbCols = col_data.getIndices().size();
+      // if no dofs on Columbia, exit nothing to do here
+      if (!OpBase::nbCols)
+        MoFEMFunctionReturnHot(0);
+      // get number of integration points
+      OpBase::nbIntegrationPts = OpBase::getGaussPts().size2();
+      // set size of local entity bock
+      OpBase::locMat.resize(OpBase::nbRows, OpBase::nbCols, false);
+      // clear matrix
+      OpBase::locMat.clear();
+      // check if entity block is on matrix diagonal
+      if (row_side == col_side && row_type == col_type) {
+        OpBase::isDiag = true; // yes, it is
+      } else {
+        OpBase::isDiag = false;
+      }
+      // integrate local matrix for entity block
+      CHKERR this->iNtegrate(row_data, col_data);
+      // assemble local matrix
+      CHKERR this->aSsemble(row_side, col_side, row_type, col_type, row_data,
+                            col_data);
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode aSsemble(int row_side, int col_side, EntityType row_type,
+                            EntityType col_type, EntData &row_data,
+                            EntData &col_data) {
+      MoFEMFunctionBegin;
+      Mat B = OpBase::getFEMethod()->ksp_B;
+
+      auto real_row_indices = row_data.getIndices();
+      auto real_col_indices = col_data.getIndices();
+      VectorInt imag_row_indices, imag_col_indices;
+      CHKERR getProblemRowIndices(imagField, row_type, row_side,
+                                  imag_row_indices);
+      CHKERR getProblemRowIndices(imagField, col_type, col_side,
+                                  imag_col_indices);
+
+      // assemble local matrix
+
+      CHKERR MatSetValues(B, OpBase::nbRows, &real_row_indices[0],
+                          OpBase::nbCols, &real_col_indices[0],
+                          &OpBase::locMat(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(B, OpBase::nbRows, &real_row_indices[0],
+                          OpBase::nbCols, &imag_col_indices[0],
+                          &OpBase::locMat(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(B, OpBase::nbRows, &imag_row_indices[0],
+                          OpBase::nbCols, &real_col_indices[0],
+                          &OpBase::locMat(0, 0), ADD_VALUES);
+      OpBase::locMat *= -1;
+      CHKERR MatSetValues(B, OpBase::nbRows, &imag_row_indices[0],
+                          OpBase::nbCols, &imag_col_indices[0],
+                          &OpBase::locMat(0, 0), ADD_VALUES);
+
+      if (!OpBase::isDiag) {
+        // if not diagonal term and since global matrix is symmetric assemble
+        // transpose term.
+        OpBase::locMat = trans(OpBase::locMat);
+        CHKERR MatSetValues(B, OpBase::nbCols, &imag_col_indices[0],
+                            OpBase::nbRows, &imag_row_indices[0],
+                            &OpBase::locMat(0, 0), ADD_VALUES);
+        OpBase::locMat *= -1;
+        CHKERR MatSetValues(B, OpBase::nbCols, &real_col_indices[0],
+                            OpBase::nbRows, &real_row_indices[0],
+                            &OpBase::locMat(0, 0), ADD_VALUES);
+        CHKERR MatSetValues(B, OpBase::nbCols, &imag_col_indices[0],
+                            OpBase::nbRows, &real_row_indices[0],
+                            &OpBase::locMat(0, 0), ADD_VALUES);
+        CHKERR MatSetValues(B, OpBase::nbCols, &real_col_indices[0],
+                            OpBase::nbRows, &imag_row_indices[0],
+                            &OpBase::locMat(0, 0), ADD_VALUES);
+      }
+      MoFEMFunctionReturn(0);
+    }
+  };
+
   //! [Source operator]
   template <int DIM> struct OpSource : public OpBase {
 
@@ -309,12 +405,12 @@ OpTools<EleOp>::OpBase::doWork(int row_side, int col_side, EntityType row_type,
   // get number of dofs on column
   OpBase::nbCols = col_data.getIndices().size();
   // if no dofs on Columbia, exit nothing to do here
-  if (!nbCols)
+  if (!OpBase::nbCols)
     MoFEMFunctionReturnHot(0);
   // get number of integration points
-  nbIntegrationPts = OpBase::getGaussPts().size2();
+  OpBase::nbIntegrationPts = OpBase::getGaussPts().size2();
   // set size of local entity bock
-  OpBase::locMat.resize(nbRows, nbCols, false);
+  OpBase::locMat.resize(OpBase::nbRows, OpBase::nbCols, false);
   // clear matrix
   OpBase::locMat.clear();
   // check if entity block is on matrix diagonal
