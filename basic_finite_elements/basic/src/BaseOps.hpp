@@ -146,11 +146,19 @@ template <typename EleOp> struct OpTools {
       auto &real_row_indices = row_data.getIndices();
       auto &real_col_indices = col_data.getIndices();
       VectorInt imag_row_indices, imag_col_indices;
+      imag_row_indices.resize(OpRealLhs::nbRows, false);
+      imag_col_indices.resize(OpRealLhs::nbCols, false);
+      std::fill(imag_row_indices.begin(), imag_row_indices.end(), -1);
+      std::fill(imag_col_indices.begin(), imag_col_indices.end(), -1);
       CHKERR OpRealLhs::getProblemRowIndices(imagField, row_type, row_side,
                                              imag_row_indices);
-      CHKERR OpRealLhs::getProblemRowIndices(imagField, col_type, col_side,
+      CHKERR OpRealLhs::getProblemCowIndices(imagField, col_type, col_side,
                                              imag_col_indices);
 
+      cerr << real_row_indices << endl;
+      cerr << imag_row_indices << endl;
+      cerr << real_col_indices << endl;
+      cerr << imag_col_indices << endl;
       // assemble local matrix
 
       CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
