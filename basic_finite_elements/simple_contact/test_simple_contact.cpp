@@ -629,24 +629,6 @@ if(is_lag){
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
 
-<<<<<<< HEAD
-    if (is_hdiv_trace) {
-      contact_problem->setContactOperatorsRhsOperatorsHdiv(
-          fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
-      contact_problem->setContactOperatorsLhsOperatorsHdiv(
-          fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
-    } else {
-      contact_problem->setContactOperatorsRhsOperators(
-          fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
-      contact_problem->setContactOperatorsLhsOperators(
-          fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
-    }
-
-    // Assemble pressure and traction forces
-    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(
-        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
-=======
     if (is_lag) {
       if (is_hdiv_trace) {
 
@@ -679,7 +661,6 @@ if(is_lag){
   }
 
 }
->>>>>>> ignatios/simple_contact
 
 // Assemble pressure and traction forces
 boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -805,20 +786,6 @@ for (; mit != neumann_forces.end(); mit++) {
     
     if (is_hdiv_trace) {
       contact_problem->setContactOperatorsForPostProcHdiv(
-<<<<<<< HEAD
-          m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
-          mb_post);
-    } else {
-      contact_problem->setContactOperatorsForPostProc(
-          m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
-          mb_post);
-    }
-
-    mb_post.delete_mesh();
-
-    CHKERR DMoFEMLoopFiniteElements(
-        dm, "CONTACT_ELEM", fe_post_proc_simple_contact);
-=======
           fe_post_proc_simple_contact, m_field, "SPATIAL_POSITION", "LAGMULT",
           mb_post);
     } else {
@@ -830,7 +797,6 @@ for (; mit != neumann_forces.end(); mit++) {
     mb_post.delete_mesh();
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
->>>>>>> ignatios/simple_contact
 
     std::ostringstream ostrm;
 
