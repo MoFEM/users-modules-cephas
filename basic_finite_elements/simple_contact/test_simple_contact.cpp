@@ -710,7 +710,7 @@ for (; mit != neumann_forces.end(); mit++) {
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr.get(),
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
@@ -722,7 +722,7 @@ for (; mit != neumann_forces.end(); mit++) {
     //                               NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr.get(), NULL,
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
@@ -732,6 +732,7 @@ for (; mit != neumann_forces.end(); mit++) {
     // create snes nonlinear solver
     {
       CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
+      CHKERR SNESSetDM(snes, dm);
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
       CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
