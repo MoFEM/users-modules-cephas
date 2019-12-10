@@ -693,13 +693,18 @@ int main(int argc, char *argv[]) {
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
 
+    boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
+        common_data_simple_contact =
+            boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+                m_field);
+
     contact_problem->setContactOperatorsRhsALE(
-        fe_rhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
-        "LAGMULT", "MATERIAL");
+        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
     contact_problem->setContactOperatorsLhsALE(
-        fe_lhs_simple_contact, "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
-        "LAGMULT", "MATERIAL");
+        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
                                   fe_rhs_simple_contact,
