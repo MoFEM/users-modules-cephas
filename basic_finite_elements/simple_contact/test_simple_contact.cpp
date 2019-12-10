@@ -461,6 +461,8 @@ if(is_lag){
 
         if (tris.size() == 0) {
           cerr << "M 2 with slave\n";
+          CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
+                                      moab::Interface::UNION);
           tris = intersect(tris, slave_tris);
           block_data = &(contact_problem->commonDataSimpleContact
                   ->setOfSlaveFacesData[1]);
@@ -514,6 +516,8 @@ if(is_lag){
         NonlinearElasticElement::BlockData *block_data;
         if (tris.size() == 0) {
           cerr << "M 1 with slave\n";
+          CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
+                                      moab::Interface::UNION);
           tris = intersect(tris, slave_tris);
           block_data = &(
               contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
@@ -525,6 +529,8 @@ if(is_lag){
                                     moab::Interface::UNION);
         tets = tets.subset_by_type(MBTET);
         block_data->tEts = tets;
+        cerr << "Side " << tets.size()
+             << "\n";
 
         // CHKERR moab.get_adjacencies(slave_tris, 3, true, tets,
         //                             moab::Interface::UNION);
@@ -797,7 +803,16 @@ for (; mit != neumann_forces.end(); mit++) {
     // moab_instance
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
-    
+
+    // moab_instance
+    moab::Core mb_post_vertex;                   // create database
+    moab::Interface &moab_proc_vertex = mb_post_vertex; // create interface to database
+
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_post_proc_simple_contact_vertex =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+
     if (is_hdiv_trace) {
       contact_problem->setContactOperatorsForPostProcHdiv(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
@@ -806,13 +821,18 @@ for (; mit != neumann_forces.end(); mit++) {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
           "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
-          mb_post,
-          contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+          mb_post, contact_problem->commonDataSimpleContact
+              ->setOfMasterFacesData[1],
           contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
           is_lag);
+
+      fe_post_proc_simple_contact_vertex->getOpPtrVector().push_back(
+          new SimpleContactProblem::OpLagMultOnVertex(m_field, "LAGMULT",
+                                                      mb_post_vertex));
     }
 
     mb_post.delete_mesh();
+
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact.get());
 
@@ -826,6 +846,20 @@ for (; mit != neumann_forces.end(); mit++) {
                        out_file_name.c_str());
     CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                               "PARALLEL=WRITE_PART");
+
+    mb_post_vertex.delete_mesh();
+
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact_vertex.get());
+    std::ostringstream ostrm_lam;
+    ostrm_lam << "out_contact_vertex_lambda_n"
+          << ".h5m";
+
+    out_file_name = ostrm_lam.str();
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                       out_file_name.c_str());
+    CHKERR mb_post_vertex.write_file(out_file_name.c_str(), "MOAB",
+                                     "PARALLEL=WRITE_PART");
 
     EntityHandle out_meshset_slave_tris;
     EntityHandle out_meshset_master_tris;

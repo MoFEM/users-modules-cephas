@@ -420,6 +420,8 @@ if(is_lag){
 
           if (tris.size() == 0) {
             cerr << "M 2 with slave\n";
+            CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
+                                        moab::Interface::UNION);
             tris = intersect(tris, slave_tris);
             block_data = &(contact_problem->commonDataSimpleContact
                                ->setOfSlaveFacesData[1]);
@@ -474,6 +476,8 @@ if(is_lag){
           NonlinearElasticElement::BlockData *block_data;
           if (tris.size() == 0) {
             cerr << "M 1 with slave\n";
+            CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
+                                        moab::Interface::UNION);
             tris = intersect(tris, slave_tris);
             block_data = &(contact_problem->commonDataSimpleContact
                                ->setOfSlaveFacesData[1]);
@@ -505,7 +509,6 @@ if(is_lag){
           }
         }
       }
-
     }
 
     // build field

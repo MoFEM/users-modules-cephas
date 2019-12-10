@@ -309,7 +309,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsMaster::doWork(
 
     
     MatrixDouble3by3 &stress =
-        commonDataSimpleContact->elasticityCommonData.sTress[gg];
+        commonDataSimpleContact->elasticityCommonDataMaster.sTress[gg];
     
     FTensor::Tensor2<double *, 3, 3> t_stress(
         &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
@@ -462,6 +462,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsSlave::doWork(
 
     MatrixDouble3by3 &stress =
         commonDataSimpleContact->elasticityCommonData.sTress[gg];
+    
     FTensor::Tensor2<double *, 3, 3> t_stress(
         &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
         &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
@@ -893,7 +894,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
 
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
-  cerr << "W))t \n";
+
   auto t_w = getFTensor0IntegrationWeightMaster();
   auto proj_normal_stress_master =
       getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
@@ -916,7 +917,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
       // Here for average stress
       const double val_m =
           0.5 * t_w * area_m *
-          (/*proj_normal_stress_master +*/ proj_normal_stress_slave);
+          (proj_normal_stress_master + proj_normal_stress_slave);
 
       FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
 
@@ -930,7 +931,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
       }
       ++t_w;
       ++proj_normal_stress_master;
-      ++proj_normal_stress_slave;
+      //++proj_normal_stress_slave;
     } // for gauss points
 
     Vec f;
@@ -1236,7 +1237,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    //cerr << "RHS  " << commonData.jacStress[gg] << "\n";
+    // cerr << "RHS  " << commonData.jacStress[gg] << "\n";
     // if (gap_gp > 0) {
     //   ++gap_gp;
     //   continue;
@@ -1811,6 +1812,47 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
     MoFEMFunctionReturn(0);
 }
 
+
+
+MoFEMErrorCode SimpleContactProblem::OpLagMultOnVertex::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+  int nb_gauss_pts = data.getN().size1();
+
+  double def_vals[1];
+  bzero(def_vals, 1 * sizeof(double));
+  Tag th_lagmult;
+  CHKERR moabOut.tag_get_handle("VERTEX_LAGMULT", 1, MB_TYPE_DOUBLE, th_lagmult,
+                                MB_TAG_CREAT | MB_TAG_SPARSE, def_vals);
+
+  double lagrange_multipliers[1] = {0};
+  double coords[3];
+  EntityHandle new_vertex = getFEEntityHandle();
+
+  VectorDouble all_coords = getCoordsSlave();
+
+  for (int ii = 0; ii != 3; ++ii) {
+
+    for (int dd = 0; dd != 3; dd++) {
+      coords[dd] = all_coords[ ii * 3 + dd];
+    }
+    lagrange_multipliers[0] = data.getFieldData()[ii];
+
+    CHKERR moabOut.create_vertex(&coords[0], new_vertex);
+    CHKERR moabOut.tag_set_data(th_lagmult, &new_vertex, 1,
+                                lagrange_multipliers);
+  }
+  MoFEMFunctionReturn(0);
+  }
+
+
 MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::getJac(
     DataForcesAndSourcesCore::EntData &col_data, int gg) {
   return get_jac_contact<0>(col_data, gg, commonData.jacStress[gg], jac);
@@ -2108,7 +2150,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
                                 const_unit_n(j) * const_unit_n(m) *
                                 t_base_master_row; // base not needed
 
-          t_assemble_m(m, k) -= val_m * t3_1_row(i, j, k) *
+          t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
                                 const_unit_n_master(i) *
                                 const_unit_n_master(j) * const_unit_n(m) *
                                 t_base_slave_col; // base not needed
