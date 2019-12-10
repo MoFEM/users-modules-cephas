@@ -707,11 +707,11 @@ int main(int argc, char *argv[]) {
         "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  fe_rhs_simple_contact,
+                                  fe_rhs_simple_contact.get(),
                                   PETSC_NULL, PETSC_NULL);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-                                  fe_lhs_simple_contact,
+                                  fe_lhs_simple_contact.get(),
                                   NULL, NULL);
 
     SNES snes;

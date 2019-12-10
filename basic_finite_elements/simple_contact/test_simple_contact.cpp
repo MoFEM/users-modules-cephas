@@ -706,7 +706,7 @@ for (; mit != neumann_forces.end(); mit++) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact.get(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
@@ -718,8 +718,8 @@ for (; mit != neumann_forces.end(); mit++) {
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    // CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
-    //                               NULL, NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact.get(),
+                                  NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
@@ -814,7 +814,7 @@ for (; mit != neumann_forces.end(); mit++) {
 
     mb_post.delete_mesh();
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact);
+                                    fe_post_proc_simple_contact.get());
 
     std::ostringstream ostrm;
 

@@ -850,10 +850,10 @@ if(is_lag){
       contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1], A);
 }
 
-CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
+CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact.get(),
                               PETSC_NULL, PETSC_NULL);
 
-CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact, NULL,
+CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact.get(), NULL,
                               NULL);
 
 if (!is_ale) {

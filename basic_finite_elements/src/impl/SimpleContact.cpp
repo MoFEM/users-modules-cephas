@@ -309,7 +309,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsMaster::doWork(
 
     
     MatrixDouble3by3 &stress =
-        commonDataSimpleContact->elasticityCommonDataMaster.sTress[gg];
+        commonDataSimpleContact->elasticityCommonData.sTress[gg];
     
     FTensor::Tensor2<double *, 3, 3> t_stress(
         &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
