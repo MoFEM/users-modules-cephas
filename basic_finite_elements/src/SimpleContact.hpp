@@ -1039,6 +1039,25 @@ struct SimpleContactProblem {
     }
     MoFEMFunctionReturn(0);
   }
+
+  struct OpLagMultOnVertex
+      : public MoFEM::ContactPrismElementForcesAndSourcesCore::
+            UserDataOperator {
+
+    moab::Interface &moabOut;
+    MoFEM::Interface &mField;
+
+    OpLagMultOnVertex(MoFEM::Interface &m_field, string field_name,
+                      moab::Interface &moab_out)
+        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          mField(m_field), moabOut(moab_out) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
 };
 
 #endif

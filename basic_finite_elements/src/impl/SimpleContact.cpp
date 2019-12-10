@@ -1673,3 +1673,41 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
   }
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode SimpleContactProblem::OpLagMultOnVertex::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+  int nb_gauss_pts = data.getN().size1();
+
+  double def_vals[1];
+  bzero(def_vals, 1 * sizeof(double));
+  Tag th_lagmult;
+  CHKERR moabOut.tag_get_handle("VERTEX_LAGMULT", 1, MB_TYPE_DOUBLE, th_lagmult,
+                                MB_TAG_CREAT | MB_TAG_SPARSE, def_vals);
+
+  double lagrange_multipliers[1] = {0};
+  double coords[3];
+  EntityHandle new_vertex = getFEEntityHandle();
+
+  VectorDouble all_coords = getCoordsSlave();
+
+  for (int ii = 0; ii != 3; ++ii) {
+
+    for (int dd = 0; dd != 3; dd++) {
+      coords[dd] = all_coords[ ii * 3 + dd];
+    }
+    lagrange_multipliers[0] = data.getFieldData()[ii];
+
+    CHKERR moabOut.create_vertex(&coords[0], new_vertex);
+    CHKERR moabOut.tag_set_data(th_lagmult, &new_vertex, 1,
+                                lagrange_multipliers);
+  }
+  MoFEMFunctionReturn(0);
+  }
