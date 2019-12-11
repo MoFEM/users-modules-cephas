@@ -122,8 +122,13 @@ struct TimeForceScale : public MethodForForceScaling {
     MoFEMFunctionReturnHot(0);
   }
 
-  // Hassan: this function will loop over data in pair vector ts to find load
-  // scale based on ts_t
+  /**
+   * @brief Scale force the right hand vector
+   * 
+   * @param fe 
+   * @param Nf 
+   * @return MoFEMErrorCode 
+   */
   MoFEMErrorCode scaleNf(const FEMethod *fe, VectorDouble &Nf) {
     MoFEMFunctionBegin;
     double scale;

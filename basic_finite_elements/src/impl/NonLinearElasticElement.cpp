@@ -738,6 +738,7 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
     MoFEMFunctionReturnHot(0);
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
       dAta.tEts.end()) {
+    MoFEMFunctionReturnHot(0);
   }
 
   std::vector<MatrixDouble> &F =
