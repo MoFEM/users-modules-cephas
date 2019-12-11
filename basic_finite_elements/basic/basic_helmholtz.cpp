@@ -53,7 +53,7 @@ private:
     const double yc = -1.25;
     const double xs = x - xc;
     const double ys = y - yc;
-    constexpr double eps = 50;
+    constexpr double eps = 10;
     return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
   };
 
@@ -85,7 +85,7 @@ MoFEMErrorCode Example::setUP() {
                                 1);
   CHKERR simple->addDomainField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 1);
-  constexpr int order = 3;
+  constexpr int order = 7;
   CHKERR simple->setFieldOrder("U_REAL", order);
   CHKERR simple->setFieldOrder("U_IMAG", order);
   CHKERR simple->setUp();
@@ -114,9 +114,9 @@ MoFEMErrorCode Example::bC() {
   // Since Dirichlet b.c. are essential boundary conditions, remove DOFs
   // from the problem.
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simple->getProblemName(), "U_REAL", unite(edges_verts, edges_part));
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
       simple->getProblemName(), "U_IMAG", unite(edges_verts, edges_part));
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      simple->getProblemName(), "U_REAL", unite(edges_verts, edges_part));
   MoFEMFunctionReturn(0);
 }
 //! [Applying essential BC]
@@ -132,7 +132,7 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpTools<VolEleOp>::OpAssembleComplexLhs<OpVolGradGrad>(
           "U_REAL", "U_IMAG", beta));
-  auto k2 = [](const double, const double, const double) { return pow(20, 2); };
+  auto k2 = [](const double, const double, const double) { return pow(60, 2); };
   basic->getOpDomainLhsPipeline().push_back(
       new OpTools<VolEleOp>::OpAssembleComplexLhs<OpVolMass>("U_REAL", "U_IMAG",
                                                              k2));

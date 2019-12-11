@@ -152,25 +152,21 @@ template <typename EleOp> struct OpTools {
       std::fill(imag_col_indices.begin(), imag_col_indices.end(), -1);
       CHKERR OpRealLhs::getProblemRowIndices(imagField, row_type, row_side,
                                              imag_row_indices);
-      CHKERR OpRealLhs::getProblemCowIndices(imagField, col_type, col_side,
+      CHKERR OpRealLhs::getProblemColIndices(imagField, col_type, col_side,
                                              imag_col_indices);
 
-      cerr << real_row_indices << endl;
-      cerr << imag_row_indices << endl;
-      cerr << real_col_indices << endl;
-      cerr << imag_col_indices << endl;
       // assemble local matrix
 
       CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
                           OpRealLhs::nbCols, &real_col_indices[0],
                           &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
-                          OpRealLhs::nbCols, &imag_col_indices[0],
-                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
-                          OpRealLhs::nbCols, &real_col_indices[0],
-                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      OpRealLhs::locMat *= -1;
+      // CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
+      //                     OpRealLhs::nbCols, &imag_col_indices[0],
+      //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
+      // CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
+      //                     OpRealLhs::nbCols, &real_col_indices[0],
+      //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
+      // OpRealLhs::locMat *= -1;
       CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
                           OpRealLhs::nbCols, &imag_col_indices[0],
                           &OpRealLhs::locMat(0, 0), ADD_VALUES);
@@ -182,16 +178,16 @@ template <typename EleOp> struct OpTools {
         CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
                             OpRealLhs::nbRows, &imag_row_indices[0],
                             &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        OpRealLhs::locMat *= -1;
+        // OpRealLhs::locMat *= -1;
         CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
                             OpRealLhs::nbRows, &real_row_indices[0],
                             &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
-                            OpRealLhs::nbRows, &real_row_indices[0],
-                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
-                            OpRealLhs::nbRows, &imag_row_indices[0],
-                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
+        // CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
+        //                     OpRealLhs::nbRows, &real_row_indices[0],
+        //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
+        // CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
+        //                     OpRealLhs::nbRows, &imag_row_indices[0],
+        //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
       }
       MoFEMFunctionReturn(0);
     }
