@@ -85,6 +85,10 @@ MoFEMErrorCode Example::setUP() {
                                 1);
   CHKERR simple->addDomainField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 1);
+  CHKERR simple->addBoundaryField("U_REAL", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
+                                1);
+  CHKERR simple->addBoundaryField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
+                                1);
   constexpr int order = 7;
   CHKERR simple->setFieldOrder("U_REAL", order);
   CHKERR simple->setFieldOrder("U_IMAG", order);
@@ -130,11 +134,11 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double, const double, const double) { return -1; };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpTools<VolEleOp>::OpAssembleComplexLhs<OpVolGradGrad>(
+      new OpTools<VolEleOp>::OpAssembleComplexDiagonalLhs<OpVolGradGrad>(
           "U_REAL", "U_IMAG", beta));
   auto k2 = [](const double, const double, const double) { return pow(60, 2); };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpTools<VolEleOp>::OpAssembleComplexLhs<OpVolMass>("U_REAL", "U_IMAG",
+      new OpTools<VolEleOp>::OpAssembleComplexDiagonalLhs<OpVolMass>("U_REAL", "U_IMAG",
                                                              k2));
 
   basic->getOpDomainRhsPipeline().push_back(
