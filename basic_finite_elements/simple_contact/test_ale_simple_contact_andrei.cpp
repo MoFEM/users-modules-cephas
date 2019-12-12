@@ -347,19 +347,6 @@ int main(int argc, char *argv[]) {
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
         new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
 
-    Range nodes;
-    CHKERR moab.get_adjacencies(master_tris, 0, false, nodes,
-                                moab::Interface::UNION);
-
-    nodes.pop_front();
-    nodes.pop_back();
-
-    // contact_problem->commonDataSimpleContact->forcesOnlyOnEntitiesRow =
-    // nodes;
-
-    //    contact_problem->commonDataSimpleContact->forcesOnlyOnEntitiesCol =
-    //    nodes;
-
     // add fields to the global matrix by adding the element
     contact_problem->addContactElementALE("CONTACT_ELEM", "SPATIAL_POSITION",
                                           "MESH_NODE_POSITIONS", "LAGMULT",
@@ -697,6 +684,15 @@ int main(int argc, char *argv[]) {
         common_data_simple_contact =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
+    
+    Range nodes;
+    CHKERR moab.get_connectivity(contact_prisms, nodes, true);
+    nodes.print();
+    nodes.pop_front();
+    nodes.pop_back();
+    nodes.print();
+
+    common_data_simple_contact->forcesOnlyOnEntitiesRow = nodes;
 
     contact_problem->setContactOperatorsRhsALE(
         fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",

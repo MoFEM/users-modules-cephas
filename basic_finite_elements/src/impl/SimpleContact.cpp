@@ -5531,6 +5531,9 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
     // cerr << "Post proc gap " << gap_ptr<<"\n";
 
     ++gap_ptr;
+    ++projected_stress_slave;
+    ++projected_stress_master;
+    
     if (lagFieldSet) {
       ++diff_normal_lag_master;
       ++diff_normal_lag_slave;
