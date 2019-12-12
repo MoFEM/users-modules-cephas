@@ -36,55 +36,61 @@ endif(NOT MPI_RUN_FLAGS)
 # when you spot it in your code.
 set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
-# Get user module commit id and pass to cpp for logging
-find_package(Git)
-include(cmake/GetGitRevisionDescription.cmake)
-get_git_head_revision(GIT_REFSPEC GIT_UM_SHA1_NAME)
-add_definitions(-DGIT_UM_SHA1_NAME="${GIT_UM_SHA1_NAME}")
-message( STATUS "User Module commit id: " ${GIT_UM_SHA1_NAME})
-
 if(NOT_PRECOMPILED_HEADRES) 
   set(MoFEM_PRECOMPILED_HEADRES OFF CACHE FORCE)
 endif(NOT_PRECOMPILED_HEADRES)
 
-include(cmake/GetGitRevisionDescription.cmake)
-
-if(STAND_ALLONE_USERS_MODULES)
+# Get user module commit id and pass to cpp for logging
+find_package(Git)
+include(cmake/GetGitRevisionSimple.cmake)
+get_git_hash(${PROJECT_SOURCE_DIR} GIT_UM_SHA1)
+if(NOT GIT_UM_SHA1)
   find_package(
-    MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
-  )  
-else(STAND_ALLONE_USERS_MODULES)
-  git_describe(GIT_VERSION "--tags")
-  if(GIT_VERSION)
-    string(
-      REGEX 
-      REPLACE "^v([0-9]+)\\..*" "\\1" GIT_MoFEM_VERSION_MAJOR "${GIT_VERSION}"
-    )
-    string(
-      REGEX 
-      REPLACE "^v[0-9]+\\.([0-9]+).*" "\\1" GIT_MoFEM_VERSION_MINOR "${GIT_VERSION}"
-    )
-    string(
-      REGEX 
-      REPLACE "^v[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" GIT_MoFEM_VERSION_BUILD "${GIT_VERSION}"
-    )
-    find_package(
-      MoFEM 
-      ${GIT_MoFEM_VERSION_MAJOR}.${GIT_MoFEM_VERSION_MINOR}.${GIT_MoFEM_VERSION_MINOR}
-      REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
-    )  
-  else(GIT_VERSION)
-    find_package(
-      MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
-    )  
-  endif(GIT_VERSION)
-endif(STAND_ALLONE_USERS_MODULES)
-include(cmake/CheckMoFEMVersion.cmake)
+    UM REQUIRED HINTS ${MOFEM_DIR} ${PROJECT_BINARY_DIR} $ENV{MOFEM_DIR})  
+endif(NOT GIT_UM_SHA1)    
+
+get_git_tag(${PROJECT_SOURCE_DIR} VERSION)
+message(STATUS "User Module commit id: " ${GIT_UM_SHA1})
+message(STATUS "UM GIT_TAG ${VERSION}")
+get_git_version(
+  ${VERSION} UM_VERSION_MAJOR UM_VERSION_MINOR UM_VERSION_BUILD)
+set(UM_VERSON 
+  ${UM_VERSION_MAJOR}.${UM_VERSION_MINOR}.${UM_VERSION_BUILD})
+message(STATUS "UM Version v${UM_VERSON}")
+
+# Generate config files
+configure_file(
+  ${PROJECT_SOURCE_DIR}/UMConfig-version.cmake.in
+  ${PROJECT_BINARY_DIR}/UMConfig-version.cmake)
+configure_file(
+  ${PROJECT_SOURCE_DIR}/UMConfig.cmake.in
+  ${PROJECT_BINARY_DIR}/UMConfig.cmake)
+# Install project files
+install(
+  FILES ${PROJECT_BINARY_DIR}/UMConfig.cmake
+  DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(
+  FILES ${PROJECT_BINARY_DIR}/UMConfig-version.cmake
+  DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+# Find MoFEM core package 
+message(STATUS "MOFEM directory ${MOFEM_DIR}")
+find_package(
+  MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR})  
+add_definitions(
+  -DMoFEM_VERSION_MAJOR=${MoFEM_VERSION_MAJOR} 
+  -DMoFEM_VERSION_MINOR=${MoFEM_VERSION_MINOR} 
+  -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
+add_definitions(-DGIT_UM_SHA1_NAME="${GIT_UM_SHA1}")
+message(STATUS "User Module commit id: " ${GIT_UM_SHA1})
+
 
 message(STATUS "MoFEM version ${MoFEM_VERSION}")
+include(cmake/CheckMoFEMVersion.cmake)
+
 add_definitions(${MoFEM_DEFINE_RESTRICT})
 
-find_package(Git)
+# Find mbconvert
 find_program(
   MBCONVERT NAMES mbconvert
   PATH 
