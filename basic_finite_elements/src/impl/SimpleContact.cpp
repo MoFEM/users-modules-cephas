@@ -5546,6 +5546,79 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlaveNoSide::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+  int nb_gauss_pts = data.getN().size1();
+
+  double def_vals;
+  def_vals = 0;
+
+  Tag th_gap;
+  CHKERR moabOut.tag_get_handle("GAP", 1, MB_TYPE_DOUBLE, th_gap,
+                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+
+  Tag th_lag_mult;
+  if (lagFieldSet)
+    CHKERR moabOut.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
+                                  th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                  &def_vals);
+
+  Tag th_lag_gap_prod;
+  if (lagFieldSet)
+    CHKERR moabOut.tag_get_handle("LAG_GAP_PROD", 1, MB_TYPE_DOUBLE,
+                                  th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                  &def_vals);
+
+  
+  double coords[3];
+  EntityHandle new_vertex = getFEEntityHandle();
+
+  auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+  
+    auto lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+    auto lag_gap_prod_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
+
+ 
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    for (int dd = 0; dd != 3; ++dd) {
+      coords[dd] = getCoordsAtGaussPtsSlave()(gg, dd);
+    }
+
+    VectorDouble &data_disp = data.getFieldData();
+    CHKERR moabOut.create_vertex(&coords[0], new_vertex);
+
+    CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &gap_ptr);
+
+    if (lagFieldSet){
+      CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
+                                  &lag_gap_prod_slave);
+      CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &lagrange_slave);
+
+        }
+
+    // cerr << "Post proc gap " << gap_ptr<<"\n";
+
+    ++gap_ptr;
+    
+    if (lagFieldSet) {
+      ++lagrange_slave;
+      ++lag_gap_prod_slave;
+     }
+  }
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode
 SimpleContactProblem::OpContactMaterialVolOnMasterSideLhs::aSsemble(
     DataForcesAndSourcesCore::EntData &row_data,

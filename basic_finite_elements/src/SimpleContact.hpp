@@ -102,6 +102,13 @@ struct SimpleContactProblem {
 
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
+      Range current_ents_with_fe;
+      CHKERR mField.get_finite_element_entities_by_handle(element_name,
+                                                      current_ents_with_fe);
+      Range ents_to_remove;
+      ents_to_remove = subtract(current_ents_with_fe, range_slave_master_prisms);
+      CHKERR mField.remove_ents_from_finite_element(element_name, ents_to_remove);
+
       // Adding range_slave_master_prisms to Element element_name
       CHKERR mField.add_ents_to_finite_element_by_type(
           range_slave_master_prisms, MBPRISM, element_name);
@@ -150,6 +157,13 @@ struct SimpleContactProblem {
                                                          mesh_node_field_name);
 
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
+
+      Range current_ents_with_fe;
+      CHKERR mField.get_finite_element_entities_by_handle(element_name,
+                                                      current_ents_with_fe);
+      Range ents_to_remove;
+      ents_to_remove = subtract(current_ents_with_fe, range_slave_master_prisms);
+      CHKERR mField.remove_ents_from_finite_element(element_name, ents_to_remove);
 
       // Adding range_slave_master_prisms to Element element_name
       CHKERR mField.add_ents_to_finite_element_by_type(
@@ -1828,6 +1842,28 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
     bool lagFieldSet;
 
     OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
+                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                   moab::Interface &moab_out, bool lagrange_field = true)
+        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          mField(m_field), commonDataSimpleContact(common_data),
+          moabOut(moab_out), lagFieldSet(lagrange_field) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpMakeVtkSlaveNoSide
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    MoFEM::Interface &mField;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    moab::Interface &moabOut;
+    bool lagFieldSet;
+
+    OpMakeVtkSlaveNoSide(MoFEM::Interface &m_field, string field_name,
                    boost::shared_ptr<CommonDataSimpleContact> &common_data,
                    moab::Interface &moab_out, bool lagrange_field = true)
         : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
@@ -3562,10 +3598,9 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
   // setup operators for calculation of active set
   MoFEMErrorCode setContactOperatorsRhsALESpatial(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
-      boost::shared_ptr<CommonDataSimpleContact>
-          common_data_simple_contact, const string field_name,
-      const string mesh_node_field_name, const string lagrang_field_name,
-      const string side_fe_name, Vec f_ = PETSC_NULL) {
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      const string field_name, const string mesh_node_field_name,
+      const string lagrang_field_name, Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
 
     // boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
@@ -4091,10 +4126,9 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
   MoFEMErrorCode setContactOperatorsLhsALESpatial(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
-      boost::shared_ptr<CommonDataSimpleContact>
-          common_data_simple_contact, const string field_name,
-      const string mesh_node_field_name, const string lagrang_field_name,
-      const string side_fe_name, Mat aij = NULL) {
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      const string field_name, const string mesh_node_field_name,
+      const string lagrang_field_name, Mat aij = NULL) {
     MoFEMFunctionBegin;
 
     // boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
@@ -4607,6 +4641,56 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
 
       fe_post_proc_simple_contact->getOpPtrVector().push_back(new OpMakeVtkSlave(
           m_field, field_name, common_data_simple_contact, moab_out));
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode setContactOperatorsForPostProcNoSide(
+      boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      MoFEM::Interface &m_field, string field_name, string mesh_node_position,
+      string lagrang_field_name, moab::Interface &moab_out,
+      bool lagrange_field = true) {
+    MoFEMFunctionBegin;
+
+    // boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+    //     boost::make_shared<CommonDataSimpleContact>(mField);
+
+    map<int, SimpleContactPrismsData>::iterator sit =
+        setOfSimpleContactPrism.begin();
+    for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalMaster(field_name, common_data_simple_contact));
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetPositionAtGaussPtsMaster(field_name,
+                                            common_data_simple_contact));
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetPositionAtGaussPtsSlave(field_name,
+                                           common_data_simple_contact));
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
+      
+      if (lagrange_field) {
+
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
+            new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+                                           common_data_simple_contact));
+
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
+            new OpLagGapProdGaussPtsSlave(lagrang_field_name,
+                                          common_data_simple_contact));
+        }
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpMakeVtkSlaveNoSide(m_field, field_name, common_data_simple_contact,
+                             moab_out, lagrange_field));
     }
     MoFEMFunctionReturn(0);
   }

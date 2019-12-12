@@ -303,21 +303,21 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-if(is_lag){
-    if (is_hdiv_trace) {
-      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-    } else {
-      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                               MB_TAG_SPARSE, MF_ZERO);
+    if (is_lag) {
+      if (is_hdiv_trace) {
+        CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
+        CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+        CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+      } else {
+        CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                                 MB_TAG_SPARSE, MF_ZERO);
 
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+        CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+        CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+        CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+        CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+      }
     }
-}
 
     // build field
     CHKERR m_field.build_fields();
@@ -343,88 +343,89 @@ if(is_lag){
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
-    //if (flg_block_config) {
-      // try {
-      //   ifstream ini_file(block_config_file);
+    // if (flg_block_config) {
+    // try {
+    //   ifstream ini_file(block_config_file);
 
-      //   po::variables_map vm;
-      //   po::options_description config_file_options;
-      //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      //     std::ostringstream str_order;
-      //     str_order << "block_" << it->getMeshsetId() << ".displacement_order";
-      //     config_file_options.add_options()(
-      //         str_order.str().c_str(),
-      //         po::value<int>(&block_data[it->getMeshsetId()].oRder)
-      //             ->default_value(order));
-      //     std::ostringstream str_cond;
-      //     str_cond << "block_" << it->getMeshsetId() << ".young_modulus";
-      //     config_file_options.add_options()(
-      //         str_cond.str().c_str(),
-      //         po::value<double>(&block_data[it->getMeshsetId()].yOung)
-      //             ->default_value(-1));
-      //     std::ostringstream str_capa;
-      //     str_capa << "block_" << it->getMeshsetId() << ".poisson_ratio";
-      //     config_file_options.add_options()(
-      //         str_capa.str().c_str(),
-      //         po::value<double>(&block_data[it->getMeshsetId()].pOisson)
-      //             ->default_value(-2));
-      //     std::ostringstream str_init_temp;
-      //     str_init_temp << "block_" << it->getMeshsetId()
-      //                   << ".initial_temperature";
-      //     config_file_options.add_options()(
-      //         str_init_temp.str().c_str(),
-      //         po::value<double>(&block_data[it->getMeshsetId()].initTemp)
-      //             ->default_value(0));
-      //   }
-      //   po::parsed_options parsed =
-      //       parse_config_file(ini_file, config_file_options, true);
-      //   store(parsed, vm);
-      //   po::notify(vm);
-      //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-      //     if (block_data[it->getMeshsetId()].oRder == -1)
-      //       continue;
-      //     if (block_data[it->getMeshsetId()].oRder == order)
-      //       continue;
-      //     PetscPrintf(PETSC_COMM_WORLD, "Set block %d order to %d\n",
-      //                 it->getMeshsetId(), block_data[it->getMeshsetId()].oRder);
-      //     Range block_ents;
-      //     CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
-      //                                        true);
+    //   po::variables_map vm;
+    //   po::options_description config_file_options;
+    //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+    //     std::ostringstream str_order;
+    //     str_order << "block_" << it->getMeshsetId() << ".displacement_order";
+    //     config_file_options.add_options()(
+    //         str_order.str().c_str(),
+    //         po::value<int>(&block_data[it->getMeshsetId()].oRder)
+    //             ->default_value(order));
+    //     std::ostringstream str_cond;
+    //     str_cond << "block_" << it->getMeshsetId() << ".young_modulus";
+    //     config_file_options.add_options()(
+    //         str_cond.str().c_str(),
+    //         po::value<double>(&block_data[it->getMeshsetId()].yOung)
+    //             ->default_value(-1));
+    //     std::ostringstream str_capa;
+    //     str_capa << "block_" << it->getMeshsetId() << ".poisson_ratio";
+    //     config_file_options.add_options()(
+    //         str_capa.str().c_str(),
+    //         po::value<double>(&block_data[it->getMeshsetId()].pOisson)
+    //             ->default_value(-2));
+    //     std::ostringstream str_init_temp;
+    //     str_init_temp << "block_" << it->getMeshsetId()
+    //                   << ".initial_temperature";
+    //     config_file_options.add_options()(
+    //         str_init_temp.str().c_str(),
+    //         po::value<double>(&block_data[it->getMeshsetId()].initTemp)
+    //             ->default_value(0));
+    //   }
+    //   po::parsed_options parsed =
+    //       parse_config_file(ini_file, config_file_options, true);
+    //   store(parsed, vm);
+    //   po::notify(vm);
+    //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+    //     if (block_data[it->getMeshsetId()].oRder == -1)
+    //       continue;
+    //     if (block_data[it->getMeshsetId()].oRder == order)
+    //       continue;
+    //     PetscPrintf(PETSC_COMM_WORLD, "Set block %d order to %d\n",
+    //                 it->getMeshsetId(),
+    //                 block_data[it->getMeshsetId()].oRder);
+    //     Range block_ents;
+    //     CHKERR moab.get_entities_by_handle(it->getMeshset(), block_ents,
+    //                                        true);
 
-      //     Range ents_to_set_order;
-      //     CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
-      //                                 moab::Interface::UNION);
+    //     Range ents_to_set_order;
+    //     CHKERR moab.get_adjacencies(block_ents, 3, false, ents_to_set_order,
+    //                                 moab::Interface::UNION);
 
-      //     ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
-      //     CHKERR moab.get_adjacencies(block_ents, 2, false, ents_to_set_order,
-      //                                 moab::Interface::UNION);
+    //     ents_to_set_order = ents_to_set_order.subset_by_type(MBTET);
+    //     CHKERR moab.get_adjacencies(block_ents, 2, false, ents_to_set_order,
+    //                                 moab::Interface::UNION);
 
-      //     CHKERR moab.get_adjacencies(block_ents, 1, false, ents_to_set_order,
-      //                                 moab::Interface::UNION);
+    //     CHKERR moab.get_adjacencies(block_ents, 1, false, ents_to_set_order,
+    //                                 moab::Interface::UNION);
 
-      //     CHKERR m_field.synchronise_entities(ents_to_set_order);
-      //     CHKERR m_field.set_field_order(ents_to_set_order, "SPATIAL_POSITION",
-      //                                    block_data[it->getMeshsetId()].oRder);
+    //     CHKERR m_field.synchronise_entities(ents_to_set_order);
+    //     CHKERR m_field.set_field_order(ents_to_set_order, "SPATIAL_POSITION",
+    //                                    block_data[it->getMeshsetId()].oRder);
 
-      //     CHKERR m_field.set_field_order(ents_to_set_order,
-      //                                    "PREVIOUS_CONVERGED_SP",
-      //                                    block_data[it->getMeshsetId()].oRder);
-      //   }
-      //   std::vector<std::string> additional_parameters;
-      //   additional_parameters =
-      //       collect_unrecognized(parsed.options, po::include_positional);
-      //   for (std::vector<std::string>::iterator vit =
-      //            additional_parameters.begin();
-      //        vit != additional_parameters.end(); ++vit) {
-      //     CHKERR PetscPrintf(PETSC_COMM_WORLD,
-      //                        "** WARNING Unrecognized option %s\n",
-      //                        vit->c_str());
-      //   }
-      // } catch (const std::exception &ex) {
-      //   std::ostringstream ss;
-      //   ss << ex.what() << std::endl;
-      //   SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
-      // }
+    //     CHKERR m_field.set_field_order(ents_to_set_order,
+    //                                    "PREVIOUS_CONVERGED_SP",
+    //                                    block_data[it->getMeshsetId()].oRder);
+    //   }
+    //   std::vector<std::string> additional_parameters;
+    //   additional_parameters =
+    //       collect_unrecognized(parsed.options, po::include_positional);
+    //   for (std::vector<std::string>::iterator vit =
+    //            additional_parameters.begin();
+    //        vit != additional_parameters.end(); ++vit) {
+    //     CHKERR PetscPrintf(PETSC_COMM_WORLD,
+    //                        "** WARNING Unrecognized option %s\n",
+    //                        vit->c_str());
+    //   }
+    // } catch (const std::exception &ex) {
+    //   std::ostringstream ss;
+    //   ss << ex.what() << std::endl;
+    //   SETERRQ(PETSC_COMM_SELF, MOFEM_STD_EXCEPTION_THROW, ss.str().c_str());
+    // }
     //}
 
     boost::shared_ptr<SimpleContactProblem> contact_problem;
@@ -447,9 +448,8 @@ if(is_lag){
 
         Range tets, tet, tris, tet_first;
         const int id = bit->getMeshsetId();
-        CHKERR m_field.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBTET, tet_first,
-            true);
+        CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(), MBTET,
+                                                       tet_first, true);
         CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
                                     moab::Interface::UNION);
         tris = intersect(tris, master_tris);
@@ -464,11 +464,11 @@ if(is_lag){
           CHKERR moab.get_adjacencies(tet_first, 2, false, tris,
                                       moab::Interface::UNION);
           tris = intersect(tris, slave_tris);
-          block_data = &(contact_problem->commonDataSimpleContact
-                  ->setOfSlaveFacesData[1]);
-        } else {
           block_data = &(
-              contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]);
+              contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
+        } else {
+          block_data = &(contact_problem->commonDataSimpleContact
+                             ->setOfMasterFacesData[1]);
         }
         CHKERR moab.get_adjacencies(tris, 3, false, tets,
                                     moab::Interface::UNION);
@@ -486,7 +486,8 @@ if(is_lag){
             //                             moab::Interface::UNION);
 
             // contact_problem->commonDataSimpleContact->setOfMasterFacesData[1]
-            //     .forcesOnlyOnEntitiesRow.insert(slave_tris.begin(), slave_tris.end());
+            //     .forcesOnlyOnEntitiesRow.insert(slave_tris.begin(),
+            //     slave_tris.end());
 
             block_data->E = bit.second.E;
             block_data->PoissonRatio = bit.second.PoissonRatio;
@@ -529,8 +530,7 @@ if(is_lag){
                                     moab::Interface::UNION);
         tets = tets.subset_by_type(MBTET);
         block_data->tEts = tets;
-        cerr << "Side " << tets.size()
-             << "\n";
+        cerr << "Side " << tets.size() << "\n";
 
         // CHKERR moab.get_adjacencies(slave_tris, 3, true, tets,
         //                             moab::Interface::UNION);
@@ -651,47 +651,54 @@ if(is_lag){
             fe_lhs_simple_contact, common_data_simple_contact,
             "SPATIAL_POSITION", "LAGMULT", Aij);
       } else {
-        contact_problem->setContactOperatorsRhsOperators(
+        contact_problem->setContactOperatorsRhsALESpatial(
             fe_rhs_simple_contact, common_data_simple_contact,
-            "SPATIAL_POSITION", "LAGMULT", "ELASTIC");
-
-        contact_problem->setContactOperatorsLhsOperators(
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT");
+        contact_problem->setContactOperatorsLhsALESpatial(
             fe_lhs_simple_contact, common_data_simple_contact,
-            "SPATIAL_POSITION", "LAGMULT", Aij);
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT");
+        // contact_problem->setContactOperatorsRhsOperators(
+        //     fe_rhs_simple_contact, common_data_simple_contact,
+        //     "SPATIAL_POSITION", "LAGMULT", "ELASTIC");
+
+        // contact_problem->setContactOperatorsLhsOperators(
+        //     fe_lhs_simple_contact, common_data_simple_contact,
+        //     "SPATIAL_POSITION", "LAGMULT", Aij);
       }
-} else {
-  if (is_nitsche){
-    contact_problem->setContactNitschePenaltyRhsOperators(
-        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS", "ELASTIC",
-        contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
-        contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
-    contact_problem->setContactNitschePenaltyLhsOperators(
-        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS", "ELASTIC",
-        contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
-        contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1], Aij);
-  }else {
-    contact_problem->setContactPenaltyRhsOperators(
-        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION");
+    } else {
+      if (is_nitsche) {
+        contact_problem->setContactNitschePenaltyRhsOperators(
+            fe_rhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "ELASTIC",
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
+        contact_problem->setContactNitschePenaltyLhsOperators(
+            fe_lhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "ELASTIC",
+            contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+            contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
+            Aij);
+      } else {
+        contact_problem->setContactPenaltyRhsOperators(
+            fe_rhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION");
 
-    contact_problem->setContactPenaltyLhsOperators(fe_lhs_simple_contact,
-                                                   common_data_simple_contact,
-                                                   "SPATIAL_POSITION", Aij);
-  }
+        contact_problem->setContactPenaltyLhsOperators(
+            fe_lhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", Aij);
+      }
+    }
 
-}
+    // Assemble pressure and traction forces
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(
+        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
 
-// Assemble pressure and traction forces
-boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
-                                                   NULL, "SPATIAL_POSITION");
-
-boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
-    neumann_forces.begin();
-for (; mit != neumann_forces.end(); mit++) {
-  CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
-                                &mit->second->getLoopFe(), NULL, NULL);
+    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+        neumann_forces.begin();
+    for (; mit != neumann_forces.end(); mit++) {
+      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
+                                    &mit->second->getLoopFe(), NULL, NULL);
     }
 
     // Implementation of spring element
@@ -712,24 +719,24 @@ for (; mit != neumann_forces.end(); mit++) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact.get(),
-                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                  fe_rhs_simple_contact.get(), PETSC_NULL,
+                                  PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr,
-                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
 
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact.get(),
-                                  NULL, NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                  fe_lhs_simple_contact.get(), NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
-                                  NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
     SNES snes;
@@ -805,8 +812,9 @@ for (; mit != neumann_forces.end(); mit++) {
     moab::Interface &moab_proc = mb_post; // create interface to database
 
     // moab_instance
-    moab::Core mb_post_vertex;                   // create database
-    moab::Interface &moab_proc_vertex = mb_post_vertex; // create interface to database
+    moab::Core mb_post_vertex; // create database
+    moab::Interface &moab_proc_vertex =
+        mb_post_vertex; // create interface to database
 
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_post_proc_simple_contact_vertex =
@@ -818,12 +826,17 @@ for (; mit != neumann_forces.end(); mit++) {
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
           "SPATIAL_POSITION", "LAGMULT", mb_post);
     } else {
-      contact_problem->setContactOperatorsForPostProc(
+      // contact_problem->setContactOperatorsForPostProc(
+      //     fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+      //     "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
+      //     mb_post, contact_problem->commonDataSimpleContact
+      //         ->setOfMasterFacesData[1],
+      //     contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
+      //     is_lag);
+
+      contact_problem->setContactOperatorsForPostProcNoSide(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
-          mb_post, contact_problem->commonDataSimpleContact
-              ->setOfMasterFacesData[1],
-          contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
+          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", mb_post,
           is_lag);
 
       fe_post_proc_simple_contact_vertex->getOpPtrVector().push_back(
@@ -853,7 +866,7 @@ for (; mit != neumann_forces.end(); mit++) {
                                     fe_post_proc_simple_contact_vertex.get());
     std::ostringstream ostrm_lam;
     ostrm_lam << "out_contact_vertex_lambda_n"
-          << ".h5m";
+              << ".h5m";
 
     out_file_name = ostrm_lam.str();
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
