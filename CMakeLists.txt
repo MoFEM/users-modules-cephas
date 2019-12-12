@@ -84,7 +84,7 @@ include(cmake/CheckMoFEMVersion.cmake)
 message(STATUS "MoFEM version ${MoFEM_VERSION}")
 add_definitions(${MoFEM_DEFINE_RESTRICT})
 
-find_package(Git)
+# Find mbconvert
 find_program(
   MBCONVERT NAMES mbconvert
   PATH 
