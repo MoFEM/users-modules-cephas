@@ -79,7 +79,7 @@ private:
 
   public:
     OpRadiationLhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpFaceBase("U", OpFaceBase::OPROWCOL), approxVals(approx_vals) {}
+        : OpFaceBase("U", "U", OpFaceBase::OPROWCOL), approxVals(approx_vals) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
@@ -92,7 +92,7 @@ private:
 
   public:
     OpRadiationRhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpFaceBase("U", OpFaceBase::OPROW), approxVals(approx_vals) {}
+        : OpFaceBase("U", "U", OpFaceBase::OPROW), approxVals(approx_vals) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
@@ -103,7 +103,7 @@ private:
     FTensor::Index<'i', 2> i; ///< summit Index
 
   public:
-    OpFluxRhs() : OpFaceBase("U", OpFaceBase::OPROW) {}
+    OpFluxRhs() : OpFaceBase("U", "U", OpFaceBase::OPROW) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };

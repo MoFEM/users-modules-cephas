@@ -11,6 +11,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
+find_package(Git)
+
 function(get_git_hash GIT_DIR _hashvar)
   execute_process(COMMAND
     "${GIT_EXECUTABLE}"  rev-parse  HEAD
