@@ -36,6 +36,8 @@ else(EXTERNAL_MODULES_BUILD)
 
   get_git_hash(${PROJECT_SOURCE_DIR} GIT_UM_SHA1)
   get_git_tag(${PROJECT_SOURCE_DIR} GIT_VERSION)
+  get_git_version(
+    ${GIT_VERSION} UM_VERSION_MAJOR UM_VERSION_MINOR UM_VERSION_BUILD)
 
   # Build basic finite element library
   include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
@@ -55,8 +57,6 @@ else(EXTERNAL_MODULES_BUILD)
 endif(EXTERNAL_MODULES_BUILD)
 
 message(STATUS "MoFEM version ${MoFEM_VERSION}")
-get_git_version(
-  ${GIT_VERSION} UM_VERSION_MAJOR UM_VERSION_MINOR UM_VERSION_BUILD)
 set(UM_VERSON 
   ${UM_VERSION_MAJOR}.${UM_VERSION_MINOR}.${UM_VERSION_BUILD})
 message(STATUS "User Module commit id: " ${GIT_UM_SHA1})
