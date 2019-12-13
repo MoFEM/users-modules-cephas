@@ -27,7 +27,7 @@ function(get_git_hash GIT_DIR _hashvar)
   endif(NOT ${res})
 endfunction()
 
-function(get_git_tag GIT_DIR _gittag) 
+function(get_git_tag GIT_DIR FALLBACK _gittag) 
   execute_process(COMMAND
     "${GIT_EXECUTABLE}" describe --tags 
     WORKING_DIRECTORY ${GIT_DIR}
@@ -37,7 +37,7 @@ function(get_git_tag GIT_DIR _gittag)
     string(REGEX REPLACE "\n$" "" GIT_TAG "${GIT_TAG}")
     set(${_gittag} "${GIT_TAG}" PARENT_SCOPE)
   else(NOT ${res})
-    set(${_gittag} "v0.0.0-not-found" PARENT_SCOPE)
+    set(${_gittag} "FALLBACK-fallback" PARENT_SCOPE)
   endif(NOT ${res}) 
 endfunction()
 
