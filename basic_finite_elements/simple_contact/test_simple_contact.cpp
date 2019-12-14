@@ -305,7 +305,7 @@ int main(int argc, char *argv[]) {
 
 if(is_lag){
     if (is_hdiv_trace) {
-      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
+      CHKERR m_field.add_field("LAGMULT", HDIV, AINSWORTH_LEGENDRE_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
     } else {
@@ -316,16 +316,36 @@ if(is_lag){
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+
+      // Add finite elements
+
+
     }
 }
 
-    // build field
-    CHKERR m_field.build_fields();
+// CHKERR m_field.add_field("LAGMULT", L2, AINSWORTH_LEGENDRE_BASE, 1,
+//                          MB_TAG_SPARSE, MF_ZERO);
 
-    // Projection on "x" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
-      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
+// CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+// CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+
+// CHKERR m_field.add_finite_element("L2MATERIAL", MF_ZERO);
+// CHKERR m_field.modify_finite_element_add_field_row("L2MATERIAL", "LAGMULT");
+// CHKERR m_field.modify_finite_element_add_field_col("L2MATERIAL", "LAGMULT");
+// CHKERR m_field.modify_finite_element_add_field_data("L2MATERIAL", "LAGMULT");
+
+// CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
+//                                                   "L2MATERIAL");
+// CHKERR m_field.build_finite_elements("L2MATERIAL", &slave_tris);
+
+
+// build field
+CHKERR m_field.build_fields();
+
+// Projection on "x" field
+{
+  Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
+  CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
     }
     // MESH_NODE_POSITIONS
     {
@@ -586,6 +606,7 @@ if(is_lag){
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+    // CHKERR DMMoFEMAddElement(dm, "L2MATERIAL");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
 
@@ -681,6 +702,14 @@ if(is_lag){
   }
 
 }
+
+// contact_problem->setContactOperatorsRhsOperatorsL2(
+//     fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+//     "LAGMULT", "L2MATERIAL");
+
+// contact_problem->setContactOperatorsLhsOperatorsL2(
+//     fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+//     "LAGMULT", "L2MATERIAL", Aij);
 
 // Assemble pressure and traction forces
 boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -830,6 +859,13 @@ for (; mit != neumann_forces.end(); mit++) {
           new SimpleContactProblem::OpLagMultOnVertex(m_field, "LAGMULT",
                                                       mb_post_vertex));
     }
+
+    // contact_problem->setContactOperatorsForPostProcL2(
+    //     fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+    //     "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
+    //     "MATERIAL", mb_post,
+    //     contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+    //     contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1]);
 
     mb_post.delete_mesh();
 
