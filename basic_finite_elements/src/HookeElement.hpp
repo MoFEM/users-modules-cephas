@@ -502,11 +502,7 @@ HookeElement::OpCalculateStrain<D>::OpCalculateStrain(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <bool D>
@@ -646,11 +642,7 @@ HookeElement::OpCalculateHomogeneousStiffness<S>::
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
@@ -708,11 +700,7 @@ HookeElement::OpCalculateStress<S>::OpCalculateStress(
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
@@ -1135,11 +1123,7 @@ HookeElement::OpAleLhsPre_dX_dx<S>::OpAleLhsPre_dX_dx(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>

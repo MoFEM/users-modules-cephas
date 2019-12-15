@@ -332,11 +332,7 @@ struct NeumannForcesSurface {
                            bool ho_geometry = false)
         : VolOnSideUserDataOperator(field_name, UserDataOperator::OPROW),
           dataAtPts(data_at_pts), hoGeometry(ho_geometry) {
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
+      std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
       sYmm = false;
     };
   };
