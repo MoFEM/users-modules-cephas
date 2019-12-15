@@ -22,7 +22,7 @@ template <typename EleOp> struct OpTools {
     OpBase(const std::string row_field_name, const std::string col_field_name,
            const typename EleOp::OpType type,
            boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : EleOp(row_field_name, col_field_name, type, true),
+        : EleOp(row_field_name, col_field_name, type, false),
           boundaryMarker(boundary_marker) {}
 
     /**
@@ -94,214 +94,10 @@ template <typename EleOp> struct OpTools {
     virtual MoFEMErrorCode aSsemble(EntData &data);
   };
 
-  template <typename OpRealLhs>
-  struct OpAssembleComplexDiagonalLhs : public OpRealLhs {
-
-    OpAssembleComplexDiagonalLhs(const std::string real_field_name,
-                                 const std::string imag_field_name,
-                                 ScalarFun beta)
-        : OpRealLhs(real_field_name, beta), realField(real_field_name),
-          imagField(imag_field_name) {}
-
-  protected:
-    const std::string realField, imagField;
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data) {
-      MoFEMFunctionBegin;
-      // get number of dofs on row
-      OpRealLhs::nbRows = row_data.getIndices().size();
-      // if no dofs on row, exit that work, nothing to do here
-      if (!OpRealLhs::nbRows)
-        MoFEMFunctionReturnHot(0);
-      // get number of dofs on column
-      OpRealLhs::nbCols = col_data.getIndices().size();
-      // if no dofs on Columbia, exit nothing to do here
-      if (!OpRealLhs::nbCols)
-        MoFEMFunctionReturnHot(0);
-      // get number of integration points
-      OpRealLhs::nbIntegrationPts = OpRealLhs::getGaussPts().size2();
-      // set size of local entity bock
-      OpRealLhs::locMat.resize(OpRealLhs::nbRows, OpRealLhs::nbCols, false);
-      // clear matrix
-      OpRealLhs::locMat.clear();
-      // check if entity block is on matrix diagonal
-      if (row_side == col_side && row_type == col_type) {
-        OpRealLhs::isDiag = true; // yes, it is
-      } else {
-        OpRealLhs::isDiag = false;
-      }
-      // integrate local matrix for entity block
-      CHKERR this->iNtegrate(row_data, col_data);
-      // assemble local matrix
-      CHKERR this->aSsemble(row_side, col_side, row_type, col_type, row_data,
-                            col_data);
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode aSsemble(int row_side, int col_side, EntityType row_type,
-                            EntityType col_type, EntData &row_data,
-                            EntData &col_data) {
-      MoFEMFunctionBegin;
-      Mat B = OpBase::getFEMethod()->ksp_B;
-
-      auto &real_row_indices = row_data.getIndices();
-      auto &real_col_indices = col_data.getIndices();
-      VectorInt imag_row_indices, imag_col_indices;
-      imag_row_indices.resize(OpRealLhs::nbRows, false);
-      imag_col_indices.resize(OpRealLhs::nbCols, false);
-      std::fill(imag_row_indices.begin(), imag_row_indices.end(), -1);
-      std::fill(imag_col_indices.begin(), imag_col_indices.end(), -1);
-      CHKERR OpRealLhs::getProblemRowIndices(imagField, row_type, row_side,
-                                             imag_row_indices);
-      CHKERR OpRealLhs::getProblemColIndices(imagField, col_type, col_side,
-                                             imag_col_indices);
-
-      // assemble local matrix
-
-      CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
-                          OpRealLhs::nbCols, &real_col_indices[0],
-                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      // CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
-      //                     OpRealLhs::nbCols, &imag_col_indices[0],
-      //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      // CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
-      //                     OpRealLhs::nbCols, &real_col_indices[0],
-      //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      // OpRealLhs::locMat *= -1;
-      CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
-                          OpRealLhs::nbCols, &imag_col_indices[0],
-                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
-
-      if (!OpRealLhs::isDiag) {
-        // if not diagonal term and since global matrix is symmetric assemble
-        // transpose term.
-        OpRealLhs::locMat = trans(OpRealLhs::locMat);
-        CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
-                            OpRealLhs::nbRows, &imag_row_indices[0],
-                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        // OpRealLhs::locMat *= -1;
-        CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
-                            OpRealLhs::nbRows, &real_row_indices[0],
-                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        // CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
-        //                     OpRealLhs::nbRows, &real_row_indices[0],
-        //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        // CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
-        //                     OpRealLhs::nbRows, &imag_row_indices[0],
-        //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      }
-      MoFEMFunctionReturn(0);
-    }
-  };
-
-  template <typename OpRealLhs>
-  struct OpAssembleComplexOffDiagonalLhs : public OpRealLhs {
-
-    OpAssembleComplexOffDiagonalLhs(const std::string real_field_name,
-                                 const std::string imag_field_name,
-                                 ScalarFun beta)
-        : OpRealLhs(real_field_name, beta), realField(real_field_name),
-          imagField(imag_field_name) {}
-
-  protected:
-    const std::string realField, imagField;
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data) {
-      MoFEMFunctionBegin;
-      // get number of dofs on row
-      OpRealLhs::nbRows = row_data.getIndices().size();
-      // if no dofs on row, exit that work, nothing to do here
-      if (!OpRealLhs::nbRows)
-        MoFEMFunctionReturnHot(0);
-      // get number of dofs on column
-      OpRealLhs::nbCols = col_data.getIndices().size();
-      // if no dofs on Columbia, exit nothing to do here
-      if (!OpRealLhs::nbCols)
-        MoFEMFunctionReturnHot(0);
-      // get number of integration points
-      OpRealLhs::nbIntegrationPts = OpRealLhs::getGaussPts().size2();
-      // set size of local entity bock
-      OpRealLhs::locMat.resize(OpRealLhs::nbRows, OpRealLhs::nbCols, false);
-      // clear matrix
-      OpRealLhs::locMat.clear();
-      // check if entity block is on matrix diagonal
-      if (row_side == col_side && row_type == col_type) {
-        OpRealLhs::isDiag = true; // yes, it is
-      } else {
-        OpRealLhs::isDiag = false;
-      }
-      // integrate local matrix for entity block
-      CHKERR this->iNtegrate(row_data, col_data);
-      // assemble local matrix
-      CHKERR this->aSsemble(row_side, col_side, row_type, col_type, row_data,
-                            col_data);
-      MoFEMFunctionReturn(0);
-    }
-
-    MoFEMErrorCode aSsemble(int row_side, int col_side, EntityType row_type,
-                            EntityType col_type, EntData &row_data,
-                            EntData &col_data) {
-      MoFEMFunctionBegin;
-      Mat B = OpBase::getFEMethod()->ksp_B;
-
-      auto &real_row_indices = row_data.getIndices();
-      auto &real_col_indices = col_data.getIndices();
-      VectorInt imag_row_indices, imag_col_indices;
-      imag_row_indices.resize(OpRealLhs::nbRows, false);
-      imag_col_indices.resize(OpRealLhs::nbCols, false);
-      std::fill(imag_row_indices.begin(), imag_row_indices.end(), -1);
-      std::fill(imag_col_indices.begin(), imag_col_indices.end(), -1);
-      CHKERR OpRealLhs::getProblemRowIndices(imagField, row_type, row_side,
-                                             imag_row_indices);
-      CHKERR OpRealLhs::getProblemColIndices(imagField, col_type, col_side,
-                                             imag_col_indices);
-
-      // assemble local matrix
-
-      CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
-                          OpRealLhs::nbCols, &real_col_indices[0],
-                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      // CHKERR MatSetValues(B, OpRealLhs::nbRows, &real_row_indices[0],
-      //                     OpRealLhs::nbCols, &imag_col_indices[0],
-      //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      // CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
-      //                     OpRealLhs::nbCols, &real_col_indices[0],
-      //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      // OpRealLhs::locMat *= -1;
-      CHKERR MatSetValues(B, OpRealLhs::nbRows, &imag_row_indices[0],
-                          OpRealLhs::nbCols, &imag_col_indices[0],
-                          &OpRealLhs::locMat(0, 0), ADD_VALUES);
-
-      if (!OpRealLhs::isDiag) {
-        // if not diagonal term and since global matrix is symmetric assemble
-        // transpose term.
-        OpRealLhs::locMat = trans(OpRealLhs::locMat);
-        CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
-                            OpRealLhs::nbRows, &imag_row_indices[0],
-                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        // OpRealLhs::locMat *= -1;
-        CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
-                            OpRealLhs::nbRows, &real_row_indices[0],
-                            &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        // CHKERR MatSetValues(B, OpRealLhs::nbCols, &imag_col_indices[0],
-        //                     OpRealLhs::nbRows, &real_row_indices[0],
-        //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-        // CHKERR MatSetValues(B, OpRealLhs::nbCols, &real_col_indices[0],
-        //                     OpRealLhs::nbRows, &imag_row_indices[0],
-        //                     &OpRealLhs::locMat(0, 0), ADD_VALUES);
-      }
-      MoFEMFunctionReturn(0);
-    }
-  };
-
   //! [Source operator]
   template <int DIM> struct OpSource : public OpBase {
 
-    OpSource(std::string field_name, ScalarFun source_fun,
+    OpSource(const std::string field_name, ScalarFun source_fun,
              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
         : OpBase(field_name, field_name, OpBase::OPROW, boundary_marker),
           sourceFun(source_fun) {}
@@ -341,9 +137,11 @@ template <typename EleOp> struct OpTools {
   //! [Grad operator]
   template <int DIM> struct OpGradGrad : public OpBase {
 
-    OpGradGrad(const std::string field_name, ScalarFun beta,
+    OpGradGrad(const std::string row_field_name,
+               const std::string col_field_name, ScalarFun beta,
                boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(field_name, field_name, OpBase::OPROWCOL, boundary_marker),
+        : OpBase(row_field_name, col_field_name, OpBase::OPROWCOL,
+                 boundary_marker),
           betaCoeff(beta) {}
 
   protected:
@@ -441,9 +239,11 @@ template <typename EleOp> struct OpTools {
   //! [Mass operator]
   struct OpMass : public OpBase {
 
-    OpMass(const std::string field_name, ScalarFun beta,
+    OpMass(const std::string row_field_name, const std::string col_field_name,
+           ScalarFun beta,
            boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(field_name, field_name, OpBase::OPROWCOL, boundary_marker),
+        : OpBase(row_field_name, col_field_name, OpBase::OPROWCOL,
+                 boundary_marker),
           betaCoeff(beta) {}
 
   protected:
@@ -557,16 +357,6 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
                       ADD_VALUES);
   row_data.getIndices().data().swap(row_indices.data());
 
-  if (!OpBase::isDiag) {
-    // if not diagonal term and since global matrix is symmetric assemble
-    // transpose term.
-    auto col_indices = col_data.getIndices();
-    CHKERR OpBase::applyBoundaryMarker(col_data);
-    OpBase::locMat = trans(OpBase::locMat);
-    CHKERR MatSetValues(B, col_data, row_data, &*locMat.data().begin(),
-                        ADD_VALUES);
-    col_data.getIndices().data().swap(col_indices.data());
-  }
   MoFEMFunctionReturn(0);
 }
 

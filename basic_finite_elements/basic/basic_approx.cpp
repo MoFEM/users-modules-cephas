@@ -29,14 +29,14 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using VolEle = FaceElementForcesAndSourcesCoreBase;
-using VolEleOp = VolEle::UserDataOperator;
+using DomianEle = FaceElementForcesAndSourcesCoreBase;
+using DomianEleOp = DomianEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 #include <BaseOps.hpp>
 
-using OpVolMass = OpTools<VolEleOp>::OpMass;
-using OpVolSource = OpTools<VolEleOp>::OpSource<2>;
+using OpDomainMass = OpTools<DomianEleOp>::OpMass;
+using OpDomainSource = OpTools<DomianEleOp>::OpSource<2>;
 
 struct Example {
 
@@ -67,10 +67,10 @@ private:
   };
   boost::shared_ptr<CommonData> commonDataPtr;
 
-  struct OpError : public VolEleOp {
+  struct OpError : public DomianEleOp {
     boost::shared_ptr<CommonData> commonDataPtr;
     OpError(boost::shared_ptr<CommonData> &common_data_ptr)
-        : VolEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
+        : DomianEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };
@@ -122,9 +122,9 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
   auto beta = [](const double, const double, const double) { return 1; };
-  basic->getOpDomainLhsPipeline().push_back(new OpVolMass("U", beta));
+  basic->getOpDomainLhsPipeline().push_back(new OpDomainMass("U", "U", beta));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource("U", Example::approxFunction));
+      new OpDomainSource("U", Example::approxFunction));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);

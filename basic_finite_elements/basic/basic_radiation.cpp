@@ -29,17 +29,17 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using VolEle = FaceElementForcesAndSourcesCoreBase;
-using VolEleOp = VolEle::UserDataOperator;
-using FaceEle = EdgeElementForcesAndSourcesCoreBase;
-using FaceEleOp = FaceEle::UserDataOperator;
+using DomianEle = FaceElementForcesAndSourcesCoreBase;
+using DomianEleOp = DomianEle::UserDataOperator;
+using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 #include <BaseOps.hpp>
 
-using OpVolGradGrad = OpTools<VolEleOp>::OpGradGrad<2>;
-using OpVolGradGradResidual = OpTools<VolEleOp>::OpGradGradResidual<2>;
-using OpFaceBase = OpTools<FaceEleOp>::OpBase;
+using OpDomainGradGrad = OpTools<DomianEleOp>::OpGradGrad<2>;
+using OpVolGradGradResidual = OpTools<DomianEleOp>::OpGradGradResidual<2>;
+using OpFaceBase = OpTools<BoundaryEleOp>::OpBase;
 
 constexpr double emissivity = 1;
 constexpr double boltzmann_constant = 5.670367e-2;
@@ -171,7 +171,7 @@ MoFEMErrorCode Example::OPs() {
   auto beta = [](const double r, const double, const double) {
     return 2e3 * 2 * M_PI * r;
   };
-  basic->getOpDomainLhsPipeline().push_back(new OpVolGradGrad("U", beta));
+  basic->getOpDomainLhsPipeline().push_back(new OpDomainGradGrad("U", "U", beta));
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
 
   basic->getOpDomainRhsPipeline().push_back(

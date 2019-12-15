@@ -29,19 +29,18 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using VolEle = FaceElementForcesAndSourcesCoreBase;
-using VolEleOp = VolEle::UserDataOperator;
-using FaceEle = EdgeElementForcesAndSourcesCoreBase;
-using FaceEleOp = FaceEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
+using DomianEle = FaceElementForcesAndSourcesCoreBase;
+using DomianEleOp = DomianEle::UserDataOperator;
+using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
+using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 #include <BaseOps.hpp>
 
-using OpVolGradGrad = OpTools<VolEleOp>::OpGradGrad<2>;
-using OpVolMass = OpTools<VolEleOp>::OpMass;
-using OpVolSource = OpTools<VolEleOp>::OpSource<2>;
-using OpFaceMass = OpTools<FaceEleOp>::OpMass;
-using OpFaceSource = OpTools<FaceEleOp>::OpSource<2>;
+using OpDomainGradGrad = OpTools<DomianEleOp>::OpGradGrad<2>;
+using OpDomainSource = OpTools<DomianEleOp>::OpSource<2>;
+using OpBoundaryMass = OpTools<BoundaryEleOp>::OpMass;
+using OpBoundarySource = OpTools<BoundaryEleOp>::OpSource<2>;
 
 struct Example {
 
@@ -78,10 +77,10 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<std::vector<bool>> boundaryMarker;
 
-  struct OpError : public VolEleOp {
+  struct OpError : public DomianEleOp {
     boost::shared_ptr<CommonData> commonDataPtr;
     OpError(boost::shared_ptr<CommonData> &common_data_ptr)
-        : VolEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
+        : DomianEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };
@@ -169,14 +168,14 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double, const double, const double) { return 1; };
   basic->getOpDomainLhsPipeline().push_back(
-      new OpVolGradGrad("U", beta, boundaryMarker));
+      new OpDomainGradGrad("U", "U", beta, boundaryMarker));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource("U", Example::nablaFunction, boundaryMarker));
+      new OpDomainSource("U", Example::nablaFunction, boundaryMarker));
   CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
   CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
-  basic->getOpBoundaryLhsPipeline().push_back(new OpFaceMass("U", beta));
+  basic->getOpBoundaryLhsPipeline().push_back(new OpBoundaryMass("U", "U", beta));
   basic->getOpBoundaryRhsPipeline().push_back(
-      new OpFaceSource("U", approxFunction));
+      new OpBoundarySource("U", approxFunction));
   CHKERR basic->setBoundaryRhsIntegrationRule(integrationRule);
   CHKERR basic->setBoundaryLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);

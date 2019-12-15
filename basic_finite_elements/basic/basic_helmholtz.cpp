@@ -29,15 +29,19 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using VolEle = FaceElementForcesAndSourcesCoreBase;
-using VolEleOp = VolEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
+
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
+using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEleOp = EdgeEle::UserDataOperator;
 
 #include <BaseOps.hpp>
 
-using OpVolGradGrad = OpTools<VolEleOp>::OpGradGrad<2>;
-using OpVolMass = OpTools<VolEleOp>::OpMass;
-using OpVolSource = OpTools<VolEleOp>::OpSource<2>;
+using OpDomainGradGrad = OpTools<DomainEleOp>::OpGradGrad<2>;
+using OpDomainMass = OpTools<DomainEleOp>::OpMass;
+using OpDomainSource = OpTools<DomainEleOp>::OpSource<2>;
+using OpBoundaryMass = OpTools<EdgeEleOp>::OpMass;
 
 struct Example {
 
@@ -47,15 +51,6 @@ struct Example {
 
 private:
   MoFEM::Interface &mField;
-
-  static double sourceFunction(const double x, const double y, const double z) {
-    const double xc = 0;
-    const double yc = -1.25;
-    const double xs = x - xc;
-    const double ys = y - yc;
-    constexpr double eps = 10;
-    return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
-  };
 
   MoFEMErrorCode setUP();
   MoFEMErrorCode bC();
@@ -89,7 +84,7 @@ MoFEMErrorCode Example::setUP() {
                                 1);
   CHKERR simple->addBoundaryField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 1);
-  constexpr int order = 7;
+  constexpr int order = 3;
   CHKERR simple->setFieldOrder("U_REAL", order);
   CHKERR simple->setFieldOrder("U_IMAG", order);
   CHKERR simple->setUp();
@@ -100,27 +95,6 @@ MoFEMErrorCode Example::setUP() {
 //! [Applying essential BC]
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
-  // Get skin on the body, i.e. body boundary, and apply homogenous
-  // Dirichlet conditions on that boundary.
-  Range surface;
-  CHKERR mField.get_moab().get_entities_by_dimension(0, 2, surface, false);
-  Skinner skin(&mField.get_moab());
-  Range edges;
-  CHKERR skin.find_skin(0, surface, false, edges);
-  Range edges_part;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  CHKERR pcomm->filter_pstatus(edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                               PSTATUS_NOT, -1, &edges_part);
-  Range edges_verts;
-  CHKERR mField.get_moab().get_connectivity(edges_part, edges_verts, false);
-  // Since Dirichlet b.c. are essential boundary conditions, remove DOFs
-  // from the problem.
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simple->getProblemName(), "U_IMAG", unite(edges_verts, edges_part));
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simple->getProblemName(), "U_REAL", unite(edges_verts, edges_part));
   MoFEMFunctionReturn(0);
 }
 //! [Applying essential BC]
@@ -129,24 +103,61 @@ MoFEMErrorCode Example::bC() {
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+
+  auto vol_source_function = [](const double x, const double y,
+                                const double z) {
+    const double xc = 0;
+    const double yc = -1.25;
+    const double xs = x - xc;
+    const double ys = y - yc;
+    constexpr double eps = 10;
+    return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
+  };
+
+  constexpr double k = 60;
   auto beta = [](const double, const double, const double) { return -1; };
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpTools<VolEleOp>::OpAssembleComplexDiagonalLhs<OpVolGradGrad>(
-          "U_REAL", "U_IMAG", beta));
-  auto k2 = [](const double, const double, const double) { return pow(60, 2); };
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpTools<VolEleOp>::OpAssembleComplexDiagonalLhs<OpVolMass>("U_REAL", "U_IMAG",
-                                                             k2));
-
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpVolSource("U_REAL", sourceFunction));
-
+  auto k2 = [k](const double, const double, const double) { return pow(k, 2); };
+  auto kp = [k](const double, const double, const double) { return k; };
+  auto km = [k](const double, const double, const double) { return -k; };
   auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+
+  auto set_domain = [&]() {
+    MoFEMFunctionBegin;
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpDomainGradGrad("U_REAL", "U_REAL", beta));
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpDomainGradGrad("U_REAL", "U_REAL", beta));
+
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpDomainMass("U_REAL", "U_REAL", k2));
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpDomainMass("U_IMAG", "U_IMAG", k2));
+
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpDomainSource("U_REAL", vol_source_function));
+
+    CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto set_boundary = [&]() {
+    MoFEMFunctionBegin;
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("U_IMAG", "U_REAL", kp));
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("U_REAL", "U_IMAG", km));
+    CHKERR basic->setBoundaryRhsIntegrationRule(integration_rule);
+    CHKERR basic->setBoundaryLhsIntegrationRule(integration_rule);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR set_domain();
+  CHKERR set_boundary();
+
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -177,6 +188,7 @@ MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
   basic->getDomainLhsFE().reset();
+  basic->getBoundaryLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("U_REAL");
