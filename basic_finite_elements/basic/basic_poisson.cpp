@@ -1,6 +1,6 @@
 /**
- * \file basic_approx.cpp
- * \example basic_approx.cpp
+ * \file basic_poisson.cpp
+ * \example basic_poisson.cpp
  *
  * Using Basic interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
