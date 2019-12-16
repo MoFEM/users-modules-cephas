@@ -84,7 +84,7 @@ MoFEMErrorCode Example::setUP() {
                                 1);
   CHKERR simple->addBoundaryField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 1);
-  constexpr int order = 3;
+  constexpr int order = 10;
   CHKERR simple->setFieldOrder("U_REAL", order);
   CHKERR simple->setFieldOrder("U_IMAG", order);
   CHKERR simple->setUp();
@@ -110,11 +110,12 @@ MoFEMErrorCode Example::OPs() {
     const double yc = -1.25;
     const double xs = x - xc;
     const double ys = y - yc;
-    constexpr double eps = 10;
+    constexpr double eps = 60;
     return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
   };
 
-  constexpr double k = 60;
+  constexpr double k = 90;
+
   auto beta = [](const double, const double, const double) { return -1; };
   auto k2 = [k](const double, const double, const double) { return pow(k, 2); };
   auto kp = [k](const double, const double, const double) { return k; };
@@ -129,7 +130,7 @@ MoFEMErrorCode Example::OPs() {
     basic->getOpDomainLhsPipeline().push_back(
         new OpDomainGradGrad("U_REAL", "U_REAL", beta));
     basic->getOpDomainLhsPipeline().push_back(
-        new OpDomainGradGrad("U_REAL", "U_REAL", beta));
+        new OpDomainGradGrad("U_IMAG", "U_IMAG", beta));
 
     basic->getOpDomainLhsPipeline().push_back(
         new OpDomainMass("U_REAL", "U_REAL", k2));
@@ -150,7 +151,6 @@ MoFEMErrorCode Example::OPs() {
         new OpBoundaryMass("U_IMAG", "U_REAL", kp));
     basic->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryMass("U_REAL", "U_IMAG", km));
-    CHKERR basic->setBoundaryRhsIntegrationRule(integration_rule);
     CHKERR basic->setBoundaryLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
@@ -188,7 +188,9 @@ MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
   basic->getDomainLhsFE().reset();
+  basic->getDomainRhsFE().reset();
   basic->getBoundaryLhsFE().reset();
+  basic->getBoundaryRhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("U_REAL");

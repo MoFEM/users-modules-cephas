@@ -56,7 +56,6 @@ template <typename EleOp> struct OpTools {
     int nbRows;           ///< number of dofs on rows
     int nbCols;           ///< number if dof on column
     int nbIntegrationPts; ///< number of integration points
-    bool isDiag;          ///< true if this block is on diagonal
 
     MatrixDouble locMat; ///< local entity block matrix
     VectorDouble locF;   ///< local entity vector
@@ -322,12 +321,6 @@ OpTools<EleOp>::OpBase::doWork(int row_side, int col_side, EntityType row_type,
   OpBase::locMat.resize(OpBase::nbRows, OpBase::nbCols, false);
   // clear matrix
   OpBase::locMat.clear();
-  // check if entity block is on matrix diagonal
-  if (row_side == col_side && row_type == col_type) {
-    OpBase::isDiag = true; // yes, it is
-  } else {
-    OpBase::isDiag = false;
-  }
   // integrate local matrix for entity block
   CHKERR this->iNtegrate(row_data, col_data);
   // assemble local matrix
