@@ -363,7 +363,7 @@ int main(int argc, char *argv[]) {
     // CHKERR moab.write_mesh("slave_master_prisms.vtk",
     //                        &meshset_slave_master_prisms, 1);
     if (is_hdiv_trace) {
-      CHKERR m_field.add_field("LAGMULT", HDIV, AINSWORTH_LEGENDRE_BASE, 1);
+      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
 }else {
@@ -544,47 +544,47 @@ int main(int argc, char *argv[]) {
         }
 }
 
-{
-  Range range_vertices;
-  CHKERR m_field.get_moab().get_adjacencies(
-      master_tris, 0, false, range_vertices, moab::Interface::UNION);
+// {
+//   Range range_vertices;
+//   CHKERR m_field.get_moab().get_adjacencies(
+//       master_tris, 0, false, range_vertices, moab::Interface::UNION);
 
-  for (Range::iterator it_vertices = range_vertices.begin();
-       it_vertices != range_vertices.end(); it_vertices++) {
+//   for (Range::iterator it_vertices = range_vertices.begin();
+//        it_vertices != range_vertices.end(); it_vertices++) {
 
-    for (DofEntityByNameAndEnt::iterator itt =
-             m_field.get_dofs_by_name_and_ent_begin("SPATIAL_POSITION",
-                                                    *it_vertices);
-         itt !=
-         m_field.get_dofs_by_name_and_ent_end("SPATIAL_POSITION", *it_vertices);
-         ++itt) {
+//     for (DofEntityByNameAndEnt::iterator itt =
+//              m_field.get_dofs_by_name_and_ent_begin("SPATIAL_POSITION",
+//                                                     *it_vertices);
+//          itt !=
+//          m_field.get_dofs_by_name_and_ent_end("SPATIAL_POSITION", *it_vertices);
+//          ++itt) {
 
-      auto &dof = **itt;
+//       auto &dof = **itt;
 
-      EntityHandle ent = dof.getEnt();
-      int dof_rank = dof.getDofCoeffIdx();
-      VectorDouble3 coords(3);
+//       EntityHandle ent = dof.getEnt();
+//       int dof_rank = dof.getDofCoeffIdx();
+//       VectorDouble3 coords(3);
 
-      CHKERR moab.get_coords(&ent, 1, &coords[0]);
+//       CHKERR moab.get_coords(&ent, 1, &coords[0]);
 
-      if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
-        printf("Before x: %e\n", dof.getFieldData());
+//       if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+//         printf("Before x: %e\n", dof.getFieldData());
 
-        switch (test_case_x) {
+//         switch (test_case_x) {
 
-        case 1:
-          dof.getFieldData() = coords[2] - 8.;
-          break;
-        case 2:
-          dof.getFieldData() = coords[2] + 1.;
-          break;
-        }
-        printf("Master  After x : %e test case %d\n", dof.getFieldData(),
-               test_case_x);
-      }
-    }
-  }
-}
+//         case 1:
+//           dof.getFieldData() = coords[2] - 8.;
+//           break;
+//         case 2:
+//           dof.getFieldData() = coords[2] + 1.;
+//           break;
+//         }
+//         printf("Master  After x : %e test case %d\n", dof.getFieldData(),
+//                test_case_x);
+//       }
+//     }
+//   }
+// }
 
 {
   Range range_vertices;
@@ -668,19 +668,19 @@ int main(int argc, char *argv[]) {
   }
 }
 
-if(is_lag){
+if (is_lag) {
   Range range_vertices;
   CHKERR m_field.get_moab().get_adjacencies(
       slave_tris, 0, false, range_vertices, moab::Interface::UNION);
-
-  for (Range::iterator it_vertices = range_vertices.begin();
-       it_vertices != range_vertices.end(); it_vertices++) {
-
+  cerr << " is lag 1 " << is_lag << "\n";
+  for (Range::iterator it_vertices = slave_tris.begin();
+       it_vertices != slave_tris.end(); it_vertices++) {
+    cerr << " is lag 2 " << is_lag << "\n";
     for (DofEntityByNameAndEnt::iterator itt =
              m_field.get_dofs_by_name_and_ent_begin("LAGMULT", *it_vertices);
          itt != m_field.get_dofs_by_name_and_ent_end("LAGMULT", *it_vertices);
          ++itt) {
-
+      cerr << " is lag 3 " << is_lag << "\n";
       auto &dof = **itt;
 
       EntityHandle ent = dof.getEnt();
@@ -753,13 +753,16 @@ if(is_lag){
   //     contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1], A);
 }
 if (is_hdiv_trace){
+  cerr << " \n\n\n\n\n\n\n ~~~~~~~~~  \n\n\n\n\n\n\n";
+  cerr << " \n\n\n\n\n\n\n ~~~~~~~~~  \n\n\n\n\n\n\n";
+
   contact_problem->setContactOperatorsRhsOperatorsHdiv(
       fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
       "LAGMULT");
 
-contact_problem->setContactOperatorsLhsOperatorsHdiv(
-    fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-    "LAGMULT", A);
+  contact_problem->setContactOperatorsLhsOperatorsHdiv(
+      fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+      "LAGMULT", A);
     } else {
 
       contact_problem->setContactOperatorsRhsOperators(

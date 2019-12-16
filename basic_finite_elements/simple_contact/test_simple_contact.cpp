@@ -305,7 +305,7 @@ int main(int argc, char *argv[]) {
 
 if(is_lag){
     if (is_hdiv_trace) {
-      CHKERR m_field.add_field("LAGMULT", HDIV, AINSWORTH_LEGENDRE_BASE, 1);
+      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
     } else {
@@ -845,7 +845,11 @@ for (; mit != neumann_forces.end(); mit++) {
     if (is_hdiv_trace) {
       contact_problem->setContactOperatorsForPostProcHdiv(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-          "SPATIAL_POSITION", "LAGMULT", mb_post);
+          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
+          mb_post,
+          contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+          contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
+          is_lag);
     } else {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,

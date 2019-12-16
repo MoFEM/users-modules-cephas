@@ -721,7 +721,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlaveHdiv::doWork(
   auto lagrange_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
-  auto t_lag_base = data.getFTensor1N<3>();
+  //auto t_lag_base = data.getFTensor1N<3>();
 
   auto get_tensor_vec = [](VectorDouble &n) {
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
@@ -732,6 +732,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlaveHdiv::doWork(
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    auto t_lag_base = data.getFTensor1N<3>(gg, 0);
     FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[0]);
     for (int bb = 0; bb != nb_base_fun_row; bb++) {
       // cerr << "Lagbase "  << t_lag_base << "    GG " << gg <<" \n";
@@ -1550,7 +1551,6 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
   MoFEMFunctionBegin;
 
   const int nb_row = row_data.getIndices().size();
-  cerr << "nb_row  "<< nb_row << "\n";
   if (!nb_row)
     MoFEMFunctionReturnHot(0);
   const int nb_col = col_data.getIndices().size();
@@ -1560,6 +1560,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
 
   int nb_base_fun_row = row_data.getFieldData().size() / 3;
   int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+  if (col_side == MBVERTEX && row_side == MBVERTEX)
+    cerr << "Passed\n";
 
   const double area_slave =
       commonDataSimpleContact->areaSlave; // same area in master and slave
@@ -2085,6 +2088,7 @@ SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::getJacRow(
 //     DataForcesAndSourcesCore::EntData &row_data,
 //     DataForcesAndSourcesCore::EntData &col_data) {
 
+
 MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork(
     int col_side, EntityType col_type,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -2237,26 +2241,32 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
         // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
         //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
         // }
+        cerr << " Row: gg " << gg << " rows " << nb_base_fun_row << "\n";
         FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
-            &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1), &jac_row(3 * 0 + 0, 2),
-            &jac_row(3 * 0 + 1, 0), &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
-            &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1), &jac_row(3 * 0 + 2, 2),
-            &jac_row(3 * 1 + 0, 0), &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
-            &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1), &jac_row(3 * 1 + 1, 2),
-            &jac_row(3 * 1 + 2, 0), &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
-            &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1), &jac_row(3 * 2 + 0, 2),
-            &jac_row(3 * 2 + 1, 0), &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
-            &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1), &jac_row(3 * 2 + 2, 2));
+            &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
+            &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
+            &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
+            &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1),
+            &jac_row(3 * 0 + 2, 2), &jac_row(3 * 1 + 0, 0),
+            &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
+            &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1),
+            &jac_row(3 * 1 + 1, 2), &jac_row(3 * 1 + 2, 0),
+            &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
+            &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1),
+            &jac_row(3 * 2 + 0, 2), &jac_row(3 * 2 + 1, 0),
+            &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
+            &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1),
+            &jac_row(3 * 2 + 2, 2));
 
         for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
 
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          // t_assemble_m(m, k) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
+          // t_assemble_m(k, m) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
           //                       const_unit_n_master(j) * const_unit_n(m) *
           //                       t_base_master_row; // base not needed
 
-          t_assemble_m(k, m) += val_m * t3_1_row(i, j, k) *
+          t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
                                 const_unit_n_master(i) *
                                 const_unit_n_master(j) * const_unit_n(m) *
                                 t_base_slave_col; // base not needed
@@ -2444,9 +2454,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dxCorrect:
 
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          // t_assemble_m(m, k) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
-          //                       const_unit_n_master(j) * const_unit_n(m) *
-          //                       t_base_master_row; // base not needed
+          t_assemble_m(m, k) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
+                                const_unit_n_master(j) * const_unit_n(m) *
+                                t_base_master_row; // base not needed
 
           t_assemble_m(k, m) += val_m * t3_1_row(i, j, k) *
                                 const_unit_n_master(i) *
@@ -3291,15 +3301,15 @@ MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlaveHdiv::doWork(
   vecR.clear();
 
   auto tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
- auto t_lag_base = data.getFTensor1N<3>();
+ //auto t_lag_base = data.getFTensor1N<3>();
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    double val_s = getGaussPtsSlave()(2, gg) * area_s;
+    double val_s = getGaussPtsSlave()(2, gg) * area_s * tilde_c_fun;
+    auto t_lag_base = data.getFTensor1N<3>(gg, 0);
 
-    
     for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
-      const double s = val_s * t_lag_base(0) * tilde_c_fun;
-      vecR[bbr] += s;  // it is a plus since F always scales with -1
-      ++t_lag_base;    // update rows
+      const double s = val_s * t_lag_base(0) ;
+      vecR[bbr] += s; // it is a plus since F always scales with -1
+      ++t_lag_base;   // update rows
     }
     ++tilde_c_fun;
   } // for gauss points
@@ -3580,11 +3590,10 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlaveHdiv::doWork(
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
-  auto t_lag_base = col_data.getFTensor1N<3>();
-
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     double val_m = getGaussPtsMaster()(2, gg) * area_slave;
-
+    // auto t_lag_base = col_data.getFTensor1N<3>();
+    auto t_lag_base = col_data.getFTensor1N<3>(gg, 0);
     for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
       FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
 
@@ -4776,10 +4785,11 @@ SimpleContactProblem::OpContactConstraintMatrixSlaveSlaveHdiv::doWork(
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
-  auto t_lag_base = col_data.getFTensor1N<3>();
+  //auto t_lag_base = col_data.getFTensor1N<3>();
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     double val_s = getGaussPtsSlave()(2, gg) * area_slave;
+    auto t_lag_base = col_data.getFTensor1N<3>(gg, 0);
 
     for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
 
@@ -5191,13 +5201,13 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveMaster::doWork(
       commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    double val_m = getGaussPtsMaster()(2, gg) * area_slave;
+   const double val_m = (1. + lambda_gap_diff_prod) * cN * getGaussPtsMaster()(2, gg) * area_slave;
 
     FTensor::Tensor0<double *> t_base_master(&col_data.getN()(gg, 0));
 
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
       FTensor::Tensor0<double *> t_base_lambda(&row_data.getN()(gg, 0));
-      const double m = (1. + lambda_gap_diff_prod) * cN * val_m * t_base_master;
+      const double m = val_m * t_base_master;
 
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
 
@@ -5513,50 +5523,37 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv::
 
   FTensor::Index<'i', 3> i;
 
-  auto lagrange_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-
-  auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-
   auto lambda_gap_diff_prod =
       getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
-
-  auto tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
 
   auto const_unit_n = get_tensor_from_vec(
       commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    double val_m = getGaussPtsMaster()(2, gg) * area_slave;
+    double val_m = cN * (1. + lambda_gap_diff_prod) * getGaussPtsSlave()(2, gg) *
+                   area_slave;
 
     FTensor::Tensor0<double *> t_base_master(&col_data.getN()(gg, 0));
-
-    FTensor::Tensor1<double *, 3> t_field_data_master(
-        &col_data.getFieldData()[0], &col_data.getFieldData()[1],
-        &col_data.getFieldData()[2], 3);
+   
 
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
       auto t_lag_base_row = row_data.getFTensor1N<3>(gg, 0);
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-        const double m =
-            val_m * t_lag_base_row(0) /* const_unit_n(i)*/ * t_base_master;
+        // const double m =
+        //     val_m * t_lag_base_row(0) /* const_unit_n(i)*/ * t_base_master;
 
         auto assemble_mat = get_vec_from_mat(NN, bbr, 3 * bbc);
 
-        assemble_mat(i) +=
-            const_unit_n(i) * cN * (1. + lambda_gap_diff_prod) * m;
+        assemble_mat(i) += const_unit_n(i) * val_m *
+                           t_lag_base_row(0) /* const_unit_n(i)*/ *
+                           t_base_master;
 
         ++t_lag_base_row; // update rows
       }
 
       ++t_base_master; // update cols master
-
-      ++t_field_data_master;
     }
 
-    ++tilde_c_fun;
-    ++lagrange_slave;
-    ++gap_gp;
     ++lambda_gap_diff_prod;
   }
 
@@ -5615,9 +5612,12 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlave::doWork(
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
+  auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-  const double val_s = getGaussPtsSlave()(2, gg) * area_slave * cN *
-                   (1. + lambda_gap_diff_prod);
+    
+    const double val_s = getGaussPtsSlave()(2, gg) * area_slave * cN *
+                         (1. + lambda_gap_diff_prod);
 
     FTensor::Tensor0<double *> t_base_slave(&col_data.getN()(gg, 0));
 
@@ -5635,6 +5635,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlave::doWork(
       ++t_base_slave; // update cols slave
     }
     ++lambda_gap_diff_prod;
+    ++gap_gp;
   }
 
   Mat aij;
@@ -5949,31 +5950,19 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv::
 
   FTensor::Index<'i', 3> i;
 
-  auto x_m = getFTensor1FromMat<3>(
-      *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
-  auto x_s = getFTensor1FromMat<3>(
-      *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
-  auto lagrange_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-
-  auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-
   auto lambda_gap_diff_prod =
       getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
-
-  auto tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
+      
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    double val_s = getGaussPtsSlave()(2, gg) * area_slave;
-
+    double val_s = cN * (1. + lambda_gap_diff_prod) *
+                   getGaussPtsSlave()(2, gg) * area_slave;
+    
     FTensor::Tensor0<double *> t_base_slave(&col_data.getN()(gg, 0));
-
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
       auto t_lag_base_row = row_data.getFTensor1N<3>(gg, 0);
-
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
         const double s =
             val_s * t_lag_base_row(0) /* const_unit_n(i)*/ * t_base_slave;
@@ -5981,7 +5970,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv::
         auto assemble_mat = get_vec_from_mat(NN, bbr, 3 * bbc);
 
         assemble_mat(i) -=
-            const_unit_n(i) * cN * (1. + lambda_gap_diff_prod) * s;
+            const_unit_n(i) * s;
 
         ++t_lag_base_row; // update rows
       }
@@ -5989,12 +5978,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv::
       ++t_base_slave; // update cols slave
     }
 
-    ++x_m;
-    ++x_s;
-    ++lagrange_slave;
-    ++gap_gp;
     ++lambda_gap_diff_prod;
-    ++tilde_c_fun;
   }
 
   Mat aij;
@@ -6373,11 +6357,10 @@ MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSideLhsTest::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  // if (row_type != MBTRI || col_type != MBTRI)
-  //   MoFEMFunctionReturnHot(0);
+  if (row_type != MBVERTEX || col_type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
 
   const int row_nb_dofs = row_data.getIndices().size();
-  cerr << "row_nb_dofs " << row_nb_dofs << "\n";
   if (!row_nb_dofs)
     MoFEMFunctionReturnHot(0);
   const int col_nb_dofs = col_data.getIndices().size();

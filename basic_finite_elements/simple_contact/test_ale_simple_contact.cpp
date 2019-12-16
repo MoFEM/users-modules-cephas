@@ -390,6 +390,7 @@ if(is_lag){
                                             "MESH_NODE_POSITIONS", "LAGMULT",
                                             contact_prisms);
     } else {
+      
       // Add elastic element
       CHKERR elastic.setBlocks(hooke_double_ptr, hooke_adouble_ptr);
       CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
