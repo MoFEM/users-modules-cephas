@@ -52,7 +52,7 @@ struct SimpleContactProblem {
       if (newtonCotes)
         return -1;
       else
-        return 2 * order;
+        return 2 * order+2;
     }
 
     MoFEMErrorCode setGaussPts(int order);
