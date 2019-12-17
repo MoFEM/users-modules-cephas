@@ -70,7 +70,6 @@ else(STAND_ALLONE_USERS_MODULES)
     )
     find_package(
       MoFEM 
-      ${GIT_MoFEM_VERSION_MAJOR}.${GIT_MoFEM_VERSION_MINOR}.${GIT_MoFEM_VERSION_MINOR}
       REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
     )  
   else(GIT_VERSION)
