@@ -5,7 +5,7 @@ In this tutorial, the use of <a href="https://www.salome-platform.org">Salome</a
 as a pre-processor for MoFEM analysis. The version of the Salome used for this tutorial
 is a part of <a href="https://www.code-aster.org/spip.php?article303">Salome-Meca</a>
  4.0.6 programme. A step-by-step procedure is given here to solve a
-linear-elastic cantilever beam problem subjected to uniform pressure shown bellow.
+linear-elastic cantilever beam problem subjected to uniform pressure shown below.
 
 \image html Diag_Ela.JPG "Figure 1: Einear-elastic cantilever beam subjected to uniform pressure." width=500px
 
@@ -13,9 +13,10 @@ linear-elastic cantilever beam problem subjected to uniform pressure shown bello
 
 \section using_Salome_tut_geometry Geometry
 First of all, after openeing change the working environment to "Geometry". This can be done 
-by navigating the drop-down menu shown in a green circle in Figure 1. 
+by navigating the drop-down menu shown in a green circle in Figure 2. 
 This will prompt opening of an existing project or creationg a new one. 
 
+\anchor figure_salome_workspaces
 \image html SM_Beginning.png "Figure 2: Navigating the working environments in Salome-Meca." width=500px
 
 To create a simpe beam with a square cross section, a box function is sufficient. 
@@ -37,7 +38,7 @@ This highlights the selected object in the object browser and there it can be re
 \section mesh Mesh
 
 Once the required modelling is present in the geometry section, change the workspace to Mesh 
-with the same dropdown menu shown in Figure 2.
+with the same dropdown menu shown in \ref figure_salome_workspaces "Figure 2".
 The viewer is empty as there is no mesh yet created but the box should still be in the in the Object Browser. 
 Select the box and mesh it by:
 
@@ -45,7 +46,7 @@ Mesh -> Create Mesh
 
 \image html SM_mesh_settings.png "Figure 4: Mesh settings." width=300px
 
-The way and how fine the object is meshed is chosen in the hypoteses selection highlited in Figure 4.
+The way and how fine the object is meshed is chosen in the hypotheses highlited in Figure 4.
 In this example 3D tetraheadral mesh is chosen with 0.3 as the maximum length of an edge of any element.
 With the settings set, compute the mesh by:
 
@@ -93,7 +94,7 @@ Now the .config file can be applied to the mesh by
 \code read_med -med_file Sal_beam_mesh.med -meshsets_config cantilever_elasticity.config 
 \endcode
 
-A new file called out.h5m is created in the current folder. It is adviced to rename 
+A new file called out.h5m is created in the current folder. It is advised to rename 
 this file to, for example, input_mesh.h5m.
 
 Subsequently, the following command is used to run the elastic analysis on the beam problem:
@@ -114,9 +115,5 @@ The out.vtk file can be viewed in <a href="https://www.paraview.org/">Paraview</
 For the cantilever beam problem, the output is shown in the following figure.
 
 \image html Simple_Beam_Paraview_030_2.png "Figure 6: Beam post-process result" width=600px
-
-\subsection med Sal_beam_mesh.med
-
-[`Sal_beam_mesh.med`](Sal_beam_mesh.med)
 
 */
