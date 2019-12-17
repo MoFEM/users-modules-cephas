@@ -105,7 +105,6 @@ The \em gmesh_beam.msh file, consisting of 86 nodes and 247 elements are given a
 
 \include users_modules/basic_finite_elements/elasticity/gmesh_beam.msh
 
-
 \section using_Gmsh_tut_solution Solution
 The \em gmesh_beam.msh file is ready to be used with MoFEM. The next step is to convert
 the \em gmesh_beam.msh file to out.h5m file using configuration file \em gmesh_beam.cfg with the
