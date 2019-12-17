@@ -107,6 +107,10 @@ read_med -med_file sal_beam_mesh.med
 \note The configuration \em cantilever_elasticity.cfg file could be found in
 elasticity example dorectory.
 
+\note Reding and setting meshblocks with boundary conditions and material
+blocks is implemented in MoFEM::MeshsetsManager::setMeshsetFromFile, see for more
+details there.
+
 Now the cantilever_elasticity.cfg file can be applied to the mesh by
 \code 
 read_med -med_file sal_beam_mesh.med -meshsets_config cantilever_elasticity.cfg 
