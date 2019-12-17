@@ -2,7 +2,7 @@
 
 
 In this tutorial, the use of <a href="https://www.salome-platform.org">Salome</a> is explained
-as an alternative pre-processor. The version of the Salome used for this tutorial
+as a pre-processor for MoFEM analysis. The version of the Salome used for this tutorial
 is a part of <a href="https://www.code-aster.org/spip.php?article303">Salome-Meca</a>
  4.0.6 programme. A step-by-step procedure is given here to solve a
 linear-elastic cantilever beam problem subjected to uniform pressure shown bellow.
@@ -99,7 +99,7 @@ this file to, for example, input_mesh.h5m.
 Subsequently, the following command is used to run the elastic analysis on the beam problem:
 
 \code
-mpirun -np 1 elasticity -my_file input_mesh.h5m -my_order 1
+mpirun -np 1 elasticity -my_file input_mesh.h5m -my_order 2
 \endcode
 
 This will create out.h5m file, which is then converted to out.vtk file using
@@ -113,7 +113,7 @@ mbconvert out.h5m out.vtk
 The out.vtk file can be viewed in <a href="https://www.paraview.org/">Paraview</a>.
 For the cantilever beam problem, the output is shown in the following figure.
 
-\image html Simple_Beam_Paraview_030_1.PNG "Figure 6: Beam post-process result" width=600px
+\image html Simple_Beam_Paraview_030_2.png "Figure 6: Beam post-process result" width=600px
 
 \subsection med Sal_beam_mesh.med
 

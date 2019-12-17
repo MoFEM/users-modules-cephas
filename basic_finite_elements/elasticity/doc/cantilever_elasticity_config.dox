@@ -3,7 +3,7 @@
 \section cantilever_elasticity.config
 
 \code
-[block_4]
+[block_3]
 # Applying material block
 id=1012
 add=BLOCKSET
@@ -12,7 +12,7 @@ young=1
 poisson=0.0
 
 
-[block_2]
+[block_4]
 # Boundary conditions
 id=1100
 add=NODESET
@@ -23,7 +23,7 @@ disp_uy=0.0
 disp_flag3=1
 disp_uz=0.0
 
-[block_3]
+[block_2]
 # Add pressure
 id=1101
 add=SIDESET
