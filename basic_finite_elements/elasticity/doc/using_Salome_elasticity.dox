@@ -1,6 +1,5 @@
 /*! \page using_salome_tut_elasticity Using Salome
 
-
 In this tutorial, the use of <a href="https://www.salome-platform.org">Salome</a> is explained
 as a pre-processor for MoFEM analysis. The version of the Salome used for this tutorial
 is a part of <a href="https://www.code-aster.org/spip.php?article303">Salome-Meca</a>
@@ -12,11 +11,13 @@ linear-elastic cantilever beam problem subjected to uniform pressure shown below
 \tableofcontents
 
 \section using_Salome_tut_geometry Geometry
-First of all, after openeing change the working environment to "Geometry". This can be done 
-by navigating the drop-down menu shown in a green circle in Figure 2. 
-This will prompt opening of an existing project or creationg a new one. 
 
-\anchor figure_salome_workspaces
+First of all, after openeing change the working environment to "Geometry".
+This can be done by navigating the drop-down menu shown in a green circle in
+\ref figure_salome_fig2 "Figure 2". This will prompt opening of an existing
+project or creationg a new one.
+
+\anchor figure_salome_fig2
 \image html SM_Beginning.png "Figure 2: Navigating the working environments in Salome-Meca." width=500px
 
 To create a simpe beam with a square cross section, a box function is sufficient. 
@@ -24,6 +25,7 @@ Navigation using tabs is as follows:
 
 New Entity -> Primitives -> Box
 
+\anchor figure_salome_fig3
 \image html Sal_ela_box.png "Figure 3: Box creation dialog and diameters." width=300px
 
 After applying the changes, the box should now appear in the viewer. 
@@ -31,24 +33,29 @@ To create selectable surfaces, explode the box as follows:
 
 New Entity -> Explode (choose Face option and apply)
 
-To ease the creation of mesh groups later, rename the faces needed to with recognisable names.
-Parts can be selected by clicking on them in the viewer (if they are set visible in the object browser).
-This highlights the selected object in the object browser and there it can be renamed via right click of the mouse.
+To ease the creation of mesh groups later, rename the body faces with
+recognisable names. Parts can be selected by clicking on them in the viewer
+(if they are set visible in the object browser). This highlights the selected
+object in the object browser and there it can be renamed via right click of
+the mouse.
 
 \section mesh Mesh
 
-Once the required modelling is present in the geometry section, change the workspace to Mesh 
-with the same dropdown menu shown in \ref figure_salome_workspaces "Figure 2".
-The viewer is empty as there is no mesh yet created but the box should still be in the in the Object Browser. 
-Select the box and mesh it by:
+Once the required modelling is present in the geometry section, change the
+workspace to Mesh with the same dropdown menu shown in \ref figure_salome_fig2 "Figure 2". 
+The viewer is empty as there is no mesh
+yet created but the box should still be in the in the Object Browser. Select
+the box and mesh it by:
 
 Mesh -> Create Mesh
 
+\anchor figure_salome_fig4
 \image html SM_mesh_settings.png "Figure 4: Mesh settings." width=300px
 
-The way and how fine the object is meshed is chosen in the hypotheses highlited in Figure 4.
-In this example 3D tetraheadral mesh is chosen with 0.3 as the maximum length of an edge of any element.
-With the settings set, compute the mesh by:
+The way and how fine the object is meshed is chosen in the hypotheses
+highlited in \ref figure_salome_fig4 "Figure 4". In this example 3D
+tetraheadral mesh is chosen with 0.3 as the maximum length of an edge of any
+element. With the settings set, compute the mesh by:
 
 Mesh -> Compute 
 
@@ -72,39 +79,48 @@ With all of the groups defined, export the mesh to .med file which can be read b
 
 File -> Export -> MED file
 
-Example .med file: [`Sal_beam_mesh.med`](Sal_beam_mesh.med)
+\note Meshed and geometry \em sal_beam_mesh.med file could be found in elasticity example
+directory.
 
 \section using_Salome_tut_solution Solution
 
-
-Once the mesh (.med file) with required groups is created, material properties, loading and boundary conditions are assigned via .config file.
-
-To confirm that the properties are assigned to correct groups, read the mesh with the following command (replace Sal_beam_mesh.med with the name of your mesh file)
-\code read_med -med_file Sal_beam_mesh.med
-\endcode
-
-Material properties used in this case are:
+Once the mesh (.med file) with required groups is created, material
+properties, loading and boundary conditions are assigned via
+\em cantilever_elasticity.cfg file. Also config file set the material propeties
+to the blocks. Material properties used in this case are:
 
 - Young’s modulus = 1
 - Poisson's ratio = 0
 
-In \subpage cantilever_elasticity.config, change the numbers assigned to blocks, i.e. [block_4] for volume, to correspond to the correct groups.
+In \em cantilever_elasticity.cfg file, change the numbers assigned to blocks,
+i.e. [block_4] for volume, to correspond to the correct groups. The config
+file is as follows 
+\include users_modules/basic_finite_elements/elasticity/cantilever_elasticity.cfg 
 
-Now the .config file can be applied to the mesh by
-\code read_med -med_file Sal_beam_mesh.med -meshsets_config cantilever_elasticity.config 
+To confirm that the properties are assigned to correct groups, read the mesh
+with the following command (replace \em sal_beam_mesh.med with the name of your
+mesh file)
+\code 
+read_med -med_file sal_beam_mesh.med
 \endcode
 
-A new file called out.h5m is created in the current folder. It is advised to rename 
-this file to, for example, input_mesh.h5m.
+\note The configuration \em cantilever_elasticity.cfg file could be found in
+elasticity example dorectory.
 
-Subsequently, the following command is used to run the elastic analysis on the beam problem:
+Now the cantilever_elasticity.cfg file can be applied to the mesh by
+\code 
+read_med -med_file sal_beam_mesh.med -meshsets_config cantilever_elasticity.cfg 
+mv out.h5m input_mesh.h5m
+\endcode
 
+A new file called out.h5m is created in the current folder. It is advised to
+rename this file to, for example, \em input_mesh.h5m. Subsequently, the
+following command is used to run the elastic analysis on the beam problem:
 \code
 mpirun -np 1 elasticity -my_file input_mesh.h5m -my_order 2
 \endcode
 
 This will create out.h5m file, which is then converted to out.vtk file using
-
 \code
 mbconvert out.h5m out.vtk
 \endcode
