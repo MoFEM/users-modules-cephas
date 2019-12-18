@@ -114,9 +114,9 @@ following command:
 ../../tools/add_meshsets -my_file gmesh_beam.msh -meshsets_config gmesh_beam.cfg
 \endcode
 
-The associated beam.cfg file is given as:
+The associated gmesh_beam.cfg file is given as:
 
-\include users_modules/basic_finite_elements/elasticity/doc/figures/beam.cfg
+\include users_modules/basic_finite_elements/elasticity/gmesh_beam.cfg
 
 The use of \em gmesh_beam.cfg file with the above command will convert the physical groups
 in \em gmesh_beam.msh in to associated BLOCKSET, NODESET and SIDESET, understandable to
