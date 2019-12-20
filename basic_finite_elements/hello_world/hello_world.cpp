@@ -166,22 +166,21 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface(simple_interface);
 
     // get options from command line
-    CHKERR simple_interface->getOptions();
+    CHKERR simple->getOptions();
     // load mesh file
-    CHKERR simple_interface->loadFile();
+    CHKERR simple->loadFile();
     // add fields
-    CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE,
-                                            3);
-    CHKERR simple_interface->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE,
-                                              3);
-    CHKERR simple_interface->addSkeletonField("S", H1, AINSWORTH_LEGENDRE_BASE,
-                                              3);
+    CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR simple->addBoundaryField("L", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR simple->addSkeletonField("S", H1, AINSWORTH_LEGENDRE_BASE, 3);
     // set fields order
-    CHKERR simple_interface->setFieldOrder("U", 4);
-    CHKERR simple_interface->setFieldOrder("L", 3);
-    CHKERR simple_interface->setFieldOrder("S", 3);
+    CHKERR simple->setFieldOrder("U", 4);
+    CHKERR simple->setFieldOrder("L", 3);
+    CHKERR simple->setFieldOrder("S", 3);
+
     // setup problem
-    CHKERR simple_interface->setUp();
+    CHKERR simple->setUp();
+
     // create elements instances
     boost::shared_ptr<ForcesAndSourcesCore> domain_fe(
         new VolumeElementForcesAndSourcesCore(m_field));
@@ -205,18 +204,17 @@ int main(int argc, char *argv[]) {
     // set operator to the volume on side of the skeleton face
     side_fe->getOpPtrVector().push_back(new OpVolumeSide("U"));
 
-    auto dm = simple_interface->getDM();
+    auto dm = simple->getDM();
     // iterate domain elements and execute element instance with operator on
     // mesh entities
-    CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getDomainFEName(),
-                                    domain_fe);
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), domain_fe);
     // iterate boundary elements and execute element instance with operator on
     // mesh entities
-    CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getBoundaryFEName(),
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getBoundaryFEName(),
                                     boundary_fe);
     // iterate skeleton elements and execute element instance with operator on
     // mesh entities
-    CHKERR DMoFEMLoopFiniteElements(dm, simple_interface->getSkeletonFEName(),
+    CHKERR DMoFEMLoopFiniteElements(dm, simple->getSkeletonFEName(),
                                     skeleton_fe);
   }
   CATCH_ERRORS;
