@@ -34,6 +34,10 @@ bfe_build_and_install(
   basic_hemholtz
   ${CMAKE_CURRENT_SOURCE_DIR}/basic_helmholtz.cpp)
 
+bfe_build_and_install(
+  basic_elastic
+  ${CMAKE_CURRENT_SOURCE_DIR}/basic_elastic.cpp)
+
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ
