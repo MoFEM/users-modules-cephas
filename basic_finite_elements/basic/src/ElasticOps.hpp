@@ -19,6 +19,8 @@ struct CommonData {
   boost::shared_ptr<MatrixDouble> mGradPtr;
   boost::shared_ptr<MatrixDouble> mStrainPtr;
   boost::shared_ptr<MatrixDouble> mStressPtr;
+  double E;
+  double mu;
 };
 
 typedef boost::function<FTensor::Tensor1<double, 2>(const double, const double)>
@@ -80,6 +82,19 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+struct OpPostProcElastic : public DomianEleOp {
+  OpPostProcElastic(const std::string field_name,
+                    moab::Interface &post_proc_mesh,
+                    std::vector<EntityHandle> &map_gauss_pts,
+                    boost::shared_ptr<CommonData> &common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data);
+private:
+  moab::Interface &postProcMesh;
+  std::vector<EntityHandle> &mapGaussPts;
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
 OpStrain::OpStrain(const std::string field_name,
                    boost::shared_ptr<CommonData> &common_data_ptr)
     : DomianEleOp(field_name, DomianEleOp::OPROW),
@@ -99,7 +114,7 @@ MoFEMErrorCode OpStrain::doWork(int side, EntityType type,
   auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr));
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-    t_strain(i, j) = 0.5 * (t_grad(i, j) || t_grad(j, i));
+    t_strain(i, j) = (t_grad(i, j) || t_grad(j, i)) / 2;
     ++t_grad;
     ++t_strain;
   }
@@ -155,7 +170,7 @@ OpInternalForce::doWork(int side, EntityType type,
   if (nb_dofs) {
 
     const size_t nb_base_functions = data.getN().size2();
-    if (3 * nb_base_functions < nb_dofs)
+    if (2 * nb_base_functions < nb_dofs)
       SETERRQ(
           PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
           "Number of DOFs is larger than number of base functions on entity");
@@ -175,7 +190,7 @@ OpInternalForce::doWork(int side, EntityType type,
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
 
       size_t bb = 0;
-      for (; bb != nb_dofs / 3; ++bb) {
+      for (; bb != nb_dofs / 2; ++bb) {
         t_nf(i) += alpha * t_diff_base(j) * t_stress(i, j);
         ++t_diff_base;
         ++t_nf;
@@ -199,9 +214,8 @@ OpBodyForce::OpBodyForce(const std::string field_name,
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr), bodyForce(body_force) {}
 
-MoFEMErrorCode
-OpBodyForce::doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpBodyForce::doWork(int side, EntityType type,
+                                   DataForcesAndSourcesCore::EntData &data) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
 
@@ -211,7 +225,7 @@ OpBodyForce::doWork(int side, EntityType type,
   if (nb_dofs) {
 
     const size_t nb_base_functions = data.getN().size2();
-    if (3 * nb_base_functions < nb_dofs)
+    if (2 * nb_base_functions < nb_dofs)
       SETERRQ(
           PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
           "Number of DOFs is larger than number of base functions on entity");
@@ -224,12 +238,6 @@ OpBodyForce::doWork(int side, EntityType type,
     auto t_base = data.getFTensor0N();
     auto t_coords = getFTensor1Coords();
 
-    auto get_gravity = [](auto &t_coords) {
-      FTensor::Tensor1<double, 2> t_gravity;
-      t_gravity(0) = 0;
-      t_gravity(1) = -1;
-    };
-
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       double alpha = getMeasure() * t_w;
@@ -237,7 +245,7 @@ OpBodyForce::doWork(int side, EntityType type,
 
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
       size_t bb = 0;
-      for (; bb != nb_dofs / 3; ++bb) {
+      for (; bb != nb_dofs / 2; ++bb) {
         t_nf(i) += alpha * t_base * t_gravity(i);
         ++t_base;
         ++t_nf;
@@ -287,18 +295,21 @@ OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
     auto t_w = getFTensor0IntegrationWeight();
     auto &t_D = commonDataPtr->tD;
 
-        for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+    locK.clear();
+    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs / 2; ++rr) {
 
         FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_a{
-            &locK(2 * rr, 0), &locK(2 * rr, 1), &locK(2 * rr, 0),
-            &locK(2 * rr, 1)};
+
+            &locK(2 * rr + 0, 0), &locK(2 * rr + 0, 1),
+
+            &locK(2 * rr + 1, 0), &locK(2 * rr + 1, 1)};
         auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
 
-        for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
+        for (size_t cc = 0; cc != nb_col_dofs / 2; ++cc) {
           t_a(i, k) += alpha * (t_D(i, j, k, l) *
                                 (t_row_diff_base(j) * t_col_diff_base(l)));
           ++t_col_diff_base;
@@ -319,4 +330,81 @@ OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
 
   MoFEMFunctionReturn(0);
 }
+
+OpPostProcElastic::OpPostProcElastic(
+    const std::string field_name, moab::Interface &post_proc_mesh,
+    std::vector<EntityHandle> &map_gauss_pts,
+    boost::shared_ptr<CommonData> &common_data_ptr)
+    : DomianEleOp(field_name, DomianEleOp::OPROW), postProcMesh(post_proc_mesh),
+      mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
+  // Opetor is only executed for vertices
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+}
+
+MoFEMErrorCode
+OpPostProcElastic::doWork(int side, EntityType type,
+                         DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  auto get_tag = [&](const std::string name) {
+    std::array<double, 9> def;
+    std::fill(def.begin(), def.end(), 0);
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), 9, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def.data());
+    return th;
+  };
+
+  MatrixDouble3by3 mat(3,3);
+  
+  auto set_matrix = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != 2; ++r)
+      for (size_t c = 0; c != 2; ++c)
+        mat(r, c) = t(r, c);
+    return mat;
+  };
+
+  auto set_matrix_symm = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != 2; ++r)
+      for (size_t c = 0; c != 2; ++c)
+        mat(r, c) = t(r, c);
+    return mat;
+  };
+
+  auto set_plain_stress_strain = [&](auto &mat, auto &t) -> MatrixDouble3by3 & {
+    mat(2, 2) = -commonDataPtr->mu * (t(0, 0) + t(1, 1));
+    return mat;
+  };
+
+  auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
+    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
+                                     &*mat.data().begin());
+  };
+
+  auto th_grad = get_tag("GRAD");
+  auto th_strain = get_tag("STRAIN");
+  auto th_stress = get_tag("STRESS");
+
+  size_t nb_gauss_pts = data.getN().size1();
+  auto t_grad = getFTensor2FromMat<2, 2>(*(commonDataPtr->mGradPtr));
+  auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr));
+  auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
+
+  for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+    CHKERR set_tag(th_grad, gg, set_matrix(t_grad));
+    CHKERR set_tag(
+        th_strain, gg,
+        set_plain_stress_strain(set_matrix_symm(t_strain), t_stress));
+    CHKERR set_tag(th_stress, gg, set_matrix_symm(t_stress));
+    ++t_grad;
+    ++t_strain;
+    ++t_stress;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 }; // namespace OpElasticTools

@@ -75,9 +75,9 @@ MoFEMErrorCode Example::setUP() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-  constexpr int order = 3;
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
+  constexpr int order = 5;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -94,8 +94,8 @@ MoFEMErrorCode Example::createCommonData() {
     FTensor::Index<'j', 2> j;
     FTensor::Index<'k', 2> k;
     FTensor::Index<'l', 2> l;
-
     t_D(i, j, k, l) = 0;
+
     constexpr double c = young_modulus / (1 - poisson_ratio * poisson_ratio);
     constexpr double o = poisson_ratio * c;
 
@@ -114,6 +114,9 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+
+  commonDataPtr->E = young_modulus;
+  commonDataPtr->mu = poisson_ratio;
 
   MoFEMFunctionReturn(0);
 }
@@ -166,7 +169,6 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(
       new OpStiffnessMatrix("U", "U", commonDataPtr));
 
@@ -208,18 +210,25 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-
-  MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
+
   basic->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateInvJacForFace(invJac));
+  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpPostProcElastic("U", post_proc_fe->postProcMesh,
+                            post_proc_fe->mapGaussPts, commonDataPtr));
   post_proc_fe->addFieldValuesPostProc("U");
   basic->getDomainRhsFE() = post_proc_fe;
   CHKERR basic->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_elastic.h5m");
-  MoFEMFunctionReturn(0);
-
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
@@ -237,17 +246,18 @@ MoFEMErrorCode Example::checkResults() {
   basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpInternalForce("U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., 1.};
   };
-
   basic->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", commonDataPtr, gravity));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", commonDataPtr));
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
@@ -263,7 +273,7 @@ MoFEMErrorCode Example::checkResults() {
 
   double nrm2;
   CHKERR VecNorm(res, NORM_2, &nrm2);
-  PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e", nrm2);
+  PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e\n", nrm2);
   constexpr double eps = 1e-8;
   if (nrm2 > eps)
     SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
