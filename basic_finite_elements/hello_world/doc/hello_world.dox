@@ -1,17 +1,25 @@
 /*! \page hello_world_tut1 Hello world
 
-In this tutorial, basic ideas about MoFEM::Simple interface and programming with
-user data operators (UDO) are presented. This article aims at providing a big picture of the sequence of how MoFEM works in a simple and typical problem.
-Before proceeding to the next parts, readers are strongly encouraged to look at the \ref general_data_structure to have fundamental ideas of MoFEM and its ecosystem.
+In this tutorial, basic ideas about MoFEM::Simple interface and programming
+with user data operators (UDO) are presented. This article aims at providing
+a big picture of the sequence of how MoFEM works in a simple and typical
+problem. Before proceeding to the next parts, readers are strongly encouraged
+to look at the \ref general_data_structure to have fundamental ideas of MoFEM
+and its ecosystem.
 
 MoFEM is designed for quick development of finite element application for
-multi-physics problems. We designed MoFEM to enable decomposition of the complex
-problem into small sub-problems, wherein each individual sub-problem can be
-independently tested and debugged or used in different context. That is achieved
-by pipelines of user data operators (UDO), see \ref figure_1_users_data_operators "Figure 1".
-In this figure, there are operators in green, finite element instances which are presented in blue, and red shows finite element objects.
-Typical operators including OpRow, OpRowCol and OpVolume are mainly used to construct the force vector (the right hand side) and the stiffness matrix and to assemble the system, respectively.
-Meanwhile, the finite element instances include \e domain_fe, \e boundary_fe, and \e skeleton_fe. Operators can be set to volume or face elements on one of the finite element instances.
+multi-physics problems. We designed MoFEM to enable decomposition of the
+complex problem into small sub-problems, wherein each individual sub-problem
+can be independently tested and debugged or used in different context. That
+is achieved by pipelines of user data operators (UDO), see \ref
+figure_1_users_data_operators "Figure 1". In this figure, there are operators
+in green, finite element instances which are presented in blue, and red shows
+finite element objects. Typical operators including OpRow, OpRowCol and
+OpVolume are mainly used to construct the force vector (the right hand side)
+and the stiffness matrix and to assemble the system, respectively. Meanwhile,
+the finite element instances include \e domain_fe, \e boundary_fe, and \e
+skeleton_fe. Operators can be set to volume or face elements on one of the
+finite element instances.
 
 In MoFEM, there is a clear separation of declaration, definition and implementation of
 a field, finite element and problem. Such approach allows to use the same
@@ -55,7 +63,7 @@ classes used to access data in database.
 PetscInitialize(&argc,&argv,(char *)0,help);
 // Register DM Manager
 DMType dm_name = "DMMOFEM";
-ierr = DMRegister_MoFEM(dm_name); CHKERRG(ierr);
+CHKERR DMRegister_MoFEM(dm_name); 
 // Create MoAB database
 moab::Core moab_core;
 moab::Interface& moab = moab_core;
@@ -66,12 +74,12 @@ MoFEM::Interface& m_field = mofem_core;
 
 Next, we get access to database by MoFEM::Simple interface
 \code
-Simple *simple_interface;
-ierr = m_field.getInterface(simple_interface); CHKERRG(ierr);
+Simple *simple;
+CHKERR m_field.getInterface(simple); 
 // get options from command line
-ierr = simple_interface->getOptions(); CHKERRG(ierr);
+CHKERR simple->getOptions(); 
 // load mesh file
-ierr = simple_interface->loadFile(); CHKERRG(ierr);
+CHKERR simple->loadFile(); 
 \endcode
 and get options from the command line and load mesh file. Default mesh file has
 name \e mesh.h5m. Particular name of file can be given in command line using
@@ -96,16 +104,16 @@ boundary and skeleton. Fields are declared by giving its name, approximation
 space, base and number of coefficients. See for details here
 MoFEM::Simple::addDomainField.
 \code
-ierr = simple_interface->addDomainField("U",H1,AINSWORTH_LEGENDRE_BASE,3); CHKERRG(ierr);
-ierr = simple_interface->addBoundaryField("L",H1,AINSWORTH_LEGENDRE_BASE,3); CHKERRG(ierr);
-ierr = simple_interface->addSkeletonField("S",H1,AINSWORTH_LEGENDRE_BASE,3); CHKERRG(ierr);
+CHKERR simple->addDomainField("U",H1,AINSWORTH_LEGENDRE_BASE,3); 
+CHKERR simple->addBoundaryField("L",H1,AINSWORTH_LEGENDRE_BASE,3); 
+CHKERR simple->addSkeletonField("S",H1,AINSWORTH_LEGENDRE_BASE,3); 
 \endcode
 Next, we set approximation order to those fields
 \code
 // set fields order
-ierr = simple_interface->setFieldOrder("U",4); CHKERRG(ierr);
-ierr = simple_interface->setFieldOrder("L",3); CHKERRG(ierr);
-ierr = simple_interface->setFieldOrder("S",3); CHKERRG(ierr);
+CHKERR simple->setFieldOrder("U",4); 
+CHKERR simple->setFieldOrder("L",3); 
+CHKERR simple->setFieldOrder("S",3); 
 \endcode
 For more details see MoFEM::Simple::setFieldOrder. If needed, function
 MoFEM::Simple::setFieldOrder can be supplemented by the additional parameter to
@@ -128,7 +136,7 @@ stage.
 The fields, finite elements and problems and all other data structures
 are built with the following code
 \code
-ierr = simple_interface->setUp(); CHKERRG(ierr);
+CHKERR simple->setUp(); 
 \endcode
 Similarly, when one runs the code, the following outputs are expected on the terminal
 - Three finite elements structures are added to the database including domain finite
@@ -269,12 +277,12 @@ PETSc library. Here we are using the particular implementation developed for MoF
 To get interface, the following lines of the code are needed
 \code
 DM dm;
-ierr = simple_interface->getDM(&dm); CHKERRG(ierr);
+CHKERR simple->getDM(&dm); 
 \endcode
 When DM interface is no longer needed, it needs to be destroyed by user in the standard
 way well-known from PETSc interface
 \code
-ierr = DMDestroy(&dm); CHKERRG(ierr);
+CHKERR DMDestroy(&dm); 
 \endcode
 
 \note In MoFEM implementation, in comparison to other finite element codes, we do
@@ -289,7 +297,7 @@ Finally, we get to the point when we can put our machine in motion, we iterate
 over finite elements and run sequences of user data operator for each of them.
 We start with \e domain_fe
 \code
-ierr = DMoFEMLoopFiniteElements(dm,simple_interface->getDomainFEName(),domain_fe); CHKERRG(ierr);
+CHKERR DMoFEMLoopFiniteElements(dm,simple->getDomainFEName(),domain_fe); 
 \endcode
 as results we get
 \verbatim
@@ -318,7 +326,7 @@ always start counting from zero.
 
 To iterate over boundary element, analogically we do,
 \code
-ierr = DMoFEMLoopFiniteElements(dm,simple_interface->getBoundaryFEName(),boundary_fe); CHKERRG(ierr);
+CHKERR DMoFEMLoopFiniteElements(dm,simple->getBoundaryFEName(),boundary_fe); 
 \endcode
 and we get similar output to the one shown before, with one difference being that the last
 operator does not print volume of the element but that is normal since entity of
@@ -326,7 +334,7 @@ boundary finite element in this particular case is the triangle.
 
 The same procedure is applied to iterate over skeleton finite elements entities
 \code
-ierr = DMoFEMLoopFiniteElements(dm,simple_interface->getSkeletonFEName(),skeleton_fe); CHKERRG(ierr);
+CHKERR DMoFEMLoopFiniteElements(dm,simple->getSkeletonFEName(),skeleton_fe); 
 \endcode
 We have thirty skeleton elements and output looks as follows
 \verbatim
@@ -452,6 +460,6 @@ make -j2
 
 - Exercise 5: Change order of field "U", "L" and "S", how that changes a number of DOFs on entities?
 
-- Exercise 6: Modify code and calculate a volume of the body. See \ref simple_interface.cpp for example.
+- Exercise 6: Modify code and calculate a volume of the body. See \ref simple.cpp for example.
 
 */
