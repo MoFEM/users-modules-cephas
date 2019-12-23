@@ -1,0 +1,34 @@
+reset
+
+brick x 0.02 y 0.005 z 0.001
+brick x 0.02 y 0.005 z 0.001
+rotate Volume 2 angle 90  about Z include_merged 
+brick x 0.005 y 0.005 z 0.001
+align Volume 1 surface 4  with surface 18
+align Volume 2 surface 10  with surface 17
+brick x 0.02 y 0.005 z 0.001
+align Volume 4 surface 24  with surface 16
+
+brick x 0.02 y 0.005 z 0.001
+rotate Volume 5 angle -45  about Z include_merged 
+move Curve 59 midpoint location curve 9  include_merged
+
+Volume 5  copy reflect x 
+
+brick x 0.005 y 0.011 z 0.001
+unite volume all 
+
+block 1 volume all
+block 1 name 'SOIL1' 
+block 2 surface 36 6 30 
+block 2 name 'HEAD1'
+block 2 attribute count 1
+block 2 attribute index 1 0
+
+Volume all move x 0 y 0 z -0.001
+
+
+
+volume all size auto factor 8
+mesh volume all
+refine surface 6 30 36  numsplit 1 bias 1.0 depth 2 smooth

@@ -24,7 +24,7 @@ Example for h adaptive transport
 Example for unsaturated flow in mixed formulation
 =================================================
 ./run_uf.sh soil_impermeable.cub unsaturated.cfg 4 0.001 1 0
-
+./run_paper.sh paper.h5m paper.cfg 6 2e-5 0.008 1
 
 Parameters set by default from param_file.petsc file
 ============================
