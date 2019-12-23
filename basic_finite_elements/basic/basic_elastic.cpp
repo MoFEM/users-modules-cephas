@@ -1,10 +1,9 @@
 /**
  * \file basic_elastic.cpp
- * \example .cpp
+ * \example basic_elastic.cpp
  *
- * Using Basic interface calculate the divergence of base functions, and
- * integral of flux on the boundary. Since the h-div space is used, volume
- * integral and boundary integral should give the same result.
+ * Plane stress elastic problem
+ * 
  */
 
 /* This file is part of MoFEM.
@@ -58,6 +57,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+//! [Run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR setUP();
@@ -69,6 +69,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
+//! [Run problem]
 
 //! [Set up problem]
 MoFEMErrorCode Example::setUP() {
@@ -178,7 +179,9 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", commonDataPtr, gravity));
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
+  auto integration_rule = [](int, int, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
 
