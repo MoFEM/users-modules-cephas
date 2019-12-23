@@ -325,7 +325,7 @@ struct ElasticMaterials {
 
   virtual MoFEMErrorCode
   setBlocks(std::map<int, NonlinearElasticElement::BlockData> &set_of_blocks) {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
 
     if (!iNitialized) {
       CHKERR iNit();
@@ -356,9 +356,10 @@ struct ElasticMaterials {
 
       PetscPrintf(mField.get_comm(),
                   "Block Id %d Young Modulus %3.2g Poisson Ration %3.2f "
-                  "Material model %s\n",
+                  "Material model %s Nb. of elements %d\n",
                   id, set_of_blocks[id].E, set_of_blocks[id].PoissonRatio,
-                  blockData[id].mAterial.c_str());
+                  blockData[id].mAterial.c_str(),
+                  set_of_blocks[id].tEts.size());
 
       if (blockData[id].mAterial.compare(MAT_KIRCHHOFF) == 0) {
         set_of_blocks[id].materialDoublePtr =
@@ -379,7 +380,7 @@ struct ElasticMaterials {
                 "field with that space is not implemented");
       }
     }
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
 
 #endif //__NONLINEAR_ELASTIC_HPP
@@ -400,9 +401,8 @@ struct ElasticMaterials {
              mField, BLOCKSET | BODYFORCESSET, it)) {
       int id = it->getMeshsetId();
       EntityHandle meshset = it->getMeshset();
-      rval = mField.get_moab().get_entities_by_type(
+      CHKERR mField.get_moab().get_entities_by_type(
           meshset, MBTET, set_of_blocks[id].tEts, true);
-      CHKERRG(rval);
       Block_BodyForces mydata;
       CHKERR it->getAttributeDataStructure(mydata);
       set_of_blocks[id].rho0 = mydata.data.density;
@@ -428,11 +428,12 @@ struct ElasticMaterials {
           set_of_blocks[id].a0[2] = blockData[id].aZ;
         }
       }
-      PetscPrintf(
-          mField.get_comm(),
-          "Block Id %d Density %3.2g a_x = %3.2g a_y = %3.2g a_z = %3.2g\n", id,
-          set_of_blocks[id].rho0, set_of_blocks[id].a0[0],
-          set_of_blocks[id].a0[1], set_of_blocks[id].a0[2]);
+      PetscPrintf(mField.get_comm(),
+                  "Block Id %d Density %3.2g a_x = %3.2g a_y = %3.2g a_z = "
+                  "%3.2g Nb. of elements %d\n",
+                  id, set_of_blocks[id].rho0, set_of_blocks[id].a0[0],
+                  set_of_blocks[id].a0[1], set_of_blocks[id].a0[2],
+                  set_of_blocks[id].tEts.size());
     }
 
     MoFEMFunctionReturnHot(0);
