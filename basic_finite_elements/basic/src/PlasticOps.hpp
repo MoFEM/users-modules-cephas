@@ -18,12 +18,26 @@ namespace OpPlasticTools {
 struct CommonData : public OpElasticTools::CommonData {
   boost::shared_ptr<VectorDouble> plasticSurfacePtr;
   boost::shared_ptr<MatrixDouble> plasticFlowPtr;
+  boost::shared_ptr<VectorDouble> plasticMultiplayerPtr;
+  boost::shared_ptr<MatrixDouble> plasticStrainPtr;
+  boost::shared_ptr<MatrixDouble> plasticStrainDotPtr;
+
 };
 //! [Common data]
 
 //! [Operators definitions]
 struct OpCalculatePlasticSurface : public DomianEleOp {
   OpCalculatePlasticSurface(const std::string field_name,
+                            boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct OpCalculatePlasticFlowRhs : public DomianEleOp {
+  OpCalculatePlasticFlowRhs(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data);
@@ -152,6 +166,64 @@ OpCalculatePlasticSurface::doWork(int side, EntityType type,
     ++t_flow;
     ++t_stress;
   }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpCalculatePlasticFlowRhs::OpCalculatePlasticFlowRhs(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+    : DomianEleOp(field_name, DomianEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {}
+
+MoFEMErrorCode
+OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 2> i;
+  FTensor::Index<'j', 2> j;
+
+  const size_t nb_dofs = data.getIndices().size();
+  if(nb_dofs) {
+
+    FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 1>, 2> t_flow(
+        &(*commonDataPtr->plasticFlowPtr)(0, 0),
+        &(*commonDataPtr->plasticFlowPtr)(1, 0),
+        &(*commonDataPtr->plasticFlowPtr)(4, 0));
+    auto t_plastic_strain_dot =
+        getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainDotPtr));
+    auto t_plastic_multiplier =
+        getFTensor0FromVec(*(commonDataPtr->plasticMultiplayerPtr));
+
+    const size_t nb_integration_pts = data.getN().size1();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_base = data.getFTensor0N();
+
+    std::array<double, MAX_DOFS_ON_ENTITY> nf;
+    std::fill(&nf[0], &nf[nb_dofs], 0);
+
+    for(size_t gg = 0; gg!=nb_integration_pts; ++gg) {
+      double alpha = getMeasure() * t_w;
+
+      FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 3>, 2> t_nf{
+          &nf[0], &nf[1], &nf[2]};
+      for (size_t bb = 0; bb != nb_dofs / 3; ++bb) {
+        t_nf(i, j) += alpha * (t_plastic_strain_dot(i, j) -
+                               t_plastic_multiplier * t_flow(i, j));
+
+        ++t_base;
+        ++t_nf;
+      }
+
+
+      ++t_flow;
+      ++t_plastic_strain_dot;
+      ++t_plastic_multiplier;
+    }
+
+
+  }
+
 
   MoFEMFunctionReturn(0);
 }
