@@ -162,8 +162,8 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = mofem_core;
 
     // Simple interface
-    Simple *simple_interface;
-    CHKERR m_field.getInterface(simple_interface);
+    Simple *simple;
+    CHKERR m_field.getInterface(simple);
 
     // get options from command line
     CHKERR simple->getOptions();
