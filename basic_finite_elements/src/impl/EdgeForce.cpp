@@ -97,20 +97,9 @@ EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
 
   // Assemble force into right-hand vector
   Vec myF = F;
-  if (useSnesF || F == PETSC_NULL) {
-    switch (getFEMethod()->ts_ctx) {
-    case FEMethod::CTX_TSSETIFUNCTION: {
-      const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-          FEMethod::CTX_SNESSETFUNCTION;
-      const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-      const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-      break;
-    }
-    default:
-      break;
-    }
-    myF = getFEMethod()->snes_f;
-  }
+  if (useSnesF || F == PETSC_NULL) 
+    myF = getKSPF();
+
   CHKERR VecSetValues(myF, data.getIndices().size(), &data.getIndices()[0],
                       &Nf[0], ADD_VALUES);
 
