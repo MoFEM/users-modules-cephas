@@ -14,7 +14,6 @@
 
 namespace OpElasticTools {
 
-
 //! [Common data]
 struct CommonData {
   FTensor::Ddg<double, 2, 2> tD;
@@ -50,8 +49,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpInternalForce : public DomianEleOp {
-  OpInternalForce(const std::string field_name,
+struct OpInternalForceRhs : public DomianEleOp {
+  OpInternalForceRhs(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data);
@@ -60,8 +59,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpBodyForce : public DomianEleOp {
-  OpBodyForce(const std::string field_name,
+struct OpBodyForceRhs : public DomianEleOp {
+  OpBodyForceRhs(const std::string field_name,
               boost::shared_ptr<CommonData> common_data_ptr,
               VectorFun body_force);
   MoFEMErrorCode doWork(int side, EntityType type,
@@ -72,8 +71,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpStiffnessMatrix : public DomianEleOp {
-  OpStiffnessMatrix(const std::string row_field_name,
+struct OpStiffnessMatrixRhs : public DomianEleOp {
+  OpStiffnessMatrixRhs(const std::string row_field_name,
                     const std::string col_field_name,
                     boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -164,14 +163,14 @@ MoFEMErrorCode OpStress::doWork(int side, EntityType type,
 }
 //! [Calculate stress]
 
-OpInternalForce::OpInternalForce(const std::string field_name,
+OpInternalForceRhs::OpInternalForceRhs(const std::string field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 //! [Internal force]
 MoFEMErrorCode
-OpInternalForce::doWork(int side, EntityType type,
+OpInternalForceRhs::doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
@@ -214,21 +213,21 @@ OpInternalForce::doWork(int side, EntityType type,
       ++t_w;
     }
 
-    CHKERR VecSetValues(getFEMethod()->ksp_f, data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues(getKSPF(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
 }
 //! [Internal force]
 
-OpBodyForce::OpBodyForce(const std::string field_name,
+OpBodyForceRhs::OpBodyForceRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr,
                          VectorFun body_force)
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr), bodyForce(body_force) {}
 
 //! [Body force]
-MoFEMErrorCode OpBodyForce::doWork(int side, EntityType type,
+MoFEMErrorCode OpBodyForceRhs::doWork(int side, EntityType type,
                                    DataForcesAndSourcesCore::EntData &data) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
@@ -271,14 +270,14 @@ MoFEMErrorCode OpBodyForce::doWork(int side, EntityType type,
       ++t_coords;
     }
 
-    CHKERR VecSetValues(getFEMethod()->ksp_f, data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues(getKSPF(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
 }
 //! [Body force]
 
-OpStiffnessMatrix::OpStiffnessMatrix(
+OpStiffnessMatrixRhs::OpStiffnessMatrixRhs(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
@@ -288,7 +287,7 @@ OpStiffnessMatrix::OpStiffnessMatrix(
 
 //! [Stiffness]
 MoFEMErrorCode
-OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
+OpStiffnessMatrixRhs::doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data) {
@@ -340,7 +339,7 @@ OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
       ++t_w;
     }
 
-    CHKERR MatSetValues(getFEMethod()->ksp_B, row_data, col_data, &locK(0, 0),
+    CHKERR MatSetValues(getKSPB(), row_data, col_data, &locK(0, 0),
                         ADD_VALUES);
   }
 

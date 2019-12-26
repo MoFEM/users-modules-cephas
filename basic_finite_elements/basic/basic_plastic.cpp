@@ -119,7 +119,7 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticSurfacePtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticFlowPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->plasticMultiplayerPtr = boost::make_shared<VectorDouble>();
+  commonDataPtr->plasticTauPtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticStrainDotPtr = boost::make_shared<MatrixDouble>();
 
@@ -178,13 +178,13 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(
-      new OpStiffnessMatrix("U", "U", commonDataPtr));
+      new OpStiffnessMatrixRhs("U", "U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., -1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", commonDataPtr, gravity));
+      new OpBodyForceRhs("U", commonDataPtr, gravity));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -264,13 +264,13 @@ MoFEMErrorCode Example::checkResults() {
   basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", commonDataPtr));
+      new OpInternalForceRhs("U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., 1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", commonDataPtr, gravity));
+      new OpBodyForceRhs("U", commonDataPtr, gravity));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
