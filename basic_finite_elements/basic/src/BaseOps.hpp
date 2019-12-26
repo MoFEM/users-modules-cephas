@@ -339,14 +339,10 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
                                                 EntData &col_data) {
   MoFEMFunctionBegin;
 
-  Mat B = OpBase::getFEMethod()->ksp_B;
-  if (OpBase::getFEMethod()->ts_ctx == FEMethod::CTX_TSSETIJACOBIAN)
-    B = OpBase::getFEMethod()->ts_B;
-
   auto row_indices = row_data.getIndices();
   CHKERR OpBase::applyBoundaryMarker(row_data);
   // assemble local matrix
-  CHKERR MatSetValues(B, row_data, col_data, &*locMat.data().begin(),
+  CHKERR MatSetValues(this->getKSPB(), row_data, col_data, &*locMat.data().begin(),
                       ADD_VALUES);
   row_data.getIndices().data().swap(row_indices.data());
 
@@ -389,15 +385,12 @@ template <typename EleOp>
 MoFEMErrorCode
 OpTools<EleOp>::OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
-  Vec F = OpBase::getFEMethod()->ksp_f;
-  if (OpBase::getFEMethod()->ts_ctx == FEMethod::CTX_TSSETIFUNCTION)
-    F = OpBase::getFEMethod()->ts_F;
 
   CHKERR applyBoundaryMarker(data);
   // get values from local vector
   const double *vals = &*locF.data().begin();
   // assemble vector
-  CHKERR VecSetOption(F, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-  CHKERR VecSetValues(F, data, vals, ADD_VALUES);
+  CHKERR VecSetValues(this->getKSPF(), data, vals, ADD_VALUES);
+  CHKERR VecSetOption(this->getKSPF(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
   MoFEMFunctionReturn(0);
 }

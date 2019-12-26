@@ -378,24 +378,6 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         snes_f = F;
       }
 
-      switch (ts_ctx) {
-      case CTX_TSSETIFUNCTION: {
-        if (!F) {
-          snes_ctx = CTX_SNESSETFUNCTION;
-          snes_f = ts_F;
-        }
-        break;
-      }
-      case CTX_TSSETIJACOBIAN: {
-        if (!B) {
-          snes_ctx = CTX_SNESSETJACOBIAN;
-          snes_B = ts_B;
-        }
-        break;
-      }
-      default:
-        break;
-      }
       MoFEMFunctionReturn(0);
     }
   };
@@ -902,25 +884,6 @@ struct EdgeSlidingConstrains : public GenericSliding {
 
       if (F != PETSC_NULL) {
         snes_f = F;
-      }
-
-      switch (ts_ctx) {
-      case CTX_TSSETIFUNCTION: {
-        if (!F) {
-          snes_ctx = CTX_SNESSETFUNCTION;
-          snes_f = ts_F;
-        }
-        break;
-      }
-      case CTX_TSSETIJACOBIAN: {
-        if (!B) {
-          snes_ctx = CTX_SNESSETJACOBIAN;
-          snes_B = ts_B;
-        }
-        break;
-      }
-      default:
-        break;
       }
 
       MoFEMFunctionReturn(0);
