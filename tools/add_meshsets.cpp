@@ -32,11 +32,14 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance;
 
     char mesh_file_name[255];
+    char mesh_out_file[255];
     PetscBool flg_file = PETSC_FALSE;
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
+    CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
+                              "out.h5m", mesh_out_file, 255, PETSC_NULL);
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
@@ -64,7 +67,7 @@ int main(int argc, char *argv[]) {
       std::cout << *cit << endl;
     }
 
-    CHKERR moab.write_file("out.h5m");
+    CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
 
