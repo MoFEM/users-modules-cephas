@@ -98,7 +98,7 @@ EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
   // Assemble force into right-hand vector
   Vec myF = F;
   if (useSnesF || F == PETSC_NULL) 
-    myF = getKSPF();
+    myF = getKSPf();
 
   CHKERR VecSetValues(myF, data.getIndices().size(), &data.getIndices()[0],
                       &Nf[0], ADD_VALUES);

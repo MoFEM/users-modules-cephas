@@ -99,7 +99,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
 
   auto get_f = [&]() {
     if(F == PETSC_NULL)
-      return getKSPF();
+      return getKSPf();
     return F;
   };
 
@@ -178,7 +178,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
 
   auto get_f = [&]() {
     if(F == PETSC_NULL)
-      return getKSPF();
+      return getKSPf();
     return F;
   };
 
@@ -237,7 +237,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
 
   auto get_f = [&]() {
     if(F == PETSC_NULL)
-      return getKSPF();
+      return getKSPf();
     return F;
   };
 
@@ -557,7 +557,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
 
   auto get_f = [&]() {
     if(F == PETSC_NULL)
-      return getKSPF();
+      return getKSPf();
     return F;
   };
 
@@ -1060,7 +1060,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
 
   auto get_f = [&]() {
     if(F == PETSC_NULL)
-      return getKSPF();
+      return getKSPf();
     return F;
   };
 

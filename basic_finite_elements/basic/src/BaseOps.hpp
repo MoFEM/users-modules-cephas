@@ -388,7 +388,7 @@ OpTools<EleOp>::OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
   // get values from local vector
   const double *vals = &*locF.data().begin();
   // assemble vector
-  CHKERR VecSetValues(this->getKSPF(), data, vals, ADD_VALUES);
-  CHKERR VecSetOption(this->getKSPF(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+  CHKERR VecSetValues(this->getKSPf(), data, vals, ADD_VALUES);
+  CHKERR VecSetOption(this->getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
   MoFEMFunctionReturn(0);
 }

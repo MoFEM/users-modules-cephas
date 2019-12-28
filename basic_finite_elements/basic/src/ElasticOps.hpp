@@ -213,7 +213,7 @@ OpInternalForceRhs::doWork(int side, EntityType type,
       ++t_w;
     }
 
-    CHKERR VecSetValues(getKSPF(), data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues(getKSPf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -270,7 +270,7 @@ MoFEMErrorCode OpBodyForceRhs::doWork(int side, EntityType type,
       ++t_coords;
     }
 
-    CHKERR VecSetValues(getKSPF(), data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues(getKSPf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);

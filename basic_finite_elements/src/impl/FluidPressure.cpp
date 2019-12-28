@@ -62,7 +62,7 @@ MoFEMErrorCode FluidPressure::OpCalculatePressure::doWork(
   }
 
   if (F == PETSC_NULL)
-    F = getKSPF();
+    F = getKSPf();
 
   if (F == PETSC_NULL)
     SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "impossible case");
