@@ -113,21 +113,13 @@ auto diff_plastic_flow_dstress = [](auto &f, auto &t_flow,
   FTensor::Index<'j', 2> j;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
+  FTensor::Index<'m', 3> m;
+  FTensor::Index<'m', 3> n;
 
   FTensor::Ddg<double, 2, 2> t_diff_flow;
-  t_diff_flow(i, j, k, l) = 0;
-  for (int ii = 0; ii != 2; ++ii)
-    for (int jj = ii; jj != 2; ++jj)
-      for (int kk = 0; kk != 2; ++kk)
-        for (int ll = ll; ll != 2; ++ll)
-
-          for (int mm = 0; mm != 3; ++mm)
-            for (int nn = 0; nn != 2; ++nn)
-              t_diff_flow(ii, jj, kk, ll) += (1. / f) *
-                                             t_diff_dev_stress(mm, nn, ii, kk) *
-                                             t_diff_dev_stress(mm, nn, kk, ll);
-
-  t_diff_flow(i, j, k, l) -= ((1. / f) * t_flow(i, j)) * t_flow(k, l);
+  t_diff_flow(i, j, k, l) = (1. / f) * (t_diff_dev_stress(m, n, i, j) *
+                                            t_diff_dev_stress(m, n, k, l) -
+                                        t_flow(i, j) * t_flow(k, l));
 
   return t_diff_flow;
 };
@@ -138,20 +130,12 @@ auto diff_plastic_flow_dstrain = [](auto &t_D,
   FTensor::Index<'j', 2> i;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
+  FTensor::Index<'m', 2> m;
+  FTensor::Index<'m', 2> n;
 
   FTensor::Ddg<double, 2, 2> t_diff_flow;
-  t_diff_flow(i, j, k, l) = 0;
-  for (int ii = 0; ii != 3; ++ii)
-    for (int jj = ii; jj != 3; ++jj)
-      for (int kk = 0; kk != 3; ++kk)
-        for (int ll = kk; ll != 3; ++ll)
-
-          for (int mm = 0; mm != 2; ++mm)
-            for (int nn = 0; nn != 2; ++nn)
-
-              t_diff_flow(ii, jj, kk, ll) +=
-                  t_diff_plastic_flow_dstress(ii, jj, mm, nn) *
-                  t_D(mm, nn, kk, ll);
+  t_diff_flow(i, j, k, l) =
+      t_diff_plastic_flow_dstress(i, j, m, n) * t_D(mm, nn, kk, ll);
 
   return t_diff_flow;
 };
