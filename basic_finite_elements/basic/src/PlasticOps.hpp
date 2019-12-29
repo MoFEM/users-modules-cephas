@@ -127,12 +127,7 @@ auto diff_plastic_flow_dstress = [](auto &f, auto &t_flow,
                                              t_diff_dev_stress(mm, nn, ii, kk) *
                                              t_diff_dev_stress(mm, nn, kk, ll);
 
-  for (int ii = 0; ii != 2; ++ii)
-    for (int jj = ii; jj != 2; ++jj)
-      for (int kk = 0; kk != 2; ++kk)
-        for (int ll = ll; ll != 2; ++ll)
-          t_diff_flow(ii, jj, kk, ll) -=
-              (1. / f) * t_flow(ii, jj) * t_flow(kk, ll);
+  t_diff_flow(i, j, k, l) -= ((1. / f) * t_flow(i, j)) * t_flow(k, l);
 
   return t_diff_flow;
 };
@@ -653,7 +648,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
     auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
-    auto t_flow = getFTensor2FromMat<3, 3>(*(commonDataPtr->plasticFlowPtr));
+    auto t_flow =
+        getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
     auto &t_D = commonDataPtr->tD;
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -741,7 +737,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
     auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
-    auto t_flow = getFTensor2FromMat<3, 3>(*(commonDataPtr->plasticFlowPtr));
+    auto t_flow =
+        getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
 
     auto &t_D = commonDataPtr->tD;
 
