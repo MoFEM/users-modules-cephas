@@ -180,11 +180,61 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpStiffnessMatrixRhs("U", "U", commonDataPtr));
 
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  basic->getOpDomainLhsPipeline().push_back(new OpStrain("U", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateTensor2SymmetricFieldValues<2>(
+          "EP", commonDataPtr->plasticStrainPtr));
+
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpPlasticStress("U", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticSurface("U", commonDataPtr));
+
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticInternalForceLhs_dEP("U", "EP", commonDataPtr));
+
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticFlowLhs_dU("EP", "U", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+    new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
+
+  basic->getOpDomainLhsPipeline().push_back(
+    new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+    new OpCalculateContrainsLhs_dEP("TAU", "EP", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+    new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonDataPtr));
+
   auto gravity = [](double x, double y) {
-    return FTensor::Tensor1<double, 2>{0., -1.};
+    return FTensor::Tensor1<double, 2>{0., 1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
       new OpBodyForceRhs("U", commonDataPtr, gravity));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateInvJacForFace(invJac));
+  basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateTensor2SymmetricFieldValues<2>(
+          "EP", commonDataPtr->plasticStrainPtr));
+
+  basic->getOpDomainRhsPipeline().push_back(
+    new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+    new OpCalculateContrainsRhs("TAU", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+    new OpInternalForceRhs("U", commonDataPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -231,6 +281,16 @@ MoFEMErrorCode Example::postProcess() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateTensor2SymmetricFieldValues<2>(
+          "EP", commonDataPtr->plasticStrainPtr));
+
   post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpPostProcElastic("U", post_proc_fe->postProcMesh,
@@ -259,12 +319,24 @@ MoFEMErrorCode Example::checkResults() {
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-      new OpInternalForceRhs("U", commonDataPtr));
+      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateTensor2SymmetricFieldValues<2>(
+          "EP", commonDataPtr->plasticStrainPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+    new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+    new OpCalculateContrainsRhs("TAU", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+    new OpInternalForceRhs("U", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., 1.};

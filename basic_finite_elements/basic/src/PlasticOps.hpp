@@ -89,12 +89,29 @@ auto diff_dev_stress = [](auto &&t_diff_stress) {
   return t_diff_dev_stress;
 };
 
+/**
+ * @brief 
+ 
+\f[
+f=\sqrt{s_{ij}s_{ij}}
+\f]
+
+ */
 auto platsic_surface = [](auto &&t_dev) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'I', 3> J;
   return sqrt(t_dev(I, J) * t_dev(I, J));
 };
 
+/**
+ * @brief Plastic flow
+ 
+\f[
+A_{ij}=\frac{\partial f}{\partial \sigma_{ij}}=
+\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}
+\f]
+
+ */
 auto plastic_flow = [](auto &f, auto &&t_dev_stress, auto &&t_diff_dev_stress) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
@@ -107,18 +124,58 @@ auto plastic_flow = [](auto &f, auto &&t_dev_stress, auto &&t_diff_dev_stress) {
   return t_diff_f;
 };
 
+/**
+ * @brief Second directive 
+
+\f[
+\frac{\partial^2 f}{\partial \sigma_{ij}\partial\sigma_{mn}}&=\\
+-\frac{1}{f^2}\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}
+\left(s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
++
+\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial
+s_{kl}}{\partial \sigma_{ij}}
++
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+\sigma_{mn}} &=\\
+-\frac{1}{f}
+\left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\right)
+\left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
++
+\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial
+s_{kl}}{\partial \sigma_{ij}}
++
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+\sigma_{mn}} &=\\
+-\frac{1}{f} A_{mn}A_{ij}
++
+\frac{1}{f}
+\left(
+\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
+\sigma_{ij}}
++
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+\sigma_{mn}} \right) =& \\
+\left(
+-\frac{1}{f} A_{mn}A_{ij}
++
+\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
+\right)
+\f]
+ 
+ */
+
 auto diff_plastic_flow_dstress = [](auto &f, auto &t_flow,
                                     auto &&t_diff_dev_stress) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
-  FTensor::Index<'m', 3> m;
-  FTensor::Index<'m', 3> n;
+  FTensor::Index<'M', 3> M;
+  FTensor::Index<'N', 3> N;
 
   FTensor::Ddg<double, 2, 2> t_diff_flow;
-  t_diff_flow(i, j, k, l) = (1. / f) * (t_diff_dev_stress(m, n, i, j) *
-                                            t_diff_dev_stress(m, n, k, l) -
+  t_diff_flow(i, j, k, l) = (1. / f) * (t_diff_dev_stress(M, N, i, j) *
+                                            t_diff_dev_stress(M, N, k, l) -
                                         t_flow(i, j) * t_flow(k, l));
 
   return t_diff_flow;
@@ -135,7 +192,7 @@ auto diff_plastic_flow_dstrain = [](auto &t_D,
 
   FTensor::Ddg<double, 2, 2> t_diff_flow;
   t_diff_flow(i, j, k, l) =
-      t_diff_plastic_flow_dstress(i, j, m, n) * t_D(mm, nn, kk, ll);
+      t_diff_plastic_flow_dstress(i, j, m, n) * t_D(m, n, k, l);
 
   return t_diff_flow;
 };
@@ -214,17 +271,6 @@ private:
 struct OpCalculateContrainsRhs : public DomianEleOp {
   OpCalculateContrainsRhs(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
-struct OpCalculatePlasticInternalForceRhs : public DomianEleOp {
-  OpCalculatePlasticInternalForceRhs(
-      const std::string field_name,
-      boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data);
 
