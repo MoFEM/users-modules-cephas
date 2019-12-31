@@ -32,6 +32,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
+constexpr double sigmaY2 = 1;
 
 #include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
@@ -51,7 +52,7 @@ private:
   MoFEMErrorCode createCommonData();
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
-  MoFEMErrorCode kspSolve();
+  MoFEMErrorCode tsSolve();
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
@@ -66,7 +67,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR createCommonData();
   CHKERR bC();
   CHKERR OPs();
-  CHKERR kspSolve();
+  CHKERR tsSolve();
   CHKERR postProcess();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
@@ -79,9 +80,13 @@ MoFEMErrorCode Example::setUP() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addDomainField("TAU", L2, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("EP", L2, AINSWORTH_LEGENDRE_BASE, 3);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  constexpr int order = 3;
+  constexpr int order = 1;
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("TAU", order - 1);
+  CHKERR simple->setFieldOrder("EP", order - 1);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -182,13 +187,16 @@ MoFEMErrorCode Example::OPs() {
 
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  basic->getOpDomainLhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  basic->getOpDomainLhsPipeline().push_back(new OpCalculateScalarFieldValues(
+      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr));
+          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateTensor2SymmetricFieldValuesDot<2>(
+          "EP", commonDataPtr->plasticStrainDotPtr, MBTRI));
 
+  basic->getOpDomainLhsPipeline().push_back(new OpStrain("U", commonDataPtr));
   basic->getOpDomainLhsPipeline().push_back(
       new OpPlasticStress("U", commonDataPtr));
   basic->getOpDomainLhsPipeline().push_back(
@@ -197,44 +205,53 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculatePlasticInternalForceLhs_dEP("U", "EP", commonDataPtr));
 
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpCalculatePlasticFlowLhs_dU("EP", "U", commonDataPtr));
-  basic->getOpDomainLhsPipeline().push_back(
-    new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr));
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
+  // basic->getOpDomainLhsPipeline().push_back(
+  //     new OpCalculatePlasticFlowLhs_dU("EP", "U", commonDataPtr));
+  // basic->getOpDomainLhsPipeline().push_back(
+  //     new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr));
+  // basic->getOpDomainLhsPipeline().push_back(
+  //     new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
 
-  basic->getOpDomainLhsPipeline().push_back(
-    new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
-  basic->getOpDomainLhsPipeline().push_back(
-    new OpCalculateContrainsLhs_dEP("TAU", "EP", commonDataPtr));
-  basic->getOpDomainLhsPipeline().push_back(
-    new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonDataPtr));
+  // basic->getOpDomainLhsPipeline().push_back(
+  //     new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
+  // basic->getOpDomainLhsPipeline().push_back(
+  //     new OpCalculateContrainsLhs_dEP("TAU", "EP", commonDataPtr));
+  // basic->getOpDomainLhsPipeline().push_back(
+  //     new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., 1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
       new OpBodyForceRhs("U", commonDataPtr, gravity));
+
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
 
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
+      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr));
+          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateTensor2SymmetricFieldValuesDot<2>(
+          "EP", commonDataPtr->plasticStrainDotPtr, MBTRI));
 
+  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-    new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
+      new OpPlasticStress("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-    new OpCalculateContrainsRhs("TAU", commonDataPtr));
+      new OpCalculatePlasticSurface("U", commonDataPtr));
+
+  // basic->getOpDomainRhsPipeline().push_back(
+  //     new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
+  // basic->getOpDomainRhsPipeline().push_back(
+  //     new OpCalculateContrainsRhs("TAU", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-    new OpInternalForceRhs("U", commonDataPtr));
+      new OpInternalForceRhs("U", commonDataPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -247,19 +264,22 @@ MoFEMErrorCode Example::OPs() {
 //! [Push operators to pipeline]
 
 //! [Solve]
-MoFEMErrorCode Example::kspSolve() {
+MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   Basic *basic = mField.getInterface<Basic>();
-  auto solver = basic->createKSP();
-  CHKERR KSPSetFromOptions(solver);
-  CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
   auto D = smartCreateDMDVector(dm);
-  auto F = smartVectorDuplicate(D);
 
-  CHKERR KSPSolve(solver, F, D);
+  auto solver = basic->createTS();
+  // double ftime = 1;
+  // CHKERR TSSetDuration(solver, PETSC_DEFAULT, ftime);
+  CHKERR TSSetSolution(solver, D);
+  CHKERR TSSetFromOptions(solver);
+  CHKERR TSSetUp(solver);
+  CHKERR TSSolve(solver, D);
+
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
@@ -285,11 +305,11 @@ MoFEMErrorCode Example::postProcess() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr));
+          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
 
   post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
   post_proc_fe->getOpPtrVector().push_back(
@@ -323,17 +343,18 @@ MoFEMErrorCode Example::checkResults() {
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("TAU", commonDataPtr->plasticTauPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
+      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr));
+          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+
   basic->getOpDomainRhsPipeline().push_back(
-    new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
+      new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-    new OpCalculateContrainsRhs("TAU", commonDataPtr));
+      new OpCalculateContrainsRhs("TAU", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
-    new OpInternalForceRhs("U", commonDataPtr));
+      new OpInternalForceRhs("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
