@@ -451,18 +451,21 @@ OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         t_nf(i, j) += alpha * t_base *
-                      (t_D(i, j, k, l) * t_plastic_strain_dot(k, l) -
-                       t_tau * t_flow(i, j));
+                      (t_D(i, j, k, l) * t_plastic_strain_dot(k, l) 
+                      
+                      /*-
+                       t_tau * t_flow(i, j)*/);
 
         ++t_base;
         ++t_nf;
       }
-      for (; bb != nb_base_functions; ++bb)
+      for (; bb < nb_base_functions; ++bb)
         ++t_base;
 
       ++t_flow;
       ++t_plastic_strain_dot;
       ++t_tau;
+      ++t_w;
     }
 
     CHKERR VecSetValues(getTSf(), data, nf.data(), ADD_VALUES);
@@ -687,7 +690,9 @@ OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr) {
+        sYmm = false;
+      }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -720,9 +725,13 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
+      double beta = alpha * getTSa();
 
       size_t rr = 0;
       for (; rr != nb_row_dofs / 3; ++rr) {
+
+        const double c0 = alpha * t_row_base;
+        const double c1 = beta * t_row_base;
 
         auto t_diff_plastic_flow = diff_plastic_flow_dstrain(
             t_D, diff_plastic_flow_dstress(t_f, t_flow,
@@ -742,20 +751,26 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
         };
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 2; cc++) {
+        for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
 
-          t_mat(i, j, k, l) +=
-              alpha * t_row_base * t_col_base * t_D(i, j, k, l);
+          FTensor::Ddg<double, 2, 2> t_tmp;
+          t_tmp(i, j, k, l) =
+              t_col_base * (c1 * t_D(i, j, k, l) -
+                            c0 * t_tau * t_diff_plastic_flow(i, j, k, l));
 
-          t_mat(i, j, k, l) -= alpha * t_row_base * t_col_base * t_tau *
-                               t_diff_plastic_flow(i, j, k, l);
+          for (int ii = 0; ii != 2; ++ii)
+            for (int jj = ii; jj != 2; ++jj)
+              for (int kk = 0; kk != 2; ++kk)
+                for (int ll = 0; ll != 2; ++ll)
+                  t_mat(ii, jj, kk, ll) += t_tmp(ii, jj, kk, ll);
+
           ++t_mat;
           ++t_col_base;
         }
 
         ++t_row_base;
       }
-      for (; rr != nb_row_base_functions; ++rr)
+      for (; rr < nb_row_base_functions; ++rr)
         ++t_row_base;
 
       ++t_w;
@@ -763,6 +778,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
       ++t_tau;
       ++t_flow;
     }
+
+    CHKERR MatSetValues(getTSB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);

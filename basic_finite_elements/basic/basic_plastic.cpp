@@ -205,12 +205,12 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculatePlasticInternalForceLhs_dEP("U", "EP", commonDataPtr));
 
-  // basic->getOpDomainLhsPipeline().push_back(
-  //     new OpCalculatePlasticFlowLhs_dU("EP", "U", commonDataPtr));
-  // basic->getOpDomainLhsPipeline().push_back(
-  //     new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr));
-  // basic->getOpDomainLhsPipeline().push_back(
-  //     new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticFlowLhs_dU("EP", "U", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
 
   // basic->getOpDomainLhsPipeline().push_back(
   //     new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
@@ -246,8 +246,8 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculatePlasticSurface("U", commonDataPtr));
 
-  // basic->getOpDomainRhsPipeline().push_back(
-  //     new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
   // basic->getOpDomainRhsPipeline().push_back(
   //     new OpCalculateContrainsRhs("TAU", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
