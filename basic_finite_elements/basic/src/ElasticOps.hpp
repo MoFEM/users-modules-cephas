@@ -270,6 +270,10 @@ MoFEMErrorCode OpBodyForceRhs::doWork(int side, EntityType type,
       ++t_coords;
     }
 
+    if ((getDataCtx() & PetscData::CtxSetTime).any())
+      for (int dd = 0; dd != nb_dofs; ++dd)
+        nf[dd] *= getTStime();
+
     CHKERR VecSetValues(getKSPf(), data, nf.data(), ADD_VALUES);
   }
 

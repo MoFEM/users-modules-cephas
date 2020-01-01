@@ -212,12 +212,12 @@ MoFEMErrorCode Example::OPs() {
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
 
-  // basic->getOpDomainLhsPipeline().push_back(
-  //     new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
-  // basic->getOpDomainLhsPipeline().push_back(
-  //     new OpCalculateContrainsLhs_dEP("TAU", "EP", commonDataPtr));
-  // basic->getOpDomainLhsPipeline().push_back(
-  //     new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateContrainsLhs_dEP("TAU", "EP", commonDataPtr));
+  basic->getOpDomainLhsPipeline().push_back(
+      new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., 1.};
@@ -248,8 +248,8 @@ MoFEMErrorCode Example::OPs() {
 
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
-  // basic->getOpDomainRhsPipeline().push_back(
-  //     new OpCalculateContrainsRhs("TAU", commonDataPtr));
+  basic->getOpDomainRhsPipeline().push_back(
+      new OpCalculateContrainsRhs("TAU", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
       new OpInternalForceRhs("U", commonDataPtr));
 
@@ -266,6 +266,7 @@ MoFEMErrorCode Example::OPs() {
 //! [Solve]
 MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
+
   Simple *simple = mField.getInterface<Simple>();
   Basic *basic = mField.getInterface<Basic>();
 
@@ -273,8 +274,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto D = smartCreateDMDVector(dm);
 
   auto solver = basic->createTS();
-  // double ftime = 1;
-  // CHKERR TSSetDuration(solver, PETSC_DEFAULT, ftime);
+
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR TSSetUp(solver);
@@ -283,6 +283,7 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
@@ -301,28 +302,51 @@ MoFEMErrorCode Example::postProcess() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
-
   post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpPostProcElastic("U", post_proc_fe->postProcMesh,
                             post_proc_fe->mapGaussPts, commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculatePlasticSurface("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpPostProcPlastic("U", post_proc_fe->postProcMesh,
-                            post_proc_fe->mapGaussPts, commonDataPtr));
   post_proc_fe->addFieldValuesPostProc("U");
   basic->getDomainRhsFE() = post_proc_fe;
   CHKERR basic->loopFiniteElements();
+
+
+  // Basic *basic = mField.getInterface<Basic>();
+
+  // basic->getDomainLhsFE().reset();
+  // auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  // post_proc_fe->generateReferenceElementMesh();
+
+
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpCalculateInvJacForFace(invJac));
+  // post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  // post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  // post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+  // post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+  //     "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpCalculateTensor2SymmetricFieldValues<2>(
+  //         "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+
+  // post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpPostProcElastic("U", post_proc_fe->postProcMesh,
+  //                           post_proc_fe->mapGaussPts, commonDataPtr));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpCalculatePlasticSurface("U", commonDataPtr));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpPostProcPlastic("U", post_proc_fe->postProcMesh,
+  //                           post_proc_fe->mapGaussPts, commonDataPtr));
+  // post_proc_fe->addFieldValuesPostProc("U");
+  // basic->getDomainRhsFE() = post_proc_fe;
+  // CHKERR basic->loopFiniteElements();
+
   CHKERR post_proc_fe->writeFile("out_plastic.h5m");
   MoFEMFunctionReturn(0);
 }
@@ -330,62 +354,7 @@ MoFEMErrorCode Example::postProcess() {
 
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
-  Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
   MoFEMFunctionBegin;
-  basic->getDomainRhsFE().reset();
-  basic->getDomainLhsFE().reset();
-
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
-      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
-
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateContrainsRhs("TAU", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpInternalForceRhs("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-
-  auto gravity = [](double x, double y) {
-    return FTensor::Tensor1<double, 2>{0., 1.};
-  };
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpBodyForceRhs("U", commonDataPtr, gravity));
-
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-
-  auto dm = simple->getDM();
-  auto res = smartCreateDMDVector(dm);
-  basic->getDomainRhsFE()->ksp_f = res;
-
-  CHKERR VecZeroEntries(res);
-  CHKERR basic->loopFiniteElements();
-  CHKERR VecGhostUpdateBegin(res, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecGhostUpdateEnd(res, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecAssemblyBegin(res);
-  CHKERR VecAssemblyEnd(res);
-
-  double nrm2;
-  CHKERR VecNorm(res, NORM_2, &nrm2);
-  PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e\n", nrm2);
-  constexpr double eps = 1e-8;
-  if (nrm2 > eps)
-    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
-
   MoFEMFunctionReturn(0);
 }
 //! [Check]

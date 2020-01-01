@@ -139,10 +139,11 @@ auto diff_plastic_flow_dstrain = [](auto &t_D,
 };
 
 auto contrains = [](double tau, double f) {
-  if ((tau + f - sigmaY2) >= 0)
-    return -f;
-  else
-    return tau;
+  return tau;
+  // if ((tau + f - sigmaY2) >= 0)
+  //   return -f;
+  // else
+  //   return tau;
 };
 
 auto sign = [](auto x) {
@@ -153,11 +154,13 @@ auto sign = [](auto x) {
 };
 
 auto constrain_dtau = [](auto tau, auto f) {
-  return (1 - sign(tau + f - sigmaY2)) / 2.;
+  return 1;
+  // return (1 - sign(tau + f - sigmaY2)) / 2.;
 };
 
 auto diff_constrain_df = [](auto tau, auto f) {
-  return (-1 - sign(tau + f - sigmaY2)) / 2.;
+  return 0;
+  // return (-1 - sign(tau + f - sigmaY2)) / 2.;
 };
 
 auto diff_constrain_dstress = [](auto &&diff_constrain_df,
@@ -454,9 +457,9 @@ OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
           &nf[0], &nf[1], &nf[2]};
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
-        t_nf(i, j) +=
-            alpha * t_base *
-            (t_D(i, j, k, l) * t_plastic_strain_dot(k, l) - t_flow(i, j));
+        t_nf(i, j) += alpha * t_base *
+                      (t_D(i, j, k, l) * t_plastic_strain_dot(k, l) -
+                       t_tau * t_flow(i, j));
 
         ++t_base;
         ++t_nf;
@@ -618,6 +621,11 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
+  FTensor::Index<'i', 2> i;
+  FTensor::Index<'j', 2> j;
+  FTensor::Index<'k', 2> k;
+  FTensor::Index<'l', 2> l;
+
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
@@ -635,16 +643,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
     auto &t_D = commonDataPtr->tD;
 
-    FTensor::Index<'i', 2> i;
-    FTensor::Index<'j', 2> j;
-    FTensor::Index<'k', 2> k;
-    FTensor::Index<'l', 2> l;
-    FTensor::Tensor2<double, 2, 2> t_one2;
-    t_one2(i, j) = 0;
-    for (int ii = 0; ii != 2; ++ii)
-      t_one2(ii, ii) = 1;
-    FTensor::Tensor4<double, 2, 2, 2, 2> t_one4;
-    t_one4(i, j, k, l) = t_one2(i, k) * t_one2(j, l);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
@@ -667,7 +665,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
 
         };
 
-        const double c0 = alpha * t_row_base;
+        const double c0 = alpha * t_row_base * t_tau;
 
         auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / 2; ++cc) {
@@ -741,7 +739,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
       size_t rr = 0;
       for (; rr != nb_row_dofs / 3; ++rr) {
 
-        const double c0 = alpha * t_row_base;
+        const double c0 = alpha * t_row_base * t_tau;
         const double c1 = beta * t_row_base;
 
         auto t_diff_plastic_flow = diff_plastic_flow_dstrain(
@@ -838,7 +836,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
             &locMat(3 * rr + 2, 0)};
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 2; cc++) {
+        for (size_t cc = 0; cc != nb_col_dofs; cc++) {
 
           t_mat(i, j) -= alpha * t_row_base * t_col_base * t_flow(i, j);
           ++t_mat;
@@ -851,6 +849,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
       ++t_w;
       ++t_flow;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -923,6 +924,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
       ++t_row_base;
       ++t_w;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -995,6 +999,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
       ++t_row_base;
       ++t_w;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1037,7 +1044,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
       auto mat_ptr = locMat.data().begin();
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs; ++rr) {
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs; cc++) {
@@ -1058,6 +1065,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
       ++t_row_base;
       ++t_w;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
