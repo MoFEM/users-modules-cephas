@@ -92,8 +92,9 @@ auto diff_dev_stress = [](auto &&t_diff_stress) {
 
 auto platsic_surface = [](auto &&t_dev) {
   FTensor::Index<'I', 3> I;
-  FTensor::Index<'I', 3> J;
-  return t_dev(I, J) * t_dev(I, J);
+  FTensor::Index<'J', 3> J;
+  double f = t_dev(I, J) * t_dev(I, J);
+  return f;
 };
 
 auto plastic_flow = [](auto &f, auto &&t_dev_stress, auto &&t_diff_dev_stress) {
@@ -139,11 +140,10 @@ auto diff_plastic_flow_dstrain = [](auto &t_D,
 };
 
 auto contrains = [](double tau, double f) {
-  return tau;
-  // if ((tau + f - sigmaY2) >= 0)
-  //   return -f;
-  // else
-  //   return tau;
+  if ((tau + f - sigmaY2) >= 0)
+    return -f;
+  else
+    return tau;
 };
 
 auto sign = [](auto x) {
@@ -154,13 +154,11 @@ auto sign = [](auto x) {
 };
 
 auto constrain_dtau = [](auto tau, auto f) {
-  return 1;
-  // return (1 - sign(tau + f - sigmaY2)) / 2.;
+  return (1 - sign(tau + f - sigmaY2)) / 2.;
 };
 
 auto diff_constrain_df = [](auto tau, auto f) {
-  return 0;
-  // return (-1 - sign(tau + f - sigmaY2)) / 2.;
+  return (-1 - sign(tau + f - sigmaY2)) / 2.;
 };
 
 auto diff_constrain_dstress = [](auto &&diff_constrain_df,
@@ -799,7 +797,9 @@ OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr) {
+        sYmm = false;
+      }
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -861,7 +861,9 @@ OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr) {
+        sYmm = false;
+      }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -895,26 +897,26 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
       double alpha = getMeasure() * t_w;
 
       auto mat_ptr = locMat.data().begin();
-      auto t_diff_constrains_du = diff_constrain_du(
+      auto t_diff_constrain_du = diff_constrain_du(
           t_D, diff_constrain_dstress(diff_constrain_df(t_tau, t_f), t_flow));
 
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{&locMat(0, 0),
                                                                &locMat(0, 1)};
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs; ++rr) {
 
         auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / 2; cc++) {
 
-          t_mat(i) += alpha * t_row_base * t_diff_constrains_du(i, j) *
+          t_mat(i) += alpha * t_row_base * t_diff_constrain_du(i, j) *
                       t_col_diff_base(j);
 
+          ++t_mat;
           ++t_col_diff_base;
         }
 
         ++t_row_base;
-        ++t_mat;
       }
       for (; rr != nb_row_base_functions; ++rr)
         ++t_row_base;
@@ -936,7 +938,9 @@ OpCalculateContrainsLhs_dEP::OpCalculateContrainsLhs_dEP(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr) {
+        sYmm = false;
+      }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -970,20 +974,21 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
       double alpha = getMeasure() * t_w;
 
       auto mat_ptr = locMat.data().begin();
-      auto t_diff_constrains_du = diff_constrain_du(
+      auto t_diff_constrain_du = diff_constrain_du(
           t_D, diff_constrain_dstress(diff_constrain_df(t_tau, t_f), t_flow));
+      t_diff_constrain_du(0, 1) *= 2;
 
       FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 3>, 2> t_mat{
           &locMat(0, 0), &locMat(0, 1), &locMat(0, 2)};
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs; ++rr) {
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / 3; cc++) {
 
           t_mat(i, j) -=
-              alpha * t_row_base * t_col_base * t_diff_constrains_du(i, j);
+              alpha * t_row_base * t_col_base * t_diff_constrain_du(i, j);
 
           ++t_col_base;
         }
@@ -1011,7 +1016,9 @@ OpCalculateContrainsLhs_dTAU::OpCalculateContrainsLhs_dTAU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {}
+      commonDataPtr(common_data_ptr) {
+        sYmm = false;
+      }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
