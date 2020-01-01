@@ -501,14 +501,15 @@ OpCalculateContrainsRhs::doWork(int side, EntityType type,
     const size_t nb_integration_pts = data.getN().size1();
     const size_t nb_base_functions = data.getN().size2();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-      double alpha = getMeasure() * t_w;
+      const double alpha = getMeasure() * t_w;
+      const double beta = alpha * contrains(t_tau, t_f);
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
-        nf[bb] += alpha * t_base * contrains(t_tau, t_f);
+        nf[bb] += beta * t_base;
         ++t_base;
       }
-      for (; bb != nb_base_functions; ++bb)
+      for (; bb < nb_base_functions; ++bb)
         ++t_base;
 
       ++t_tau;
@@ -1026,11 +1027,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
@@ -1041,12 +1037,13 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
     auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
 
+    auto t_row_base = row_data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-      double alpha = getMeasure() * t_w;
+      const double alpha = getMeasure() * t_w;
+      const double beta = alpha * constrain_dtau(t_tau, t_f);
 
       auto mat_ptr = locMat.data().begin();
 
@@ -1054,23 +1051,19 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
       for (; rr != nb_row_dofs; ++rr) {
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs; cc++) {
-
-          *mat_ptr +=
-              alpha * t_row_base * t_col_base * constrain_dtau(t_tau, t_f);
-
+        for (size_t cc = 0; cc != nb_col_dofs; ++cc) {
+          *mat_ptr += beta * t_row_base * t_col_base;
           ++mat_ptr;
           ++t_col_base;
         }
         ++t_row_base;
       }
-      for (; rr != nb_row_base_functions; ++rr)
+      for (; rr < nb_row_base_functions; ++rr)
         ++t_row_base;
 
+      ++t_w;
       ++t_f;
       ++t_tau;
-      ++t_row_base;
-      ++t_w;
     }
 
     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),

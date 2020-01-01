@@ -254,7 +254,7 @@ MoFEMErrorCode Example::OPs() {
       new OpInternalForceRhs("U", commonDataPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
+    return 2 * approx_order;
   };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
