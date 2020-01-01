@@ -296,56 +296,36 @@ MoFEMErrorCode Example::postProcess() {
   basic->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
+
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateInvJacForFace(invJac));
   post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateTensor2SymmetricFieldValues<2>(
+          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+
   post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpPostProcElastic("U", post_proc_fe->postProcMesh,
                             post_proc_fe->mapGaussPts, commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculatePlasticSurface("U", commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpPostProcPlastic("U", post_proc_fe->postProcMesh,
+                            post_proc_fe->mapGaussPts, commonDataPtr));
   post_proc_fe->addFieldValuesPostProc("U");
   basic->getDomainRhsFE() = post_proc_fe;
   CHKERR basic->loopFiniteElements();
-
-
-  // Basic *basic = mField.getInterface<Basic>();
-
-  // basic->getDomainLhsFE().reset();
-  // auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  // post_proc_fe->generateReferenceElementMesh();
-
-
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculateInvJacForFace(invJac));
-  // post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  // post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  // post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-  // post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-  //     "TAU", commonDataPtr->plasticTauPtr, MBTRI));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculateTensor2SymmetricFieldValues<2>(
-  //         "EP", commonDataPtr->plasticStrainPtr, MBTRI));
-
-  // post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpPostProcElastic("U", post_proc_fe->postProcMesh,
-  //                           post_proc_fe->mapGaussPts, commonDataPtr));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculatePlasticSurface("U", commonDataPtr));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpPostProcPlastic("U", post_proc_fe->postProcMesh,
-  //                           post_proc_fe->mapGaussPts, commonDataPtr));
-  // post_proc_fe->addFieldValuesPostProc("U");
-  // basic->getDomainRhsFE() = post_proc_fe;
-  // CHKERR basic->loopFiniteElements();
 
   CHKERR post_proc_fe->writeFile("out_plastic.h5m");
   MoFEMFunctionReturn(0);

@@ -1140,11 +1140,12 @@ OpPostProcPlastic::doWork(int side, EntityType type,
   auto th_plastic_surface = get_tag("PLASTIC_SURFACE", 1);
   auto th_plastic_flow = get_tag("PLASTIC_FLOW", 9);
 
-  auto t_flow = getFTensor2FromMat<2, 2>(*(commonDataPtr->plasticFlowPtr));
+  auto t_flow =
+      getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
   size_t gg = 0;
   for (auto &f : *(commonDataPtr->plasticSurfacePtr)) {
     CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
-    CHKERR set_tag(th_plastic_flow, gg, set_matrix_3d(t_flow));
+    CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     ++gg;
     ++t_flow;
   }
