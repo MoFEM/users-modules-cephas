@@ -108,10 +108,42 @@ auto diff_dev_stress = [](auto &&t_diff_stress) {
   return t_diff_dev_stress;
 };
 
+
+/**
+ 
+ \f[
+f=\sqrt{s_{ij}s_{ij}}\\
+A_{ij}=\frac{\partial f}{\partial \sigma_{ij}}=
+\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\\
+\frac{\partial^2 f}{\partial \sigma_{ij}\partial\sigma_{mn}}&=\\
+-\frac{1}{f^2}\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}
+\left(s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
++
+\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
++
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial \sigma_{mn}} &=\\
+-\frac{1}{f} 
+\left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\right)
+\left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
++
+\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
++
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial \sigma_{mn}} &=\\
+-\frac{1}{f} A_{mn}A_{ij}
++
+\frac{1}{f} 
+\left(
+\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
++
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial \sigma_{mn}}
+\right)   
+ \f]
+  
+ */
 auto platsic_surface = [](auto &&t_dev) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
-  double f = t_dev(I, J) * t_dev(I, J);
+  double f = sqrt(t_dev(I, J) * t_dev(I, J));
   return f;
 };
 
@@ -122,7 +154,11 @@ auto plastic_flow = [](auto &f, auto &&t_dev_stress, auto &&t_diff_dev_stress) {
   FTensor::Index<'l', 2> l;
 
   FTensor::Tensor2_symmetric<double, 2> t_diff_f;
-  t_diff_f(k, l) = 2. * (t_dev_stress(I, J) * t_diff_dev_stress(I, J, k, l));
+  if(std::abs(f) > std::numeric_limits<double>::epsilon())
+    t_diff_f(k, l) =
+        (1. / f) * (t_dev_stress(I, J) * t_diff_dev_stress(I, J, k, l));
+  else 
+    t_diff_f(k, l) = 0;
   return t_diff_f;
 };
 
@@ -136,7 +172,12 @@ auto diff_plastic_flow_dstress = [](auto &f, auto &t_flow,
   FTensor::Index<'N', 3> N;
 
   FTensor::Ddg<double, 2, 2> t_diff_flow;
-  t_diff_flow(i, j, k, l) = 2. * (t_diff_dev_stress(M, N, i, j) * t_diff_dev_stress(M, N, k, l));
+  if (std::abs(f) > std::numeric_limits<double>::epsilon())
+    t_diff_flow(i, j, k, l) =
+        t_diff_dev_stress(M, N, i, j) * t_diff_dev_stress(M, N, k, l) -
+        (1 / f) * t_flow(i, j) * t_flow(k, l);
+  else
+    t_diff_flow(i, j, k, l) = 0;
 
   return t_diff_flow;
 };
