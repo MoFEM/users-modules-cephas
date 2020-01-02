@@ -30,9 +30,10 @@ using DomianEleOp = DomianEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr double young_modulus = 1;
+constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY2 = 1;
+constexpr double cn = 1;
 
 #include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
@@ -270,14 +271,31 @@ MoFEMErrorCode Example::tsSolve() {
   Simple *simple = mField.getInterface<Simple>();
   Basic *basic = mField.getInterface<Basic>();
 
-  auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
-
   auto solver = basic->createTS();
+
+  DM dm;
+  CHKERR TSGetDM(solver,&dm);
+  auto D = smartCreateDMDVector(dm);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR TSSetUp(solver);
+
+  auto get_section_monitor = [&]() {
+    MoFEMFunctionBegin;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    PetscViewerAndFormat *vf;
+    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
+                                      PETSC_VIEWER_DEFAULT, &vf);
+    CHKERR SNESMonitorSet(
+        snes,
+        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
+        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR get_section_monitor();
   CHKERR TSSolve(solver, D);
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -365,7 +383,7 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
-    CHKERR simple->loadFile("");
+    CHKERR simple->loadFile();
     //! [Load mesh]
 
     //! [Example]

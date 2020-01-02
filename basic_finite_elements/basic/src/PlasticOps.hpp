@@ -140,8 +140,8 @@ auto diff_plastic_flow_dstrain = [](auto &t_D,
 };
 
 auto contrains = [](double tau, double f) {
-  if ((tau + f - sigmaY2) >= 0)
-    return -f;
+  if ((tau + cn * (f - sigmaY2)) >= 0)
+    return -cn * (f - sigmaY2);
   else
     return tau;
 };
@@ -154,11 +154,11 @@ auto sign = [](auto x) {
 };
 
 auto constrain_dtau = [](auto tau, auto f) {
-  return (1 - sign(tau + f - sigmaY2)) / 2.;
+  return (1 - sign(tau + cn * (f - sigmaY2))) / 2.;
 };
 
 auto diff_constrain_df = [](auto tau, auto f) {
-  return (-1 - sign(tau + f - sigmaY2)) / 2.;
+  return (-1 - sign(tau + cn * (f - sigmaY2))) / 2.;
 };
 
 auto diff_constrain_dstress = [](auto &&diff_constrain_df,
@@ -924,7 +924,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
 
       ++t_f;
       ++t_tau;
-      ++t_row_base;
       ++t_w;
     }
 
@@ -1002,7 +1001,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
 
       ++t_f;
       ++t_tau;
-      ++t_row_base;
       ++t_w;
     }
 
@@ -1126,7 +1124,7 @@ OpPostProcPlastic::doWork(int side, EntityType type,
     return mat;
   };
 
-  auto set_scalar = [&](auto &t) -> MatrixDouble3by3 & {
+  auto set_scalar = [&](auto t) -> MatrixDouble3by3 & {
     mat.clear();
     mat(0, 0) = t;
     return mat;
@@ -1138,16 +1136,25 @@ OpPostProcPlastic::doWork(int side, EntityType type,
   };
 
   auto th_plastic_surface = get_tag("PLASTIC_SURFACE", 1);
+  auto th_tau = get_tag("PLASTIC_MULTIPLIER", 1);
   auto th_plastic_flow = get_tag("PLASTIC_FLOW", 9);
+  auto th_plastic_strain = get_tag("PLASTIC_STRAIN", 9);
 
+  auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
   auto t_flow =
       getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
+  auto t_plastic_strain =
+      getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainPtr));
   size_t gg = 0;
-  for (auto &f : *(commonDataPtr->plasticSurfacePtr)) {
-    CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
+  for(int gg = 0; gg!=commonDataPtr->plasticSurfacePtr->size(); ++gg) {
+    const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
+    const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
+    CHKERR set_tag(th_plastic_surface, gg, set_scalar(sqrt(f) - sqrt(sigmaY2)));
+    CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
-    ++gg;
+    CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
     ++t_flow;
+    ++t_plastic_strain;
   }
 
   MoFEMFunctionReturn(0);
