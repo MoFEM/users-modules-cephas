@@ -33,7 +33,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY2 = 1;
-constexpr double cn = 1;
+constexpr double cn = 1e4;
 
 #include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
@@ -126,6 +126,7 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->plasticSurfacePtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticFlowPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticTauPtr = boost::make_shared<VectorDouble>();
+  commonDataPtr->plasticTauDotPtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticStrainDotPtr = boost::make_shared<MatrixDouble>();
 
@@ -190,6 +191,9 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   basic->getOpDomainLhsPipeline().push_back(new OpCalculateScalarFieldValues(
       "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+  basic->getOpDomainLhsPipeline().push_back(new OpCalculateScalarFieldValuesDot(
+      "TAU", commonDataPtr->plasticTauDotPtr, MBTRI));
+
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
           "EP", commonDataPtr->plasticStrainPtr, MBTRI));
@@ -234,6 +238,8 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
   basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
       "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+  basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValuesDot(
+      "TAU", commonDataPtr->plasticTauDotPtr, MBTRI));
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
           "EP", commonDataPtr->plasticStrainPtr, MBTRI));
@@ -383,7 +389,7 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
-    CHKERR simple->loadFile();
+    CHKERR simple->loadFile("");
     //! [Load mesh]
 
     //! [Example]
