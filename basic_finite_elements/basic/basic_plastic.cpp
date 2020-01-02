@@ -32,9 +32,9 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
-constexpr double sigmaY2 = 1;
+constexpr double sigmaY = 1;
 constexpr double G = young_modulus / (2 * (1 + poisson_ratio));
-constexpr double cn = 1 / G;
+constexpr double cn = 1;
 
 #include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
@@ -87,8 +87,8 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
   constexpr int order = 1;
   CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("TAU", order - 1);
-  CHKERR simple->setFieldOrder("EP", order - 1);
+  CHKERR simple->setFieldOrder("TAU", 0);
+  CHKERR simple->setFieldOrder("EP", 0);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -338,13 +338,14 @@ MoFEMErrorCode Example::postProcess() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
           "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpPlasticStress("U", commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculatePlasticSurface("U", commonDataPtr));
 
-  post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpPostProcElastic("U", post_proc_fe->postProcMesh,
                             post_proc_fe->mapGaussPts, commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculatePlasticSurface("U", commonDataPtr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpPostProcPlastic("U", post_proc_fe->postProcMesh,
                             post_proc_fe->mapGaussPts, commonDataPtr));

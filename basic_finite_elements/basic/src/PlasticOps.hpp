@@ -31,16 +31,15 @@ auto diff_strain = []() {
   FTensor::Index<'j', 2> j;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
-
-  FTensor::Ddg<double, 2, 2> t_diff_stress;
-  t_diff_stress(i, j, k, l) = 0;
+  FTensor::Ddg<double, 2, 2> t_diff_strain;
+  t_diff_strain(i, j, k, l) = 0;
   for (size_t ii = 0; ii != 2; ++ii) {
-    t_diff_stress(ii, ii, ii, ii) += 0.5;
+    t_diff_strain(ii, ii, ii, ii) += 0.5;
     for (size_t jj = ii; jj != 2; ++jj) {
-      t_diff_stress(ii, jj, ii, jj) += 0.5;
+      t_diff_strain(ii, jj, ii, jj) += 0.5;
     }
   }
-  return t_diff_stress;
+  return t_diff_strain;
 };
 
 auto diff_stress = []() {
@@ -108,9 +107,8 @@ auto diff_dev_stress = [](auto &&t_diff_stress) {
   return t_diff_dev_stress;
 };
 
-
 /**
- 
+
  \f[
 f=\sqrt{s_{ij}s_{ij}}\\
 A_{ij}=\frac{\partial f}{\partial \sigma_{ij}}=
@@ -119,26 +117,35 @@ A_{ij}=\frac{\partial f}{\partial \sigma_{ij}}=
 -\frac{1}{f^2}\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}
 \left(s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
 +
-\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
+\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial
+s_{kl}}{\partial \sigma_{ij}}
 +
-\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial \sigma_{mn}} &=\\
--\frac{1}{f} 
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+\sigma_{mn}} &=\\
+-\frac{1}{f}
 \left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\right)
 \left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
 +
-\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
+\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial
+s_{kl}}{\partial \sigma_{ij}}
 +
-\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial \sigma_{mn}} &=\\
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+\sigma_{mn}} &=\\
 -\frac{1}{f} A_{mn}A_{ij}
 +
-\frac{1}{f} 
+\frac{1}{f}
 \left(
-\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
+\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
+\sigma_{ij}}
 +
-\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial \sigma_{mn}}
-\right)   
- \f]
-  
+\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+\sigma_{mn}}
+\right) =& \\
+\frac{1}{f}
+\left(
+\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
+\sigma_{ij}} -A_{mn}A_{ij} \right) \f]
+
  */
 auto platsic_surface = [](auto &&t_dev) {
   FTensor::Index<'I', 3> I;
@@ -154,10 +161,10 @@ auto plastic_flow = [](auto &f, auto &&t_dev_stress, auto &&t_diff_dev_stress) {
   FTensor::Index<'l', 2> l;
 
   FTensor::Tensor2_symmetric<double, 2> t_diff_f;
-  if(std::abs(f) > std::numeric_limits<double>::epsilon())
+  if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_f(k, l) =
         (1. / f) * (t_dev_stress(I, J) * t_diff_dev_stress(I, J, k, l));
-  else 
+  else
     t_diff_f(k, l) = 0;
   return t_diff_f;
 };
@@ -174,8 +181,9 @@ auto diff_plastic_flow_dstress = [](auto &f, auto &t_flow,
   FTensor::Ddg<double, 2, 2> t_diff_flow;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_flow(i, j, k, l) =
-        t_diff_dev_stress(M, N, i, j) * t_diff_dev_stress(M, N, k, l) -
-        (1 / f) * t_flow(i, j) * t_flow(k, l);
+        (1 / (2 * f)) *
+        (t_diff_dev_stress(M, N, i, j) * t_diff_dev_stress(M, N, k, l) -
+         t_flow(i, j) * t_flow(k, l));
   else
     t_diff_flow(i, j, k, l) = 0;
 
@@ -199,14 +207,14 @@ auto diff_plastic_flow_dstrain = [](auto &t_D,
 };
 
 auto contrains = [](double tau, double f) {
-  if ((cn * f + tau) >= cn * sigmaY2)
-    return cn * (-f + sigmaY2);
+  if ((cn * f + tau) >= cn * sigmaY)
+    return cn * (-f + sigmaY);
   else
     return tau;
 };
 
 auto sign = [](auto x) {
-  if (x == 0) 
+  if (x == 0)
     return 0;
   else if (x > 0)
     return 1;
@@ -215,21 +223,21 @@ auto sign = [](auto x) {
 };
 
 auto constrain_dtau = [](auto tau, auto f) {
-  return (1 - sign(cn * (f - sigmaY2) + tau)) / 2.;
+  return (1 - sign(cn * (f - sigmaY) + tau)) / 2.;
 };
 
 auto diff_constrain_df = [](auto tau, auto f) {
-  return -cn * (1 + sign(cn * (f - sigmaY2) + tau)) / 2.;
+  return -cn * (1 + sign(cn * (f - sigmaY) + tau)) / 2.;
 };
 
-auto diff_constrain_dstress =
-    [](auto &&diff_constrain_df, auto &&t_plastic_flow) {
-      FTensor::Index<'i', 2> i;
-      FTensor::Index<'j', 2> j;
-      FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstress;
-      t_diff_constrain_dstress(i, j) = diff_constrain_df * t_plastic_flow(i, j);
-      return t_diff_constrain_dstress;
-    };
+auto diff_constrain_dstress = [](auto &&diff_constrain_df,
+                                 auto &&t_plastic_flow) {
+  FTensor::Index<'i', 2> i;
+  FTensor::Index<'j', 2> j;
+  FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstress;
+  t_diff_constrain_dstress(i, j) = diff_constrain_df * t_plastic_flow(i, j);
+  return t_diff_constrain_dstress;
+};
 
 auto diff_constrain_du = [](auto &t_D, auto &&t_diff_constrain_dstress) {
   FTensor::Index<'i', 2> i;
@@ -416,7 +424,7 @@ OpCalculatePlasticSurface::doWork(int side, EntityType type,
 
   const size_t nb_gauss_pts = commonDataPtr->mStressPtr->size2();
   auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
-  auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr)); 
+  auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr));
 
   commonDataPtr->plasticSurfacePtr->resize(nb_gauss_pts, false);
   commonDataPtr->plasticFlowPtr->resize(3, nb_gauss_pts, false);
@@ -517,7 +525,8 @@ OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         t_nf(i, j) += alpha * t_base *
-                      (t_plastic_strain_dot(i, j) - t_tau_dot * t_flow(i, j));
+                      (t_D(i, j, k, l) * t_plastic_strain_dot(k, l) -
+                       t_tau_dot * t_flow(i, j));
 
         ++t_base;
         ++t_nf;
@@ -759,8 +768,8 @@ OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
-        sYmm = false;
-      }
+  sYmm = false;
+}
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -772,6 +781,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
   FTensor::Index<'j', 2> j;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
+  FTensor::Index<'m', 2> m;
+  FTensor::Index<'n', 2> n;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
@@ -824,8 +835,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
 
           FTensor::Ddg<double, 2, 2> t_tmp;
           t_tmp(i, j, k, l) =
-              t_col_base * (c1 * t_diff_plastic_strain(i, j, k, l) +
-                            c0 * t_diff_plastic_flow(i, j, k, l));
+              t_col_base *
+              (c1 * t_D(i, j, m, n) * t_diff_plastic_strain(m, n, k, l) +
+               c0 * t_diff_plastic_flow(i, j, k, l));
 
           for (int ii = 0; ii != 2; ++ii)
             for (int jj = ii; jj != 2; ++jj)
@@ -860,8 +872,8 @@ OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
-        sYmm = false;
-      }
+  sYmm = false;
+}
 
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -924,8 +936,8 @@ OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
-        sYmm = false;
-      }
+  sYmm = false;
+}
 
 MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -1001,8 +1013,8 @@ OpCalculateContrainsLhs_dEP::OpCalculateContrainsLhs_dEP(
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
-        sYmm = false;
-      }
+  sYmm = false;
+}
 
 MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -1037,7 +1049,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
 
       auto mat_ptr = locMat.data().begin();
       auto t_diff_constrain_du = diff_constrain_du(
-          t_D, diff_constrain_dstress(diff_constrain_df(t_tau_dot, t_f), t_flow));
+          t_D,
+          diff_constrain_dstress(diff_constrain_df(t_tau_dot, t_f), t_flow));
       t_diff_constrain_du(0, 1) *= 2;
 
       FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 3>, 2> t_mat{
@@ -1078,8 +1091,8 @@ OpCalculateContrainsLhs_dTAU::OpCalculateContrainsLhs_dTAU(
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
-        sYmm = false;
-      }
+  sYmm = false;
+}
 
 MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -1207,10 +1220,10 @@ OpPostProcPlastic::doWork(int side, EntityType type,
   auto t_plastic_strain =
       getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainPtr));
   size_t gg = 0;
-  for(int gg = 0; gg!=commonDataPtr->plasticSurfacePtr->size(); ++gg) {
+  for (int gg = 0; gg != commonDataPtr->plasticSurfacePtr->size(); ++gg) {
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
-    CHKERR set_tag(th_plastic_surface, gg, set_scalar(sqrt(f) - sqrt(sigmaY2)));
+    CHKERR set_tag(th_plastic_surface, gg, set_scalar(f - sigmaY));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
