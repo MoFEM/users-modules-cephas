@@ -387,7 +387,7 @@ int main(int argc, char *argv[]) {
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(data->invJac));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
-        new OpCalculateScalarValuesDot("u", dot_val_ptr));
+        new OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(
         new OpCalculateScalarFieldGradient<2>("u", grad_ptr));
     vol_ele_stiff_rhs->getOpPtrVector().push_back(

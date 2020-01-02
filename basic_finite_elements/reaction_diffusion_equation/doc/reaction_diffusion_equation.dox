@@ -464,7 +464,7 @@ MoFEM::OpCalculateInvJacForFace(data->invJac));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpSetInvJacH1ForFace(data->invJac));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpCalculateScalarValuesDot("u", dot_val_ptr));
+MoFEM::OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpCalculateScalarFieldGradient<2>("u", grad_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
