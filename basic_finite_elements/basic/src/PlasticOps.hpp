@@ -260,6 +260,14 @@ inline auto diff_deviator(FTensor::Ddg<double, 2, 2> &&t_diff_stress) {
   return t_diff_deviator;
 };
 
+inline auto hardening(double tau) {
+  return H*tau + sigmaY;
+}
+
+inline auto hardening_dtau() {
+  return H;
+}
+
 /**
  *
 
@@ -396,8 +404,8 @@ c =  t -  m(w(t, f)))
 
  */
 inline double contrains(double tau, double f) {
-  if ((cn * f + tau) >= cn * sigmaY)
-    return cn * (-f + sigmaY);
+  if ((cn * f + tau) >= 0)
+    return cn * (-f);
   else
     return tau;
 };
@@ -411,12 +419,12 @@ inline double sign(double x) {
     return -1;
 };
 
-inline double constrain_dtau(double tau, double f) {
-  return (1 - sign(cn * (f - sigmaY) + tau)) / 2.;
+inline double diff_constrain_dtau(double tau, double f) {
+  return (1 - sign(cn * (f) + tau)) / 2.;
 };
 
 inline auto diff_constrain_df(double tau, double f) {
-  return -cn * (1 + sign(cn * (f - sigmaY) + tau)) / 2.;
+  return -cn * (1 + sign(cn * (f) + tau)) / 2.;
 };
 
 template <typename T>
@@ -600,6 +608,7 @@ OpCalculateContrainsRhs::doWork(int side, EntityType type,
   const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
+    auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
     auto t_w = getFTensor0IntegrationWeight();
@@ -612,7 +621,7 @@ OpCalculateContrainsRhs::doWork(int side, EntityType type,
     const size_t nb_base_functions = data.getN().size2();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double beta = alpha * contrains(t_tau_dot, t_f);
+      const double beta = alpha * contrains(t_tau_dot, t_f - hardening(t_tau));
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
@@ -622,6 +631,7 @@ OpCalculateContrainsRhs::doWork(int side, EntityType type,
       for (; bb < nb_base_functions; ++bb)
         ++t_base;
 
+      ++t_tau;
       ++t_tau_dot;
       ++t_f;
       ++t_w;
@@ -1012,6 +1022,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
+    auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
     auto t_flow =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
@@ -1025,7 +1036,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
 
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
-          diff_constrain_dstress(diff_constrain_df(t_tau_dot, t_f), t_flow));
+          diff_constrain_dstress(
+              diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)), t_flow));
       FTensor::Tensor2<double, 2, 2> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dstrain(i, j) * t_diff_symmetrize(i, j, k, l);
@@ -1052,6 +1064,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
         ++t_row_base;
 
       ++t_f;
+      ++t_tau;
       ++t_tau_dot;
       ++t_flow;
       ++t_stress;
@@ -1096,6 +1109,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
+    auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
     auto t_flow =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
@@ -1107,7 +1121,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
       auto mat_ptr = locMat.data().begin();
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
-          diff_constrain_dstress(diff_constrain_df(t_tau_dot, t_f), t_flow));
+          diff_constrain_dstress(
+              diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)), t_flow));
 
       FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 3>, 2> t_mat{
           &locMat(0, 0), &locMat(0, 1), &locMat(0, 2)};
@@ -1131,6 +1146,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
         ++t_row_base;
 
       ++t_f;
+      ++t_tau;
       ++t_tau_dot;
       ++t_flow;
       ++t_w;
@@ -1168,12 +1184,18 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
     auto t_f = getFTensor0FromVec(*(commonDataPtr->plasticSurfacePtr));
+    auto t_tau = getFTensor0FromVec(*(commonDataPtr->plasticTauPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
 
     auto t_row_base = row_data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double beta = alpha * getTSa() * constrain_dtau(t_tau_dot, t_f);
+      const double c0 =
+          alpha * getTSa() *
+          diff_constrain_dtau(t_tau_dot, t_f - hardening(t_tau));
+      const double c1 = alpha *
+                        diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)) *
+                        hardening_dtau();
 
       auto mat_ptr = locMat.data().begin();
 
@@ -1182,7 +1204,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs; ++cc) {
-          *mat_ptr += beta * t_row_base * t_col_base;
+          *mat_ptr += (c0 - c1) * t_row_base * t_col_base;
           ++mat_ptr;
           ++t_col_base;
         }
@@ -1193,6 +1215,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
 
       ++t_w;
       ++t_f;
+      ++t_tau;
       ++t_tau_dot;
     }
 
@@ -1280,7 +1303,8 @@ OpPostProcPlastic::doWork(int side, EntityType type,
   for (int gg = 0; gg != commonDataPtr->plasticSurfacePtr->size(); ++gg) {
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
-    CHKERR set_tag(th_plastic_surface, gg, set_scalar(f - sigmaY));
+    CHKERR set_tag(th_plastic_surface, gg,
+                   set_scalar(f - hardening(tau)));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
