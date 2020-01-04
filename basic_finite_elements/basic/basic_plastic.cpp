@@ -85,10 +85,10 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("TAU", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("EP", L2, AINSWORTH_LEGENDRE_BASE, 3);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  constexpr int order = 1;
+  constexpr int order = 2;
   CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("TAU", 0);
-  CHKERR simple->setFieldOrder("EP", 0);
+  CHKERR simple->setFieldOrder("TAU", order-1);
+  CHKERR simple->setFieldOrder("EP", order-1);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }

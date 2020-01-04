@@ -209,17 +209,17 @@ inline auto diff_symmetrize() {
   return t_diff;
 };
 
-template <typename T, typename R = double>
-inline R trace(T &t_stress, R r = R()) {
+template <typename T>
+inline double trace(FTensor::Tensor2_symmetric<T, 2> &t_stress) {
   constexpr double third = boost::math::constants::third<double>();
   return (t_stress(0, 0) + t_stress(1, 1)) * third;
 };
 
-template <typename A, typename B, typename R = double>
-inline auto deviator(A &t_stress, B trace, R r = R()) {
+template<typename T>
+inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
-  FTensor::Tensor2_symmetric<R, 3> t_dev;
+  FTensor::Tensor2_symmetric<double, 3> t_dev;
   t_dev(I, J) = 0;
   for (int ii = 0; ii != 2; ++ii)
     for (int jj = ii; jj != 2; ++jj)
@@ -230,14 +230,13 @@ inline auto deviator(A &t_stress, B trace, R r = R()) {
   return t_dev;
 };
 
-template <typename T, typename R = double>
-inline auto diff_deviator(T &&t_diff_stress, R r = R()) {
+inline auto diff_deviator(FTensor::Ddg<double, 2, 2> &&t_diff_stress) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
 
-  FTensor::Ddg<R, 3, 2> t_diff_deviator;
+  FTensor::Ddg<double, 3, 2> t_diff_deviator;
 
   t_diff_deviator(I, J, k, l) = 0;
 
@@ -262,6 +261,23 @@ inline auto diff_deviator(T &&t_diff_stress, R r = R()) {
 };
 
 /**
+ *
+
+ \f[
+f&=\sqrt{s_{ij}s_{ij}}\\
+A_{ij}&=\frac{\partial f}{\partial \sigma_{ij}}=
+\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\\
+\frac{\partial A_{ij}}{\partial \sigma_{kl}}&= \frac{\partial^2 f}{\partial
+\sigma_{ij}\partial\sigma_{mn}}= \frac{1}{f} \left( \frac{\partial
+s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
+-A_{mn}A_{ij}
+\right)\\
+\frac{\partial f}{\partial \epsilon_{ij}}&=A_{mn}D_{mnij}
+\\
+\frac{\partial A_{ij}}{\partial \epsilon_{kl}}&=
+\frac{\partial A_{ij}}{\partial \sigma_{mn}} \frac{\partial
+\sigma_{mn}}{\partial \epsilon_{kl}}= \frac{\partial A_{ij}}{\partial
+\sigma_{mn}} D_{mnkl} \f]
 
  \f[
 f=\sqrt{s_{ij}s_{ij}}\\
@@ -301,22 +317,22 @@ s_{kl}}{\partial \sigma_{ij}}
 \sigma_{ij}} -A_{mn}A_{ij} \right) \f]
 
  */
-template <typename T, typename R = double>
-inline R platsic_surface(T &&t_dev, R r = R()) {
+inline double
+platsic_surface(FTensor::Tensor2_symmetric<double, 3> &&t_stress_deviator) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
-  return std::sqrt(t_dev(I, J) * t_dev(I, J));
+  return std::sqrt(t_stress_deviator(I, J) * t_stress_deviator(I, J));
 };
 
-template <typename A, typename B, typename C, typename R = double>
-inline auto plastic_flow(A &f, B &&t_dev_stress, C &&t_diff_deviator,
-                         R r = R()) {
+inline auto plastic_flow(double f,
+                         FTensor::Tensor2_symmetric<double, 3> &&t_dev_stress,
+                         FTensor::Ddg<double, 3, 2> &&t_diff_deviator) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
 
-  FTensor::Tensor2_symmetric<R, 2> t_diff_f;
+  FTensor::Tensor2_symmetric<double, 2> t_diff_f;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_f(k, l) =
         (1. / f) * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
@@ -325,9 +341,10 @@ inline auto plastic_flow(A &f, B &&t_dev_stress, C &&t_diff_deviator,
   return t_diff_f;
 };
 
-template <typename A, typename B, typename C, typename R = double>
-inline auto diff_plastic_flow_dstress(A &f, B &t_flow, C &&t_diff_deviator,
-                                      R r = R()) {
+template <typename T>
+inline auto
+diff_plastic_flow_dstress(double f, FTensor::Tensor2_symmetric<T, 2> &t_flow,
+                          FTensor::Ddg<double, 3, 2> &&t_diff_deviator) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
   FTensor::Index<'k', 2> k;
@@ -335,7 +352,7 @@ inline auto diff_plastic_flow_dstress(A &f, B &t_flow, C &&t_diff_deviator,
   FTensor::Index<'M', 3> M;
   FTensor::Index<'N', 3> N;
 
-  FTensor::Ddg<R, 2, 2> t_diff_flow;
+  FTensor::Ddg<double, 2, 2> t_diff_flow;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_flow(i, j, k, l) =
         (1. / f) * (t_diff_deviator(M, N, i, j) * t_diff_deviator(M, N, k, l) -
@@ -346,9 +363,10 @@ inline auto diff_plastic_flow_dstress(A &f, B &t_flow, C &&t_diff_deviator,
   return t_diff_flow;
 };
 
-template <typename A, typename B, typename R = double>
-inline auto diff_plastic_flow_dstrain(A &t_D, B &&t_diff_plastic_flow_dstress,
-                                      R r = R()) {
+template <typename T>
+inline auto diff_plastic_flow_dstrain(
+    FTensor::Ddg<T, 2, 2> &t_D,
+    FTensor::Ddg<double, 2, 2> &&t_diff_plastic_flow_dstress) {
   FTensor::Index<'i', 2> j;
   FTensor::Index<'j', 2> i;
   FTensor::Index<'k', 2> k;
@@ -356,23 +374,21 @@ inline auto diff_plastic_flow_dstrain(A &t_D, B &&t_diff_plastic_flow_dstress,
   FTensor::Index<'m', 2> m;
   FTensor::Index<'m', 2> n;
 
-  FTensor::Ddg<R, 2, 2> t_diff_flow;
+  FTensor::Ddg<double, 2, 2> t_diff_flow;
   t_diff_flow(i, j, k, l) =
       t_diff_plastic_flow_dstress(i, j, m, n) * t_D(m, n, k, l);
 
   return t_diff_flow;
 };
 
-template <typename A, typename B, typename R = double>
-inline R contrains(A tau, B f, R r = R()) {
+inline double contrains(double tau, double f) {
   if ((cn * f + tau) >= cn * sigmaY)
     return cn * (-f + sigmaY);
   else
     return tau;
 };
 
-template <typename A, typename R = double>
-inline R sign(A x, R r = R()) {
+inline double sign(double x) {
   if (x == 0)
     return 0;
   else if (x > 0)
@@ -381,34 +397,34 @@ inline R sign(A x, R r = R()) {
     return -1;
 };
 
-template <typename A, typename B, typename R = double>
-inline R constrain_dtau(A tau, B f, R r = R()) {
+inline double constrain_dtau(double tau, double f) {
   return (1 - sign(cn * (f - sigmaY) + tau)) / 2.;
 };
 
-template <typename A, typename B, typename R = double>
-inline auto diff_constrain_df(A tau, B f, R r = R()) {
+inline auto diff_constrain_df(double tau, double f) {
   return -cn * (1 + sign(cn * (f - sigmaY) + tau)) / 2.;
 };
 
-template <typename A, typename B, typename R = double>
-inline auto diff_constrain_dstress(A &&diff_constrain_df, B &t_plastic_flow,
-                                   R r = R()) {
+template <typename T>
+inline auto
+diff_constrain_dstress(double &&diff_constrain_df,
+                       FTensor::Tensor2_symmetric<T, 2> &t_plastic_flow) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
-  FTensor::Tensor2_symmetric<R, 2> t_diff_constrain_dstress;
+  FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstress;
   t_diff_constrain_dstress(i, j) = diff_constrain_df * t_plastic_flow(i, j);
   return t_diff_constrain_dstress;
 };
 
-template <typename A, typename B, typename R = double>
-inline auto diff_constrain_dstrain(A &t_D, B &&t_diff_constrain_dstress,
-                                   R r = R()) {
+template <typename T>
+inline auto diff_constrain_dstrain(
+    FTensor::Ddg<T, 2, 2> &t_D,
+    FTensor::Tensor2_symmetric<T, 2> &&t_diff_constrain_dstress) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
   FTensor::Index<'k', 2> k;
   FTensor::Index<'l', 2> l;
-  FTensor::Tensor2_symmetric<R, 2> t_diff_constrain_dstrain;
+  FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstrain;
   t_diff_constrain_dstrain(k, l) =
       t_diff_constrain_dstress(i, j) * t_D(i, j, k, l);
   return t_diff_constrain_dstrain;
