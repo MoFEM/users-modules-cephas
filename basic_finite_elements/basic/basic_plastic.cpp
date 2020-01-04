@@ -60,6 +60,7 @@ private:
 
   MatrixDouble invJac;
   boost::shared_ptr<OpPlasticTools::CommonData> commonDataPtr;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
 };
 
 //! [Run problem]
@@ -69,8 +70,8 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR createCommonData();
   CHKERR bC();
   CHKERR OPs();
-  CHKERR tsSolve();
   CHKERR postProcess();
+  CHKERR tsSolve();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
@@ -282,15 +283,14 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto solver = basic->createTS();
 
-  DM dm;
-  CHKERR TSGetDM(solver,&dm);
+  auto dm = simple->getDM();
   auto D = smartCreateDMDVector(dm);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR TSSetUp(solver);
 
-  auto get_section_monitor = [&]() {
+  auto set_section_monitor = [&]() {
     MoFEMFunctionBegin;
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
@@ -304,7 +304,18 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR get_section_monitor();
+  auto set_time_monitor = [&]() {
+    MoFEMFunctionBegin;
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dm, postProcFe));
+    boost::shared_ptr<ForcesAndSourcesCore> null;
+    CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
+                               monitor_ptr, null, null);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR set_section_monitor();
+  CHKERR set_time_monitor();
+
   CHKERR TSSolve(solver, D);
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -318,44 +329,36 @@ MoFEMErrorCode Example::tsSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  postProcFe->generateReferenceElementMesh();
 
-  basic->getDomainLhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-
-
-  post_proc_fe->getOpPtrVector().push_back(
+  postProcFe->getOpPtrVector().push_back(
       new OpCalculateInvJacForFace(invJac));
-  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-  post_proc_fe->getOpPtrVector().push_back(
+  postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  postProcFe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+  postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
 
-  post_proc_fe->getOpPtrVector().push_back(
+  postProcFe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+  postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+  postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
       "TAU", commonDataPtr->plasticTauPtr, MBTRI));
-  post_proc_fe->getOpPtrVector().push_back(
+  postProcFe->getOpPtrVector().push_back(
       new OpCalculateTensor2SymmetricFieldValues<2>(
           "EP", commonDataPtr->plasticStrainPtr, MBTRI));
-  post_proc_fe->getOpPtrVector().push_back(
+  postProcFe->getOpPtrVector().push_back(
       new OpPlasticStress("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
+  postProcFe->getOpPtrVector().push_back(
       new OpCalculatePlasticSurface("U", commonDataPtr));
 
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpPostProcElastic("U", post_proc_fe->postProcMesh,
-                            post_proc_fe->mapGaussPts, commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpPostProcPlastic("U", post_proc_fe->postProcMesh,
-                            post_proc_fe->mapGaussPts, commonDataPtr));
-  post_proc_fe->addFieldValuesPostProc("U");
-  basic->getDomainRhsFE() = post_proc_fe;
-  CHKERR basic->loopFiniteElements();
-
-  CHKERR post_proc_fe->writeFile("out_plastic.h5m");
+  postProcFe->getOpPtrVector().push_back(
+      new OpPostProcElastic("U", postProcFe->postProcMesh,
+                            postProcFe->mapGaussPts, commonDataPtr));
+  postProcFe->getOpPtrVector().push_back(
+      new OpPostProcPlastic("U", postProcFe->postProcMesh,
+                            postProcFe->mapGaussPts, commonDataPtr));
+  postProcFe->addFieldValuesPostProc("U");
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]

@@ -1290,5 +1290,28 @@ OpPostProcPlastic::doWork(int side, EntityType type,
 
   MoFEMFunctionReturn(0);
 }
+
+struct Monitor : public FEMethod {
+
+  Monitor(SmartPetscObj<DM> &dm,
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc_fe)
+      : dM(dm), postProcFe(post_proc_fe){};
+
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode operator()() { return 0; }
+
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBegin;
+    CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
+    CHKERR postProcFe->writeFile(
+        "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+};
+
 //! [Postprocessing]
 }; // namespace OpPlasticTools
