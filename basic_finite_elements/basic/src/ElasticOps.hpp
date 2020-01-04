@@ -71,8 +71,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpStiffnessMatrixRhs : public DomianEleOp {
-  OpStiffnessMatrixRhs(const std::string row_field_name,
+struct OpStiffnessMatrixLhs : public DomianEleOp {
+  OpStiffnessMatrixLhs(const std::string row_field_name,
                     const std::string col_field_name,
                     boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -281,7 +281,7 @@ MoFEMErrorCode OpBodyForceRhs::doWork(int side, EntityType type,
 }
 //! [Body force]
 
-OpStiffnessMatrixRhs::OpStiffnessMatrixRhs(
+OpStiffnessMatrixLhs::OpStiffnessMatrixLhs(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
@@ -291,7 +291,7 @@ OpStiffnessMatrixRhs::OpStiffnessMatrixRhs(
 
 //! [Stiffness]
 MoFEMErrorCode
-OpStiffnessMatrixRhs::doWork(int row_side, int col_side, EntityType row_type,
+OpStiffnessMatrixLhs::doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data) {

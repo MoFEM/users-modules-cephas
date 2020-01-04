@@ -171,7 +171,7 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(
-      new OpStiffnessMatrixRhs("U", "U", commonDataPtr));
+      new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., -1.};

@@ -186,10 +186,12 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateInvJacForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   basic->getOpDomainLhsPipeline().push_back(
-      new OpStiffnessMatrixRhs("U", "U", commonDataPtr));
+      new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
 
   basic->getOpDomainLhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  basic->getOpDomainLhsPipeline().push_back(new OpStrain("U", commonDataPtr));
+
   basic->getOpDomainLhsPipeline().push_back(new OpCalculateScalarFieldValues(
       "TAU", commonDataPtr->plasticTauPtr, MBTRI));
   basic->getOpDomainLhsPipeline().push_back(new OpCalculateScalarFieldValuesDot(
@@ -202,7 +204,6 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateTensor2SymmetricFieldValuesDot<2>(
           "EP", commonDataPtr->plasticStrainDotPtr, MBTRI));
 
-  basic->getOpDomainLhsPipeline().push_back(new OpStrain("U", commonDataPtr));
   basic->getOpDomainLhsPipeline().push_back(
       new OpPlasticStress("U", commonDataPtr));
   basic->getOpDomainLhsPipeline().push_back(
@@ -237,6 +238,8 @@ MoFEMErrorCode Example::OPs() {
 
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
+
   basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
       "TAU", commonDataPtr->plasticTauPtr, MBTRI));
   basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValuesDot(
@@ -248,7 +251,6 @@ MoFEMErrorCode Example::OPs() {
       new OpCalculateTensor2SymmetricFieldValuesDot<2>(
           "EP", commonDataPtr->plasticStrainDotPtr, MBTRI));
 
-  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
       new OpPlasticStress("U", commonDataPtr));
   basic->getOpDomainRhsPipeline().push_back(
