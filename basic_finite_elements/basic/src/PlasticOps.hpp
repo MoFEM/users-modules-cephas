@@ -381,6 +381,20 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
+/**
+
+ \f[
+w = \tau + (f - \sigma_y)\\
+\textrm{max}_0 = (w + \textrm{Abs}[a])/2\\
+c =  t -  m(w(t, f)))
+ \f]
+
+\f[
+\tau - \frac{1}{2}\left\{\tau + (f(\pmb\sigma) - \sigma_y) + 
+\| \tau + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0
+\f]
+
+ */
 inline double contrains(double tau, double f) {
   if ((cn * f + tau) >= cn * sigmaY)
     return cn * (-f + sigmaY);
