@@ -59,15 +59,15 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpBodyForceRhs : public DomianEleOp {
-  OpBodyForceRhs(const std::string field_name,
+struct OpForceRhs : public DomianEleOp {
+  OpForceRhs(const std::string field_name,
               boost::shared_ptr<CommonData> common_data_ptr,
               VectorFun body_force);
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data);
 
 private:
-  VectorFun bodyForce;
+  VectorFun funForce;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
@@ -220,14 +220,14 @@ OpInternalForceRhs::doWork(int side, EntityType type,
 }
 //! [Internal force]
 
-OpBodyForceRhs::OpBodyForceRhs(const std::string field_name,
+OpForceRhs::OpForceRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr,
                          VectorFun body_force)
     : DomianEleOp(field_name, DomianEleOp::OPROW),
-      commonDataPtr(common_data_ptr), bodyForce(body_force) {}
+      commonDataPtr(common_data_ptr), funForce(body_force) {}
 
 //! [Body force]
-MoFEMErrorCode OpBodyForceRhs::doWork(int side, EntityType type,
+MoFEMErrorCode OpForceRhs::doWork(int side, EntityType type,
                                    DataForcesAndSourcesCore::EntData &data) {
   FTensor::Index<'i', 2> i;
   FTensor::Index<'j', 2> j;
@@ -254,12 +254,12 @@ MoFEMErrorCode OpBodyForceRhs::doWork(int side, EntityType type,
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       double alpha = getMeasure() * t_w;
-      auto t_gravity = bodyForce(t_coords(0), t_coords(1));
+      auto t_force = funForce(t_coords(0), t_coords(1));
 
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
-        t_nf(i) += alpha * t_base * t_gravity(i);
+        t_nf(i) += alpha * t_base * t_force(i);
         ++t_base;
         ++t_nf;
       }

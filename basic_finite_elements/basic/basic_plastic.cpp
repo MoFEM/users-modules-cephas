@@ -34,7 +34,6 @@ constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
 constexpr double H = 1e-3;
-constexpr double cn = 1;
 
 #include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
@@ -88,7 +87,7 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("TAU", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("EP", L2, AINSWORTH_LEGENDRE_BASE, 3);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  constexpr int order = 2;
+  constexpr int order = 1;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("TAU", order-1);
   CHKERR simple->setFieldOrder("EP", order-1);
@@ -235,7 +234,7 @@ MoFEMErrorCode Example::OPs() {
     return FTensor::Tensor1<double, 2>{0., 1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
-      new OpBodyForceRhs("U", commonDataPtr, gravity));
+      new OpForceRhs("U", commonDataPtr, gravity));
 
   basic->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));

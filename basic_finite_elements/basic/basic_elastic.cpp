@@ -177,7 +177,7 @@ MoFEMErrorCode Example::OPs() {
     return FTensor::Tensor1<double, 2>{0., -1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
-      new OpBodyForceRhs("U", commonDataPtr, gravity));
+      new OpForceRhs("U", commonDataPtr, gravity));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -258,7 +258,7 @@ MoFEMErrorCode Example::checkResults() {
     return FTensor::Tensor1<double, 2>{0., 1.};
   };
   basic->getOpDomainRhsPipeline().push_back(
-      new OpBodyForceRhs("U", commonDataPtr, gravity));
+      new OpForceRhs("U", commonDataPtr, gravity));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
