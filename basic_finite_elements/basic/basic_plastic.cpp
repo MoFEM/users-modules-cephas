@@ -33,7 +33,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
-constexpr double H = 0.01;
+constexpr double H = 1e-3;
 constexpr double cn = 1;
 
 #include <ElasticOps.hpp>
@@ -61,6 +61,8 @@ private:
   MatrixDouble invJac;
   boost::shared_ptr<OpPlasticTools::CommonData> commonDataPtr;
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
 };
 
 //! [Run problem]
@@ -101,6 +103,7 @@ MoFEMErrorCode Example::createCommonData() {
 
   auto get_matrial_stiffens = [&](FTensor::Ddg<double, 2, 2> &t_D) {
     MoFEMFunctionBegin;
+
     FTensor::Index<'i', 2> i;
     FTensor::Index<'j', 2> j;
     FTensor::Index<'k', 2> k;
@@ -117,6 +120,7 @@ MoFEMErrorCode Example::createCommonData() {
     t_D(1, 1, 1, 1) = c;
 
     t_D(0, 1, 0, 1) = (1 - poisson_ratio) * c;
+
     MoFEMFunctionReturn(0);
   };
 
@@ -280,6 +284,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   Simple *simple = mField.getInterface<Simple>();
   Basic *basic = mField.getInterface<Basic>();
+  ISManager *is_manager = mField.getInterface<ISManager>();
 
   auto solver = basic->createTS();
 
@@ -337,9 +342,24 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  auto scatter_create = [&](auto coeff) {
+    SmartPetscObj<IS> is;
+    CHKERR is_manager->isCreateProblemFieldAndRank(simple->getProblemName(),
+                                                   ROW, "U", coeff, coeff, is);
+    int loc_size;
+    CHKERR ISGetLocalSize(is, &loc_size);
+    Vec v;
+    CHKERR VecCreateMPI(mField.get_comm(), loc_size, PETSC_DETERMINE, &v);
+    VecScatter scatter;
+    CHKERR VecScatterCreate(D, is, v, PETSC_NULL, &scatter);
+    return std::make_tuple(SmartPetscObj<Vec>(v),
+                           SmartPetscObj<VecScatter>(scatter));
+  };
+
   auto set_time_monitor = [&]() {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dm, postProcFe));
+    boost::shared_ptr<Monitor> monitor_ptr(
+        new Monitor(dm, postProcFe, uXScatter, uYScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -348,6 +368,8 @@ MoFEMErrorCode Example::tsSolve() {
 
   CHKERR set_section_monitor();
   CHKERR create_post_process_element();
+  uXScatter = scatter_create(0);
+  uYScatter = scatter_create(1);
   CHKERR set_time_monitor();
 
   CHKERR TSSolve(solver, D);
@@ -363,6 +385,8 @@ MoFEMErrorCode Example::tsSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
+
+
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]

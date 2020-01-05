@@ -215,7 +215,7 @@ inline double trace(FTensor::Tensor2_symmetric<T, 2> &t_stress) {
   return (t_stress(0, 0) + t_stress(1, 1)) * third;
 };
 
-template<typename T>
+template <typename T>
 inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
   FTensor::Index<'I', 3> I;
   FTensor::Index<'J', 3> J;
@@ -260,13 +260,9 @@ inline auto diff_deviator(FTensor::Ddg<double, 2, 2> &&t_diff_stress) {
   return t_diff_deviator;
 };
 
-inline auto hardening(double tau) {
-  return H*tau + sigmaY;
-}
+inline auto hardening(double tau) { return H * tau + sigmaY; }
 
-inline auto hardening_dtau() {
-  return H;
-}
+inline auto hardening_dtau() { return H; }
 
 /**
  *
@@ -398,7 +394,7 @@ c =  t -  m(w(t, f)))
  \f]
 
 \f[
-\tau - \frac{1}{2}\left\{\tau + (f(\pmb\sigma) - \sigma_y) + 
+\tau - \frac{1}{2}\left\{\tau + (f(\pmb\sigma) - \sigma_y) +
 \| \tau + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0
 \f]
 
@@ -1190,9 +1186,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
     auto t_row_base = row_data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double c0 =
-          alpha * getTSa() *
-          diff_constrain_dtau(t_tau_dot, t_f - hardening(t_tau));
+      const double c0 = alpha * getTSa() *
+                        diff_constrain_dtau(t_tau_dot, t_f - hardening(t_tau));
       const double c1 = alpha *
                         diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)) *
                         hardening_dtau();
@@ -1303,8 +1298,7 @@ OpPostProcPlastic::doWork(int side, EntityType type,
   for (int gg = 0; gg != commonDataPtr->plasticSurfacePtr->size(); ++gg) {
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
-    CHKERR set_tag(th_plastic_surface, gg,
-                   set_scalar(f - hardening(tau)));
+    CHKERR set_tag(th_plastic_surface, gg, set_scalar(f - hardening(tau)));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
@@ -1318,23 +1312,54 @@ OpPostProcPlastic::doWork(int side, EntityType type,
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc_fe)
-      : dM(dm), postProcFe(post_proc_fe){};
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc_fe,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter
+
+          )
+      : dM(dm), postProcFe(post_proc_fe), uXScatter(ux_scatter),
+        uYScatter(uy_scatter){};
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
-    CHKERR postProcFe->writeFile(
-        "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+
+    auto make_vtk = [&]() {
+      MoFEMFunctionBegin;
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
+      CHKERR postProcFe->writeFile(
+          "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      MoFEMFunctionReturn(0);
+    };
+
+    auto print_max_min = [&](auto &tuple, const std::string msg) {
+      MoFEMFunctionBegin;
+      CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                             INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecScatterEnd(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                           INSERT_VALUES, SCATTER_FORWARD);
+      double max, min;
+      CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
+      CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
+      PetscPrintf(PETSC_COMM_WORLD, "%s time %3.4e min %3.4e max %3.4e\n",
+                  msg.c_str(), ts_t, min, max);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR make_vtk();
+    CHKERR print_max_min(uXScatter, "Ux");
+    CHKERR print_max_min(uYScatter, "Uy");
+
     MoFEMFunctionReturn(0);
   }
 
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
 };
 
 //! [Postprocessing]
