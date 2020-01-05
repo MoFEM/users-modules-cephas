@@ -400,8 +400,8 @@ c =  t -  m(w(t, f)))
 
  */
 inline double contrains(double tau, double f) {
-  if ((cn * f + tau) >= 0)
-    return cn * (-f);
+  if ((f + tau) >= 0)
+    return -f;
   else
     return tau;
 };
@@ -416,11 +416,11 @@ inline double sign(double x) {
 };
 
 inline double diff_constrain_dtau(double tau, double f) {
-  return (1 - sign(cn * (f) + tau)) / 2.;
+  return (1 - sign(f + tau)) / 2.;
 };
 
 inline auto diff_constrain_df(double tau, double f) {
-  return -cn * (1 + sign(cn * (f) + tau)) / 2.;
+  return -(1 + sign(f + tau)) / 2.;
 };
 
 template <typename T>
