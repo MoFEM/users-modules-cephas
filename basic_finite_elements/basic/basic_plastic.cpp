@@ -33,7 +33,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
-constexpr double H = 0.1;
+constexpr double H = 0.01;
 constexpr double cn = 1;
 
 #include <ElasticOps.hpp>
