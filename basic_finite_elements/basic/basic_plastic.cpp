@@ -70,8 +70,8 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR createCommonData();
   CHKERR bC();
   CHKERR OPs();
-  CHKERR postProcess();
   CHKERR tsSolve();
+  CHKERR postProcess();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
@@ -304,6 +304,39 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  auto create_post_process_element = [&]() {
+    MoFEMFunctionBegin;
+    postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe->generateReferenceElementMesh();
+
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateTensor2SymmetricFieldValues<2>(
+            "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+    postProcFe->getOpPtrVector().push_back(
+        new OpPlasticStress("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculatePlasticSurface("U", commonDataPtr));
+
+    postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
+        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(new OpPostProcPlastic(
+        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+    postProcFe->addFieldValuesPostProc("U");
+    MoFEMFunctionReturn(0);
+  };
+
   auto set_time_monitor = [&]() {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dm, postProcFe));
@@ -314,6 +347,7 @@ MoFEMErrorCode Example::tsSolve() {
   };
 
   CHKERR set_section_monitor();
+  CHKERR create_post_process_element();
   CHKERR set_time_monitor();
 
   CHKERR TSSolve(solver, D);
@@ -329,36 +363,6 @@ MoFEMErrorCode Example::tsSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-  postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  postProcFe->generateReferenceElementMesh();
-
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-  postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-      "TAU", commonDataPtr->plasticTauPtr, MBTRI));
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateTensor2SymmetricFieldValues<2>(
-          "EP", commonDataPtr->plasticStrainPtr, MBTRI));
-  postProcFe->getOpPtrVector().push_back(
-      new OpPlasticStress("U", commonDataPtr));
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculatePlasticSurface("U", commonDataPtr));
-
-  postProcFe->getOpPtrVector().push_back(
-      new OpPostProcElastic("U", postProcFe->postProcMesh,
-                            postProcFe->mapGaussPts, commonDataPtr));
-  postProcFe->getOpPtrVector().push_back(
-      new OpPostProcPlastic("U", postProcFe->postProcMesh,
-                            postProcFe->mapGaussPts, commonDataPtr));
-  postProcFe->addFieldValuesPostProc("U");
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
