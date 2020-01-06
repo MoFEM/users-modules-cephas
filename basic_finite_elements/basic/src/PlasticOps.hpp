@@ -268,6 +268,7 @@ inline auto hardening_dtau() { return H; }
  *
 
  \f[
+\begin{split}
 f&=\sqrt{s_{ij}s_{ij}}\\
 A_{ij}&=\frac{\partial f}{\partial \sigma_{ij}}=
 \frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\\
@@ -281,9 +282,12 @@ s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
 \frac{\partial A_{ij}}{\partial \epsilon_{kl}}&=
 \frac{\partial A_{ij}}{\partial \sigma_{mn}} \frac{\partial
 \sigma_{mn}}{\partial \epsilon_{kl}}= \frac{\partial A_{ij}}{\partial
-\sigma_{mn}} D_{mnkl} \f]
+\sigma_{mn}} D_{mnkl} 
+\end{split}
+\f]
 
  \f[
+\begin{split}
 f=\sqrt{s_{ij}s_{ij}}\\
 A_{ij}=\frac{\partial f}{\partial \sigma_{ij}}=
 \frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\\
@@ -312,13 +316,15 @@ s_{kl}}{\partial \sigma_{ij}}
 \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
 \sigma_{ij}}
 +
-\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
+s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
 \sigma_{mn}}
 \right) =& \\
 \frac{1}{f}
 \left(
 \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
-\sigma_{ij}} -A_{mn}A_{ij} \right) \f]
+\sigma_{ij}} -A_{mn}A_{ij} \right) 
+\end{split}
+\f]
 
  */
 inline double
