@@ -115,10 +115,6 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
-
-  commonDataPtr->E = young_modulus;
-  commonDataPtr->mu = poisson_ratio;
-
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]

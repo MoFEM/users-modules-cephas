@@ -20,8 +20,6 @@ struct CommonData {
   boost::shared_ptr<MatrixDouble> mGradPtr;
   boost::shared_ptr<MatrixDouble> mStrainPtr;
   boost::shared_ptr<MatrixDouble> mStressPtr;
-  double E;
-  double mu;
 };
 //! [Common data]
 
@@ -396,7 +394,7 @@ OpPostProcElastic::doWork(int side, EntityType type,
   };
 
   auto set_plain_stress_strain = [&](auto &mat, auto &t) -> MatrixDouble3by3 & {
-    mat(2, 2) = -commonDataPtr->mu * (t(0, 0) + t(1, 1));
+    mat(2, 2) = -poisson_ratio * (t(0, 0) + t(1, 1));
     return mat;
   };
 

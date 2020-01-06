@@ -134,10 +134,6 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->plasticTauDotPtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticStrainDotPtr = boost::make_shared<MatrixDouble>();
-
-  commonDataPtr->E = young_modulus;
-  commonDataPtr->mu = poisson_ratio;
-
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
