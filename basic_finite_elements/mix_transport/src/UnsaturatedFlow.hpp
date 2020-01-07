@@ -38,8 +38,9 @@ struct GenericMaterial {
 
   static double ePsilon0; ///< Regularization parameter
   static double ePsilon1; ///< Regularization parameter
+  static double scaleZ; ///< Scale z direction
+  
   double sCale;           ///< Scale time dependent eq.
-  // double Ks;                 ///< Saturated hydraulic conductivity [m/day]
 
   double h;   ///< hydraulic head
   double h_t; ///< rate of hydraulic head
@@ -59,7 +60,7 @@ struct GenericMaterial {
    * \brief Initialize head
    * @return value of head
    */
-  virtual double initalPcEval() const = 0;
+  virtual double initialPcEval() const = 0;
   virtual void printMatParameters(const int id,
                                   const std::string &prefix) const = 0;
 
@@ -366,9 +367,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         block_data->z = t_coords(2);
         CHKERR block_data->calK();
         const double K = block_data->K;
+        const double scaleZ = block_data->scaleZ;
         const double z = t_coords(2); /// z-coordinate at Gauss pt
         // Calculate pressure gradient
-        noalias(nF) -= alpha * (t_h - z) * divVec;
+        noalias(nF) -= alpha * (t_h - z * scaleZ) * divVec;
         // Calculate presure gradient from flux
         FTensor::Tensor0<double *> t_nf(&*nF.begin());
         for (int rr = 0; rr != nb_dofs; rr++) {
@@ -880,7 +882,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         // get weight for integration rule
         double alpha = getGaussPts()(2, gg) * getVolume();
         nN += alpha * outer_prod(data.getN(gg), data.getN(gg));
-        nF += alpha * block_data->initalPcEval() * data.getN(gg);
+        nF += alpha * block_data->initialPcEval() * data.getN(gg);
       }
 
       // factor matrix
@@ -1225,7 +1227,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
    * @param  ref_level mesh refinement on which mesh problem you like to built.
    * @return           error code
    */
-  MoFEMErrorCode buildProblem(BitRefLevel ref_level = BitRefLevel().set(0)) {
+  MoFEMErrorCode buildProblem(Range zero_flux_ents,
+                              BitRefLevel ref_level = BitRefLevel().set(0)) {
     MoFEMFunctionBegin;
 
     // Build fields
@@ -1255,6 +1258,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     CHKERR DMMoFEMAddElement(dM, "MIX_BCVALUE");
     // constructor data structures
     CHKERR DMSetUp(dM);
+
+    // remove zero flux dofs
+    CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        "MIX", "FLUXES", zero_flux_ents);
 
     PetscSection section;
     CHKERR mField.getInterface<ISManager>()->sectionCreate("MIX", &section);
@@ -1328,6 +1335,8 @@ struct UnsaturatedFlowElement : public MixTransportElement {
           fePtr->ts_u_t, INSERT_VALUES, SCATTER_REVERSE);
       switch (fePtr->ts_ctx) {
       case TSMethod::CTX_TSSETIFUNCTION:
+        CHKERR VecSetOption(fePtr->ts_F, VEC_IGNORE_NEGATIVE_INDICES,
+                            PETSC_TRUE);
         if (!cTx.bcIndices.empty()) {
           double scale;
           CHKERR cTx.scaleMethodFlux->getForceScale(fePtr->ts_t, scale);
@@ -1347,8 +1356,9 @@ struct UnsaturatedFlowElement : public MixTransportElement {
           const NumeredDofEntity *dof_ptr;
           for (std::vector<int>::iterator it = cTx.bcVecIds.begin();
                it != cTx.bcVecIds.end(); it++, vit++) {
-            CHKERR fePtr->problemPtr->getColDofsByPetscGlobalDofIdx(*it,
-                                                                    &dof_ptr);
+            if (auto dof_ptr =
+                    fePtr->problemPtr->getColDofsByPetscGlobalDofIdx(*it)
+                        .lock())
             dof_ptr->getFieldData() = *vit;
           }
         } else {
@@ -1401,21 +1411,12 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         CHKERR VecAssemblyEnd(fePtr->ts_F);
         if (!cTx.bcVecIds.empty()) {
           cTx.vecValsOnBc -= cTx.bcVecVals;
-          // cerr << mArk << endl;
-          // cerr << "a " << cTx.vecValsOnBc << endl;
-          // cerr << "a " << cTx.bcVecVals << endl;
           CHKERR VecSetValues(fePtr->ts_F, cTx.bcVecIds.size(),
                               &*cTx.bcVecIds.begin(), &*cTx.vecValsOnBc.begin(),
                               INSERT_VALUES);
         }
         CHKERR VecAssemblyBegin(fePtr->ts_F);
         CHKERR VecAssemblyEnd(fePtr->ts_F);
-        // CHKERR VecView(fePtr->ts_F,PETSC_VIEWER_STDOUT_WORLD);
-        // CHKERR
-        // fePtr->mField.getInterface<VecManager>()->setOtherLocalGhostVector(
-        //   fePtr->problemPtr,"VALUES",string("FLUXES")+"_residual",
-        //   ROW,fePtr->ts_F,INSERT_VALUES,SCATTER_REVERSE
-        // );
       } break;
       default:
         // don nothing
