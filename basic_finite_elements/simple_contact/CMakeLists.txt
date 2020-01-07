@@ -48,6 +48,12 @@ bfe_build_and_install(insert_prism_interface
 bfe_build_and_install(test_simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
 
+bfe_build_and_install(test_h_div_simple_contact
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_simple_contact.cpp)
+
+bfe_build_and_install(test_h_div_vol
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_vol.cpp)
+
 bfe_build_and_install(test_ale_simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact.cpp)
 

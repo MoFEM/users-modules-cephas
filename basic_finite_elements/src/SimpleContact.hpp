@@ -194,7 +194,13 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
+
+    boost::shared_ptr<MatrixDouble> divPAtPts;
+
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
+    boost::shared_ptr<VectorDouble> lagMultAtGaussPtsT1Ptr;
+    boost::shared_ptr<VectorDouble> lagMultAtGaussPtsT2Ptr;
+
     boost::shared_ptr<VectorDouble> projNormalStressAtMaster;
     boost::shared_ptr<VectorDouble> projNormalStressAtSlave;
     boost::shared_ptr<VectorDouble> relErrorLagNormalStressAtMaster;
@@ -209,56 +215,77 @@ struct SimpleContactProblem {
     boost::shared_ptr<VectorDouble> normalVectorSlavePtr;
     boost::shared_ptr<VectorDouble> normalVectorMasterPtr;
 
-    boost::shared_ptr<MatrixDouble> hMat;
-    boost::shared_ptr<MatrixDouble> FMat;
-    boost::shared_ptr<MatrixDouble> HMat;
-    boost::shared_ptr<VectorDouble> detHVec;
-    boost::shared_ptr<MatrixDouble> invHMat;
+    boost::shared_ptr<VectorDouble> tangentOneVectorSlavePtr;
+    boost::shared_ptr<VectorDouble> tangentTwoVectorSlavePtr;
 
-    std::map<int, NonlinearElasticElement::BlockData> setOfMasterFacesData;
-    std::map<int, NonlinearElasticElement::BlockData> setOfSlaveFacesData;
+     boost::shared_ptr<MatrixDouble> hMat;
+     boost::shared_ptr<MatrixDouble> FMat;
+     boost::shared_ptr<MatrixDouble> HMat;
+     boost::shared_ptr<VectorDouble> detHVec;
+     boost::shared_ptr<MatrixDouble> invHMat;
 
-    boost::shared_ptr<std::vector<DataForcesAndSourcesCore::EntData *>> masterRowData;
+     boost::shared_ptr<MatrixDouble> xAtPts;
+     boost::shared_ptr<MatrixDouble> xInitAtPts;
 
-    DataForcesAndSourcesCore::EntData *l2RowData;
+     boost::shared_ptr<MatrixDouble> lagMultAtGaussPtsPt3D;
 
-    DataForcesAndSourcesCore::EntData *l2ColData;
+     std::map<int, NonlinearElasticElement::BlockData> setOfMasterFacesData;
+     std::map<int, NonlinearElasticElement::BlockData> setOfSlaveFacesData;
 
-    DataForcesAndSourcesCore::EntData *faceRowData;
+     boost::shared_ptr<std::vector<DataForcesAndSourcesCore::EntData *>>
+         masterRowData;
 
-    double areaSlave;
+     DataForcesAndSourcesCore::EntData *l2RowData;
 
-    CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
-      positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
-      positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
-      lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
-      projNormalStressAtMaster = boost::make_shared<VectorDouble>();
-      projNormalStressAtSlave = boost::make_shared<VectorDouble>();
-      relErrorLagNormalStressAtMaster = boost::make_shared<VectorDouble>();
-      relErrorLagNormalStressAtSlave = boost::make_shared<VectorDouble>();
+     DataForcesAndSourcesCore::EntData *l2ColData;
 
-      diffNormalLagSlave= boost::make_shared<VectorDouble>();
-      diffNormalLagMaster= boost::make_shared<VectorDouble>();
-      gapPtr = boost::make_shared<VectorDouble>();
-      normalSlaveLengthALEPtr = boost::make_shared<VectorDouble>();
-      normalMasterLengthALEPtr = boost::make_shared<VectorDouble>();
-      lagGapProdPtr = boost::make_shared<VectorDouble>();
-      tildeCFunPtr = boost::make_shared<VectorDouble>();
-      lambdaGapDiffProductPtr = boost::make_shared<VectorDouble>();
-      normalVectorSlavePtr = boost::make_shared<VectorDouble>();
-      normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+     DataForcesAndSourcesCore::EntData *faceRowData;
 
-      hMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      FMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
-      invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      masterRowData =
-          boost::make_shared<std::vector<DataForcesAndSourcesCore::EntData*>>();
+     double areaSlave;
 
-      faceRowData = nullptr;
-      l2RowData = nullptr;
-      l2ColData = nullptr;
+     CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
+       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
+       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
+       lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
+       lagMultAtGaussPtsT1Ptr = boost::make_shared<VectorDouble>();
+       lagMultAtGaussPtsT2Ptr = boost::make_shared<VectorDouble>();
+
+       projNormalStressAtMaster = boost::make_shared<VectorDouble>();
+       projNormalStressAtSlave = boost::make_shared<VectorDouble>();
+       relErrorLagNormalStressAtMaster = boost::make_shared<VectorDouble>();
+       relErrorLagNormalStressAtSlave = boost::make_shared<VectorDouble>();
+
+       diffNormalLagSlave = boost::make_shared<VectorDouble>();
+       diffNormalLagMaster = boost::make_shared<VectorDouble>();
+       gapPtr = boost::make_shared<VectorDouble>();
+       normalSlaveLengthALEPtr = boost::make_shared<VectorDouble>();
+       normalMasterLengthALEPtr = boost::make_shared<VectorDouble>();
+       lagGapProdPtr = boost::make_shared<VectorDouble>();
+       tildeCFunPtr = boost::make_shared<VectorDouble>();
+       lambdaGapDiffProductPtr = boost::make_shared<VectorDouble>();
+       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
+       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+
+       tangentOneVectorSlavePtr = boost::make_shared<VectorDouble>();
+       tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>();
+
+       divPAtPts = boost::make_shared<MatrixDouble>();
+       lagMultAtGaussPtsPt3D = boost::make_shared<MatrixDouble>();
+
+       hMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+       FMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+       HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+       detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
+       invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+       xAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+       xInitAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+       masterRowData = boost::make_shared<
+           std::vector<DataForcesAndSourcesCore::EntData *>>();
+
+       faceRowData = nullptr;
+       l2RowData = nullptr;
+       l2ColData = nullptr;
     }
 
     Range forcesOnlyOnEntitiesRow;
@@ -990,6 +1017,21 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  struct OpGetLagMulAtGaussPtsSlaveHdiv3D
+      : public VolumeElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetLagMulAtGaussPtsSlaveHdiv3D(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : VolumeElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPROW),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
   struct OpGetLagMulAtGaussPtsSlaveL2
       : public FaceElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator {
 
@@ -1281,6 +1323,24 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
               lagrang_field_name, UserDataOperator::OPCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACESLAVE),
+          commonDataSimpleContact(common_data_contact), F(f_) {}
+
+    VectorDouble vecR;
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpCalIntTildeCFunSlaveHdiv3D
+      : public VolumeElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    Vec F;
+    OpCalIntTildeCFunSlaveHdiv3D(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Vec f_ = PETSC_NULL)
+        : VolumeElementForcesAndSourcesCoreOnVolumeSide::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPCOL),
           commonDataSimpleContact(common_data_contact), F(f_) {}
 
     VectorDouble vecR;
@@ -1838,6 +1898,50 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
       doPrisms = false;
       sYmm = false;
     };
+  };
+
+  struct OpCalculateHdivDivergenceResidual
+      : public VolumeElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    Vec F;
+    OpCalculateHdivDivergenceResidual(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Vec f_ = PETSC_NULL)
+        : VolumeElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL),
+          commonDataSimpleContact(common_data_contact), F(f_) {
+      sYmm = false;
+    }
+
+    VectorDouble vec_f;
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data); 
+
+    
+  };
+
+struct OpCalculateHdivDivergenceResidualOnDispl
+      : public VolumeElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    Vec F;
+    OpCalculateHdivDivergenceResidualOnDispl(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        Vec f_ = PETSC_NULL)
+        : VolumeElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL),
+          commonDataSimpleContact(common_data_contact), F(f_) {
+      sYmm = false;
+    }
+
+    VectorDouble vec_f;
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data); 
+
+    
   };
 
   struct OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv
@@ -3697,6 +3801,87 @@ struct OpCalRelativeErrorNormalLagrangeMasterAndSlaveDifference
       fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalIntTildeCFunSlaveHdiv(lagrang_field_name,
                                          common_data_simple_contact, f_));
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+  MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv3D(
+      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_hdiv_rhs_slave_tet,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name,
+      string side_lagrange_volume_element, Vec f_ = PETSC_NULL) {
+    MoFEMFunctionBegin;
+
+    map<int, SimpleContactPrismsData>::iterator sit =
+        setOfSimpleContactPrism.begin();
+    for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalSlave(field_name, common_data_simple_contact));
+
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          fe_hdiv_rhs_slave =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+
+      fe_hdiv_rhs_slave->getOpPtrVector().push_back(
+          new OpGetLagMulAtGaussPtsSlaveHdiv3D(lagrang_field_name,
+                                               common_data_simple_contact));
+
+      fe_hdiv_rhs_slave_tet->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>(field_name,
+                                              common_data_simple_contact->xAtPts));
+      
+      fe_hdiv_rhs_slave_tet->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>("MESH_NODE_POSITIONS",
+                                              common_data_simple_contact->xInitAtPts));
+
+      fe_hdiv_rhs_slave_tet->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorDivergence<3, 3>(
+              lagrang_field_name, common_data_simple_contact->divPAtPts));
+
+      fe_hdiv_rhs_slave_tet->getOpPtrVector().push_back(
+          new OpCalculateHdivDivergenceResidual(
+              field_name, common_data_simple_contact, f_));
+
+      fe_hdiv_rhs_slave_tet->getOpPtrVector().push_back(
+          new OpCalculateHdivDivergenceResidualOnDispl(
+              lagrang_field_name, common_data_simple_contact, f_));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+          lagrang_field_name, fe_hdiv_rhs_slave, side_lagrange_volume_element));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetPositionAtGaussPtsMaster(field_name,
+                                            common_data_simple_contact));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetPositionAtGaussPtsSlave(field_name,
+                                           common_data_simple_contact));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetGapSlave(field_name, common_data_simple_contact));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConMaster(field_name, common_data_simple_contact, f_));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalFReConSlave(field_name, common_data_simple_contact, f_));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
+          field_name, common_data_simple_contact, rValue, cnValue));
+
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          int_tilde =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+
+      int_tilde->getOpPtrVector().push_back(new OpCalIntTildeCFunSlaveHdiv3D(
+          lagrang_field_name, common_data_simple_contact, f_));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+          lagrang_field_name, int_tilde, side_lagrange_volume_element));
     }
     MoFEMFunctionReturn(0);
   }
