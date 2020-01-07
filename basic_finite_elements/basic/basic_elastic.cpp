@@ -30,6 +30,7 @@ using DomianEleOp = DomianEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
+constexpr int order = 2;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 
@@ -78,7 +79,6 @@ MoFEMErrorCode Example::setUP() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  constexpr int order = 5;
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
