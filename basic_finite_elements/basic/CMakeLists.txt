@@ -42,6 +42,10 @@ bfe_build_and_install(
   basic_plastic
   ${CMAKE_CURRENT_SOURCE_DIR}/basic_plastic.cpp)
 
+bfe_build_and_install(
+  basic_contact
+  ${CMAKE_CURRENT_SOURCE_DIR}/basic_contact.cpp)
+
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ
