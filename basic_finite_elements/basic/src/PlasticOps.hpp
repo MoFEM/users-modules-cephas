@@ -12,6 +12,38 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+/** \file PlasticOps.hpp
+
+\f[
+\left\{
+\begin{array}{ll}
+\frac{\partial \sigma_{ij}}{\partial x_j} - b_i = 0 & \forall x \in \Omega \\
+\varepsilon_{ij} = \frac{1}{2}\left( \frac{\partial u_i}{\partial x_j} + \frac{\partial u_j}{\partial x_i} \right)\\
+\sigma_{ij} = D_{ijkl}\left(\varepsilon_{kl}-\varepsilon^p_{kl}\right) \\
+\dot{\varepsilon}^p_{kl} - \dot{\tau} \left( \left. \frac{\partial f}{\partial \sigma_{kl}} \right|_{(\sigma,\tau) } \right) = 0 \\
+f(\sigma, \tau) \leq 0,\; \dot{\tau} \geq 0,\;\dot{\tau}f(\sigma, \tau)=0\\
+u_i = \overline{u}_i & \forall x \in \partial\Omega_u \\
+\sigma_{ij}n_j = \overline{t}_i & \forall x \in \partial\Omega_\sigma \\
+\Omega_u \cup \Omega_\sigma = \Omega \\
+\Omega_u \cap \Omega_\sigma = \emptyset
+\end{array}
+\right.
+\f]
+
+\f[
+\left\{
+\begin{array}{ll}
+\left(\frac{\partial \delta u_i}{\partial x_j},\sigma_{ij}\right)_\Omega-(\delta u_i,b_i)_\Omega -(\delta u_i,\overline{t}_i)_{\partial\Omega_\sigma}=0 & \forall \delta u_i \in H^1(\Omega)\\
+\left(\delta\varepsilon^p_{kl} ,D_{ijkl}\left( \dot{\varepsilon}^p_{kl} - \dot{\tau} A_{kl} \right)\right) = 0 
+& \forall \delta\varepsilon^p_{ij} \in L^2(\Omega) \cap \mathcal{S} \\
+\left(\delta\tau,c_n\dot{\tau} - \frac{1}{2}\left\{c_n \dot{\tau} + (f(\pmb\sigma,\tau) - \sigma_y) +
+\| c_n \dot{\tau} + (f(\pmb\sigma,\tau) - \sigma_y) \|\right\}\right) = 0 & \forall \delta\tau \in L^2(\Omega)
+\end{array}
+\right.
+\f]
+
+*/
+
 namespace OpPlasticTools {
 
 //! [Common data]

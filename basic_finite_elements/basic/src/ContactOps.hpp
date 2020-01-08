@@ -45,6 +45,32 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+struct OpConstrainLhs_dU : public BoundaryEleOp {
+  OpConstrainLhs_dU(const std::string row_field_name,
+                       const std::string col_field_name,
+                       boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  MatrixDouble locMat;
+};
+
+struct OpConstrainLhs_dSigma : public BoundaryEleOp {
+  OpConstrainLhs_dSigma(const std::string row_field_name,
+                       const std::string col_field_name,
+                       boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  MatrixDouble locMat;
+};
+
 struct OpConstrainTraction : public BoundaryEleOp {
   OpConstrainTraction(const std::string field_name,
                  boost::shared_ptr<CommonData> common_data_ptr);
@@ -380,5 +406,64 @@ OpInternalContactLhs::doWork(int row_side, int col_side, EntityType row_type,
 
   MoFEMFunctionReturn(0);
 }
+
+OpConstrainLhs_dU::OpConstrainLhs_dU(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {
+  sYmm = false;
+}
+MoFEMErrorCode
+OpConstrainLhs_dU::doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
+  const size_t row_nb_dofs = row_data.getIndices().size();
+  const size_t col_nb_dofs = col_data.getIndices().size();
+
+  if (row_nb_dofs && col_nb_dofs) {
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_row_base = row_data.getFTensor0N();
+    size_t nb_face_functions = row_data.getN().size2();
+
+    locMat.resize(row_nb_dofs, col_nb_dofs, false);
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      size_t rr = 0;
+      for (; rr != row_nb_dofs / 2; ++rr) {
+
+        for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
+        }
+
+        ++t_row_base;
+      }
+      for (; rr < nb_face_functions; ++rr)
+        ++t_row_base;
+
+      ++t_w;
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpConstrainLhs_dSigma::OpConstrainLhs_dSigma(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {
+  sYmm = false;
+}
+MoFEMErrorCode
+OpConstrainLhs_dSigma::doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data) {}
 
 }; // namespace OpContactTools
