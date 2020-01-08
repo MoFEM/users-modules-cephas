@@ -262,7 +262,7 @@ inline auto hardening_dtau() { return H; }
 /**
  *
 
- \f[
+\f[
 \begin{split}
 f&=\sqrt{s_{ij}s_{ij}}\\
 A_{ij}&=\frac{\partial f}{\partial \sigma_{ij}}=
@@ -272,52 +272,12 @@ A_{ij}&=\frac{\partial f}{\partial \sigma_{ij}}=
 s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
 -A_{mn}A_{ij}
 \right)\\
-\frac{\partial f}{\partial \epsilon_{ij}}&=A_{mn}D_{mnij}
+\frac{\partial f}{\partial \varepsilon_{ij}}&=A_{mn}D_{mnij}
 \\
-\frac{\partial A_{ij}}{\partial \epsilon_{kl}}&=
+\frac{\partial A_{ij}}{\partial \varepsilon_{kl}}&=
 \frac{\partial A_{ij}}{\partial \sigma_{mn}} \frac{\partial
-\sigma_{mn}}{\partial \epsilon_{kl}}= \frac{\partial A_{ij}}{\partial
+\sigma_{mn}}{\partial \varepsilon_{kl}}= \frac{\partial A_{ij}}{\partial
 \sigma_{mn}} D_{mnkl} 
-\end{split}
-\f]
-
- \f[
-\begin{split}
-f=\sqrt{s_{ij}s_{ij}}\\
-A_{ij}=\frac{\partial f}{\partial \sigma_{ij}}=
-\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\\
-\frac{\partial^2 f}{\partial \sigma_{ij}\partial\sigma_{mn}}&=\\
--\frac{1}{f^2}\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}
-\left(s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
-+
-\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial
-s_{kl}}{\partial \sigma_{ij}}
-+
-\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
-\sigma_{mn}} &=\\
--\frac{1}{f}
-\left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\right)
-\left(\frac{1}{f} s_{kl} \frac{\partial s_{kl}}{\partial \sigma_{ij}}\right)
-+
-\frac{1}{f} \frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial
-s_{kl}}{\partial \sigma_{ij}}
-+
-\frac{1}{f} s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
-\sigma_{mn}} &=\\
--\frac{1}{f} A_{mn}A_{ij}
-+
-\frac{1}{f}
-\left(
-\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
-\sigma_{ij}}
-+
-s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
-\sigma_{mn}}
-\right) =& \\
-\frac{1}{f}
-\left(
-\frac{\partial s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial
-\sigma_{ij}} -A_{mn}A_{ij} \right) 
 \end{split}
 \f]
 
@@ -367,15 +327,9 @@ inline auto diff_plastic_flow_dstrain(
 
 /**
 
- \f[
-w = \tau + (f - \sigma_y)\\
-\textrm{max}_0 = (w + \textrm{Abs}[a])/2\\
-c =  t -  m(w(t, f)))
- \f]
-
 \f[
-\tau - \frac{1}{2}\left\{\tau + (f(\pmb\sigma) - \sigma_y) +
-\| \tau + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0
+\dot{\tau} - \frac{1}{2}\left\{\dot{\tau} + (f(\pmb\sigma) - \sigma_y) +
+\| \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0
 \f]
 
  */
