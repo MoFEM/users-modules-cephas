@@ -380,10 +380,10 @@ c =  t -  m(w(t, f)))
 
  */
 inline double contrains(double tau, double f) {
-  if ((f + tau) >= 0)
+  if ((f + cn * tau) >= 0)
     return -f;
   else
-    return tau;
+    return cn * tau;
 };
 
 inline double sign(double x) {
@@ -396,11 +396,11 @@ inline double sign(double x) {
 };
 
 inline double diff_constrain_dtau(double tau, double f) {
-  return (1 - sign(f + tau)) / 2.;
+  return (cn - cn * sign(f + cn * tau)) / 2.;
 };
 
 inline auto diff_constrain_df(double tau, double f) {
-  return -(1 + sign(f + tau)) / 2.;
+  return (-1 - sign(f + cn * tau)) / 2.;
 };
 
 template <typename T>
@@ -525,12 +525,14 @@ OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
 
       FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 3>, 2> t_nf{
           &nf[0], &nf[1], &nf[2]};
+
+      FTensor::Tensor2_symmetric<double, 2> t_flow_stress_diff;
+      t_flow_stress_diff(i, j) = t_D(i, j, k, l) * (t_plastic_strain_dot(k, l) -
+                                                    t_tau_dot * t_flow(k, l));
+
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
-        t_nf(i, j) += alpha * t_base *
-                      (t_D(i, j, k, l) * t_plastic_strain_dot(k, l) -
-                       t_tau_dot * t_flow(i, j));
-
+        t_nf(i, j) += alpha * t_base * t_flow_stress_diff(i, j);
         ++t_base;
         ++t_nf;
       }
@@ -714,10 +716,12 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
       auto t_diff_plastic_flow_dstrain = diff_plastic_flow_dstrain(
           t_D,
           diff_plastic_flow_dstress(t_f, t_flow, diff_deviator(diff_tensor())));
-      FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_plastic_flow_dgrad;
-      t_diff_plastic_flow_dgrad(i, j, k, l) =
-          t_diff_plastic_flow_dstrain(i, j, m, n) *
-          t_diff_symmetrize(m, n, k, l);
+      FTensor::Ddg<double, 2, 2> t_flow_stress_dstrain;
+      t_flow_stress_dstrain(i, j, k, l) =
+          t_D(i, j, m, n) * t_diff_plastic_flow_dstrain(m, n, k, l);
+      FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_plastic_flow_stress_dgrad;
+      t_diff_plastic_flow_stress_dgrad(i, j, k, l) =
+          t_flow_stress_dstrain(i, j, m, n) * t_diff_symmetrize(m, n, k, l);
 
       size_t rr = 0;
       for (; rr != nb_row_dofs / 3; ++rr) {
@@ -740,8 +744,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
         for (size_t cc = 0; cc != nb_col_dofs / 2; ++cc) {
 
           FTensor::Tensor3<double, 2, 2, 2> t_tmp;
-          t_tmp(i, j, l) =
-              c0 * (t_diff_plastic_flow_dgrad(i, j, l, k) * t_col_diff_base(k));
+          t_tmp(i, j, l) = c0 * (t_diff_plastic_flow_stress_dgrad(i, j, l, k) *
+                                 t_col_diff_base(k));
 
           for (int ii = 0; ii != 2; ++ii)
             for (int jj = ii; jj < 2; ++jj)
@@ -834,9 +838,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
         for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
 
           t_mat(i, j, k, l) +=
-              t_col_base *
-              (c1 * t_D(i, j, m, n) * t_diff_plastic_strain(m, n, k, l) +
-               c0 * t_diff_plastic_flow_dstrain(i, j, k, l));
+              t_col_base * (t_D(i, j, m, n) *
+                            (c1 * t_diff_plastic_strain(m, n, k, l) +
+                             c0 * t_diff_plastic_flow_dstrain(m, n, k, l)));
 
           ++t_mat;
           ++t_col_base;
@@ -893,6 +897,9 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w * getTSa();
 
+      FTensor::Tensor2_symmetric<double, 2> t_flow_stress;
+      t_flow_stress(i, j) = t_D(i, j, m, n) * t_flow(m, n);
+
       for (size_t rr = 0; rr != nb_row_dofs / 3; ++rr) {
 
         FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 1>, 2> t_mat{
@@ -901,8 +908,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs; cc++) {
-
-          t_mat(i, j) -= alpha * t_row_base * t_col_base * t_flow(i, j);
+          t_mat(i, j) -= alpha * t_row_base * t_col_base * t_flow_stress(i, j);
           ++t_mat;
           ++t_col_base;
         }
