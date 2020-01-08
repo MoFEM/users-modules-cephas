@@ -65,6 +65,20 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+struct OpInternalContactLhs : public DomianEleOp {
+  OpInternalContactLhs(const std::string row_field_name,
+                       const std::string col_field_name,
+                       boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  MatrixDouble locMat;
+};
+
 template <typename T>
 inline double gap(FTensor::Tensor1<T, 2> &t_disp,
                   FTensor::Tensor1<double, 2> &t_normal) {
@@ -309,7 +323,62 @@ MoFEMErrorCode OpConstrainDisp::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
+OpInternalContactLhs::OpInternalContactLhs(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {
+  sYmm = false;
+}
 
+MoFEMErrorCode
+OpInternalContactLhs::doWork(int row_side, int col_side, EntityType row_type,
+                             EntityType col_type,
+                             DataForcesAndSourcesCore::EntData &row_data,
+                             DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
 
+  const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
+  const size_t row_nb_dofs = row_data.getIndices().size();
+  const size_t col_nb_dofs = col_data.getIndices().size();
+
+  if(row_nb_dofs && col_nb_dofs) {
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_row_base = row_data.getFTensor0N();
+    size_t nb_face_functions = row_data.getN().size2();
+
+    locMat.resize(row_nb_dofs, col_nb_dofs, false);
+
+    for(size_t gg = 0; gg!=nb_gauss_pts; ++gg) {
+
+      const double alpha = getMeasure() * t_w;
+
+      size_t rr = 0;
+      for (; rr != row_nb_dofs / 2; ++rr) {
+
+        FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 2> t_mat{
+            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 0)};
+
+        auto t_col_diff_base = col_data.getFTensor2DiffN<3, 2>();
+        for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
+          const double div = t_col_diff_base(j, j);
+          t_mat(i) += alpha * t_row_base * div;
+          ++t_mat;
+          ++t_col_diff_base;
+        }
+
+        ++t_row_base;
+      }
+      for (; rr < nb_face_functions; ++rr)
+        ++t_row_base; 
+      
+      ++t_w;
+    }
+
+  }
+
+  MoFEMFunctionReturn(0);
+}
 
 }; // namespace OpContactTools
