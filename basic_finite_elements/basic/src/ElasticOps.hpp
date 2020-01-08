@@ -23,6 +23,11 @@ struct CommonData {
 };
 //! [Common data]
 
+FTensor::Index<'i', 2> i;
+FTensor::Index<'j', 2> j;
+FTensor::Index<'k', 2> k;
+FTensor::Index<'l', 2> l;
+
 //! [Operators definitions]
 typedef boost::function<FTensor::Tensor1<double, 2>(const double, const double)>
     VectorFun;
@@ -109,8 +114,6 @@ OpStrain::OpStrain(const std::string field_name,
 //! [Calculate strain]
 MoFEMErrorCode OpStrain::doWork(int side, EntityType type,
                                 DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mGradPtr->size2();
   commonDataPtr->mStrainPtr->resize(3, nb_gauss_pts);
@@ -139,11 +142,6 @@ OpStress::OpStress(const std::string field_name,
 //! [Calculate stress]
 MoFEMErrorCode OpStress::doWork(int side, EntityType type,
                                 DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
   commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
@@ -170,9 +168,6 @@ OpInternalForceRhs::OpInternalForceRhs(const std::string field_name,
 MoFEMErrorCode
 OpInternalForceRhs::doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-
   MoFEMFunctionBegin;
 
   const size_t nb_dofs = data.getIndices().size();
@@ -227,9 +222,6 @@ OpForceRhs::OpForceRhs(const std::string field_name,
 //! [Body force]
 MoFEMErrorCode OpForceRhs::doWork(int side, EntityType type,
                                    DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-
   MoFEMFunctionBegin;
 
   const size_t nb_dofs = data.getIndices().size();
@@ -294,10 +286,6 @@ OpStiffnessMatrixLhs::doWork(int row_side, int col_side, EntityType row_type,
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();

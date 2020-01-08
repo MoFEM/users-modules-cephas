@@ -25,6 +25,18 @@ struct CommonData : public OpElasticTools::CommonData {
 };
 //! [Common data]
 
+FTensor::Index<'i', 2> i;
+FTensor::Index<'j', 2> j;
+FTensor::Index<'k', 2> k;
+FTensor::Index<'l', 2> l;
+FTensor::Index<'m', 2> m;
+FTensor::Index<'n', 2> n;
+
+FTensor::Index<'I', 3> I;
+FTensor::Index<'J', 3> J;
+FTensor::Index<'M', 3> M;
+FTensor::Index<'N', 3> N;
+
 //! [Operators definitions]
 struct OpCalculatePlasticSurface : public DomianEleOp {
   OpCalculatePlasticSurface(const std::string field_name,
@@ -181,10 +193,6 @@ private:
 
 //! [Lambda functions]
 inline auto diff_tensor() {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
   FTensor::Ddg<double, 2, 2> t_diff;
   t_diff(i, j, k, l) = 0;
   for (size_t ii = 0; ii != 2; ++ii)
@@ -194,10 +202,6 @@ inline auto diff_tensor() {
 };
 
 inline auto diff_symmetrize() {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
   FTensor::Tensor4<double, 2, 2, 2, 2> t_diff;
   t_diff(i, j, k, l) = 0;
   t_diff(0, 0, 0, 0) = 1;
@@ -217,8 +221,6 @@ inline double trace(FTensor::Tensor2_symmetric<T, 2> &t_stress) {
 
 template <typename T>
 inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
-  FTensor::Index<'I', 3> I;
-  FTensor::Index<'J', 3> J;
   FTensor::Tensor2_symmetric<double, 3> t_dev;
   t_dev(I, J) = 0;
   for (int ii = 0; ii != 2; ++ii)
@@ -231,15 +233,8 @@ inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
 };
 
 inline auto diff_deviator(FTensor::Ddg<double, 2, 2> &&t_diff_stress) {
-  FTensor::Index<'I', 3> I;
-  FTensor::Index<'J', 3> J;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   FTensor::Ddg<double, 3, 2> t_diff_deviator;
-
   t_diff_deviator(I, J, k, l) = 0;
-
   for (int ii = 0; ii != 2; ++ii)
     for (int jj = ii; jj != 2; ++jj)
       for (int kk = 0; kk != 2; ++kk)
@@ -329,19 +324,12 @@ s_{kl} \frac{\partial^2 s_{kl}}{\partial \sigma_{ij} \partial
  */
 inline double
 platsic_surface(FTensor::Tensor2_symmetric<double, 3> &&t_stress_deviator) {
-  FTensor::Index<'I', 3> I;
-  FTensor::Index<'J', 3> J;
   return std::sqrt(t_stress_deviator(I, J) * t_stress_deviator(I, J));
 };
 
 inline auto plastic_flow(double f,
                          FTensor::Tensor2_symmetric<double, 3> &&t_dev_stress,
                          FTensor::Ddg<double, 3, 2> &&t_diff_deviator) {
-  FTensor::Index<'I', 3> I;
-  FTensor::Index<'J', 3> J;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   FTensor::Tensor2_symmetric<double, 2> t_diff_f;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_f(k, l) =
@@ -355,13 +343,6 @@ template <typename T>
 inline auto
 diff_plastic_flow_dstress(double f, FTensor::Tensor2_symmetric<T, 2> &t_flow,
                           FTensor::Ddg<double, 3, 2> &&t_diff_deviator) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-  FTensor::Index<'M', 3> M;
-  FTensor::Index<'N', 3> N;
-
   FTensor::Ddg<double, 2, 2> t_diff_flow;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_flow(i, j, k, l) =
@@ -377,13 +358,6 @@ template <typename T>
 inline auto diff_plastic_flow_dstrain(
     FTensor::Ddg<T, 2, 2> &t_D,
     FTensor::Ddg<double, 2, 2> &&t_diff_plastic_flow_dstress) {
-  FTensor::Index<'i', 2> j;
-  FTensor::Index<'j', 2> i;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-  FTensor::Index<'m', 2> m;
-  FTensor::Index<'m', 2> n;
-
   FTensor::Ddg<double, 2, 2> t_diff_flow;
   t_diff_flow(i, j, k, l) =
       t_diff_plastic_flow_dstress(i, j, m, n) * t_D(m, n, k, l);
@@ -433,8 +407,6 @@ template <typename T>
 inline auto
 diff_constrain_dstress(double &&diff_constrain_df,
                        FTensor::Tensor2_symmetric<T, 2> &t_plastic_flow) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
   FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstress;
   t_diff_constrain_dstress(i, j) = diff_constrain_df * t_plastic_flow(i, j);
   return t_diff_constrain_dstress;
@@ -444,10 +416,6 @@ template <typename T>
 inline auto diff_constrain_dstrain(
     FTensor::Ddg<T, 2, 2> &t_D,
     FTensor::Tensor2_symmetric<T, 2> &&t_diff_constrain_dstress) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
   FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstrain;
   t_diff_constrain_dstrain(k, l) =
       t_diff_constrain_dstress(i, j) * t_D(i, j, k, l);
@@ -467,11 +435,6 @@ MoFEMErrorCode
 OpCalculatePlasticSurface::doWork(int side, EntityType type,
                                   DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
 
   const size_t nb_gauss_pts = commonDataPtr->mStressPtr->size2();
   auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
@@ -510,11 +473,6 @@ OpPlasticStress::OpPlasticStress(const std::string field_name,
 MoFEMErrorCode
 OpPlasticStress::doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
   commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
@@ -544,12 +502,6 @@ MoFEMErrorCode
 OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
                                   DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
@@ -659,11 +611,6 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
@@ -742,13 +689,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-  FTensor::Index<'m', 2> m;
-  FTensor::Index<'n', 2> n;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
@@ -844,13 +784,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-  FTensor::Index<'m', 2> m;
-  FTensor::Index<'n', 2> n;
-
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
@@ -941,9 +874,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
   if (nb_row_dofs && nb_col_dofs) {
@@ -1004,13 +934,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-  FTensor::Index<'m', 2> m;
-  FTensor::Index<'n', 2> n;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
@@ -1093,11 +1016,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
