@@ -3,7 +3,7 @@
  * \example basic_elastic.cpp
  *
  * Plane stress elastic problem
- * 
+ *
  */
 
 /* This file is part of MoFEM.
@@ -53,12 +53,16 @@ private:
   MoFEMErrorCode createCommonData();
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
-  MoFEMErrorCode kspSolve();
+  MoFEMErrorCode tsSolve();
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
-  MatrixDouble invJac;
+  MatrixDouble invJac, jAc;
   boost::shared_ptr<OpContactTools::CommonData> commonDataPtr;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+
   Range getEntsOnMeshSkin();
 };
 
@@ -69,7 +73,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR createCommonData();
   CHKERR bC();
   CHKERR OPs();
-  CHKERR kspSolve();
+  CHKERR tsSolve();
   CHKERR postProcess();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
@@ -126,6 +130,11 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactStressDivergencePtr =
+      boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
@@ -142,20 +151,69 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
 
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(
-      new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+  auto add_domain_ops = [&]() {
+    basic->getOpDomainLhsPipeline().push_back(new OpCalculateJacForFace(jAc));
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+    basic->getOpDomainLhsPipeline().push_back(new OpMakeHdivFromHcurl());
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpSetContravariantPiolaTransformFace(jAc));
+    basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacHcurlFace(invJac));
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpInternalContactLhs("U", "SIGMA"));
 
-  auto gravity = [](double x, double y) {
-    return FTensor::Tensor1<double, 2>{0., -1.};
+    basic->getOpDomainLhsPipeline().push_back(
+        new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+
+    auto gravity = [](double x, double y) {
+      return FTensor::Tensor1<double, 2>{0., -1.};
+    };
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpForceRhs("U", commonDataPtr, gravity));
+    basic->getOpDomainRhsPipeline().push_back(new OpCalculateJacForFace(jAc));
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+    basic->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpSetContravariantPiolaTransformFace(jAc));
+    basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacHcurlFace(invJac));
+
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpCalculateHVecTensorDivergence<2, 2>(
+            "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    basic->getOpDomainRhsPipeline().push_back(
+        new OpInternalContactRhs("U", commonDataPtr));
   };
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpForceRhs("U", commonDataPtr, gravity));
+
+  auto add_boundary_ops = [&]() {
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpSetContrariantPiolaTransformOnEdge());
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpConstrainDisp("U", commonDataPtr));
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpConstrainTraction("SIGMA", commonDataPtr));
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpConstrainLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+
+    basic->getOpBoundaryRhsPipeline().push_back(
+        new OpSetContrariantPiolaTransformOnEdge());
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpConstrainDisp("U", commonDataPtr));
+    basic->getOpBoundaryLhsPipeline().push_back(
+        new OpConstrainTraction("SIGMA", commonDataPtr));
+    basic->getOpBoundaryLhsPipeline().push_back(
+      new OpConstrainRhs("SIGMA", commonDataPtr));
+  };
+
+  add_domain_ops();
+  add_boundary_ops();
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
+    return 2 * approx_order;
   };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
@@ -165,99 +223,101 @@ MoFEMErrorCode Example::OPs() {
 //! [Push operators to pipeline]
 
 //! [Solve]
-MoFEMErrorCode Example::kspSolve() {
+MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
+
   Simple *simple = mField.getInterface<Simple>();
   Basic *basic = mField.getInterface<Basic>();
-  auto solver = basic->createKSP();
-  CHKERR KSPSetFromOptions(solver);
-  CHKERR KSPSetUp(solver);
+  ISManager *is_manager = mField.getInterface<ISManager>();
+
+  auto solver = basic->createTS();
 
   auto dm = simple->getDM();
   auto D = smartCreateDMDVector(dm);
-  auto F = smartVectorDuplicate(D);
 
-  CHKERR KSPSolve(solver, F, D);
+  CHKERR TSSetSolution(solver, D);
+  CHKERR TSSetFromOptions(solver);
+  CHKERR TSSetUp(solver);
+
+  auto set_section_monitor = [&]() {
+    MoFEMFunctionBegin;
+    SNES snes;
+    CHKERR TSGetSNES(solver, &snes);
+    PetscViewerAndFormat *vf;
+    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
+                                      PETSC_VIEWER_DEFAULT, &vf);
+    CHKERR SNESMonitorSet(
+        snes,
+        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
+        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto create_post_process_element = [&]() {
+    MoFEMFunctionBegin;
+    postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe->generateReferenceElementMesh();
+    auto postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe->generateReferenceElementMesh();
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
+        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+    postProcFe->addFieldValuesPostProc("U");
+    MoFEMFunctionReturn(0);
+  };
+
+  auto scatter_create = [&](auto coeff) {
+    SmartPetscObj<IS> is;
+    CHKERR is_manager->isCreateProblemFieldAndRank(simple->getProblemName(),
+                                                   ROW, "U", coeff, coeff, is);
+    int loc_size;
+    CHKERR ISGetLocalSize(is, &loc_size);
+    Vec v;
+    CHKERR VecCreateMPI(mField.get_comm(), loc_size, PETSC_DETERMINE, &v);
+    VecScatter scatter;
+    CHKERR VecScatterCreate(D, is, v, PETSC_NULL, &scatter);
+    return std::make_tuple(SmartPetscObj<Vec>(v),
+                           SmartPetscObj<VecScatter>(scatter));
+  };
+
+  auto set_time_monitor = [&]() {
+    MoFEMFunctionBegin;
+    boost::shared_ptr<Monitor> monitor_ptr(
+        new Monitor(dm, postProcFe, uXScatter, uYScatter));
+    boost::shared_ptr<ForcesAndSourcesCore> null;
+    CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
+                               monitor_ptr, null, null);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR set_section_monitor();
+  CHKERR create_post_process_element();
+  uXScatter = scatter_create(0);
+  uYScatter = scatter_create(1);
+  CHKERR set_time_monitor();
+
+  CHKERR TSSolve(solver, D);
+
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
 
 //! [Postprocess results]
-MoFEMErrorCode Example::postProcess() {
-  MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
-
-  basic->getDomainLhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpPostProcElastic("U", post_proc_fe->postProcMesh,
-                            post_proc_fe->mapGaussPts, commonDataPtr));
-  post_proc_fe->addFieldValuesPostProc("U");
-  basic->getDomainRhsFE() = post_proc_fe;
-  CHKERR basic->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_elastic.h5m");
-  MoFEMFunctionReturn(0);
-}
+MoFEMErrorCode Example::postProcess() { return 0; }
 //! [Postprocess results]
 
 //! [Check]
-MoFEMErrorCode Example::checkResults() {
-  Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
-  MoFEMFunctionBegin;
-  basic->getDomainRhsFE().reset();
-  basic->getDomainLhsFE().reset();
-
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpInternalForceRhs("U", commonDataPtr));
-
-  auto gravity = [](double x, double y) {
-    return FTensor::Tensor1<double, 2>{0., 1.};
-  };
-  basic->getOpDomainRhsPipeline().push_back(
-      new OpForceRhs("U", commonDataPtr, gravity));
-
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-
-  auto dm = simple->getDM();
-  auto res = smartCreateDMDVector(dm);
-  basic->getDomainRhsFE()->ksp_f = res;
-
-  CHKERR VecZeroEntries(res);
-  CHKERR basic->loopFiniteElements();
-  CHKERR VecGhostUpdateBegin(res, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecGhostUpdateEnd(res, ADD_VALUES, SCATTER_REVERSE);
-  CHKERR VecAssemblyBegin(res);
-  CHKERR VecAssemblyEnd(res);
-
-  double nrm2;
-  CHKERR VecNorm(res, NORM_2, &nrm2);
-  PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e\n", nrm2);
-  constexpr double eps = 1e-8;
-  if (nrm2 > eps)
-    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
-
-  MoFEMFunctionReturn(0);
-}
+MoFEMErrorCode Example::checkResults() { return 0; }
 //! [Check]
 
 Range Example::getEntsOnMeshSkin() {
