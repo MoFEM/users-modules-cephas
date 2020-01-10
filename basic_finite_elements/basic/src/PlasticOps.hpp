@@ -18,9 +18,11 @@
 \left\{
 \begin{array}{ll}
 \frac{\partial \sigma_{ij}}{\partial x_j} - b_i = 0 & \forall x \in \Omega \\
-\varepsilon_{ij} = \frac{1}{2}\left( \frac{\partial u_i}{\partial x_j} + \frac{\partial u_j}{\partial x_i} \right)\\
+\varepsilon_{ij} = \frac{1}{2}\left( \frac{\partial u_i}{\partial x_j} +
+\frac{\partial u_j}{\partial x_i} \right)\\
 \sigma_{ij} = D_{ijkl}\left(\varepsilon_{kl}-\varepsilon^p_{kl}\right) \\
-\dot{\varepsilon}^p_{kl} - \dot{\tau} \left( \left. \frac{\partial f}{\partial \sigma_{kl}} \right|_{(\sigma,\tau) } \right) = 0 \\
+\dot{\varepsilon}^p_{kl} - \dot{\tau} \left( \left. \frac{\partial f}{\partial
+\sigma_{kl}} \right|_{(\sigma,\tau) } \right) = 0 \\
 f(\sigma, \tau) \leq 0,\; \dot{\tau} \geq 0,\;\dot{\tau}f(\sigma, \tau)=0\\
 u_i = \overline{u}_i & \forall x \in \partial\Omega_u \\
 \sigma_{ij}n_j = \overline{t}_i & \forall x \in \partial\Omega_\sigma \\
@@ -33,14 +35,15 @@ u_i = \overline{u}_i & \forall x \in \partial\Omega_u \\
 \f[
 \left\{
 \begin{array}{ll}
-\left(\frac{\partial \delta u_i}{\partial x_j},\sigma_{ij}\right)_\Omega-(\delta u_i,b_i)_\Omega -(\delta u_i,\overline{t}_i)_{\partial\Omega_\sigma}=0 & \forall \delta u_i \in H^1(\Omega)\\
-\left(\delta\varepsilon^p_{kl} ,D_{ijkl}\left( \dot{\varepsilon}^p_{kl} - \dot{\tau} A_{kl} \right)\right) = 0 
+\left(\frac{\partial \delta u_i}{\partial x_j},\sigma_{ij}\right)_\Omega-(\delta
+u_i,b_i)_\Omega -(\delta u_i,\overline{t}_i)_{\partial\Omega_\sigma}=0 & \forall
+\delta u_i \in H^1(\Omega)\\ \left(\delta\varepsilon^p_{kl} ,D_{ijkl}\left(
+\dot{\varepsilon}^p_{kl} - \dot{\tau} A_{kl} \right)\right) = 0
 & \forall \delta\varepsilon^p_{ij} \in L^2(\Omega) \cap \mathcal{S} \\
-\left(\delta\tau,c_n\dot{\tau} - \frac{1}{2}\left\{c_n \dot{\tau} + (f(\pmb\sigma,\tau) - \sigma_y) +
-\| c_n \dot{\tau} + (f(\pmb\sigma,\tau) - \sigma_y) \|\right\}\right) = 0 & \forall \delta\tau \in L^2(\Omega)
-\end{array}
-\right.
-\f]
+\left(\delta\tau,c_n\dot{\tau} - \frac{1}{2}\left\{c_n \dot{\tau} +
+(f(\pmb\sigma,\tau) - \sigma_y) +
+\| c_n \dot{\tau} + (f(\pmb\sigma,\tau) - \sigma_y) \|\right\}\right) = 0 &
+\forall \delta\tau \in L^2(\Omega) \end{array} \right. \f]
 
 */
 
@@ -73,8 +76,7 @@ FTensor::Index<'N', 3> N;
 struct OpCalculatePlasticSurface : public DomianEleOp {
   OpCalculatePlasticSurface(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -83,8 +85,7 @@ private:
 struct OpPlasticStress : public DomianEleOp {
   OpPlasticStress(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -93,8 +94,7 @@ private:
 struct OpCalculatePlasticFlowRhs : public DomianEleOp {
   OpCalculatePlasticFlowRhs(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -103,8 +103,7 @@ private:
 struct OpCalculateContrainsRhs : public DomianEleOp {
   OpCalculateContrainsRhs(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -115,9 +114,8 @@ struct OpCalculatePlasticInternalForceLhs_dEP : public DomianEleOp {
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -129,9 +127,8 @@ struct OpCalculatePlasticFlowLhs_dU : public DomianEleOp {
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -143,9 +140,8 @@ struct OpCalculatePlasticFlowLhs_dEP : public DomianEleOp {
                                 const std::string col_field_name,
                                 boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -157,9 +153,8 @@ struct OpCalculatePlasticFlowLhs_dTAU : public DomianEleOp {
                                  const std::string col_field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -171,9 +166,8 @@ struct OpCalculateContrainsLhs_dU : public DomianEleOp {
                              const std::string col_field_name,
                              boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -185,9 +179,8 @@ struct OpCalculateContrainsLhs_dEP : public DomianEleOp {
                               const std::string col_field_name,
                               boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -199,9 +192,8 @@ struct OpCalculateContrainsLhs_dTAU : public DomianEleOp {
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -213,8 +205,7 @@ struct OpPostProcPlastic : public DomianEleOp {
                     moab::Interface &post_proc_mesh,
                     std::vector<EntityHandle> &map_gauss_pts,
                     boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   moab::Interface &postProcMesh;
@@ -309,7 +300,7 @@ s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
 \frac{\partial A_{ij}}{\partial \varepsilon_{kl}}&=
 \frac{\partial A_{ij}}{\partial \sigma_{mn}} \frac{\partial
 \sigma_{mn}}{\partial \varepsilon_{kl}}= \frac{\partial A_{ij}}{\partial
-\sigma_{mn}} D_{mnkl} 
+\sigma_{mn}} D_{mnkl}
 \end{split}
 \f]
 
@@ -417,9 +408,8 @@ OpCalculatePlasticSurface::OpCalculatePlasticSurface(
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
-MoFEMErrorCode
-OpCalculatePlasticSurface::doWork(int side, EntityType type,
-                                  DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpCalculatePlasticSurface::doWork(int side, EntityType type,
+                                                 EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = commonDataPtr->mStressPtr->size2();
@@ -456,9 +446,8 @@ OpPlasticStress::OpPlasticStress(const std::string field_name,
 }
 
 //! [Calculate stress]
-MoFEMErrorCode
-OpPlasticStress::doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
+                                       EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
   commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
@@ -484,9 +473,8 @@ OpCalculatePlasticFlowRhs::OpCalculatePlasticFlowRhs(
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
-MoFEMErrorCode
-OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
-                                  DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
+                                                 EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
@@ -542,9 +530,8 @@ OpCalculateContrainsRhs::OpCalculateContrainsRhs(
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
-MoFEMErrorCode
-OpCalculateContrainsRhs::doWork(int side, EntityType type,
-                                DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
+                                               EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_dofs = data.getIndices().size();
@@ -595,8 +582,7 @@ OpCalculatePlasticInternalForceLhs_dEP::OpCalculatePlasticInternalForceLhs_dEP(
 
 MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -672,10 +658,11 @@ OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
+                                                    EntityType row_type,
+                                                    EntityType col_type,
+                                                    EntData &row_data,
+                                                    EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -768,10 +755,11 @@ OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
+                                                     EntityType row_type,
+                                                     EntityType col_type,
+                                                     EntData &row_data,
+                                                     EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -858,10 +846,10 @@ OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowLhs_dTAU::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode
+OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
+                                       EntityType row_type, EntityType col_type,
+                                       EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -921,10 +909,11 @@ OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
+                                                  EntityType row_type,
+                                                  EntityType col_type,
+                                                  EntData &row_data,
+                                                  EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -1003,10 +992,11 @@ OpCalculateContrainsLhs_dEP::OpCalculateContrainsLhs_dEP(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
+                                                   EntityType row_type,
+                                                   EntityType col_type,
+                                                   EntData &row_data,
+                                                   EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -1079,10 +1069,11 @@ OpCalculateContrainsLhs_dTAU::OpCalculateContrainsLhs_dTAU(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
+                                                    EntityType row_type,
+                                                    EntityType col_type,
+                                                    EntData &row_data,
+                                                    EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
@@ -1148,9 +1139,8 @@ OpPostProcPlastic::OpPostProcPlastic(
 }
 
 //! [Postprocessing]
-MoFEMErrorCode
-OpPostProcPlastic::doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
+                                         EntData &data) {
   MoFEMFunctionBegin;
 
   std::array<double, 9> def;
