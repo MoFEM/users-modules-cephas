@@ -30,8 +30,7 @@ FTensor::Index<'l', 2> l;
 struct OpInternalContactRhs : public DomianEleOp {
   OpInternalContactRhs(const std::string field_name,
                        boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -40,8 +39,7 @@ private:
 struct OpConstrainRhs : public BoundaryEleOp {
   OpConstrainRhs(const std::string field_name,
                  boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -52,9 +50,8 @@ struct OpConstrainLhs_dU : public BoundaryEleOp {
                     const std::string col_field_name,
                     boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -66,9 +63,8 @@ struct OpConstrainLhs_dTraction : public BoundaryEleOp {
                            const std::string col_field_name,
                            boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -78,8 +74,7 @@ private:
 struct OpConstrainTraction : public BoundaryEleOp {
   OpConstrainTraction(const std::string field_name,
                       boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -88,8 +83,7 @@ private:
 struct OpConstrainDisp : public BoundaryEleOp {
   OpConstrainDisp(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
@@ -99,9 +93,8 @@ struct OpInternalContactLhs : public DomianEleOp {
   OpInternalContactLhs(const std::string row_field_name,
                        const std::string col_field_name);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   MatrixDouble locMat;
@@ -170,9 +163,8 @@ OpInternalContactRhs::OpInternalContactRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
-MoFEMErrorCode
-OpInternalContactRhs::doWork(int side, EntityType type,
-                             DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpInternalContactRhs::doWork(int side, EntityType type,
+                                            EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = getGaussPts().size2();
   const size_t nb_dofs = data.getIndices().size();
@@ -182,6 +174,7 @@ OpInternalContactRhs::doWork(int side, EntityType type,
     std::array<double, MAX_DOFS_ON_ENTITY> nf;
     std::fill(&nf[0], &nf[nb_dofs], 0);
 
+    const size_t nb_base_functions = data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
     auto t_base = data.getFTensor0N();
     auto t_div =
@@ -189,17 +182,23 @@ OpInternalContactRhs::doWork(int side, EntityType type,
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      double alpha = getMeasure() * t_w;
+      const double alpha = getMeasure() * t_w;
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
 
-      for (size_t bb = 0; bb != nb_dofs / 2; ++bb) {
+      size_t bb = 0;
+      for (; bb != nb_dofs / 2; ++bb) {
         t_nf(i) += alpha * t_base * t_div(i);
         ++t_nf;
         ++t_base;
-      };
+      }
+      for (; bb < nb_base_functions; ++bb)
+        ++t_base;
+
       ++t_div;
       ++t_w;
     }
+
+    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -211,7 +210,7 @@ OpConstrainRhs::OpConstrainRhs(const std::string field_name,
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode OpConstrainRhs::doWork(int side, EntityType type,
-                                      DataForcesAndSourcesCore::EntData &data) {
+                                      EntData &data) {
 
   MoFEMFunctionBegin;
 
@@ -256,6 +255,8 @@ MoFEMErrorCode OpConstrainRhs::doWork(int side, EntityType type,
       ++t_traction;
       ++t_w;
     }
+
+    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -269,9 +270,8 @@ OpConstrainTraction::OpConstrainTraction(
   doEntities[MBEDGE] = true;
 }
 
-MoFEMErrorCode
-OpConstrainTraction::doWork(int side, EntityType type,
-                            DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpConstrainTraction::doWork(int side, EntityType type,
+                                           EntData &data) {
 
   MoFEMFunctionBegin;
 
@@ -317,9 +317,8 @@ OpConstrainDisp::OpConstrainDisp(const std::string field_name,
   std::fill(&doEntities[MBTRI], &doEntities[MBMAXTYPE], false);
 }
 
-MoFEMErrorCode
-OpConstrainDisp::doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpConstrainDisp::doWork(int side, EntityType type,
+                                       EntData &data) {
 
   MoFEMFunctionBegin;
 
@@ -358,11 +357,11 @@ OpInternalContactLhs::OpInternalContactLhs(const std::string row_field_name,
   sYmm = false;
 }
 
-MoFEMErrorCode
-OpInternalContactLhs::doWork(int row_side, int col_side, EntityType row_type,
-                             EntityType col_type,
-                             DataForcesAndSourcesCore::EntData &row_data,
-                             DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpInternalContactLhs::doWork(int row_side, int col_side,
+                                            EntityType row_type,
+                                            EntityType col_type,
+                                            EntData &row_data,
+                                            EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
@@ -372,11 +371,12 @@ OpInternalContactLhs::doWork(int row_side, int col_side, EntityType row_type,
   if (row_nb_dofs && col_nb_dofs) {
 
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_base = row_data.getFTensor0N();
-    size_t nb_face_functions = row_data.getN().size2();
 
     locMat.resize(row_nb_dofs, col_nb_dofs, false);
+    locMat.clear();
 
+    size_t nb_base_functions = row_data.getN().size2();
+    auto t_row_base = row_data.getFTensor0N();
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       const double alpha = getMeasure() * t_w;
@@ -384,26 +384,28 @@ OpInternalContactLhs::doWork(int row_side, int col_side, EntityType row_type,
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
 
-        FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 2> t_mat{
-            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 0)};
+        FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{
+            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 1)};
 
         auto t_col_diff_base = col_data.getFTensor2DiffN<3, 2>(gg, 0);
+
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
           const double div = t_col_diff_base(0, 0) + t_col_diff_base(1, 1);
-          t_mat(0) += alpha * t_row_base * div;
-          ++t_mat;
-          t_mat(1) += alpha * t_row_base * div;
-          ++t_mat;
+          t_mat(i) += alpha * t_row_base * div;
           ++t_col_diff_base;
+          ++t_mat;
         }
 
         ++t_row_base;
       }
-      for (; rr < nb_face_functions; ++rr)
+      for (; rr < nb_base_functions; ++rr)
         ++t_row_base;
 
       ++t_w;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -416,11 +418,10 @@ OpConstrainLhs_dU::OpConstrainLhs_dU(
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
-MoFEMErrorCode
-OpConstrainLhs_dU::doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpConstrainLhs_dU::doWork(int row_side, int col_side,
+                                         EntityType row_type,
+                                         EntityType col_type, EntData &row_data,
+                                         EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
@@ -446,6 +447,7 @@ OpConstrainLhs_dU::doWork(int row_side, int col_side, EntityType row_type,
     size_t nb_face_functions = row_data.getN().size2();
 
     locMat.resize(row_nb_dofs, col_nb_dofs, false);
+    locMat.clear();
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -482,6 +484,9 @@ OpConstrainLhs_dU::doWork(int row_side, int col_side, EntityType row_type,
       ++t_traction;
       ++t_w;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -494,11 +499,11 @@ OpConstrainLhs_dTraction::OpConstrainLhs_dTraction(
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
-MoFEMErrorCode
-OpConstrainLhs_dTraction::doWork(int row_side, int col_side,
-                                 EntityType row_type, EntityType col_type,
-                                 DataForcesAndSourcesCore::EntData &row_data,
-                                 DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpConstrainLhs_dTraction::doWork(int row_side, int col_side,
+                                                EntityType row_type,
+                                                EntityType col_type,
+                                                EntData &row_data,
+                                                EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
@@ -561,6 +566,9 @@ OpConstrainLhs_dTraction::doWork(int row_side, int col_side,
       ++t_traction;
       ++t_w;
     }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);

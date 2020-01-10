@@ -86,14 +86,17 @@ MoFEMErrorCode Example::setUP() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  CHKERR simple->addBoundaryField("SIGMA", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  CHKERR simple->setFieldOrder("U", order);
 
+  CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  // CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  // CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  // CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+
+  CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order+1, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -135,6 +138,9 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
 
+  jAc.resize(2, 2, false);
+  invJac.resize(2, 2, false);
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
@@ -151,72 +157,69 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
 
-  auto add_domain_ops = [&]() {
-    basic->getOpDomainLhsPipeline().push_back(new OpCalculateJacForFace(jAc));
-    basic->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-    basic->getOpDomainLhsPipeline().push_back(new OpMakeHdivFromHcurl());
-    basic->getOpDomainLhsPipeline().push_back(
-        new OpSetContravariantPiolaTransformFace(jAc));
-    basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacHcurlFace(invJac));
-    basic->getOpDomainRhsPipeline().push_back(
-        new OpInternalContactLhs("U", "SIGMA"));
+  auto add_domain_base_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpCalculateJacForFace(jAc));
+    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    pipeline.push_back(new OpMakeHdivFromHcurl());
+    pipeline.push_back(new OpSetContravariantPiolaTransformFace(jAc));
+    pipeline.push_back(new OpSetInvJacHcurlFace(invJac));
+  };
 
-    basic->getOpDomainLhsPipeline().push_back(
-        new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+  auto add_domain_ops_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+    pipeline.push_back(new OpInternalContactLhs("U", "SIGMA"));
+  };
 
+  auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
       return FTensor::Tensor1<double, 2>{0., -1.};
     };
-    basic->getOpDomainRhsPipeline().push_back(
-        new OpForceRhs("U", commonDataPtr, gravity));
-    basic->getOpDomainRhsPipeline().push_back(new OpCalculateJacForFace(jAc));
-    basic->getOpDomainRhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-    basic->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
-    basic->getOpDomainRhsPipeline().push_back(
-        new OpSetContravariantPiolaTransformFace(jAc));
-    basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacHcurlFace(invJac));
+    pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
 
-    basic->getOpDomainRhsPipeline().push_back(
-        new OpCalculateHVecTensorDivergence<2, 2>(
-            "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    basic->getOpDomainRhsPipeline().push_back(
-        new OpInternalContactRhs("U", commonDataPtr));
+    pipeline.push_back(
+        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+    pipeline.push_back(new OpStrain("U", commonDataPtr));
+    pipeline.push_back(new OpStress("U", commonDataPtr));
+    pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
+
+    pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
+        "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    pipeline.push_back(new OpInternalContactRhs("U", commonDataPtr));
   };
 
-  auto add_boundary_ops = [&]() {
-    basic->getOpBoundaryLhsPipeline().push_back(
-        new OpSetContrariantPiolaTransformOnEdge());
-    basic->getOpBoundaryLhsPipeline().push_back(
-        new OpConstrainDisp("U", commonDataPtr));
-    basic->getOpBoundaryLhsPipeline().push_back(
-        new OpConstrainTraction("SIGMA", commonDataPtr));
-    basic->getOpBoundaryLhsPipeline().push_back(
-        new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
-    basic->getOpBoundaryLhsPipeline().push_back(
+  auto add_boundary_base_ops = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
+    pipeline.push_back(new OpConstrainDisp("U", commonDataPtr));
+    pipeline.push_back(new OpConstrainTraction("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
+  };
+
+  auto add_boundary_ops_lhs = [&](auto &pipeline) {
+    pipeline.push_back(
         new OpConstrainLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
-
-    basic->getOpBoundaryRhsPipeline().push_back(
-        new OpSetContrariantPiolaTransformOnEdge());
-    basic->getOpBoundaryLhsPipeline().push_back(
-        new OpConstrainDisp("U", commonDataPtr));
-    basic->getOpBoundaryLhsPipeline().push_back(
-        new OpConstrainTraction("SIGMA", commonDataPtr));
-    basic->getOpBoundaryLhsPipeline().push_back(
-      new OpConstrainRhs("SIGMA", commonDataPtr));
   };
 
-  add_domain_ops();
-  add_boundary_ops();
+  auto add_boundary_ops_rhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpConstrainRhs("SIGMA", commonDataPtr));
+  };
+
+  add_domain_base_ops(basic->getOpDomainLhsPipeline());
+  add_domain_base_ops(basic->getOpDomainRhsPipeline());
+  add_domain_ops_lhs(basic->getOpDomainLhsPipeline());
+  add_domain_ops_rhs(basic->getOpDomainRhsPipeline());
+  // add_boundary_base_ops(basic->getOpBoundaryLhsPipeline());
+  // add_boundary_base_ops(basic->getOpBoundaryRhsPipeline());
+  // add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
+  // add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * order;
   };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR basic->setBoundaryRhsIntegrationRule(integration_rule);
+  CHKERR basic->setBoundaryLhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -326,9 +329,6 @@ Range Example::getEntsOnMeshSkin() {
   Skinner skin(&mField.get_moab());
   Range skin_edges;
   CHKERR skin.find_skin(0, faces, false, skin_edges);
-  Range skin_verts;
-  CHKERR mField.get_moab().get_connectivity(skin_edges, skin_verts, true);
-  skin_edges.merge(skin_verts);
   return skin_edges;
 };
 
