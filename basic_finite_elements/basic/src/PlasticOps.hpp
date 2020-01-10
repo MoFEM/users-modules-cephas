@@ -453,14 +453,14 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
   commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
   auto &t_D = commonDataPtr->tD;
   auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr));
-  auto t_platic_strain =
+  auto t_plastic_strain =
       getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainPtr));
   auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-    t_stress(i, j) = t_D(i, j, k, l) * (t_strain(k, l) - t_platic_strain(k, l));
+    t_stress(i, j) = t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
     ++t_strain;
-    ++t_platic_strain;
+    ++t_plastic_strain;
     ++t_stress;
   }
 
