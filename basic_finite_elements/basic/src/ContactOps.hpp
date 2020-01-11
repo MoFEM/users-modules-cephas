@@ -633,7 +633,7 @@ struct Monitor : public FEMethod {
       MoFEMFunctionBegin;
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
       CHKERR postProcFe->writeFile(
-          "out_plastic_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+          "out_contact_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       MoFEMFunctionReturn(0);
     };
 

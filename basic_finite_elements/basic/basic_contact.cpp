@@ -259,8 +259,6 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
     postProcFe->generateReferenceElementMesh();
-    auto postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-    postProcFe->generateReferenceElementMesh();
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
