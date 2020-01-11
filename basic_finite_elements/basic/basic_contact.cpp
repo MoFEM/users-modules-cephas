@@ -30,7 +30,7 @@ using DomianEleOp = DomianEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 1;
+constexpr int order = 2;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = young_modulus;
@@ -188,7 +188,8 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
-    pipeline.push_back(new OpConstrainDisp("U", commonDataPtr));
+    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+        "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpConstrainTraction("SIGMA", commonDataPtr));
   };
 

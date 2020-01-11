@@ -80,15 +80,6 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpConstrainDisp : public BoundaryEleOp {
-  OpConstrainDisp(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
 struct OpInternalContactLhs : public DomianEleOp {
   OpInternalContactLhs(const std::string row_field_name,
                        const std::string col_field_name);
@@ -287,15 +278,17 @@ MoFEMErrorCode OpConstrainTraction::doWork(int side, EntityType type,
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t nb_dofs = data.getIndices().size();
 
+  if (side == 0 && type == MBEDGE) {
+    commonDataPtr->contactTractionPtr->resize(2, nb_gauss_pts);
+    commonDataPtr->contactTractionPtr->clear();
+  }
+
+  const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
     std::array<double, MAX_DOFS_ON_ENTITY> nf;
     std::fill(&nf[0], &nf[nb_dofs], 0);
-
-    commonDataPtr->contactTractionPtr->resize(2, nb_gauss_pts);
-    commonDataPtr->contactTractionPtr->clear();
 
     auto t_direction = getFTensor1Direction();
     FTensor::Tensor1<double, 2> t_normal{-t_direction(1), t_direction(0)};
@@ -322,53 +315,6 @@ MoFEMErrorCode OpConstrainTraction::doWork(int side, EntityType type,
         ++t_base;
 
       ++t_traction;
-    }
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-OpConstrainDisp::OpConstrainDisp(const std::string field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr)
-    : BoundaryEleOp(field_name, DomianEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {
-  std::fill(&doEntities[MBTRI], &doEntities[MBMAXTYPE], false);
-}
-
-MoFEMErrorCode OpConstrainDisp::doWork(int side, EntityType type,
-                                       EntData &data) {
-
-  MoFEMFunctionBegin;
-
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t nb_dofs = data.getIndices().size();
-
-  if (nb_dofs) {
-
-    std::array<double, MAX_DOFS_ON_ENTITY> nf;
-    std::fill(&nf[0], &nf[nb_dofs], 0);
-
-    commonDataPtr->contactDispPtr->resize(2, nb_gauss_pts);
-    commonDataPtr->contactDispPtr->clear();
-
-    auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
-
-    size_t nb_base_functions = data.getN().size2();
-    auto t_base = data.getFTensor0N();
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      auto t_field_data = data.getFTensor1FieldData<2>();
-
-      size_t bb = 0;
-      for (; bb != nb_dofs / 2; ++bb) {
-        t_disp(i) += t_base * t_field_data(i);
-        ++t_field_data;
-        ++t_base;
-      }
-      for (; bb != nb_base_functions; ++bb)
-        ++t_base;
-
-      ++t_disp;
     }
   }
 
@@ -549,9 +495,6 @@ MoFEMErrorCode OpConstrainLhs_dTraction::doWork(int row_side, int col_side,
     const double l = sqrt(t_normal(i) * t_normal(i));
     t_normal(i) /= l;
     t_direction(i) /= l;
-
-    FTensor::Tensor2<double, 2, 2> t_dd;
-    t_dd(i, j) = t_direction(i) * t_direction(j);
 
     auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
     auto t_traction =
