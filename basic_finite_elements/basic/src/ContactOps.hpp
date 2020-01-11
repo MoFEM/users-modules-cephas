@@ -103,7 +103,7 @@ private:
 template <typename T>
 inline double gap(FTensor::Tensor1<T, 2> &t_disp,
                   FTensor::Tensor1<double, 2> &t_normal) {
-  return t_disp(i) * t_normal(i) - 1;
+  return t_disp(i) * t_normal(i);
 }
 
 template <typename T>
@@ -121,10 +121,11 @@ inline auto diff_traction(FTensor::Tensor1<double, 2> &t_normal) {
 }
 
 inline double constrian(double &&gap, double &&normal_traction) {
-  if ((cn * gap + normal_traction) < 0)
-    return -cn * gap;
-  else
-    return normal_traction;
+  return -cn * gap;
+  // if ((cn * gap + normal_traction) < 0)
+  //   return -cn * gap;
+  // else
+  //   return normal_traction;
 };
 
 inline double sign(double x) {
@@ -137,12 +138,12 @@ inline double sign(double x) {
 };
 
 inline double diff_constrains_dgap(double &&gap, double &&normal_traction) {
-  return (cn * (-1 + sign(cn * gap + normal_traction))) / 2.;
+  return -cn;//(cn * (-1 + sign(cn * gap + normal_traction))) / 2.;
 }
 
 inline double diff_constrains_dtraction(double &&gap,
                                         double &&normal_traction) {
-  return (1 + sign(cn * gap + normal_traction)) / 2.;
+  return 0;//(1 + sign(cn * gap + normal_traction)) / 2.;
 }
 
 auto diff_constrains_du(double &&diff_constrains_dgap,
@@ -229,9 +230,6 @@ MoFEMErrorCode OpConstrainRhs::doWork(int side, EntityType type,
     const double l = sqrt(t_normal(i) * t_normal(i));
     t_normal(i) /= l;
     t_direction(i) /= l;
-
-    FTensor::Tensor2<double, 2, 2> t_dd;
-    t_dd(i, j) = t_direction(i) * t_direction(j);
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
@@ -363,7 +361,7 @@ MoFEMErrorCode OpConstrainDisp::doWork(int side, EntityType type,
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
-        t_disp(j) += t_base * t_field_data(j);
+        t_disp(i) += t_base * t_field_data(i);
         ++t_field_data;
         ++t_base;
       }
@@ -472,7 +470,7 @@ MoFEMErrorCode OpConstrainLhs_dU::doWork(int row_side, int col_side,
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor1N<3>();
-    size_t nb_face_functions = row_data.getN().size2();
+    size_t nb_face_functions = row_data.getN().size2() / 3;
 
     locMat.resize(row_nb_dofs, col_nb_dofs, false);
     locMat.clear();
