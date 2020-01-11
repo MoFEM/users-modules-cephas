@@ -89,14 +89,12 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
 
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  // CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  // CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
-  // CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order+1, &skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -192,10 +190,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
     pipeline.push_back(new OpConstrainDisp("U", commonDataPtr));
     pipeline.push_back(new OpConstrainTraction("SIGMA", commonDataPtr));
-    pipeline.push_back(new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
         new OpConstrainLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
   };
@@ -208,10 +206,11 @@ MoFEMErrorCode Example::OPs() {
   add_domain_base_ops(basic->getOpDomainRhsPipeline());
   add_domain_ops_lhs(basic->getOpDomainLhsPipeline());
   add_domain_ops_rhs(basic->getOpDomainRhsPipeline());
-  // add_boundary_base_ops(basic->getOpBoundaryLhsPipeline());
-  // add_boundary_base_ops(basic->getOpBoundaryRhsPipeline());
-  // add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
-  // add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
+
+  add_boundary_base_ops(basic->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(basic->getOpBoundaryRhsPipeline());
+  add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
+  add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * order;
