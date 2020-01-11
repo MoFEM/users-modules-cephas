@@ -248,7 +248,7 @@ MoFEMErrorCode OpConstrainRhs::doWork(int side, EntityType type,
       t_rhs(i) =
           t_normal(i) * constrian(gap(t_disp, t_normal),
                                   normal_traction(t_traction, t_normal)) +
-          t_direction(i) * normal_traction(t_traction, t_normal);
+          t_direction(i) * (t_direction(j) * t_traction(j));
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
@@ -571,8 +571,8 @@ MoFEMErrorCode OpConstrainLhs_dTraction::doWork(int row_side, int col_side,
           diff_traction(t_normal));
 
       FTensor::Tensor2<double, 2, 2> t_diff_rhs;
-      t_diff_rhs(i, j) = t_normal(i) * t_diff_dstress(j) +
-                         t_direction(i) * diff_traction(t_normal)(j);
+      t_diff_rhs(i, j) =
+          t_normal(i) * t_diff_dstress(j) + t_direction(i) * t_direction(j);
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
