@@ -193,17 +193,17 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
     pipeline.push_back(new OpCalculateVectorFieldValues<2>(
         "U", commonDataPtr->contactDispPtr));
-    pipeline.push_back(new OpConstrainTraction("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
-        new OpConstrainLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpConstrainRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
   add_domain_base_ops(basic->getOpDomainLhsPipeline());

@@ -37,8 +37,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpConstrainRhs : public BoundaryEleOp {
-  OpConstrainRhs(const std::string field_name,
+struct OpConstrainBoundaryRhs : public BoundaryEleOp {
+  OpConstrainBoundaryRhs(const std::string field_name,
                  boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
@@ -46,8 +46,8 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpConstrainLhs_dU : public BoundaryEleOp {
-  OpConstrainLhs_dU(const std::string row_field_name,
+struct OpConstrainBoundaryLhs_dU : public BoundaryEleOp {
+  OpConstrainBoundaryLhs_dU(const std::string row_field_name,
                     const std::string col_field_name,
                     boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -59,8 +59,8 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpConstrainLhs_dTraction : public BoundaryEleOp {
-  OpConstrainLhs_dTraction(const std::string row_field_name,
+struct OpConstrainBoundaryLhs_dTraction : public BoundaryEleOp {
+  OpConstrainBoundaryLhs_dTraction(const std::string row_field_name,
                            const std::string col_field_name,
                            boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -72,8 +72,8 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpConstrainTraction : public BoundaryEleOp {
-  OpConstrainTraction(const std::string field_name,
+struct OpConstrainBoundaryTraction : public BoundaryEleOp {
+  OpConstrainBoundaryTraction(const std::string field_name,
                       boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
@@ -197,12 +197,12 @@ MoFEMErrorCode OpInternalContactRhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-OpConstrainRhs::OpConstrainRhs(const std::string field_name,
+OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(const std::string field_name,
                                boost::shared_ptr<CommonData> common_data_ptr)
     : BoundaryEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
-MoFEMErrorCode OpConstrainRhs::doWork(int side, EntityType type,
+MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
                                       EntData &data) {
 
   MoFEMFunctionBegin;
@@ -264,7 +264,7 @@ MoFEMErrorCode OpConstrainRhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-OpConstrainTraction::OpConstrainTraction(
+OpConstrainBoundaryTraction::OpConstrainBoundaryTraction(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : BoundaryEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
@@ -272,7 +272,7 @@ OpConstrainTraction::OpConstrainTraction(
   doEntities[MBEDGE] = true;
 }
 
-MoFEMErrorCode OpConstrainTraction::doWork(int side, EntityType type,
+MoFEMErrorCode OpConstrainBoundaryTraction::doWork(int side, EntityType type,
                                            EntData &data) {
 
   MoFEMFunctionBegin;
@@ -381,14 +381,14 @@ MoFEMErrorCode OpInternalContactLhs::doWork(int row_side, int col_side,
   MoFEMFunctionReturn(0);
 }
 
-OpConstrainLhs_dU::OpConstrainLhs_dU(
+OpConstrainBoundaryLhs_dU::OpConstrainBoundaryLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : BoundaryEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
-MoFEMErrorCode OpConstrainLhs_dU::doWork(int row_side, int col_side,
+MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
                                          EntityType row_type,
                                          EntityType col_type, EntData &row_data,
                                          EntData &col_data) {
@@ -466,14 +466,14 @@ MoFEMErrorCode OpConstrainLhs_dU::doWork(int row_side, int col_side,
   MoFEMFunctionReturn(0);
 }
 
-OpConstrainLhs_dTraction::OpConstrainLhs_dTraction(
+OpConstrainBoundaryLhs_dTraction::OpConstrainBoundaryLhs_dTraction(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
     : BoundaryEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
-MoFEMErrorCode OpConstrainLhs_dTraction::doWork(int row_side, int col_side,
+MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(int row_side, int col_side,
                                                 EntityType row_type,
                                                 EntityType col_type,
                                                 EntData &row_data,
