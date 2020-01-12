@@ -112,11 +112,10 @@ inline auto diff_traction(FTensor::Tensor1<double, 2> &t_normal) {
 }
 
 inline double constrian(double &&gap, double &&normal_traction) {
+  if ((cn * gap + normal_traction) < 0)
   return -cn * gap;
-  // if ((cn * gap + normal_traction) < 0)
-  //   return -cn * gap;
-  // else
-  //   return normal_traction;
+  else
+    return normal_traction;
 };
 
 inline double sign(double x) {
@@ -129,12 +128,12 @@ inline double sign(double x) {
 };
 
 inline double diff_constrains_dgap(double &&gap, double &&normal_traction) {
-  return -cn;//(cn * (-1 + sign(cn * gap + normal_traction))) / 2.;
+  return (cn * (-1 + sign(cn * gap + normal_traction))) / 2.;
 }
 
 inline double diff_constrains_dtraction(double &&gap,
                                         double &&normal_traction) {
-  return 0;//(1 + sign(cn * gap + normal_traction)) / 2.;
+  return (1 + sign(cn * gap + normal_traction)) / 2.;
 }
 
 auto diff_constrains_du(double &&diff_constrains_dgap,
