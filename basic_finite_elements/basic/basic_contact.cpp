@@ -260,9 +260,16 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
     postProcFe->generateReferenceElementMesh();
+
+    postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAc));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+    postProcFe->getOpPtrVector().push_back(
+        new OpSetContravariantPiolaTransformFace(jAc));
+    postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
     postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
@@ -270,6 +277,7 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
         "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
     postProcFe->addFieldValuesPostProc("U");
+    postProcFe->addFieldValuesPostProc("SIGMA");
     MoFEMFunctionReturn(0);
   };
 
