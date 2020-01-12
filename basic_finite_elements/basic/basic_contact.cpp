@@ -131,6 +131,7 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactStressPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactStressDivergencePtr =
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
