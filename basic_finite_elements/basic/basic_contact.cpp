@@ -171,7 +171,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
-      return FTensor::Tensor1<double, 2>{0., -1.};
+      return FTensor::Tensor1<double, 2>{0., 1.};
     };
     pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
 
