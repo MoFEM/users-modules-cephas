@@ -16,6 +16,7 @@ namespace OpContactTools {
 
 //! [Common data]
 struct CommonData : public OpElasticTools::CommonData {
+  boost::shared_ptr<MatrixDouble> contactStressPtr;
   boost::shared_ptr<MatrixDouble> contactStressDivergencePtr;
   boost::shared_ptr<MatrixDouble> contactTractionPtr;
   boost::shared_ptr<MatrixDouble> contactDispPtr;
