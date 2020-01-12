@@ -181,6 +181,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpStress("U", commonDataPtr));
     pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
 
+    pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
+        "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpInternalContactRhs("U", commonDataPtr));
