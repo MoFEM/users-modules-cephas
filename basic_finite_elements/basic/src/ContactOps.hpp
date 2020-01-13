@@ -28,8 +28,8 @@ FTensor::Index<'j', 2> j;
 FTensor::Index<'k', 2> k;
 FTensor::Index<'l', 2> l;
 
-struct OpInternalContactRhs : public DomianEleOp {
-  OpInternalContactRhs(const std::string field_name,
+struct OpInternalDomainContactRhs : public DomianEleOp {
+  OpInternalDomainContactRhs(const std::string field_name,
                        boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
@@ -60,8 +60,8 @@ private:
 };
 
 struct OpConstrainBoundaryLhs_dTraction : public BoundaryEleOp {
-  OpConstrainBoundaryLhs_dTraction(const std::string row_field_name,
-                           const std::string col_field_name,
+  OpConstrainBoundaryLhs_dTraction(
+      const std::string row_field_name, const std::string col_field_name,
                            boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
@@ -152,11 +152,11 @@ auto diff_constrains_dstress(
   return t_diff;
 }
 
-OpInternalContactRhs::OpInternalContactRhs(
+OpInternalDomainContactRhs::OpInternalDomainContactRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : DomianEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
-MoFEMErrorCode OpInternalContactRhs::doWork(int side, EntityType type,
+MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
                                             EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = getGaussPts().size2();
@@ -197,8 +197,8 @@ MoFEMErrorCode OpInternalContactRhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(const std::string field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr)
+OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : BoundaryEleOp(field_name, DomianEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
@@ -390,7 +390,8 @@ OpConstrainBoundaryLhs_dU::OpConstrainBoundaryLhs_dU(
 }
 MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
                                          EntityType row_type,
-                                         EntityType col_type, EntData &row_data,
+                                                 EntityType col_type,
+                                                 EntData &row_data,
                                          EntData &col_data) {
   MoFEMFunctionBegin;
 
@@ -473,11 +474,9 @@ OpConstrainBoundaryLhs_dTraction::OpConstrainBoundaryLhs_dTraction(
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
-MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(int row_side, int col_side,
-                                                EntityType row_type,
-                                                EntityType col_type,
-                                                EntData &row_data,
-                                                EntData &col_data) {
+MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
