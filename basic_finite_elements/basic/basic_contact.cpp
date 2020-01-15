@@ -97,7 +97,7 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -170,7 +170,6 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    pipeline.push_back(new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -189,7 +188,6 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
