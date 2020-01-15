@@ -233,13 +233,6 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
     MoFEMFunctionBegin;
     CHKERR postProcMesh.write_file(file_name.c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");
-    // #else
-    //  #warning "No parallel HDF5, not most efficient way of writing files"
-    //  if(mField.get_comm_rank()==0) {
-    //    rval = postProcMesh.write_file(file_name.c_str(),"MOAB","");
-    //    CHKERRG(rval);
-    //  }
-    // #endif
     MoFEMFunctionReturn(0);
   }
 };
