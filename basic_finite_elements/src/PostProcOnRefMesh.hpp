@@ -133,6 +133,13 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
   PostProcTemplateOnRefineMesh(MoFEM::Interface &m_field)
       : ELEMENT(m_field), postProcMesh(coreMesh) {}
 
+  virtual ~PostProcTemplateOnRefineMesh() {
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+    if (pcomm_post_proc_mesh != NULL) 
+      delete pcomm_post_proc_mesh;
+  }
+
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
     THROW_MESSAGE("not implemented");
   }
@@ -252,15 +259,6 @@ struct PostProcTemplateVolumeOnRefinedMesh
       : PostProcTemplateOnRefineMesh<VOLUME_ELEMENT>(m_field),
         tenNodesPostProcTets(ten_nodes_post_proc_tets),
         nbOfRefLevels(nb_ref_levels) {}
-
-  virtual ~PostProcTemplateVolumeOnRefinedMesh() {
-    moab::Interface &moab = T::coreMesh;
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
 
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
@@ -521,9 +519,9 @@ struct PostProcTemplateVolumeOnRefinedMesh
     moab::Interface &moab = T::coreMesh;
     ParallelComm *pcomm_post_proc_mesh =
         ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
+    if (pcomm_post_proc_mesh != NULL) 
       delete pcomm_post_proc_mesh;
-    }
+    
     CHKERR T::postProcMesh.delete_mesh();
     MoFEMFunctionReturnHot(0);
   }
@@ -671,14 +669,6 @@ struct PostProcFatPrismOnRefinedMesh
             MoFEM::FatPrismElementForcesAndSourcesCore>(m_field),
         tenNodesPostProcTets(ten_nodes_post_proc_tets) {}
 
-  virtual ~PostProcFatPrismOnRefinedMesh() {
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
-
   int getRuleTrianglesOnly(int order) { return -1; };
   int getRuleThroughThickness(int order) { return -1; };
 
@@ -733,14 +723,6 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
       : PostProcTemplateOnRefineMesh<MoFEM::FaceElementForcesAndSourcesCore>(
             m_field),
         sixNodePostProcTris(six_node_post_proc_tris) {}
-
-  virtual ~PostProcFaceOnRefinedMesh() {
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
 
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
@@ -799,6 +781,10 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
 };
 
+/**
+ * @brief Postprocess 2d face elements
+ * 
+ */
 struct PostProcFaceOnRefinedMeshFor2D : public PostProcFaceOnRefinedMesh {
 
   using PostProcFaceOnRefinedMesh::PostProcFaceOnRefinedMesh;
