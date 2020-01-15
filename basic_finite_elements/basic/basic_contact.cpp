@@ -32,7 +32,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr int order = 2;
 constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.25;
+constexpr double poisson_ratio = 0.;
 constexpr double cn = young_modulus;
 
 #include <ElasticOps.hpp>
@@ -90,6 +90,9 @@ MoFEMErrorCode Example::setUP() {
 
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
   CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+
+  // CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  // CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
@@ -167,7 +170,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    pipeline.push_back(new OpInternalContactLhs("U", "SIGMA"));
+    pipeline.push_back(new OpInternalDomainContactLhs("U", "SIGMA"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -197,6 +200,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -204,6 +208,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
@@ -217,9 +222,7 @@ MoFEMErrorCode Example::OPs() {
   add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
   add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * order;
-  };
+  auto integration_rule = [](int, int, int approx_order) { return 2 * order; };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
   CHKERR basic->setBoundaryRhsIntegrationRule(integration_rule);
