@@ -871,3 +871,46 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
 
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
+    const std::string field_name, const std::string vol_fe_name,
+    boost::shared_ptr<MatrixDouble> grad_mat_ptr, bool save_on_tag) {
+  MoFEMFunctionBegin;
+
+  if (!grad_mat_ptr)
+    grad_mat_ptr = boost::make_shared<MatrixDouble>();
+
+  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
+      boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+  // check number of coefficients
+  auto field_ptr = mField.get_field_structure(field_name);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+  switch (nb_coefficients) {
+  case 1:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<3>(field_name, grad_mat_ptr));
+    break;
+  case 3:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
+    break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "field with that number of coefficients is not implemented");
+  }
+
+  FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+      new OpGetFieldGradientValuesOnSkin(
+          postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+          my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
+  return OpSwitch<
+      FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
+      FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>();
+}
