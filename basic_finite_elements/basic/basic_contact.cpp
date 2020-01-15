@@ -25,14 +25,14 @@
 using namespace MoFEM;
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
+using DomianEle = MoFEM::Basic::FaceEle2D;
 using DomianEleOp = DomianEle::UserDataOperator;
-using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
+using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr int order = 2;
 constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.;
+constexpr double poisson_ratio = 0;
 constexpr double cn = young_modulus;
 
 #include <ElasticOps.hpp>
@@ -59,7 +59,7 @@ private:
 
   MatrixDouble invJac, jAc;
   boost::shared_ptr<OpContactTools::CommonData> commonDataPtr;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  boost::shared_ptr<PostProcFaceOnRefinedMeshFor2D> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
 
@@ -88,16 +88,16 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
 
-  // CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  // CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
-  CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
-  CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  // CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  // CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -170,7 +170,6 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    // pipeline.push_back(new OpInternalDomainContactLhs("U", "SIGMA"));
     pipeline.push_back(new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA"));
   };
 
@@ -190,7 +189,6 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
   };
 
@@ -267,7 +265,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe = boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
     postProcFe->generateReferenceElementMesh();
 
     postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAc));
@@ -283,10 +281,15 @@ MoFEMErrorCode Example::tsSolve() {
         new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
     postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
     postProcFe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(new OpCalculateHVecTensorField<2, 2>(
+        "SIGMA", commonDataPtr->contactStressPtr));
+
     postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
         "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpPostProcContact("SIGMA", postProcFe->postProcMesh,
+                              postProcFe->mapGaussPts, commonDataPtr));
     postProcFe->addFieldValuesPostProc("U");
-    postProcFe->addFieldValuesPostProc("SIGMA");
     MoFEMFunctionReturn(0);
   };
 
