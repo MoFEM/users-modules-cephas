@@ -231,7 +231,6 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
    */
   MoFEMErrorCode writeFile(const std::string file_name) {
     MoFEMFunctionBegin;
-    // #ifdef MOAB_HDF5_PARALLEL
     CHKERR postProcMesh.write_file(file_name.c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");
     // #else
