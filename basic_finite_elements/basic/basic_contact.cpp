@@ -30,7 +30,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 3;
+constexpr int order = 4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = young_modulus;
@@ -94,12 +94,7 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-
-  Range skin_faces;
-  CHKERR mField.get_moab().get_adjacencies(skin_ents, 2, false, skin_faces,
-                                           moab::Interface::UNION);
-  skin_faces.merge(skin_ents);
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_faces);
+  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -197,8 +192,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
     pipeline.push_back(
         new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
-    pipeline.push_back(
-        new OpConstrainDomainLhs_dU("SIGMA", "U"));
+    pipeline.push_back(new OpConstrainDomainLhs_dU("SIGMA", "U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
