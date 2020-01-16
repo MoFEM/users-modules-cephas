@@ -25,14 +25,14 @@
 using namespace MoFEM;
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomianEle = MoFEM::Basic::FaceEle2D;
-using DomianEleOp = DomianEle::UserDataOperator;
+using DomainEle = MoFEM::Basic::FaceEle2D;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 2;
+constexpr int order = 3;
 constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0;
+constexpr double poisson_ratio = 0.25;
 constexpr double cn = young_modulus;
 
 #include <ElasticOps.hpp>
@@ -91,13 +91,15 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
   CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
-  // CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
-  // CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
-
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
+
+  Range skin_faces;
+  CHKERR mField.get_moab().get_adjacencies(skin_ents, 2, false, skin_faces,
+                                           moab::Interface::UNION);
+  skin_faces.merge(skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_faces);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -129,8 +131,31 @@ MoFEMErrorCode Example::createCommonData() {
     MoFEMFunctionReturn(0);
   };
 
+  auto get_matrial_compliance = [&](FTensor::Ddg<double, 2, 2> &t_C) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', 2> i;
+    FTensor::Index<'j', 2> j;
+    FTensor::Index<'k', 2> k;
+    FTensor::Index<'l', 2> l;
+
+    constexpr double a = 1. / young_modulus; 
+
+    t_C(0, 0, 0, 0) = a;
+    t_C(1, 1, 1, 1) = a;
+
+    t_C(0, 0, 1, 1) -= a * poisson_ratio;
+    t_C(1, 1, 0, 0) -= a * poisson_ratio;
+
+    t_C(0, 1, 0, 1) = (1 + poisson_ratio) / young_modulus;
+
+    MoFEMFunctionReturn(0);
+  };
+
   commonDataPtr = boost::make_shared<OpContactTools::CommonData>();
   CHKERR get_matrial_stiffens(commonDataPtr->tD);
+  CHKERR get_matrial_compliance(commonDataPtr->tC);
+
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
@@ -142,11 +167,6 @@ MoFEMErrorCode Example::createCommonData() {
 
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
-
-  Range skin_edges = getEntsOnMeshSkin();
-  Range skin_verts;
-  CHKERR mField.get_moab().get_connectivity(skin_edges, skin_verts, true);
-  commonDataPtr->skinEntsAndVerts = unite(skin_verts, skin_edges);
 
   MoFEMFunctionReturn(0);
 }
@@ -175,6 +195,10 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainDomainLhs_dU("SIGMA", "U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -188,11 +212,14 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpStrain("U", commonDataPtr));
     pipeline.push_back(new OpStress("U", commonDataPtr));
     pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
+    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+        "U", commonDataPtr->contactDispPtr));
 
     pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -204,15 +231,15 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
-    pipeline.push_back(
-        new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
-    pipeline.push_back(
-        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+    // pipeline.push_back(
+    //     new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    // pipeline.push_back(
+    //     new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
-    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    // pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
   add_domain_base_ops(basic->getOpDomainLhsPipeline());
