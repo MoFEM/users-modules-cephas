@@ -634,7 +634,7 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type, EntData &
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
-        const double t_div_base = t_diff_base(0, 0) + t_diff_base(0, 1);
+        const double t_div_base = t_diff_base(0, 0) + t_diff_base(1, 1);
 
         t_nf(i) +=
             alpha * (t_base(j) * t_epsilon(i, j) + t_div_base * t_disp(i));
@@ -761,7 +761,7 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
             &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 1)};
 
         const double t_row_div_base =
-            t_row_diff_base(0, 0) + t_row_diff_base(0, 1);
+            t_row_diff_base(0, 0) + t_row_diff_base(1, 1);
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
 
