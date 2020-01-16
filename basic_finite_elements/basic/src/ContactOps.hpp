@@ -633,14 +633,16 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type, EntData &
       FTensor::Tensor2_symmetric<double, 2> t_epsilon;
       t_epsilon(i, j) = t_C(i, j, k, l) * t_stress(k, l);
 
+      FTensor::Tensor2<double, 2, 2> t_omega;
+      t_omega(i,j) = (t_grad(i, j) - t_grad(j, i)) / 2;
+
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
         const double t_div_base = t_diff_base(0, 0) + t_diff_base(1, 1);
 
         t_nf(i) +=
             alpha * (t_base(j) * t_epsilon(i, j) + t_div_base * t_disp(i));
-
-        t_nf(i) += alpha * (t_base(j) * ((t_grad(i, j) - t_grad(j, i)) / 2));
+        t_nf(i) += alpha * (t_base(j) * t_omega(i, j));
 
         ++t_nf;
         ++t_base;
@@ -766,7 +768,7 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
         FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{
             &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 1)};
 
-        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat_A{
+        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat_asymmetric{
             &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
             &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1)};
 
@@ -777,22 +779,21 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
         auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
 
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
+
           t_mat(i) += alpha * t_row_div_base * t_col_base;
 
-          FTensor::Tensor2<double, 2, 2> t_a_grad_x{
-              0., t_col_diff_base(1) / 2., -t_col_diff_base(1) / 2., 0.};
-          FTensor::Tensor2<double, 2, 2> t_a_grad_y{
-              0., -t_col_diff_base(0) / 2., t_col_diff_base(0) / 2., 0.};
+          const double omega_u = t_col_diff_base(1) / 2;
+          const double omega_v = -t_col_diff_base(0) / 2;
 
-          t_mat_A(0, 0) += alpha * t_row_base(1) * t_a_grad_x(0, 1);
-          t_mat_A(0, 1) += alpha * t_row_base(1) * t_a_grad_y(0, 1);
-          t_mat_A(1, 0) += alpha * t_row_base(0) * t_a_grad_x(1, 0);
-          t_mat_A(1, 1) += alpha * t_row_base(0) * t_a_grad_y(1, 0);
+          t_mat_asymmetric(0, 0) += alpha * t_row_base(1) * omega_u;
+          t_mat_asymmetric(0, 1) += alpha * t_row_base(1) * omega_v;
+          t_mat_asymmetric(1, 0) -= alpha * t_row_base(0) * omega_u;
+          t_mat_asymmetric(1, 1) -= alpha * t_row_base(0) * omega_v;
 
           ++t_col_base;
           ++t_col_diff_base;
           ++t_mat;
-          ++t_mat_A;
+          ++t_mat_asymmetric;
         }
 
         ++t_row_diff_base;
