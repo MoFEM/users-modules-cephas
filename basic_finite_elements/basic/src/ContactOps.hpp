@@ -94,28 +94,6 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpInternalDomainContactRhs : public DomianEleOp {
-  OpInternalDomainContactRhs(const std::string field_name,
-                       boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
-struct OpInternalDomainContactLhs : public DomianEleOp {
-  OpInternalDomainContactLhs(const std::string row_field_name,
-                             const std::string col_field_name,
-                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
-};
-
 template <typename T>
 inline double gap(FTensor::Tensor1<T, 2> &t_disp,
                   FTensor::Tensor1<double, 2> &t_normal) {
