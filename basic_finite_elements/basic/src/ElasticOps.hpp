@@ -32,7 +32,7 @@ FTensor::Index<'l', 2> l;
 typedef boost::function<FTensor::Tensor1<double, 2>(const double, const double)>
     VectorFun;
 
-struct OpStrain : public DomianEleOp {
+struct OpStrain : public DomainEleOp {
   OpStrain(const std::string field_name,
            boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -41,7 +41,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpStress : public DomianEleOp {
+struct OpStress : public DomainEleOp {
   OpStress(const std::string field_name,
            boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -50,7 +50,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpInternalForceRhs : public DomianEleOp {
+struct OpInternalForceRhs : public DomainEleOp {
   OpInternalForceRhs(const std::string field_name,
                      boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -59,7 +59,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpForceRhs : public DomianEleOp {
+struct OpForceRhs : public DomainEleOp {
   OpForceRhs(const std::string field_name,
              boost::shared_ptr<CommonData> common_data_ptr,
              VectorFun body_force);
@@ -70,7 +70,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpStiffnessMatrixLhs : public DomianEleOp {
+struct OpStiffnessMatrixLhs : public DomainEleOp {
   OpStiffnessMatrixLhs(const std::string row_field_name,
                        const std::string col_field_name,
                        boost::shared_ptr<CommonData> common_data_ptr);
@@ -83,7 +83,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpPostProcElastic : public DomianEleOp {
+struct OpPostProcElastic : public DomainEleOp {
   OpPostProcElastic(const std::string field_name,
                     moab::Interface &post_proc_mesh,
                     std::vector<EntityHandle> &map_gauss_pts,
@@ -99,7 +99,7 @@ private:
 
 OpStrain::OpStrain(const std::string field_name,
                    boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
@@ -124,7 +124,7 @@ MoFEMErrorCode OpStrain::doWork(int side, EntityType type, EntData &data) {
 //! [Calculate strain]
 OpStress::OpStress(const std::string field_name,
                    boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
@@ -151,7 +151,7 @@ MoFEMErrorCode OpStress::doWork(int side, EntityType type, EntData &data) {
 
 OpInternalForceRhs::OpInternalForceRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 //! [Internal force]
@@ -205,7 +205,7 @@ MoFEMErrorCode OpInternalForceRhs::doWork(int side, EntityType type,
 OpForceRhs::OpForceRhs(const std::string field_name,
                        boost::shared_ptr<CommonData> common_data_ptr,
                        VectorFun body_force)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr), funForce(body_force) {}
 
 //! [Body force]
@@ -262,7 +262,7 @@ MoFEMErrorCode OpForceRhs::doWork(int side, EntityType type, EntData &data) {
 OpStiffnessMatrixLhs::OpStiffnessMatrixLhs(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -328,7 +328,7 @@ OpPostProcElastic::OpPostProcElastic(
     const std::string field_name, moab::Interface &post_proc_mesh,
     std::vector<EntityHandle> &map_gauss_pts,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW), postProcMesh(post_proc_mesh),
+    : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
       mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);

@@ -30,15 +30,15 @@ static char help[] = "...\n\n";
 #include <BasicFiniteElements.hpp>
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
-using DomianEleOp = DomianEle::UserDataOperator;
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 #include <BaseOps.hpp>
 
-using OpDomainGradGrad = OpTools<DomianEleOp>::OpGradGrad<2>;
-using OpDomainSource = OpTools<DomianEleOp>::OpSource<2>;
+using OpDomainGradGrad = OpTools<DomainEleOp>::OpGradGrad<2>;
+using OpDomainSource = OpTools<DomainEleOp>::OpSource<2>;
 using OpBoundaryMass = OpTools<BoundaryEleOp>::OpMass;
 using OpBoundarySource = OpTools<BoundaryEleOp>::OpSource<2>;
 
@@ -77,10 +77,10 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<std::vector<bool>> boundaryMarker;
 
-  struct OpError : public DomianEleOp {
+  struct OpError : public DomainEleOp {
     boost::shared_ptr<CommonData> commonDataPtr;
     OpError(boost::shared_ptr<CommonData> &common_data_ptr)
-        : DomianEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
+        : DomainEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };

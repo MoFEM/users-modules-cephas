@@ -29,16 +29,16 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
-using DomianEleOp = DomianEle::UserDataOperator;
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 #include <BaseOps.hpp>
 
-using OpDomainGradGrad = OpTools<DomianEleOp>::OpGradGrad<2>;
-using OpVolGradGradResidual = OpTools<DomianEleOp>::OpGradGradResidual<2>;
+using OpDomainGradGrad = OpTools<DomainEleOp>::OpGradGrad<2>;
+using OpVolGradGradResidual = OpTools<DomainEleOp>::OpGradGradResidual<2>;
 using OpFaceBase = OpTools<BoundaryEleOp>::OpBase;
 
 constexpr double emissivity = 1;

@@ -73,7 +73,7 @@ FTensor::Index<'M', 3> M;
 FTensor::Index<'N', 3> N;
 
 //! [Operators definitions]
-struct OpCalculatePlasticSurface : public DomianEleOp {
+struct OpCalculatePlasticSurface : public DomainEleOp {
   OpCalculatePlasticSurface(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -82,7 +82,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpPlasticStress : public DomianEleOp {
+struct OpPlasticStress : public DomainEleOp {
   OpPlasticStress(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -91,7 +91,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculatePlasticFlowRhs : public DomianEleOp {
+struct OpCalculatePlasticFlowRhs : public DomainEleOp {
   OpCalculatePlasticFlowRhs(const std::string field_name,
                             boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -100,7 +100,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculateContrainsRhs : public DomianEleOp {
+struct OpCalculateContrainsRhs : public DomainEleOp {
   OpCalculateContrainsRhs(const std::string field_name,
                           boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -109,7 +109,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpCalculatePlasticInternalForceLhs_dEP : public DomianEleOp {
+struct OpCalculatePlasticInternalForceLhs_dEP : public DomainEleOp {
   OpCalculatePlasticInternalForceLhs_dEP(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr);
@@ -122,7 +122,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculatePlasticFlowLhs_dU : public DomianEleOp {
+struct OpCalculatePlasticFlowLhs_dU : public DomainEleOp {
   OpCalculatePlasticFlowLhs_dU(const std::string row_field_name,
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr);
@@ -135,7 +135,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculatePlasticFlowLhs_dEP : public DomianEleOp {
+struct OpCalculatePlasticFlowLhs_dEP : public DomainEleOp {
   OpCalculatePlasticFlowLhs_dEP(const std::string row_field_name,
                                 const std::string col_field_name,
                                 boost::shared_ptr<CommonData> common_data_ptr);
@@ -148,7 +148,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculatePlasticFlowLhs_dTAU : public DomianEleOp {
+struct OpCalculatePlasticFlowLhs_dTAU : public DomainEleOp {
   OpCalculatePlasticFlowLhs_dTAU(const std::string row_field_name,
                                  const std::string col_field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr);
@@ -161,7 +161,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculateContrainsLhs_dU : public DomianEleOp {
+struct OpCalculateContrainsLhs_dU : public DomainEleOp {
   OpCalculateContrainsLhs_dU(const std::string row_field_name,
                              const std::string col_field_name,
                              boost::shared_ptr<CommonData> common_data_ptr);
@@ -174,7 +174,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculateContrainsLhs_dEP : public DomianEleOp {
+struct OpCalculateContrainsLhs_dEP : public DomainEleOp {
   OpCalculateContrainsLhs_dEP(const std::string row_field_name,
                               const std::string col_field_name,
                               boost::shared_ptr<CommonData> common_data_ptr);
@@ -187,7 +187,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculateContrainsLhs_dTAU : public DomianEleOp {
+struct OpCalculateContrainsLhs_dTAU : public DomainEleOp {
   OpCalculateContrainsLhs_dTAU(const std::string row_field_name,
                                const std::string col_field_name,
                                boost::shared_ptr<CommonData> common_data_ptr);
@@ -200,7 +200,7 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpPostProcPlastic : public DomianEleOp {
+struct OpPostProcPlastic : public DomainEleOp {
   OpPostProcPlastic(const std::string field_name,
                     moab::Interface &post_proc_mesh,
                     std::vector<EntityHandle> &map_gauss_pts,
@@ -402,7 +402,7 @@ inline auto diff_constrain_dstrain(
 
 OpCalculatePlasticSurface::OpCalculatePlasticSurface(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
@@ -439,7 +439,7 @@ MoFEMErrorCode OpCalculatePlasticSurface::doWork(int side, EntityType type,
 
 OpPlasticStress::OpPlasticStress(const std::string field_name,
                                  boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
@@ -470,7 +470,7 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
 
 OpCalculatePlasticFlowRhs::OpCalculatePlasticFlowRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
@@ -527,7 +527,7 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
 
 OpCalculateContrainsRhs::OpCalculateContrainsRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
@@ -575,7 +575,7 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
 OpCalculatePlasticInternalForceLhs_dEP::OpCalculatePlasticInternalForceLhs_dEP(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -653,7 +653,7 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
 OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -750,7 +750,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
 OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -841,7 +841,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
 OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -904,7 +904,7 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
 OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -987,7 +987,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
 OpCalculateContrainsLhs_dEP::OpCalculateContrainsLhs_dEP(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -1064,7 +1064,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
 OpCalculateContrainsLhs_dTAU::OpCalculateContrainsLhs_dTAU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
@@ -1132,7 +1132,7 @@ OpPostProcPlastic::OpPostProcPlastic(
     const std::string field_name, moab::Interface &post_proc_mesh,
     std::vector<EntityHandle> &map_gauss_pts,
     boost::shared_ptr<CommonData> common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW), postProcMesh(post_proc_mesh),
+    : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
       mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);

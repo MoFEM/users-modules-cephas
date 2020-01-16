@@ -25,8 +25,8 @@
 using namespace MoFEM;
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
-using DomianEleOp = DomianEle::UserDataOperator;
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
