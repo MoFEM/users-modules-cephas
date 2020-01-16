@@ -94,7 +94,7 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order + 1, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
