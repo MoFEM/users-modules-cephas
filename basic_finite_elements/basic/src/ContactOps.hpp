@@ -20,6 +20,8 @@ struct CommonData : public OpElasticTools::CommonData {
   boost::shared_ptr<MatrixDouble> contactStressDivergencePtr;
   boost::shared_ptr<MatrixDouble> contactTractionPtr;
   boost::shared_ptr<MatrixDouble> contactDispPtr;
+
+  Range skinEntsAndVerts;
 };
 //! [Common data]
 
@@ -89,6 +91,28 @@ struct OpInternalBoundaryContactLhs : public BoundaryEleOp {
                         EntData &col_data);
 
 private:
+  MatrixDouble locMat;
+};
+
+struct OpInternalDomainContactRhs : public DomianEleOp {
+  OpInternalDomainContactRhs(const std::string field_name,
+                       boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct OpInternalDomainContactLhs : public DomianEleOp {
+  OpInternalDomainContactLhs(const std::string row_field_name,
+                             const std::string col_field_name,
+                             boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
   MatrixDouble locMat;
 };
 
@@ -568,14 +592,141 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
   MoFEMFunctionReturn(0);
 }
 
+OpInternalDomainContactRhs::OpInternalDomainContactRhs(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+    : DomianEleOp(field_name, DomianEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {}
+
+MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
+                                            EntData &data) {
+  MoFEMFunctionBegin;
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t nb_dofs = data.getIndices().size();
+
+  if (nb_dofs) {
+
+    
+    std::array<double, MAX_DOFS_ON_ENTITY> nf;
+    std::fill(&nf[0], &nf[nb_dofs], 0);
+
+    const size_t nb_base_functions = data.getN().size2();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_base = data.getFTensor0N();
+    auto t_div =
+        getFTensor1FromMat<2>(*(commonDataPtr->contactStressDivergencePtr));
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      const double alpha = getMeasure() * t_w;
+      FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
+
+      size_t bb = 0;
+      for (; bb != nb_dofs / 2; ++bb) {
+        t_nf(i) -= alpha * t_base * t_div(i);
+        ++t_nf;
+        ++t_base;
+      }
+      for (; bb < nb_base_functions; ++bb)
+        ++t_base;
+
+      ++t_div;
+      ++t_w;
+    }
+
+    int ii = 0;
+    for (auto &dof : data.getFieldDofs()) {
+      auto ent = dof->getEnt();
+      if (commonDataPtr->skinEntsAndVerts.find(ent) ==
+          commonDataPtr->skinEntsAndVerts.end())
+        nf[ii] = 0;
+      ++ii;
+    }
+
+    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpInternalDomainContactLhs::OpInternalDomainContactLhs(
+    const std::string row_field_name, const std::string col_field_name, 
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {
+  sYmm = false;
+}
+
+MoFEMErrorCode OpInternalDomainContactLhs::doWork(int row_side, int col_side,
+                                            EntityType row_type,
+                                            EntityType col_type,
+                                            EntData &row_data,
+                                            EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t row_nb_dofs = row_data.getIndices().size();
+  const size_t col_nb_dofs = col_data.getIndices().size();
+
+  if (row_nb_dofs && col_nb_dofs) {
+
+    auto t_w = getFTensor0IntegrationWeight();
+
+    locMat.resize(row_nb_dofs, col_nb_dofs, false);
+    locMat.clear();
+
+    size_t nb_base_functions = row_data.getN().size2();
+    auto t_row_base = row_data.getFTensor0N();
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      const double alpha = getMeasure() * t_w;
+
+      size_t rr = 0;
+      for (; rr != row_nb_dofs / 2; ++rr) {
+
+        FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{
+            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 1)};
+
+        auto t_col_diff_base = col_data.getFTensor2DiffN<3, 2>(gg, 0);
+
+        for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
+          const double div = t_col_diff_base(0, 0) + t_col_diff_base(1, 1);
+          t_mat(i) -= alpha * t_row_base * div;
+          ++t_col_diff_base;
+          ++t_mat;
+        }
+
+        ++t_row_base;
+      }
+      for (; rr < nb_base_functions; ++rr)
+        ++t_row_base;
+
+      ++t_w;
+    }
+
+    int ii = 0;
+    for (auto &dof : row_data.getFieldDofs()) {
+      auto ent = dof->getEnt();
+      if (commonDataPtr->skinEntsAndVerts.find(ent) ==
+          commonDataPtr->skinEntsAndVerts.end())
+        for(int cc = 0; cc!=col_nb_dofs; ++cc)
+          locMat(ii, cc) = 0;
+      ++ii;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
           boost::shared_ptr<PostProcFaceOnRefinedMeshFor2D> &post_proc_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter
-
-          )
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter)
       : dM(dm), postProcFe(post_proc_fe), uXScatter(ux_scatter),
         uYScatter(uy_scatter){};
 
@@ -650,11 +801,21 @@ MoFEMErrorCode OpPostProcContact::doWork(int side, EntityType type,
                                          EntData &data) {
   MoFEMFunctionBegin;
 
-  auto get_tag = [&](const std::string name) {
+  auto get_tag_mat = [&](const std::string name) {
     std::array<double, 9> def;
     std::fill(def.begin(), def.end(), 0);
     Tag th;
     CHKERR postProcMesh.tag_get_handle(name.c_str(), 9, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def.data());
+    return th;
+  };
+
+  auto get_tag_vec = [&](const std::string name) {
+    std::array<double, 3> def;
+    std::fill(def.begin(), def.end(), 0);
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE, th,
                                        MB_TAG_CREAT | MB_TAG_SPARSE,
                                        def.data());
     return th;
@@ -670,22 +831,32 @@ MoFEMErrorCode OpPostProcContact::doWork(int side, EntityType type,
     return mat;
   };
 
+  auto set_vector = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != 2; ++r)
+      mat(0, r) = t(r);
+    return mat;
+  };
+
   auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
     return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
                                      &*mat.data().begin());
   };
 
-  auto th_stress = get_tag("SIGMA");
+  auto th_stress = get_tag_mat("SIGMA");
+  auto th_div = get_tag_vec("DIV_SIGMA");
 
   size_t nb_gauss_pts = getGaussPts().size2();
   auto t_stress = getFTensor2FromMat<2, 2>(*(commonDataPtr->contactStressPtr));
+  auto t_div =
+      getFTensor1FromMat<2>(*(commonDataPtr->contactStressDivergencePtr));
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    // cerr << t_stress << endl;
-
     CHKERR set_tag(th_stress, gg, set_matrix(t_stress));
+    CHKERR set_tag(th_div, gg, set_vector(t_div));
     ++t_stress;
+    ++t_div;
   }
 
   MoFEMFunctionReturn(0);

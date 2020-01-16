@@ -97,7 +97,7 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order, &skin_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -143,6 +143,11 @@ MoFEMErrorCode Example::createCommonData() {
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
 
+  Range skin_edges = getEntsOnMeshSkin();
+  Range skin_verts;
+  CHKERR mField.get_moab().get_connectivity(skin_edges, skin_verts, true);
+  commonDataPtr->skinEntsAndVerts = unite(skin_verts, skin_edges);
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
@@ -170,6 +175,8 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpInternalDomainContactLhs("U", "SIGMA", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -188,6 +195,7 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -198,7 +206,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
+    // pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -206,7 +214,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
@@ -279,6 +287,9 @@ MoFEMErrorCode Example::tsSolve() {
         new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
     postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
     postProcFe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorDivergence<2, 2>(
+            "SIGMA", commonDataPtr->contactStressDivergencePtr));
     postProcFe->getOpPtrVector().push_back(new OpCalculateHVecTensorField<2, 2>(
         "SIGMA", commonDataPtr->contactStressPtr));
 
