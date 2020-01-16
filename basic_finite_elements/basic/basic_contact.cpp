@@ -32,7 +32,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr int order = 4;
 constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.25;
+constexpr double poisson_ratio = 0.;
 constexpr double cn = young_modulus;
 
 #include <ElasticOps.hpp>
@@ -94,7 +94,13 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order + 1, &skin_ents);
+
+  Range skin_faces;
+  CHKERR mField.get_moab().get_adjacencies(skin_ents, 2, false, skin_faces,
+                                           moab::Interface::UNION);
+  skin_faces.merge(skin_ents);
+
+  CHKERR simple->setFieldOrder("SIGMA", order, &skin_faces);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
