@@ -96,7 +96,8 @@ private:
 struct OpConstrainDomainRhs : public DomainEleOp {
   OpConstrainDomainRhs(const std::string field_name,
                        boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);  
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
@@ -108,6 +109,7 @@ struct OpConstrainDomainLhs_dSigma : public DomainEleOp {
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
+
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   MatrixDouble locMat;
@@ -119,6 +121,7 @@ struct OpConstrainDomainLhs_dU : public DomainEleOp {
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
+
 private:
   MatrixDouble locMat;
 };
@@ -276,11 +279,11 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
 
       const double alpha = t_w * l;
 
+      FTensor::Tensor2<double, 2, 2> t_tangent_tensor;
+      t_tangent_tensor(i, j) = t_direction(i) * t_direction(j);
+
       FTensor::Tensor1<double, 2> t_rhs;
-      t_rhs(i) =
-          t_normal(i) * constrian(gap(t_disp, t_normal),
-                                  normal_traction(t_traction, t_normal)) +
-          t_direction(i) * (t_direction(j) * t_traction(j));
+      t_rhs(i) = t_tangent_tensor(i, j) * t_disp(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
@@ -442,74 +445,79 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
                                                  EntData &col_data) {
   MoFEMFunctionBegin;
 
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t row_nb_dofs = row_data.getIndices().size();
-  const size_t col_nb_dofs = col_data.getIndices().size();
+  // const size_t nb_gauss_pts = getGaussPts().size2();
+  // const size_t row_nb_dofs = row_data.getIndices().size();
+  // const size_t col_nb_dofs = col_data.getIndices().size();
 
-  if (row_nb_dofs && col_nb_dofs) {
+  // if (row_nb_dofs && col_nb_dofs) {
 
-    locMat.resize(row_nb_dofs, col_nb_dofs, false);
-    locMat.clear();
+  //   locMat.resize(row_nb_dofs, col_nb_dofs, false);
+  //   locMat.clear();
 
-    FTensor::Tensor1<double, 2> t_direction{getDirection()[0],
-                                            getDirection()[1]};
-    FTensor::Tensor1<double, 2> t_normal{-t_direction(1), t_direction(0)};
-    const double l = sqrt(t_normal(i) * t_normal(i));
-    t_normal(i) /= l;
-    t_direction(i) /= l;
+  //   FTensor::Tensor1<double, 2> t_direction{getDirection()[0],
+  //                                           getDirection()[1]};
+  //   FTensor::Tensor1<double, 2> t_normal{-t_direction(1), t_direction(0)};
+  //   const double l = sqrt(t_normal(i) * t_normal(i));
+  //   t_normal(i) /= l;
+  //   t_direction(i) /= l;
 
-    auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
-    auto t_traction =
-        getFTensor1FromMat<2>(*(commonDataPtr->contactTractionPtr));
+  //   auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
+  //   auto t_traction =
+  //       getFTensor1FromMat<2>(*(commonDataPtr->contactTractionPtr));
 
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_base = row_data.getFTensor1N<3>();
-    size_t nb_face_functions = row_data.getN().size2() / 3;
+  //   auto t_w = getFTensor0IntegrationWeight();
+  //   auto t_row_base = row_data.getFTensor1N<3>();
+  //   size_t nb_face_functions = row_data.getN().size2() / 3;
 
-    locMat.resize(row_nb_dofs, col_nb_dofs, false);
-    locMat.clear();
+  //   locMat.resize(row_nb_dofs, col_nb_dofs, false);
+  //   locMat.clear();
 
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+  //   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      const double alpha = t_w * l;
-      auto t_diff_du = diff_constrains_du(
-          diff_constrains_dgap(gap(t_disp, t_normal),
-                               normal_traction(t_traction, t_normal)),
-          diff_gap(t_normal));
-      FTensor::Tensor2<double, 2, 2> t_diff_rhs;
-      t_diff_rhs(i, j) = t_normal(i) * t_diff_du(j);
+  //     const double alpha = t_w * l;
 
-      size_t rr = 0;
-      for (; rr != row_nb_dofs / 2; ++rr) {
+  //     FTensor::Tensor2<double, 2, 2> t_tangent_tensor;
+  //     t_tangent_tensor(i, j) = t_direction(i) * t_direction(j);
 
-        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat(
-            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
-            &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1));
-        const double row_base = t_row_base(i) * t_normal(i);
+  //     // auto t_diff_du = diff_constrains_du(
+  //     //     diff_constrains_dgap(gap(t_disp, t_normal),
+  //     //                          normal_traction(t_traction, t_normal)),
+  //     //     diff_gap(t_normal));
+  //     // FTensor::Tensor2<double, 2, 2> t_diff_rhs;
+  //     // t_diff_rhs(i, j) = t_normal(i) * t_diff_du(j);
 
-        auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
-          const double beta = alpha * row_base * t_col_base;
+  //     size_t rr = 0;
+  //     for (; rr != row_nb_dofs / 2; ++rr) {
 
-          t_mat(i, j) += beta * t_diff_rhs(i, j);
+  //       FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat(
+  //           &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
+  //           &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1));
+  //       const double row_base = t_row_base(i) * t_normal(i);
 
-          ++t_col_base;
-          ++t_mat;
-        }
+  //       auto t_col_base = col_data.getFTensor0N(gg, 0);
+  //       for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
+  //         const double beta = alpha * row_base * t_col_base;
 
-        ++t_row_base;
-      }
-      for (; rr < nb_face_functions; ++rr)
-        ++t_row_base;
+  //         t_mat(i, j) += beta * t_diff_rhs(i, j);
 
-      ++t_disp;
-      ++t_traction;
-      ++t_w;
-    }
+  //         ++t_col_base;
+  //         ++t_mat;
+  //       }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
-  }
+  //       ++t_row_base;
+  //     }
+  //     for (; rr < nb_face_functions; ++rr)
+  //       ++t_row_base;
+
+  //     ++t_disp;
+  //     ++t_traction;
+  //     ++t_w;
+  //   }
+
+  //   CHKERR MatSetValues(getSNESB(), row_data, col_data,
+  //   &*locMat.data().begin(),
+  //                       ADD_VALUES);
+  // }
 
   MoFEMFunctionReturn(0);
 }
@@ -604,7 +612,8 @@ OpConstrainDomainRhs::OpConstrainDomainRhs(
     : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
-MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type, EntData &data) {
+MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
+                                            EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = getGaussPts().size2();
   const size_t nb_dofs = data.getIndices().size();
@@ -619,9 +628,8 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type, EntData &
     auto t_base = data.getFTensor1N<3>();
     auto t_diff_base = data.getFTensor2DiffN<3, 2>();
     auto t_stress =
-        getFTensor2FromMat<2,2>(*(commonDataPtr->contactStressPtr));
-    auto t_disp =
-        getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
+        getFTensor2FromMat<2, 2>(*(commonDataPtr->contactStressPtr));
+    auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
     auto t_grad = getFTensor2FromMat<2, 2>((*commonDataPtr->mGradPtr));
     auto &t_C = commonDataPtr->tC;
 
@@ -634,7 +642,7 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type, EntData &
       t_epsilon(i, j) = t_C(i, j, k, l) * t_stress(k, l);
 
       FTensor::Tensor2<double, 2, 2> t_omega;
-      t_omega(i,j) = (t_grad(i, j) - t_grad(j, i)) / 2;
+      t_omega(i, j) = (t_grad(i, j) - t_grad(j, i)) / 2;
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
@@ -955,6 +963,5 @@ MoFEMErrorCode OpPostProcContact::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 //! [Postprocessing]
-
 
 }; // namespace OpContactTools
