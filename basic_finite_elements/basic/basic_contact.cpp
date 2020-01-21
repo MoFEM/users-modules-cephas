@@ -30,7 +30,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 2;
+constexpr int order = 1;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.;
 constexpr double cn = young_modulus;
@@ -103,7 +103,7 @@ MoFEMErrorCode Example::setUP() {
     CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
                                              moab::Interface::UNION);
     skin_faces.merge(skin_ents);
-    return skin_faces;
+    return skin_ents;
   };
 
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
@@ -221,6 +221,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+    pipeline.push_back(new OpInternalDomainContactLhs("U", "SIGMA"));
     pipeline.push_back(
         new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
     pipeline.push_back(
@@ -247,6 +248,7 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
   };
 

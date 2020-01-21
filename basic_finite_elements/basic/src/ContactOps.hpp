@@ -49,6 +49,15 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+struct OpInternalDomainContactRhs : public DomainEleOp {
+  OpInternalDomainContactRhs(const std::string field_name,
+                               boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
 struct OpConstrainBoundaryRhs : public BoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
@@ -96,6 +105,17 @@ private:
 struct OpInternalBoundaryContactLhs : public BoundaryEleOp {
   OpInternalBoundaryContactLhs(const std::string row_field_name,
                                const std::string col_field_name);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
+
+private:
+  MatrixDouble locMat;
+};
+
+struct OpInternalDomainContactLhs : public DomainEleOp {
+  OpInternalDomainContactLhs(const std::string row_field_name,
+                             const std::string col_field_name);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -315,6 +335,60 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
+OpInternalDomainContactRhs::OpInternalDomainContactRhs(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {}
+
+MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
+                                                  EntData &data) {
+
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t nb_dofs = data.getIndices().size();
+
+  if (nb_dofs) {
+
+    std::array<double, MAX_DOFS_ON_ENTITY> nf;
+    std::fill(&nf[0], &nf[nb_dofs], 0);
+
+    const size_t nb_base_functions = data.getN().size2();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_diff_base = data.getFTensor1DiffN<2>();
+    auto t_stress =
+        getFTensor2FromMat<2, 2>(*(commonDataPtr->contactStressPtr));
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      const double alpha = getMeasure() * t_w;
+      FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
+
+      const double omega = FTensor::levi_civita(i, j) * t_stress(i, j);
+
+      size_t bb = 0;
+      for (; bb != nb_dofs / 2; ++bb) {
+
+        t_nf(i) +=
+            alpha * (t_diff_base(j) * FTensor::levi_civita(i, j) / 2) * omega;
+
+        ++t_nf;
+        ++t_diff_base;
+      }
+      for (; bb < nb_base_functions; ++bb) {
+        ++t_diff_base;
+      }
+
+      ++t_stress;
+      ++t_w;
+    }
+
+    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
     : BoundaryEleOp(field_name, DomainEleOp::OPROW),
@@ -322,7 +396,6 @@ OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
 
 MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
                                               EntData &data) {
-
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
@@ -494,6 +567,69 @@ MoFEMErrorCode OpInternalBoundaryContactLhs::doWork(int row_side, int col_side,
       }
       for (; rr < nb_base_functions; ++rr)
         ++t_row_base;
+
+      ++t_w;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpInternalDomainContactLhs::OpInternalDomainContactLhs(
+    const std::string row_field_name, const std::string col_field_name)
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL) {
+  sYmm = false;
+}
+
+MoFEMErrorCode OpInternalDomainContactLhs::doWork(int row_side, int col_side,
+                                                  EntityType row_type,
+                                                  EntityType col_type,
+                                                  EntData &row_data,
+                                                  EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t row_nb_dofs = row_data.getIndices().size();
+  const size_t col_nb_dofs = col_data.getIndices().size();
+
+  if (row_nb_dofs && col_nb_dofs) {
+
+    auto t_w = getFTensor0IntegrationWeight();
+
+    locMat.resize(row_nb_dofs, col_nb_dofs, false);
+    locMat.clear();
+
+    size_t nb_base_functions = row_data.getN().size2();
+    auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      const double alpha = getMeasure() * t_w;
+
+      size_t rr = 0;
+      for (; rr != row_nb_dofs / 2; ++rr) {
+
+        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat_asymmetric{
+            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
+            &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1)};
+
+        auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
+
+        for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
+          t_mat_asymmetric(i, j) +=
+              alpha * (t_row_diff_base(l) * FTensor::levi_civita(i, l) / 2) *
+              (FTensor::levi_civita(j, k) * t_col_base(k));
+
+          ++t_col_base;
+          ++t_mat_asymmetric;
+        }
+
+        ++t_row_diff_base;
+      }
+      for (; rr < nb_base_functions; ++rr) 
+        ++t_row_diff_base;
 
       ++t_w;
     }
@@ -821,7 +957,6 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
                                                EntityType col_type,
                                                EntData &row_data,
                                                EntData &col_data) {
-
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
