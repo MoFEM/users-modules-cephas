@@ -95,14 +95,15 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
 
   auto ger_adj_skin_ents = [&](auto &&skin_ents) {
-    // Range skin_verts;
-    // CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
-    // Range skin_faces;
-    // CHKERR mField.get_moab().get_adjacencies(skin_verts, 1, false, skin_faces,
-    //                                          moab::Interface::UNION);
-    // CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
-    //                                          moab::Interface::UNION);
-    return skin_ents;
+    Range skin_verts;
+    CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
+    Range skin_faces;
+    CHKERR mField.get_moab().get_adjacencies(skin_verts, 1, false, skin_faces,
+                                             moab::Interface::UNION);
+    CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
+                                             moab::Interface::UNION);
+    skin_faces.merge(skin_ents);
+    return skin_faces;
   };
 
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
@@ -171,6 +172,7 @@ MoFEMErrorCode Example::createCommonData() {
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactGradDispPtr = boost::make_shared<MatrixDouble>();
 
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
