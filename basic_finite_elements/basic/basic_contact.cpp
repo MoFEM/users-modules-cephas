@@ -30,7 +30,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 1;
+constexpr int order = 2;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.;
 constexpr double cn = young_modulus;
@@ -91,8 +91,11 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
   CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
+  CHKERR simple->addDomainField("OMEGA", L2, AINSWORTH_LEGENDRE_BASE, 1);
+
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
+  // CHKERR simple->setFieldOrder("OMEGA", 0);
 
   auto ger_adj_skin_ents = [&](auto &&skin_ents) {
     Range skin_verts;
@@ -103,11 +106,13 @@ MoFEMErrorCode Example::setUP() {
     CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
                                              moab::Interface::UNION);
     skin_faces.merge(skin_ents);
-    return skin_ents;
+    return skin_faces;
   };
 
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
+  auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
   CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents);
+  CHKERR simple->setFieldOrder("OMEGA", order, &adj_skin_ents_faces);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -172,27 +177,10 @@ MoFEMErrorCode Example::createCommonData() {
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->contactGradDispPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactOmegaPtr = boost::make_shared<VectorDouble>();
 
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
-
-  auto mark_boundary_dofs = [&](Range &&skin_edges) {
-    Simple *simple = mField.getInterface<Simple>();
-    Range skin_verts;
-    CHKERR mField.get_moab().get_connectivity(skin_edges, skin_verts, true);
-    skin_edges.merge(skin_verts);
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<bool>>();
-    problem_manager->markDofs(simple->getProblemName(), ROW, skin_edges,
-                              *marker_ptr);
-    return marker_ptr;
-  };
-
-  // Get global local vector of marked DOFs. Is global, since is set for all
-  // DOFs on processor. Is local since only DOFs on processor are in the
-  // vector. To access DOFs use local indices.
-  commonDataPtr->boundaryMarker = mark_boundary_dofs(getEntsOnMeshSkin());
 
   MoFEMFunctionReturn(0);
 }
@@ -221,7 +209,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    pipeline.push_back(new OpInternalDomainContactLhs("U", "SIGMA"));
+    pipeline.push_back(new OpRotationDomainContactLhs("OMEGA", "SIGMA"));
     pipeline.push_back(
         new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
     pipeline.push_back(
@@ -239,17 +227,18 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpStrain("U", commonDataPtr));
     pipeline.push_back(new OpStress("U", commonDataPtr));
     pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
-    // pipeline.push_back(new OpCalculateVectorFieldValues<2>(
-    //     "U", commonDataPtr->contactDispPtr));
 
-    pipeline.push_back(new OpDomainDisplacement("U", commonDataPtr));
+    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+        "U", commonDataPtr->contactDispPtr));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
+        "OMEGA", commonDataPtr->contactOmegaPtr, MBTRI));
 
     pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpRotationDomainContactRhs("OMEGA", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
