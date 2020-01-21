@@ -145,11 +145,6 @@ int main(int argc, char *argv[]) {
     const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
     PetscInt choice_base_value = LOBATTO;
 
-    // Select base
-    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
-    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
-    PetscInt choice_base_value = LOBATTO;
-
     // Read options from command line
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
     CHKERR(ierr);
