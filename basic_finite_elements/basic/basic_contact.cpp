@@ -30,7 +30,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 2;
+constexpr int order = 3;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.;
 constexpr double cn = young_modulus;
@@ -95,7 +95,7 @@ MoFEMErrorCode Example::setUP() {
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
-  // CHKERR simple->setFieldOrder("OMEGA", 0);
+  CHKERR simple->setFieldOrder("OMEGA", -1);
 
   auto ger_adj_skin_ents = [&](auto &&skin_ents) {
     Range skin_verts;
@@ -111,7 +111,7 @@ MoFEMErrorCode Example::setUP() {
 
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
-  CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order + 1, &adj_skin_ents);
   CHKERR simple->setFieldOrder("OMEGA", order, &adj_skin_ents_faces);
 
   CHKERR simple->setUp();
