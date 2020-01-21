@@ -42,36 +42,8 @@ endif(NOT_PRECOMPILED_HEADRES)
 
 include(cmake/GetGitRevisionDescription.cmake)
 
-if(STAND_ALLONE_USERS_MODULES)
-  find_package(
-    MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
-  )  
-else(STAND_ALLONE_USERS_MODULES)
-  git_describe(GIT_VERSION "--tags")
-  if(GIT_VERSION)
-    string(
-      REGEX 
-      REPLACE "^v([0-9]+)\\..*" "\\1" GIT_MoFEM_VERSION_MAJOR "${GIT_VERSION}"
-    )
-    string(
-      REGEX 
-      REPLACE "^v[0-9]+\\.([0-9]+).*" "\\1" GIT_MoFEM_VERSION_MINOR "${GIT_VERSION}"
-    )
-    string(
-      REGEX 
-      REPLACE "^v[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" GIT_MoFEM_VERSION_BUILD "${GIT_VERSION}"
-    )
-    find_package(
-      MoFEM 
-      ${GIT_MoFEM_VERSION_MAJOR}.${GIT_MoFEM_VERSION_MINOR}.${GIT_MoFEM_VERSION_BUILD}
-      REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
-    )  
-  else(GIT_VERSION)
-    find_package(
-      MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR}
-    )  
-  endif(GIT_VERSION)
-endif(STAND_ALLONE_USERS_MODULES)
+find_package(
+  MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR})
 include(cmake/CheckMoFEMVersion.cmake)
 
 message(STATUS "MoFEM version ${MoFEM_VERSION}")
