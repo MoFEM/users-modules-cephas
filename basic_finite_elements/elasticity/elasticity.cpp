@@ -246,7 +246,7 @@ int main(int argc, char *argv[]) {
 
     // CHECK IF EDGE BLOCKSET EXIST AND IF IT IS ADD ALL ENTITIES FROM IT
     // CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
-        // MESHSET_OF_EDGE_BLOCKSET, 1, bit_level0);
+    // MESHSET_OF_EDGE_BLOCKSET, 1, bit_level0);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 3, "ROD") == 0) {
@@ -299,10 +299,11 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR m_field.add_ents_to_field_by_type(
-            edges_in_simple_rod, MBEDGE, "DISPLACEMENT");
+    CHKERR m_field.add_ents_to_field_by_type(edges_in_simple_rod, MBEDGE,
+                                             "DISPLACEMENT");
     // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
-    //                                                   MBEDGE, "DISPLACEMENT");
+    //                                                   MBEDGE,
+    //                                                   "DISPLACEMENT");
 
     // Set order of edge in rod to be 1
     CHKERR m_field.set_field_order(edges_in_simple_rod, "DISPLACEMENT", 1);
@@ -321,7 +322,6 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(edges_to_set_order, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
     CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
-
 
     if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
@@ -529,7 +529,7 @@ int main(int argc, char *argv[]) {
     // Add Simple Rod elements
     // This is only declaration not implementation.
     CHKERR MetaSimpleRodElement::addSimpleRodElements(m_field, "DISPLACEMENT",
-                                          "MESH_NODE_POSITIONS");
+                                                      "MESH_NODE_POSITIONS");
 
     // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
     //                                                   MBEDGE, "SIMPLE_ROD");
@@ -541,9 +541,9 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr(
         new EdgeElementForcesAndSourcesCore(m_field));
 
-    CHKERR MetaSimpleRodElement::setSimpleRodOperators(m_field, fe_simple_rod_lhs_ptr,
-                                           fe_simple_rod_rhs_ptr, "DISPLACEMENT",
-                                           "MESH_NODE_POSITIONS");
+    CHKERR MetaSimpleRodElement::setSimpleRodOperators(
+        m_field, fe_simple_rod_lhs_ptr, fe_simple_rod_rhs_ptr, "DISPLACEMENT",
+        "MESH_NODE_POSITIONS");
 
     // Add body force element. This is only declaration of element. not its
     // implementation.
@@ -772,7 +772,7 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_mass_ptr);
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
     }
-    
+
     // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
 
     // Assemble pressure and traction forces. Run particular implemented for do
@@ -846,9 +846,6 @@ int main(int argc, char *argv[]) {
     if (is_calculating_frequency == PETSC_TRUE) {
       CHKERR MatAssemblyBegin(Mij, MAT_FINAL_ASSEMBLY);
       CHKERR MatAssemblyEnd(Mij, MAT_FINAL_ASSEMBLY);
-
-      // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
-      // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
     }
 
     // Set matrix positive defined and symmetric for Cholesky and icc
@@ -905,7 +902,7 @@ int main(int argc, char *argv[]) {
     PostProcEdgeOnRefinedMesh post_proc_edge(m_field);
     CHKERR post_proc_edge.generateReferenceElementMesh();
     CHKERR post_proc_edge.addFieldValuesPostProc("DISPLACEMENT");
-    
+
     PostProcFatPrismOnRefinedMesh prism_post_proc(m_field);
     CHKERR prism_post_proc.generateReferenceElementMesh();
 
@@ -1094,7 +1091,7 @@ int main(int argc, char *argv[]) {
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
       CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc_edge);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
-      PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
+      PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
       if (mesh_has_tets) {
         CHKERR post_proc.writeFile("out.h5m");
       }
@@ -1137,7 +1134,6 @@ int main(int argc, char *argv[]) {
       frequency = sqrt(model_stiffness / model_mass) / (2 * pi);
       PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
     }
-    
 
     // Calculate elastic energy
     auto calculate_strain_energy = [dm, &block_sets_ptr, test_nb]() {
