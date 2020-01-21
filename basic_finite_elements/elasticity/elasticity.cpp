@@ -145,6 +145,11 @@ int main(int argc, char *argv[]) {
     const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
     PetscInt choice_base_value = LOBATTO;
 
+    // Select base
+    enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
+    const char *list_bases[] = {"legendre", "lobatto", "bernstein_bezier"};
+    PetscInt choice_base_value = LOBATTO;
+
     // Read options from command line
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
     CHKERR(ierr);
@@ -284,11 +289,14 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_ents_to_field_by_dim(0, 3, "DISPLACEMENT");
     CHKERR m_field.add_ents_to_field_by_dim(0, 3, "MESH_NODE_POSITIONS");
 
+    // Get all edges in the mesh
+    Range all_edges;
+    CHKERR m_field.get_moab().get_entities_by_type(0, MBEDGE, all_edges, true);
+
+    // Get edges associated with simple rod
     Range edges_in_simple_rod;
-    // CHECK IF EDGE BLOCSET EXIST AND ADD ENTITIES TO FIELD BY MESHSET
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 3, "ROD") == 0) {
-        // Get edges in simple rod
         Range edges;
         CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(),
                                                        MBEDGE, edges, true);
@@ -298,49 +306,32 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.add_ents_to_field_by_type(
             edges_in_simple_rod, MBEDGE, "DISPLACEMENT");
-
     // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
     //                                                   MBEDGE, "DISPLACEMENT");
 
     // Set order of edge in rod to be 1
-    CHKERR m_field.set_field_order(edges_in_simple_rod, "DISPLACEMENT",
-                                   1);
+    CHKERR m_field.set_field_order(edges_in_simple_rod, "DISPLACEMENT", 1);
 
-    // Get all edges in the mesh
-    Range all_edges;
-    CHKERR m_field.get_moab().get_entities_by_type(0, MBEDGE, all_edges, true);
-
-    // Get edges to set order
+    // Get remaining edges (not associated with simple rod) to set order
     Range edges_to_set_order;
     edges_to_set_order = subtract(all_edges, edges_in_simple_rod);
 
-    // all_edges.print();
-    // edges_in_simple_rod.print();
-    // edges_to_set_order.print();
     // Set approximation order.
     // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
     // Meshes.
+    CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(edges_to_set_order, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
-    CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
-    // CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
-    // CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
-    // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+
+
     if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
     else
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
-
-    // BE CARFULL HERE, SINCE ALL EDGES FROM ROD ELEMENT HAS TO BE FISRT ORDER
-    // TO SOLVE THAT PROBLEM, TAKE ALL THE EDGES FORM ROOT MESHSET AND
-    // SUBSTRACT EDGES OF RODS. USE moab.get_enetities_by_type
-    // edges_to_set_order = subtact(all_edges, edges_in_simple_rod);
-    // CHKERR m_field.set_field_order(edges_to_set_order,
-    // "DISPLACEMENT", order);
 
     // Set order of approximation of geometry.
     // Apply 2nd order only on skin (or in whole body)

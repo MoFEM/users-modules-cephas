@@ -30,7 +30,11 @@ using namespace MoFEM;
 
 using namespace boost::numeric;
 
-static char help[] = "...\n\n";
+static char help[] = "\
+ -my_file mesh file name\n\
+ -my_sr reduction of step size\n\
+ -my_its_d desired number of steps\n\
+ -my_ms maximal number of steps\n\n";
 
 #define DATAFILENAME "load_disp.txt"
 
@@ -155,7 +159,30 @@ using namespace CohesiveElement;
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  const string default_options = "-ksp_type fgmres \n"
+                                 "-pc_type lu \n"
+                                 "-pc_factor_mat_solver_package mumps\n"
+                                 "-ksp_monitor \n"
+                                 "-ksp_atol 1e-10 \n"
+                                 "-ksp_rtol 1e-10 \n"
+                                 "-snes_monitor \n"
+                                 "-snes_type newtonls \n"
+                                 "-snes_linesearch_type l2 \n"
+                                 "-snes_linesearch_monitor \n"
+                                 "-snes_max_it 16 \n"
+                                 "-snes_atol 1e-8 \n"
+                                 "-snes_rtol 1e-8 \n"
+                                 "-snes_converged_reason \n";
+
+  string param_file = "param_file.petsc";
+  if (!static_cast<bool>(ifstream(param_file))) {
+    std::ofstream file(param_file.c_str(), std::ios::ate);
+    if (file.is_open()) {
+      file << default_options;
+      file.close();
+    }
+  }
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   try {
 
@@ -457,7 +484,7 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
       // Elements with boundary conditions
-      CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "DISPLACEMENT");
+      CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "DISPLACEMENT");
       CHKERR MetaNodalForces::addElement(m_field, "DISPLACEMENT");
 
       CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
@@ -655,16 +682,16 @@ int main(int argc, char *argv[]) {
     CHKERR VecAssemblyEnd(F_body_force);
 
     // surface forces
-    boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     string fe_name_str = "FORCE_FE";
-    neumann_forces.insert(fe_name_str, new NeummanForcesSurface(m_field));
+    neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
       CHKERR neumann_forces.at(fe_name_str)
           .addForce("DISPLACEMENT", arc_ctx->F_lambda, it->getMeshsetId());
     }
     fe_name_str = "PRESSURE_FE";
-    neumann_forces.insert(fe_name_str, new NeummanForcesSurface(m_field));
+    neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, SIDESET | PRESSURESET, it)) {
       CHKERR neumann_forces.at(fe_name_str)
@@ -733,7 +760,7 @@ int main(int argc, char *argv[]) {
       step++;
     }
 
-    boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
+    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
     CHKERR VecZeroEntries(arc_ctx->F_lambda);
     CHKERR VecGhostUpdateBegin(arc_ctx->F_lambda, INSERT_VALUES,

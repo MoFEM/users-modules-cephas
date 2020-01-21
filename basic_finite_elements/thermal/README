@@ -2,31 +2,22 @@ Check before run
 ================
 
 * Check where is your mesh file
-* Check what verion of openmpi (or other MPI library) are you using
-
-If you are using spack and you would like to use mpirun and mbconvert 
-tools please first run the following 
-======================================================================
-
-spack load moab
+* Check what version of openmpi (or other MPI library) you are using
 
 Example for running steady problem
 ==================================
 mpirun -np 2 ./thermal_steady \
   -my_file simple_thermal_problem.h5m \
-  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
   -my_order 4 -my_max_post_proc_ref_level 2
 
 Example for running unsteady problem
 ==================================
 mpirun -np 2 ./thermal_unsteady \
   -my_file simple_thermal_problem.h5m \
-  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
-  -snes_type newtonls -snes_linesearch_type basic -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor \
-  -ts_monitor -ts_type beuler -ts_dt 0.1 -ts_final_time 5 -snes_lag_jacobian -2 \
-  -my_order 4 -my_max_post_proc_ref_level 1 -ts_exact_final_time stepover
+  -ts_dt 0.1 -ts_final_time 5 -snes_lag_jacobian -2 \
+  -my_order 4 -my_max_post_proc_ref_level 1 
 
-Example thermo-elasticity
+Example of thermo-elasticity
 =========================
 
 NOTE:
@@ -36,26 +27,40 @@ present and problem is linear. It is no need to recalculate jacobian at each
 step.
 
 mpirun -np 2 ./thermal_unsteady \
-  -my_file heat_exchange.h5m  \
-  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
-  -snes_type newtonls -snes_linesearch_type basic -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_monitor \
-  -ts_monitor -ts_type beuler -ts_dt 0.0025 -ts_final_time 0.01 -snes_lag_jacobian -2 -ts_exact_final_time stepover \
-  -my_order 2 -my_max_post_proc_ref_level 1
+ -my_file heat_exchange.h5m  \
+ -ts_dt 0.0025 -ts_final_time 0.01 -snes_lag_jacobian -2 \
+ -my_order 2 -my_max_post_proc_ref_level 1
 
 mpirun -np 2 ../elasticity/elasticity \
   -my_file ../thermal/solution.h5m \
-  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor \
   -my_order 3 -my_max_post_proc_ref_level 2 -my_ref_temp -5
 
-Example of runing climate model
+Example of running climate model
 ================================
 
 mpirun -np 3 ./thermal_unsteady -my_file solution.h5m \
--ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor  \
--snes_type newtonls -snes_linesearch_type bt -snes_linesearch_monitor \
--snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8 -snes_stol 0 -snes_monitor -snes_converged_reason \
--ts_monitor -ts_type alpha -ts_dt 0.1 -ts_final_time 1 -ts_exact_final_time stepover -my_order 1 -my_block_config config_blocks.inf \
+-snes_converged_reason \
+-ts_type alpha -ts_dt 0.1 -ts_final_time 1 -my_order 1 -my_block_config config_blocks.inf \
 -my_ground_analysis_data parameters.in
+
+Parameters set by default from param_file.petsc file
+============================
+
+-ksp_type fgmres 
+-pc_type lu 
+-pc_factor_mat_solver_package mumps 
+-ksp_monitor
+
+-snes_type newtonls 
+-snes_linesearch_type basic 
+-snes_max_it 100 
+-snes_atol 1e-8 
+-snes_rtol 1e-8 
+-snes_monitor 
+-ts_monitor 
+-ts_type beuler 
+-ts_exact_final_time stepover 
+
 
 Example of block config file
 ============================
@@ -69,6 +74,7 @@ temperature_order = 3
 #heat_capacity = 2112000
 heat_capacity = 0
 heat_conductivity = 1.4352e-05
+initial_temperature = 1
 
 [block_6]
 
@@ -81,7 +87,7 @@ solar_radiation = no
 Example of parameters file
 ==========================
 
-# Start date of symulation
+# Start date of simulation
 
 # 4-digit year, valid range: -2000 to 6000
 year = 2014
@@ -117,7 +123,7 @@ TdayAtWinter = 8
 TnigthAtSummer = 20
 TnigthAtWinter = 8
 
-# Day in the year with lowes temerature
+# Day in the year with lowest temperature
 DayOfLowTemperature = 0
 
 # Localisation
@@ -125,7 +131,7 @@ longitude = 0.127
 latitude = 51.5072
 
 # Dew Point ( Celsius )
-# The dew point is the temperature at which the water vapor in a sample of air at
+# The dew point is the temperature at which the water vapour in a sample of air at
 # constant barometric pressure condenses into liquid water at the same rate at
 # which it evaporates (Celsius)
 DewPoint = 10
@@ -136,7 +142,7 @@ u10 = 0
 # cloudness factor (0–1, dimensionless)
 CR = 0
 
-# Presssure [Pa]
+# Pressure [Pa]
 Pressure = 101325
 
 # observed solar radiation (W/m2)

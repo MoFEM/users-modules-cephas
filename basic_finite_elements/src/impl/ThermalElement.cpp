@@ -236,9 +236,8 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
     double val = getGaussPts()(2, gg);
     double flux;
     if (hoGeometry) {
-      const double area = norm_2(getNormalsAtGaussPts(gg));
-      flux = flux = dAta.dAta.data.value1 *
-                    area; // FluxData.HeatFluxCubitBcData.data.value1 * area
+      const double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
+      flux = dAta.dAta.data.value1 * area; 
     } else {
       flux = dAta.dAta.data.value1 * getArea();
     }
@@ -510,8 +509,10 @@ ThermalElement::addThermalElements(const std::string field_name,
         temp_data.data.Conductivity;
     // setOfBlocks[it->getMeshsetId()].cOnductivity =
     // temp_data.data.Conductivity;
-
     setOfBlocks[it->getMeshsetId()].cApacity = temp_data.data.HeatCapacity;
+    if (temp_data.data.User2 != 0) {
+      setOfBlocks[it->getMeshsetId()].initTemp = temp_data.data.User2;
+    }
     CHKERR mField.get_moab().get_entities_by_type(
         it->meshset, MBTET, setOfBlocks[it->getMeshsetId()].tEts, true);
     CHKERR mField.add_ents_to_finite_element_by_type(

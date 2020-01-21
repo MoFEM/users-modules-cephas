@@ -230,11 +230,10 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
 
    */
   MoFEMErrorCode writeFile(const std::string file_name) {
-    MoFEMFunctionBeginHot;
+    MoFEMFunctionBegin;
     // #ifdef MOAB_HDF5_PARALLEL
-    rval = postProcMesh.write_file(file_name.c_str(), "MOAB",
+    CHKERR postProcMesh.write_file(file_name.c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");
-    CHKERRG(rval);
     // #else
     //  #warning "No parallel HDF5, not most efficient way of writing files"
     //  if(mField.get_comm_rank()==0) {
@@ -242,7 +241,7 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
     //    CHKERRG(rval);
     //  }
     // #endif
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
 };
 
@@ -435,10 +434,9 @@ struct PostProcTemplateVolumeOnRefinedMesh
     };
 
     const int dof_max_order = get_element_max_dofs_order();
-    int level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
-    if (level > levelGaussPtsOnRefMesh.size() - 1) {
+    size_t level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
+    if (level > (levelGaussPtsOnRefMesh.size() - 1)) 
       level = levelGaussPtsOnRefMesh.size() - 1;
-    }
 
     auto &level_ref_gauss_pts = levelGaussPtsOnRefMesh[level];
     auto &level_ref_tets = levelRefTets[level];
@@ -498,7 +496,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
     const double *t_coords_ele_x = &T::coords[0];
     const double *t_coords_ele_y = &T::coords[1];
     const double *t_coords_ele_z = &T::coords[2];
-    for (unsigned int gg = 0; gg != num_nodes; ++gg) {
+    for (int gg = 0; gg != num_nodes; ++gg) {
       FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
           t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
       t_coords(i) = 0;
@@ -720,7 +718,7 @@ struct PostProcFatPrismOnRefinedMesh
   MoFEMErrorCode preProcess();
   MoFEMErrorCode postProcess();
 
-  struct CommonData : PostProcCommonOnRefMesh::CommonData {};
+  struct CommonData : PostProcCommonOnRefMesh::CommonDataForVolume {};
   CommonData commonData;
 
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
@@ -776,11 +774,10 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideOpFe;
-    const std::string tagName;
-    const bool saveOnTag;
-
     const std::string feVolName;
     boost::shared_ptr<MatrixDouble> gradMatPtr;
+    const std::string tagName;
+    const bool saveOnTag;
 
     OpGetFieldGradientValuesOnSkin(
         moab::Interface &post_proc_mesh,
@@ -792,8 +789,8 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          tagName(tag_name), sideOpFe(side_fe), feVolName(vol_fe_name),
-          gradMatPtr(grad_mat_ptr), saveOnTag(save_on_tag) {}
+          sideOpFe(side_fe), feVolName(vol_fe_name),
+	  gradMatPtr(grad_mat_ptr), tagName(tag_name), saveOnTag(save_on_tag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -836,6 +833,11 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
     MoFEMFunctionReturn(0);
   }
+
+  private:
+    MatrixDouble gaussPtsTri;
+    MatrixDouble gaussPtsQuad;
+
 };
 
 
