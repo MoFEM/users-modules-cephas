@@ -99,6 +99,15 @@ struct DataAtIntegrationPtsSimpleRods {
         mapSimpleRod[id].simpleRodYoungModulus = attributes[0];
         mapSimpleRod[id].simpleRodSectionArea = attributes[1];
         mapSimpleRod[id].simpleRodPreStress = attributes[2];
+
+        // Print spring blocks after being read
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSimple rod block %d\n", id);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tYoung's modulus %3.4g\n",
+                           attributes[0]);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tCross-section area %3.4g\n",
+                           attributes[1]);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tPrestress %3.4g\n",
+                           attributes[2]);
       }
     }
 
