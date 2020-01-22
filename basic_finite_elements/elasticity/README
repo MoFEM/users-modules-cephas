@@ -35,6 +35,16 @@ mpirun -np 2 ./elasticity \
 -pc_mg_type multiplicative \
 -log_view
 
+Spring
+======
+
+mpirun -np 2 ./elasticity \
+-my_file spring_LShape.h5m \
+-my_order 2 \
+-ksp_type cg \
+-pc_type asm \
+-sub_pc_type lu \
+-ksp_monitor
 
 Simple Rod
 ==========
