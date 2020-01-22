@@ -88,8 +88,8 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
 
-  CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
 
   CHKERR simple->addDomainField("OMEGA", L2, AINSWORTH_LEGENDRE_BASE, 1);
 
@@ -110,8 +110,10 @@ MoFEMErrorCode Example::setUP() {
   };
 
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
+  auto adj_skin_ents_edges = adj_skin_ents.subset_by_dimension(1);
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
-  CHKERR simple->setFieldOrder("SIGMA", order + 1, &adj_skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents);
+  //CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents_faces);
   CHKERR simple->setFieldOrder("OMEGA", order, &adj_skin_ents_faces);
 
   CHKERR simple->setUp();
