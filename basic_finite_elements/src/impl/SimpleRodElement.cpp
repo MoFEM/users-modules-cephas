@@ -153,8 +153,7 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
     if (!col_nb_dofs)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.eDges.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.eDges.end()) {
+    if (dAta.eDges.find(getFEEntityHandle()) == dAta.eDges.end()) {
       MoFEMFunctionReturnHot(0);
     }
 

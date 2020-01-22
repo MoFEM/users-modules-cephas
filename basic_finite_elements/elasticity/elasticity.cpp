@@ -301,9 +301,6 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.add_ents_to_field_by_type(edges_in_simple_rod, MBEDGE,
                                              "DISPLACEMENT");
-    // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
-    //                                                   MBEDGE,
-    //                                                   "DISPLACEMENT");
 
     // Set order of edge in rod to be 1
     CHKERR m_field.set_field_order(edges_in_simple_rod, "DISPLACEMENT", 1);
