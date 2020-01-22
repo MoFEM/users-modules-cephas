@@ -73,5 +73,9 @@ add_test(SimpleRod
   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
   -my_file ${CMAKE_CURRENT_SOURCE_DIR}/simple_rod_beam.h5m
   -my_order 1 
-)
+  -my_is_calculating_frequency 1
+  -ksp_type cg 
+  -pc_type asm 
+  -sub_pc_type lu 
+  -ksp_monitor)
 
