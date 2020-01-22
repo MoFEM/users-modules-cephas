@@ -1110,7 +1110,7 @@ int main(int argc, char *argv[]) {
       CHKERR MatMult(Mij, D, u1);
       double model_mass;
       CHKERR VecDot(u1, D, &model_mass);
-      PetscPrintf(PETSC_COMM_WORLD, "Model mass  %6.4e\n", model_mass);
+      // PetscPrintf(PETSC_COMM_WORLD, "Model mass  %6.4e\n", model_mass);
 
       // Calculate model stiffness, k = v^T * K * v where v = u / norm(u)
       double u_norm;
@@ -1118,7 +1118,7 @@ int main(int argc, char *argv[]) {
 
       // CHKERR VecScale(D,1./u_norm);     // v obtained
       CHKERR VecScale(D, 1. / 1.); // v obtained
-      PetscPrintf(PETSC_COMM_WORLD, "u_norm  %6.4e\n", u_norm);
+      // PetscPrintf(PETSC_COMM_WORLD, "u_norm  %6.4e\n", u_norm);
 
       Vec v1;
       VecDuplicate(D, &v1);
@@ -1126,8 +1126,8 @@ int main(int argc, char *argv[]) {
 
       double model_stiffness;
       CHKERR VecDot(v1, D, &model_stiffness);
-      PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n",
-                  model_stiffness);
+      // PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n",
+      //             model_stiffness);
 
       double frequency;
       double pi = 3.14159265359;
