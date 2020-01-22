@@ -61,22 +61,6 @@ struct MetaSimpleRodElement {
       boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr,
       const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
-
-  /**
-   * \brief Implementation of SimpleRod element. Set operators to calculate LHS and
-   * RHS
-   *
-   * @param t_normal            Local normal vector
-   * @param t_tangent1          First local tangent vector
-   * @param t_tangent2          Second local tangent vector
-   * @param t_spring_local      Spring stiffness in local coords
-   * @return t_spring_global    Spring stiffness in global coords
-  //  */
-  static FTensor::Tensor2<double, 3, 3>
-  transformLocalToGlobal(FTensor::Tensor1<double, 3> t_normal,
-                         FTensor::Tensor1<double, 3> t_tangent1,
-                         FTensor::Tensor1<double, 3> t_tangent2,
-                         FTensor::Tensor2<double, 3, 3> t_spring_local);
 };
 
 #endif //__SIMPLERODELEMENT_HPP__
