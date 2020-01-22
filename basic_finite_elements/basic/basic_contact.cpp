@@ -113,7 +113,7 @@ MoFEMErrorCode Example::setUP() {
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
   auto adj_skin_ents_edges = adj_skin_ents.subset_by_dimension(1);
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
-  CHKERR simple->setFieldOrder("SIGMA", order + 1, &adj_skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
   // CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents_faces);
   // CHKERR simple->setFieldOrder("OMEGA", order - 1, &adj_skin_ents_faces);
 
@@ -213,8 +213,8 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
     // pipeline.push_back(new OpRotationDomainContactLhs("OMEGA", "SIGMA"));
-    pipeline.push_back(
-        new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
+    // pipeline.push_back(
+    //     new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
     // pipeline.push_back(
     //     new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
   };
@@ -240,7 +240,7 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
+    // pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     // pipeline.push_back(new OpRotationDomainContactRhs("OMEGA", commonDataPtr));
     // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
