@@ -324,6 +324,9 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsMaster::doWork(
   auto normal_at_gp_master =
       get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0]);
 
+  auto normal_at_gp_slave =
+      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
   auto proj_normal_stress_master =
       getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
 
@@ -345,7 +348,11 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsMaster::doWork(
     proj_normal_stress_master +=
         t_stress(i, j) * normal_at_gp_master(i) * normal_at_gp_master(j);
 
+    // proj_normal_stress_master +=
+    //     t_stress(i, j) * normal_at_gp_master(i) * normal_at_gp_slave(j);
+
     ++proj_normal_stress_master;
+    ++normal_at_gp_slave;
   }
 
   MoFEMFunctionReturn(0);
@@ -1007,6 +1014,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalPenaltyRhsMaster::doWork(
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     if (gap_gp > 0) {
       ++gap_gp;
+      ++t_w;
       continue;
     }
 
@@ -1064,9 +1072,15 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
   };
 
   FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
 
   auto const_unit_n =
-      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+      get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0], 0);
+
+  auto const_unit_n_slave = get_tensor_vec(
+      commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
 
   auto t_w = getFTensor0IntegrationWeightMaster();
   auto proj_normal_stress_master =
@@ -1076,40 +1090,68 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
 
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+  auto tilde_c_nitsche_fun =
+      getFTensor0FromVec(*commonDataSimpleContact->tildeCFunNitschePtr);
 
-      // if (gap_gp > 0) {
-      //   ++gap_gp;
-      //   continue;
-      // }
-      // ++gap_gp;
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      // cerr << "Stresses "
-      //      << 0.5 * (proj_normal_stress_master + proj_normal_stress_slave)
-      //      << "\n";
-      // Here for average stress
-      const double val_m =
-          0.5 * t_w * area_m *
-          (proj_normal_stress_master /*+ proj_normal_stress_slave*/);
+    MatrixDouble3by3 &stress =
+        commonDataSimpleContact->elasticityCommonDataMaster.sTress[gg];
 
-      FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+    FTensor::Tensor2<double *, 3, 3> t_stress(
+        &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
+        &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
+        &stress(2, 2));
 
-      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+    // if (gap_gp > 0) {
+    //   ++gap_gp;
+    // ++t_w;
+    // ++proj_normal_stress_master;
+    // ++proj_normal_stress_slave;
+    //   continue;
+    // }
+    // ++gap_gp;
 
-        auto t_assemble_m = get_tensor_vec(vec_f, 3 * bbc);
+    // cerr << "Stresses "
+    //      << 0.5 * (proj_normal_stress_master + proj_normal_stress_slave)
+    //      << "\n";
+    // Here for average stress
+    const double val_m =
+        t_w * area_m ;
 
-        t_assemble_m(i) += val_m * const_unit_n(i) * t_base_master;
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
 
-        ++t_base_master;
-      }
-      ++t_w;
-      ++proj_normal_stress_master;
-      //++proj_normal_stress_slave;
-    } // for gauss points
+    for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-    Vec f;
-    if (F == PETSC_NULL) {
-      f = getFEMethod()->snes_f;
+      auto t_assemble_m = get_tensor_vec(vec_f, 3 * bbc);
+
+      // t_assemble_m(i) -=
+      //     val_m *
+      //     (omegaVal * proj_normal_stress_slave * const_unit_n_slave(i) -
+      //      (1. - omegaVal) * t_stress(i,j) * const_unit_n(j)) *
+      //     t_base_master;
+
+      t_assemble_m(i) +=
+          val_m *
+          (omegaVal * proj_normal_stress_slave * const_unit_n_slave(i) +
+           (1. - omegaVal) * proj_normal_stress_master *
+               const_unit_n_slave(i)) *
+          t_base_master;
+
+      t_assemble_m(i) += t_w * area_m * tilde_c_nitsche_fun *
+                         const_unit_n_slave(i) * t_base_master;
+
+      ++t_base_master;
+    }
+    ++t_w;
+    ++proj_normal_stress_master;
+    ++proj_normal_stress_slave;
+    ++tilde_c_nitsche_fun;
+  } // for gauss points
+
+  Vec f;
+  if (F == PETSC_NULL) {
+    f = getFEMethod()->snes_f;
     } else {
       f = F;
     }
@@ -1156,6 +1198,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalPenaltyRhsSlave::doWork(
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
   if (gap_gp > 0) {
       ++gap_gp;
+      ++t_w;
       continue;
     }
     const double val_s = t_w * area_s * cN;
@@ -1212,9 +1255,14 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsSlave::doWork(
   };
 
   FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
 
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+
+  auto const_unit_master =
+      get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0], 0);
 
   auto t_w = getFTensor0IntegrationWeightSlave();
 
@@ -1225,40 +1273,78 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsSlave::doWork(
 
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+  auto tilde_c_nitsche_fun =
+      getFTensor0FromVec(*commonDataSimpleContact->tildeCFunNitschePtr);
 
-      // if (gap_gp > 0) {
-      //   ++gap_gp;
-      //   continue;
-      // }
-      // ++gap_gp;
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      // cerr << "Stresses Master "
-      //      << proj_normal_stress_master << " Stresses Slave "
-      //      <<proj_normal_stress_slave <<"\n";
-      // 0.5 * (sigma_master + sigma_slave)
-      const double val_s =
-          0.5 * t_w * area_s *
-          (/*proj_normal_stress_master +*/ proj_normal_stress_slave);
+    // if (gap_gp > 0) {
+    //   ++gap_gp;
+    //   ++t_w;
+    //   ++proj_normal_stress_master;
+    //   ++proj_normal_stress_slave;
+    //   continue;
+    // }
+    // ++gap_gp;
 
-      FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+    // cerr << "Stresses Master "
+    //      << proj_normal_stress_master << " Stresses Slave "
+    //      <<proj_normal_stress_slave <<"\n";
+    // 0.5 * (sigma_master + sigma_slave)
+    const double val_s = t_w * area_s ;
 
-      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+    MatrixDouble3by3 &stress =
+        commonDataSimpleContact->elasticityCommonDataMaster.sTress[gg];
 
-        auto t_assemble_s = get_tensor_vec(vec_f, 3 * bbc);
+    FTensor::Tensor2<double *, 3, 3> t_stress(
+        &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
+        &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
+        &stress(2, 2));
 
-        t_assemble_s(i) -= val_s * const_unit_n(i) * t_base_slave;
+    // MatrixDouble3by3 &stress =
+    //     commonDataSimpleContact->elasticityCommonData.sTress[gg];
 
-        ++t_base_slave;
-      }
-      ++t_w;
-      ++proj_normal_stress_master;
-      ++proj_normal_stress_slave;
-    } // for gauss points
+    // FTensor::Tensor2<double *, 3, 3> t_stress(
+    //     &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
+    //     &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
+    //     &stress(2, 2));
 
-    Vec f;
-    if (F == PETSC_NULL) {
-      f = getFEMethod()->snes_f;
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+      auto t_assemble_s = get_tensor_vec(vec_f, 3 * bbc);
+
+      // t_assemble_s(i) -= t_w * area_s * omegaVal  * t_stress(i, j) *
+      //                    const_unit_n(j) * t_base_slave;
+
+      // t_assemble_s(i) +=
+      //     val_s *
+      //     (omegaVal * proj_normal_stress_slave * const_unit_n(i) -
+      //      (1 - omegaVal) * t_stress(k, j) * const_unit_master(j) *
+      //          const_unit_master(k) *const_unit_master(i)) *
+      //     t_base_slave;
+
+      t_assemble_s(i) -=
+          val_s *
+          (omegaVal * proj_normal_stress_slave * const_unit_n(i) +
+           (1. - omegaVal) * proj_normal_stress_master * const_unit_n(i)) *
+          t_base_slave;
+
+      t_assemble_s(i) -= t_w * area_s * tilde_c_nitsche_fun * const_unit_n(i) * t_base_slave;
+
+      ++t_base_slave;
+    }
+
+    ++t_w;
+    ++proj_normal_stress_master;
+    ++proj_normal_stress_slave;
+    ++tilde_c_nitsche_fun;
+  } // for gauss points
+
+  Vec f;
+  if (F == PETSC_NULL) {
+    f = getFEMethod()->snes_f;
     } else {
       f = F;
     }
@@ -1402,6 +1488,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0], 0);
 
+  auto const_unit_slave = get_tensor_vec(
+      commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+
   auto t_w = getFTensor0IntegrationWeight();
 
   // k.resize(nb_row, nb_row, false);
@@ -1409,10 +1498,14 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
   jac.resize(9, nb_row, false);
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
+  auto tilde_c_nitsche_fun =
+      getFTensor0FromVec(*commonDataSimpleContact->tildeCFunNitschePtr);
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     // cerr << "RHS  " << commonData.jacStress[gg] << "\n";
     // if (gap_gp > 0) {
     //   ++gap_gp;
+    //   ++t_w;
     //   continue;
     // }
   
@@ -1461,7 +1554,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
     // }
     
     //half for the average stress story
-    const double val_m = 0.5 * t_w * area_m * gap_gp;
+    const double val_m = thetaSVal * tilde_c_nitsche_fun * (1 - omegaVal) *  t_w * area_m / cN;
     // cerr << "\n \n"
     //      << "start " << jac << "\n";
     FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
@@ -1477,6 +1570,8 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
     }
     ++t_w;
     ++gap_gp;
+    ++tilde_c_nitsche_fun;
+    ++const_unit_slave;
   }
   // cerr << "\n \n"
   //      << "start f_n " << vec_f << "\n";
@@ -1504,10 +1599,34 @@ MoFEMErrorCode SimpleContactProblem::OpLoopForRowDataOnMaster::doWork(
   if (nb_row == 0)
     MoFEMFunctionReturnHot(0);
   
+  if(type == MBVERTEX)
+    commonDataSimpleContact->masterRowData->clear();
+
+        // masterRowData =
+        //     boost::make_shared<std::vector<DataForcesAndSourcesCore::EntData
+        //     *>>();
+
+        commonDataSimpleContact->masterRowData->push_back(&data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpLoopForRowDataOnSlave::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+
+  int nb_row = data.getIndices().size();
+  if (nb_row == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type == MBVERTEX)
+    commonDataSimpleContact->slaveRowData->clear();
+
   // masterRowData =
   //     boost::make_shared<std::vector<DataForcesAndSourcesCore::EntData *>>();
 
-  commonDataSimpleContact->masterRowData->push_back(&data);
+  commonDataSimpleContact->slaveRowData->push_back(&data);
 
   MoFEMFunctionReturn(0);
 }
@@ -1538,6 +1657,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlave_dx::doWork(
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'m', 3> m;
+  FTensor::Index<'k', 3> k;
 
   vec_f.resize(3 * nb_base_fun_row,
                false); // the last false in ublas
@@ -1563,9 +1683,13 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlave_dx::doWork(
   jac.resize(9, nb_row, false);
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
+auto tilde_c_nitsche_fun =
+      getFTensor0FromVec(*commonDataSimpleContact->tildeCFunNitschePtr);
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     // if (gap_gp > 0) {
     //   ++gap_gp;
+    //   ++t_w;
     //   continue;
     // }
     CHKERR getJac(data, gg);
@@ -1631,8 +1755,16 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlave_dx::doWork(
     // }
 
     // half for the average stress story
-    const double val_s = 0.5 * t_w * area_s * gap_gp;
+    // cerr << " Theta S Val " << thetaSVal << "\n";
+    // cerr << " Omega Val " << omegaVal << "\n";
+    // cerr << " cN " << cN << "\n";
 
+    const double val_s =
+        thetaSVal * tilde_c_nitsche_fun * omegaVal * t_w * area_s / cN;
+    // cerr << "cN " << cN << "\n";
+    // cerr << "omegaVal " << omegaVal << "\n";
+    // cerr << "thetaSVal " << thetaSVal << "\n";
+    
     FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
 
     for (int bbc = 0; bbc != nb_base_fun_row; ++bbc) {
@@ -1640,12 +1772,13 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlave_dx::doWork(
       auto t_assemble_s = get_tensor_vec(vec_f, 3 * bbc);
 
       t_assemble_s(j) += val_s * t3_1(i, m, j) * const_unit_n(i) *
-                         const_unit_n(m); // base not needed
+                         const_unit_n(m) ; // base not needed
       ++t3_1;
       ++t_base_slave;
     }
     ++t_w;
     ++gap_gp;
+    ++tilde_c_nitsche_fun;
   }
 
   // CHKERR aSemble(side, type, data);
@@ -1679,7 +1812,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
-
+  
   const int nb_row = row_data.getIndices().size();
   if (!nb_row)
     MoFEMFunctionReturnHot(0);
@@ -1691,8 +1824,10 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
   int nb_base_fun_row = row_data.getFieldData().size() / 3;
   int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
+  
+
   if (col_side == MBVERTEX && row_side == MBVERTEX)
-    cerr << "Passed\n";
+    // cerr << "Passed\n";
 
   const double area_slave =
       commonDataSimpleContact->areaSlave; // same area in master and slave
@@ -1735,103 +1870,126 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
 
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+  auto nitsche_gap_diff_prod =
+      getFTensor0FromVec(*commonDataSimpleContact->nitscheGapDiffProductPtr);
 
-      // if (gap_gp > 0) {
-      //   ++gap_gp;
-      //   continue;
-      // }
-      // ++gap_gp;
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-      // cerr << "Jack! " << commonData.jacStress[gg] << " \n";
-      CHKERR getJac(col_data, gg);
+    // if (gap_gp > 0) {
+    //   ++gap_gp;
+    //   continue;
+    // }
+    // ++gap_gp;
+
+    // cerr << "Jack! " << commonData.jacStress[gg] << " \n";
+    CHKERR getJac(col_data, gg);
+    // cerr << "2qwe qwe\n";
+    // double val = getVolume() * getGaussPts()(3, gg);
+    // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+    //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+    // }
+    FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
+        &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
+        &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),
+        &jac(3 * 0 + 2, 0), &jac(3 * 0 + 2, 1), &jac(3 * 0 + 2, 2),
+        &jac(3 * 1 + 0, 0), &jac(3 * 1 + 0, 1), &jac(3 * 1 + 0, 2),
+        &jac(3 * 1 + 1, 0), &jac(3 * 1 + 1, 1), &jac(3 * 1 + 1, 2),
+        &jac(3 * 1 + 2, 0), &jac(3 * 1 + 2, 1), &jac(3 * 1 + 2, 2),
+        &jac(3 * 2 + 0, 0), &jac(3 * 2 + 0, 1), &jac(3 * 2 + 0, 2),
+        &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
+        &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
+    // for (int cc = 0; cc != nb_col / 3; cc++) {
+    //   FTensor::Tensor1<double *, 3> diff_base_functions =
+    //       row_data.getFTensor1DiffN<3>(gg, 0);
+    //   FTensor::Tensor2<double *, 3, 3> lhs(
+    //       &k(0, 3 * cc + 0), &k(0, 3 * cc + 1), &k(0, 3 * cc + 2),
+    //       &k(1, 3 * cc + 0), &k(1, 3 * cc + 1), &k(1, 3 * cc + 2),
+    //       &k(2, 3 * cc + 0), &k(2, 3 * cc + 1), &k(2, 3 * cc + 2), 3 *
+    //       nb_col);
+    //   for (int rr = 0; rr != nb_row / 3; rr++) {
+    //     lhs(i, j) += val * t3_1(i, m, j) * diff_base_functions(m);
+    //     ++diff_base_functions;
+    //     ++lhs;
+    //   }
+    //   ++t3_1;
+    // }
+
+    // half for the average stress story
+    const double val_m = 0.5 * t_w * area_s;
+    FTensor::Tensor0<double *> t_base_master_col(&col_data.getN()(gg, 0));
+    for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+      // cerr << "2\n";
+
+      CHKERR getJacRow(row_data, gg);
       // cerr << "2qwe qwe\n";
       // double val = getVolume() * getGaussPts()(3, gg);
       // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
       //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
       // }
-      FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
-          &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
-          &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),
-          &jac(3 * 0 + 2, 0), &jac(3 * 0 + 2, 1), &jac(3 * 0 + 2, 2),
-          &jac(3 * 1 + 0, 0), &jac(3 * 1 + 0, 1), &jac(3 * 1 + 0, 2),
-          &jac(3 * 1 + 1, 0), &jac(3 * 1 + 1, 1), &jac(3 * 1 + 1, 2),
-          &jac(3 * 1 + 2, 0), &jac(3 * 1 + 2, 1), &jac(3 * 1 + 2, 2),
-          &jac(3 * 2 + 0, 0), &jac(3 * 2 + 0, 1), &jac(3 * 2 + 0, 2),
-          &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
-          &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
-      // for (int cc = 0; cc != nb_col / 3; cc++) {
-      //   FTensor::Tensor1<double *, 3> diff_base_functions =
-      //       row_data.getFTensor1DiffN<3>(gg, 0);
-      //   FTensor::Tensor2<double *, 3, 3> lhs(
-      //       &k(0, 3 * cc + 0), &k(0, 3 * cc + 1), &k(0, 3 * cc + 2),
-      //       &k(1, 3 * cc + 0), &k(1, 3 * cc + 1), &k(1, 3 * cc + 2),
-      //       &k(2, 3 * cc + 0), &k(2, 3 * cc + 1), &k(2, 3 * cc + 2), 3 *
-      //       nb_col);
-      //   for (int rr = 0; rr != nb_row / 3; rr++) {
-      //     lhs(i, j) += val * t3_1(i, m, j) * diff_base_functions(m);
-      //     ++diff_base_functions;
-      //     ++lhs;
-      //   }
-      //   ++t3_1;
-      // }
+      FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
+          &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
+          &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
+          &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
+          &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1),
+          &jac_row(3 * 0 + 2, 2), &jac_row(3 * 1 + 0, 0),
+          &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
+          &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1),
+          &jac_row(3 * 1 + 1, 2), &jac_row(3 * 1 + 2, 0),
+          &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
+          &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1),
+          &jac_row(3 * 2 + 0, 2), &jac_row(3 * 2 + 1, 0),
+          &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
+          &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1),
+          &jac_row(3 * 2 + 2, 2));
 
-      // half for the average stress story
-      const double val_m = 0.5 * t_w * area_s;
-      FTensor::Tensor0<double *> t_base_master_col(&col_data.getN()(gg, 0));
-      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-        // cerr << "2\n";
+      FTensor::Tensor0<double *> t_base_master_row(&row_data.getN()(gg, 0));
 
-        CHKERR getJacRow(row_data, gg);
-        // cerr << "2qwe qwe\n";
-        // double val = getVolume() * getGaussPts()(3, gg);
-        // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
-        //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        // }
-        FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
-            &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1), &jac_row(3 * 0 + 0, 2),
-            &jac_row(3 * 0 + 1, 0), &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
-            &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1), &jac_row(3 * 0 + 2, 2),
-            &jac_row(3 * 1 + 0, 0), &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
-            &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1), &jac_row(3 * 1 + 1, 2),
-            &jac_row(3 * 1 + 2, 0), &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
-            &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1), &jac_row(3 * 2 + 0, 2),
-            &jac_row(3 * 2 + 1, 0), &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
-            &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1), &jac_row(3 * 2 + 2, 2));
+      const double sum_prod = 1. + nitsche_gap_diff_prod;
+      const double diff_prod = 1. - nitsche_gap_diff_prod;
 
-        FTensor::Tensor0<double *> t_base_master_row(
-            &row_data.getN()(gg, 0));
+      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+        // cerr << "213123\n";
 
-        for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-          // cerr << "213123\n";
+        auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
+        t_assemble_m(m, k) += val_m * (1. - omegaVal) * t3_1(i, j, k) *
+                              const_unit_n_master(i) * const_unit_n_master(j) *
+                              const_unit_n_slave(m) *
+                              t_base_master_row; // base not needed
 
-          t_assemble_m(m, k ) += val_m *
-                                t3_1(i, j, k) * const_unit_n_master(i) *
-                                const_unit_n_master(j) *
-                                const_unit_n_slave(m) *
-                                t_base_master_row; // base not needed
+        cerr << sum_prod << "sum_prod\n";
+        cerr << diff_prod << "diff_prod\n";
+cerr << omegaVal << "omegaVal\n";
+        t_assemble_m(m, k) +=
+            val_m *
+            (diff_prod * (1. - omegaVal) * t3_1(i, j, k) *
+                 const_unit_n_master(i) * const_unit_n_master(j) +
+             sum_prod * cN * t_base_master_col * const_unit_n_slave(k)) *
+            (const_unit_n_slave(m) * t_base_master_row +
+             (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
+                 const_unit_n_master(i) * const_unit_n_master(j) /
+                 cN); // base not needed
 
-          t_assemble_m(k, m) += val_m * t3_1_row(i, j, k) *
-                                const_unit_n_master(i) *
-                                const_unit_n_master(j) * const_unit_n_slave(m) *
-                                t_base_master_col; // base not needed
+        // t_assemble_m(m, k) += val_m * (1. - omegaVal) * t3_1_row(i, j, k) *
+        //                       const_unit_n_master(i) * const_unit_n_master(j) *
+        //                       const_unit_n_slave(m) *
+        //                       t_base_master_col; // base not needed
 
-          // t_assemble_m(m, k) += t_assemble_m(k, m);
+        // t_assemble_m(m, k) += t_assemble_m(k, m);
 
-          ++t_base_master_row;
-          ++t3_1_row;
-        }
-        ++t3_1;
-        ++t_base_master_col;
+        ++t_base_master_row;
+        ++t3_1_row;
       }
-      ++t_w;
+      ++t3_1;
+      ++t_base_master_col;
     }
-    // CHKERR aSemble(side, type, data);
-    Mat aij;
-    if (Aij == PETSC_NULL) {
-      aij = getFEMethod()->snes_B;
+    ++t_w;
+    ++nitsche_gap_diff_prod;
+  }
+  // CHKERR aSemble(side, type, data);
+  Mat aij;
+  if (Aij == PETSC_NULL) {
+    aij = getFEMethod()->snes_B;
     } else {
       aij = Aij;
     }
@@ -1850,74 +2008,103 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::getJac(
 }
 
 MoFEMErrorCode
+SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::getJacRow(
+    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+  return get_jac_contact<0>(col_data, gg, commonData.jacStress[gg], jac_row);
+}
+
+MoFEMErrorCode
 SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
+    int col_side, EntityType col_type,
     DataForcesAndSourcesCore::EntData &col_data) {
+
   MoFEMFunctionBegin;
 
-  const int nb_row = row_data.getIndices().size();
-  if (!nb_row)
-    MoFEMFunctionReturnHot(0);
+  // const int nb_row = row_data.getIndices().size();
+  // if (!nb_row)
+  //   MoFEMFunctionReturnHot(0);
   const int nb_col = col_data.getIndices().size();
   if (!nb_col)
     MoFEMFunctionReturnHot(0);
-  const int nb_gauss_pts = row_data.getN().size1();
-  cerr << "Row " << nb_row << " Col " << nb_col << "\n";
-  int nb_base_fun_row =
-      row_data.getFieldData().size() / 3;
-  int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
-  const double area_slave =
-      commonDataSimpleContact->areaSlave; // same area in master and slave
+  // boost::shared_ptr<std::vector<DataForcesAndSourcesCore::EntData *>>
+  //     masterRowData;
+  for (std::vector<DataForcesAndSourcesCore::EntData *>::iterator row_data =
+           commonDataSimpleContact->slaveRowData->begin();
+       row_data != commonDataSimpleContact->slaveRowData->end(); ++row_data) {
 
-  auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-    return FTensor::Tensor2<double *, 3, 3>(
-        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
-        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
-        &m(r + 2, c + 2));
-  };
+    const int nb_row = (*row_data)->getIndices().size();
+    if (!nb_row)
+      continue;
 
-  auto get_tensor_vec = [](VectorDouble &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
+    // cerr << " row SlaveMaster asd" << (*row_data)->getIndices() << "\n";
+    // cerr << " col " << col_data.getIndices() << "\n";
 
-  NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
-  NN.clear();
+    const int nb_gauss_pts = (*row_data)->getN().size1();
 
-  FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
-  FTensor::Index<'m', 3> m;
-  FTensor::Index<'k', 3> k;
+    int nb_base_fun_row = (*row_data)->getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
-  const double area_s =
-      commonDataSimpleContact->areaSlave; // same area in master and slave
+    // cerr << "OpStressDerivativeGapMasterSlave_dx "
+    //      << " Row " << nb_row << " Col " << nb_col << " indices "
+    //      << col_data.getIndices() << "\n";
 
-  auto const_unit_n_master =
-      get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0]);
+    // cerr << " base funs row " << nb_base_fun_row << " base funs  cols "
+    //      << nb_base_fun_col << " indices rows " << (*row_data)->getIndices()
+    //      << "\n";
 
-  auto const_unit_n_slave =
-      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+    const double area_slave =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
 
-  auto t_w = getFTensor0IntegrationWeight();
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor2<double *, 3, 3>(
+          &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+          &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+          &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+    };
 
-  // k.resize(nb_row, nb_row, false);
-  // k.clear();
-  jac.resize(9, nb_col, false);
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
 
-  auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+    NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+    NN.clear();
 
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    NNT.resize(3 * nb_base_fun_col, 3 * nb_base_fun_row, false);
+    NNT.clear();
 
-    //   if (gap_gp > 0) {
-    //   ++gap_gp;
-    //   continue;
-    // }
-    // ++gap_gp;
-  
-      // cerr << "Jack! " << commonData.jacStress[gg] << " \n";
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'m', 3> m;
+    FTensor::Index<'k', 3> k;
+
+    const double area_s =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+    auto const_unit_n_master =
+        get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0]);
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    // k.resize(nb_row, nb_row, false);
+    // k.clear();
+    jac.resize(9, nb_col, false);
+    jac_row.resize(9, nb_row, false);
+
+    auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+      // if (gap_gp > 0) {
+      //   ++gap_gp;
+      //   continue;
+      // }
+      // ++gap_gp;
+
       CHKERR getJac(col_data, gg);
-      // cerr << "2qwe qwe\n";
       // double val = getVolume() * getGaussPts()(3, gg);
       // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
       //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
@@ -1934,7 +2121,7 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
           &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
       // for (int cc = 0; cc != nb_col / 3; cc++) {
       //   FTensor::Tensor1<double *, 3> diff_base_functions =
-      //       row_data.getFTensor1DiffN<3>(gg, 0);
+      //       (*row_data)->getFTensor1DiffN<3>(gg, 0);
       //   FTensor::Tensor2<double *, 3, 3> lhs(
       //       &k(0, 3 * cc + 0), &k(0, 3 * cc + 1), &k(0, 3 * cc + 2),
       //       &k(1, 3 * cc + 0), &k(1, 3 * cc + 1), &k(1, 3 * cc + 2),
@@ -1948,27 +2135,81 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
       //   ++t3_1;
       // }
 
+      FTensor::Tensor0<double *> t_base_slave_col(&col_data.getN()(gg, 0));
       // half for the average stress story
       const double val_m = 0.5 * t_w * area_s;
       for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-        // cerr << "2\n";
+        FTensor::Tensor0<double *> t_base_master_row(
+            &(*row_data)->getN()(gg, 0));
 
-        FTensor::Tensor0<double *> t_base_slave_row(&row_data.getN()(gg, 0));
+        // CHKERR getJacRow(row_data, gg);
+        // // cerr << "2qwe qwe\n";
+        // // double val = getVolume() * getGaussPts()(3, gg);
+        // // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+        // //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+        // // }
+        // FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
+        //     &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
+        //     &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
+        //     &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
+        //     &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1),
+        //     &jac_row(3 * 0 + 2, 2), &jac_row(3 * 1 + 0, 0),
+        //     &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
+        //     &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1),
+        //     &jac_row(3 * 1 + 1, 2), &jac_row(3 * 1 + 2, 0),
+        //     &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
+        //     &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1),
+        //     &jac_row(3 * 2 + 0, 2), &jac_row(3 * 2 + 1, 0),
+        //     &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
+        //     &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1),
+        //     &jac_row(3 * 2 + 2, 2));
 
+        CHKERR getJacRow(**row_data, gg);
+
+        // double val = getVolume() * getGaussPts()(3, gg);
+        // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+        //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+        // }
+        // cerr << " Row: gg " << gg << " rows " << nb_base_fun_row << "\n";
+        FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
+            &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
+            &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
+            &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
+            &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1),
+            &jac_row(3 * 0 + 2, 2), &jac_row(3 * 1 + 0, 0),
+            &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
+            &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1),
+            &jac_row(3 * 1 + 1, 2), &jac_row(3 * 1 + 2, 0),
+            &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
+            &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1),
+            &jac_row(3 * 2 + 0, 2), &jac_row(3 * 2 + 1, 0),
+            &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
+            &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1),
+            &jac_row(3 * 2 + 2, 2));
         for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-          // cerr << "213123\n";
 
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
+          auto t_assemble_s = get_tensor_from_mat(NNT, 3 * bbc, 3 * bbr);
 
-          t_assemble_m(m, k) -= val_m *
-                                (t3_1(i, j, k) * const_unit_n_master(i) *
-                                 const_unit_n_master(j)) *
-                                const_unit_n_slave(m) *
-                                t_base_slave_row; // base not needed
+          // t_assemble_m(m, k) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
+          //                       const_unit_n_master(j) * const_unit_n(m) *
+          //                       t_base_master_row; // base not needed
+          
+            t_assemble_s(m, k) += val_m * t3_1_row(i, j, k) *
+                                  const_unit_n_master(i) *
+                                  const_unit_n_master(j) * const_unit_n(m) *
+                                  t_base_slave_col; // base not needed
+          // if (gap_gp <= 0)
+            t_assemble_m(k, m) += val_m * t3_1_row(i, j, k) * const_unit_n(i) *
+                                  const_unit_n(j) * const_unit_n(m) *
+                                  t_base_slave_col; // base not needed
 
-          ++t_base_slave_row;
+          // cerr << "Master Stress : " << t_assemble_m << "\n";
+          ++t3_1_row;
+          ++t_base_master_row;
         }
         ++t3_1;
+        ++t_base_slave_col;
       }
       ++t_w;
     }
@@ -1980,12 +2221,392 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
       aij = Aij;
     }
 
-    CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+//  cerr << "Cols New " << (*row_data)->getIndices() << " \n";
+
+//     cerr << "Rows New " << col_data.getIndices() << " \n";
+
+//      cerr << " NN " << NN << "\n";
+    CHKERR MatSetValues(aij, nb_row, &(*row_data)->getIndices()[0], nb_col,
                         &col_data.getIndices()[0], &*NN.data().begin(),
                         ADD_VALUES);
-
-    MoFEMFunctionReturn(0);
+// noalias(NNT) = trans(NN);
+    CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
+                        &(*row_data)->getIndices()[0], &*NNT.data().begin(),
+                        ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode
+SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx2::getJac(
+    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+  return get_jac_contact<0>(col_data, gg, commonData.jacStress[gg], jac);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx2::getJacRow(
+    DataForcesAndSourcesCore::EntData &col_data, int gg) {
+  return get_jac_contact<0>(col_data, gg, commonDataSlave.jacStress[gg],
+                            jac_row);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx2::doWork(
+    int col_side, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  // const int nb_row = row_data.getIndices().size();
+  // if (!nb_row)
+  //   MoFEMFunctionReturnHot(0);
+  const int nb_col = col_data.getIndices().size();
+  if (!nb_col)
+    MoFEMFunctionReturnHot(0);
+
+  // boost::shared_ptr<std::vector<DataForcesAndSourcesCore::EntData *>>
+  //     masterRowData;
+  for (std::vector<DataForcesAndSourcesCore::EntData *>::iterator row_data =
+           commonDataSimpleContact->slaveRowData->begin();
+       row_data != commonDataSimpleContact->slaveRowData->end(); ++row_data) {
+
+    const int nb_row = (*row_data)->getIndices().size();
+    if (!nb_row)
+      continue;
+
+    // cerr << " row SlaveMaster asd" << (*row_data)->getIndices() << "\n";
+    // cerr << " col " << col_data.getIndices() << "\n";
+
+    const int nb_gauss_pts = (*row_data)->getN().size1();
+
+    int nb_base_fun_row = (*row_data)->getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+    // cerr << "OpStressDerivativeGapMasterSlave_dx "
+    //      << " Row " << nb_row << " Col " << nb_col << " indices "
+    //      << col_data.getIndices() << "\n";
+
+    // cerr << " base funs row " << nb_base_fun_row << " base funs  cols "
+    //      << nb_base_fun_col << " indices rows " << (*row_data)->getIndices()
+    //      << "\n";
+
+    const double area_slave =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor2<double *, 3, 3>(
+          &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+          &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+          &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+    };
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+    NN.clear();
+
+    NNT.resize(3 * nb_base_fun_col, 3 * nb_base_fun_row, false);
+    NNT.clear();
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'m', 3> m;
+    FTensor::Index<'k', 3> k;
+
+    const double area_s =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+    auto const_unit_n_master =
+        get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0]);
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    // k.resize(nb_row, nb_row, false);
+    // k.clear();
+    jac.resize(9, nb_col, false);
+    jac_row.resize(9, nb_row, false);
+
+    auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+      // if (gap_gp > 0) {
+      //   ++gap_gp;
+      //   continue;
+      // }
+      // ++gap_gp;
+
+      CHKERR getJac(col_data, gg);
+      // double val = getVolume() * getGaussPts()(3, gg);
+      // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+      //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+      // }
+      FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
+          &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
+          &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),
+          &jac(3 * 0 + 2, 0), &jac(3 * 0 + 2, 1), &jac(3 * 0 + 2, 2),
+          &jac(3 * 1 + 0, 0), &jac(3 * 1 + 0, 1), &jac(3 * 1 + 0, 2),
+          &jac(3 * 1 + 1, 0), &jac(3 * 1 + 1, 1), &jac(3 * 1 + 1, 2),
+          &jac(3 * 1 + 2, 0), &jac(3 * 1 + 2, 1), &jac(3 * 1 + 2, 2),
+          &jac(3 * 2 + 0, 0), &jac(3 * 2 + 0, 1), &jac(3 * 2 + 0, 2),
+          &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
+          &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
+      // for (int cc = 0; cc != nb_col / 3; cc++) {
+      //   FTensor::Tensor1<double *, 3> diff_base_functions =
+      //       (*row_data)->getFTensor1DiffN<3>(gg, 0);
+      //   FTensor::Tensor2<double *, 3, 3> lhs(
+      //       &k(0, 3 * cc + 0), &k(0, 3 * cc + 1), &k(0, 3 * cc + 2),
+      //       &k(1, 3 * cc + 0), &k(1, 3 * cc + 1), &k(1, 3 * cc + 2),
+      //       &k(2, 3 * cc + 0), &k(2, 3 * cc + 1), &k(2, 3 * cc + 2), 3 *
+      //       nb_col);
+      //   for (int rr = 0; rr != nb_row / 3; rr++) {
+      //     lhs(i, j) += val * t3_1(i, m, j) * diff_base_functions(m);
+      //     ++diff_base_functions;
+      //     ++lhs;
+      //   }
+      //   ++t3_1;
+      // }
+
+      FTensor::Tensor0<double *> t_base_slave_col(&col_data.getN()(gg, 0));
+      // half for the average stress story
+      const double val_m = 0.5 * t_w * area_s;
+      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+        FTensor::Tensor0<double *> t_base_master_row(
+            &(*row_data)->getN()(gg, 0));
+
+        // CHKERR getJacRow(row_data, gg);
+        // // cerr << "2qwe qwe\n";
+        // // double val = getVolume() * getGaussPts()(3, gg);
+        // // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+        // //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+        // // }
+        // FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
+        //     &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
+        //     &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
+        //     &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
+        //     &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1),
+        //     &jac_row(3 * 0 + 2, 2), &jac_row(3 * 1 + 0, 0),
+        //     &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
+        //     &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1),
+        //     &jac_row(3 * 1 + 1, 2), &jac_row(3 * 1 + 2, 0),
+        //     &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
+        //     &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1),
+        //     &jac_row(3 * 2 + 0, 2), &jac_row(3 * 2 + 1, 0),
+        //     &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
+        //     &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1),
+        //     &jac_row(3 * 2 + 2, 2));
+
+        CHKERR getJacRow(**row_data, gg);
+
+        // double val = getVolume() * getGaussPts()(3, gg);
+        // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+        //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+        // }
+        // cerr << " Row: gg " << gg << " rows " << nb_base_fun_row << "\n";
+        FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
+            &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
+            &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
+            &jac_row(3 * 0 + 1, 1), &jac_row(3 * 0 + 1, 2),
+            &jac_row(3 * 0 + 2, 0), &jac_row(3 * 0 + 2, 1),
+            &jac_row(3 * 0 + 2, 2), &jac_row(3 * 1 + 0, 0),
+            &jac_row(3 * 1 + 0, 1), &jac_row(3 * 1 + 0, 2),
+            &jac_row(3 * 1 + 1, 0), &jac_row(3 * 1 + 1, 1),
+            &jac_row(3 * 1 + 1, 2), &jac_row(3 * 1 + 2, 0),
+            &jac_row(3 * 1 + 2, 1), &jac_row(3 * 1 + 2, 2),
+            &jac_row(3 * 2 + 0, 0), &jac_row(3 * 2 + 0, 1),
+            &jac_row(3 * 2 + 0, 2), &jac_row(3 * 2 + 1, 0),
+            &jac_row(3 * 2 + 1, 1), &jac_row(3 * 2 + 1, 2),
+            &jac_row(3 * 2 + 2, 0), &jac_row(3 * 2 + 2, 1),
+            &jac_row(3 * 2 + 2, 2));
+
+        for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+
+          auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
+          auto t_assemble_s = get_tensor_from_mat(NNT, 3 * bbc, 3 * bbr);
+
+          // t_assemble_m(m, k) += val_m * t3_1(i, j, k) *
+          // const_unit_n_master(i) *
+          //                       const_unit_n_master(j) * const_unit_n(m) *
+          //                       t_base_master_row; // base not needed
+
+          t_assemble_s(m, k) += val_m * t3_1_row(i, j, k) *
+                                const_unit_n_master(i) *
+                                const_unit_n_master(j) * const_unit_n(m) *
+                                t_base_slave_col; // base not needed
+
+          t_assemble_m(k, m) += val_m * t3_1_row(i, j, k) * const_unit_n(i) *
+                                const_unit_n(j) * const_unit_n(m) *
+                                t_base_slave_col; // base not needed
+          // cerr << "Master Stress : " << t_assemble_m << "\n";
+          ++t3_1_row;
+          ++t_base_master_row;
+        }
+        ++t3_1;
+        ++t_base_slave_col;
+      }
+      ++t_w;
+    }
+    // CHKERR aSemble(side, type, data);
+    Mat aij;
+    if (Aij == PETSC_NULL) {
+      aij = getFEMethod()->snes_B;
+    } else {
+      aij = Aij;
+    }
+    // cerr << " NN " << NN << "\n";
+    // CHKERR MatSetValues(aij, nb_row, &(*row_data)->getIndices()[0], nb_col,
+    //                     &col_data.getIndices()[0], &*NN.data().begin(),
+    //                     ADD_VALUES);
+
+    // CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
+    //                     &(*row_data)->getIndices()[0], &*NNT.data().begin(),
+    //                     ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+// MoFEMErrorCode
+// SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
+//     int row_side, int col_side, EntityType row_type, EntityType col_type,
+//     DataForcesAndSourcesCore::EntData &row_data,
+//     DataForcesAndSourcesCore::EntData &col_data) {
+//   MoFEMFunctionBegin;
+
+//   const int nb_row = row_data.getIndices().size();
+//   if (!nb_row)
+//     MoFEMFunctionReturnHot(0);
+//   const int nb_col = col_data.getIndices().size();
+//   if (!nb_col)
+//     MoFEMFunctionReturnHot(0);
+//   const int nb_gauss_pts = row_data.getN().size1();
+//   cerr << "Row " << nb_row << " Col " << nb_col << "\n";
+//   int nb_base_fun_row =
+//       row_data.getFieldData().size() / 3;
+//   int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+//   const double area_slave =
+//       commonDataSimpleContact->areaSlave; // same area in master and slave
+
+//   auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+//     return FTensor::Tensor2<double *, 3, 3>(
+//         &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+//         &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+//         &m(r + 2, c + 2));
+//   };
+
+//   auto get_tensor_vec = [](VectorDouble &n) {
+//     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+//   };
+
+//   NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+//   NN.clear();
+
+//   FTensor::Index<'i', 3> i;
+//   FTensor::Index<'j', 3> j;
+//   FTensor::Index<'m', 3> m;
+//   FTensor::Index<'k', 3> k;
+
+//   const double area_s =
+//       commonDataSimpleContact->areaSlave; // same area in master and slave
+
+//   auto const_unit_n_master =
+//       get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr.get()[0]);
+
+//   auto const_unit_n_slave =
+//       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+//   auto t_w = getFTensor0IntegrationWeight();
+
+//   // k.resize(nb_row, nb_row, false);
+//   // k.clear();
+//   jac.resize(9, nb_col, false);
+
+//   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+//   for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+//     //   if (gap_gp > 0) {
+//     //   ++gap_gp;
+//     //   continue;
+//     // }
+//     // ++gap_gp;
+  
+//       // cerr << "Jack! " << commonData.jacStress[gg] << " \n";
+//       CHKERR getJac(col_data, gg);
+//       // cerr << "2qwe qwe\n";
+//       // double val = getVolume() * getGaussPts()(3, gg);
+//       // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
+//       //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+//       // }
+//       FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
+//           &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
+//           &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),
+//           &jac(3 * 0 + 2, 0), &jac(3 * 0 + 2, 1), &jac(3 * 0 + 2, 2),
+//           &jac(3 * 1 + 0, 0), &jac(3 * 1 + 0, 1), &jac(3 * 1 + 0, 2),
+//           &jac(3 * 1 + 1, 0), &jac(3 * 1 + 1, 1), &jac(3 * 1 + 1, 2),
+//           &jac(3 * 1 + 2, 0), &jac(3 * 1 + 2, 1), &jac(3 * 1 + 2, 2),
+//           &jac(3 * 2 + 0, 0), &jac(3 * 2 + 0, 1), &jac(3 * 2 + 0, 2),
+//           &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
+//           &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
+//       // for (int cc = 0; cc != nb_col / 3; cc++) {
+//       //   FTensor::Tensor1<double *, 3> diff_base_functions =
+//       //       row_data.getFTensor1DiffN<3>(gg, 0);
+//       //   FTensor::Tensor2<double *, 3, 3> lhs(
+//       //       &k(0, 3 * cc + 0), &k(0, 3 * cc + 1), &k(0, 3 * cc + 2),
+//       //       &k(1, 3 * cc + 0), &k(1, 3 * cc + 1), &k(1, 3 * cc + 2),
+//       //       &k(2, 3 * cc + 0), &k(2, 3 * cc + 1), &k(2, 3 * cc + 2), 3 *
+//       //       nb_col);
+//       //   for (int rr = 0; rr != nb_row / 3; rr++) {
+//       //     lhs(i, j) += val * t3_1(i, m, j) * diff_base_functions(m);
+//       //     ++diff_base_functions;
+//       //     ++lhs;
+//       //   }
+//       //   ++t3_1;
+//       // }
+
+//       // half for the average stress story
+//       const double val_m = 0.5 * t_w * area_s;
+//       for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+//         // cerr << "2\n";
+
+//         FTensor::Tensor0<double *> t_base_slave_row(&row_data.getN()(gg, 0));
+
+//         for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+//           // cerr << "213123\n";
+
+//           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
+
+//           t_assemble_m(m, k) -= val_m *
+//                                 (t3_1(i, j, k) * const_unit_n_master(i) *
+//                                  const_unit_n_master(j)) *
+//                                 const_unit_n_slave(m) *
+//                                 t_base_slave_row; // base not needed
+
+//           ++t_base_slave_row;
+//         }
+//         ++t3_1;
+//       }
+//       ++t_w;
+//     }
+//     // CHKERR aSemble(side, type, data);
+//     Mat aij;
+//     if (Aij == PETSC_NULL) {
+//       aij = getFEMethod()->snes_B;
+//     } else {
+//       aij = Aij;
+//     }
+
+//     CHKERR MatSetValues(aij, nb_row, &row_data.getIndices()[0], nb_col,
+//                         &col_data.getIndices()[0], &*NN.data().begin(),
+//                         ADD_VALUES);
+
+//     MoFEMFunctionReturn(0);
+// }
 
 
 
@@ -2168,15 +2789,15 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
           // t_assemble_m(m, k) -= val_m * t3_1(i, j, k) * const_unit_n(i) *
           //                       const_unit_n(j) * const_unit_n(m) *
           //                       t_base_slave_row; // base not needed
-
-          t_assemble_m(m, k) -= val_m * t3_1(i, j, k) * const_unit_n(i) *
-                                const_unit_n(j) * const_unit_n(m) *
-                                t_base_slave_row; // base not needed
-
-          t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
-                                const_unit_n(i) *
-                                const_unit_n(j) * const_unit_n(m) *
-                                t_base_slave_col; // base not needed
+          
+            t_assemble_m(m, k) -= val_m * t3_1(i, j, k) * const_unit_n(i) *
+                                  const_unit_n(j) * const_unit_n(m) *
+                                  t_base_slave_row; // base not needed
+          // if(gap_gp > 0)
+          // t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
+          //                       const_unit_n(i) *
+          //                       const_unit_n(j) * const_unit_n(m) *
+          //                       t_base_slave_col; // base not needed
 
           ++t3_1_row;
           ++t_base_slave_row;
@@ -2185,6 +2806,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
         ++t3_1;
       }
       ++t_w;
+      ++gap_gp;
     }
     // CHKERR aSemble(side, type, data);
     Mat aij;
@@ -2203,7 +2825,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
 
 MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::getJac(
     DataForcesAndSourcesCore::EntData &col_data, int gg) {
-  return get_jac_contact<0>(col_data, gg, commonDataMaster.jacStress[gg], jac);
+  return get_jac_contact<0>(col_data, gg, commonData.jacStress[gg], jac);
 }
 
 MoFEMErrorCode
@@ -2242,8 +2864,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
     if (!nb_row)
       continue;
 
-    cerr << " row  asd" << (*row_data)->getIndices() << "\n";
-    cerr << " col " << col_data.getIndices()<< "\n";
+    
 
     const int nb_gauss_pts = (*row_data)->getN().size1();
 
@@ -2274,6 +2895,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
 
     NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
     NN.clear();
+
+    NNT.resize(3 * nb_base_fun_col, 3 * nb_base_fun_row, false);
+    NNT.clear();
 
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
@@ -2311,6 +2935,17 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
       // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
       //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
       // }
+      // FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
+      //     &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
+      //     &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),
+      //     &jac(3 * 0 + 2, 0), &jac(3 * 0 + 2, 1), &jac(3 * 0 + 2, 2),
+      //     &jac(3 * 1 + 0, 0), &jac(3 * 1 + 0, 1), &jac(3 * 1 + 0, 2),
+      //     &jac(3 * 1 + 1, 0), &jac(3 * 1 + 1, 1), &jac(3 * 1 + 1, 2),
+      //     &jac(3 * 1 + 2, 0), &jac(3 * 1 + 2, 1), &jac(3 * 1 + 2, 2),
+      //     &jac(3 * 2 + 0, 0), &jac(3 * 2 + 0, 1), &jac(3 * 2 + 0, 2),
+      //     &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
+      //     &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
+
       FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1(
           &jac(3 * 0 + 0, 0), &jac(3 * 0 + 0, 1), &jac(3 * 0 + 0, 2),
           &jac(3 * 0 + 1, 0), &jac(3 * 0 + 1, 1), &jac(3 * 0 + 1, 2),
@@ -2321,6 +2956,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
           &jac(3 * 2 + 0, 0), &jac(3 * 2 + 0, 1), &jac(3 * 2 + 0, 2),
           &jac(3 * 2 + 1, 0), &jac(3 * 2 + 1, 1), &jac(3 * 2 + 1, 2),
           &jac(3 * 2 + 2, 0), &jac(3 * 2 + 2, 1), &jac(3 * 2 + 2, 2));
+
       // for (int cc = 0; cc != nb_col / 3; cc++) {
       //   FTensor::Tensor1<double *, 3> diff_base_functions =
       //       (*row_data)->getFTensor1DiffN<3>(gg, 0);
@@ -2366,12 +3002,12 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
         //     &jac_row(3 * 2 + 2, 2));
 
         CHKERR getJacRow(**row_data, gg);
-        
+
         // double val = getVolume() * getGaussPts()(3, gg);
         // if ((!aLe) && (getHoGaussPtsDetJac().size() > 0)) {
         //   val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
         // }
-        cerr << " Row: gg " << gg << " rows " << nb_base_fun_row << "\n";
+        // cerr << " Row: gg " << gg << " rows " << nb_base_fun_row << "\n";
         FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3> t3_1_row(
             &jac_row(3 * 0 + 0, 0), &jac_row(3 * 0 + 0, 1),
             &jac_row(3 * 0 + 0, 2), &jac_row(3 * 0 + 1, 0),
@@ -2392,21 +3028,31 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
 
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          // t_assemble_m(k, m) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
-          //                       const_unit_n_master(j) * const_unit_n(m) *
+          auto t_assemble_s = get_tensor_from_mat(NNT, 3 * bbc, 3 * bbr);
+
+          // t_assemble_m(m, k) -= val_m * t3_1(i, j, k) * const_unit_n(i) *
+          //                       const_unit_n(j) * const_unit_n(m) *
           //                       t_base_master_row; // base not needed
 
-          t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
-                                const_unit_n_master(i) *
-                                const_unit_n_master(j) * const_unit_n(m) *
-                                t_base_slave_col; // base not needed
-          ++t3_1_row;
-          ++t_base_master_row;
+          
+            t_assemble_s(m, k) -= val_m * t3_1_row(i, j, k) *
+                                  const_unit_n_master(i) *
+                                  const_unit_n_master(j) * const_unit_n(m) *
+                                  t_base_slave_col; // base not needed
+            // if (gap_gp > 0){
+            //   t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
+            //                         const_unit_n_master(i) *
+            //                         const_unit_n_master(j) * const_unit_n(m) *
+            //                         t_base_slave_col; // base not needed
+            // }
+            ++t3_1_row;
+            ++t_base_master_row;
         }
         ++t3_1;
         ++t_base_slave_col;
       }
       ++t_w;
+      ++gap_gp;
     }
     // CHKERR aSemble(side, type, data);
     Mat aij;
@@ -2415,10 +3061,16 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
     } else {
       aij = Aij;
     }
+   
+    
+    CHKERR MatSetValues(aij, nb_row, &(*row_data)->getIndices()[0], nb_col,
+                        &col_data.getIndices()[0], &*NN.data().begin(),
+                        ADD_VALUES);
 
-    CHKERR MatSetValues(
-        aij, nb_row, &(*row_data)->getIndices()[0],
-        nb_col, &col_data.getIndices()[0], &*NN.data().begin(), ADD_VALUES);
+    // noalias(NNT) = trans(NN);
+    CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
+                        &(*row_data)->getIndices()[0], &*NNT.data().begin(),
+                        ADD_VALUES);
 }
     MoFEMFunctionReturn(0);
 }
@@ -2584,9 +3236,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dxCorrect:
 
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          t_assemble_m(m, k) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
-                                const_unit_n_master(j) * const_unit_n(m) *
-                                t_base_master_row; // base not needed
+          // t_assemble_m(m, k) += val_m * t3_1(i, j, k) * const_unit_n_master(i) *
+          //                       const_unit_n_master(j) * const_unit_n(m) *
+          //                       t_base_master_row; // base not needed
 
           t_assemble_m(k, m) += val_m * t3_1_row(i, j, k) *
                                 const_unit_n_master(i) *
@@ -3271,6 +3923,66 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunNitscheSlave::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->tildeCFunNitschePtr.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->tildeCFunNitschePtr.get()->clear();
+
+  commonDataSimpleContact->nitscheGapDiffProductPtr.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->nitscheGapDiffProductPtr.get()->clear();
+
+  auto nitsche_gap_diff_prod =
+      getFTensor0FromVec(*commonDataSimpleContact->nitscheGapDiffProductPtr);
+
+  auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+  auto proj_normal_stress_master =
+      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
+  auto proj_normal_stress_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
+
+  auto tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunNitschePtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    const double cg = cN * gap_gp;
+
+    // const double regular_abs = fabs(lambda_gap_diff);
+    const double p_n_omega = omegaVal * proj_normal_stress_slave +
+                             (1 - omegaVal) * proj_normal_stress_master;
+    const double lambda_gap_diff = p_n_omega - cg;
+    const double lambda_gap_sum = p_n_omega + cg;
+
+    const double regular_abs = fabs(lambda_gap_sum);
+    tilde_c_fun =
+        0.5 * (lambda_gap_diff + pow(regular_abs, r) / r); // is lagMult Correct?
+    // cerr << "tilde_c_fun " << tilde_c_fun << "\n";
+    const double exponent = r - 1.;
+
+    double sign = 0.;
+    sign = (lambda_gap_sum == 0) ? 0 : (lambda_gap_sum < 0) ? -1 : 1;
+    // cerr << "tilde_c_fun in fun " << tilde_c_fun<<"\n";
+    // if (lagrange_slave == 0. && cg == 0.)
+    // sign = 1.;
+    nitsche_gap_diff_prod = sign * pow(regular_abs, exponent);
+
+    ++gap_gp;
+    ++nitsche_gap_diff_prod;
+     ++proj_normal_stress_slave;
+     ++proj_normal_stress_master;
+    ++tilde_c_fun;
+  }
+  MoFEMFunctionReturn(0);
+}
 
 MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
@@ -3778,7 +4490,7 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlaveH1L2::doWork(
                       &commonDataSimpleContact->l2ColData->getIndices()[0],
                       &*NN.data().begin(), ADD_VALUES);
 
-  cerr << "Passed \n";
+  // cerr << "Passed \n";
 
   MoFEMFunctionReturn(0);
 }
@@ -4529,6 +5241,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactSimplePenaltyMasterMaster::doWork(
 
     if (gap_gp > 0) {
       ++gap_gp;
+      ++t_w;
       continue;
     }
 
@@ -4617,6 +5330,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactSimplePenaltyMasterSlave::doWork(
 
     if (gap_gp > 0) {
       ++gap_gp;
+      ++t_w;
       continue;
     }
 
@@ -4705,6 +5419,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactSimplePenaltySlaveSlave::doWork(
 
     if (gap_gp > 0) {
       ++gap_gp;
+      ++t_w;
       continue;
     }
 
@@ -4792,6 +5507,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactSimplePenaltySlaveMaster::doWork(
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
     if (gap_gp > 0) {
+      ++t_w;
       ++gap_gp;
       continue;
     }
@@ -6369,12 +7085,12 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
 
   if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
-
+ 
   int nb_dofs = data.getFieldData().size();
   if (nb_dofs == 0)
     MoFEMFunctionReturnHot(0);
   int nb_gauss_pts = data.getN().size1();
-
+  cerr << "CHEK\n";
   double def_vals;
   def_vals = 0;
 
@@ -6734,7 +7450,7 @@ MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSideLhsTest::doWork(
   if (!col_nb_dofs)
     MoFEMFunctionReturnHot(0);
 
-  commonDataSimpleContact->faceRowData = &row_data;
+  //commonDataSimpleContact->faceRowData = &row_data;
   const EntityHandle tri_master = getSideEntity(3, MBTRI);
   CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
 
@@ -6747,8 +7463,8 @@ MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSideLhsTest::doWork(
     DataForcesAndSourcesCore::EntData &col_data) {
   MoFEMFunctionBegin;
 
-  // if (row_type != MBTRI || col_type != MBTRI)
-  //   MoFEMFunctionReturnHot(0);
+  if (row_type != MBVERTEX || col_type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
 
   const int row_nb_dofs = row_data.getIndices().size();
   if (!row_nb_dofs)
@@ -6757,7 +7473,7 @@ MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSideLhsTest::doWork(
   if (!col_nb_dofs)
     MoFEMFunctionReturnHot(0);
 
-  commonDataSimpleContact->faceRowData = &row_data;
+  // commonDataSimpleContact->faceRowData = &row_data;
   const EntityHandle tri_master = getSideEntity(4, MBTRI);
   CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
 

@@ -49,6 +49,8 @@ int main(int argc, char *argv[]) {
                                  "-my_is_newton_cotes PETSC_FALSE \n"
                                  "-is_lag PETSC_TRUE \n"
                                  "-is_nitsche PETSC_FALSE \n"
+                                 "-my_omega_value 0\n"
+                                 "-my_theta_s_value 0\n"
                                  "-my_hdiv_trace PETSC_FALSE";
 
   string param_file = "param_file.petsc";
@@ -82,6 +84,8 @@ int main(int argc, char *argv[]) {
     PetscBool is_nitsche = PETSC_FALSE;
     PetscBool is_hdiv_trace = PETSC_FALSE;
     PetscInt master_move = 0;
+    PetscReal my_omega_value = 0.5;
+    PetscInt my_theta_s_value = 1;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -105,6 +109,10 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
 
+    CHKERR PetscOptionsReal("-my_omega_value",
+                            "default regularisation cn value", "", 1.,
+                            &my_omega_value, PETSC_NULL);
+
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
@@ -119,6 +127,9 @@ int main(int argc, char *argv[]) {
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_nitsche, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-my_theta_s_value", "test case", "", 0,
+                           &my_theta_s_value, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_hdiv_trace",
                             "set if mesh is partitioned (this result that each "
@@ -451,6 +462,9 @@ CHKERR m_field.build_fields();
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
         new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
 
+    contact_problem->omegaValue = my_omega_value;
+    contact_problem->thetaSValue = my_theta_s_value;
+
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms, is_lag);
@@ -572,6 +586,128 @@ CHKERR m_field.build_fields();
       }
     }
 
+    CHKERR m_field.add_finite_element("DUMMY_CONTACT_ELEM", MF_ZERO);
+    CHKERR m_field.modify_finite_element_add_field_col("DUMMY_CONTACT_ELEM",
+                                                       "SPATIAL_POSITION");
+
+    CHKERR m_field.modify_finite_element_add_field_row("DUMMY_CONTACT_ELEM",
+                                                       "SPATIAL_POSITION");
+
+    CHKERR m_field.modify_finite_element_add_field_data("DUMMY_CONTACT_ELEM",
+                                                        "SPATIAL_POSITION");
+
+    CHKERR m_field.add_ents_to_finite_element_by_type(contact_prisms, MBPRISM,
+                                                      "DUMMY_CONTACT_ELEM");
+
+    contact_problem->addContactElement("DUMMY_CONTACT_ELEM", "SPATIAL_POSITION",
+                                       "LAGMULT", contact_prisms, is_lag);
+
+    auto add_adjacencies_for_nitsche_prism =
+        [&](moab::Interface &moab, const Field &field,
+            const EntFiniteElement &fe, Range &adjacency) -> MoFEMErrorCode {
+      MoFEMFunctionBegin;
+
+      if (field.getName() != "SPATIAL_POSITION")
+        MoFEMFunctionReturnHot(0);
+
+      CHKERR DefaultElementAdjacency::defaultPrism(moab, field, fe, adjacency);
+
+      // find two tries from prism
+      const EntityHandle prism = fe.getEnt();
+      Range faces_range;
+      CHKERR moab.get_adjacencies(&prism, 1, 2, false, faces_range);
+
+      EntityHandle faces_mesh_set;
+      CHKERR moab.create_meshset(MESHSET_SET, faces_mesh_set);
+
+      CHKERR moab.add_entities(faces_mesh_set, faces_range);
+
+      Range tris;
+      CHKERR moab.get_entities_by_type(faces_mesh_set, MBTRI, tris, false);
+
+      cerr << "Field name " << field.getName() << "\n";
+      cerr << " size of tris!!!  " << tris.size() << "\n";
+
+      // find the two tets to be connected
+      Range all_rem_entities;
+
+      for (Range::iterator it_tris = tris.begin(); it_tris != tris.end();
+           it_tris++) {
+
+        Range init_vertex, init_edge, init_face;
+
+        // CHKERR moab.get_adjacencies(&*it_tris, 1, 0, true, init_vertex);
+        // CHKERR moab.get_adjacencies(&*it_tris, 1, 1, true, init_edge);
+        // CHKERR moab.get_adjacencies(&*it_tris, 1, 2, true, init_face);
+
+        Range vols_tet_range;
+        CHKERR moab.get_adjacencies(&*it_tris, 1, 3, true, vols_tet_range);
+        cerr << "volumes passed " << vols_tet_range.size() << " \n";
+
+        EntityHandle vol_mesh_set;
+        CHKERR moab.create_meshset(MESHSET_SET, vol_mesh_set);
+
+        CHKERR moab.add_entities(vol_mesh_set, vols_tet_range);
+
+        Range tet;
+        CHKERR moab.get_entities_by_type(vol_mesh_set, MBTET, tet, false);
+        // adjacency.merge(tet);
+
+        Range faces;
+        CHKERR moab.get_adjacencies(tet, 2, false, faces,
+                                    moab::Interface::UNION);
+
+        // adjacency.merge(faces);
+
+        Range edges;
+        CHKERR moab.get_adjacencies(tet, 1, false, edges,
+                                    moab::Interface::UNION);
+
+        // adjacency.merge(edges);
+
+        Range vertices;
+        CHKERR moab.get_adjacencies(tet, 0, false, vertices,
+                                    moab::Interface::UNION);
+
+        // adjacency.merge(vertices);
+        all_rem_entities.merge(tet);
+        all_rem_entities.merge(faces);
+        all_rem_entities.merge(edges);
+        all_rem_entities.merge(vertices);
+
+        cerr << " all_rem_entities " << all_rem_entities.size() << "\n";
+
+        // Range rem_vertex, rem_edge, rem_face;
+        // rem_vertex = subtract(vertices, init_vertex);
+        // rem_edge = subtract(edges, init_edge);
+        // rem_face = subtract(faces, init_face);
+        // all_rem_entities.merge(rem_vertex);
+        // all_rem_entities.merge(rem_edge);
+        // all_rem_entities.merge(rem_face);
+
+        // there is an issue with RefElement_PRISM::getSideNumberPtr
+        // otherwise
+
+        // adjacency.merge(rem_vertex);
+        // adjacency.merge(rem_edge);
+        // adjacency.merge(rem_face);
+      }
+      Range sub_ent = subtract(all_rem_entities, adjacency);
+      cerr << " sub_ents size " << sub_ent.size() << "\n";
+      for (auto e : sub_ent)
+        const_cast<SideNumber_multiIndex &>(fe.getSideNumberTable())
+            .insert(boost::shared_ptr<SideNumber>(new SideNumber(e, -1, 0, 0)));
+
+      cerr << " Total number of entities !!!  " << adjacency.size() << "\n";
+      adjacency.merge(sub_ent);
+      cerr << " Total number of entities 2 !!!  " << adjacency.size() << "\n";
+
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR m_field.modify_finite_element_adjacency_table(
+        "DUMMY_CONTACT_ELEM", MBPRISM, add_adjacencies_for_nitsche_prism);
+
     // contact_problem->commonDataSimpleContact->elasticityCommonData
     //     .forcesOnlyOnEntitiesRow();
 
@@ -606,6 +742,8 @@ CHKERR m_field.build_fields();
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+    if(is_nitsche)
+      CHKERR DMMoFEMAddElement(dm, "DUMMY_CONTACT_ELEM");
     // CHKERR DMMoFEMAddElement(dm, "L2MATERIAL");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
@@ -842,7 +980,8 @@ for (; mit != neumann_forces.end(); mit++) {
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
 
-    if (is_hdiv_trace) {
+    if (is_hdiv_trace ) {
+
       contact_problem->setContactOperatorsForPostProcHdiv(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
           "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
@@ -851,6 +990,7 @@ for (; mit != neumann_forces.end(); mit++) {
           contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
           is_lag);
     } else {
+
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
           "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
@@ -858,7 +998,7 @@ for (; mit != neumann_forces.end(); mit++) {
               ->setOfMasterFacesData[1],
           contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
           is_lag);
-
+      if(is_lag)
       fe_post_proc_simple_contact_vertex->getOpPtrVector().push_back(
           new SimpleContactProblem::OpLagMultOnVertex(m_field, "LAGMULT",
                                                       mb_post_vertex));
