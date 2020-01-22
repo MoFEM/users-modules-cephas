@@ -91,11 +91,11 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
   CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
-  CHKERR simple->addDomainField("OMEGA", L2, AINSWORTH_LEGENDRE_BASE, 1);
+  // CHKERR simple->addDomainField("OMEGA", L2, AINSWORTH_LEGENDRE_BASE, 1);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
-  CHKERR simple->setFieldOrder("OMEGA", -1);
+  // CHKERR simple->setFieldOrder("OMEGA", -1);
 
   auto ger_adj_skin_ents = [&](auto &&skin_ents) {
     Range skin_verts;
@@ -113,9 +113,9 @@ MoFEMErrorCode Example::setUP() {
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
   auto adj_skin_ents_edges = adj_skin_ents.subset_by_dimension(1);
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
-  CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order + 1, &adj_skin_ents);
   // CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents_faces);
-  CHKERR simple->setFieldOrder("OMEGA", order - 1, &adj_skin_ents_faces);
+  // CHKERR simple->setFieldOrder("OMEGA", order - 1, &adj_skin_ents_faces);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -163,7 +163,7 @@ MoFEMErrorCode Example::createCommonData() {
     t_C(0, 0, 1, 1) -= a * poisson_ratio;
     t_C(1, 1, 0, 0) -= a * poisson_ratio;
 
-    t_C(0, 1, 0, 1) = (1 + poisson_ratio) / young_modulus;
+    t_C(0, 1, 0, 1) = a * (1 + poisson_ratio);
 
     MoFEMFunctionReturn(0);
   };
@@ -212,11 +212,11 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    pipeline.push_back(new OpRotationDomainContactLhs("OMEGA", "SIGMA"));
+    // pipeline.push_back(new OpRotationDomainContactLhs("OMEGA", "SIGMA"));
     pipeline.push_back(
         new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
-    pipeline.push_back(
-        new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
+    // pipeline.push_back(
+    //     new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -233,15 +233,15 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpCalculateVectorFieldValues<2>(
         "U", commonDataPtr->contactDispPtr));
-    pipeline.push_back(new OpCalculateScalarFieldValues(
-        "OMEGA", commonDataPtr->contactOmegaPtr, MBTRI));
+    // pipeline.push_back(new OpCalculateScalarFieldValues(
+        // "OMEGA", commonDataPtr->contactOmegaPtr, MBTRI));
 
     pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
-    pipeline.push_back(new OpRotationDomainContactRhs("OMEGA", commonDataPtr));
+    // pipeline.push_back(new OpRotationDomainContactRhs("OMEGA", commonDataPtr));
     // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
@@ -254,15 +254,15 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
-    // pipeline.push_back(
-    //     new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     // pipeline.push_back(
     //     new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
-    // pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
   add_domain_base_ops(basic->getOpDomainLhsPipeline());

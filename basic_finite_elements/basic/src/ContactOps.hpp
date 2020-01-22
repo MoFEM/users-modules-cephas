@@ -422,14 +422,14 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
 
       const double alpha = t_w * l;
 
-      FTensor::Tensor1<double, 2> t_rhs;
-      t_rhs(i) = t_tangent_tensor(i, j) * t_disp(j);
+      // FTensor::Tensor1<double, 2> t_rhs;
+      // t_rhs(i) = t_tangent_tensor(i, j) * t_disp(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
         const double beta = alpha * (t_base(i) * t_normal(i));
 
-        t_nf(i) += beta * t_rhs(i);
+        t_nf(i) += beta * t_disp(i);
 
         ++t_nf;
         ++t_base;
@@ -696,7 +696,9 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
           const double beta = alpha * row_base * t_col_base;
 
-          t_mat(i, j) += beta * t_tangent_tensor(i, j);
+          t_mat(0, 0) += beta;
+          t_mat(1, 1) += beta;
+          // t_tangent_tensor(i, j);
 
           ++t_col_base;
           ++t_mat;
@@ -843,11 +845,12 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
       for (; bb != nb_dofs / 2; ++bb) {
         const double t_div_base = t_diff_base(0, 0) + t_diff_base(1, 1);
 
-        t_nf(i) +=
-            alpha * (t_base(j) * t_epsilon(i, j) + t_div_base * t_disp(i));
-        t_nf(i) += alpha * (t_base(j) * FTensor::levi_civita(i, j)) *
-                   (FTensor::levi_civita(k, l) * t_grad(k, l) / 2);
-        t_nf(i) += alpha * (t_base(j) * FTensor::levi_civita(i, j)) * t_omega;
+        t_nf(i) += alpha * (t_base(j) * t_epsilon(i, j)); 
+            
+        //     + t_div_base * t_disp(i));
+        // t_nf(i) += alpha * (t_base(j) * FTensor::levi_civita(i, j)) *
+        //            (FTensor::levi_civita(k, l) * t_grad(k, l) / 2);
+        // t_nf(i) += alpha * (t_base(j) * FTensor::levi_civita(i, j)) * t_omega;
 
         ++t_nf;
         ++t_base;
