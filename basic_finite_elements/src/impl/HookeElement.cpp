@@ -36,11 +36,7 @@ HookeElement::OpCalculateStrainAle::OpCalculateStrainAle(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, false),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 MoFEMErrorCode HookeElement::OpCalculateStrainAle::doWork(int row_side,
@@ -90,11 +86,7 @@ HookeElement::OpCalculateEnergy::OpCalculateEnergy(
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Vec ghost_vec)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts), ghostVec(ghost_vec) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
   if (ghostVec != PETSC_NULL) {
     ierr = PetscObjectReference((PetscObject)ghostVec);
     CHKERRABORT(PETSC_COMM_SELF, ierr);
@@ -163,11 +155,7 @@ HookeElement::OpCalculateEshelbyStress::OpCalculateEshelbyStress(
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 MoFEMErrorCode HookeElement::OpCalculateEshelbyStress::doWork(
@@ -1151,11 +1139,7 @@ HookeElement::OpCalculateStiffnessScaledByDensityField::
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
       rhoAtGaussPtsPtr(rho_at_gauss_pts), rhoN(rho_n), rHo0(rho_0) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 MoFEMErrorCode HookeElement::OpCalculateStiffnessScaledByDensityField::doWork(

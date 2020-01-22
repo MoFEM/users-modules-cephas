@@ -202,7 +202,6 @@ struct HookeElement {
         blockSetsPtr; ///< Structure keeping data about problem, like
                       ///< material parameters
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
-    int lastEvaluatedId;
   };
 
   struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
@@ -503,11 +502,7 @@ HookeElement::OpCalculateStrain<D>::OpCalculateStrain(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <bool D>
@@ -646,13 +641,8 @@ HookeElement::OpCalculateHomogeneousStiffness<S>::
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
-      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-      lastEvaluatedId(-1) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts) {
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
@@ -662,49 +652,43 @@ MoFEMErrorCode HookeElement::OpCalculateHomogeneousStiffness<S>::doWork(
 
   for (auto &m : (*blockSetsPtr)) {
     if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
-        m.second.tEts.end())
-      // NOTE: The stiffness Matrix is calculated only once, since is
-      // constant for
-      // all integration points and all elements in the block.
-      if (lastEvaluatedId != m.second.iD) {
+        m.second.tEts.end()) {
 
-        lastEvaluatedId = m.second.iD;
+      dataAtPts->stiffnessMat->resize(36, 1, false);
+      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+          MAT_TO_DDG(dataAtPts->stiffnessMat));
+      const double young = m.second.E;
+      const double poisson = m.second.PoissonRatio;
 
-        dataAtPts->stiffnessMat->resize(36, 1, false);
-        FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-            MAT_TO_DDG(dataAtPts->stiffnessMat));
-        const double young = m.second.E;
-        const double poisson = m.second.PoissonRatio;
+      // coefficient used in intermediate calculation
+      const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
 
-        // coefficient used in intermediate calculation
-        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
 
-        FTensor::Index<'i', 3> i;
-        FTensor::Index<'j', 3> j;
-        FTensor::Index<'k', 3> k;
-        FTensor::Index<'l', 3> l;
+      t_D(i, j, k, l) = 0.;
 
-        t_D(i, j, k, l) = 0.;
+      t_D(0, 0, 0, 0) = 1 - poisson;
+      t_D(1, 1, 1, 1) = 1 - poisson;
+      t_D(2, 2, 2, 2) = 1 - poisson;
 
-        t_D(0, 0, 0, 0) = 1 - poisson;
-        t_D(1, 1, 1, 1) = 1 - poisson;
-        t_D(2, 2, 2, 2) = 1 - poisson;
+      t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+      t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+      t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
 
-        t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-        t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-        t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+      t_D(0, 0, 1, 1) = poisson;
+      t_D(1, 1, 0, 0) = poisson;
+      t_D(0, 0, 2, 2) = poisson;
+      t_D(2, 2, 0, 0) = poisson;
+      t_D(1, 1, 2, 2) = poisson;
+      t_D(2, 2, 1, 1) = poisson;
 
-        t_D(0, 0, 1, 1) = poisson;
-        t_D(1, 1, 0, 0) = poisson;
-        t_D(0, 0, 2, 2) = poisson;
-        t_D(2, 2, 0, 0) = poisson;
-        t_D(1, 1, 2, 2) = poisson;
-        t_D(2, 2, 1, 1) = poisson;
+      t_D(i, j, k, l) *= coefficient;
 
-        t_D(i, j, k, l) *= coefficient;
-
-        break;
-      }
+      break;
+    }
   }
 
   MoFEMFunctionReturn(0);
@@ -716,11 +700,7 @@ HookeElement::OpCalculateStress<S>::OpCalculateStress(
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
@@ -1143,11 +1123,7 @@ HookeElement::OpAleLhsPre_dX_dx<S>::OpAleLhsPre_dX_dx(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
