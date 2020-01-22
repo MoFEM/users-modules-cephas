@@ -1,0 +1,72 @@
+reset
+
+brick x 1 y 5 z 1
+
+create vertex -0.5 -2.5 5 color
+create curve vertex 9 vertex 3
+
+create vertex 0.5 -2.5 5 color
+create curve vertex 11 vertex 2
+
+merge vertex 3 with vertex 10
+merge vertex 2 with vertex 12
+
+
+# Material properties, units: N, mm
+{young_modulus = 20}
+{poisson_ratio = 0.2}
+block 1 volume 1
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2  
+block 1 attribute index 1 {young_modulus}
+block 1 attribute index 2 {poisson_ratio}
+
+# Material properties for ROD, units: N, mm
+{bar_id=13}
+{young_modulus_rod = 1}	# 100 makes cables too stiff to be able to stretch
+{cross_section_area = 5}	# hand calculated from the geometry
+{pre_stress=0.1}		# unit of stress, N/mm2
+block 2 curve {bar_id} 14
+block 2 name 'ROD'  
+block 2 attribute count 3
+block 2 attribute index 1 {young_modulus_rod}
+block 2 attribute index 2 {cross_section_area}
+block 2 attribute index 3 {pre_stress}
+
+# Mesh
+{fixed_vertex_id=9}
+curve {bar_id} 14 interval 1
+curve {bar_id} 14 scheme bias factor 1 start vertex {fixed_vertex_id}
+mesh curve {bar_id} 14 
+
+
+volume 1 scheme tetmesh
+volume 1 size auto factor 7
+mesh volume 1
+
+
+# Boundary conditions
+
+create displacement on surface 3 dof 1 dof 2 dof 3 fix 0
+
+create displacement on vertex 9 dof 1 dof 2 dof 3 fix 0
+create displacement on vertex 11 dof 1 dof 2 dof 3 fix 0
+
+
+
+
+# Pressures need to be created seperately to avoid Cubit bug
+#{force_vertex_id=2}
+#create force on vertex {force_vertex_id} force value 7 direction curve 1
+
+create pressure on surface 1 magnitude 0.5
+
+
+#rotate volume 1 angle 65 about z include_merged
+#rotate volume 1 angle 65 about x include_merged
+
+
+save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/elasticity/simple_rod_beam.cub" overwrite
+
+
+
