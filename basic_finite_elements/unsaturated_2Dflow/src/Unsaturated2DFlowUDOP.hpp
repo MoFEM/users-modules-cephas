@@ -40,15 +40,9 @@ namespace UFOperators2D {
     Range block_ents;
 
     BlockData()
-    : K_s(4.8000)
-    , ll(0.5000)
-    , theta_r(0.01000000)
-    , theta_s(0.45000000)
-    , theta_m(0.45008000)
-    , nn(1.17200000)
-    , alpha(0.00170000)
-    , h_s(-2.0000)
-    {}
+        : K_s(1.000), ll(0.5000), theta_r(0.0450), theta_s(0.4300),
+          theta_m(0.4300000), nn(5.3800000), alpha(1.812500), h_s(0.0000) {
+    }
 
     double get_waterContent(double head){
       double ret_val;
@@ -158,6 +152,8 @@ namespace UFOperators2D {
 
   };
 
+  BlockData block_map;
+
 
   struct PreviousData {
     MatrixDouble grads;    ///< Gradients of field "u" at integration points
@@ -183,23 +179,24 @@ namespace UFOperators2D {
       MoFEMFunctionBegin;
       const int nb_dofs = data.getIndices().size();
       if (nb_dofs) {
-        auto find_block_data = [&]() {
-          EntityHandle fe_ent = getFEEntityHandle();
-          BlockData *block_raw_ptr = nullptr;
-          for (auto &m : setOfBlock) {
-            if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
-              block_raw_ptr = &m.second;
-              break;
-            }
-          }
-          return block_raw_ptr;
-        };
+        // auto find_block_data = [&]() {
+        //   EntityHandle fe_ent = getFEEntityHandle();
+        //   BlockData *block_raw_ptr = nullptr;
+        //   for (auto &m : setOfBlock) {
+        //     if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+        //       block_raw_ptr = &m.second;
+        //       break;
+        //     }
+        //   }
+        //   return block_raw_ptr;
+        // };
 
-        auto block_data_ptr = find_block_data();
-        if (!block_data_ptr)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+        // auto block_data_ptr = find_block_data();
+        // // if (!block_data_ptr)
+        // //   SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
 
-        auto &block_data = *block_data_ptr;
+        // auto &block_data = *block_data_ptr;
+
 
         vecF.resize(nb_dofs, false);
         vecF.clear();
@@ -221,8 +218,8 @@ namespace UFOperators2D {
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
 
-          const double K_h = block_data.get_conductivity(t_val);
-          const double C_h = block_data.get_capacity(t_val); 
+          const double K_h = block_map.get_conductivity(t_val);
+          const double C_h = block_map.get_capacity(t_val); 
           for (int rr = 0; rr != nb_dofs; ++rr) {
             vecF[rr] += a * (t_base * C_h * t_dot_val + K_h *
             t_diff_base(i) * t_grad(i));
@@ -268,23 +265,23 @@ namespace UFOperators2D {
       // cerr << "In doWork() : (row, col) = (" << nb_row_dofs << ", " <<
       // nb_col_dofs << ")" << endl;
       if (nb_row_dofs && nb_col_dofs) {
-        auto find_block_data = [&]() {
-          EntityHandle fe_ent = getFEEntityHandle();
-          BlockData *block_raw_ptr = nullptr;
-          for (auto &m : setOfBlock) {
-            if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
-              block_raw_ptr = &m.second;
-              break;
-            }
-          }
-          return block_raw_ptr;
-        };
+        // auto find_block_data = [&]() {
+        //   EntityHandle fe_ent = getFEEntityHandle();
+        //   BlockData *block_raw_ptr = nullptr;
+        //   for (auto &m : setOfBlock) {
+        //     if (m.second.block_ents.find(fe_ent) != m.second.block_ents.end()) {
+        //       block_raw_ptr = &m.second;
+        //       break;
+        //     }
+        //   }
+        //   return block_raw_ptr;
+        // };
 
-        auto block_data_ptr = find_block_data();
-        if (!block_data_ptr)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
+        // auto block_data_ptr = find_block_data();
+        // if (!block_data_ptr)
+        //   SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "Block not found");
 
-        auto &block_data = *block_data_ptr;
+        // auto &block_data = *block_data_ptr;
 
         mat.resize(nb_row_dofs, nb_col_dofs, false);
         mat.clear();
@@ -307,10 +304,10 @@ namespace UFOperators2D {
 
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
-          const double K_h = block_data.get_conductivity(t_val);
-          const double C_h = block_data.get_capacity(t_val);
-          const double DK_h = block_data.get_diffConductivity(t_val);
-          const double DC_h = block_data.get_diffCapacity(t_val);
+          const double K_h = block_map.get_conductivity(t_val);
+          const double C_h = block_map.get_capacity(t_val);
+          const double DK_h = block_map.get_diffConductivity(t_val);
+          const double DC_h = block_map.get_diffCapacity(t_val);
 
           // cout << "C_h : " << C_h << endl; 
           for (int rr = 0; rr != nb_row_dofs; ++rr) {
