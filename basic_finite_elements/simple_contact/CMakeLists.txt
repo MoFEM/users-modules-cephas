@@ -42,11 +42,8 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
 #  DESTINATION ${BFE_MOD_DIR}
 #  PERMISSIONS OWNER_READ OWNER_WRITE)
 
-bfe_build_and_install(insert_prism_interface
-  ${CMAKE_CURRENT_SOURCE_DIR}/insert_prism_interface.cpp)
-
-bfe_build_and_install(test_simple_contact
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
+bfe_build_and_install(simple_contact
+    ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
 
 #if(ADOL-C_LIBRARY)
 
