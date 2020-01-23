@@ -1,7 +1,7 @@
 /** \file simple_contact.cpp
  * \example simple_contact.cpp
  *
- * Implementation of simple contact between surfaces with matching meshes
+ * Testing simple contact between surfaces with matching meshes
  *
  **/
 
@@ -45,9 +45,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
-                                 "-my_cn_value 1e3 \n"
-                                 "-my_is_newton_cotes 0 \n"
-                                 "-my_hdiv_trace 0";
+                                 "-my_cn_value 1. \n"
+                                 "-my_is_newton_cotes 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -66,34 +65,32 @@ int main(int argc, char *argv[]) {
   moab::Interface &moab = mb_instance; // create interface to database
 
   try {
-    PetscBool flg_block_config, flg_file;
-
+    PetscBool flg_file;
     char mesh_file_name[255];
     PetscInt order = 1;
-
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
-    PetscReal cn_value = -1;
+    PetscReal cn_value = 1.;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
-    PetscBool is_hdiv_trace = PETSC_FALSE;
-    PetscInt master_move = 0;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
 
-    CHKERR PetscOptionsInt("-my_order", "default approximation order", "", 1,
-                           &order, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_order",
+                           "default approximation order for spatial positions",
+                           "", 1, &order, PETSC_NULL);
+    CHKERR PetscOptionsInt(
+        "-my_order_lambda",
+        "default approximation order of Lagrange multipliers", "", 1,
+        &order_lambda, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
-                            "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
+                            "set if mesh is partitioned, i.e. each process "
+                            "keeps only part of the mesh",
                             "", PETSC_FALSE, &is_partitioned, PETSC_NULL);
-
-    CHKERR PetscOptionsInt("-my_master_move", "Move master?", "", 0,
-                           &master_move, PETSC_NULL);
 
     CHKERR PetscOptionsReal("-my_r_value", "default regularisation r value", "",
                             1., &r_value, PETSC_NULL);
@@ -102,32 +99,21 @@ int main(int argc, char *argv[]) {
                             "", 1., &cn_value, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
-                            "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
+                            "set if Newton-Cotes integration rules are used",
                             "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
-
-    CHKERR PetscOptionsBool("-my_hdiv_trace",
-                            "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
-                            "", PETSC_FALSE, &is_hdiv_trace, PETSC_NULL);
-
-    CHKERR PetscOptionsInt(
-        "-my_order_lambda",
-        "default approximation order of Lagrange multipliers", "", 1,
-        &order_lambda, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
-    // Read parameters from line command
+    // Check if mesh file was provided
     if (flg_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
     CHKERR DMRegister_MoFEM("DMMOFEM");
 
+    // Read mesh to MOAB
     if (is_partitioned == PETSC_TRUE) {
-      // Read mesh to MOAB
       const char *option;
       option = "PARALLEL=BCAST_DELETE;"
                "PARALLEL_RESOLVE_SHARED_ENTS;"
@@ -253,13 +239,6 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
 
-    cout << "contact_prisms: " << contact_prisms.size() << endl;
-    contact_prisms.print();
-    cout << "master_tris: " << master_tris.size() << endl;
-    master_tris.print();
-    cout << "slave_tris: " << slave_tris.size() << endl;
-    slave_tris.print();
-
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
@@ -280,19 +259,13 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-    if (is_hdiv_trace) {
-      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-    } else {
-      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                               MB_TAG_SPARSE, MF_ZERO);
+    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                             MB_TAG_SPARSE, MF_ZERO);
 
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
-    }
+    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+    CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
     // build field
     CHKERR m_field.build_fields();
@@ -302,7 +275,7 @@ int main(int argc, char *argv[]) {
       Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
       CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
     }
-    // MESH_NODE_POSITIONS
+    // Projection on "X" field
     {
       Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
@@ -409,17 +382,10 @@ int main(int argc, char *argv[]) {
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
 
-    if (is_hdiv_trace) {
-      contact_problem->setContactOperatorsRhsOperatorsHdiv(
-          fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
-      contact_problem->setContactOperatorsLhsOperatorsHdiv(
-          fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
-    } else {
-      contact_problem->setContactOperatorsRhsOperators(
-          fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
-      contact_problem->setContactOperatorsLhsOperators(
-          fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
-    }
+    contact_problem->setContactOperatorsRhsOperators(
+        fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
+    contact_problem->setContactOperatorsLhsOperators(
+        fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -541,15 +507,9 @@ int main(int argc, char *argv[]) {
     // moab_instance
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
-    if (is_hdiv_trace) {
-      contact_problem->setContactOperatorsForPostProcHdiv(
-          m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
-          mb_post);
-    } else {
-      contact_problem->setContactOperatorsForPostProc(
-          m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
-          mb_post);
-    }
+    contact_problem->setContactOperatorsForPostProc(
+        m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
+        mb_post);
 
     mb_post.delete_mesh();
 

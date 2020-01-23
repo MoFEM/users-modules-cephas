@@ -419,4 +419,24 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
   -file_name mesh_for_testing_surface_pressure_element.h5m
-  )
+)
+
+# SIMPLE CONTACT
+
+bfe_add_executable(test_simple_contact
+${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp
+)
+
+target_link_libraries(test_simple_contact
+users_modules
+mofem_finite_elements
+mofem_interfaces
+mofem_multi_indices
+mofem_petsc
+mofem_approx
+mofem_third_party
+mofem_cblas
+${MoFEM_PROJECT_LIBS}
+)
+
+cm_export_file("8cube_contact.cub" export_atom_tests_basic_fe)
