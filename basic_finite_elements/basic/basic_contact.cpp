@@ -208,9 +208,6 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    // pipeline.push_back(new OpRotationDomainContactLhs("OMEGA", "SIGMA"));
-    // pipeline.push_back(
-    //     new OpConstrainDomainLhs_dSigma("SIGMA", "SIGMA", commonDataPtr));
     pipeline.push_back(
         new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
   };
