@@ -167,9 +167,6 @@ int main(int argc, char *argv[]) {
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
                              cit->getName().c_str(), cit->getMeshsetId());
           EntityHandle cubit_meshset = cit->getMeshset();
-          Range tris;
-          CHKERR moab.get_entities_by_type(cubit_meshset, MBTRI, tris, true);
-          master_tris.merge(tris);
 
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
@@ -224,13 +221,23 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(
           bit_levels.size() - 1);
 
-      CHKERR moab.get_adjacencies(master_tris, 3, false, contact_prisms,
-                                  moab::Interface::UNION);
-      contact_prisms = contact_prisms.subset_by_type(MBPRISM);
-      Range faces;
-      CHKERR moab.get_adjacencies(contact_prisms, 2, false, faces,
-                                  moab::Interface::UNION);
-      slave_tris = subtract(faces.subset_by_type(MBTRI), master_tris);
+      EntityHandle meshset_prisms;
+      CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
+      CHKERR m_field.getInterface<BitRefManager>()
+          ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
+                                         MBPRISM, meshset_prisms);
+      CHKERR moab.get_entities_by_handle(meshset_prisms, contact_prisms);
+
+      EntityHandle tri;
+      for (Range::iterator pit = contact_prisms.begin();
+           pit != contact_prisms.end(); pit++) {
+        CHKERR moab.side_element(*pit, 2, 3, tri);
+        // TODO: handle possible error
+        master_tris.insert(tri);
+        CHKERR moab.side_element(*pit, 2, 4, tri);
+        // TODO: handle possible error
+        slave_tris.insert(tri);
+      }
 
       MoFEMFunctionReturn(0);
     };
@@ -245,11 +252,11 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
 
-    cout << "contact_prisms:" << contact_prisms.size() << endl;
+    cout << "contact_prisms: " << contact_prisms.size() << endl;
     contact_prisms.print();
-    cout << "master_tris:" << master_tris.size() << endl;
+    cout << "master_tris: " << master_tris.size() << endl;
     master_tris.print();
-    cout << "slave_tris:" << slave_tris.size() << endl;
+    cout << "slave_tris: " << slave_tris.size() << endl;
     slave_tris.print();
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -447,8 +454,8 @@ int main(int argc, char *argv[]) {
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr,
-                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
 
@@ -459,8 +466,7 @@ int main(int argc, char *argv[]) {
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
-                                  NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
     SNES snes;
@@ -546,8 +552,8 @@ int main(int argc, char *argv[]) {
 
     mb_post.delete_mesh();
 
-    CHKERR DMoFEMLoopFiniteElements(
-        dm, "CONTACT_ELEM", fe_post_proc_simple_contact);
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
 
     std::ostringstream ostrm;
 
