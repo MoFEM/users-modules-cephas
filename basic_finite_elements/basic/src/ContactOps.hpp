@@ -845,7 +845,8 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
       for (; bb != nb_dofs / 2; ++bb) {
         const double t_div_base = t_diff_base(0, 0) + t_diff_base(1, 1);
 
-        t_nf(i) += alpha * (t_base(j) * t_epsilon(i, j)); 
+        t_nf(i) += alpha * (t_base(j) * t_grad(i, j)); 
+        t_nf(i) += alpha * t_div_base * t_disp(i);
             
         //     + t_div_base * t_disp(i));
         // t_nf(i) += alpha * (t_base(j) * FTensor::levi_civita(i, j)) *
@@ -978,9 +979,9 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
 
-        FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{
+        FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat_diag{
             &locMat(2 * rr + 0, 0), &locMat(2 * rr + 1, 1)};
-        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat_asymmetric{
+        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat{
             &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
             &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1)};
 
@@ -992,15 +993,16 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
 
-            t_mat(i) += alpha * t_row_div_base * t_col_base;
-            t_mat_asymmetric(i, j) +=
-                alpha * (t_row_base(j) * FTensor::levi_civita(i, j)) *
-                (FTensor::levi_civita(j, k) * t_col_diff_base(k) / 2);
+            // t_mat_asymmetric(i, j) += alpha * t_row_base(j) * 
+            //     alpha * (t_row_base(j) * FTensor::levi_civita(i, j)) *
+            //     (FTensor::levi_civita(j, k) * t_col_diff_base(k) / 2);
+            t_mat_diag(i) += alpha * t_row_base(j) * t_col_diff_base(j);
+            t_mat_diag(i) += alpha * t_row_div_base * t_col_base;
 
             ++t_col_base;
             ++t_col_diff_base;
+            ++t_mat_diag;
             ++t_mat;
-            ++t_mat_asymmetric;
         }
 
         ++t_row_diff_base;
