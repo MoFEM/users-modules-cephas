@@ -758,6 +758,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
     FTensor::Tensor2<double, 2, 2> t_tangent_tensor;
     t_tangent_tensor(i, j) = t_direction(i) * t_direction(j);
+    FTensor::Tensor2<double, 2, 2> t_tangent_normal;
+    t_tangent_normal(i, j) = t_normal(i) * t_normal(j);
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor1N<3>();
@@ -1021,6 +1023,8 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 
       ++t_w;
     }
+
+    // cerr << row_side << " " << col_side << " " << row_type << " " << col_type << locMat << endl;
 
     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
                         ADD_VALUES);

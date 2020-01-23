@@ -32,7 +32,7 @@ using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr int order = 2;
 constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.;
+constexpr double poisson_ratio = 0.25;
 constexpr double cn = young_modulus;
 
 #include <ElasticOps.hpp>
@@ -113,7 +113,7 @@ MoFEMErrorCode Example::setUP() {
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
   auto adj_skin_ents_edges = adj_skin_ents.subset_by_dimension(1);
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
-  CHKERR simple->setFieldOrder("SIGMA", order, &skin_edges);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
   // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
   // CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents_faces);
   // CHKERR simple->setFieldOrder("OMEGA", order - 1, &adj_skin_ents_faces);
