@@ -177,7 +177,6 @@ MoFEMErrorCode Example::createCommonData() {
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->contactOmegaPtr = boost::make_shared<VectorDouble>();
 
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
@@ -230,8 +229,6 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpCalculateVectorFieldValues<2>(
         "U", commonDataPtr->contactDispPtr));
-    // pipeline.push_back(new OpCalculateScalarFieldValues(
-        // "OMEGA", commonDataPtr->contactOmegaPtr, MBTRI));
 
     pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
         "SIGMA", commonDataPtr->contactStressPtr));

@@ -20,7 +20,6 @@ struct CommonData : public OpElasticTools::CommonData {
   boost::shared_ptr<MatrixDouble> contactStressDivergencePtr;
   boost::shared_ptr<MatrixDouble> contactTractionPtr;
   boost::shared_ptr<MatrixDouble> contactDispPtr;
-  boost::shared_ptr<VectorDouble> contactOmegaPtr;
   FTensor::Ddg<double, 2, 2> tC;
 };
 //! [Common data]
@@ -634,7 +633,6 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
         getFTensor2FromMat<2, 2>(*(commonDataPtr->contactStressPtr));
     auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
     auto t_grad = getFTensor2FromMat<2, 2>(*(commonDataPtr->mGradPtr));
-    auto t_omega = getFTensor0FromVec((*commonDataPtr->contactOmegaPtr));
     auto &t_C = commonDataPtr->tC;
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -664,7 +662,6 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
       ++t_stress;
       ++t_disp;
       ++t_grad;
-      ++t_omega;
       ++t_w;
     }
 
