@@ -15,6 +15,17 @@
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elastic_materials/src)
 
+ set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
+
+bfe_copy_and_install("*.cfg" "${permissions_default}")
+bfe_copy_and_install("*.h5m" "${permissions_default}")
+bfe_copy_and_install("*.med" "${permissions_default}")
+bfe_copy_and_install("*.geo" "${permissions_default}")
+bfe_copy_and_install("*.msh" "${permissions_default}")
+
 file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
@@ -22,32 +33,6 @@ file(
 
 install(
   FILES ${CMAKE_CURRENT_SOURCE_DIR}/README 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/LShape2PartsDirich.h5m
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE) 
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/LShape2PartsDirich.h5m 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/heat_exchange.h5m
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/heat_exchange.h5m 
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
 

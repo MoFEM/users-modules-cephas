@@ -2,7 +2,7 @@ Check before run
 ================
 
 * Check where is your mesh file
-* Check what verion of openmoi (or other MPI library) are you using
+* Check what version of openmoi (or other MPI library) are you using
 
 Example run
 
