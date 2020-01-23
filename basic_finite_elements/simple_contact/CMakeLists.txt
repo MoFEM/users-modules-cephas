@@ -42,26 +42,26 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
 #  DESTINATION ${BFE_MOD_DIR}
 #  PERMISSIONS OWNER_READ OWNER_WRITE)
 
-bfe_build_and_install(insert_prism_interface
-  ${CMAKE_CURRENT_SOURCE_DIR}/insert_prism_interface.cpp)
+#bfe_build_and_install(insert_prism_interface
+#  ${CMAKE_CURRENT_SOURCE_DIR}/insert_prism_interface.cpp)
 
 bfe_build_and_install(test_simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
 
-bfe_build_and_install(test_h_div_simple_contact
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_simple_contact.cpp)
+#bfe_build_and_install(test_h_div_simple_contact
+#    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_simple_contact.cpp)
 
-bfe_build_and_install(test_h_div_vol
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_vol.cpp)
+#bfe_build_and_install(test_h_div_vol
+#    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_vol.cpp)
 
-bfe_build_and_install(test_ale_simple_contact
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact.cpp)
+#bfe_build_and_install(test_ale_simple_contact
+#    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact.cpp)
 
-bfe_build_and_install(test_l2_hdiv_simple_contact
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_l2_hdiv_simple_contact.cpp)
+#bfe_build_and_install(test_l2_hdiv_simple_contact
+#    ${CMAKE_CURRENT_SOURCE_DIR}/test_l2_hdiv_simple_contact.cpp)
 
-bfe_build_and_install(test_ale_simple_contact_andrei
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact_andrei.cpp)
+#bfe_build_and_install(test_ale_simple_contact_andrei
+#    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact_andrei.cpp)
 
 #if(ADOL-C_LIBRARY)
 
