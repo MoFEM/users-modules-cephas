@@ -217,12 +217,7 @@ struct OpSimpleRodK : MoFEM::EdgeElementForcesAndSourcesCore::UserDataOperator {
     locK(5, 4) = locK(4, 5);
     locK(5, 5) = coeff * z21 * z21;
 
-    // Add computed values of spring stiffness to the global LHS matrix
-    Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
-                                               : getFEMethod()->snes_B;
-    CHKERR MatSetValues(B, row_nb_dofs, &*row_data.getIndices().begin(),
-                        col_nb_dofs, &*col_data.getIndices().begin(),
-                        &locK(0, 0), ADD_VALUES);
+    CHKERR MatSetValues(getKSPB(), row_data, col_data, &locK(0, 0), ADD_VALUES);
 
     MoFEMFunctionReturn(0);
   }
@@ -279,10 +274,8 @@ struct OpSimpleRodPreStress
       nF(d + 3) = axial_force * dir[d];
     }
 
-    // add computed values of spring in the global right hand side vector
-    Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
-                                               : getFEMethod()->snes_f;
-    CHKERR VecSetValues(f, nb_dofs, &data.getIndices()[0], &nF[0], ADD_VALUES);
+    CHKERR VecSetValues(getKSPf(), data, &nF[0], ADD_VALUES);
+
     MoFEMFunctionReturn(0);
   }
 };
@@ -335,7 +328,6 @@ MoFEMErrorCode MetaSimpleRodElement::setSimpleRodOperators(
     fe_simple_rod_rhs_ptr->getOpPtrVector().push_back(new OpSimpleRodPreStress(
         commonDataPtr, sitSimpleRod.second, field_name));
   }
-  //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
-  //   " times" << endl;
+
   MoFEMFunctionReturn(0);
 }
