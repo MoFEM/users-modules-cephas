@@ -424,14 +424,16 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
 
       const double alpha = t_w * l;
 
-      // FTensor::Tensor1<double, 2> t_rhs;
-      // t_rhs(i) = t_tangent_tensor(i, j) * t_disp(j);
+      FTensor::Tensor1<double, 2> t_rhs_disp, t_rhs_traction;
+      t_rhs_disp(i) = t_tangent_tensor(i, j) * t_disp(j);
+      t_rhs_traction(i) = t_tangent_tensor(i, j) * t_traction(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
         const double beta = alpha * (t_base(i) * t_normal(i));
 
-        t_nf(i) += beta * t_disp(i);
+        t_nf(i) += beta * t_rhs_disp(i);
+        t_nf(i) += beta * t_rhs_traction(i);
 
         ++t_nf;
         ++t_base;
@@ -698,8 +700,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
           const double beta = alpha * row_base * t_col_base;
 
-          t_mat(0, 0) += beta;
-          t_mat(1, 1) += beta;
+          t_mat(i, j) += beta * t_tangent_tensor(i, j);
           // t_tangent_tensor(i, j);
 
           ++t_col_base;
@@ -755,6 +756,9 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
     auto t_traction =
         getFTensor1FromMat<2>(*(commonDataPtr->contactTractionPtr));
 
+    FTensor::Tensor2<double, 2, 2> t_tangent_tensor;
+    t_tangent_tensor(i, j) = t_direction(i) * t_direction(j);
+
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor1N<3>();
     size_t nb_face_functions = row_data.getN().size2() / 3;
@@ -763,14 +767,14 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
       const double alpha = t_w * l;
 
-      auto t_diff_dstress = diff_constrains_dstress(
-          diff_constrains_dtraction(gap(t_disp, t_normal),
-                                    normal_traction(t_traction, t_normal)),
-          diff_traction(t_normal));
+      // auto t_diff_dstress = diff_constrains_dstress(
+      //     diff_constrains_dtraction(gap(t_disp, t_normal),
+      //                               normal_traction(t_traction, t_normal)),
+      //     diff_traction(t_normal));
 
-      FTensor::Tensor2<double, 2, 2> t_diff_rhs;
-      t_diff_rhs(i, j) =
-          t_normal(i) * t_diff_dstress(j) + t_direction(i) * t_direction(j);
+      // FTensor::Tensor2<double, 2, 2> t_diff_rhs;
+      // t_diff_rhs(i, j) =
+      //     t_normal(i) * t_diff_dstress(j) + t_direction(i) * t_direction(j);
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
@@ -785,7 +789,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
           const double col_base = t_col_base(i) * t_normal(i);
           const double beta = alpha * row_base * col_base;
 
-          t_mat(i, j) += beta * t_diff_rhs(i, j);
+          t_mat(i, j) += beta * t_tangent_tensor(i, j);
 
           ++t_col_base;
           ++t_mat;

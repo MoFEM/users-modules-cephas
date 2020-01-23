@@ -30,7 +30,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 3;
+constexpr int order = 2;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.;
 constexpr double cn = young_modulus;
@@ -101,10 +101,10 @@ MoFEMErrorCode Example::setUP() {
     Range skin_verts;
     CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
     Range skin_faces;
-    CHKERR mField.get_moab().get_adjacencies(skin_verts, 1, false, skin_faces,
-                                             moab::Interface::UNION);
-    CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
-                                             moab::Interface::UNION);
+    // CHKERR mField.get_moab().get_adjacencies(skin_verts, 1, false, skin_faces,
+                                            //  moab::Interface::UNION);
+    // CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
+                                            //  moab::Interface::UNION);
     skin_faces.merge(skin_ents);
     return skin_faces;
   };
@@ -113,7 +113,8 @@ MoFEMErrorCode Example::setUP() {
   auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
   auto adj_skin_ents_edges = adj_skin_ents.subset_by_dimension(1);
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
+  CHKERR simple->setFieldOrder("SIGMA", order, &skin_edges);
+  // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
   // CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents_faces);
   // CHKERR simple->setFieldOrder("OMEGA", order - 1, &adj_skin_ents_faces);
 
@@ -254,15 +255,15 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     // pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
-    // pipeline.push_back(
-    //     new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
-    // pipeline.push_back(
-    //     new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
-    // pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
   add_domain_base_ops(basic->getOpDomainLhsPipeline());
