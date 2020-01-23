@@ -227,6 +227,7 @@ int main(int argc, char *argv[]) {
           ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
                                          MBPRISM, meshset_prisms);
       CHKERR moab.get_entities_by_handle(meshset_prisms, contact_prisms);
+      CHKERR moab.delete_entities(&meshset_prisms, 1);
 
       EntityHandle tri;
       for (Range::iterator pit = contact_prisms.begin();
@@ -579,6 +580,9 @@ int main(int argc, char *argv[]) {
                            &out_meshset_slave_tris, 1);
     CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
                            &out_meshset_master_tris, 1);
+    
+    CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
+    CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);
