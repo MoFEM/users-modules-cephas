@@ -30,7 +30,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 2;
+constexpr int order = 5;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = young_modulus;
@@ -91,8 +91,6 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
   CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
-  // CHKERR simple->addDomainField("OMEGA", L2, AINSWORTH_LEGENDRE_BASE, 1);
-
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
   // CHKERR simple->setFieldOrder("OMEGA", -1);
@@ -115,8 +113,6 @@ MoFEMErrorCode Example::setUP() {
   auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
   // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
-  // CHKERR simple->setFieldOrder("SIGMA", order, &adj_skin_ents_faces);
-  // CHKERR simple->setFieldOrder("OMEGA", order - 1, &adj_skin_ents_faces);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -242,7 +238,6 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
-    // pipeline.push_back(new OpRotationDomainContactRhs("OMEGA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
@@ -254,7 +249,6 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
-    // pipeline.push_back(new OpInternalBoundaryContactLhs("U", "SIGMA"));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -262,7 +256,6 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
-    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
   };
 
