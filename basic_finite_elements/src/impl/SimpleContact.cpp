@@ -1952,19 +1952,19 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
 
         auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-        t_assemble_m(m, k) += val_m * (1. - omegaVal) * t3_1(i, j, k) *
+        t_assemble_m(m, k) += 2. * val_m * (1. - omegaVal) * t3_1(i, j, k) *
                               const_unit_n_master(i) * const_unit_n_master(j) *
                               const_unit_n_slave(m) *
                               t_base_master_row; // base not needed
 
-        cerr << sum_prod << "sum_prod\n";
-        cerr << diff_prod << "diff_prod\n";
-cerr << omegaVal << "omegaVal\n";
+//         cerr << sum_prod << "sum_prod\n";
+//         cerr << diff_prod << "diff_prod\n";
+// cerr << omegaVal << "omegaVal\n";
         t_assemble_m(m, k) +=
-            val_m *
-            (diff_prod * (1. - omegaVal) * t3_1(i, j, k) *
-                 const_unit_n_master(i) * const_unit_n_master(j) +
-             sum_prod * cN * t_base_master_col * const_unit_n_slave(k)) *
+             val_m *
+            (sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
+                 const_unit_n_master(i) * const_unit_n_master(j) -
+            diff_prod * cN * t_base_master_col * const_unit_n_slave(k)) *
             (const_unit_n_slave(m) * t_base_master_row +
              (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
                  const_unit_n_master(i) * const_unit_n_master(j) /
