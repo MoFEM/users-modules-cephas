@@ -308,7 +308,9 @@ MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
 
-        t_nf(i) -= alpha * t_base * t_div_stress(i);
+        t_nf(i) += alpha * t_base * t_div_stress(i);
+        t_nf(i) += alpha * t_diff_base(j) * t_stress(i, j);
+
         // t_nf(i) -= alpha * (FTensor::levi_civita(i, j) * t_diff_base(j) / 2) *
         //            (FTensor::levi_civita(k, l) * t_stress(k, l));
 
@@ -1018,9 +1020,9 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 
     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
                         ADD_VALUES);
-    // noalias(transLocMat) = -trans(locMat);
-    // CHKERR MatSetValues(getSNESB(), col_data, row_data,
-    //                     &*transLocMat.data().begin(), ADD_VALUES);
+    noalias(transLocMat) = trans(locMat);
+    CHKERR MatSetValues(getSNESB(), col_data, row_data,
+                        &*transLocMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
