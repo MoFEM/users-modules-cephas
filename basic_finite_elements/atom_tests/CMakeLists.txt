@@ -440,3 +440,10 @@ ${MoFEM_PROJECT_LIBS}
 )
 
 cm_export_file("8cube_contact.cub" export_atom_tests_basic_fe)
+
+# add_test(
+#   test_simple_contact_8cube
+#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+#   ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact
+#   -file_name mesh_for_testing_surface_pressure_element.h5m
+# )

@@ -20,14 +20,22 @@
  */
 
 #include <BasicFiniteElements.hpp>
-
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
 #include <Hooke.hpp>
+
+// #include <boost/program_options.hpp>
+// namespace po = boost::program_options;
+
 using namespace boost::numeric;
+using namespace std;
+
+namespace bio = boost::iostreams;
+using bio::stream;
+using bio::tee_device;
 
 using namespace MoFEM;
+
+typedef tee_device<std::ostream, std::ofstream> TeeDevice;
+typedef stream<TeeDevice> TeeStream;
 
 static char help[] = "\n";
 int main(int argc, char *argv[]) {
@@ -543,6 +551,15 @@ int main(int argc, char *argv[]) {
     
     CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
     CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
+
+    std::ofstream ofs(
+        (std ::string("test_simple_contact_8cube") + ".txt").c_str());
+    TeeDevice my_tee(std::cout, ofs);
+    TeeStream my_split(my_tee);
+
+    fe_post_proc_simple_contact->getOpPtrVector().push_back(
+        new OpMakeTestTextFile(m_field, field_name, common_data_simple_contact,
+                               _my_split, lagrange_field));
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);

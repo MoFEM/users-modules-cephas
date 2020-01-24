@@ -27,6 +27,10 @@ extern "C" {
 }
 #endif
 
+namespace bio = boost::iostreams;
+using bio::stream;
+using bio::tee_device;
+
 struct SimpleContactProblem {
 
   struct SimpleContactPrismsData {
@@ -1057,6 +1061,28 @@ struct SimpleContactProblem {
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpMakeTestTextFile
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+    MoFEM::Interface &mField;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    bool lagFieldSet;
+    stream<tee_device<std::ostream, std::ofstream>> &mySplit;
+    OpMakeTestTextFile(
+        MoFEM::Interface &m_field, string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data,
+        stream<tee_device<std::ostream, std::ofstream>> &_my_split,
+        bool lagrange_field = true)
+        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          mField(m_field), commonDataSimpleContact(common_data),
+          lagFieldSet(lagrange_field), mySplit(_my_split) {}
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+    ~OpMakeTestTextFile() { mySplit.close(); }
   };
 };
 

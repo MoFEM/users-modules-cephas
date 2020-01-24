@@ -1701,7 +1701,7 @@ MoFEMErrorCode SimpleContactProblem::OpLagMultOnVertex::doWork(
   for (int ii = 0; ii != 3; ++ii) {
 
     for (int dd = 0; dd != 3; dd++) {
-      coords[dd] = all_coords[ ii * 3 + dd];
+      coords[dd] = all_coords[ii * 3 + dd];
     }
     lagrange_multipliers[0] = data.getFieldData()[ii];
 
@@ -1710,4 +1710,28 @@ MoFEMErrorCode SimpleContactProblem::OpLagMultOnVertex::doWork(
                                 lagrange_multipliers);
   }
   MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+  int nb_gauss_pts = data.getN().size1();
+  auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+  auto lag_gap_prod_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    mySplit << gap_ptr << "    " << lagrange_slave << "    "
+            << lag_gap_prod_slave << std::endl;
+    ++gap_ptr;
+    ++lagrange_slave;
+    ++lag_gap_prod_slave;
   }
+  MoFEMFunctionReturn(0);
+}
