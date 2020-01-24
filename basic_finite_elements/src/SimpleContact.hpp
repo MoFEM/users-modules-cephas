@@ -23,13 +23,11 @@ extern "C" {
 // #include <gm_rule.h>
 //#include <quad.h>
 #include <triangle_ncc_rule.h>
+
 #ifdef __cplusplus
 }
+#include <boost/enable_shared_from_this.hpp>
 #endif
-
-namespace bio = boost::iostreams;
-using bio::stream;
-using bio::tee_device;
 
 struct SimpleContactProblem {
 
@@ -86,6 +84,7 @@ struct SimpleContactProblem {
       if (lagrange_field)
         CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                           lagrang_field_name);
+
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         field_name);
 
@@ -93,7 +92,6 @@ struct SimpleContactProblem {
       if (lagrange_field)
         CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                            lagrang_field_name);
-      //}
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
@@ -104,6 +102,15 @@ struct SimpleContactProblem {
 
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
+      Range current_ents_with_fe;
+      CHKERR mField.get_finite_element_entities_by_handle(element_name,
+                                                          current_ents_with_fe);
+      Range ents_to_remove;
+      ents_to_remove =
+          subtract(current_ents_with_fe, range_slave_master_prisms);
+      CHKERR mField.remove_ents_from_finite_element(element_name,
+                                                    ents_to_remove);
+
       // Adding range_slave_master_prisms to Element element_name
       CHKERR mField.add_ents_to_finite_element_by_type(
           range_slave_master_prisms, MBPRISM, element_name);
@@ -112,29 +119,161 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
-  struct CommonDataSimpleContact {
+  MoFEMErrorCode addContactElementALE(const string element_name,
+                                      const string field_name,
+                                      const string mesh_node_field_name,
+                                      const string lagrang_field_name,
+                                      Range &range_slave_master_prisms,
+                                      bool lagrange_field = true) {
+    MoFEMFunctionBegin;
+
+    CHKERR mField.add_finite_element(element_name, MF_ZERO);
+
+    if (range_slave_master_prisms.size() > 0) {
+
+      if (lagrange_field)
+        CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                          lagrang_field_name);
+
+      CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                        field_name);
+      CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                        mesh_node_field_name);
+
+      if (lagrange_field)
+        CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                          lagrang_field_name);
+      CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                        field_name);
+      CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                        mesh_node_field_name);
+
+      if (lagrange_field)
+        CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                           lagrang_field_name);
+
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         field_name);
+
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         mesh_node_field_name);
+
+      setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
+
+      Range current_ents_with_fe;
+      CHKERR mField.get_finite_element_entities_by_handle(element_name,
+                                                          current_ents_with_fe);
+      Range ents_to_remove;
+      ents_to_remove =
+          subtract(current_ents_with_fe, range_slave_master_prisms);
+      CHKERR mField.remove_ents_from_finite_element(element_name,
+                                                    ents_to_remove);
+
+      // Adding range_slave_master_prisms to Element element_name
+      CHKERR mField.add_ents_to_finite_element_by_type(
+          range_slave_master_prisms, MBPRISM, element_name);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+  struct CommonDataSimpleContact
+      : public boost::enable_shared_from_this<CommonDataSimpleContact> {
+
+    NonlinearElasticElement::CommonData elasticityCommonData;
+    NonlinearElasticElement::CommonData elasticityCommonDataMaster;
+    NonlinearElasticElement::CommonData elasticityCommonDataSlave;
+    short int tAg;
+    // NonlinearElasticElement::BlockData elasticBlockData;
+
+    std::map<std::string, std::vector<VectorDouble>> dataAtGaussPts;
+    std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPts;
+
+    std::map<std::string, std::vector<VectorDouble>> dataAtGaussPtsMaster;
+    std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPtsMaster;
+
+    std::map<std::string, std::vector<VectorDouble>> dataAtGaussPtsSlave;
+    std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPtsSlave;
+
+    string spatialPositions;
+    string meshPositions;
+    std::vector<MatrixDouble3by3> sTress;
+    std::vector<MatrixDouble> jacStress;
+
+    vector<vector<VectorDouble>> tangentSlaveALE;
+    vector<vector<VectorDouble>> tangentMasterALE;
+
+    vector<VectorDouble> normalSlaveALE;
+    vector<VectorDouble> normalMasterALE;
+
+    boost::shared_ptr<VectorDouble> normalSlaveLengthALEPtr;
+    boost::shared_ptr<VectorDouble> normalMasterLengthALEPtr;
 
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
+    boost::shared_ptr<VectorDouble> projNormalStressAtMaster;
+    boost::shared_ptr<VectorDouble> projNormalStressAtSlave;
+    boost::shared_ptr<VectorDouble> relErrorLagNormalStressAtMaster;
+    boost::shared_ptr<VectorDouble> relErrorLagNormalStressAtSlave;
+
+    boost::shared_ptr<VectorDouble> diffNormalLagSlave;
+    boost::shared_ptr<VectorDouble> diffNormalLagMaster;
     boost::shared_ptr<VectorDouble> gapPtr;
     boost::shared_ptr<VectorDouble> lagGapProdPtr;
     boost::shared_ptr<VectorDouble> tildeCFunPtr;
     boost::shared_ptr<VectorDouble> lambdaGapDiffProductPtr;
-    boost::shared_ptr<VectorDouble> normalVectorPtr;
+    boost::shared_ptr<VectorDouble> normalVectorSlavePtr;
+    boost::shared_ptr<VectorDouble> normalVectorMasterPtr;
 
-    double areaCommon;
+    boost::shared_ptr<MatrixDouble> hMat;
+    boost::shared_ptr<MatrixDouble> FMat;
+    boost::shared_ptr<MatrixDouble> HMat;
+    boost::shared_ptr<VectorDouble> detHVec;
+    boost::shared_ptr<MatrixDouble> invHMat;
+
+    std::map<int, NonlinearElasticElement::BlockData> setOfMasterFacesData;
+    std::map<int, NonlinearElasticElement::BlockData> setOfSlaveFacesData;
+
+    boost::shared_ptr<std::vector<DataForcesAndSourcesCore::EntData *>>
+        masterRowData;
+
+    DataForcesAndSourcesCore::EntData *faceRowData;
+
+    double areaSlave;
 
     CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
       lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
+      projNormalStressAtMaster = boost::make_shared<VectorDouble>();
+      projNormalStressAtSlave = boost::make_shared<VectorDouble>();
+      relErrorLagNormalStressAtMaster = boost::make_shared<VectorDouble>();
+      relErrorLagNormalStressAtSlave = boost::make_shared<VectorDouble>();
+
+      diffNormalLagSlave = boost::make_shared<VectorDouble>();
+      diffNormalLagMaster = boost::make_shared<VectorDouble>();
       gapPtr = boost::make_shared<VectorDouble>();
+      normalSlaveLengthALEPtr = boost::make_shared<VectorDouble>();
+      normalMasterLengthALEPtr = boost::make_shared<VectorDouble>();
       lagGapProdPtr = boost::make_shared<VectorDouble>();
       tildeCFunPtr = boost::make_shared<VectorDouble>();
       lambdaGapDiffProductPtr = boost::make_shared<VectorDouble>();
-      normalVectorPtr = boost::make_shared<VectorDouble>();
+      normalVectorSlavePtr = boost::make_shared<VectorDouble>();
+      normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+
+      hMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      FMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
+      invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      masterRowData = boost::make_shared<
+          std::vector<DataForcesAndSourcesCore::EntData *>>();
+      faceRowData = nullptr;
     }
+
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
 
   private:
     MoFEM::Interface &mField;
@@ -143,13 +282,91 @@ struct SimpleContactProblem {
   double rValue;
   double cnValue;
   bool newtonCotes;
-
+  boost::shared_ptr<SimpleContactElement> feRhsSimpleContact;
+  boost::shared_ptr<SimpleContactElement> feLhsSimpleContact;
+  boost::shared_ptr<SimpleContactElement> fePostProcSimpleContact;
+  boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
   MoFEM::Interface &mField;
 
   SimpleContactProblem(MoFEM::Interface &m_field, double &r_value_regular,
                        double &cn_value, bool newton_cotes = false)
       : mField(m_field), rValue(r_value_regular), cnValue(cn_value),
-        newtonCotes(newton_cotes) {}
+        newtonCotes(newton_cotes) {
+    commonDataSimpleContact =
+        boost::make_shared<CommonDataSimpleContact>(mField);
+    feRhsSimpleContact =
+        boost::make_shared<SimpleContactElement>(mField, newtonCotes);
+    feLhsSimpleContact =
+        boost::make_shared<SimpleContactElement>(mField, newtonCotes);
+    fePostProcSimpleContact =
+        boost::make_shared<SimpleContactElement>(mField, newtonCotes);
+  }
+
+  struct OpGetTangentSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetTangentSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpGetNormalSlaveALE
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetNormalSlaveALE(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpGetNormalMasterALE
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetNormalMasterALE(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpGetTangentMaster
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetTangentMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
 
   /// \brief tangents t1 and t2 to face f4 at all gauss points
   struct OpGetNormalSlave
@@ -169,58 +386,21 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
-  /// \brief tangents t1 and t2 to face f4 at all gauss points
-  struct OpGetNormalSlaveForSide
+  struct OpGetNormalMaster
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
-    std::string sideFeName;
-
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpGetNormalSlaveForSide(
+    OpGetNormalMaster(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
-        std::string &side_fe_name)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
-          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
-          sideFeName(side_fe_name) {}
+                  FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
-  };
-
-  struct OpContactConstraintMatrixMasterSlaveForSide
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
-    std::string sideFeName;
-
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpContactConstraintMatrixMasterSlaveForSide(
-        const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
-        std::string &side_fe_name, Mat aij = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACEMASTERSLAVE),
-          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
-          sideFeName(side_fe_name), Aij(aij) {
-      sYmm = false; // This will make sure to loop over all intities (e.g.
-                    // for order=2 it will make doWork to loop 16 time)
-    }
-    MatrixDouble NN;
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
   };
 
   // Calculate displacements or spatial positions at Gauss points  (Note
@@ -303,23 +483,6 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpPrintLagMulAtGaussPtsSlave(
-        const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              lagrang_field_name, UserDataOperator::OPROW,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
-          commonDataSimpleContact(common_data_contact) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
-  };
-
-  struct OpGetLagMulAtGaussPtsSlaveHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpGetLagMulAtGaussPtsSlaveHdiv(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
@@ -431,57 +594,12 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
-  struct OpCalIntTildeCFunSlaveHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    Vec F;
-    OpCalIntTildeCFunSlaveHdiv(
-        const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Vec f_ = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              lagrang_field_name, UserDataOperator::OPCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
-          commonDataSimpleContact(common_data_contact), F(f_) {}
-
-    VectorDouble vecR;
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
-  };
-
   struct OpContactConstraintMatrixMasterSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     Mat Aij;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpContactConstraintMatrixMasterSlave(
-        const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACEMASTERSLAVE),
-          commonDataSimpleContact(common_data_contact), Aij(aij) {
-      sYmm = false; // This will make sure to loop over all intities (e.g.
-                    // for order=2 it will make doWork to loop 16 time)
-    }
-    MatrixDouble NN;
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
-
-  struct OpContactConstraintMatrixMasterSlaveHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpContactConstraintMatrixMasterSlaveHdiv(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         Mat aij = PETSC_NULL)
@@ -525,62 +643,12 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &row_data,
                           DataForcesAndSourcesCore::EntData &col_data);
   };
-
-  struct OpContactConstraintMatrixSlaveSlaveHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpContactConstraintMatrixSlaveSlaveHdiv(
-        const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVESLAVE),
-          commonDataSimpleContact(common_data_contact), Aij(aij) {
-      sYmm = false; // This will make sure to loop over all intities (e.g.
-                    // for order=2 it will make doWork to loop 16 time)
-    }
-    MatrixDouble NN;
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
-
   struct OpDerivativeBarTildeCFunOLambdaSlaveSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     Mat Aij;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpDerivativeBarTildeCFunOLambdaSlaveSlave(
-        const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              lagrang_field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVESLAVE),
-          Aij(aij), commonDataSimpleContact(common_data_contact) {
-      sYmm = false; // This will make sure to loop over all entities (e.g.
-                    // for order=2 it will make doWork to loop 16 time)
-    }
-    MatrixDouble NN;
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
-
-  struct OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         Mat aij = PETSC_NULL)
@@ -606,32 +674,6 @@ struct SimpleContactProblem {
     Mat Aij;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpDerivativeBarTildeCFunODisplacementsSlaveMaster(
-        const string field_name, const string lagrang_field_name,
-        double &cn_value,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVEMASTER),
-          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
-      sYmm = false; // This will make sure to loop over all entities (e.g.
-                    // for order=2 it will make doWork to loop 16 time)
-    }
-    MatrixDouble NN;
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
-
-  struct OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    double cN; //@todo: ign: to become input parameter
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv(
         const string field_name, const string lagrang_field_name,
         double &cn_value,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
@@ -677,48 +719,43 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
-  struct OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-    double cN; //@todo: ign: to become input parameter
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv(
-        const string field_name, const string lagrang_field_name,
-        double &cn_value,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVESLAVE),
-          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
-      sYmm = false; // This will make sure to loop over all entities (e.g.
-                    // for order=2 it will make doWork to loop 16 time)
-    }
-    MatrixDouble NN;
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
-
   struct OpMakeVtkSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     MoFEM::Interface &mField;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     moab::Interface &moabOut;
+    bool lagFieldSet;
 
-    OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
-                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
-                   moab::Interface &moab_out)
+    OpMakeVtkSlave(
+        MoFEM::Interface &m_field, string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data,
+        moab::Interface &moab_out, bool lagrange_field = true)
         : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPROW,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
-          moabOut(moab_out) {}
+          moabOut(moab_out), lagFieldSet(lagrange_field) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
+  struct OpLagMultOnVertex
+      : public MoFEM::ContactPrismElementForcesAndSourcesCore::
+            UserDataOperator {
+
+    moab::Interface &moabOut;
+    MoFEM::Interface &mField;
+
+    OpLagMultOnVertex(MoFEM::Interface &m_field, string field_name,
+                      moab::Interface &moab_out)
+        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          mField(m_field), moabOut(moab_out) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -727,21 +764,21 @@ struct SimpleContactProblem {
   // setup operators for calculation of active set
   MoFEMErrorCode setContactOperatorsRhsOperators(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
-      string field_name, string lagrang_field_name,
-      /*string side_fe_name,*/
-      Vec f_ = PETSC_NULL) {
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name, Vec f_ = PETSC_NULL) {
     MoFEMFunctionBegin;
 
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
-        boost::make_shared<CommonDataSimpleContact>(mField);
+    // boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+    //     boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-      //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide>
-      //   feMatSideRhs =
-      //       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+    //       feMatSideRhs =
+    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+    //               mField);
 
       // feMatSideRhs->getOpPtrVector().push_back(
       //     new OpCalculateVectorFieldGradient<3, 3>(X_field,
@@ -752,13 +789,13 @@ struct SimpleContactProblem {
       // feMatSideRhs->getOpPtrVector().push_back(
       //     new OpCalculateDeformation(X_field, data_at_pts, ho_geometry));
 
-      // feRhsSimpleContact->getOpPtrVector().push_back(new
-      // OpGetNormalSlaveForSide(
-      //     field_name, commonDataSimpleContact, feMatSideRhs, side_fe_name));
+    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpGetNormalSlaveForSide(field_name, common_data_simple_contact,
+    //                                   feMatSideRhs, side_fe_name));
 
-      // feRhsSimpleContact->getOpPtrVector().push_back(
+      // fe_rhs_simple_contact->getOpPtrVector().push_back(
       //     new OpContactConstraintMatrixMasterSlaveForSide(
-      //         field_name, lagrang_field_name, commonDataSimpleContact,
+      //         field_name, lagrang_field_name, common_data_simple_contact,
       //         feMatSideRhs, side_fe_name));
 
       fe_rhs_simple_contact->getOpPtrVector().push_back(
@@ -778,6 +815,7 @@ struct SimpleContactProblem {
       fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                          common_data_simple_contact));
+
       //   fe_rhs_simple_contact->getOpPtrVector().push_back(
       //       new OpPrintLagMulAtGaussPtsSlave(lagrang_field_name,
       //                                      common_data_simple_contact));
@@ -798,59 +836,14 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv(
-      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
-      string field_name, string lagrang_field_name, Vec f_ = PETSC_NULL) {
-    MoFEMFunctionBegin;
-
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
-        boost::make_shared<CommonDataSimpleContact>(mField);
-
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
-                                           common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
-                                             common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalFReConMaster(field_name, common_data_simple_contact, f_));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalFReConSlave(field_name, common_data_simple_contact, f_));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, common_data_simple_contact, rValue, cnValue));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalIntTildeCFunSlaveHdiv(lagrang_field_name,
-                                         common_data_simple_contact, f_));
-    }
-    MoFEMFunctionReturn(0);
-  }
-
   MoFEMErrorCode setContactOperatorsLhsOperators(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name, Mat aij) {
     MoFEMFunctionBegin;
 
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
-        boost::make_shared<CommonDataSimpleContact>(mField);
+    // boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+    //     boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
@@ -902,76 +895,22 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setContactOperatorsLhsOperatorsHdiv(
-      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
-      string field_name, string lagrang_field_name, Mat aij) {
-    MoFEMFunctionBegin;
-
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
-        boost::make_shared<CommonDataSimpleContact>(mField);
-
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
-                                           common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
-                                             common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpContactConstraintMatrixMasterSlaveHdiv(
-              field_name, lagrang_field_name, common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpContactConstraintMatrixSlaveSlaveHdiv(
-              field_name, lagrang_field_name, common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpCalTildeCFunSlave(
-          field_name, common_data_simple_contact, rValue, cnValue));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpDerivativeBarTildeCFunOLambdaSlaveSlaveHdiv(
-              lagrang_field_name, common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpDerivativeBarTildeCFunODisplacementsSlaveMasterHdiv(
-              field_name, lagrang_field_name, cnValue,
-              common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveHdiv(
-              field_name, lagrang_field_name, cnValue,
-              common_data_simple_contact, aij));
-    }
-    MoFEMFunctionReturn(0);
-  }
-
   MoFEMErrorCode setContactOperatorsForPostProc(
-      MoFEM::Interface &m_field,
       boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
-      string field_name, string lagrang_field_name, moab::Interface &moab_out) {
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
+      moab::Interface &moab_out, bool lagrange_field = true) {
     MoFEMFunctionBegin;
 
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
-        boost::make_shared<CommonDataSimpleContact>(mField);
+    // boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
+    //     boost::make_shared<CommonDataSimpleContact>(mField);
 
     map<int, SimpleContactPrismsData>::iterator sit =
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetNormalMaster(field_name, common_data_simple_contact));
 
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetNormalSlave(field_name, common_data_simple_contact));
@@ -987,103 +926,24 @@ struct SimpleContactProblem {
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpGetGapSlave(field_name, common_data_simple_contact));
 
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         common_data_simple_contact));
+      if (lagrange_field) {
 
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpLagGapProdGaussPtsSlave(lagrang_field_name,
-                                        common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
-                             moab_out));
-    }
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode setContactOperatorsForPostProcHdiv(
-      MoFEM::Interface &m_field,
-      boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
-      string field_name, string lagrang_field_name, moab::Interface &moab_out) {
-    MoFEMFunctionBegin;
-
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact =
-        boost::make_shared<CommonDataSimpleContact>(mField);
-
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
+            new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                            common_data_simple_contact));
 
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, common_data_simple_contact));
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
+            new OpLagGapProdGaussPtsSlave(lagrang_field_name,
+                                          common_data_simple_contact));
+      }
 
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlaveHdiv(lagrang_field_name,
-                                             common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpLagGapProdGaussPtsSlave(lagrang_field_name,
-                                        common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
-                             moab_out));
+          new OpMakeVtkSlave(m_field, field_name,
+                                   common_data_simple_contact, moab_out,
+                                   lagrange_field));
     }
     MoFEMFunctionReturn(0);
   }
-
-  struct OpLagMultOnVertex
-      : public MoFEM::ContactPrismElementForcesAndSourcesCore::
-            UserDataOperator {
-
-    moab::Interface &moabOut;
-    MoFEM::Interface &mField;
-
-    OpLagMultOnVertex(MoFEM::Interface &m_field, string field_name,
-                      moab::Interface &moab_out)
-        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, UserDataOperator::OPROW,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
-          mField(m_field), moabOut(moab_out) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
-  };
-
-  struct OpMakeTestTextFile
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-    MoFEM::Interface &mField;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    bool lagFieldSet;
-    stream<tee_device<std::ostream, std::ofstream>> &mySplit;
-    OpMakeTestTextFile(
-        MoFEM::Interface &m_field, string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data,
-        stream<tee_device<std::ostream, std::ofstream>> &_my_split,
-        bool lagrange_field = true)
-        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, UserDataOperator::OPROW,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
-          mField(m_field), commonDataSimpleContact(common_data),
-          lagFieldSet(lagrange_field), mySplit(_my_split) {}
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
-    ~OpMakeTestTextFile() { mySplit.close(); }
-  };
 };
 
 #endif
