@@ -2855,7 +2855,7 @@ struct OpCalculateHdivDivergenceResidualOnDispl
   };
 
   struct OpStressDerivativeGapMasterSlave_dx
-      : public MoFEM::ContactPrismElementForcesAndSourcesCore::
+      : public MoFEM::VolumeElementForcesAndSourcesCoreOnVolumeSide::
             UserDataOperator {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
@@ -2882,10 +2882,8 @@ struct OpCalculateHdivDivergenceResidualOnDispl
         NonlinearElasticElement::CommonData &common_data,
         NonlinearElasticElement::CommonData &common_data_master, double &c_n,
         double &omega_val, int &theta_s_val, Mat aij = PETSC_NULL)
-        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, UserDataOperator::OPCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVE),
+        : MoFEM::VolumeElementForcesAndSourcesCoreOnVolumeSide::
+              UserDataOperator(field_name, UserDataOperator::OPCOL),
           commonDataSimpleContact(common_data_contact), dAta(data),
           commonData(common_data), commonDataMaster(common_data_master),
           cN(c_n), omegaVal(omega_val), thetaSVal(theta_s_val), aLe(false),
@@ -3172,8 +3170,9 @@ struct OpCalculateHdivDivergenceResidualOnDispl
 //                           DataForcesAndSourcesCore::EntData &col_data);
 //   };
 
-  struct OpStressDerivativeGapSlaveMaster_dx : 
-  public MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+  struct OpStressDerivativeGapSlaveMaster_dx
+      : public MoFEM::VolumeElementForcesAndSourcesCoreOnVolumeSide::
+            UserDataOperator {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
 
@@ -3199,10 +3198,8 @@ struct OpCalculateHdivDivergenceResidualOnDispl
         NonlinearElasticElement::CommonData &common_data,
         NonlinearElasticElement::CommonData &common_data_slave, double &c_n,
         double &omega_val, int &theta_s_val, Mat aij = PETSC_NULL)
-        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, UserDataOperator::OPCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACEMASTER),
+        : MoFEM::VolumeElementForcesAndSourcesCoreOnVolumeSide::
+              UserDataOperator(field_name, UserDataOperator::OPCOL),
           commonDataSimpleContact(common_data_contact), dAta(data),
           commonData(common_data), commonDataSlave(common_data_slave),
           aLe(false), cN(c_n), omegaVal(omega_val), thetaSVal(theta_s_val),
@@ -3903,12 +3900,22 @@ struct OpCalculateHdivDivergenceResidualOnDispl
                                          feMatMasterMasterSideRhs,
                                          side_fe_name));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          feMatSlaveMasterSideRhs =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+
+      feMatSlaveMasterSideRhs->getOpPtrVector().push_back(
           new OpStressDerivativeGapSlaveMaster_dx(
               field_name, common_data_simple_contact, slave_block,
               common_data_simple_contact->elasticityCommonDataMaster,
               common_data_simple_contact->elasticityCommonData, cnValue,
               omegaValue, thetaSValue));
+
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
+    //                                      feMatSlaveMasterSideRhs,
+    //                                      side_fe_name));
 
       //   fe_lhs_simple_contact->getOpPtrVector().push_back(
       //       new OpStressDerivativeGapSlaveMaster_dx2(
@@ -3916,12 +3923,25 @@ struct OpCalculateHdivDivergenceResidualOnDispl
       //           common_data_simple_contact->elasticityCommonDataMaster,
       //           common_data_simple_contact->elasticityCommonData));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
+      boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+          feMatMasterSlaveSideRhs =
+              boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                  mField);
+
+      feMatMasterSlaveSideRhs->getOpPtrVector().push_back(
           new OpStressDerivativeGapMasterSlave_dx(
               field_name, common_data_simple_contact, master_block,
               common_data_simple_contact->elasticityCommonData,
               common_data_simple_contact->elasticityCommonDataMaster, cnValue,
               omegaValue, thetaSValue));
+
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
+                                        feMatMasterSlaveSideRhs, side_fe_name));
+
+
+
+
 
       //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
       //       feMatMasterSlaveSideRhs =
