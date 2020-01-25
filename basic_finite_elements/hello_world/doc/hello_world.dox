@@ -81,11 +81,13 @@ CHKERR simple->getOptions();
 // load mesh file
 CHKERR simple->loadFile(); 
 \endcode
-and get options from the command line and load mesh file. Default mesh file has
-name \e mesh.h5m. Particular name of file can be given in command line using
-option \e -file_name \e my_file.h5m. The visualization of the meshed object is given in \ref figure_2_meshed_object "Figure 2".
+and get options from the command line and load mesh file. Default mesh file
+has name \e mesh.h5m. Particular name of file can be given in command line
+using option \e -file_name \e my_file.h5m. The visualization of the meshed
+object is given in \ref figure_2_meshed_object "Figure 2".
 
-The indication that MoFEM database has been initialized is that the MoFEM version and git commit id are shown on the terminal as below.
+The indication that MoFEM database has been initialized is that the MoFEM
+version and git commit id are shown on the terminal as below.
 \verbatim
 MoFEM version 0.8.13 (MOAB 5.0.2 Petsc Release Version 3.9.3, Jul, 02, 2018 )
 git commit id 549c206e489d605e1c9d531f5d463b99ec2adc32
@@ -93,7 +95,7 @@ git commit id 549c206e489d605e1c9d531f5d463b99ec2adc32
 It should be noted that the message can be different depending on the time of installation and update.
 
 \anchor figure_2_meshed_object
-\image html hello_world_global_id.png "Figure 2. Meshed object" width=600px
+\image html hellow_world_mesh.png "Figure 2. Meshed object" width=600px
 
 \subsection hello_world_adding_fields Adding fields
 
