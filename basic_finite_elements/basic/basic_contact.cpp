@@ -1,8 +1,8 @@
 /**
- * \file basic_elastic.cpp
- * \example basic_elastic.cpp
+ * \file basic_contact.cpp
+ * \example basic_contact.cpp
  *
- * Plane stress elastic problem
+ * Example of contact problem
  *
  */
 
