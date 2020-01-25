@@ -30,10 +30,10 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 5;
+constexpr int order = 2;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
-constexpr double cn = young_modulus;
+constexpr double cn = 1;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -144,30 +144,8 @@ MoFEMErrorCode Example::createCommonData() {
     MoFEMFunctionReturn(0);
   };
 
-  auto get_matrial_compliance = [&](FTensor::Ddg<double, 2, 2> &t_C) {
-    MoFEMFunctionBegin;
-
-    FTensor::Index<'i', 2> i;
-    FTensor::Index<'j', 2> j;
-    FTensor::Index<'k', 2> k;
-    FTensor::Index<'l', 2> l;
-
-    constexpr double a = 1. / young_modulus; 
-
-    t_C(0, 0, 0, 0) = a;
-    t_C(1, 1, 1, 1) = a;
-
-    t_C(0, 0, 1, 1) -= a * poisson_ratio;
-    t_C(1, 1, 0, 0) -= a * poisson_ratio;
-
-    t_C(0, 1, 0, 1) = a * (1 + poisson_ratio);
-
-    MoFEMFunctionReturn(0);
-  };
-
   commonDataPtr = boost::make_shared<OpContactTools::CommonData>();
   CHKERR get_matrial_stiffens(commonDataPtr->tD);
-  CHKERR get_matrial_compliance(commonDataPtr->tC);
 
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();

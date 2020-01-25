@@ -20,7 +20,6 @@ struct CommonData : public OpElasticTools::CommonData {
   boost::shared_ptr<MatrixDouble> contactStressDivergencePtr;
   boost::shared_ptr<MatrixDouble> contactTractionPtr;
   boost::shared_ptr<MatrixDouble> contactDispPtr;
-  FTensor::Ddg<double, 2, 2> tC;
 };
 //! [Common data]
 
@@ -91,19 +90,6 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpConstrainDomainLhs_dSigma : public DomainEleOp {
-  OpConstrainDomainLhs_dSigma(const std::string row_field_name,
-                              const std::string col_field_name,
-                              boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
-};
-
 struct OpConstrainDomainLhs_dU : public DomainEleOp {
   OpConstrainDomainLhs_dU(const std::string row_field_name,
                           const std::string col_field_name,
@@ -138,13 +124,6 @@ inline auto diff_traction(FTensor::Tensor1<double, 2> &t_normal) {
   return FTensor::Tensor1<double, 2>{t_normal(0), t_normal(1)};
 }
 
-inline double constrian(double &&gap, double &&normal_traction) {
-  if ((cn * gap + normal_traction) < 0)
-    return -cn * gap;
-  else
-    return normal_traction;
-};
-
 inline double sign(double x) {
   if (x == 0)
     return 0;
@@ -154,28 +133,20 @@ inline double sign(double x) {
     return -1;
 };
 
-inline double diff_constrains_dgap(double &&gap, double &&normal_traction) {
-  return (cn * (-1 + sign(cn * gap + normal_traction))) / 2.;
+inline double w(const double g, const double t) {
+  return g - cn * t;
 }
 
-inline double diff_constrains_dtraction(double &&gap,
-                                        double &&normal_traction) {
-  return (1 + sign(cn * gap + normal_traction)) / 2.;
+inline double constrian(double &&g, double &&t) {
+  return (w(g, t) + std::abs(w(g, t))) / 2;
+};
+
+inline double diff_constrains_dtraction(double &&g, double &&t) {
+  return -cn * (1 + sign(w(g, t))) / 2;
 }
 
-auto diff_constrains_du(double &&diff_constrains_dgap,
-                        FTensor::Tensor1<double, 2> &&t_diff_gap) {
-  FTensor::Tensor1<double, 2> t_diff;
-  t_diff(i) = diff_constrains_dgap * t_diff_gap(i);
-  return t_diff;
-}
-
-auto diff_constrains_dstress(
-    double &&diff_constrains_dtraction,
-    FTensor::Tensor1<double, 2> &&t_diff_normal_traction) {
-  FTensor::Tensor1<double, 2> t_diff;
-  t_diff(i) = diff_constrains_dtraction * t_diff_normal_traction(i);
-  return t_diff;
+inline double diff_constrains_dgap(double &&g, double &&t) {
+  return (1 + sign(w(g, t))) / 2;
 }
 
 OpInternalDomainContactRhs::OpInternalDomainContactRhs(
@@ -273,17 +244,29 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
 
       const double alpha = t_w * l;
+      // cerr << getCoords() << " : " << getDirection() << " : " << t_normal
+      //      << " : " << gap(t_disp, t_normal) << " : "
+      //      << normal_traction(t_traction, t_normal) << " : "
+      //      << constrian(gap(t_disp, t_normal),
+      //                   normal_traction(t_traction, t_normal))
+      //      << " " << endl;
 
-      FTensor::Tensor1<double, 2> t_rhs_disp, t_rhs_traction;
-      t_rhs_disp(i) = t_tangent_tensor(i, j) * t_disp(j);
-      t_rhs_traction(i) = t_tangent_tensor(i, j) * t_traction(j);
+      FTensor::Tensor1<double, 2> t_rhs_constrains;
+      t_rhs_constrains(i) =
+          t_normal(i) * constrian(gap(t_disp, t_normal),
+                                  normal_traction(t_traction, t_normal));
+
+      FTensor::Tensor1<double, 2> t_rhs_tangent_disp, t_rhs_tangent_traction;
+      t_rhs_tangent_disp(i) = t_tangent_tensor(i, j) * t_disp(j);
+      t_rhs_tangent_traction(i) = t_tangent_tensor(i, j) * t_traction(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
         const double beta = alpha * (t_base(i) * t_normal(i));
 
-        t_nf(i) += beta * t_rhs_disp(i);
-        t_nf(i) += beta * t_rhs_traction(i);
+        t_nf(i) += beta * t_rhs_constrains(i);
+        t_nf(i) += beta * t_rhs_tangent_disp(i);
+        t_nf(i) += beta * t_rhs_tangent_traction(i);
 
         ++t_nf;
         ++t_base;
@@ -398,12 +381,17 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
     locMat.resize(row_nb_dofs, col_nb_dofs, false);
     locMat.clear();
 
+    FTensor::Tensor2<double, 2, 2> t_normal_tensor;
+    t_normal_tensor(i, j) = t_normal(i) * t_normal(j);
     FTensor::Tensor2<double, 2, 2> t_tangent_tensor;
     t_tangent_tensor(i, j) = t_direction(i) * t_direction(j);
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       const double alpha = t_w * l;
+
+      const double tangent_gap = diff_constrains_dgap(
+          gap(t_disp, t_normal), normal_traction(t_traction, t_normal));
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
@@ -417,6 +405,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
           const double beta = alpha * row_base * t_col_base;
 
+          t_mat(i, j) += (beta * tangent_gap) * t_normal_tensor(i, j);
           t_mat(i, j) += beta * t_tangent_tensor(i, j);
 
           ++t_col_base;
@@ -472,10 +461,10 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
     auto t_traction =
         getFTensor1FromMat<2>(*(commonDataPtr->contactTractionPtr));
 
+    FTensor::Tensor2<double, 2, 2> t_normal_tensor;
+    t_normal_tensor(i, j) = t_normal(i) * t_normal(j);
     FTensor::Tensor2<double, 2, 2> t_tangent_tensor;
     t_tangent_tensor(i, j) = t_direction(i) * t_direction(j);
-    FTensor::Tensor2<double, 2, 2> t_tangent_normal;
-    t_tangent_normal(i, j) = t_normal(i) * t_normal(j);
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_base = row_data.getFTensor1N<3>();
@@ -484,6 +473,9 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       const double alpha = t_w * l;
+
+      const double tangent_traction = diff_constrains_dtraction(
+          gap(t_disp, t_normal), normal_traction(t_traction, t_normal));
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
@@ -498,6 +490,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
           const double col_base = t_col_base(i) * t_normal(i);
           const double beta = alpha * row_base * col_base;
 
+          t_mat(i, j) += (beta * tangent_traction) * t_normal_tensor(i, j);
           t_mat(i, j) += beta * t_tangent_tensor(i, j);
 
           ++t_col_base;
@@ -545,15 +538,11 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
         getFTensor2FromMat<2, 2>(*(commonDataPtr->contactStressPtr));
     auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
     auto t_grad = getFTensor2FromMat<2, 2>(*(commonDataPtr->mGradPtr));
-    auto &t_C = commonDataPtr->tC;
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       const double alpha = getMeasure() * t_w;
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
-
-      FTensor::Tensor2_symmetric<double, 2> t_epsilon;
-      t_epsilon(i, j) = t_C(i, j, k, l) * t_stress(k, l);
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
@@ -578,72 +567,6 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
     }
 
     CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-OpConstrainDomainLhs_dSigma::OpConstrainDomainLhs_dSigma(
-    const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {
-  sYmm = false;
-}
-MoFEMErrorCode OpConstrainDomainLhs_dSigma::doWork(int row_side, int col_side,
-                                                   EntityType row_type,
-                                                   EntityType col_type,
-                                                   EntData &row_data,
-                                                   EntData &col_data) {
-  MoFEMFunctionBegin;
-
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t row_nb_dofs = row_data.getIndices().size();
-  const size_t col_nb_dofs = col_data.getIndices().size();
-
-  if (row_nb_dofs && col_nb_dofs) {
-
-    auto t_w = getFTensor0IntegrationWeight();
-
-    locMat.resize(row_nb_dofs, col_nb_dofs, false);
-    locMat.clear();
-
-    auto &t_C = commonDataPtr->tC;
-
-    size_t nb_base_functions = row_data.getN().size2() / 3;
-    auto t_row_base = row_data.getFTensor1N<3>();
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      const double alpha = getMeasure() * t_w;
-
-      size_t rr = 0;
-      for (; rr != row_nb_dofs / 2; ++rr) {
-
-        FTensor::Tensor2<FTensor::PackPtr<double *, 2>, 2, 2> t_mat{
-            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
-            &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1)};
-
-        auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
-
-        for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
-
-          t_mat(i, j) +=
-              alpha * t_C(i, k, j, l) * (t_row_base(k) * t_col_base(l));
-
-          ++t_col_base;
-          ++t_mat;
-        }
-
-        ++t_row_base;
-      }
-      for (; rr < nb_base_functions; ++rr)
-        ++t_row_base;
-
-      ++t_w;
-    }
-
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
