@@ -30,10 +30,11 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 2;
+constexpr int order = 3;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
+constexpr double spring_stiffness = 1e-4;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -93,24 +94,8 @@ MoFEMErrorCode Example::setUP() {
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
-  // CHKERR simple->setFieldOrder("OMEGA", -1);
-
-  auto ger_adj_skin_ents = [&](auto &&skin_ents) {
-    Range skin_verts;
-    CHKERR mField.get_moab().get_connectivity(skin_ents, skin_verts, true);
-    Range skin_faces;
-    // CHKERR mField.get_moab().get_adjacencies(skin_verts, 1, false, skin_faces,
-                                            //  moab::Interface::UNION);
-    // CHKERR mField.get_moab().get_adjacencies(skin_verts, 2, false, skin_faces,
-                                            //  moab::Interface::UNION);
-    skin_faces.merge(skin_ents);
-    return skin_faces;
-  };
 
   auto skin_edges = getEntsOnMeshSkin();
-  auto adj_skin_ents = ger_adj_skin_ents(getEntsOnMeshSkin());
-  auto adj_skin_ents_edges = adj_skin_ents.subset_by_dimension(1);
-  auto adj_skin_ents_faces = adj_skin_ents.subset_by_dimension(2);
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
   // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
 
@@ -166,6 +151,40 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Boundary condition]
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
+
+  auto fix_disp = [&](const std::string blockset_name) {
+    Range fix_ents;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
+          0) {
+        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
+                                                        true);
+      }
+    }
+    return fix_ents;
+  };
+
+  auto remove_ents = [&](const Range &&ents, const bool fix_x,
+                         const bool fix_y) {
+    auto prb_mng = mField.getInterface<ProblemsManager>();
+    auto simple = mField.getInterface<Simple>();
+    MoFEMFunctionBegin;
+    Range verts;
+    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+    verts.merge(ents);
+    const int lo_coeff = fix_x ? 0 : 1;
+    const int hi_coeff = fix_y ? 1 : 0;
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
+                                         lo_coeff, hi_coeff);
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "SIGMA",
+                                         ents, lo_coeff, hi_coeff);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR remove_ents(fix_disp("FIX_X"), true, false);
+  CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
+  CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
+
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -225,10 +244,12 @@ MoFEMErrorCode Example::OPs() {
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSpringLhs("U", "U"));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(basic->getOpDomainLhsPipeline());
