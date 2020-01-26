@@ -134,7 +134,8 @@ template <typename T1, typename T2>
 inline double gap(FTensor::Tensor1<T1, 3> &t_coords,
                   FTensor::Tensor1<T2, 2> &t_disp,
                   FTensor::Tensor1<double, 2> &t_normal) {
-  return (t_coords(i) + t_disp(i)) * t_normal(i);
+  const double zero_level = -1 - t_coords(0);
+  return t_disp(i) * t_normal(i) + zero_level;
 }
 
 template <typename T>

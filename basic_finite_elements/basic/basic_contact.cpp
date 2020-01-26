@@ -30,11 +30,11 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 3;
+constexpr int order = 2;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
-constexpr double spring_stiffness = 1e-4;
+constexpr double spring_stiffness = 0;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -172,14 +172,20 @@ MoFEMErrorCode Example::bC() {
     Range verts;
     CHKERR mField.get_moab().get_connectivity(ents, verts, true);
     verts.merge(ents);
-    const int lo_coeff = fix_x ? 0 : 1;
-    const int hi_coeff = fix_y ? 1 : 0;
+    const int lo_coeff = fix_x ? 0 : 0;
+    const int hi_coeff = fix_y ? 1 : 1;
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
                                          lo_coeff, hi_coeff);
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "SIGMA",
-                                         ents, lo_coeff, hi_coeff);
     MoFEMFunctionReturn(0);
   };
+
+  Range boundary_ents;
+  boundary_ents.merge(fix_disp("FIX_X"));
+  boundary_ents.merge(fix_disp("FIX_Y"));
+  boundary_ents.merge(fix_disp("FIX_ALL"));
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
+      0, 2);
 
   CHKERR remove_ents(fix_disp("FIX_X"), true, false);
   CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
