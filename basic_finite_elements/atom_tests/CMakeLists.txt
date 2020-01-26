@@ -423,11 +423,11 @@ add_test(
 
 # SIMPLE CONTACT
 
-bfe_add_executable(test_simple_contact
-${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp
+bfe_add_executable(test_jacobian_of_simple_contact_element
+${CMAKE_CURRENT_SOURCE_DIR}/test_jacobian_of_simple_contact_element.cpp
 )
 
-target_link_libraries(test_simple_contact
+target_link_libraries(test_jacobian_of_simple_contact_element
 users_modules
 mofem_finite_elements
 mofem_interfaces
@@ -439,7 +439,31 @@ mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
 
-cm_export_file("8cube_contact.cub" export_atom_tests_basic_fe)
+cm_export_file("2tets_contact.cub" export_atom_tests_basic_fe)
+add_test(
+  test_jacobian_of_simple_contact_element
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_r_value 1 -my_cn_value 1e2 -my_order 3 -my_order_lambda 3
+)
+
+# bfe_add_executable(test_simple_contact
+# ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp
+# )
+
+# target_link_libraries(test_simple_contact
+# users_modules
+# mofem_finite_elements
+# mofem_interfaces
+# mofem_multi_indices
+# mofem_petsc
+# mofem_approx
+# mofem_third_party
+# mofem_cblas
+# ${MoFEM_PROJECT_LIBS}
+# )
+
+# cm_export_file("8cube_contact.cub" export_atom_tests_basic_fe)
 
 # add_test(
 #   test_simple_contact_8cube

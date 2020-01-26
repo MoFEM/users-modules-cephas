@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
-    // Read parameters from line command
+    // Check if mesh file was provided
     if (flg_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }

@@ -96,9 +96,9 @@ struct SimpleContactProblem {
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
 
-      CHKERR
-      mField.modify_finite_element_add_field_data(element_name,
-                                                  "MESH_NODE_POSITIONS");
+    //   CHKERR
+    //   mField.modify_finite_element_add_field_data(element_name,
+    //                                               "MESH_NODE_POSITIONS");
 
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
