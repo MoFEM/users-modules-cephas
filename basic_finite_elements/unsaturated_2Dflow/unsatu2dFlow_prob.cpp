@@ -394,9 +394,9 @@ MoFEMErrorCode UFProblem<dim>::run_analysis() {
 
   cout << "Material Block Size: " << material_blocks.size() << endl;
 
-  material_blocks[1003].block_ents.print();
+  material_blocks[3].block_ents.print();
   cout << "size: ";
-  cout << material_blocks[1003].block_ents.size() << endl;
+  cout << material_blocks[3].block_ents.size() << endl;
 
   VectorDouble initVals;
   initVals.resize(3, false);

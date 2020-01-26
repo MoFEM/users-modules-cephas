@@ -1,0 +1,30 @@
+/*!\page unsaturated_flow Unsaturated flow in 2D
+
+This tutorial deals with the usage of the unsaturated_2Dflow module to simulate/analyse 
+the flow water or chemical (fluid in general) in a variably saturated matrix. The emphasis 
+is not on the finite element implementation, rather it is on the description of how the 
+code is run. 
+\tableofcontents
+
+
+\section math_model Unsaturated flow model
+
+The mathematical equation describing the movement of water and chemicals in a variably 
+saturated matrix is usually given by Richards' model \cite{Vogel2001},
+
+\f[
+\frac{\partial \theta(h)}{\partial t} - \mathrm{div}\,[K(h)\,\mathrm{grad}\,(h - z)] = 0
+\f]
+
+where \f$h\f$ is the pressure head, $\theta$ the water (chemical) content is a function of \f$h\f$. 
+The hydraulic conductivity \f$K\f$ is positive definite. The variable \f$z\f$ refers to the 
+vertical distance in the case of vertical flow against the action of gravitational 
+force. However, when the flow is assumed to be restricted in the horizontal plane 
+(i.e., \f$z\f$ is constant), the contribution of \f$z\f$ is ignored.   
+
+A full description of the above equation requires constitutive laws for the water content 
+\f$\theta(h)\f$ and hydraulic conductivity \f$K(h)\f$, and boundary and initial conditions. These 
+constitutive laws depend on the particular material (such as the matrix and the fluid) properties. 
+In this example, we consider the modified van Genuchten (MVG) constitutive laws. 
+The volumetric fluid content constitutive equation is given as
+*/

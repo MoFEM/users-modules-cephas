@@ -16,62 +16,45 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 # Add tests
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/atom_tests)
 
-file(
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/star1.msh
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE) 
+set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
+set(permissions_execute 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ
+  OWNER_EXECUTE 
+  GROUP_EXECUTE)
 
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/bc.cfg
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-  
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/star1.msh
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/bc.cfg
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
+bfe_copy_and_install("*.msh" "${permissions_default}")
+bfe_copy_and_install("*.cfg" "${permissions_default}")
+bfe_copy_and_install("*.jou" "${permissions_default}")
+bfe_copy_and_install("*.cub" "${permissions_default}")
+bfe_copy_and_install("*.h5m" "${permissions_default}")
+bfe_copy_and_install("*.sh" "${permissions_execute}")
+bfe_copy_and_install("*.petsc" "${permissions_execute}")
 
 file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
   FILE_PERMISSIONS OWNER_READ OWNER_WRITE)  
-
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
 
-
-
-
 bfe_build_and_install(
   unsatu2dFlow_prob ${CMAKE_CURRENT_SOURCE_DIR}/unsatu2dFlow_prob.cpp)
-
-file(
-    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
-
 
 #if(ADOL-C_LIBRARY)
 
   #bfe_build_and_install(
-   # unsaturated_transport ${CMAKE_CURRENT_SOURCE_DIR}#/unsaturated_transport.cpp)
-
-  #file(
-   # COPY ${CMAKE_CURRENT_SOURCE_DIR}/run_uf.sh
-   # DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-   # FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE #GROUP_EXECUTE)    
-  #install(FILES ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh 
-  #  DESTINATION ${BFE_MOD_DIR}
-  #  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_EXECUTE)
+    #unsaturated_transport ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated_transport.cpp)
 
   #add_test(
-  #  unsaturated_flow ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh
-  #  ${CMAKE_CURRENT_SOURCE_DIR}/soil_impermeable.cub 
-  #  ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated.cfg 2 0.0001 0.0003)
+   # unsaturated_flow ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh
+   # ${CMAKE_CURRENT_SOURCE_DIR}/soil_impermeable.cub 
+   # ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated.cfg 2 0.0001 0.0003)
 
 #endif(ADOL-C_LIBRARY)
 
