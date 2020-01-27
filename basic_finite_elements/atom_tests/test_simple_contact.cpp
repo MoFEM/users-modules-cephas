@@ -524,7 +524,7 @@ int main(int argc, char *argv[]) {
         "SPATIAL_POSITION", "LAGMULT", mb_post);
 
     std::ofstream ofs(
-        (std ::string("test_simple_contact_8cube") + ".txt").c_str());
+        (std ::string("test_simple_contact") + ".txt").c_str());
     TeeDevice my_tee(std::cout, ofs);
     TeeStream my_split(my_tee);
 

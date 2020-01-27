@@ -472,5 +472,17 @@ add_test(
 )
 add_test(test_simple_contact_8cube_compare ${CMAKE_COMMAND} -E compare_files
   ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_8cube.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact_8cube.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
+
+cm_export_file("4seasons_contact.cub" export_atom_tests_basic_fe)
+add_test(
+  test_simple_contact_4seasons
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact
+  -my_file 4seasons_contact.cub -my_order 2 -my_cn_value 1e3
+)
+add_test(test_simple_contact_4seasons_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_4seasons.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
