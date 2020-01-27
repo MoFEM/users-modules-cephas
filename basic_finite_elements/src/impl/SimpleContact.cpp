@@ -1029,16 +1029,14 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(
 
   auto lagrange_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-  auto lag_gap_prod_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
-
+  double d_lambda, d_gap;
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    mySplit << gap_ptr << "    " << lagrange_slave << "    "
-            << lag_gap_prod_slave << std::endl;
+    d_lambda = fabs(lagrange_slave) < 1e-8 ? 0.0 : lagrange_slave;
+    d_gap = fabs(gap_ptr) < 1e-8 ? 0.0 : gap_ptr;
+    mySplit << d_lambda << " " << d_gap << " " << std::endl;
 
     ++gap_ptr;
     ++lagrange_slave;
-    ++lag_gap_prod_slave;
   }
   MoFEMFunctionReturn(0);
 }

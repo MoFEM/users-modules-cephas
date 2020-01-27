@@ -799,19 +799,15 @@ struct SimpleContactProblem {
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
-          lagFieldSet(lagrange_field), mySplit(_my_split) {}
+          lagFieldSet(lagrange_field), mySplit(_my_split) {
+        mySplit << fixed << setprecision(8);
+        mySplit << "[0] Lagrange multiplier [1] Gap" << endl;
+          }
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
 
-    ~OpMakeTestTextFile() { mySplit.close(); }
-    // MoFEMErrorCode postProcess() {
-    //   MoFEMFunctionBeginHot;
-    //   mySplit.flush();
-    //   mySplit.close();
-
-    //   MoFEMFunctionReturnHot(0);
-    // }
+    ~OpMakeTestTextFile() {}
   };
 
   /**
@@ -967,7 +963,6 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
       moab::Interface &moab_out,
-      stream<tee_device<std::ostream, std::ofstream>> &_my_split,
       bool lagrange_field = true) {
     MoFEMFunctionBegin;
 
@@ -1003,17 +998,6 @@ struct SimpleContactProblem {
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
                              moab_out, lagrange_field));
-
-      _my_split << "Gap        "
-                << "    "
-                << "Lagrange "
-                << "    "
-                << "Product of gap and Lagrange   " << std::endl;
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpMakeTestTextFile(m_field, field_name,
-                                 common_data_simple_contact, _my_split,
-                                 lagrange_field));
     }
     MoFEMFunctionReturn(0);
   }
