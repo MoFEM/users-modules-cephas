@@ -1,7 +1,7 @@
-/** \file test_simple_contact.cpp
- * \example test_simple_contact.cpp
+/** \file simple_contact.cpp
+ * \example simple_contact.cpp
  *
- * Testing implementation of simple contact element
+ * Implementation of simple contact between surfaces with matching meshes
  *
  **/
 
@@ -20,18 +20,22 @@
  */
 
 #include <BasicFiniteElements.hpp>
-
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
 #include <Hooke.hpp>
-using namespace boost::numeric;
 
-using namespace MoFEM;
+//#include <boost/program_options.hpp>
+//namespace po = boost::program_options;
+
+using namespace std;
+using namespace boost::numeric;
 
 namespace bio = boost::iostreams;
 using bio::stream;
 using bio::tee_device;
+
+typedef tee_device<std::ostream, std::ofstream> TeeDevice;
+typedef stream<TeeDevice> TeeStream;
+
+using namespace MoFEM;
 
 static char help[] = "\n";
 int main(int argc, char *argv[]) {
@@ -42,16 +46,16 @@ int main(int argc, char *argv[]) {
                                  "-ksp_monitor \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
-                                 "-snes_max_it 100 \n"
+                                 "-snes_max_it 10 \n"
                                  "-snes_atol 1e-8 \n"
                                  "-snes_rtol 1e-8 \n"
                                  "-snes_monitor \n"
                                  "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
-                                 "-my_cn_value 1e3 \n"
-                                 "-my_is_newton_cotes PETSC_FALSE \n"
-                                 "-is_lag PETSC_TRUE \n";
+                                 "-my_cn_value 1. \n"
+                                 "-my_is_newton_cotes 0 \n"
+                                 "-my_is_test 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -70,17 +74,16 @@ int main(int argc, char *argv[]) {
   moab::Interface &moab = mb_instance; // create interface to database
 
   try {
-    PetscBool flg_block_config, flg_file;
+    PetscBool flg_file;
 
     char mesh_file_name[255];
     PetscInt order = 1;
-
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
-    PetscBool is_lag = PETSC_TRUE;
+    PetscBool is_test = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -89,6 +92,10 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsInt("-my_order", "default approximation order", "", 1,
                            &order, PETSC_NULL);
+    CHKERR PetscOptionsInt(
+        "-my_order_lambda",
+        "default approximation order of Lagrange multipliers", "", 1,
+        &order_lambda, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -102,24 +109,15 @@ int main(int argc, char *argv[]) {
                             "", 1., &cn_value, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
-                            "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
-                            "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
-
-    CHKERR PetscOptionsBool("-is_lag",
-                            "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mes",
-                            "", PETSC_TRUE, &is_lag, PETSC_NULL);
-
-    CHKERR PetscOptionsInt(
-        "-my_order_lambda",
-        "default approximation order of Lagrange multipliers", "", 1,
-        &order_lambda, PETSC_NULL);
+                            "set if Newton-Cotes quadrature rules are used", "",
+                            PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_is_test", "set if run as test", "",
+                            PETSC_FALSE, &is_test, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
-    // Read parameters from line command
+    // Check if mesh file was provided
     if (flg_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
@@ -154,51 +152,43 @@ int main(int argc, char *argv[]) {
     // print block sets with materials
     CHKERR mmanager_ptr->printMaterialsSet();
 
-    auto add_prism_interface = [&](Range &tets, Range &prisms,
-                                   Range &master_tris, Range &slave_tris,
-                                   EntityHandle &meshset_tets,
-                                   EntityHandle &meshset_prisms,
+    auto add_prism_interface = [&](Range &contact_prisms, Range &master_tris,
+                                   Range &slave_tris,
                                    std::vector<BitRefLevel> &bit_levels) {
       MoFEMFunctionBegin;
       PrismInterface *interface;
       CHKERR m_field.getInterface(interface);
 
-      int ll = 1;
+      int lvl = 1;
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
         if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
                              cit->getName().c_str(), cit->getMeshsetId());
           EntityHandle cubit_meshset = cit->getMeshset();
-          Range tris;
-          CHKERR moab.get_entities_by_type(cubit_meshset, MBTRI, tris, true);
-          master_tris.merge(tris);
 
-          {
-            // get tet entities from back bit_level
-            EntityHandle ref_level_meshset = 0;
-            CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-                                               BitRefLevel().set(), MBTET,
-                                               ref_level_meshset);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-                                               BitRefLevel().set(), MBPRISM,
-                                               ref_level_meshset);
-            Range ref_level_tets;
-            CHKERR moab.get_entities_by_handle(ref_level_meshset,
-                                               ref_level_tets, true);
-            // get faces and tets to split
-            CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true,
-                                       0);
-            // set new bit level
-            bit_levels.push_back(BitRefLevel().set(ll++));
-            // split faces and tets
-            CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
-                                         cubit_meshset, true, true, 0);
-            // clean meshsets
-            CHKERR moab.delete_entities(&ref_level_meshset, 1);
-          }
+          // get tet entities from back bit_level
+          EntityHandle ref_level_meshset;
+          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
+                                     ref_level_meshset);
+          CHKERR m_field.getInterface<BitRefManager>()
+              ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
+                                             BitRefLevel().set(), MBTET,
+                                             ref_level_meshset);
+          CHKERR m_field.getInterface<BitRefManager>()
+              ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
+                                             BitRefLevel().set(), MBPRISM,
+                                             ref_level_meshset);
+
+          // get faces and tets to split
+          CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true, 0);
+          // set new bit level
+          bit_levels.push_back(BitRefLevel().set(lvl++));
+          // split faces and tets
+          CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
+                                       cubit_meshset, true, true, 0);
+          // clean meshsets
+          CHKERR moab.delete_entities(&ref_level_meshset, 1);
+
           // update cubit meshsets
           for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
             EntityHandle cubit_meshset = ciit->meshset;
@@ -229,45 +219,44 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(
           bit_levels.size() - 1);
 
-      CHKERR moab.create_meshset(MESHSET_SET, meshset_tets);
+      EntityHandle meshset_prisms;
       CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
-
-      CHKERR m_field.getInterface<BitRefManager>()
-          ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
-                                         MBTET, meshset_tets);
-      CHKERR moab.get_entities_by_handle(meshset_tets, tets, true);
-
       CHKERR m_field.getInterface<BitRefManager>()
           ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
                                          MBPRISM, meshset_prisms);
-      CHKERR moab.get_entities_by_handle(meshset_prisms, prisms);
+      CHKERR moab.get_entities_by_handle(meshset_prisms, contact_prisms);
+      CHKERR moab.delete_entities(&meshset_prisms, 1);
 
-      Range tris;
-      CHKERR moab.get_adjacencies(prisms, 2, false, tris,
-                                  moab::Interface::UNION);
-      tris = tris.subset_by_type(MBTRI);
-      slave_tris = subtract(tris, master_tris);
+      EntityHandle tri;
+      for (Range::iterator pit = contact_prisms.begin();
+           pit != contact_prisms.end(); pit++) {
+        CHKERR moab.side_element(*pit, 2, 3, tri);
+        // TODO: handle possible error
+        master_tris.insert(tri);
+        CHKERR moab.side_element(*pit, 2, 4, tri);
+        // TODO: handle possible error
+        slave_tris.insert(tri);
+      }
 
       MoFEMFunctionReturn(0);
     };
 
-    Range all_tets, contact_prisms, master_tris, slave_tris;
-    EntityHandle meshset_tets, meshset_prisms;
+    Range contact_prisms, master_tris, slave_tris;
     std::vector<BitRefLevel> bit_levels;
 
     bit_levels.push_back(BitRefLevel().set(0));
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels[0]);
 
-    CHKERR add_prism_interface(all_tets, contact_prisms, master_tris,
-                               slave_tris, meshset_tets, meshset_prisms,
+    CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
-    cout << "contact_prisms:" << contact_prisms.size() << endl;
-    contact_prisms.print();
-    cout << "master_tris:" << master_tris.size() << endl;
-    master_tris.print();
-    cout << "slave_tris:" << slave_tris.size() << endl;
-    slave_tris.print();
+
+    // cout << "contact_prisms: " << contact_prisms.size() << endl;
+    // contact_prisms.print();
+    // cout << "master_tris: " << master_tris.size() << endl;
+    // master_tris.print();
+    // cout << "slave_tris: " << slave_tris.size() << endl;
+    // slave_tris.print();
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -275,37 +264,36 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3, MB_TAG_SPARSE, MF_ZERO);
 
+    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                             MB_TAG_SPARSE, MF_ZERO);
+
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
-    // Declare problem
-    // add entities (by tets) to the field
+    // Declare problem add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
     CHKERR m_field.set_field_order(0, MBTET, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                               MB_TAG_SPARSE, MF_ZERO);
+    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+    CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+    // build field
+    CHKERR m_field.build_fields();
 
-      // build field
-      CHKERR m_field.build_fields();
-
-      // Projection on "x" field
-      {
-        Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
-        CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
+    // Projection on "x" field
+    {
+      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
+      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
     }
-    // MESH_NODE_POSITIONS
+    // Projection on "X" field
     {
       Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
@@ -327,7 +315,7 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms, is_lag);
+                                       "LAGMULT", contact_prisms);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
@@ -415,25 +403,23 @@ int main(int argc, char *argv[]) {
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
 
+    contact_problem->setContactOperatorsRhsOperators(
+        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "LAGMULT");
+    contact_problem->setContactOperatorsLhsOperators(
+        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "LAGMULT", Aij);
 
-        contact_problem->setContactOperatorsRhsOperators(
-            fe_rhs_simple_contact, common_data_simple_contact,
-            "SPATIAL_POSITION", "LAGMULT");
+    // Assemble pressure and traction forces
+    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+    CHKERR MetaNeumannForces::setMomentumFluxOperators(
+        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
 
-        contact_problem->setContactOperatorsLhsOperators(
-            fe_lhs_simple_contact, common_data_simple_contact,
-            "SPATIAL_POSITION", "LAGMULT", Aij);
-
-// Assemble pressure and traction forces
-boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-CHKERR MetaNeumannForces::setMomentumFluxOperators(m_field, neumann_forces,
-                                                   NULL, "SPATIAL_POSITION");
-
-boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
-    neumann_forces.begin();
-for (; mit != neumann_forces.end(); mit++) {
-  CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
-                                &mit->second->getLoopFe(), NULL, NULL);
+    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+        neumann_forces.begin();
+    for (; mit != neumann_forces.end(); mit++) {
+      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
+                                    &mit->second->getLoopFe(), NULL, NULL);
     }
 
     // Implementation of spring element
@@ -454,26 +440,38 @@ for (; mit != neumann_forces.end(); mit++) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact.get(),
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr,
-                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
 
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact.get(),
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
-                                  NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
+
+    if (is_test == PETSC_TRUE) {
+      char testing_options[] = "-ksp_type fgmres "
+                               "-pc_type lu "
+                               "-pc_factor_mat_solver_package mumps "
+                               "-snes_type newtonls "
+                               "-snes_linesearch_type basic "
+                               "-snes_max_it 10 "
+                               "-snes_atol 1e-8 "
+                               "-snes_rtol 1e-8 ";
+      CHKERR PetscOptionsInsertString(NULL, testing_options);
+    }
+
     SNES snes;
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
@@ -501,6 +499,9 @@ for (; mit != neumann_forces.end(); mit++) {
           post_proc.postProcMesh, post_proc.mapGaussPts, "SPATIAL_POSITION",
           sit->second, post_proc.commonData));
     }
+
+    // CHKERR VecAssemblyBegin(D);
+    // CHKERR VecAssemblyEnd(D);
 
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
@@ -543,34 +544,34 @@ for (; mit != neumann_forces.end(); mit++) {
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
 
-    // moab_instance
-    moab::Core mb_post_vertex;                   // create database
-    moab::Interface &moab_proc_vertex = mb_post_vertex; // create interface to database
-
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_post_proc_simple_contact_vertex =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-
-    typedef tee_device<std::ostream, std::ofstream> TeeDevice;
-    typedef stream<TeeDevice> TeeStream;
-
-    std::ofstream ofs(
-        (std ::string("test_for_H1_H1_conforming_meshes_contact") + ".txt")
-            .c_str());
-    TeeDevice my_tee(std::cout, ofs);
-    TeeStream my_split(my_tee);
-
-    // todo:check this Ignatios
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post, my_split, is_lag);
-
+        "SPATIAL_POSITION", "LAGMULT", mb_post);
+    
     mb_post.delete_mesh();
 
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact.get());
+    if (is_test == PETSC_TRUE) {
+      std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
+      TeeDevice my_tee(std::cout, ofs);
+      TeeStream my_split(my_tee);
 
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new SimpleContactProblem::OpMakeTestTextFile(
+              m_field, "SPATIAL_POSITION", common_data_simple_contact,
+              my_split));
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
+      
+      my_split << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy
+               << endl;
+      ofs.close();
+    }
+    else {
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
+    }
+  
     std::ostringstream ostrm;
 
     ostrm << "out_contact"
@@ -581,20 +582,6 @@ for (; mit != neumann_forces.end(); mit++) {
                        out_file_name.c_str());
     CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                               "PARALLEL=WRITE_PART");
-
-    mb_post_vertex.delete_mesh();
-
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact_vertex.get());
-    std::ostringstream ostrm_lam;
-    ostrm_lam << "out_contact_vertex_lambda_n"
-          << ".h5m";
-
-    out_file_name = ostrm_lam.str();
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                       out_file_name.c_str());
-    CHKERR mb_post_vertex.write_file(out_file_name.c_str(), "MOAB",
-                                     "PARALLEL=WRITE_PART");
 
     EntityHandle out_meshset_slave_tris;
     EntityHandle out_meshset_master_tris;
@@ -609,6 +596,9 @@ for (; mit != neumann_forces.end(); mit++) {
                            &out_meshset_slave_tris, 1);
     CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
                            &out_meshset_master_tris, 1);
+
+    CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
+    CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);

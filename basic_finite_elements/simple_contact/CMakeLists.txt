@@ -31,48 +31,91 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
 
+bfe_build_and_install(simple_contact
+    ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
 
-#file(
-#  COPY ${CMAKE_CURRENT_SOURCE_DIR}/PeelTestHalfCrack.h5m
-#  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-#  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+file(
+  COPY ${CMAKE_CURRENT_SOURCE_DIR}/examples
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+)
+    
+install(
+  DIRECTORY examples
+  DESTINATION ${BFE_MOD_DIR}
+)
   
-#install(
-#  FILES ${CMAKE_CURRENT_SOURCE_DIR}/PeelTestHalfCrack.h5m 
-#  DESTINATION ${BFE_MOD_DIR}
-#  PERMISSIONS OWNER_READ OWNER_WRITE)
+add_test(
+  test_simple_contact_8cube
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/8cube_contact.cub 
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_8cube_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_8cube.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
 
-#bfe_build_and_install(insert_prism_interface
-#  ${CMAKE_CURRENT_SOURCE_DIR}/insert_prism_interface.cpp)
+add_test(
+  test_simple_contact_4seasons
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/4seasons_contact.cub
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_4seasons_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_4seasons.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
 
-bfe_build_and_install(test_simple_contact
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp)
+add_test(
+  test_simple_contact_Tinterface
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/Tinterface_contact.cub
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_Tinterface_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_Tinterface.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
 
-#bfe_build_and_install(test_h_div_simple_contact
-#    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_simple_contact.cpp)
+add_test(
+  test_simple_contact_punch_top_and_mid
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_and_mid.cub
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_punch_top_and_mid_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_punch_top_and_mid.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
 
-#bfe_build_and_install(test_h_div_vol
-#    ${CMAKE_CURRENT_SOURCE_DIR}/test_h_div_vol.cpp)
+add_test(
+  test_simple_contact_punch_top_only
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_only.cub
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_punch_top_only_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_punch_top_only.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
 
-#bfe_build_and_install(test_ale_simple_contact
-#    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact.cpp)
-
-#bfe_build_and_install(test_l2_hdiv_simple_contact
-#    ${CMAKE_CURRENT_SOURCE_DIR}/test_l2_hdiv_simple_contact.cpp)
-
-#bfe_build_and_install(test_ale_simple_contact_andrei
-#    ${CMAKE_CURRENT_SOURCE_DIR}/test_ale_simple_contact_andrei.cpp)
-
-#if(ADOL-C_LIBRARY)
-
-  #testing
-#  add_test(ArcLengthInterfaceTest
-#    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/arc_length_interface
-#    -my_file ${CMAKE_CURRENT_SOURCE_DIR}/PeelTestHalfCrack.h5m -my_order 1
-#    -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps
-#    -ksp_monitor -ksp_atol 1e-10 -ksp_rtol 1e-10
-#    -snes_monitor -snes_type newtonls -snes_linesearch_type l2 -snes_linesearch_monitor
-#    -snes_max_it 16 -snes_atol 1e-8 -snes_rtol 1e-8 -my_sr 1e-1 -my_ms 3 -snes_converged_reason
-#    -log_view)
-
-# endif(ADOL-C_LIBRARY)
