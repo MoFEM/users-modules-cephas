@@ -25,7 +25,7 @@ set(BFE_DIRS
   hierarchical_approximation
   reaction_diffusion_equation
   chemo_mech
-  #unsaturated_2Dflow
+  unsaturated_2Dflow
   )
 
 function(bfe_install bfe_mod_dir)
