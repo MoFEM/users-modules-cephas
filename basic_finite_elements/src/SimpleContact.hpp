@@ -29,6 +29,10 @@ extern "C" {
 #include <boost/enable_shared_from_this.hpp>
 #endif
 
+namespace bio = boost::iostreams;
+using bio::stream;
+using bio::tee_device;
+
 struct SimpleContactProblem {
 
   struct SimpleContactPrismsData {
@@ -96,9 +100,9 @@ struct SimpleContactProblem {
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
 
-    //   CHKERR
-    //   mField.modify_finite_element_add_field_data(element_name,
-    //                                               "MESH_NODE_POSITIONS");
+      //   CHKERR
+      //   mField.modify_finite_element_add_field_data(element_name,
+      //                                               "MESH_NODE_POSITIONS");
 
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
@@ -727,10 +731,9 @@ struct SimpleContactProblem {
     moab::Interface &moabOut;
     bool lagFieldSet;
 
-    OpMakeVtkSlave(
-        MoFEM::Interface &m_field, string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data,
-        moab::Interface &moab_out, bool lagrange_field = true)
+    OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
+                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                   moab::Interface &moab_out, bool lagrange_field = true)
         : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPROW,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
@@ -761,6 +764,31 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  struct OpMakeTestTextFile
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+    MoFEM::Interface &mField;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    bool lagFieldSet;
+    stream<tee_device<std::ostream, std::ofstream>> &mySplit;
+    OpMakeTestTextFile(
+        MoFEM::Interface &m_field, string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data,
+        stream<tee_device<std::ostream, std::ofstream>> &_my_split,
+        bool lagrange_field = true)
+        : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          mField(m_field), commonDataSimpleContact(common_data),
+          lagFieldSet(lagrange_field), mySplit(_my_split) {
+      mySplit << fixed << setprecision(8);
+      mySplit << "[0] Lagrange multiplier [1] Gap" << endl;
+    }
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+    ~OpMakeTestTextFile() {}
+  };
+
   // setup operators for calculation of active set
   MoFEMErrorCode setContactOperatorsRhsOperators(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
@@ -775,10 +803,10 @@ struct SimpleContactProblem {
         setOfSimpleContactPrism.begin();
     for (; sit != setOfSimpleContactPrism.end(); sit++) {
 
-    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-    //       feMatSideRhs =
-    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-    //               mField);
+      //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+      //       feMatSideRhs =
+      //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+      //               mField);
 
       // feMatSideRhs->getOpPtrVector().push_back(
       //     new OpCalculateVectorFieldGradient<3, 3>(X_field,
@@ -789,9 +817,10 @@ struct SimpleContactProblem {
       // feMatSideRhs->getOpPtrVector().push_back(
       //     new OpCalculateDeformation(X_field, data_at_pts, ho_geometry));
 
-    //   fe_rhs_simple_contact->getOpPtrVector().push_back(
-    //       new OpGetNormalSlaveForSide(field_name, common_data_simple_contact,
-    //                                   feMatSideRhs, side_fe_name));
+      //   fe_rhs_simple_contact->getOpPtrVector().push_back(
+      //       new OpGetNormalSlaveForSide(field_name,
+      //       common_data_simple_contact,
+      //                                   feMatSideRhs, side_fe_name));
 
       // fe_rhs_simple_contact->getOpPtrVector().push_back(
       //     new OpContactConstraintMatrixMasterSlaveForSide(
@@ -938,9 +967,8 @@ struct SimpleContactProblem {
       }
 
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpMakeVtkSlave(m_field, field_name,
-                                   common_data_simple_contact, moab_out,
-                                   lagrange_field));
+          new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
+                             moab_out, lagrange_field));
     }
     MoFEMFunctionReturn(0);
   }

@@ -227,10 +227,8 @@ int main(int argc, char *argv[]) {
       for (Range::iterator pit = contact_prisms.begin();
            pit != contact_prisms.end(); pit++) {
         CHKERR moab.side_element(*pit, 2, 3, tri);
-        // TODO: handle possible error
         master_tris.insert(tri);
         CHKERR moab.side_element(*pit, 2, 4, tri);
-        // TODO: handle possible error
         slave_tris.insert(tri);
       }
 
@@ -385,15 +383,21 @@ int main(int argc, char *argv[]) {
         fe_lhs_simple_contact =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
+    boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
+        common_data_simple_contact =
+            boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+                m_field);
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_post_proc_simple_contact =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
 
     contact_problem->setContactOperatorsRhsOperators(
-        fe_rhs_simple_contact, "SPATIAL_POSITION", "LAGMULT");
+        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "LAGMULT");
     contact_problem->setContactOperatorsLhsOperators(
-        fe_lhs_simple_contact, "SPATIAL_POSITION", "LAGMULT", Aij);
+        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "LAGMULT", Aij);
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -516,13 +520,25 @@ int main(int argc, char *argv[]) {
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
     contact_problem->setContactOperatorsForPostProc(
-        m_field, fe_post_proc_simple_contact, "SPATIAL_POSITION", "LAGMULT",
-        mb_post);
+        fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+        "SPATIAL_POSITION", "LAGMULT", mb_post);
+
+    std::ofstream ofs(
+        (std ::string("test_simple_contact_8cube") + ".txt").c_str());
+    TeeDevice my_tee(std::cout, ofs);
+    TeeStream my_split(my_tee);
+
+    fe_post_proc_simple_contact->getOpPtrVector().push_back(
+        new SimpleContactProblem::OpMakeTestTextFile(
+            m_field, "SPATIAL_POSITION", common_data_simple_contact, my_split));
 
     mb_post.delete_mesh();
 
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
+
+    my_split << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
+    my_split.close();                                
 
     std::ostringstream ostrm;
 
@@ -548,18 +564,9 @@ int main(int argc, char *argv[]) {
                            &out_meshset_slave_tris, 1);
     CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
                            &out_meshset_master_tris, 1);
-    
+
     CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
     CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
-
-    std::ofstream ofs(
-        (std ::string("test_simple_contact_8cube") + ".txt").c_str());
-    TeeDevice my_tee(std::cout, ofs);
-    TeeStream my_split(my_tee);
-
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpMakeTestTextFile(m_field, field_name, common_data_simple_contact,
-                               _my_split, lagrange_field));
 
     CHKERR VecDestroy(&D);
     CHKERR VecDestroy(&F);

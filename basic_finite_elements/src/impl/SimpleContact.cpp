@@ -116,7 +116,6 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
-
 MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
@@ -593,7 +592,6 @@ MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
 
   MoFEMFunctionReturn(0);
 }
-
 
 MoFEMErrorCode
 SimpleContactProblem::OpContactConstraintMatrixMasterSlave::doWork(
@@ -1085,6 +1083,29 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
       ++lagrange_slave;
       ++lag_gap_prod_slave;
     }
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+  int nb_gauss_pts = data.getN().size1();
+  auto gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+  double d_lambda, d_gap;
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    d_lambda = fabs(lagrange_slave) < 1e-16 ? 0.0 : lagrange_slave;
+    d_gap = fabs(gap_ptr) < 1e-16 ? 0.0 : gap_ptr;
+    mySplit << d_lambda << " " << d_gap << " " << std::endl;
+    ++gap_ptr;
+    ++lagrange_slave;
   }
   MoFEMFunctionReturn(0);
 }

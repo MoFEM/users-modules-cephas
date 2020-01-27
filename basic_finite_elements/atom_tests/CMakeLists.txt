@@ -447,27 +447,30 @@ add_test(
   -my_file 2tets_contact.cub -my_r_value 1 -my_cn_value 1e2 -my_order 3 -my_order_lambda 3
 )
 
-# bfe_add_executable(test_simple_contact
-# ${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp
-# )
+bfe_add_executable(test_simple_contact
+${CMAKE_CURRENT_SOURCE_DIR}/test_simple_contact.cpp
+)
 
-# target_link_libraries(test_simple_contact
-# users_modules
-# mofem_finite_elements
-# mofem_interfaces
-# mofem_multi_indices
-# mofem_petsc
-# mofem_approx
-# mofem_third_party
-# mofem_cblas
-# ${MoFEM_PROJECT_LIBS}
-# )
+target_link_libraries(test_simple_contact
+users_modules
+mofem_finite_elements
+mofem_interfaces
+mofem_multi_indices
+mofem_petsc
+mofem_approx
+mofem_third_party
+mofem_cblas
+${MoFEM_PROJECT_LIBS}
+)
 
-# cm_export_file("8cube_contact.cub" export_atom_tests_basic_fe)
-
-# add_test(
-#   test_simple_contact_8cube
-#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
-#   ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact
-#   -file_name mesh_for_testing_surface_pressure_element.h5m
-# )
+cm_export_file("8cube_contact.cub" export_atom_tests_basic_fe)
+add_test(
+  test_simple_contact_8cube
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact
+  -my_file 8cube_contact.cub -my_order 2 -my_cn_value 1e3
+)
+add_test(test_simple_contact_8cube_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_8cube.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact_8cube.txt
+)

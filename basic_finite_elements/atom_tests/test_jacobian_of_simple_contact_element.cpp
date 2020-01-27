@@ -1,7 +1,7 @@
 /** \file simple_contact.cpp
  * \example simple_contact.cpp
  *
- * Testing implementation of simple contact element (for contact between 
+ * Testing implementation of simple contact element (for contact between
  * surfaces with matching meshes) by verifying its tangent matrix
  *
  **/
@@ -23,7 +23,6 @@
 #include <BasicFiniteElements.hpp>
 
 using namespace std;
-
 using namespace MoFEM;
 
 static char help[] = "\n";
@@ -45,7 +44,6 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = 1.;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool test_jacobian = PETSC_FALSE;
-
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -128,7 +126,6 @@ int main(int argc, char *argv[]) {
                                        cubit_meshset, true, true, 0);
           // clean meshsets
           CHKERR moab.delete_entities(&ref_level_meshset, 1);
-
         }
       }
 
@@ -262,8 +259,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMSetUp(dm);
 
-    Mat A, fdA;  // Stiffness matrix
-    Vec D, F; // Vector of DOFs and the RHS
+    Mat A, fdA; // Stiffness matrix
+    Vec D, F;   // Vector of DOFs and the RHS
 
     CHKERR DMCreateGlobalVector(dm, &D);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
@@ -307,13 +304,13 @@ int main(int argc, char *argv[]) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
           "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
-          //"-pc_type none";
+      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
                                "-snes_rtol 0 "
                                "-snes_max_it 1 ";
-                               //"-pc_type none";
+      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
