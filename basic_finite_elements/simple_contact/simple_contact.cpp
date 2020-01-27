@@ -20,12 +20,20 @@
  */
 
 #include <BasicFiniteElements.hpp>
-
-#include <boost/program_options.hpp>
-using namespace std;
-namespace po = boost::program_options;
 #include <Hooke.hpp>
+
+//#include <boost/program_options.hpp>
+//namespace po = boost::program_options;
+
+using namespace std;
 using namespace boost::numeric;
+
+namespace bio = boost::iostreams;
+using bio::stream;
+using bio::tee_device;
+
+typedef tee_device<std::ostream, std::ofstream> TeeDevice;
+typedef stream<TeeDevice> TeeStream;
 
 using namespace MoFEM;
 
@@ -46,7 +54,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order_lambda 1 \n"
                                  "-my_r_value 1. \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_is_newton_cotes 0 \n";
+                                 "-my_is_newton_cotes 0 \n"
+                                 "-my_is_test 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -69,12 +78,12 @@ int main(int argc, char *argv[]) {
 
     char mesh_file_name[255];
     PetscInt order = 1;
-
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
+    PetscBool is_test = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -102,6 +111,8 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if Newton-Cotes quadrature rules are used", "",
                             PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_is_test", "set if run as test", "",
+                            PETSC_FALSE, &is_test, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -240,12 +251,12 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
 
-    cout << "contact_prisms: " << contact_prisms.size() << endl;
-    contact_prisms.print();
-    cout << "master_tris: " << master_tris.size() << endl;
-    master_tris.print();
-    cout << "slave_tris: " << slave_tris.size() << endl;
-    slave_tris.print();
+    // cout << "contact_prisms: " << contact_prisms.size() << endl;
+    // contact_prisms.print();
+    // cout << "master_tris: " << master_tris.size() << endl;
+    // master_tris.print();
+    // cout << "slave_tris: " << slave_tris.size() << endl;
+    // slave_tris.print();
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -448,6 +459,19 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
+
+    if (is_test == PETSC_TRUE) {
+      char testing_options[] = "-ksp_type fgmres "
+                               "-pc_type lu "
+                               "-pc_factor_mat_solver_package mumps "
+                               "-snes_type newtonls "
+                               "-snes_linesearch_type basic "
+                               "-snes_max_it 10 "
+                               "-snes_atol 1e-8 "
+                               "-snes_rtol 1e-8 ";
+      CHKERR PetscOptionsInsertString(NULL, testing_options);
+    }
+
     SNES snes;
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
@@ -524,11 +548,31 @@ int main(int argc, char *argv[]) {
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
         "SPATIAL_POSITION", "LAGMULT", mb_post);
 
+    if (is_test == PETSC_TRUE) {
+      std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
+      TeeDevice my_tee(std::cout, ofs);
+      TeeStream my_split(my_tee);
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new SimpleContactProblem::OpMakeTestTextFile(
+              m_field, "SPATIAL_POSITION", common_data_simple_contact,
+              my_split));
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
+      
+      my_split << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy
+               << endl;
+      my_split.close();
+    }
+    else {
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
+    }
+
     mb_post.delete_mesh();
 
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact);
-
+  
     std::ostringstream ostrm;
 
     ostrm << "out_contact"
