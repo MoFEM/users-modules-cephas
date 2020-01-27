@@ -565,7 +565,8 @@ int main(int argc, char *argv[]) {
       
       my_split << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy
                << endl;
-      my_split.close();
+
+      ofs.close();
     }
     else {
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
