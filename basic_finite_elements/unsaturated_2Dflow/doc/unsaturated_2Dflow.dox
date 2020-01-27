@@ -1,9 +1,17 @@
 /*!\page unsaturated_flow Unsaturated flow in 2D
 
-This tutorial deals with the usage of the unsaturated_2Dflow module to simulate/analyse 
+This tutorial deals with the usage of the \b unsaturated_2Dflow module to simulate/analyse 
 the flow water or chemical (fluid in general) in a variably saturated matrix. The emphasis 
 is not on the finite element implementation, rather it is on the description of how the 
 code is run. 
+\image html capillary_flow.gif "Paper network flow in tow-dimensions                " width=600px
+The presentation includes:
+- An overview of the mathematical equation
+- Mesh generation in Gmsh
+- Executing the code
+- Command options controlling the simulation
+- Converting output into vtk
+
 \tableofcontents
 
 
@@ -16,7 +24,7 @@ saturated matrix is usually given by Richards' model \cite{Vogel2001},
 \frac{\partial \theta(h)}{\partial t} - \mathrm{div}\,[K(h)\,\mathrm{grad}\,(h - z)] = 0
 \f]
 
-where \f$h\f$ is the pressure head, $\theta$ the water (chemical) content is a function of \f$h\f$. 
+where \f$h\f$ is the pressure head, \f$\theta\f$ the water (chemical) content is a function of \f$h\f$. 
 The hydraulic conductivity \f$K\f$ is positive definite. The variable \f$z\f$ refers to the 
 vertical distance in the case of vertical flow against the action of gravitational 
 force. However, when the flow is assumed to be restricted in the horizontal plane 
@@ -27,4 +35,217 @@ A full description of the above equation requires constitutive laws for the wate
 constitutive laws depend on the particular material (such as the matrix and the fluid) properties. 
 In this example, we consider the modified van Genuchten (MVG) constitutive laws. 
 The volumetric fluid content constitutive equation is given as
+\f[ 
+\theta(h) = \begin{cases} 
+      \theta_r + \frac{\theta_m - \theta_r}{[1+(-\alpha h)^n]m}, & h < h_s\\
+      \theta_s, & h\leq h_s
+   \end{cases}
+\f]
+where \f$\theta_r\f$ and \f$\theta_s\f$,are positive material parameters referred to as residual 
+and saturated fluid contents. The parameter \f$h_s\f$ is the minimal capillary pressure, 
+and \f$\theta_m\f$ is a fictitious modelling parameter.  \f$\alpha\f$ and \f$n\f$ are empirical 
+shape parameters. In addition, the constitutive equation for the hydraulic conductivity is given by
+
+\f[ 
+\theta(h) = \begin{cases} 
+      K_s\,K_r(h), & h < h_s\\
+      K_s, & h\leq h_s
+   \end{cases}
+\f]
+where \f$K_s\f$ is the saturated hydraulic conductivity and \f$K_r\f$ is the unsaturated hydraulic 
+conductivity, which is related to $h$ through the effective saturation \f$S_e\f$ (volume fraction representing 
+the composition of fluid in the matrix-fluid mixture) by
+\f[
+K_r = S_e^\ell \bigg[ \frac{1-F(S_e)}{1-F(1)}\bigg]^2
+\f]
+
+where \f$\ell\f$ is the pore connectivity parameter usually assumed to be \f$0.5\f$, and the 
+function \f$F\f$ is given by
+
+\f[
+F = [1-(\frac{\theta_s - \theta_r}{\theta_m - \theta_r}S_e)^{1/m}]^m
+\f]
+and the effective saturation is given by
+\f[
+S_e = \frac{\theta - \theta_r}{\theta_s - \theta_r}
+\f]
+Here \f$m = 1 - 1/n\f$, \f$n>1\f$.
+
+The values of the parameters used in this problem represents \f$K_s = 1.0, \ell = 0.5, \theta_r = 0.045, 
+\theta_s = 0.43, theta_m = 0.43, n = 5.38, \alpha = 1.8125\f$ and \f$h_s = 0.00\f$.
+
+The boundary conditions are divided into two (see \ref fig_1_domain "Fig 1"); one that prescribes the pressure 
+head \f$h\f$ on a given part of the boundary \f$\Gamma_1\f$, the other one prescribes the on 
+the rest of the boundary \f$\Gamma_2 = \partial\Omega - \Gamma_1\f$. Usually the second type of 
+boundary condition is zero flux which corresponds to an insulation of the boundary, i.e., no 
+material is coming in and out of the boundary.
+
+The initial condition prescribes the pressure head \f$h\f$ at the beginning of the simulation, 
+in this example we consider a homogeneous initial condition, i.e., \f$h = h_s\f$
+
+\section mesh_gen Mesh generation
+The problem considered in this tutorial is the lateral flow of a dissolvable fluid in a 
+two-dimensional paper network as shown in \ref fig_1_domain "Fig 1". Parts of the boundary labeled \f$\Gamma_1\f$ 
+are attached with a source of the fluid associated with pressure head \f$h = C\f$. The rest of the boundary, i.e., 
+\f$\Gamma_2\f$, is insulated. 
+
+\anchor fig_1_domain
+\image html domain_bds.png "Figure 1: Domain and boundary decomposition            " width=600px
+
+The geometry of the paper network \f$\Omega\f$ is created in Gmsh GUI. Later, the 
+geometry can be saved in to a .geo file that can be opened in any text editor, 
+which in turn provides an alternative way of modifying it. 
+
+The geometry consists of 5 rectangular regions each with dimension \f$l_x = 0.02 \f$ by \f$l_y = 0.005\f$. 
+The approach for creating the domain is as follows: 
+
+- a rectangle with the mentioned dimensions is created, that is
+\code{.bash}
+lx = 0.02;
+ly = 0.005;
+SetFactory("OpenCASCADE");
+Rectangle(1) = {0, 0, 0, lx, ly, 0};
+\endcode
+the last line creates a rectangular surface with ID 1 and one of its vertices lies at 
+the origin, and dimensions \f$lx\f$ along the \f$x\f$-axis and \f$ly\f$ along the \f$x\f$-axis.
+
+- the rest of the four rectangles are obtained by duplicating and rotating surface 1 by 
+appropriate angles and an axis of rotation, for example
+\code{.bash}
+Rotate {{0, 0, 1}, {lx, ly/2, 0}, Pi/3} { Duplicata { Surface{1}; }}
+\endcode
+this line make a duplicate of Surface 1 (to obtain a new surface 2), and rotates by \f$\pi/3\f$ in the 
+counter clockwise direction along an axis parallel to the \f$z\f$-axis passing through the point with 
+coordinates \f$(l_x, l_y/2, 0)\f$.
+
+- since the Gmsh BooleanUnion operator only creates the union of 2 entities, we create the union of 
+the 5 rectangle step by step deleting the original ones at each step, for instance 
+\code{.bash}
+BooleanUnion { Surface{1}; } { Surface{2}; }
+Recursive Delete { Surface{1}; Surface{2}; }
+\endcode
+here the first line unites surface 1 and 2 to create a new surface, while the second deleted 
+the original rectangles once the a surface which is the union of the two has been created.
+ 
+- once we have the desired surface 9, the next step is to define where the physical curves and 
+surfaces used to define the initial and boundary conditions. Since we can have parts of regions 
+with different initial conditions, each region has to be created as physical surface in its own right. 
+However, in this example problem we only have one type of initial conditions which defined all over the 
+surface 9. Moreover, to define the boundary conditions one needs to obtain boundary id's in the in Gmsh, 
+for instance
+\code{.bash}
+Physical Curve("ESSENTIAL") = {8, 12, 30};
+Physical Surface("INITIAL") = {9};
+\endcode
+  
+
+ Thus, the file \b paper_network.geo is as shown below 
+\code{.bash}
+lx = 0.02;
+ly = 0.005;
+SetFactory("OpenCASCADE");
+Rectangle(1) = {0, 0, 0, lx, ly, 0};
+Rotate {{0, 0, 1}, {lx, ly/2, 0}, Pi/3} { Duplicata { Surface{1}; }}
+Rotate {{0, 0, 1}, {lx, ly/2, 0}, 2*Pi/3} { Duplicata { Surface{1}; }}
+Rotate {{0, 0, 1}, {lx, ly/2, 0}, Pi} { Duplicata { Surface{1}; }}
+Rotate {{0, 0, 1}, {lx, ly/2, 0}, 3*Pi/2} {Duplicata { Surface{1}; }}
+
+BooleanUnion { Surface{1}; } { Surface{2}; }
+Recursive Delete { Surface{1}; Surface{2}; }
+BooleanUnion { Surface{6}; } { Surface{3}; }
+Recursive Delete {  Surface{6}; Surface{3}; }
+BooleanUnion { Surface{7}; } { Surface{4}; }
+Recursive Delete {  Surface{7}; Surface{4}; }
+BooleanUnion { Surface{8}; } { Surface{5}; }
+Recursive Delete {  Surface{8}; Surface{5}; }
+
+Physical Curve("ESSENTIAL") = {8, 12, 30};
+Physical Surface("INITIAL") = {9};
+\endcode
+
+Having the \b paper_network.geo file created, we then generate the mesh in Gmsh 
+to obtain \b paper_network.msh file. MoFEM does not use the \b paper_network.msh 
+file directly, instead one needs to convert it into \b paper_network.h5m, a MoFEM 
+equivalent mesh file. To do this, we create a configuration file \b bc.cfg that 
+tells the converter to associate the physical groups in  \b paper_network.msh into 
+BLOCKSET, NODESET and SIDESET that are readable by MoFEM. The corresponding 
+configuration file,  \b bc.cfg, is as shown below
+
+
+\code{.bash}
+[block_1]
+
+id=1001
+add=BLOCKSET
+name=ESSENTIAL
+
+[block_2]
+
+id=1002
+add=BLOCKSET
+name=INITIAL
+
+\endcode
+
+Now, the mesh is converted by the command
+
+\code{.bash}
+../../tools/add_meshsets -my_file paper_network.msh -meshsets_config bc.cfg -output_file paper_network.h5m
+\endcode
+
+The mesh \b paper\_network.h5m is now ready to be used as an input in executing the code. 
+
+\section command_options Command options controlling the simulation
+There are a bunch of commands that control the execution of the code. Some of the are listed in the 
+parameter file \b param\_file.petsc
+\code{.bash}
+-file_name paper_network.h5m # input the mesh
+ 
+ -ts_monitor     # for printing information at each time step
+ -ts_exact_final_time stepover   # to stop the analysis when T = ceil(final_time/dt)*dt
+ -ts_dt 0.0000005                       # to specify the time step
+ -ts_final_time 5                          # to specify the final time
+ -ts_adapt_type none                  # to specify adaptivity in time
+ 
+ -ksp_type gmres                        # to specify the type of linear solver at each Newton step
+ -pc_type lu                                 # preconditioner type
+ -pc_factor_mat_solver_type mumps.  # preconditoner factoring algorithm 
+ 
+-snes_atol 1e-7    # Newton tolerance for pressure head
+-snes_rtol 1e-12   # Newton tolerance for residual
+
+
+ -snes_monitor     # for displaying errors at each Newton iteration to monitor convergence
+ -snes_lag_jacobian 1 # -2 to recompute the Jacobian at each Newton step or 1 to do it 
+                      # only once at the beginning of the step and use it of later steps
+\endcode
+
+It is also possible to control at which time steps we should produce out put values, 
+for example every 2 or 4 time steps. to do that the user should go to the 
+\b UnsaturatedFlowOperators.hpp and change the parameter \b save_every_nth_step to a desired value.
+
+\section execution Executing the code
+We then execute the code using the command
+
+\code{.bash}
+time mpirun -np 1 unsatu2dFlow_prob -file_name mesh.h5m 2>&1 | tee log
+\endcode
+Here \b tee \b log is used to out put a log file to analyse the result in other suitable platforms for ploting 
+such as gnuplot, and the command line option \b -np 1} refers to the number of processors in running the code, 
+here in this case is just $1$. To use more than one processor the user should first partition 
+the mesh \b paper\_network.h5m, for example, the following command
+
+\code{.bash}
+../../tools/mofem_part -my_file paper_network.cub -output_file paper_network.h5m -my_nparts 4 -dim 2 -adj_dim 1
+\endcode
+partition the mesh for 4 processors and output with the same name.
+
+\section{Converting the output into vtk files}
+The output the run are a bunch of \b .h5m files that needs to be converted to 
+\b vtk for visualisation in, for example, paraView. This is done by the command
+
+\code{.bash}
+../nonlinear_elasticity/do_vtk.sh out_level_*.h5m
+\endcode
+
 */
