@@ -130,12 +130,16 @@ inline FTensor::Tensor1<double, 2> normal(FTensor::Tensor1<T1, 3> &t_coords,
   return FTensor::Tensor1<double, 2>{0., 1.};
 }
 
-template <typename T1, typename T2>
-inline double gap(FTensor::Tensor1<T1, 3> &t_coords,
-                  FTensor::Tensor1<T2, 2> &t_disp,
+template <typename T>
+inline double gap0(FTensor::Tensor1<T, 3> &t_coords,
                   FTensor::Tensor1<double, 2> &t_normal) {
-  const double zero_level = -1 - t_coords(0);
-  return t_disp(i) * t_normal(i) + zero_level;
+  return (-1 - t_coords(1)) * t_normal(1);
+}
+
+template <typename T>
+inline double gap(FTensor::Tensor1<T, 2> &t_disp,
+                  FTensor::Tensor1<double, 2> &t_normal) {
+  return t_disp(i) * t_normal(i);
 }
 
 template <typename T>
@@ -157,16 +161,16 @@ inline double w(const double g, const double t) {
   return g - cn * t;
 }
 
-inline double constrian(double &&g, double &&t) {
-  return (w(g, t) + std::abs(w(g, t))) / 2;
+inline double constrian(double &&g0, double &&g, double &&t) {
+  return (w(g - g0, t) + std::abs(w(g - g0, t))) / 2 + g0;
 };
 
-inline double diff_constrains_dtraction(double &&g, double &&t) {
-  return -cn * (1 + sign(w(g, t))) / 2;
+inline double diff_constrains_dtraction(double &&g0, double &&g, double &&t) {
+  return -cn * (1 + sign(w(g - g0, t))) / 2;
 }
 
-inline double diff_constrains_dgap(double &&g, double &&t) {
-  return (1 + sign(w(g, t))) / 2;
+inline double diff_constrains_dgap(double &&g0, double &&g, double &&t) {
+  return (1 + sign(w(g - g0, t))) / 2;
 }
 
 OpInternalDomainContactRhs::OpInternalDomainContactRhs(
@@ -273,15 +277,17 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       t_contact_tangent_tensor(1, 1) -= 1;
 
       FTensor::Tensor1<double, 2> t_rhs_constrains;
+
       t_rhs_constrains(i) =
           t_contact_normal(i) *
-          constrian(gap(t_coords, t_disp, t_contact_normal),
+          constrian(gap0(t_coords, t_contact_normal),
+                    gap(t_disp, t_contact_normal),
                     normal_traction(t_traction, t_contact_normal));
 
       FTensor::Tensor1<double, 2> t_rhs_tangent_disp, t_rhs_tangent_traction;
       t_rhs_tangent_disp(i) = t_contact_tangent_tensor(i, j) * t_disp(j);
       t_rhs_tangent_traction(i) =
-          t_contact_tangent_tensor(i, j) * t_traction(j);
+          cn * t_contact_tangent_tensor(i, j) * t_traction(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
@@ -419,9 +425,9 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
       t_contact_tangent_tensor(0, 0) -= 1;
       t_contact_tangent_tensor(1, 1) -= 1;
 
-      auto diff_constrain =
-          diff_constrains_dgap(gap(t_coords, t_disp, t_contact_normal),
-                               normal_traction(t_traction, t_contact_normal));
+      auto diff_constrain = diff_constrains_dgap(
+          gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
+          normal_traction(t_traction, t_contact_normal));
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / 2; ++rr) {
@@ -511,7 +517,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
       t_contact_tangent_tensor(1, 1) -= 1;
 
       const double diff_traction = diff_constrains_dtraction(
-          gap(t_coords, t_disp, t_contact_normal),
+          gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
           normal_traction(t_traction, t_contact_normal));
 
       size_t rr = 0;
@@ -528,7 +534,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
           const double beta = alpha * row_base * col_base;
 
           t_mat(i, j) += (beta * diff_traction) * t_contact_normal_tensor(i, j);
-          t_mat(i, j) += beta * t_contact_tangent_tensor(i, j);
+          t_mat(i, j) += beta * cn * t_contact_tangent_tensor(i, j);
 
           ++t_col_base;
           ++t_mat;
