@@ -3571,8 +3571,6 @@ struct OpCalculateHdivDivergenceResidualOnDispl
             new OpLoopMasterForSide(field_name, feMatMasterSideStressDerRhs,
                                     side_fe_name));
 
-        
-
         fe_rhs_simple_contact->getOpPtrVector().push_back(
             new OpCalNitscheCStressRhsMaster(
                 field_name, common_data_simple_contact, omegaValue, f_));
@@ -3697,7 +3695,7 @@ struct OpCalculateHdivDivergenceResidualOnDispl
 
       feMatSlaveSideRhs->getOpPtrVector().push_back(
           new NonlinearElasticElement::OpJacobianPiolaKirchhoffStress(
-              field_name, master_block,
+              field_name, slave_block,
               common_data_simple_contact->elasticityCommonData,
               common_data_simple_contact->tAg, false, false, false));
 
@@ -3709,13 +3707,18 @@ struct OpCalculateHdivDivergenceResidualOnDispl
                                          feMatMasterSideRhs, side_fe_name));
 
       fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
-                                        feMatSlaveSideRhs, side_fe_name));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpCalProjStressesAtGaussPtsMaster(field_name,
                                                 common_data_simple_contact));
 
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
+                                        feMatSlaveSideRhs, side_fe_name));
+
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
+            new OpCalProjStressesAtGaussPtsSlave(field_name,
+                                                  common_data_simple_contact));
+
+      
       fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpCalTildeCFunNitscheSlave(field_name, common_data_simple_contact,
                                          rValue, cnValue, omegaValue));
@@ -3847,10 +3850,6 @@ struct OpCalculateHdivDivergenceResidualOnDispl
     //   fe_lhs_simple_contact->getOpPtrVector().push_back(
     //       new OpLoopSlaveForSide(field_name, feMatSlaveSideRhs, side_fe_name));
 
-    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-    //       new OpCalProjStressesAtGaussPtsSlave(field_name,
-    //                                            common_data_simple_contact));
-
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatSlaveSlaveSideRhs =
               boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
@@ -3912,10 +3911,10 @@ struct OpCalculateHdivDivergenceResidualOnDispl
               common_data_simple_contact->elasticityCommonData, cnValue,
               omegaValue, thetaSValue));
 
-    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-    //       new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
-    //                                      feMatSlaveMasterSideRhs,
-    //                                      side_fe_name));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
+                                         feMatSlaveMasterSideRhs,
+                                         side_fe_name));
 
       //   fe_lhs_simple_contact->getOpPtrVector().push_back(
       //       new OpStressDerivativeGapSlaveMaster_dx2(
