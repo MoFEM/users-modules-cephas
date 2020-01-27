@@ -547,6 +547,8 @@ int main(int argc, char *argv[]) {
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
         "SPATIAL_POSITION", "LAGMULT", mb_post);
+    
+    mb_post.delete_mesh();
 
     if (is_test == PETSC_TRUE) {
       std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
@@ -569,9 +571,6 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
     }
-
-    mb_post.delete_mesh();
-
   
     std::ostringstream ostrm;
 

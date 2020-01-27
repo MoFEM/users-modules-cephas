@@ -88,3 +88,19 @@ add_test(
   ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_Tinterface.txt
   ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
+
+add_test(
+  test_simple_contact_punch_top_and_mid
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_and_mid.cub
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_punch_top_and_mid_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_punch_top_and_mid.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
+
