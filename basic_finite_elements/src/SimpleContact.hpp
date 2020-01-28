@@ -34,9 +34,6 @@ extern "C" {
 #endif
 
 #define TOL 1.e-8
-namespace bio = boost::iostreams;
-using bio::stream;
-using bio::tee_device;
 
 /** \brief Set of functions declaring elements and setting operators
  * to apply contact conditions
@@ -774,13 +771,13 @@ struct SimpleContactProblem {
     MoFEM::Interface &mField;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     bool lagFieldSet;
-
-    stream<tee_device<std::ostream, std::ofstream>> &mySplit;
+    std::ofstream &mySplit;
+    // stream<tee_device<std::ostream, std::ofstream>> &mySplit;
 
     OpMakeTestTextFile(
         MoFEM::Interface &m_field, string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data,
-        stream<tee_device<std::ostream, std::ofstream>> &_my_split,
+        std::ofstream &_my_split,
         bool lagrange_field = true)
         : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPROW,

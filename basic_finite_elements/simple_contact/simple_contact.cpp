@@ -28,13 +28,6 @@
 using namespace std;
 using namespace boost::numeric;
 
-namespace bio = boost::iostreams;
-using bio::stream;
-using bio::tee_device;
-
-typedef tee_device<std::ostream, std::ofstream> TeeDevice;
-typedef stream<TeeDevice> TeeStream;
-
 using namespace MoFEM;
 
 static char help[] = "\n";
@@ -552,19 +545,18 @@ int main(int argc, char *argv[]) {
 
     if (is_test == PETSC_TRUE) {
       std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
-      TeeDevice my_tee(std::cout, ofs);
-      TeeStream my_split(my_tee);
-
+      
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new SimpleContactProblem::OpMakeTestTextFile(
               m_field, "SPATIAL_POSITION", common_data_simple_contact,
-              my_split));
+              ofs));
 
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
       
-      my_split << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy
+      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy
                << endl;
+      ofs.flush();
       ofs.close();
     }
     else {
