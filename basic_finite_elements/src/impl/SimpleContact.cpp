@@ -706,28 +706,30 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
     const double val_s = (1. - lambda_gap_diff_prod) * t_w * area_slave;
 
     FTensor::Tensor0<double *> t_base_lambda_col(&col_data.getN()(gg, 0));
+    for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
 
-    for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
       FTensor::Tensor0<double *> t_base_lambda_row(&row_data.getN()(gg, 0));
-      FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 1, 1> t_mat(&NN(bbc, 0));
-      const double s = val_s * t_base_lambda_col;
-      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-        // if (bbr == bbc) {
+      FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 1, 1> t_mat(&NN(bbr, 0));
+      const double s = val_s * t_base_lambda_row;
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+          if (bbr == bbc) {
           if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
+            // NN(bbr, bbc) = 0;
           } else {
-            t_mat(0,0) += s * t_base_lambda_row;
+            NN(bbr, bbc) += s * t_base_lambda_col;
           }
 
-        // } else {
-        //   if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
-        //   } else {
-        //     t_mat(0, 0) += s * t_base_lambda_row;
-          // }
-        // }
+        } else {
+          if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
+          } else {
+            NN(bbr, bbc) += s * t_base_lambda_col;
+          }
+        }
         ++t_mat;
-        ++t_base_lambda_row; // update rows
+        ++t_base_lambda_col; // update cols
       }
-      ++t_base_lambda_col; // update cols
+      ++t_base_lambda_row; // update rows
     }
     ++lagrange_slave;
     ++gap_gp;
