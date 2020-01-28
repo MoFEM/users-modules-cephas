@@ -89,7 +89,7 @@ struct DataAtIntegrationPtsSimpleRods {
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 3) {
+        if (attributes.size() < 3) {
           SETERRQ1(
               PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
               "Input mesh for ROD should have 3 attributes but there is %d",
