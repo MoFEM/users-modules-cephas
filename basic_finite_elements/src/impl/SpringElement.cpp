@@ -85,7 +85,7 @@ struct DataAtIntegrationPtsSprings {
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 2) {
+        if (attributes.size() < 2) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
                    "Springs should have 2 attributes but there is %d",
                    attributes.size());
