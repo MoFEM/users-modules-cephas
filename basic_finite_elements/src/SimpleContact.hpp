@@ -33,6 +33,7 @@ extern "C" {
 #include <boost/enable_shared_from_this.hpp>
 #endif
 
+#define TOL 1.e-8
 namespace bio = boost::iostreams;
 using bio::stream;
 using bio::tee_device;
@@ -116,10 +117,6 @@ struct SimpleContactProblem {
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
 
-      CHKERR
-      mField.modify_finite_element_add_field_data(element_name,
-                                                  "MESH_NODE_POSITIONS");
-
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
       // Adding range_slave_master_prisms to Element element_name
@@ -132,15 +129,6 @@ struct SimpleContactProblem {
 
   struct CommonDataSimpleContact
       : public boost::enable_shared_from_this<CommonDataSimpleContact> {
-
-    std::map<std::string, std::vector<VectorDouble>> dataAtGaussPts;
-    std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPts;
-
-    std::map<std::string, std::vector<VectorDouble>> dataAtGaussPtsMaster;
-    std::map<std::string, std::vector<MatrixDouble>> gradAtGaussPtsMaster;
-
-    string spatialPositions;
-    string meshPositions;
 
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
