@@ -345,7 +345,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
 
-  vec_f.resize(3 * nb_base_fun_col, false); 
+  vec_f.resize(3 * nb_base_fun_col, false);
   vec_f.clear();
 
   const double area_m =
@@ -398,7 +398,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
   const int nb_gauss_pts = data.getN().size1();
   int nb_base_fun_col = data.getFieldData().size() / 3;
 
-  vec_f.resize(3 * nb_base_fun_col, false); 
+  vec_f.resize(3 * nb_base_fun_col, false);
   vec_f.clear();
 
   const double area_s =
@@ -474,14 +474,13 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
     const double lambda_gap_diff = lagrange_slave - cg;
     const double regular_abs = fabs(lambda_gap_diff);
 
-    tilde_c_fun =
-        (lagrange_slave + cg - pow(regular_abs, r) / r);
+    tilde_c_fun = (lagrange_slave + cg - pow(regular_abs, r) / r);
 
     const double exponent = r - 1.;
 
     double sign = 0.;
     sign = (lambda_gap_diff == 0) ? 0 : (lambda_gap_diff < 0) ? -1 : 1;
-    
+
     lambda_gap_diff_prod = sign * pow(regular_abs, exponent);
     ++lagrange_slave;
     ++gap_gp;
@@ -504,7 +503,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
   const double area_s =
       commonDataSimpleContact->areaSlave; // same area in master and slave
 
-  vecR.resize(nb_base_fun_col, false); 
+  vecR.resize(nb_base_fun_col, false);
   vecR.clear();
 
   auto tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
@@ -577,7 +576,7 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlave::doWork(
 
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
       FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
-      const double m = val_m * t_base_lambda ;
+      const double m = val_m * t_base_lambda;
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
         auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
 
@@ -635,9 +634,9 @@ SimpleContactProblem::OpContactConstraintMatrixSlaveSlave::doWork(
 
   auto const_unit_n =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
-  
+
   auto t_w = getFTensor0IntegrationWeightSlave();
-  
+
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     double val_s = t_w * area_slave;
 
@@ -688,8 +687,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
   const double area_slave =
       commonDataSimpleContact->areaSlave; // same area in master and slave
 
-  NN.resize(nb_base_fun_row, nb_base_fun_col,
-            false);
+  NN.resize(nb_base_fun_row, nb_base_fun_col, false);
   NN.clear();
 
   auto lagrange_slave =
@@ -698,7 +696,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
 
   auto lambda_gap_diff_prod =
       getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
-  
+
   auto t_w = getFTensor0IntegrationWeightSlave();
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
@@ -712,10 +710,10 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
       const double s = val_s * t_base_lambda_row;
       for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-          if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
-          } else {
-            t_mat(0, 0) += s * t_base_lambda_col;
-          }
+        if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
+        } else {
+          t_mat(0, 0) += s * t_base_lambda_col;
+        }
 
         ++t_mat;
         ++t_base_lambda_col; // update cols
@@ -778,18 +776,18 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveMaster::doWork(
     FTensor::Tensor0<double *> t_base_lambda(&row_data.getN()(gg, 0));
 
     for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-       
-        FTensor::Tensor0<double *> t_base_master(&col_data.getN()(gg, 0));
-        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
-            &NN(bbr, 0), &NN(bbr, 1), &NN(bbr, 2)};
-        const double m = val_m * t_base_lambda;
 
-        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+      FTensor::Tensor0<double *> t_base_master(&col_data.getN()(gg, 0));
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
+          &NN(bbr, 0), &NN(bbr, 1), &NN(bbr, 2)};
+      const double m = val_m * t_base_lambda;
 
-          t_mat(i) += const_unit_n(i) * m * t_base_master;
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-          ++t_base_master; // update rows
-          ++t_mat;
+        t_mat(i) += const_unit_n(i) * m * t_base_master;
+
+        ++t_base_master; // update rows
+        ++t_mat;
       }
       ++t_base_lambda; // update cols master
     }
@@ -840,23 +838,24 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlave::doWork(
 
   auto gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
   auto t_w = getFTensor0IntegrationWeightSlave();
-  const double first_prod = cN * area_slave;//to reduce number of multiplications
+  const double first_prod =
+      cN * area_slave; // to reduce number of multiplications
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
     const double val_s = t_w * first_prod * (1. + lambda_gap_diff_prod);
     FTensor::Tensor0<double *> t_base_lambda(&row_data.getN()(gg, 0));
 
-      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-        const double s = val_s * t_base_lambda;
-        FTensor::Tensor0<double *> t_base_slave(&col_data.getN()(gg, 0));
-        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
-            &NN(bbr, 0), &NN(bbr, 1), &NN(bbr, 2)};
+    for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+      const double s = val_s * t_base_lambda;
+      FTensor::Tensor0<double *> t_base_slave(&col_data.getN()(gg, 0));
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
+          &NN(bbr, 0), &NN(bbr, 1), &NN(bbr, 2)};
 
-        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
-          t_mat(i) -= const_unit_n(i) * s * t_base_slave;
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+        t_mat(i) -= const_unit_n(i) * s * t_base_slave;
 
-          ++t_base_slave; // update rows
-          ++t_mat;
+        ++t_base_slave; // update rows
+        ++t_mat;
       }
       ++t_base_lambda; // update cols slave
     }

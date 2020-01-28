@@ -396,7 +396,7 @@ struct SimpleContactProblem {
      * {\delta
      * W_{\text c}(\lambda, \mathbf{x}^{(2)},
      * \delta \mathbf{x}^{(2)}}) \,\,  =
-     * \int_{{\gamma}^{(2)}_{\text c}} \lambda 
+     * \int_{{\gamma}^{(2)}_{\text c}} \lambda
      * \delta{\mathbf{x}^{(2)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
@@ -548,13 +548,11 @@ struct SimpleContactProblem {
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
-     * that can be chosen between in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default value) 
-     * and \f$ g_{\textrm{n}}\f$ is
-     * the gap function evaluated at the slave triangle gauss points as:
-     * \f[
-     * g_{\textrm{n}} = - \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left(
-     * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right)
-     * \f]
+     * that can be chosen between in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
+     * \mathbf{x}^{(2)}  \right) \f]
      */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -645,7 +643,7 @@ struct SimpleContactProblem {
      * \f[
      * {\text D} \int_{{\gamma}^{(1)}_{\text c}} {\delta
      * W_{\text c}(\lambda, \mathbf{x}^{(1)},
-     * \delta \mathbf{x}^{(1)}})[\Delta \lambda] 
+     * \delta \mathbf{x}^{(1)}})[\Delta \lambda]
      * \,\,{ {\text d} {\gamma}} =
      * \int_{{\gamma}^{(1)}_{\text c}} \Delta \lambda
      * \delta{\mathbf{x}^{(1)}}
@@ -739,8 +737,9 @@ struct SimpleContactProblem {
      * @brief Integrates and assembles the complementarity function at slave
      * face gauss points
      *
-     * Integrates and assembles the variation with respect to master spatial positions of the complementarity function to fulfills KKT
-     * conditions in the integral sense:
+     * Integrates and assembles the variation with respect to master spatial
+     * positions of the complementarity function to fulfills KKT conditions in
+     * the integral sense:
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -794,9 +793,9 @@ struct SimpleContactProblem {
      * @brief Integrates and assembles the complementarity function at slave
      * face gauss points
      *
-     * Integrates and assembles of the variation with respect to slave spatial positions
-     * of the complementarity function to fulfills KKT conditions in the
-     * integral sense:
+     * Integrates and assembles of the variation with respect to slave spatial
+     * positions of the complementarity function to fulfills KKT conditions in
+     * the integral sense:
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -863,20 +862,18 @@ struct SimpleContactProblem {
     std::ofstream &mySplit;
     // stream<tee_device<std::ostream, std::ofstream>> &mySplit;
 
-    OpMakeTestTextFile(
-        MoFEM::Interface &m_field, string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data,
-        std::ofstream &_my_split,
-        bool lagrange_field = true)
+    OpMakeTestTextFile(MoFEM::Interface &m_field, string field_name,
+                       boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                       std::ofstream &_my_split, bool lagrange_field = true)
         : MoFEM::ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPROW,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
           lagFieldSet(lagrange_field), mySplit(_my_split) {
-        mySplit << fixed << setprecision(8);
-        mySplit << "[0] Lagrange multiplier [1] Gap" << endl;
-          }
+      mySplit << fixed << setprecision(8);
+      mySplit << "[0] Lagrange multiplier [1] Gap" << endl;
+    }
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -1036,8 +1033,7 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
-      moab::Interface &moab_out,
-      bool lagrange_field = true) {
+      moab::Interface &moab_out, bool lagrange_field = true) {
     MoFEMFunctionBegin;
 
     map<int, SimpleContactPrismsData>::iterator sit =
