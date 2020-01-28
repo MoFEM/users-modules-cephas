@@ -689,8 +689,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
       commonDataSimpleContact->areaSlave; // same area in master and slave
 
   NN.resize(nb_base_fun_row, nb_base_fun_col,
-            false); // the last false in ublas resize will destroy
-                    // (not preserved) the old values
+            false);
   NN.clear();
 
   auto lagrange_slave =
@@ -705,27 +704,19 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     const double val_s = (1. - lambda_gap_diff_prod) * t_w * area_slave;
 
-    FTensor::Tensor0<double *> t_base_lambda_col(&col_data.getN()(gg, 0));
+    FTensor::Tensor0<double *> t_base_lambda_row(&row_data.getN()(gg, 0));
     for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+      FTensor::Tensor0<double *> t_base_lambda_col(&col_data.getN()(gg, 0));
 
-      FTensor::Tensor0<double *> t_base_lambda_row(&row_data.getN()(gg, 0));
       FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 1, 1> t_mat(&NN(bbr, 0));
       const double s = val_s * t_base_lambda_row;
       for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-          if (bbr == bbc) {
           if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
-            // NN(bbr, bbc) = 0;
           } else {
-            NN(bbr, bbc) += s * t_base_lambda_col;
+            t_mat(0, 0) += s * t_base_lambda_col;
           }
 
-        } else {
-          if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
-          } else {
-            NN(bbr, bbc) += s * t_base_lambda_col;
-          }
-        }
         ++t_mat;
         ++t_base_lambda_col; // update cols
       }

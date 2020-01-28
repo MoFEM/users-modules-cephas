@@ -471,8 +471,8 @@ struct SimpleContactProblem {
      * equal to zero:
      *
      * \f[
-     * {\overline C(\lambda, \mathbf{x}^{(i)})} :=  \lambda - c_{\text
-     * n} g_{\textrm{n}}  - \dfrac{1}{r}{\left| \lambda + c_{\text n}
+     * {\overline C(\lambda, \mathbf{x}^{(i)})} :=  \lambda + c_{\text
+     * n} g_{\textrm{n}} - \dfrac{1}{r}{\left| \lambda - c_{\text n}
      * g_{\textrm{n}}\right|}^{r} \f]
      *
      * where, \f$ \lambda\f$ is the lagrange multiplier, \f$\mathbf{x}^{(i)}\f$
@@ -538,8 +538,8 @@ struct SimpleContactProblem {
      * \f[
      * {\overline C(\lambda, \mathbf{x}^{(i)},
      * \delta \lambda)} = \int_{{\gamma}^{(1)}_{\text
-     * c}} \left( \lambda - c_{\text n} g_{\textrm{n}}  - \dfrac{1}{r}{\left|
-     * \lambda + c_{\text n} g_{\textrm{n}}\right|}^{r}\right) \delta{{\lambda}}
+     * c}} \left( \lambda + c_{\text n} g_{\textrm{n}}  - \dfrac{1}{r}{\left|
+     * \lambda - c_{\text n} g_{\textrm{n}}\right|}^{r}\right) \delta{{\lambda}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
@@ -588,14 +588,15 @@ struct SimpleContactProblem {
     /**
      * @brief Integrates and assembles for over master side
      *
-     * Computes linearisation of and assembles lagrange multipliers virtual work, \f$ \delta
-     * W_{\text c}\f$ with respect to lagrange multipliers
+     * Computes linearisation of and assembles lagrange multipliers virtual
+     * work, \f$ \delta W_{\text c}\f$ with respect to lagrange multipliers
      *
      * \f[
      * {\text D} \int_{{\gamma}^{(2)}_{\text c}} {\delta
      * W_{\text c}(\lambda, \mathbf{x}^{(2)},
-     * \delta \mathbf{x}^{(2)}})[\delta lambda]  =
-     * \int_{{\gamma}^{(2)}_{\text c}} \delta \lambda
+     * \delta \mathbf{x}^{(2)}})[\Delta \lambda]
+     *  \,\,{ {\text d} {\gamma}}  =
+     * \int_{{\gamma}^{(2)}_{\text c}} \Delta \lambda
      * \delta{\mathbf{x}^{(2)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
@@ -644,8 +645,9 @@ struct SimpleContactProblem {
      * \f[
      * {\text D} \int_{{\gamma}^{(1)}_{\text c}} {\delta
      * W_{\text c}(\lambda, \mathbf{x}^{(1)},
-     * \delta \mathbf{x}^{(1)}})[\delta lambda]  =
-     * \int_{{\gamma}^{(1)}_{\text c}} \delta \lambda
+     * \delta \mathbf{x}^{(1)}})[\Delta \lambda] 
+     * \,\,{ {\text d} {\gamma}} =
+     * \int_{{\gamma}^{(1)}_{\text c}} \Delta \lambda
      * \delta{\mathbf{x}^{(1)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
@@ -678,6 +680,35 @@ struct SimpleContactProblem {
                     // for order=2 it will make doWork to loop 16 time)
     }
     MatrixDouble NN;
+
+    /**
+     * @brief Integrates and assembles the complementarity function at slave
+     * face gauss points
+     *
+     * Integrates and assembles of variation of the complementarity function
+     * with respect to lagrange multipliers to fulfills KKT conditions
+     * in the integral sense:
+     *
+     * \f[
+     * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
+     * \delta \lambda)}[\Delta \lambda] = \int_{{\gamma}^{(1)}_{\text
+     * c}} \Delta \lambda \left( 1 - {\text {sign}}\left( \lambda - c_{\text n}
+     * g_{\textrm{n}} \right) \dfrac{1}{r}{\left| \lambda - c_{\text n}
+     * g_{\textrm{n}}\right|}^{r-1}\right) \delta{{\lambda}}
+     * \,\,{ {\text d} {\gamma}}
+     * \f]
+     * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
+     * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
+     * parameter and affects convergence, \f$r\f$ is regularisation parameter
+     * that can be chosen between in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
+     * \mathbf{x}^{(2)}  \right) \f]
+     */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
@@ -704,6 +735,34 @@ struct SimpleContactProblem {
                     // for order=2 it will make doWork to loop 16 time)
     }
     MatrixDouble NN;
+    /**
+     * @brief Integrates and assembles the complementarity function at slave
+     * face gauss points
+     *
+     * Integrates and assembles the variation with respect to master spatial positions of the complementarity function to fulfills KKT
+     * conditions in the integral sense:
+     *
+     * \f[
+     * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
+     * \delta \lambda)}[\Delta \mathbf{x}^{(2)}] = \int_{{\gamma}^{(2)}_{\text
+     * c}} \Delta \mathbf{x}^{(2)}  c_{\text n} g_{\textrm{n}} \left( 1 + {\text
+     * {sign}}\left( \lambda - c_{\text n} g_{\textrm{n}} \right)
+     * \dfrac{1}{r}{\left| \lambda - c_{\text n}
+     * g_{\textrm{n}}\right|}^{r-1}\right) \delta{{\lambda}}
+     * \,\,{ {\text d} {\gamma}}
+     * \f]
+     * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
+     * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
+     * parameter and affects convergence, \f$r\f$ is regularisation parameter
+     * that can be chosen between in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
+     * \mathbf{x}^{(2)}  \right) \f]
+     */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
@@ -730,6 +789,36 @@ struct SimpleContactProblem {
                     // for order=2 it will make doWork to loop 16 time)
     }
     MatrixDouble NN;
+
+    /**
+     * @brief Integrates and assembles the complementarity function at slave
+     * face gauss points
+     *
+     * Integrates and assembles of the variation with respect to slave spatial positions
+     * of the complementarity function to fulfills KKT conditions in the
+     * integral sense:
+     *
+     * \f[
+     * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
+     * \delta \lambda)}[\Delta \mathbf{x}^{(1)}] = \int_{{\gamma}^{(1)}_{\text
+     * c}} \Delta \mathbf{x}^{(1)}  c_{\text n} g_{\textrm{n}} \left( 1 + {\text
+     * {sign}}\left( \lambda - c_{\text n} g_{\textrm{n}} \right)
+     * \dfrac{1}{r}{\left| \lambda - c_{\text n}
+     * g_{\textrm{n}}\right|}^{r-1}\right) \delta{{\lambda}}
+     * \,\,{ {\text d} {\gamma}}
+     * \f]
+     * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
+     * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
+     * parameter and affects convergence, \f$r\f$ is regularisation parameter
+     * that can be chosen between in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
+     * \mathbf{x}^{(2)}  \right) \f]
+     */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
                           DataForcesAndSourcesCore::EntData &row_data,
