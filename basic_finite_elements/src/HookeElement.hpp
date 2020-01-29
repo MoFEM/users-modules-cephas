@@ -299,17 +299,6 @@ struct HookeElement {
         }
       }
 
-      // if (diagonal_block) {
-      //   for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
-      //     int col_bb = 0;
-      //     for (; col_bb != row_bb + 1; col_bb++) {
-      //       auto t_assemble = get_tensor2(locK, 3 * row_bb, 3 * col_bb);
-      //       auto t_off_side = get_tensor2(locK, 3 * col_bb, 3 * row_bb);
-      //       t_off_side(i, k) = t_assemble(k, i);
-      //     }
-      //   }
-      // }
-
       const int *row_ind = &*row_data.getIndices().begin();
       const int *col_ind = &*col_data.getIndices().begin();
       Mat B = getFEMethod()->snes_B != PETSC_NULL ? getFEMethod()->snes_B
