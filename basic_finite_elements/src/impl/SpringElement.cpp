@@ -146,8 +146,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (nb_dofs == 0)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
+    if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
     }
 
@@ -280,8 +279,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (!col_nb_dofs)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
+    if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
     }
 
@@ -357,20 +355,16 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     }
 
     // Add computed values of spring stiffness to the global LHS matrix
-    Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
-                                               : getFEMethod()->snes_B;
-    CHKERR MatSetValues(B, row_nb_dofs, &*row_data.getIndices().begin(),
-                        col_nb_dofs, &*col_data.getIndices().begin(),
-                        &locKs(0, 0), ADD_VALUES);
+    CHKERR MatSetValues(getKSPB(), row_data, col_data, &locKs(0, 0),
+                        ADD_VALUES);
 
     // is symmetric
     if (row_side != col_side || row_type != col_type) {
       transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
       noalias(transLocKs) = trans(locKs);
 
-      CHKERR MatSetValues(B, col_nb_dofs, &*col_data.getIndices().begin(),
-                          row_nb_dofs, &*row_data.getIndices().begin(),
-                          &transLocKs(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocKs(0, 0),
+                          ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);

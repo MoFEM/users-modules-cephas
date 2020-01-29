@@ -251,8 +251,7 @@ struct OpSimpleRodPreStress
     if (nb_dofs == 0)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.eDges.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.eDges.end()) {
+    if (dAta.eDges.find(getFEEntityHandle()) == dAta.eDges.end()) {
       MoFEMFunctionReturnHot(0);
     }
 

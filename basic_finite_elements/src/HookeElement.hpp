@@ -251,8 +251,7 @@ struct HookeElement {
       const int col_nb_dofs = col_data.getIndices().size();
       if (!col_nb_dofs)
         MoFEMFunctionReturnHot(0);
-      if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-          dAta.tEts.end()) {
+      if (dAta.tEts.find(getFEEntityHandle()) == dAta.tEts.end()) {
         MoFEMFunctionReturnHot(0);
       }
       // commonData.getBlockData(dAta);
@@ -277,7 +276,7 @@ struct HookeElement {
       FTensor::Index<'k', 3> k;
       FTensor::Index<'l', 3> l;
 
-      double density = 7850.e-9;
+      constexpr double density = 7850.e-9;
 
       // integrate local matrix for entity block
       for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -299,20 +298,16 @@ struct HookeElement {
         }
       }
 
-      const int *row_ind = &*row_data.getIndices().begin();
-      const int *col_ind = &*col_data.getIndices().begin();
-      Mat B = getFEMethod()->snes_B != PETSC_NULL ? getFEMethod()->snes_B
-                                                  : getFEMethod()->ksp_B;
-      CHKERR MatSetValues(B, row_nb_dofs, row_ind, col_nb_dofs, col_ind,
-                          &locK(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locK(0, 0),
+                          ADD_VALUES);
 
       // is symmetric
       if (row_type != col_type || row_side != col_side) {
         translocK.resize(col_nb_dofs, row_nb_dofs, false);
         noalias(translocK) = trans(locK);
 
-        CHKERR MatSetValues(B, col_nb_dofs, col_ind, row_nb_dofs, row_ind,
-                            &translocK(0, 0), ADD_VALUES);
+        CHKERR MatSetValues(getKSPB(), row_data, col_data, &translocK(0, 0),
+                            ADD_VALUES);
       }
 
       MoFEMFunctionReturn(0);
@@ -766,8 +761,7 @@ MoFEMErrorCode HookeElement::OpCalculateHomogeneousStiffness<S>::doWork(
   MoFEMFunctionBegin;
 
   for (auto &m : (*blockSetsPtr)) {
-    if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
-        m.second.tEts.end()) {
+    if (m.second.tEts.find(getFEEntityHandle()) != m.second.tEts.end()) {
 
       dataAtPts->stiffnessMat->resize(36, 1, false);
       FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
