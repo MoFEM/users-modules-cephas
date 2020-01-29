@@ -335,7 +335,7 @@ MoFEMErrorCode SimpleContactProblem::OpLagGapProdGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnMaster::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -388,7 +388,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalFReConMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -440,7 +440,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalFReConSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGetCompFunSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -490,7 +490,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalIntCompFunSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -528,7 +528,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalIntTildeCFunSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixMasterSlave::doWork(
+SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -596,7 +596,7 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixSlaveSlave::doWork(
+SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -666,7 +666,7 @@ SimpleContactProblem::OpContactConstraintMatrixSlaveSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
+SimpleContactProblem::OpCalDerIntCompFunOverLambdaSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -733,7 +733,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveMaster::doWork(
+SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -802,7 +802,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveMaster::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlave::doWork(
+SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
