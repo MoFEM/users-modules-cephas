@@ -36,8 +36,8 @@ extern "C" {
 #define TOL 1.e-8
 
 /** \brief Set of functions declaring elements and setting operators
- * to apply contact conditions
- * \ingroup simple_contact_problem
+ * to apply contact conditions between surfaces with matching
+ * meshes \ingroup simple_contact_problem
  */
 
 struct SimpleContactProblem {
@@ -72,10 +72,19 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for pressure element (spatial configuration)
+   * @brief Function that adds field data for spatial positions and lagrange
+   * multipliers to rows and columns, provides access to field data and adds
+   * prism entities to element.
    *
-   * Computes linearisation of the spatial component with respect to
-   * material coordinates.
+   * @param  element_name               String for the element name
+   * @param  field_name                 String of field name for spatial
+   * position
+   * @param  lagrang_field_name         String of field name for lagrange
+   * multipliers
+   * @param  range_slave_master_prisms  Range for prism entities used to create
+   * contact elements
+   * @param  lagrange_field             Boolean used to determine existence of Lagrange multipliers field (default is true)
+   * @return                            Error code
    *
    */
   MoFEMErrorCode addContactElement(const string element_name,
@@ -89,8 +98,7 @@ struct SimpleContactProblem {
 
     if (range_slave_master_prisms.size() > 0) {
 
-      //============================================================================================================
-      // C row as Lagrange_mul and col as DISPLACEMENT
+      // C row as Lagrange_mul and col as SPATIAL_POSITION
       if (lagrange_field)
         CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                           lagrang_field_name);
@@ -98,7 +106,7 @@ struct SimpleContactProblem {
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         field_name);
 
-      // CT col as Lagrange_mul and row as DISPLACEMENT
+      // CT col as Lagrange_mul and row as SPATIAL_POSITION
       if (lagrange_field)
         CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                           lagrang_field_name);
@@ -169,7 +177,7 @@ struct SimpleContactProblem {
       : mField(m_field), rValue(r_value_regular), cnValue(cn_value),
         newtonCotes(newton_cotes) {}
 
-  /// \brief tangents t1 and t2 to face f4 at all gauss points
+  /// \brief Tangents t1 and t2 to face f4 at all gauss points
   struct OpGetNormalSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -205,9 +213,9 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
-   * Calgulates the spacial coordinated of the gauss points of master triangle.
+   * Calculates the spacial coordinates of the gauss points of master triangle.
    *
    */
   struct OpGetPositionAtGaussPtsMaster
@@ -228,9 +236,9 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
-   * Calgulates the spacial coordinated of the gauss points of slave triangle.
+   * Calculates the spacial coordinates of the gauss points of slave triangle.
    *
    */
   struct OpGetPositionAtGaussPtsSlave
@@ -251,9 +259,9 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
-   * Calgulates gap function at the gauss points on the slave triangle.
+   * Calculates gap function at the gauss points on the slave triangle.
    *
    */
   struct OpGetGapSlave
@@ -273,15 +281,15 @@ struct SimpleContactProblem {
     /**
      * @brief Evaluates gap function at slave face gauss points
      *
-     * Computes linearisation of the material component
-     * with respect to a variation of material coordinates:
+     * Computes gap function at slave face gauss points:
+     * 
      * \f[
      * g_{\textrm{n}} = - \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left(
      * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right)
      * \f]
-     * where \f$\mathbf{n}(\mathbf{x}^{(1))}\f$ is the outward normal vector at
+     * where \f$\mathbf{n}(\mathbf{x}^{(1)}\f$ is the outward normal vector at
      * the slave triangle gauss points, \f$\mathbf{x}^{(1)}\f$ and
-     * \f$\mathbf{x}^{(2)}\f$ are the spatial coordinated of the overlapping
+     * \f$\mathbf{x}^{(2)}\f$ are the spatial coordinates of the overlapping
      * gauss points located at the slave and master triangles, respectively.
      *
      *
@@ -291,7 +299,7 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
    * Calgulates lagrange multipliers at the gauss points on the slave triangle.
    *
@@ -314,7 +322,7 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
    * Prints lagrange multipliers and gaps evaluated at the gauss points on the
    * slave triangle.
@@ -338,7 +346,7 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
    * Calgulates the product of lagrange multipliers with gaps evaluated at the
    * gauss points on the slave triangle.
@@ -402,7 +410,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
      * of the master surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(2)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
      * points at and master triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type,
@@ -432,6 +440,7 @@ struct SimpleContactProblem {
           commonDataSimpleContact(common_data_contact), F(f_) {}
 
     VectorDouble vec_f;
+    
     /**
      * @brief Integrates and assembles lagrange multipliers virtual work on
      * slave surface
@@ -449,7 +458,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(1)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
      * points at and slave triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type,
@@ -476,7 +485,7 @@ struct SimpleContactProblem {
      * g_{\textrm{n}}\right|}^{r} \f]
      *
      * where, \f$ \lambda\f$ is the lagrange multiplier, \f$\mathbf{x}^{(i)}\f$
-     * are the coordinated of the overlapping gauss points at slave and master
+     * are the coordinates of the overlapping gauss points at slave and master
      * triangles for  \f$i = 1\f$ and \f$i = 2\f$, respectively. Furthermore,
      * \f$ c_{\text n}\f$ works as an augmentation parameter and affects
      * convergence, \f$r\f$ is regularisation parameter that can be chosen
@@ -544,7 +553,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
@@ -600,7 +609,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
      * of the master surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(2)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
      * points at and master triangles.
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -651,7 +660,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(1)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
      * points at and slave triangles.
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -697,7 +706,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
@@ -733,6 +742,7 @@ struct SimpleContactProblem {
                     // for order=2 it will make doWork to loop 16 time)
     }
     MatrixDouble NN;
+
     /**
      * @brief Integrates and assembles the complementarity function at slave
      * face gauss points
@@ -752,7 +762,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
@@ -800,7 +810,7 @@ struct SimpleContactProblem {
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
      * \delta \lambda)}[\Delta \mathbf{x}^{(1)}] = \int_{{\gamma}^{(1)}_{\text
-     * c}} \Delta \mathbf{x}^{(1)}  c_{\text n} g_{\textrm{n}} \left( 1 + {\text
+     * c}} -\Delta \mathbf{x}^{(1)}  c_{\text n} g_{\textrm{n}} \left( 1 + {\text
      * {sign}}\left( \lambda - c_{\text n} g_{\textrm{n}} \right)
      * \dfrac{1}{r}{\left| \lambda - c_{\text n}
      * g_{\textrm{n}}\right|}^{r-1}\right) \delta{{\lambda}}
@@ -808,7 +818,7 @@ struct SimpleContactProblem {
      * \f]
      * where, \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the lagrange multiplier,
-     * \f$\mathbf{x}^{(i)}\f$ are the coordinated of the overlapping gauss
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
@@ -825,7 +835,7 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief operator for the simple contact element
+   * @brief Operator for the simple contact element
    *
    * Prints to .vtk file pre-calculated gaps, lagrange multipliers and their
    * productat the gauss points on the slave triangle.
@@ -882,7 +892,7 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief function for the simple contact element that sets the user data
+   * @brief Function for the simple contact element that sets the user data
    * RHS-operators
    *
    * @param  fe_rhs_simple_contact      Pointer to the FE instance for RHS
@@ -896,7 +906,7 @@ struct SimpleContactProblem {
    * @return                            Error code
    *
    */
-  MoFEMErrorCode setContactOperatorsRhsOperators(
+  MoFEMErrorCode setContactOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name, Vec f_ = PETSC_NULL) {
@@ -941,7 +951,7 @@ struct SimpleContactProblem {
   }
 
   /**
-   * @brief function for the simple contact element that sets the user data
+   * @brief Function for the simple contact element that sets the user data
    * LHS-operators
    *
    * @param  fe_lhs_simple_contact      Pointer to the FE instance for LHS
@@ -955,7 +965,7 @@ struct SimpleContactProblem {
    * @return                            Error code
    *
    */
-  MoFEMErrorCode setContactOperatorsLhsOperators(
+  MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name, Mat aij) {
@@ -1012,7 +1022,7 @@ struct SimpleContactProblem {
   }
 
   /**
-   * @brief function for the simple contact element that sets the user data
+   * @brief Function for the simple contact element that sets the user data
    * post processing operators
    *
    * @param  fe_post_proc_simple_contact Pointer to the FE instance for post
@@ -1023,8 +1033,9 @@ struct SimpleContactProblem {
    * positions
    * @param  lagrang_field_name          String of field name for lagrange
    * multipliers
-   * @param  moab_out                    Left hand side matrix
-   * @param  lagrange_field              Booleand to determine existance of
+   * @param  moab_out                    MOAB interface used to output
+   * values at integration points
+   * @param  lagrange_field              Booleand to determine existence of
    * lagrange field
    * @return                             Error code
    *

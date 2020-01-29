@@ -398,10 +398,10 @@ int main(int argc, char *argv[]) {
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
 
-    contact_problem->setContactOperatorsRhsOperators(
+    contact_problem->setContactOperatorsRhs(
         fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
         "LAGMULT");
-    contact_problem->setContactOperatorsLhsOperators(
+    contact_problem->setContactOperatorsLhs(
         fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
         "LAGMULT", Aij);
 
