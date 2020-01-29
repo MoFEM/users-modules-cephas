@@ -161,7 +161,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // get number of Gauss points
     const int nb_gauss_pts = data.getN().size1();
 
-    // get intergration weights
+    // get integration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // FTensor indices

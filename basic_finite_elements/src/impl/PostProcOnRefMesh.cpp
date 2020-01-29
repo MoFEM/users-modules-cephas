@@ -924,11 +924,13 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   Range edges;
   CHKERR postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
   int rank = pcomm->rank();
-  Range::iterator pit = edges.begin();
-  for (; pit != edges.end(); pit++) {
-    CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
-                                     &rank);
-  }
+  auto set_edges_rank = [&](const auto rank, const auto &edges) {
+    std::vector<EntityHandle> ranks(edges.size(), rank);
+    CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), edges,
+                                     &*ranks.begin());
+  };
+  set_edges_rank(rank, edges);
+  
   CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
   MoFEMFunctionReturn(0);
 }

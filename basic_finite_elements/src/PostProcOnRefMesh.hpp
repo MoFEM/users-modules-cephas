@@ -857,14 +857,6 @@ struct PostProcEdgeOnRefinedMesh : public PostProcTemplateOnRefineMesh<
             m_field),
         sixNodePostProcTris(six_node_post_proc_tris) {}
 
-  virtual ~PostProcEdgeOnRefinedMesh() {
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
-
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
 
