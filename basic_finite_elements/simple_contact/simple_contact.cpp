@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    CHKERR DMRegister_MoFEM("DMMOFEM");
+    // CHKERR DMRegister_MoFEM("DMMOFEM");
 
     if (is_partitioned == PETSC_TRUE) {
       // Read mesh to MOAB
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
                                                     bit_levels[0]);
 
-    DMType dm_name = "CONTACT_PROB";
+    DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
 
     // create dm instance
@@ -338,7 +338,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetType(dm, dm_name);
 
     // set dm datastruture which created mofem datastructures
-    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, dm_name, bit_levels[0]);
+    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels[0]);
     CHKERR DMSetFromOptions(dm);
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm

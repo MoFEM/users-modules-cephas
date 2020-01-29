@@ -472,7 +472,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunSlave::doWork(
     const double cg = cN * gap_gp;
 
     const double lambda_gap_diff = lagrange_slave - cg;
-    const double regular_abs = fabs(lambda_gap_diff);
+    const double regular_abs = std::abs(lambda_gap_diff);
 
     tilde_c_fun = (lagrange_slave + cg - pow(regular_abs, r) / r);
 
@@ -710,7 +710,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunOLambdaSlaveSlave::doWork(
       const double s = val_s * t_base_lambda_row;
       for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-        if (fabs(gap_gp) < TOL && fabs(lagrange_slave) < TOL) {
+        if (std::abs(gap_gp) < TOL && std::abs(lagrange_slave) < TOL) {
         } else {
           t_mat(0, 0) += s * t_base_lambda_col;
         }
@@ -948,10 +948,10 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(
 
   auto lagrange_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-  double d_lambda, d_gap;
+  double d_gap;
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    d_lambda = fabs(lagrange_slave) < TOL ? 0.0 : lagrange_slave;
-    d_gap = fabs(gap_ptr) < TOL ? 0.0 : gap_ptr;
+    const double d_lambda = std::abs(lagrange_slave) < TOL ? 0.0 : lagrange_slave;
+    d_gap = std::abs(gap_ptr) < TOL ? 0.0 : gap_ptr;
     mySplit << d_lambda << " " << d_gap << " " << std::endl;
 
     ++gap_ptr;
