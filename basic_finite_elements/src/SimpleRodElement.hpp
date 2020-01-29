@@ -45,14 +45,15 @@ struct MetaSimpleRodElement {
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
   /**
-   * \brief Implementation of SimpleRod element. Set operators to calculate LHS and
-   * RHS
+   * \brief Implementation of SimpleRod element. Set operators to calculate LHS
+   * and RHS
    *
    * @param m_field                 Interface insurance
    * @param fe_simple_rod_lhs_ptr          Pointer to the FE instance for LHS
    * @param fe_simple_rod_rhs_ptr          Pointer to the FE instance for RHS
    * @param field_name              Field name (e.g. SPATIAL_POSITION)
-   * @param mesh_nodals_positions   Name of field on which ho-geometry is defined
+   * @param mesh_nodals_positions   Name of field on which ho-geometry is
+   * defined
    * @return                        Error code
    */
   static MoFEMErrorCode setSimpleRodOperators(

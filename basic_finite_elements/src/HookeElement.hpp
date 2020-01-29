@@ -215,7 +215,7 @@ struct HookeElement {
 
     MatrixDouble locK;
     MatrixDouble translocK;
-    BlockData &dAta  ;
+    BlockData &dAta;
     // boost::shared_ptr<map<int, BlockData>> dAta;
     // boost::shared_ptr<std::map<int, BlockData>> dAta =
     //     boost::make_shared<std::map<int, BlockData>>();

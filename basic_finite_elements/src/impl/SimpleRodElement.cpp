@@ -265,7 +265,7 @@ struct OpSimpleRodPreStress
 
     double axial_force =
         commonDataPtr->simpleRodSectionArea * commonDataPtr->simpleRodPreStress;
-    
+
     auto dir = getDirection();
     dir /= norm_2(dir);
     for (auto d : {0, 1, 2}) {
