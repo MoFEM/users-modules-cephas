@@ -9,10 +9,11 @@ static char help[] = "...\n\n";
 template <int dim>
 struct UFProblem {
 public: 
-  UFProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order, const int n_species)
+  UFProblem(moab::Core &mb_instance, MoFEM::Core &core, const int order, const double satu_cond, const int n_species)
       : moab( mb_instance)
       , m_field(core)
       , order(order)
+      , K_s(satu_cond)
       , nb_species(n_species)
       , cOmm(m_field.get_comm())
       , rAnk(m_field.get_comm_rank()) {
@@ -104,6 +105,7 @@ private:
   const int rAnk;
 
   int order;
+  double K_s;
   int nb_species;
 
   std::map<int, BlockData> material_blocks;
@@ -209,7 +211,7 @@ MoFEMErrorCode UFProblem<dim>::set_initial_values(std::string field_name,
   }
   if (!surface.empty()) {
     Range surface_verts;
-    
+
     CHKERR moab.get_connectivity(surface, surface_verts, false);
     CHKERR m_field.getInterface<FieldBlas>()->setField(
         init_val, MBVERTEX, surface_verts, field_name);
@@ -256,7 +258,7 @@ MoFEMErrorCode UFProblem<dim>::push_stiff_rhs(std::string field_name,
   MoFEMFunctionBegin;
 
   vol_ele_stiff_rhs->getOpPtrVector().push_back(
-      new OpAssembleStiffRhs(field_name, data, block_map));
+      new OpAssembleStiffRhs(field_name, data, K_s, block_map));
   // boundary_ele_rhs->getOpPtrVector().push_back(
   //     new OpAssembleNaturalBCRhs(field_name,natural_bdry_ents));
   MoFEMFunctionReturn(0);
@@ -281,7 +283,7 @@ MoFEMErrorCode UFProblem<dim>::push_stiff_lhs(std::string field_name,
   MoFEMFunctionBegin;
 
   vol_ele_stiff_lhs->getOpPtrVector().push_back(
-      new OpAssembleStiffLhs(field_name, data, block_map));
+      new OpAssembleStiffLhs(field_name, data, K_s, block_map));
 
   MoFEMFunctionReturn(0);
 }
@@ -366,7 +368,7 @@ MoFEMErrorCode UFProblem<dim>::run_analysis() {
 
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
     string name = it->getName();
-    if (name.compare(0, 14, "ESSENTIAL") == 0) {
+    if (name.compare(0, 9, "ESSENTIAL") == 0) {
       CHKERR it->getMeshsetIdEntitiesByDimension(m_field.get_moab(), dim-1,
                                                   natural_bdry_ents, true);
     }
@@ -478,9 +480,13 @@ int main(int argc, char *argv[]) {
 
   
     int order = 1;
+    double satu_cond = 1.00;
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+    
+    CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-saturated_conductivity",
+                              &satu_cond, PETSC_NULL);
     int nb_species = 1;
-    UFProblem<2> unsatu_flow_problem(mb_instance, core, order, nb_species);
+    UFProblem<2> unsatu_flow_problem(mb_instance, core, order, satu_cond, nb_species);
     CHKERR unsatu_flow_problem.run_analysis();
   }
   CATCH_ERRORS;

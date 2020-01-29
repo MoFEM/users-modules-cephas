@@ -26,7 +26,9 @@ set(permissions_execute
   GROUP_READ
   OWNER_EXECUTE 
   GROUP_EXECUTE)
+  
 
+  
 bfe_copy_and_install("*.msh" "${permissions_default}")
 bfe_copy_and_install("*.cfg" "${permissions_default}")
 bfe_copy_and_install("*.jou" "${permissions_default}")
@@ -34,6 +36,8 @@ bfe_copy_and_install("*.cub" "${permissions_default}")
 bfe_copy_and_install("*.h5m" "${permissions_default}")
 bfe_copy_and_install("*.sh" "${permissions_execute}")
 bfe_copy_and_install("*.petsc" "${permissions_execute}")
+bfe_copy_and_install("*.geo" "${permissions_execute}")
+
 
 file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/README

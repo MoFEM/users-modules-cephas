@@ -18,14 +18,13 @@ namespace UFOperators2D {
   using PostProc = PostProcFaceOnRefinedMesh;
 
 
-  const int save_every_nth_step = 4;
+  int nth_step = 4;
   const double natural_bc_values = -1;
   const double essential_bc_values = 0.0;
 
 
   // const int 2 = 3;
   FTensor::Index<'i', 3> i;
-
   struct BlockData {
     int block_id;
     double K_s; // K_s
@@ -40,7 +39,7 @@ namespace UFOperators2D {
     Range block_ents;
 
     BlockData()
-        : K_s(1.000), ll(0.5000), theta_r(0.0450), theta_s(0.4300),
+        : K_s(1.00), ll(0.5000), theta_r(0.0450), theta_s(0.4300),
           theta_m(0.4300000), nn(5.3800000), alpha(1.812500), h_s(0.0000) {
     }
 
@@ -171,10 +170,12 @@ namespace UFOperators2D {
       
     OpAssembleStiffRhs(std::string field, 
                        boost::shared_ptr<PreviousData> &data,
+                       const double k_satu,
                        std::map<int, BlockData> &block_map)
         : OpVolEle(field, OpVolEle::OPROW), commonData(data)
-        , setOfBlock(block_map) {}
-
+        , setOfBlock(block_map)
+        , satu_conduc(k_satu) {}
+    double satu_conduc; 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
       const int nb_dofs = data.getIndices().size();
@@ -214,6 +215,8 @@ namespace UFOperators2D {
 
 
         const double vol = getMeasure();
+
+        block_map.K_s = satu_conduc;
         
         for (int gg = 0; gg != nb_integration_pts; ++gg) {
           const double a = vol * t_w;
@@ -251,10 +254,15 @@ namespace UFOperators2D {
 
     OpAssembleStiffLhs(std::string fieldu,
                        boost::shared_ptr<PreviousData> &data,
+                       const double k_satu,
                        std::map<int, BlockData> &block_map)
-        : OpVolEle(fieldu, fieldu, OpVolEle::OPROWCOL), commonData(data), setOfBlock(block_map) {
+        : OpVolEle(fieldu, fieldu, OpVolEle::OPROWCOL)
+        , commonData(data)
+        , conduc_satu(k_satu)
+        , setOfBlock(block_map) {
       sYmm = true;
     }
+    double conduc_satu;
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data) {
@@ -299,6 +307,7 @@ namespace UFOperators2D {
         const double vol = getMeasure();
 
         FTensor::Index<'i', 2> i;
+        block_map.K_s = conduc_satu;
 
         // cout << "B0 : " << block_data.B0 << endl;
 
@@ -413,9 +422,12 @@ namespace UFOperators2D {
         , eRror(err){};
     MoFEMErrorCode preProcess() { return 0; }
     MoFEMErrorCode operator()() { return 0; }
+    
     MoFEMErrorCode postProcess() {
       MoFEMFunctionBegin;
-      if (ts_step % save_every_nth_step == 0) {
+      CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-save_every_nth_step",
+                                &nth_step, PETSC_NULL);
+      if (ts_step % nth_step == 0) {
         CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
         CHKERR postProc->writeFile(
             "out_level_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
