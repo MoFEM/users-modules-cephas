@@ -1,21 +1,22 @@
--file_name paper_network_final.h5m 
+ -order 1                      # order of approximation
+ -saturated_conductivity 0.1   
+ -save_every_nth_step  4       # time-steps to save output at 
  
- -ts_monitor 
- -ts_exact_final_time stepover 
- -ts_dt 0.0000005 
- -ts_final_time 0.0001
- -ts_adapt_type none 
+
+# petsc time solver (ts) arguments
+ -ts_monitor                    # to print messages about the time step computations                  
+ -ts_exact_final_time stepover  # rule when to stop at the final time
+ -ts_dt 0.0000005               # time step size
+ -ts_final_time 0.0005          # final time
+ -ts_adapt_type none            # no time-adaptivity, i.e., fixed step size
  
+ # petsc linear solver arguments, fixed
  -ksp_type gmres 
  -pc_type lu 
  -pc_factor_mat_solver_type mumps 
  
--snes_atol 1e-7
--snes_rtol 1e-12 
-
-
+ # petsc nonlinear solver arguments, no need to change them
+ -snes_atol 1e-7
+ -snes_rtol 1e-12 
  -snes_monitor 
  -snes_lag_jacobian 1
-
- -saturated_conductivity 0.1
- -save_every_nth_step  4 

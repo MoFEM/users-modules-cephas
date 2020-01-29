@@ -109,12 +109,12 @@ Next, on the left click on the \b Module; this opens three branches namely \b Ge
 \code{.bash}
 Geometry -> Elementary entities -> Add -> Rectangle  
 \endcode
-
-\image html creat_rect1.png width=800px
-
 A dialogue page appears as shown below, press "shift" key to hold position and enter X = 0, Y = 0, Z = 0 as the coordinates of 
 the left corner of the rectangle and enter DX = 0.02 and DY = 0.005 as the dimensions, make sure that \b radius \b rounded is set to 0. 
-Then click \b Add on the dialogue box. To finish creating the rectangle press "q" key to abort. Now the rectangle is created.
+Then click \b Add on the dialogue box.
+\image html creat_rect1.png width=800px
+
+ To finish creating the rectangle press "q" key to abort. Now the rectangle is created.
 
 \image html creat_rect2.png width=800px
 
@@ -213,12 +213,19 @@ add=BLOCKSET
 name=INITIAL
 \endcode
 
-\section execute executing the code
+\section execute Executing the code
 All the necessary steps to run the code are encapsulated in following bash script file \b run.sh
 
 \code{.bash}
 #!/bin/bash
-../../tools/add_meshsets -my_file paper_network.msh -meshsets_config bc.cfg
+
+if  [[ $1 = "-my_file" ]]; then
+    echo "Running with input file $2 ..."
+    ../../tools/add_meshsets -my_file $2 -meshsets_config bc.cfg 
+else
+  echo "Give the input mesh file name ..."  
+  exit
+fi
 
 cp out.h5m paper_network_pre.h5m
 
@@ -235,35 +242,37 @@ such as the mesh, order of approximation and parameters for \b petsc's time solv
 as follows
 
 \code{.bash}
- -file_name paper_network_final.h5m 
- -order 1
- -saturated_conductivity 0.1
- -save_every_nth_step  4
+ -order 1                      # order of approximation
+ -saturated_conductivity 0.1   
+ -save_every_nth_step  4       # time-steps to save output at 
  
- -ts_monitor 
- -ts_exact_final_time stepover 
- -ts_dt 0.0000005 
- -ts_final_time 0.0005
- -ts_adapt_type none 
+
+# petsc time solver (ts) arguments
+ -ts_monitor                    # to print messages about the time step computations                  
+ -ts_exact_final_time stepover  # rule when to stop at the final time
+ -ts_dt 0.0000005               # time step size
+ -ts_final_time 0.0005          # final time
+ -ts_adapt_type none            # no time-adaptivity, i.e., fixed step size
  
+ # petsc linear solver arguments, fixed
  -ksp_type gmres 
  -pc_type lu 
  -pc_factor_mat_solver_type mumps 
  
--snes_atol 1e-7
--snes_rtol 1e-12 
-
+ # petsc nonlinear solver arguments, no need to change them
+ -snes_atol 1e-7
+ -snes_rtol 1e-12 
  -snes_monitor 
- -snes_lag_jacobian 1 
+ -snes_lag_jacobian 1
 \endcode
 
 Finally, the code is simply executed using the script file as
 
 \code{.bash}
-bash run.sh
+./run.sh -my_file paper_network.msh
 \endcode
 
-\section output_vis visualizing analysing the output
+\section output_vis Visualizing the output
 
 Assuming paraView is installed on your machine, open paraView and load the file \b out_level*
 
@@ -300,5 +309,45 @@ Propertties window
 \image html overtime.png width=800px
 
 paraView is a powerful visualisation and analysis tool. It has reach functionalities, you may play around to get a some understanding of it.
+
+\section Exercise 
+
+- \b Estimating \b speed \b of \b the \b front \b of \b pressure \b head. To do this, you need a grid over in the \b RenderView of \b VTK, in which the output is lying inside it.
+   and then put the \b Time at a certain point say 56. we can get the grid in the following way, on the paraView page with the output loaded, in the \b Properties view under 
+   \b Annotations check \b Axis Grid and press \b Edit button next to it. A dialogue box appears, in it press the gear as shown, 
+   \image html dialogue2.png width=400px
+   and on the appearing dialogue box check \b Show \b Grid button and press the gear as shown,  
+   \image html dialogue3.png width=400px
+   now on the final dialogue box appearing check \b Show \Grid, \b Show \b Edges and \Show \b Ticks, 
+   \image html dialogue4.png width=400px
+   finally press \b Apply -> \b OK then close the dialogue box.  
+   \image html grid.png width=800px
+   (since the \b save_every_nth_step  is set at 4, it implies that output 56 means t = 56X4Xdt where dt is the time step size) then for example h1 = -0.5 is
+   roughly at 0.008. Hence we effectively say that at t = 242Xdt the speed is 0.008/(242Xdt). Do this at various time steps and record the speeds. Now do the speed
+   test for different values of saturated_conductivity \f$K_s\f$. And observe that how the size of \f$K_s\f$ influences the speed.
+
+- \b Add \b more \b feature \b to \b the \b geometry. For example, a geometry consisting of two rectangles separated by an angle \f$\pi/3\f$, as shown
+   \image html two_rec.png width=800px
+   and the geo file \b two_rec.geo is 
+   \code{.bash}
+    // Gmsh project created on Mon Jan 27 21:51:41 2020
+    lx = 0.02;    
+    ly = 0.005;
+    SetFactory("OpenCASCADE");
+
+    Rectangle(1) = {0, 0, 0, lx, ly, 0};
+    Rotate {{0, 0, 1}, {lx, ly/2, 0}, Pi/3} { Duplicata { Surface{1}; }} 
+    BooleanUnion { Surface{1}; } { Surface{2}; }
+    Recursive Delete { Surface{1}; Surface{2}; }
+
+    Physical Curve("ESSENTIAL") = {8};
+    Physical Surface("INITIAL") = {3};
+
+
+   \endcode
+   Understand what each line is about. Create the corresponding mesh and execute the code with it. Now create a geometry such as this
+   \image html star_geo.png width=800px
+   Create a mesh with it and run the code using the mesh. 
+
 
 */
