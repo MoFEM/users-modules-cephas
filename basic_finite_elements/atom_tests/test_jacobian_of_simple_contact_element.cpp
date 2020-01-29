@@ -1,5 +1,5 @@
-/** \file simple_contact.cpp
- * \example simple_contact.cpp
+/** \file test_jacobian_of_simple_contact_element.cpp
+ * \example test_jacobian_of_simple_contact_element.cpp
  *
  * Testing implementation of simple contact element (for contact between
  * surfaces with matching meshes) by verifying its tangent matrix
@@ -78,8 +78,6 @@ int main(int argc, char *argv[]) {
     if (flg_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
-
-    // CHKERR DMRegister_MoFEM("DMMOFEM");
 
     // Read mesh to MOAB
     const char *option;
@@ -290,10 +288,10 @@ int main(int argc, char *argv[]) {
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
 
-    contact_problem->setContactOperatorsRhsOperators(
+    contact_problem->setContactOperatorsRhs(
         fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
         "LAGMULT");
-    contact_problem->setContactOperatorsLhsOperators(
+    contact_problem->setContactOperatorsLhs(
         fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
         "LAGMULT", A);
 
