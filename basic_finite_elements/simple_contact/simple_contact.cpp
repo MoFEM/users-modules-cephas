@@ -332,9 +332,10 @@ int main(int argc, char *argv[]) {
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
 
+    SmartPetscObj<DM> dm;
+    dm = createSmartDM(m_field.get_comm(), dm_name);
+ 
     // create dm instance
-    DM dm;
-    CHKERR DMCreate(PETSC_COMM_WORLD, &dm);
     CHKERR DMSetType(dm, dm_name);
 
     // set dm datastruture which created mofem datastructures
@@ -348,23 +349,24 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "SPRING");
 
     CHKERR DMSetUp(dm);
+    
+    
+    // Vector of DOFs and the RHS
+    auto D = smartCreateDMVector(dm);
+    auto F = smartVectorDuplicate(D);
 
-    Mat Aij;  // Stiffness matrix
-    Vec D, F; //, D0; // Vector of DOFs and the RHS
-
-    CHKERR DMCreateGlobalVector(dm, &D);
-
-    // CHKERR VecZeroEntries(D);
+    // Stiffness matrix
+    auto Aij = smartCreateDMMatrix(dm);
+    
+    CHKERR VecZeroEntries(D);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
 
-    CHKERR VecDuplicate(D, &F);
     CHKERR VecZeroEntries(F);
     CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
 
-    CHKERR DMCreateMatrix(dm, &Aij);
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(Aij);
 
@@ -465,12 +467,12 @@ int main(int argc, char *argv[]) {
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
-    SNES snes;
+    auto snes = MoFEM::createSNES(m_field.get_comm());
+    CHKERR SNESSetDM(snes, dm);
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
     // create snes nonlinear solver
     {
-      CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
       CHKERR SNESSetDM(snes, dm);
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
@@ -591,14 +593,6 @@ int main(int argc, char *argv[]) {
 
     CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
     CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
-
-    CHKERR VecDestroy(&D);
-    CHKERR VecDestroy(&F);
-    CHKERR MatDestroy(&Aij);
-    CHKERR SNESDestroy(&snes);
-
-    // destroy DM
-    CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 

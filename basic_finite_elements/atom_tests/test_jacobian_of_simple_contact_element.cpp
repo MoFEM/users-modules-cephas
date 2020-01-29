@@ -247,8 +247,8 @@ int main(int argc, char *argv[]) {
     CHKERR DMRegister_MoFEM(dm_name);
 
     // create dm instance
-    DM dm;
-    CHKERR DMCreate(PETSC_COMM_WORLD, &dm);
+    SmartPetscObj<DM> dm;
+    dm = createSmartDM(m_field.get_comm(), dm_name);
     CHKERR DMSetType(dm, dm_name);
 
     // set dm datastruture which created mofem datastructures
@@ -259,19 +259,22 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMSetUp(dm);
 
-    Mat A, fdA; // Stiffness matrix
-    Vec D, F;   // Vector of DOFs and the RHS
+    // Vector of DOFs and the RHS
+    auto D = smartCreateDMVector(dm);
+    auto F = smartVectorDuplicate(D);
 
-    CHKERR DMCreateGlobalVector(dm, &D);
+    // Stiffness matrix
+    auto A = smartCreateDMMatrix(dm);
+    
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
 
-    CHKERR VecDuplicate(D, &F);
     CHKERR VecZeroEntries(F);
 
-    CHKERR DMCreateMatrix(dm, &A);
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
-    CHKERR MatDuplicate(A, MAT_DO_NOT_COPY_VALUES, &fdA);
+    Mat duplicate;
+    CHKERR MatDuplicate(A, MAT_DO_NOT_COPY_VALUES, &duplicate);
+    SmartPetscObj<Mat> fdA(duplicate);
     CHKERR MatZeroEntries(fdA);
 
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
@@ -314,12 +317,12 @@ int main(int argc, char *argv[]) {
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
-    SNES snes;
+    auto snes = MoFEM::createSNES(m_field.get_comm());
+    CHKERR SNESSetDM(snes, dm);
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
     // create snes nonlinear solver
     {
-      CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
       CHKERR SNESSetDM(snes, dm);
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
@@ -356,14 +359,6 @@ int main(int argc, char *argv[]) {
                 "difference matrix is too big");
       }
     }
-
-    CHKERR VecDestroy(&D);
-    CHKERR VecDestroy(&F);
-    CHKERR MatDestroy(&A);
-    CHKERR SNESDestroy(&snes);
-
-    // destroy DM
-    CHKERR DMDestroy(&dm);
   }
   CATCH_ERRORS;
 
