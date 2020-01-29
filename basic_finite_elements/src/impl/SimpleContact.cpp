@@ -950,7 +950,8 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
   double d_gap;
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    const double d_lambda = std::abs(lagrange_slave) < TOL ? 0.0 : lagrange_slave;
+    const double d_lambda =
+        std::abs(lagrange_slave) < TOL ? 0.0 : lagrange_slave;
     d_gap = std::abs(gap_ptr) < TOL ? 0.0 : gap_ptr;
     mySplit << d_lambda << " " << d_gap << " " << std::endl;
 

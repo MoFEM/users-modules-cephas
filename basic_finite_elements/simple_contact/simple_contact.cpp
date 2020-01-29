@@ -23,7 +23,7 @@
 #include <Hooke.hpp>
 
 //#include <boost/program_options.hpp>
-//namespace po = boost::program_options;
+// namespace po = boost::program_options;
 
 using namespace std;
 using namespace boost::numeric;
@@ -334,7 +334,7 @@ int main(int argc, char *argv[]) {
 
     SmartPetscObj<DM> dm;
     dm = createSmartDM(m_field.get_comm(), dm_name);
- 
+
     // create dm instance
     CHKERR DMSetType(dm, dm_name);
 
@@ -349,15 +349,14 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "SPRING");
 
     CHKERR DMSetUp(dm);
-    
-    
+
     // Vector of DOFs and the RHS
     auto D = smartCreateDMVector(dm);
     auto F = smartVectorDuplicate(D);
 
     // Stiffness matrix
     auto Aij = smartCreateDMMatrix(dm);
-    
+
     CHKERR VecZeroEntries(D);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -398,12 +397,12 @@ int main(int argc, char *argv[]) {
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
 
-    contact_problem->setContactOperatorsRhs(
-        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-        "LAGMULT");
-    contact_problem->setContactOperatorsLhs(
-        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-        "LAGMULT", Aij);
+    contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                            common_data_simple_contact,
+                                            "SPATIAL_POSITION", "LAGMULT");
+    contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                            common_data_simple_contact,
+                                            "SPATIAL_POSITION", "LAGMULT", Aij);
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -542,30 +541,27 @@ int main(int argc, char *argv[]) {
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
         "SPATIAL_POSITION", "LAGMULT", mb_post);
-    
+
     mb_post.delete_mesh();
 
     if (is_test == PETSC_TRUE) {
       std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
-      
+
       fe_post_proc_simple_contact->getOpPtrVector().push_back(
           new SimpleContactProblem::OpMakeTestTextFile(
-              m_field, "SPATIAL_POSITION", common_data_simple_contact,
-              ofs));
+              m_field, "SPATIAL_POSITION", common_data_simple_contact, ofs));
 
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact);
-      
-      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy
-               << endl;
+                                      fe_post_proc_simple_contact);
+
+      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
       ofs.flush();
       ofs.close();
-    }
-    else {
+    } else {
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact);
+                                      fe_post_proc_simple_contact);
     }
-  
+
     std::ostringstream ostrm;
 
     ostrm << "out_contact"

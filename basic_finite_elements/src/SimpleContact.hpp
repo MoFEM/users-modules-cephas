@@ -83,7 +83,8 @@ struct SimpleContactProblem {
    * multipliers
    * @param  range_slave_master_prisms  Range for prism entities used to create
    * contact elements
-   * @param  lagrange_field             Boolean used to determine existence of Lagrange multipliers field (default is true)
+   * @param  lagrange_field             Boolean used to determine existence of
+   * Lagrange multipliers field (default is true)
    * @return                            Error code
    *
    */
@@ -282,7 +283,7 @@ struct SimpleContactProblem {
      * @brief Evaluates gap function at slave face gauss points
      *
      * Computes gap function at slave face gauss points:
-     * 
+     *
      * \f[
      * g_{\textrm{n}} = - \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left(
      * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right)
@@ -580,7 +581,7 @@ struct SimpleContactProblem {
    * Integrates and assembles Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
    * with respect to Lagrange multipliers over master side
-   * 
+   *
    */
   struct OpCalContactTractionOverLambdaMasterSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
@@ -605,7 +606,7 @@ struct SimpleContactProblem {
      * @brief  * Integrates and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
      * with respect to Lagrange multipliers over master side
-     * 
+     *
      * Computes linearisation of and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ with respect to Lagrange multipliers
      *
@@ -633,7 +634,7 @@ struct SimpleContactProblem {
    * @brief LHS-operator for the simple contact element
    *
    * Integrates and assembles Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers 
+   * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
    * with respect to Lagrange multipliers over slave side
    *
    */
@@ -660,7 +661,7 @@ struct SimpleContactProblem {
      * @brief Integrates and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
      * with respect to Lagrange multipliers over slave side
-     * 
+     *
      * Computes linearisation of and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ with respect to Lagrange multipliers
      *
@@ -737,8 +738,7 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
-  struct
-      OpCalDerIntCompFunOverSpatPosSlaveMaster
+  struct OpCalDerIntCompFunOverSpatPosSlaveMaster
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     double cN; //@todo: ign: to become input parameter
@@ -953,17 +953,19 @@ struct SimpleContactProblem {
                                          common_data_simple_contact));
 
       fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalContactTractionOnMaster(field_name, common_data_simple_contact, f_));
+          new OpCalContactTractionOnMaster(field_name,
+                                           common_data_simple_contact, f_));
 
       fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalContactTractionOnSlave(field_name, common_data_simple_contact, f_));
+          new OpCalContactTractionOnSlave(field_name,
+                                          common_data_simple_contact, f_));
 
       fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetCompFunSlave(
           field_name, common_data_simple_contact, rValue, cnValue));
 
       fe_rhs_simple_contact->getOpPtrVector().push_back(
           new OpCalIntCompFunSlave(lagrang_field_name,
-                                     common_data_simple_contact, f_));
+                                   common_data_simple_contact, f_));
     }
     MoFEMFunctionReturn(0);
   }
