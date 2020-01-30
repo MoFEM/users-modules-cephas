@@ -1,8 +1,8 @@
 /*!\page unsaturated_flow Unsaturated flow in 2D
 
 This tutorial deals with the usage of the \b unsaturated_2Dflow module to simulate/analyse 
-the of flow water or chemical (or fluid in general) in a variably saturated matrix. The emphasis 
-is not on the finite element implementation, rather it is on the preprocessor and description of how the 
+the flow of water or chemical (or fluid in general) in a variably saturated matrix. The emphasis 
+is not on the finite element implementation; rather it is on the preprocessor and description of how the 
 code is run. 
 \image html flow_rec.gif  width=600px
 The presentation includes:
@@ -183,7 +183,8 @@ Then to create the mesh,
 Module -> Mesh -> 2D 
 \endcode
 
-The rectangle is the meshed into relatively coarser triangles. If you want to refine it, just press \b {Refine by splitting} (you can repeat pressing it 
+The rectangle is the meshed into relatively coarser triangles. If you want to refine it, just press \bRefine \b by \b splitting under 
+\b Mesh. (you can repeat pressing it 
 as many times as required, to get to an acceptable level of refinement.) To save the resulting mesh you need to go to 
 
 \image html mesh.png width=800px
@@ -218,7 +219,7 @@ All the necessary steps to run the code are encapsulated in following bash scrip
 
 \code{.bash}
 #!/bin/bash
-
+  
 if  [[ $1 = "-my_file" ]]; then
     echo "Running with input file $2 ..."
     ../../tools/add_meshsets -my_file $2 -meshsets_config bc.cfg 
@@ -231,9 +232,12 @@ cp out.h5m paper_network_pre.h5m
 
 ../../tools/mofem_part -my_file paper_network_pre.h5m -output_file paper_network_final.h5m -my_nparts 1 -dim 2 -adj_dim 1
 
-time mpirun -np 1 ./unsatu2dFlow_prob 2>&1 | tee log
+if [[ -z "$3" ]]; then
+    time mpirun -np 1 ./unsatu2dFlow_prob -file_name paper_network_final.h5m 2>&1 | tee log
+elif [[ $3 = "-saturated_conductivity" ]]; then
+    time mpirun -np 1 ./unsatu2dFlow_prob -file_name paper_network_final.h5m -saturated_conductivity $4 2>&1 | tee log
+fi
 
-rm out_*
 ../nonlinear_elasticity/do_vtk.sh out_*.h5m
 \endcode
 
@@ -243,7 +247,7 @@ as follows
 
 \code{.bash}
  -order 1                      # order of approximation
- -saturated_conductivity 0.1   
+ -saturated_conductivity 0.1   # set default value for K_s 
  -save_every_nth_step  4       # time-steps to save output at 
  
 
@@ -269,7 +273,7 @@ as follows
 Finally, the code is simply executed using the script file as
 
 \code{.bash}
-./run.sh -my_file paper_network.msh
+./run.sh -my_file paper_network.msh -saturated_conductivity 1.0
 \endcode
 
 \section output_vis Visualizing the output

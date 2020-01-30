@@ -147,3 +147,10 @@ The output the run are a bunch of \b .h5m files that needs to be converted to
 \code{.bash}
 ../nonlinear_elasticity/do_vtk.sh out_level_*.h5m
 \endcode
+
+
+if [[ -z "$3" ]]; then
+    time mpirun -np 1 ./unsatu2dFlow_prob -file_name paper_network_final.h5m 2>&1 | tee log
+elif [[ $3 = "-saturated_conductivity" ]]; then
+    time mpirun -np 1 ./unsatu2dFlow_prob -file_name paper_network_final.h5m -saturated_conductivity $4 2>&1 | tee log
+fi

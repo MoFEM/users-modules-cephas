@@ -1,5 +1,5 @@
  -order 1                      # order of approximation
- -saturated_conductivity 0.1   
+ -saturated_conductivity 0.1   # default value for K_s
  -save_every_nth_step  4       # time-steps to save output at 
  
 
