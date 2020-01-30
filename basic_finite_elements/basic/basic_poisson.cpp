@@ -116,7 +116,7 @@ MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->resVec = smartCreateDMDVector(simple->getDM());
+  commonDataPtr->resVec = smartCreateDMVector(simple->getDM());
   commonDataPtr->L2Vec = createSmartVectorMPI(
       mField.get_comm(), (!mField.get_comm_rank()) ? 1 : 0, 1);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
@@ -192,7 +192,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
+  auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
   CHKERR KSPSolve(solver, F, D);

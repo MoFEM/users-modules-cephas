@@ -289,7 +289,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto solver = basic->createTS();
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
+  auto D = smartCreateDMVector(dm);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
