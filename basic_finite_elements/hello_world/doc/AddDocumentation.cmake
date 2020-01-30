@@ -17,3 +17,4 @@ add_custom_target(hellow_world_docs
   ${PROJECT_SOURCE_DIR}/users_modules/basic_finite_elements/hello_world/doc/figures 
   ${PROJECT_BINARY_DIR}/html
 )
+add_dependencies(doc hellow_world_docs)

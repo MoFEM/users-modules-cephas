@@ -17,3 +17,4 @@ add_custom_target(basic_docs
   ${PROJECT_SOURCE_DIR}/users_modules/basic_finite_elements/basic/doc/figures 
   ${PROJECT_BINARY_DIR}/html
 )
+add_dependencies(doc basic_docs)
