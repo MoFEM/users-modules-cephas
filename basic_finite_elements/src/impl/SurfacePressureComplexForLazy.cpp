@@ -467,21 +467,6 @@ NeumannForcesSurfaceComplexForLazy::MyTriangleSpatialFE::preProcess() {
   ierr = PetscOptionsEnd();
   CHKERRG(ierr);
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
   MoFEMFunctionReturnHot(0);
 }
 

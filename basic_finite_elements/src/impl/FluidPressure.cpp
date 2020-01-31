@@ -61,24 +61,8 @@ MoFEMErrorCode FluidPressure::OpCalculatePressure::doWork(
     }
   }
 
-  bool set = false;
-  switch (getFEMethod()->ts_ctx) {
-  case FEMethod::CTX_TSSETIFUNCTION:
-    F = getFEMethod()->ts_F;
-    set = true;
-    break;
-  default:
-    break;
-  }
-  if (!set) {
-    switch (getFEMethod()->snes_ctx) {
-    case FEMethod::CTX_SNESSETFUNCTION:
-      F = getFEMethod()->snes_f;
-      set = true;
-    default:
-      break;
-    }
-  }
+  if (F == PETSC_NULL)
+    F = getKSPf();
 
   if (F == PETSC_NULL)
     SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "impossible case");
