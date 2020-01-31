@@ -345,14 +345,14 @@ MoFEMErrorCode SimpleContactProblem::OpCalProjStressesAtGaussPtsMaster::doWork(
         &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
         &stress(2, 2));
 
-    proj_normal_stress_master +=
-        t_stress(i, j) * normal_at_gp_master(i) * normal_at_gp_master(j);
-
     // proj_normal_stress_master +=
-    //     t_stress(i, j) * normal_at_gp_master(i) * normal_at_gp_slave(j);
+    //     t_stress(i, j) * normal_at_gp_master(i) * normal_at_gp_master(j);
+
+    proj_normal_stress_master +=
+        t_stress(i, j) * normal_at_gp_master(i) * normal_at_gp_slave(j);
 
     ++proj_normal_stress_master;
-    ++normal_at_gp_slave;
+    // ++normal_at_gp_slave;
   }
 
   MoFEMFunctionReturn(0);
@@ -1099,13 +1099,13 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    MatrixDouble3by3 &stress =
-        commonDataSimpleContact->elasticityCommonDataMaster.sTress[gg];
+    // MatrixDouble3by3 &stress =
+    //     commonDataSimpleContact->elasticityCommonDataMaster.sTress[gg];
 
-    FTensor::Tensor2<double *, 3, 3> t_stress(
-        &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
-        &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
-        &stress(2, 2));
+    // FTensor::Tensor2<double *, 3, 3> t_stress(
+    //     &stress(0, 0), &stress(0, 1), &stress(0, 2), &stress(1, 0),
+    //     &stress(1, 1), &stress(1, 2), &stress(2, 0), &stress(2, 1),
+    //     &stress(2, 2));
 
     // if (gap_gp > 0) {
     //   ++gap_gp;
@@ -1137,7 +1137,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
 
       t_assemble_m(i) +=
           val_m *
-          (omegaVal * proj_normal_stress_slave + (1. - omegaVal) *
+          (omegaVal * proj_normal_stress_slave - (1. - omegaVal) *
            proj_normal_stress_master ) *
           const_unit_n_slave(i) * t_base_master;
 
@@ -1330,7 +1330,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsSlave::doWork(
 
       t_assemble_s(i) -=
           val_s *
-          (omegaVal * proj_normal_stress_slave +
+          (omegaVal * proj_normal_stress_slave -
            (1. - omegaVal) * proj_normal_stress_master ) * const_unit_n(i) *
           t_base_slave;
 
@@ -1581,7 +1581,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
       //     val_m_2 * t_stress(j, m) * const_unit_n(m) * t_base_master;
 
       t_assemble_m(j) += val_m * t3_1(i, m, j) * const_unit_n(i) *
-                         const_unit_n(m); // base not needed
+                         const_unit_slave(m); // base not needed
 
       // if (type == MBEDGE)
         // cerr <<" " <<  t_assemble_m << "\n";
@@ -1592,8 +1592,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
     ++t_w;
     ++gap_gp;
     ++tilde_c_nitsche_fun;
-    ++const_unit_slave;
-  }
+    }
   // cerr << "\n \n"
   //      << "start f_n " << vec_f << "\n";
   //CHKERR aSemble(side, type, data);
@@ -1989,26 +1988,25 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterMaster_dx::doWor
 
         auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-        t_assemble_m(m, k) += 2. * val_m * (1. - omegaVal) * t3_1(i, j, k) *
-                              const_unit_n_master(i) * const_unit_n_master(j) *
+        t_assemble_m(m, k) -= 2. * val_m * (1. - omegaVal) * t3_1(i, j, k) *
+                              const_unit_n_master(j) * const_unit_n_slave(i) *
                               const_unit_n_slave(m) *
                               t_base_master_row; // base not needed
-
 
         //         cerr << sum_prod << "sum_prod\n";
         //         cerr << diff_prod << "diff_prod\n";
         // cerr << omegaVal << "omegaVal\n";
-   
-   
+
         t_assemble_m(m, k) +=
-             val_m *
-            (sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
-                 const_unit_n_master(i) * const_unit_n_master(j) -
-            diff_prod * cN * t_base_master_col * const_unit_n_slave(k)) *
+            val_m *
+            ( -sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
+                 const_unit_n_master(i) * const_unit_n_slave(j) -
+             diff_prod * cN * t_base_master_col * const_unit_n_slave(k)) *
             (-const_unit_n_slave(m) * t_base_master_row +
              (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
-                 const_unit_n_master(i) * const_unit_n_master(j) /
+                 const_unit_n_master(j) * const_unit_n_slave(i) /
                  cN); // base not needed
+
         // cerr << " diff_prod " << diff_prod << "\n";
         // cerr << " sum_prod " << sum_prod << "\n";
 
@@ -2248,19 +2246,19 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
             //                       const_unit_n_master(j) * const_unit_n(m) *
             //                       t_base_slave_row; // base not needed
 
-            t_assemble_m(m, k) -= 2. * val_m * (1 - omegaVal) * t3_1(i, j, k) *
-                                  const_unit_n_master(i) * const_unit_n_master(j) *
+            t_assemble_m(m, k) += 2. * val_m * (1 - omegaVal) * t3_1(i, j, k) *
+                                  const_unit_n(i) * const_unit_n_master(j) *
                                   const_unit_n(m) *
                                   t_base_slave_row; // base not needed
 
             t_assemble_m(m, k) +=
                 val_m *
-                (sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
-                     const_unit_n_master(i) * const_unit_n_master(j) -
-                 diff_prod * cN * t_base_master_col * const_unit_n(k)) *
+                (-diff_prod * (1. - omegaVal) * t3_1(i, j, k) *
+                     const_unit_n(i) * const_unit_n_master(j) -
+                 sum_prod * cN * t_base_master_col * const_unit_n(k)) *
                 (const_unit_n(m) * t_base_slave_row -
-                 omegaVal * thetaSVal * t3_1_row(i, j, m) *
-                     const_unit_n(i) * const_unit_n(j) / cN);
+                 omegaVal * thetaSVal * t3_1_row(i, j, m) * const_unit_n(i) *
+                     const_unit_n(j) / cN);
 
             //(sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
             //      const_unit_n_master(i) * const_unit_n_master(j) -
@@ -2304,9 +2302,9 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
                         &col_data.getIndices()[0], &*NN.data().begin(),
                         ADD_VALUES);
 // noalias(NNT) = trans(NN);
-    CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
-                        &(*row_data)->getIndices()[0], &*NNT.data().begin(),
-                        ADD_VALUES);
+    // CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
+    //                     &(*row_data)->getIndices()[0], &*NNT.data().begin(),
+    //                     ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
@@ -2876,12 +2874,15 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
                               const_unit_n(i) * const_unit_n(j) *
                               const_unit_n(m) *
                               t_base_slave_row; // base not needed
+        
+        cerr << " sum_prod  " << sum_prod << " diff_prod  " << diff_prod
+             << "\n";
 
         t_assemble_m(m, k) +=
             val_m *
             (sum_prod * omegaVal * t3_1(i, j, k) * const_unit_n(i) *
                  const_unit_n(j) +
-             diff_prod * cN * t_base_slave_col * const_unit_n(k)) *
+             sum_prod * cN * t_base_slave_col * const_unit_n(k)) *
             (const_unit_n(m) * t_base_slave_row -
              omegaVal * thetaSVal * t3_1_row(i, j, m) * const_unit_n(i) *
                  const_unit_n(j) / cN); // base not needed
@@ -3017,10 +3018,17 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
     auto nitsche_gap_diff_prod =
         getFTensor0FromVec(*commonDataSimpleContact->nitscheGapDiffProductPtr);
 
+    auto tilde_c_fun =
+        getFTensor0FromVec(*commonDataSimpleContact->tildeCFunNitschePtr);
+
+    auto proj_normal_stress_master =
+        getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtMaster);
+    auto proj_normal_stress_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->projNormalStressAtSlave);
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-      const double sum_prod = 1. + nitsche_gap_diff_prod;
-      const double diff_prod = 1. - nitsche_gap_diff_prod;
+      double sum_prod = 1. + nitsche_gap_diff_prod;
+      double diff_prod = 1. - nitsche_gap_diff_prod;
 
       // if (gap_gp > 0) {
       //   ++gap_gp;
@@ -3132,6 +3140,11 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
           //                       const_unit_n(j) * const_unit_n(m) *
           //                       t_base_master_row; // base not needed
 
+          // cerr << " C FUN " << tilde_c_fun << " GAP " << gap_gp << " MASTER "
+          //      << proj_normal_stress_master << " SLAVE "
+          //      << proj_normal_stress_slave << " sum_prod " << sum_prod
+          //      << " diff_prod " << diff_prod << "\n";
+
           t_assemble_m(m, k) += 2. * val_m * omegaVal * t3_1(i, j, k) *
                                 const_unit_n(i) * const_unit_n(j) *
                                 const_unit_n(m) *
@@ -3144,7 +3157,8 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
                diff_prod * cN * t_base_slave_col * const_unit_n(k)) *
               (-const_unit_n(m) * t_base_master_row +
                (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
-                   const_unit_n_master(i) * const_unit_n_master(j) / cN); // base not needed
+                   const_unit_n_master(i) * const_unit_n(j) /
+                   cN); // base not needed
 
           // if (gap_gp > 0){
           //   t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
@@ -3161,6 +3175,8 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
       ++t_w;
       ++gap_gp;
       ++nitsche_gap_diff_prod;
+      ++tilde_c_fun;
+      ++proj_normal_stress_master;
     }
     // CHKERR aSemble(side, type, data);
     Mat aij;
@@ -3176,9 +3192,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
                         ADD_VALUES);
 
     // noalias(NNT) = trans(NN);
-    CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
-                        &(*row_data)->getIndices()[0], &*NNT.data().begin(),
-                        ADD_VALUES);
+    // CHKERR MatSetValues(aij, nb_col, &col_data.getIndices()[0], nb_row,
+    //                     &(*row_data)->getIndices()[0], &*NNT.data().begin(),
+    //                     ADD_VALUES);
 }
     MoFEMFunctionReturn(0);
 }
@@ -3568,7 +3584,7 @@ MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
-  if (type != MBVERTEX)
+  if (type != MBTRI)
     MoFEMFunctionReturnHot(0);
 
   const EntityHandle tri_master = getSideEntity(3, MBTRI);
@@ -4065,7 +4081,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunNitscheSlave::doWork(
     const double cg = cN * gap_gp;
 
     // const double regular_abs = fabs(lambda_gap_diff);
-    const double p_n_omega = omegaVal * proj_normal_stress_slave +
+    const double p_n_omega = omegaVal * proj_normal_stress_slave -
                              (1 - omegaVal) * proj_normal_stress_master;
     const double lambda_gap_diff = p_n_omega - cg;
     const double lambda_gap_sum = p_n_omega + cg;
@@ -4077,7 +4093,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunNitscheSlave::doWork(
     const double exponent = r - 1.;
 
     double sign = 0.;
-    sign = (lambda_gap_sum == 0) ? 0 : (lambda_gap_sum < 0) ? -1 : 1;
+    sign = (std::abs(lambda_gap_sum) < 1.e-8) ? 0 : (lambda_gap_sum < 0) ? -1 : 1;
     // cerr << "tilde_c_fun in fun " << tilde_c_fun<<"\n";
     // if (lagrange_slave == 0. && cg == 0.)
     // sign = 1.;

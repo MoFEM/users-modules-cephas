@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_ale, PETSC_NULL);
 
-    CHKERR PetscOptionsBool("-my_is_lag",
+    CHKERR PetscOptionsBool("-is_lag",
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_lag, PETSC_NULL);
@@ -1018,10 +1018,10 @@ else{
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
-                                                            "SPATIAL_POSITION");
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
-        set_coord, "MESH_NODE_POSITIONS");
+    // CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
+    //                                                         "SPATIAL_POSITION");
+    // CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+    //     set_coord, "MESH_NODE_POSITIONS");
 
     PetscRandomDestroy(&rctx);
 
@@ -1262,7 +1262,7 @@ else{
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
     } else {
-
+      cerr << " !!!!!!!  !!!!!!!  !!!!!!!  Nitsche !!!!!!! !!!!!!!  !!!!!!! \n";
       contact_problem->setContactNitschePenaltyRhsOperators(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "MESH_NODE_POSITIONS", "ELASTIC",

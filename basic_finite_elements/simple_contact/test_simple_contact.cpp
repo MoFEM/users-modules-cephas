@@ -144,6 +144,9 @@ int main(int argc, char *argv[]) {
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
+    cerr << "~~~~~~~~~ OMEGAAA   " << my_omega_value << "\n";
+    cerr << "~~~~~~~~~ THETA   " << my_theta_s_value << "\n";
+
     // Read parameters from line command
     if (flg_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
@@ -693,14 +696,14 @@ CHKERR m_field.build_fields();
         // adjacency.merge(rem_face);
       }
       Range sub_ent = subtract(all_rem_entities, adjacency);
-      // cerr << " sub_ents size " << sub_ent.size() << "\n";
+      cerr << " sub_ents size " << sub_ent.size() << "\n";
       for (auto e : sub_ent)
         const_cast<SideNumber_multiIndex &>(fe.getSideNumberTable())
             .insert(boost::shared_ptr<SideNumber>(new SideNumber(e, -1, 0, 0)));
 
-      // cerr << " Total number of entities !!!  " << adjacency.size() << "\n";
+      cerr << " Total number of entities !!!  " << adjacency.size() << "\n";
       adjacency.merge(sub_ent);
-      // cerr << " Total number of entities 2 !!!  " << adjacency.size() << "\n";
+      cerr << " Total number of entities 2 !!!  " << adjacency.size() << "\n";
 
       MoFEMFunctionReturn(0);
     };
