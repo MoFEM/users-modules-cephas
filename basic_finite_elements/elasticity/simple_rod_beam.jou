@@ -78,7 +78,3 @@ create pressure on surface 1 magnitude 0.5
 
 
 save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/elasticity/simple_rod_beam.cub" overwrite
-
-
-
-
