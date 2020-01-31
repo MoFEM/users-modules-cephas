@@ -14,7 +14,7 @@ merge vertex 2 with vertex 12
 
 
 # Material properties, units: N, mm
-{young_modulus = 20}
+{young_modulus = 10}
 {poisson_ratio = 0.2}
 block 1 volume 1
 block 1 name 'MAT_ELASTIC'
@@ -23,7 +23,7 @@ block 1 attribute index 1 {young_modulus}
 block 1 attribute index 2 {poisson_ratio}
 
 # Density for mass matrix calculation
-{density = 7850.e-8}
+{density = 1e-3}
 block 2 volume 1
 block 2 name 'BODY_FORCES'
 block 2 attribute count 4
