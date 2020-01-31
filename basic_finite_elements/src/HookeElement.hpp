@@ -39,7 +39,7 @@
 
 struct NonlinearElasticElement {
 
-  /** \brief data for calculation het conductivity and heat capacity elements
+  /** \brief data for calculation heat conductivity and heat capacity elements
    * \ingroup nonlinear_elastic_elem
    */
   struct BlockData {
@@ -52,7 +52,7 @@ struct NonlinearElasticElement {
   };
 };
 
-#endif
+#endif // __NONLINEAR_ELASTIC_HPP
 
 /** \brief structure grouping operators and data used for calculation of
  * nonlinear elastic element \ingroup nonlinear_elastic_elem
@@ -65,9 +65,24 @@ struct NonlinearElasticElement {
  * loop attach operator.
  *
  */
+
+#ifndef __CONVECTIVE_MASS_ELEMENT_HPP
+struct ConvectiveMassElement {
+  /** \brief data for calculation inertia forces
+   * \ingroup user_modules
+   */
+  struct BlockData {
+    double rho0;     ///< reference density
+    VectorDouble a0; ///< constant acceleration
+    Range tEts;      ///< elements in block set
+  };
+}
+
+#endif //__CONVECTIVE_MASS_ELEMENT_HPP
 struct HookeElement {
 
   using BlockData = NonlinearElasticElement::BlockData;
+  using MassBlockData = ConvectiveMassElement::BlockData;
 
   using EntData = DataForcesAndSourcesCore::EntData;
   using UserDataOperator = ForcesAndSourcesCore::UserDataOperator;
@@ -216,19 +231,18 @@ struct HookeElement {
     MatrixDouble locK;
     MatrixDouble translocK;
     BlockData &dAta;
-    // boost::shared_ptr<map<int, BlockData>> dAta;
-    // boost::shared_ptr<std::map<int, BlockData>> dAta =
-    //     boost::make_shared<std::map<int, BlockData>>();
+    MassBlockData &massData;
 
     boost::shared_ptr<DataAtIntegrationPts> commonData;
 
     OpCalculateMassMatrix(const std::string row_field,
                           const std::string col_field, BlockData &data,
+                          MassBlockData &mass_data,
                           boost::shared_ptr<DataAtIntegrationPts> &common_data,
                           bool symm = true)
         : VolumeElementForcesAndSourcesCore::UserDataOperator(
               row_field, col_field, OPROWCOL, symm),
-          commonData(common_data), dAta(data) {}
+          commonData(common_data), dAta(data), massData(mass_data) {}
 
     PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
@@ -254,7 +268,9 @@ struct HookeElement {
       if (dAta.tEts.find(getFEEntityHandle()) == dAta.tEts.end()) {
         MoFEMFunctionReturnHot(0);
       }
-      // commonData.getBlockData(dAta);
+      if (massData.tEts.find(getFEEntityHandle()) == massData.tEts.end()) {
+        MoFEMFunctionReturnHot(0);
+      }
 
       const bool diagonal_block =
           (row_type == col_type) && (row_side == col_side);
@@ -266,17 +282,15 @@ struct HookeElement {
       const int row_nb_gauss_pts = row_data.getN().size1();
       const int row_nb_base_functions = row_data.getN().size2();
 
-      // auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
-
-      // const double mu = commonData.mU;
-      // const double lambda = commonData.lAmbda;
-
       FTensor::Index<'i', 3> i;
       FTensor::Index<'j', 3> j;
       FTensor::Index<'k', 3> k;
       FTensor::Index<'l', 3> l;
 
-      constexpr double density = 7850.e-9;
+      double density = massData.rho0;
+   
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
 
       // integrate local matrix for entity block
       for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
@@ -284,7 +298,7 @@ struct HookeElement {
         auto t_row_base_func = row_data.getFTensor0N(gg, 0);
 
         // Get volume and integration weight
-        double w = getVolume() * getGaussPts()(3, gg);
+        double w = getVolume() * t_w;
 
         for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
           auto t_col_base_func = col_data.getFTensor0N(gg, 0);
@@ -294,8 +308,11 @@ struct HookeElement {
             // Next base function for column
             ++t_col_base_func;
           }
+          // Next base function for row
           ++t_row_base_func;
         }
+        // Next integration point for getting weight
+        ++t_w;
       }
 
       CHKERR MatSetValues(getKSPB(), row_data, col_data, &locK(0, 0),
@@ -306,7 +323,7 @@ struct HookeElement {
         translocK.resize(col_nb_dofs, row_nb_dofs, false);
         noalias(translocK) = trans(locK);
 
-        CHKERR MatSetValues(getKSPB(), row_data, col_data, &translocK(0, 0),
+        CHKERR MatSetValues(getKSPB(), col_data, row_data, &translocK(0, 0),
                             ADD_VALUES);
       }
 

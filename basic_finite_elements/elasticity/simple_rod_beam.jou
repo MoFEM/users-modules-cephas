@@ -1,4 +1,5 @@
 reset
+set duplicate block elements on
 
 brick x 1 y 5 z 1
 
@@ -21,17 +22,27 @@ block 1 attribute count 2
 block 1 attribute index 1 {young_modulus}
 block 1 attribute index 2 {poisson_ratio}
 
+# Density for mass matrix calculation
+{density = 7850.e-8}
+block 2 volume 1
+block 2 name 'BODY_FORCES'
+block 2 attribute count 4
+block 2 attribute index 1 {density}	#material density
+block 2 attribute index 2 0		#constant acceleration in x-direction
+block 2 attribute index 3 0		#constant acceleration in y-direction
+block 2 attribute index 4 0		#constant acceleration in z-direction
+
 # Material properties for ROD, units: N, mm
 {bar_id=13}
 {young_modulus_rod = 1}	# 100 makes cables too stiff to be able to stretch
 {cross_section_area = 5}	# hand calculated from the geometry
 {pre_stress=0.1}		# unit of stress, N/mm2
-block 2 curve {bar_id} 14
-block 2 name 'ROD'  
-block 2 attribute count 3
-block 2 attribute index 1 {young_modulus_rod}
-block 2 attribute index 2 {cross_section_area}
-block 2 attribute index 3 {pre_stress}
+block 3 curve {bar_id} 14
+block 3 name 'ROD'  
+block 3 attribute count 3
+block 3 attribute index 1 {young_modulus_rod}
+block 3 attribute index 2 {cross_section_area}
+block 3 attribute index 3 {pre_stress}
 
 # Mesh
 {fixed_vertex_id=9}
@@ -67,6 +78,7 @@ create pressure on surface 1 magnitude 0.5
 
 
 save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/elasticity/simple_rod_beam.cub" overwrite
+
 
 
 

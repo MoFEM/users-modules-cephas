@@ -1834,6 +1834,34 @@ MoFEMErrorCode ConvectiveMassElement::setBlocks() {
   MoFEMFunctionReturnHot(0);
 }
 
+MoFEMErrorCode ConvectiveMassElement::setBlocks(
+    MoFEM::Interface &m_field,
+    boost::shared_ptr<map<int, BlockData>> &block_sets_ptr) {
+  MoFEMFunctionBegin;
+
+  if (!block_sets_ptr)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Pointer to block of sets is null");
+
+  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+           m_field, BLOCKSET | BODYFORCESSET, it)) {
+    Block_BodyForces mydata;
+    CHKERR it->getAttributeDataStructure(mydata);
+    int id = it->getMeshsetId();
+    auto &block_data = (*block_sets_ptr)[id];
+    EntityHandle meshset = it->getMeshset();
+    CHKERR m_field.get_moab().get_entities_by_dimension(meshset, 3,
+                                                        block_data.tEts, true);
+    block_data.rho0 = mydata.data.density;
+    block_data.a0.resize(3);
+    block_data.a0[0] = mydata.data.acceleration_x;
+    block_data.a0[1] = mydata.data.acceleration_y;
+    block_data.a0[2] = mydata.data.acceleration_z;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode ConvectiveMassElement::addConvectiveMassElement(
     string element_name, string velocity_field_name,
     string spatial_position_field_name, string material_position_field_name,

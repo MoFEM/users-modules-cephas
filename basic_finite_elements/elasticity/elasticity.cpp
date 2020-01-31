@@ -87,6 +87,7 @@ struct BlockOptionData {
 };
 
 using BlockData = NonlinearElasticElement::BlockData;
+using MassBlockData = ConvectiveMassElement::BlockData;
 using VolUserDataOperator = VolumeElementForcesAndSourcesCore::UserDataOperator;
 
 /// Set integration rule
@@ -468,6 +469,10 @@ int main(int argc, char *argv[]) {
     CHKERR HookeElement::setBlocks(m_field, block_sets_ptr);
     CHKERR setting_blocks_data_and_order_from_config_file(block_sets_ptr);
 
+    boost::shared_ptr<std::map<int, MassBlockData>> mass_block_sets_ptr =
+        boost::make_shared<std::map<int, MassBlockData>>();
+    CHKERR ConvectiveMassElement::setBlocks(m_field, mass_block_sets_ptr);
+
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
@@ -499,12 +504,14 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<HookeElement::DataAtIntegrationPts> data_at_pts(
         new HookeElement::DataAtIntegrationPts());
-    // HookeElement::DataAtIntegrationPts &data_at_pts;
 
     for (auto &sit : *block_sets_ptr) {
-      fe_mass_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpCalculateMassMatrix(
-              "DISPLACEMENT", "DISPLACEMENT", sit.second, data_at_pts));
+      for (auto &mit : *mass_block_sets_ptr) {
+        fe_mass_ptr->getOpPtrVector().push_back(
+            new HookeElement::OpCalculateMassMatrix("DISPLACEMENT",
+                                                    "DISPLACEMENT", sit.second,
+                                                    mit.second, data_at_pts));
+      }
     }
 
     // Add spring boundary condition applied on surfaces.
@@ -561,6 +568,7 @@ int main(int argc, char *argv[]) {
                                                           true);
       CHKERR m_field.add_ents_to_finite_element_by_dim(tets, 3, "BODY_FORCE");
     }
+    CHKERR m_field.build_finite_elements("BODY_FORCE");
 
     // Add Neumann forces, i.e. pressure or traction forces applied on body
     // surface. This is only declaration not implementation.
