@@ -21,23 +21,23 @@ The narrow understanding of the finite element method is that is method of integ
 The integral of function \f$\rho(\mathbf{x})\f$, where is coordinate \f$\mathbf{x}\in V\f$ is sum (assmble) of integrals over all primitives shapes (elements) constituting whole integral domain 
 \f[
 \begin{align}
-  I(f) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} f(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^N \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V
+  I(f) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} f(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^N \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^N I_\mathcal{T}
 \end{align}
 \f]
-You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by mesh, composes from nonoverlapping elements elements, see \ref basic_l1_figure_1 "Figure 1". Making closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from the sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine mesh until error becomes small enough, as small as you need. From the other, if the surfaces of the body are  flat surface, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-order, in fact MoFEM has the capability to represent geometry with arbitrary polynomial order, that also enables control of geometry error. However in this tutorial we restrict ourself, and gometry will be represented by
+You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by mesh, composes from nonoverlapping elements elements, see mesh on the left \ref basic_l1_figure_1 "Figure 1". Making closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from the sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine mesh until error becomes small enough, as small as you need. From the other, if the surfaces of the body are  flat surface, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-order, in fact MoFEM has the capability to represent geometry with arbitrary polynomial order, that also enables control of geometry error. However in this tutorial we restrict ourself, and gometry will be represented by
 linear <em>Shape Functions</em>. For the rest of the tutorials we will be using \f$(\cdot)^h\f$, that given quantity is approximated, and thus is some error associated with approximation.
 
 \anchor basic_l1_figure_1
-\image html basic_mesh_lesson1.png "Figure 1: Finite element mesh" width=600px
+\image html basic_shape_function.png "Figure 1: Finite element mesh shape funstions, and integration points" width=800px
 
 Integration on each element, applying integration formulae, is as follows
 \f[
 \begin{align}
-  \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}V \approx
+  I_\mathcal{T} = \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}V \approx
   \sum_{g=0}^G w_g \rho\left(\mathbf{x}^h(\pmb\xi_g)\right) \| J_g \|
 \end{align}
 \f]
-where \f$w_g\f$ is integration weight, \f$\pmb\xi_g\f$ is coordinate of integration point on the referemce, or if element is <a href="https://en.wikipedia.org/wiki/Simplex">simplexes</a> more convinently in <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a>, i.e. \f$\pmb\lambda_g\f$. We integrate over reference element, for which integration rule is defined by integration weighths and integration points. The example of integration of element, that is tetrahderon is shown in \ref basic_l1_figure_2 "Figure 2", taken from \cite zienkiewicz1977finite, table9.3, page 223, where more details about numerical integration can be found. Since integration rule is defined on reference element using \f$\pmb\xi\f$, for example for triangle refrence element nodes have coordinates 
+where \f$w_g\f$ is integration weight, \f$\pmb\xi_g\f$ is coordinate of integration point on the referemce, or if element is <a href="https://en.wikipedia.org/wiki/Simplex">simplexes</a> more convinently in <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a>, i.e. \f$\pmb\lambda_g\f$. We integrate over reference element, for which integration rule is defined by integration weighths and integration points. Since integration rule is defined on reference element using \f$\pmb\xi\f$, for example for triangle refrence element nodes have coordinates 
 \f[
 \begin{align}
   \begin{array}{lll}
@@ -47,41 +47,35 @@ where \f$w_g\f$ is integration weight, \f$\pmb\xi_g\f$ is coordinate of integrat
   \end{array}
 \end{align}
 \f]
-where \f$\xi^0, \xi^1, \xi^2\f$ are coordinates on local referemce element.
+where \f$\xi^0, \xi^1, \xi^2\f$ are coordinates on local referemce element, see \ref basic_l1_figure_1 "Figure 1".
 
-\anchor basic_l1_figure_2
-\image html basic_quadrature_tris.png "Figure 2: Numerical integration formulae for triangle" width=600px
-
-Now, we need to introduce concepts of Shape Functions, which is on the core of almost every finite element code. 
-
-\note No one person invented the finite element method,  but in its roots is the invention of Shape Functions and isoparametric finite elements by <a href="https://en.wikipedia.org/wiki/Bruce_Irons_(engineer)">B. M. Irons</a> along with Ian C. Taig. 
-
-Positions in physical coordinates at integration point \f$g\f$ can be callated using formula
+Now, we need to introduce concepts of Shape Functions, which is in the core of almost every finite element code. Positions in physical coordinates at integration point \f$g\f$ can be callated using formula
 \f[
 \begin{align}
-  \mathbf{x}^h(\xi_g) = \sum_{m=0}^M N_m(\pmb\xi_g) \mathbf{x}_m
+  (x^i_g)^h(\pmb\xi_g) = \sum_{m=0}^M \mathcal{N}_m(\pmb\xi_g) x^i_m = \mathcal{N}_m(\pmb\xi_g) x^i_m 
 \end{align}
 \f]
-where \f$M\f$ is numer of nodes on the element, \f$\mathbf{x}_m\f$ are coordinates of the element nodes and \f$N_m(\pmb\xi_g)\f$ are shape functions. Shape function \f$N_m(\pmb\xi_g)\f$ has propety that takes value of \f$1\f$ at  node \f$m\f$ and zero on any other node. Also, sum of all shepe functions at any point in element is 1, see \ref basic_l1_figure_3 "Figure 3", see \cite zienkiewicz1977finite for more details. That explains its name, since for given coordinates and of nodes, and givem shape functions, domain of the element is uniquly defined. If the $\f\pmb\xi_g\f$ are <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a>, as in \ref basic_l1_figure_2 "Figure 2", above equation can be rewritten in simpler form
+where \f$m=0..M-1\f$, where \f$M\f$ is numer of nodes on the element, \f$\mathbf{x}_m\f$ are coordinates of the element nodes and \f$\mathcal{N}_m(\pmb\xi_g)\f$ are shape functions. Note that in te following equations we will be using 
+<a href="https://en.wikipedia.org/wiki/Einstein_notation"> Enstain notatio</a>, such that for reapaeting indices symbol of summation is omited, in case above that is for \f$m\f$. Shape function \f$\mathcal{N}_m(\pmb\xi_g)\f$ has propety that takes value of \f$1\f$ at node \f$m\f$ and zero on any other node. Also, sum of all shepe functions at any point in element is one, i.e. shape
+functions at any point partition the unitity. If element is <a href="https://en.wikipedia.org/wiki/Simplex">simplex</a>, i.e. is edge, triangle or tetrahedron, shape functions are <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a>, then above equation can be rewritten in form
 \f[
 \begin{align}
-  \mathbf{x}^h(\xi_g) = \sum_{m=0}^M \xi^m_g \mathbf{x}_m
+  (x^i_g)^h(\pmb\xi_g) = \lambda_m(\pmb\xi_g) x^i_m
 \end{align}
 \f]
-which for one integration pont, according to \ref basic_l1_figure_2 "Figure 2", 
-for triangle \f$\pmb \xi_0 = \{ 1/3, 1/3, 1/3 \}\f$, subscript \f$0\f$ indicate number of integration point (nore that we start counring from zero, that is convention used in C++ programming language).
 
-\anchor basic_l1_figure_3
-\image html basic_shape_function.png "Figure 3: Shape function on triangle" width=600px
 
 Using shape functions, we can approximate. Not only the shape but exploiting the concept of the isoparametric element we can approximate field with some physical interpretation, for example, density at integration point \f$g\f$ is 
 \f[
 \begin{align}
-  \rho^h = \sum_{m=0}^M N_m(\pmb\xi_g) \rho_m = \sum_{m=0}^M \xi^m_g \rho_m
+  \rho^h = \mathcal{N}_m \rho_m 
 \end{align}
 \f]
 where \f$\rho_m\f$ is a value of density at nodes, and \f$\rho^h\f$ is approximation of denisty at position \f$x^h=x^g(\pmb\xi_g)\f$.
 
 
+\note You can learn more about inegtation from \cite zienkiewicz1977finite,  where more details about numerical integration can be found.
+
+\note No one person invented the finite element method,  but in its roots is the invention of Shape Functions and isoparametric finite elements by <a href="https://en.wikipedia.org/wiki/Bruce_Irons_(engineer)">B. M. Irons</a> along with Ian C. Taig.
 
 */
