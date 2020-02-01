@@ -95,7 +95,6 @@ int main(int argc, char *argv[]) {
       PrismInterface *interface;
       CHKERR m_field.getInterface(interface);
 
-      int lvl = 1;
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
         if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
@@ -118,26 +117,22 @@ int main(int argc, char *argv[]) {
           // get faces and tets to split
           CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true, 0);
           // set new bit level
-          bit_levels.push_back(BitRefLevel().set(lvl++));
+          bit_levels.push_back(BitRefLevel().set(bit_levels.size()));
           // split faces and tets
           CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
                                        cubit_meshset, true, true, 0);
           // clean meshsets
           CHKERR moab.delete_entities(&ref_level_meshset, 1);
+
+          CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(1);
+          bit_levels.pop_back();
         }
       }
-
-      for (unsigned int ll = 0; ll != bit_levels.size() - 1; ll++) {
-        CHKERR m_field.delete_ents_by_bit_ref(bit_levels[ll], bit_levels[ll],
-                                              true);
-      }
-      CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(
-          bit_levels.size() - 1);
 
       EntityHandle meshset_prisms;
       CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
       CHKERR m_field.getInterface<BitRefManager>()
-          ->getEntitiesByTypeAndRefLevel(bit_levels[0], BitRefLevel().set(),
+          ->getEntitiesByTypeAndRefLevel(bit_levels.back(), BitRefLevel().set(),
                                          MBPRISM, meshset_prisms);
       CHKERR moab.get_entities_by_handle(meshset_prisms, contact_prisms);
       CHKERR moab.delete_entities(&meshset_prisms, 1);
@@ -159,7 +154,7 @@ int main(int argc, char *argv[]) {
 
     bit_levels.push_back(BitRefLevel().set(0));
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
-        0, 3, bit_levels[0]);
+        0, 3, bit_levels.back());
 
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
@@ -232,14 +227,14 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.build_finite_elements();
 
     // build adjacencies
-    CHKERR m_field.build_adjacencies(bit_levels[0]);
+    CHKERR m_field.build_adjacencies(bit_levels.back());
 
     // define problems
     CHKERR m_field.add_problem("CONTACT_PROB");
 
     // set refinement level for problem
     CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
-                                                    bit_levels[0]);
+                                                    bit_levels.back());
 
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
@@ -250,7 +245,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetType(dm, dm_name);
 
     // set dm datastruture which created mofem datastructures
-    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels[0]);
+    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels.back());
     CHKERR DMSetFromOptions(dm);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");

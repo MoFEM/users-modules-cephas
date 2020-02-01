@@ -134,3 +134,33 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
+add_test(
+  test_simple_contact_arc_3surfaces
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/arc_3surf_contact.cub
+  -my_order 2
+  -my_cn_value 1e3
+)
+add_test(
+  test_simple_contact_arc_3surfaces_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_arc_3surf.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
+
+add_test(
+  test_simple_contact_smiling_face
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
+  -my_order 2
+  -my_cn_value 1e-1
+)
+add_test(
+  test_simple_contact_smiling_face_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_smiling_face.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
+
