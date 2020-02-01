@@ -3574,9 +3574,9 @@ cerr << " Theta   " << thetaSValue
             new OpLoopSlaveForSide(field_name, feMatSlaveSideStressDerRhs,
             side_fe_name));
 
-            fe_rhs_simple_contact->getOpPtrVector().push_back(
-                new OpLoopMasterForSide(field_name, feMatMasterSideStressDerRhs,
-                                        side_fe_name));
+        fe_rhs_simple_contact->getOpPtrVector().push_back(
+            new OpLoopMasterForSide(field_name, feMatMasterSideStressDerRhs,
+                side_fe_name));
 
         fe_rhs_simple_contact->getOpPtrVector().push_back(
             new OpCalNitscheCStressRhsMaster(
@@ -3706,24 +3706,27 @@ cerr << " Theta   " << thetaSValue
               common_data_simple_contact->elasticityCommonData,
               common_data_simple_contact->tAg, false, false, false));
 
-    //   fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSide(
-    //       field_name, feMatMasterSideRhs, side_fe_name));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSide(
+          field_name, feMatMasterSideRhs, side_fe_name));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
-                                         feMatMasterSideRhs, side_fe_name));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
+    //                                      feMatMasterSideRhs, side_fe_name));
 
       fe_lhs_simple_contact->getOpPtrVector().push_back(
           new OpCalProjStressesAtGaussPtsMaster(field_name,
                                                 common_data_simple_contact));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
-                                        feMatSlaveSideRhs, side_fe_name));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
+    //                                     feMatSlaveSideRhs, side_fe_name));
 
-        fe_lhs_simple_contact->getOpPtrVector().push_back(
-            new OpCalProjStressesAtGaussPtsSlave(field_name,
-                                                  common_data_simple_contact));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+          field_name, feMatSlaveSideRhs, side_fe_name));
+
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpCalProjStressesAtGaussPtsSlave(field_name,
+                                               common_data_simple_contact));
 
       
       fe_lhs_simple_contact->getOpPtrVector().push_back(
@@ -3893,18 +3896,26 @@ cerr << " Theta   " << thetaSValue
       feMatSlaveSlaveSideRhs->getOpPtrVector().push_back(
           new OpLoopForRowDataOnSlave(field_name, common_data_simple_contact));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
-                                        feMatSlaveSlaveSideRhs, side_fe_name));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+          field_name, feMatSlaveSlaveSideRhs, side_fe_name));
+
+      //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+      //       new OpLoopSlaveForSideLhsTest(field_name,
+      //       common_data_simple_contact,
+      //                                     feMatSlaveSlaveSideRhs,
+      //                                     side_fe_name));
 
     
 
       
       // 15/01/2020
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
-                                         feMatMasterMasterSideRhs,
-                                         side_fe_name));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
+    //                                      feMatMasterMasterSideRhs,
+    //                                      side_fe_name));
+
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSide(
+          field_name, feMatMasterMasterSideRhs, side_fe_name));
 
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
           feMatSlaveMasterSideRhs =
@@ -3918,10 +3929,13 @@ cerr << " Theta   " << thetaSValue
               common_data_simple_contact->elasticityCommonData, cnValue,
               omegaValue, thetaSValue));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
-                                         feMatSlaveMasterSideRhs,
-                                         side_fe_name));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpLoopMasterForSideLhsTest(field_name, common_data_simple_contact,
+    //                                      feMatSlaveMasterSideRhs,
+    //                                      side_fe_name));
+
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopMasterForSide(
+          field_name, feMatSlaveMasterSideRhs, side_fe_name));
 
       //   fe_lhs_simple_contact->getOpPtrVector().push_back(
       //       new OpStressDerivativeGapSlaveMaster_dx2(
@@ -3941,13 +3955,12 @@ cerr << " Theta   " << thetaSValue
               common_data_simple_contact->elasticityCommonDataMaster, cnValue,
               omegaValue, thetaSValue));
 
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
-                                        feMatMasterSlaveSideRhs, side_fe_name));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpLoopSlaveForSideLhsTest(field_name, common_data_simple_contact,
+    //                                     feMatMasterSlaveSideRhs, side_fe_name));
 
-
-
-
+      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpLoopSlaveForSide(
+          field_name, feMatMasterSlaveSideRhs, side_fe_name));
 
       //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
       //       feMatMasterSlaveSideRhs =
