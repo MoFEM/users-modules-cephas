@@ -72,14 +72,14 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief Function that adds field data for spatial positions and lagrange
+   * @brief Function that adds field data for spatial positions and Lagrange
    * multipliers to rows and columns, provides access to field data and adds
    * prism entities to element.
    *
    * @param  element_name               String for the element name
    * @param  field_name                 String of field name for spatial
    * position
-   * @param  lagrang_field_name         String of field name for lagrange
+   * @param  lagrang_field_name         String of field name for Lagrange
    * multipliers
    * @param  range_slave_master_prisms  Range for prism entities used to create
    * contact elements
@@ -178,7 +178,7 @@ struct SimpleContactProblem {
       : mField(m_field), rValue(r_value_regular), cnValue(cn_value),
         newtonCotes(newton_cotes) {}
 
-  /// \brief Tangents t1 and t2 to face f4 at all gauss points
+  /// \brief Computes normal to slave face that is common to all gauss points
   struct OpGetNormalSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -288,7 +288,7 @@ struct SimpleContactProblem {
      * g_{\textrm{n}} = - \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left(
      * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right)
      * \f]
-     * where \f$\mathbf{n}(\mathbf{x}^{(1)}\f$ is the outward normal vector at
+     * where \f$\mathbf{n}(\mathbf{x}^{(1)})\f$ is the outward normal vector at
      * the slave triangle gauss points, \f$\mathbf{x}^{(1)}\f$ and
      * \f$\mathbf{x}^{(2)}\f$ are the spatial coordinates of the overlapping
      * gauss points located at the slave and master triangles, respectively.
@@ -302,7 +302,7 @@ struct SimpleContactProblem {
   /**
    * @brief Operator for the simple contact element
    *
-   * Calgulates Lagrange multipliers at the gauss points on the slave triangle.
+   * Calculates Lagrange multipliers at the gauss points on the slave triangle.
    *
    */
   struct OpGetLagMulAtGaussPtsSlave
@@ -469,8 +469,8 @@ struct SimpleContactProblem {
   /**
    * @brief Operator for the simple contact element
    *
-   * Computes function that fulfill KKT conditions
-   * when equal to zero:
+   * Computes function that fulfils KKT conditions
+   * when equal to zero
    *
    */
   struct OpGetCompFunSlave
@@ -481,14 +481,14 @@ struct SimpleContactProblem {
     double cN; //@todo: ign: to become input parameter
 
     /**
-     * @brief Evaluates the complementarity function function at slave face
+     * @brief Evaluates the complementarity function at slave face
      * gauss points
      *
-     * Computes the complementarity function that fulfill KKT conditions when
-     * equal to zero:
+     * Computes the complementarity function that fulfils KKT conditions when
+     * equal to zero
      *
      * \f[
-     * {\overline C(\lambda, \mathbf{x}^{(i)})} :=  \lambda + c_{\text
+     * {C(\lambda, \mathbf{x}^{(i)})} :=  \lambda + c_{\text
      * n} g_{\textrm{n}} - \dfrac{1}{r}{\left| \lambda - c_{\text n}
      * g_{\textrm{n}}\right|}^{r} \f]
      *
@@ -524,8 +524,9 @@ struct SimpleContactProblem {
   /**
    * @brief RHS-operator for the simple contact element
    *
-   * Integrates and assembles complementarity function that funfills KKT
-   * conditions over slave contact area.
+   * Integrates and assembles complementarity function that fulfills KKT
+   * conditions over slave contact area and assembles components of the RHS
+   * vector.
    *
    */
   struct OpCalIntCompFunSlave
@@ -549,8 +550,8 @@ struct SimpleContactProblem {
      * @brief Integrates and assembles the complementarity function at slave
      * face gauss points
      *
-     * Integrates and assembles the complementarity function to fulfills KKT
-     * conditions in the integral sence:
+     * Integrates and assembles the complementarity function to fulfil KKT
+     * conditions in the integral sense
      *
      * \f[
      * {\overline C(\lambda, \mathbf{x}^{(i)},
@@ -580,7 +581,7 @@ struct SimpleContactProblem {
    *
    * Integrates and assembles Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-   * with respect to Lagrange multipliers over master side
+   * with respect to Lagrange multipliers on master side
    *
    */
   struct OpCalContactTractionOverLambdaMasterSlave
@@ -603,9 +604,9 @@ struct SimpleContactProblem {
     MatrixDouble NN;
 
     /**
-     * @brief  * Integrates and assembles Lagrange multipliers virtual
+     * @brief  Integrates and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-     * with respect to Lagrange multipliers over master side
+     * with respect to Lagrange multipliers on master side
      *
      * Computes linearisation of and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ with respect to Lagrange multipliers
@@ -635,7 +636,7 @@ struct SimpleContactProblem {
    *
    * Integrates and assembles Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-   * with respect to Lagrange multipliers over slave side
+   * with respect to Lagrange multipliers on slave side
    *
    */
   struct OpCalContactTractionOverLambdaSlaveSlave
@@ -660,7 +661,7 @@ struct SimpleContactProblem {
     /**
      * @brief Integrates and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-     * with respect to Lagrange multipliers over slave side
+     * with respect to Lagrange multipliers on slave side
      *
      * Computes linearisation of and assembles Lagrange multipliers virtual
      * work, \f$ \delta W_{\text c}\f$ with respect to Lagrange multipliers
@@ -670,7 +671,7 @@ struct SimpleContactProblem {
      * W^{(1)}_{\text c}(\lambda,
      * \delta \mathbf{x}^{(1)}})[\Delta \lambda]
      * \,\, =
-     * \int_{{\gamma}^{(1)}_{\text c}} \Delta \lambda
+     * \int_{{\gamma}^{(1)}_{\text c}} -\Delta \lambda
      * \delta{\mathbf{x}^{(1)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
@@ -685,6 +686,14 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
+  /**
+   * @brief LHS-operator for the simple contact element
+   *
+   * Integrates and assembles variation of the complementarity function
+   * with respect to Lagrange multipliers to fulfils KKT conditions
+   * in the integral sense.
+   *
+   */
   struct OpCalDerIntCompFunOverLambdaSlaveSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -709,8 +718,8 @@ struct SimpleContactProblem {
      * face gauss points
      *
      * Integrates and assembles variation of the complementarity function
-     * with respect to Lagrange multipliers to fulfills KKT conditions
-     * in the integral sense:
+     * with respect to Lagrange multipliers to fulfils KKT conditions
+     * in the integral sense
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -738,6 +747,14 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
+  /**
+   * @brief LHS-operator for the simple contact element
+   *
+   * Integrates and assembles the variation with respect to master spatial
+   * positions of the complementarity function to fulfill KKT conditions in
+   * the integral sense.
+   *
+   */
   struct OpCalDerIntCompFunOverSpatPosSlaveMaster
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -765,7 +782,7 @@ struct SimpleContactProblem {
      *
      * Integrates and assembles the variation with respect to master spatial
      * positions of the complementarity function to fulfill KKT conditions in
-     * the integral sense:
+     * the integral sense
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -795,6 +812,14 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
+  /**
+   * @brief LHS-operator for the simple contact element
+   *
+   * Integrates and assembles the variation with respect to slave spatial
+   * positions of the complementarity function to fulfill KKT conditions in
+   * the integral sense.
+   *
+   */
   struct OpCalDerIntCompFunOverSpatPosSlaveSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -817,12 +842,12 @@ struct SimpleContactProblem {
     MatrixDouble NN;
 
     /**
-     * @brief Integrates and assembles the complementarity function at slave
-     * face gauss points
+     * @brief Integrates and assembles linearisation of the complementarity
+     * function at slave face gauss points
      *
-     * Integrates and assembles of the variation with respect to slave spatial
+     * Integrates and assembles the variation with respect to slave spatial
      * positions of the complementarity function to fulfill KKT conditions in
-     * the integral sense:
+     * the integral sense
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -918,7 +943,7 @@ struct SimpleContactProblem {
    * contact element
    * @param  field_name                 String of field name for spatial
    * positions
-   * @param  lagrang_field_name         String of field name for lagrange
+   * @param  lagrang_field_name         String of field name for Lagrange
    * multipliers
    * @param  f_                         Right hand side vector
    * @return                            Error code
@@ -979,7 +1004,7 @@ struct SimpleContactProblem {
    * contact element
    * @param  field_name                 String of field name for spatial
    * positions
-   * @param  lagrang_field_name         String of field name for lagrange
+   * @param  lagrang_field_name         String of field name for Lagrange
    * multipliers
    * @param  aij                        Left hand side matrix
    * @return                            Error code
@@ -1051,7 +1076,7 @@ struct SimpleContactProblem {
    * contact element
    * @param  field_name                  String of field name for spatial
    * positions
-   * @param  lagrang_field_name          String of field name for lagrange
+   * @param  lagrang_field_name          String of field name for Lagrange
    * multipliers
    * @param  moab_out                    MOAB interface used to output
    * values at integration points
