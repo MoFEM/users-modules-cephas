@@ -4,6 +4,8 @@
 
 Basic lessons intended to give new MoFEM developer freedom to implement bespoke finite element codes. In this and following tutorials we assume that the user can programme, and is at least has basic fluency in C++ programming. Also, assume that the reader is an engineer, physicist, or mathematician, which is interested in solving Partial Differential Equations (PDEs) using finite elements. Finally, we try to keep mathematical abstraction as basic as it can be.  
 
+Presented porblems, except first, are for 2D problems, however are implemented in such way that can be extended to 3D. Once reader get understanding, as a excercise cna extedn implementation to 3D case.
+
 \tableofcontents
 
 MoFEM provides interfaces with varying level of abstraction, lower abstraction, harder to use, demanding more knowledge about how MoFEM works and designs. Higher abstraction, limits flexibility, but makes implementation faster and simpler. Here we use \em Simple and \em Basic interfaces, which are complementary to each other.
@@ -14,68 +16,290 @@ The \em Basic interface is used to simplified creation of operator pipelines. Th
 
 In the following lessons, we intend to create consistently series of problems, which will give you the freedom to solve a large class of nonlinear problems.  
 
-\section basic_lessons1_lsson1 Lesson 1: Theory 
+\section basic_lessons1_start Essentials
 
-The narrow understanding of the finite element method is that is method of integration of functions on complex shapes. The integration domain is divided into the elements with primitive shapes, e.g. edge, triangle, quad,  tetrahedron, or hex, and on each element, integration rule on primitive shape is evaluated. 
+\subsection basic_lessons1_siplexes Integration of simplexes 
 
-The integral of function \f$\rho(\mathbf{x})\f$, where is coordinate \f$\mathbf{x}\in V\f$ is sum (assmble) of integrals over all primitives shapes (elements) constituting whole integral domain 
+Numrical inegration of function \f$\rho\f$, is given by formula,
 \f[
 \begin{align}
-  I(f) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} f(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^N \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^N I_\mathcal{T}
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| J_g \| \rho^h_g
 \end{align}
 \f]
-You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by mesh, composes from nonoverlapping elements elements, see mesh on the left \ref basic_l1_figure_1 "Figure 1". Making closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from the sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine mesh until error becomes small enough, as small as you need. From the other, if the surfaces of the body are  flat surface, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-order, in fact MoFEM has the capability to represent geometry with arbitrary polynomial order, that also enables control of geometry error. However in this tutorial we restrict ourself, and gometry will be represented by
-linear <em>Shape Functions</em>. For the rest of the tutorials we will be using \f$(\cdot)^h\f$, that given quantity is approximated, and thus is some error associated with approximation.
+where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated function, e.g. density. Typically sum of the inetgration weights is scaled by volume (measure) of refernce element, such that is weights equal to unity, as follows
+\f[
+\begin{align}
+  \sum_{g=0}^{G-1} W_g  = 1 
+\end{align}
+\f]
+Consequenly, for such scalling for Jacobinan we use:
+
+- For tetrahedron 
+\f[
+\begin{align}
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \rho^h_g
+\end{align}
+\f]
+where \f$v=\frac{1}{6}\| J_g \|\f$ is volume of tetrahedrons
+
+- For triangle
+\f[
+\begin{align}
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a)  \rho^h_g
+\end{align}
+\f]
+where \f$a=\frac{1}{2}\| J_g \|\f$ is area of trianlgle.
+
+- For edge
+\f[
+\begin{align}
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g l) \rho^h_g
+\end{align}
+\f]
+where \f$l\f$ is length.
+
+\subsection basic_lesson1_moments Moments of inertia
+
+The distribution of mass in the body can be characterised by inertia moments, with respect to some origin and coordinate system. Moments have practical applications, are used for analysis motion of rigid bodies, or to characterise crosssection are in structural analysis. 
+
+- Zero inertia momenbt is a body mass, 
+\f[
+\begin{align}
+M := \int_\Omega \rho(\mathbf{x}) \textrm{d}V
+\end{align}
+\f]
+wjere \f$\rho\f$ is material density and \f$\Omega\f$ is a body domain. Mass characterise how much force need to be applied for desired body acceleration, as statet Newton law
+\f[
+\begin{align}
+a^i = M f^i
+\end{align}
+\f]
+where \f$f^i\f$ is force, and kinematic energy can be expressed as 
+\f[
+\begin{align}
+E_k = \frac{v^i M v^i}{2}
+\end{align}
+\f]
+
+- First inertaia moment, is given by
+\f[
+\begin{align}
+S^i := \int_\Omega \rho(\mathbf{x}) x^i \textrm{d}V
+\end{align}
+\f]
+where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravirty of the body can be calulated as
+\f[
+\begin{align}
+x_c^i = \frac{S^i}{M}.
+\end{align}
+\f]
+where \f$\mathbf{x}_c\f$ is gravity centre of the body, or system of the bodies. Note at centre of gravity fisrt moment of inertia is zero.
+
+- Second inertaia moment is defined as
+\f[
+\begin{align}
+I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}V
+\end{align}
+\f]
+where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wiki/Outer_product">here</a>. Second mmomment of inertia, analogously to mass, characterise how much torque has to be applied at body origin for deired body acceleration, as follows
+\f[
+\begin{align}
+\omega^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
+\end{align}
+\f]
+ane kinematic energy is 
+\f[
+\begin{align}
+E_k = \frac{\omega^i I^{ij} \omega^j}{2}
+\end{align}
+\f]
+
+\section basic_lessons1_theory Theory 
+
+This section is not essential, you can skip it and come back to it later for deepr understanding of the problem, move to implememtation.
+
+\subsection basic_lessons1_elements Integral over elements
+
+The narrow interpretation what finite element method is, is that is a method for integration of functions on complex shapes. The integration domain is divided into the elements with primitive shapes, e.g. edge, triangle, quad,  tetrahedron, or hex, and on each element, integration rule on primitive shape is evaluated. 
+
+The integral of function \f$\rho(\mathbf{x})\f$, where is coordinate \f$\mathbf{x}\in V\f$ is sum of integrals over all primitives shapes (elements) constituting whole integral domain 
+\f[
+\begin{align}
+  I(f) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} f(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} I_\mathcal{T}
+\end{align}
+\f]
+You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by mesh, composes from nonoverlapping elements elements, see mesh on the left \ref basic_l1_figure_1 "Figure 1". Making closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from the sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine mesh until error becomes small enough, as small as you need. From the other, if the surfaces of the body are  flat surface, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of geometry error. However in this tutorial we restrict ourself, and gometry will be represented by linear <em>Shape Functions</em>. For the rest of the tutorials we will be using \f$(\cdot)^h\f$, to indicate that given quantity is approximated, and thus is some error associated with approximation.
 
 \anchor basic_l1_figure_1
 \image html basic_shape_function.png "Figure 1: Finite element mesh shape funstions, and integration points" width=800px
 
+\subsubsection basic_lessons1_rule Integration in the element
+
 Integration on each element, applying integration formulae, is as follows
 \f[
 \begin{align}
-  I_\mathcal{T} = \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}V \approx
-  \sum_{g=0}^G w_g \rho\left(\mathbf{x}^h(\pmb\xi_g)\right) \| J_g \|
+  I_\mathcal{T} = 
+  \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}V \approx
+  \sum_{g=0}^{G-1} W_g \rho\left(\mathbf{x}^h(\pmb\xi_g)\right) \| J_g \| =
+  \sum_{g=0}^{G-1} W_g \rho_g \| J_g \| =
+  \sum_{g=0}^{G-1} w_g \rho_g
 \end{align}
 \f]
-where \f$w_g\f$ is integration weight, \f$\pmb\xi_g\f$ is coordinate of integration point on the referemce, or if element is <a href="https://en.wikipedia.org/wiki/Simplex">simplexes</a> more convinently in <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a>, i.e. \f$\pmb\lambda_g\f$. We integrate over reference element, for which integration rule is defined by integration weighths and integration points. Since integration rule is defined on reference element using \f$\pmb\xi\f$, for example for triangle refrence element nodes have coordinates 
+where \f$\rho_g\f$ is value of integrated function at integrated point \f$\pmb\xi_g\f$ and \f$w_g=\| J_g \| W_g\f$ is integration weight. You can see, that integral is expressed simply as sum of function valaules at integration multiplied by weights, something which can be easly implemented as a computer program. If <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">Gauss quadrature</a> is used with approximate rule, polynomials can be calulated exactly up to order of integration rule \f$r\f$. If function is analaytical, order of error of\f$O(h^r)\f$, where \f$h\f$ is size of the element. We will
+dicuss how to choos integration rule on element later.   
+
+For integration of simpexes, i.e. (vertices), edges, triangles, tetrahedra, usually for convinience and efficiency, integration points are given by <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a> \f$\pmb\lambda\f$, see left of \ref basic_l1_figure_2 "Figure 2". For quadraliterals, like quads and hex, quadrature points are constructed by tensor product of integration rules in 1d, see right of \ref basic_l1_figure_2 "Figure 2". One can construct integration for other elements shapes, for prims by tensor product of integration on triangle and line. For other shapes like for wedge, one can use Duffy transform, i.e. construct integration rule for hexahedron, and collpase edges to nodes, i.e. degenarte  hexahedron to construct wedge. In other words, refernce element is hexahedron, but physical elemnent is a wedge. However at the end numerical integration integartion will be sum of integration weigths multiplied by function values at integration points. 
+
+\anchor basic_l1_figure_2
+\image html basic_shape_function_quad_and_tri.png "Figure 2: Shape functions on triangle and quadraliteral" width=800px
+
+\subsubsection basic_lessons1_approx Approximation of density field
+
+The  remian question is how to evaluate filed \f$\rho(\mathbf{x}^h_g)\f$ at integration points? In this case
+\anchor lesson1_approx_rho
 \f[
 \begin{align}
-  \begin{array}{lll}
-  \pmb\xi_0 = \{0, 0\}. & \pmb\lambda_0 = \{1-\xi^1-\xi^2, 0, 0 \} & = \{1, 0 , 0\} \\
-  \pmb\xi_1 = \{1, 0\}, & \pmb\lambda_1 = \{0, \xi^1-\xi^0, 0 \} &= \{0, 1 , 0\} \\
-  \pmb\xi_2 = \{0, 1\}, & \pmb\lambda_2 = \{0, 0, \xi^2-\xi^0 \} &= \{0, 0 , 1\}
-  \end{array}
+  \rho_g = \rho(\mathbf{x}^h(\pmb\xi_g)) 
+  \approx \rho^h_g = \sum_i^{M-1} \mathcal{N}_m(\pmb\xi_g) \overline{\rho}_m
 \end{align}
 \f]
-where \f$\xi^0, \xi^1, \xi^2\f$ are coordinates on local referemce element, see \ref basic_l1_figure_1 "Figure 1".
+where \f$\rho^h_g\f$ is interpolated value at integration point \f$\pmb\xi_g\f$, \f$\mathcal{N}_m\f$ is shape function at node \f$m\f$, \f$M\f$ is number of nodes on the elemment, see \ref basic_l1_figure_2 "Figure 2", and \f$\overline{\rho}_i\f$ value of funtion \f$\rho(\mathbf{x}_i)\f$ at node \f$i\f$ with coordinates \f$\mathbf{x}_i\f$. Note that finite  element interpolate function \f$\rho(\mathbf{x})\f$, since at nodes 
+\f$\overline{\rho}_i = \rho(\mathbf{x}_i)\f$, and between nodes function is 
+approximated. For linear shape functions, as in \ref basic_l1_figure_2 "Figure 2", approximation error is order of \f$O(h^2)\f$, where \f$h\f$ is size of element (mesh). By making mesh smaller, the error of approximation can be controled to achive desired accuracy. It another way to improve quality of approximation, and achive arbitrary error order, that is \f$O(h^{p+1})\f$. That 
+can be acheived by using higher order polynomials to approximate function \f$\rho\f$, see for more details here \ref hierarchical_approximation_1.
 
-Now, we need to introduce concepts of Shape Functions, which is in the core of almost every finite element code. Positions in physical coordinates at integration point \f$g\f$ can be callated using formula
+\subsubsection basic_lessons1_map Mapping reference and phiscal element
+
+\anchor basic_l1_figure_3
+\image html basic_map.png "Figure 3: Map reference element to physical element" width=700px
+
+Note that on the \ref basic_l1_figure_1 "Figure 1" is a map between reference element (red trinagle) and element in physical configuration (blue triangle). Map transform element, shift, rotate and strech element (see \ref basic_l1_figure_3 "Figure 3"), and establish one to one relation (at leas for all point without element boundary) between coordinates in reference element \f$\pmb\xi\f$ and physical coordintes \f$\mathbf{x}\f$ as follows
+\anchor lesson1_map
 \f[
 \begin{align}
-  (x^i_g)^h(\pmb\xi_g) = \sum_{m=0}^M \mathcal{N}_m(\pmb\xi_g) x^i_m = \mathcal{N}_m(\pmb\xi_g) x^i_m 
+  \left(\mathbf{x}^h\right)^i (\pmb\xi) = 
+  \sum_m^{M-1} \mathcal{N}_m(\pmb\xi) \left( \overline{\mathbf{x}}_m \right)^i 
 \end{align}
 \f]
-where \f$m=0..M-1\f$, where \f$M\f$ is numer of nodes on the element, \f$\mathbf{x}_m\f$ are coordinates of the element nodes and \f$\mathcal{N}_m(\pmb\xi_g)\f$ are shape functions. Note that in te following equations we will be using 
-<a href="https://en.wikipedia.org/wiki/Einstein_notation"> Enstain notatio</a>, such that for reapaeting indices symbol of summation is omited, in case above that is for \f$m\f$. Shape function \f$\mathcal{N}_m(\pmb\xi_g)\f$ has propety that takes value of \f$1\f$ at node \f$m\f$ and zero on any other node. Also, sum of all shepe functions at any point in element is one, i.e. shape
-functions at any point partition the unitity. If element is <a href="https://en.wikipedia.org/wiki/Simplex">simplex</a>, i.e. is edge, triangle or tetrahedron, shape functions are <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a>, then above equation can be rewritten in form
+Note that above equation is  not very diffrent from equation \ref lesson1_approx_rho "(3)", the only diffrence is that is evaluated for every coefficient  \f$m=0..d-1\f$, where  \f$d\f$ is dimension of the problem, e.g. for 3D promblem \f$d=3\f$. 
+
+\subsubsection basic_lessons1_jacobian Jacobian
+
+Finally we foucs on tangent map, i.e. on the Jaconbian, needed when one change integration variables from physical coordinates, to reference cooridnates. Note that integration over physical element is problemtic, it is much esier to construct integration rule on reference element and integrate on it. From \ref basic_l1_figure_3 "Figure 3" we can see that local inifitisimal element can be maped to element in physical space, that can be done by maping inifitisimal vectoros \f$d\pmb\xi_i\f$ into \f$d\mathbf{x}_i\f$, and it can be derived as follows. Expanding map at point \f$\mathbf{q}\f$ into Taylor series, we get
+\anchor baic_taylor_expansion
+\f[
+  \begin{align}
+  \mathbf{x}_\mathbf{q}^i = 
+  \mathbf{x}_\mathbf{p}^i + d\mathbf{x}^i = 
+  \mathbf{x}_\mathbf{p}^i + J^{ij}(\pmb\xi_\mathbf{P}) d\pmb\xi^j + O(\|d\pmb\xi\|^2)
+  \end{align}
+\f]
+where Jacobian is
+\f[
+  \begin{align}
+  J^{ij}(\pmb\xi_\mathbf{P})  = 
+  \sum_{m=0}^{M-1} \left.
+  \frac{\partial \mathcal{N}_m}{\partial \xi_j}
+  \right|_\mathbf{P} \left( \overline{\mathbf{x}}_m \right)^i
+  \end{align}
+\f]
+Note that in eq. \ref baic_taylor_expansion "(5)", higher order term on the right can be ommited, since we focus attention on inifitisimal elements in reference element and phiscal element, that is  \f$dA\f$ and \f$da\f$, respectively. For example element \f$dA\f$ has size \f$\|d\pmb\xi\| \ll 1 \f$ and can be assumed that \f$\|d\pmb\xi\|^2 = 0\f$, without makeing any error. 
+
+Using above derivation for Jacobian, in general 3D case, i.e. tetrahedron, or hexahedron, inifitisimal element volume at integtation point \f$g\f$ in physical configuration can be expressed as 
 \f[
 \begin{align}
-  (x^i_g)^h(\pmb\xi_g) = \lambda_m(\pmb\xi_g) x^i_m
+  dv = 
+  d\mathbf{x_2}^k (\varepsilon^{ijk} d\mathbf{x_0}^i d\mathbf{x_1}^j) 
+  =
+  \varepsilon^{ijk} J^{i0} J^{j1} J^{k2} d\pmb\xi_0^0 d\pmb\xi_1^1 d\pmb\xi_2^2 
+  =
+  \| \mathbf{J} \| dV
 \end{align}
 \f]
-
-
-Using shape functions, we can approximate. Not only the shape but exploiting the concept of the isoparametric element we can approximate field with some physical interpretation, for example, density at integration point \f$g\f$ is 
+taking \f$d\pmb\xi_0^0\f$, \f$d\pmb\xi_1^1\f$, and \f$d\pmb\xi_2^2\f$, are cartesian base vectors and \f$\varepsilon\f$ is levi-civita rensor. \f$J^{i0}\f$, \f$J^{j1}\f$, and \f$J^{k2}\f$ are coulumns of Jacobian evalueted at integration point \f$\pmb\xi_g\f$. Connection between levi-civita tensor and Jacobian determinant can found <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol#Determinants">here</a>. Note that for lower dimenison abouve equation hold. Finally we have all necessery to calulate integral on finite element mesh
 \f[
 \begin{align}
-  \rho^h = \mathcal{N}_m \rho_m 
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| J_g \| \rho^h_g
 \end{align}
 \f]
-where \f$\rho_m\f$ is a value of density at nodes, and \f$\rho^h\f$ is approximation of denisty at position \f$x^h=x^g(\pmb\xi_g)\f$.
 
-
-\note You can learn more about inegtation from \cite zienkiewicz1977finite,  where more details about numerical integration can be found.
+\note You can learn more about inegtation from \cite zienkiewicz1977finite.
 
 \note No one person invented the finite element method,  but in its roots is the invention of Shape Functions and isoparametric finite elements by <a href="https://en.wikipedia.org/wiki/Bruce_Irons_(engineer)">B. M. Irons</a> along with Ian C. Taig.
 
+\section basic_lesson1_implementation Implementation
+
+\subsection basic_lesson1_installations Installation
+
+If you want to develop code in MoFEM, and you prapely have if you reading this tutorial, you have to install MoFEM for developer version, to do that follow intrtuctions here \ref install_spack.
+
+All files executavle are located in, and there you will commpile code 
+\code
+$HOME/mofem_install/build_debug/basic_finite_elements/basic
+\endcode
+whereas source code is located in 
+\code
+$HOME/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/basic
+\endcode
+This is called out of source compilation, since code and programs are located in two diffrent locations. It is convinient whay if you have diffrent compilation options or linking diffrent linaries and you like to test all, agianst the same source code. Code in \em build_debug is compiled with debugging flags and is not optimised. Using debugger you can run such code line by line, that can help you understand how it works, and find erros in your code.
+Information how to debug code can be found 
+<a href="https://code.visualstudio.com/docs/introvideos/debugging">here</a>.
+
+\note In default MoFEM installation you can executables under another location, that  is
+\code 
+$HOME/mofem_install/build_opt/basic_finite_elements/basic
+\endcode
+Under \em build_opt location is optimised code, which is much faster, but harder to inspect with debugger. 
+
+\subsection basic_lesson1_programming Editor
+
+You can use your favorite editor, vim, emacs, sublime, atom.io, if you have one, however if you have no preferences we recommend <a href="https://code.visualstudio.com">vscode</a>. We have some tips how you can configure it to make it work well with MoFE, see \ref configure_vs_code.
+
+\note We have some programming conventions, and style of programming, see \ref coding_practice. You do not have to jump and learn conventions, you will pick-up style on the way, how childern pick-up cultural conventions when they grow up. In MoFEM we using clang-formt, to help us unify programming style. Most of the of the editors use clang-format. For example how to do that in vscode is described <a href="https://code.visualstudio.com/docs/cpp/cpp-ide">here</a>. Keeping the same style, and learning and following programming conventiosn is important in long term. MoFEM is open community code, and if everyone follow agreed style, it improve code readibility and people undertand eachother better. 
+
+\subsection basci_lesson1_main Main function
+
+Main function retivly short, and look exactly the same for every program
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp main
+You can use above snipped to start your code. Main functions is responsible to kik-start the job, and it has stages;
+
+- Main prorgamm begins with registring MoFEM DM inteface in PETSc data structures. That enables transparent control of MoFEN data base by PETSc solvers, and vice-versa use PETSc starndard interface to create matrices, vectors, and other PETSc objects
+
+- Next, MOAB databse is created, and conected to interface. Similar approch is nade for MoFEM database. MoAB databse storses dara about mesh, wheras MoFM database stores data about finite element method, approximation bases, finnite elements and problems. MoFEM is another level on top of MOAB databse, since finite element data are stored on data tags created on mesh entities. 
+
+- Finally, problem specific example class is created and calulations are excured in Example::runProblem.
+
+\subsection basci_lesson1_error_handling Error handling
+
+Note that all errors are catch, at the end, see
+\code
+try {
+
+}
+CATCH_ERRORS;
+\endcode
+That part of the code is reposnible for hanling all the error, initauted inside PETSc, MOAB, Boost, standard library, and MoFEM or developer functions. PETSc, MOAB, and MoFEM functions return erorr code, to handle them properly, do as follows
+\code
+  CHKERR PetscFunction();   // PETSc function
+  CHKERR moab.function();   // MOAB function
+  CHKERR m_field.funtion(); // MoFEM function
+\endcode
+That will make seraching for runtime errors esier, and in case of the probele seek for help, see \ref guidelines_bug_reporting.
+
+\note When you programm, you can encounter two type of error, <em>compilation errors</em>, and <em>runtime errors</em>. <em>Compilation errors</em> most often syntax error, prevent compiler to make program, you see them when you run \em make programm. Runtime errors are becasue some bug in programm, segmentation fault, overflow, bad algorithm, or simply you run of computer resurces, memory. Those error need to be handled, to indicate user what is the problem, where it is.
+
+\subsection basic_lesson1_example_class Exmaple class
+
+Each lesson has example calss, which very similar struture, as follows
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Example
+
+\subsection basic_lesson1_opertors Operators and pipelines
+
+\anchor basic_l1_figure_4 
+\image html basic_lesson1_ops.png "Figure 4: Operators and common data" width=800px
+
+
+\subsection basci_lesson1_code Code
+
+\include users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp 
 */
