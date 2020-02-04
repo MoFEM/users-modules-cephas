@@ -314,7 +314,7 @@ int main(int argc, char *argv[]) {
     }
 
     auto snes = MoFEM::createSNES(m_field.get_comm());
-    CHKERR SNESSetDM(snes, dm);
+    // CHKERR SNESSetDM(snes, dm);
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
 
