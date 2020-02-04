@@ -303,24 +303,20 @@ int main(int argc, char *argv[]) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
           "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
-      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
                                "-snes_rtol 0 "
                                "-snes_max_it 1 ";
-      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
     auto snes = MoFEM::createSNES(m_field.get_comm());
-    // CHKERR SNESSetDM(snes, dm);
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
 
     // create snes nonlinear solver
     {
-      // CHKERR SNESSetDM(snes, dm);
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
       CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
