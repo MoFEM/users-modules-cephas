@@ -327,7 +327,7 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetFromOptions(snes);
     }
 
-    // CHKERR SNESSolve(snes, PETSC_NULL, D);
+    CHKERR SNESSolve(snes, PETSC_NULL, D);
 
     if (test_jacobian == PETSC_FALSE) {
       double nrm_A0;
