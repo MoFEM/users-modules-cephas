@@ -825,7 +825,6 @@ struct PostProcEdgeOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     return commonData;
   }
 
-  MoFEMErrorCode operator()();
 };
 
 #endif //__POSTPROC_ON_REF_MESH_HPP
