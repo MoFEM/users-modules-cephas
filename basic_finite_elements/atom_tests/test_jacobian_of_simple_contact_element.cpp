@@ -247,6 +247,7 @@ int main(int argc, char *argv[]) {
     // set dm datastruture which created mofem datastructures
     CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels.back());
     CHKERR DMSetFromOptions(dm);
+    CHKERR DMMoFEMSetIsPartitioned(dm, PETSC_FALSE);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
 
@@ -258,7 +259,6 @@ int main(int argc, char *argv[]) {
 
     // Stiffness matrix
     auto A = smartCreateDMMatrix(dm);
-    auto fdA = smartCreateDMMatrix(dm);
 
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -271,10 +271,7 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
 
-    // auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
-
-    CHKERR MatSetOption(fdA, MAT_SPD, PETSC_TRUE);
-    CHKERR MatZeroEntries(fdA);
+    auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
 
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_rhs_simple_contact =
