@@ -320,7 +320,7 @@ int main(int argc, char *argv[]) {
 
     // create snes nonlinear solver
     {
-      CHKERR SNESSetDM(snes, dm);
+      // CHKERR SNESSetDM(snes, dm);
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
       CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
