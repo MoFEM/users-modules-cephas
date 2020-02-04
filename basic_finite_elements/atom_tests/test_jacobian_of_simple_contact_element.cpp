@@ -338,7 +338,7 @@ int main(int argc, char *argv[]) {
 
       CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
       CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
-      // CHKERR SNESSetFromOptions(snes);
+      CHKERR SNESSetFromOptions(snes);
 
       CHKERR SNESSolve(snes, NULL, D);
       CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
