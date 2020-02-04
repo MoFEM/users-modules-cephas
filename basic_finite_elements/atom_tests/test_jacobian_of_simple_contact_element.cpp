@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
     CHKERR VecZeroEntries(F);
     CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-    
+
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
 
