@@ -840,6 +840,44 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
 
 };
 
+
+/**
+ * \brief Postprocess on edge
+ *
+ * \ingroup mofem_fs_post_proc
+ */
+struct PostProcEdgeOnRefinedMesh : public PostProcTemplateOnRefineMesh<
+                                       MoFEM::EdgeElementForcesAndSourcesCore> {
+
+  bool sixNodePostProcTris;
+
+  PostProcEdgeOnRefinedMesh(MoFEM::Interface &m_field,
+                            bool six_node_post_proc_tris = true)
+      : PostProcTemplateOnRefineMesh<MoFEM::EdgeElementForcesAndSourcesCore>(
+            m_field),
+        sixNodePostProcTris(six_node_post_proc_tris) {}
+
+  // Gauss pts set on refined mesh
+  int getRule(int order) { return -1; };
+
+  MoFEMErrorCode generateReferenceElementMesh();
+  MoFEMErrorCode setGaussPts(int order);
+
+  std::map<EntityHandle, EntityHandle> elementsMap;
+
+  MoFEMErrorCode preProcess();
+  MoFEMErrorCode postProcess();
+
+  struct CommonData : PostProcCommonOnRefMesh::CommonData {};
+  CommonData commonData;
+
+  virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
+    return commonData;
+  }
+
+
+};
+
 #endif //__POSTPROC_ON_REF_MESH_HPP
 
 /**

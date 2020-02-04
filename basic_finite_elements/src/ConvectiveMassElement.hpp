@@ -487,6 +487,10 @@ struct ConvectiveMassElement {
   };
 
   MoFEMErrorCode setBlocks();
+  
+  static MoFEMErrorCode
+  setBlocks(MoFEM::Interface &m_field,
+            boost::shared_ptr<map<int, BlockData>> &block_sets_ptr);
 
   MoFEMErrorCode addConvectiveMassElement(
       string element_name, string velocity_field_name,
