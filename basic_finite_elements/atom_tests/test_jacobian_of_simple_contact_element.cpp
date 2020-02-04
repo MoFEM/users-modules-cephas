@@ -258,6 +258,7 @@ int main(int argc, char *argv[]) {
 
     // Stiffness matrix
     auto A = smartCreateDMMatrix(dm);
+    auto fdA = smartCreateDMMatrix(dm);
 
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -270,7 +271,10 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
 
-    auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
+    // auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
+
+    CHKERR MatSetOption(fdA, MAT_SPD, PETSC_TRUE);
+    CHKERR MatZeroEntries(fdA);
 
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_rhs_simple_contact =
