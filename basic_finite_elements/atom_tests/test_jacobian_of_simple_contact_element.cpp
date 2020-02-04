@@ -336,8 +336,8 @@ int main(int argc, char *argv[]) {
       char testing_options_fd[] = "-snes_fd";
       CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
 
-      // CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
-      // CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
+      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
       // CHKERR SNESSetFromOptions(snes);
 
       // CHKERR SNESSolve(snes, NULL, D);
