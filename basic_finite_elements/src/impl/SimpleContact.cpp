@@ -1151,6 +1151,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
 
       ++t_base_master;
     }
+    // cerr << "Tilde C " << tilde_c_nitsche_fun << "\n";
     ++t_w;
     ++proj_normal_stress_master;
     ++proj_normal_stress_slave;
@@ -1588,6 +1589,8 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMaster_dx::doWork(
       t_assemble_m(j) += val_m * t3_1(i, m, j) * const_unit_n(i) *
                          const_unit_slave(m); // base not needed
 
+      // cerr << " t_assemble_m  " << t_assemble_m << "\n";
+
       // cerr << " Tang " << t_assemble_m << " t3_1 " << t3_1
       //      << " val_m " << val_m << " \n ";
 
@@ -2003,11 +2006,11 @@ for (int gg = 0; gg != nb_gauss_pts; gg++) {
     double sum_prod = 1. + nitsche_gap_diff_prod;
     double diff_prod = 1. - nitsche_gap_diff_prod;
     double master_coef = 1.;
-    if (std::abs(nitsche_gap_diff_prod) < 1.e-8) {
-      sum_prod *= 2.;
-      diff_prod *= 2.;
-      master_coef = 0.;
-    }
+    // if (std::abs(nitsche_gap_diff_prod) < 1.e-8) {
+    //   sum_prod *= 2.;
+    //   diff_prod *= 2.;
+    //   master_coef = 0.;
+    // }
 
     for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
       // cerr << "213123\n";
@@ -2015,7 +2018,7 @@ for (int gg = 0; gg != nb_gauss_pts; gg++) {
       auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
       // if (std::abs(nitsche_gap_diff_prod) > 1.e-8)
         t_assemble_m(m, k) += 2. * val_m * (1. - omegaVal) * t3_1(i, j, k) *
-                              const_unit_n_master(j) * const_unit_n_slave(i) *
+                              const_unit_n_master(i) * const_unit_n_slave(j) *
                               const_unit_n_slave(m) *
                               t_base_master_row; // base not needed
         
@@ -2029,40 +2032,40 @@ for (int gg = 0; gg != nb_gauss_pts; gg++) {
         //         cerr << diff_prod << "diff_prod\n";
         // cerr << omegaVal << "omegaVal\n";
 
-        t_assemble_m(m, k) +=
+        t_assemble_m(m, k) -=
             val_m *
-            (-sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
+            (sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
                  const_unit_n_master(i) * const_unit_n_slave(j) -
               diff_prod * cN * t_base_master_col *
                  const_unit_n_slave(k)) *
-            (-const_unit_n_slave(m) * t_base_master_row +
+            (const_unit_n_slave(m) * t_base_master_row -
               (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
-                 const_unit_n_master(j) * const_unit_n_slave(i) /
+                 const_unit_n_master(i) * const_unit_n_slave(j) /
                  cN); // base not needed
 
-        if (std::abs(nitsche_gap_diff_prod) < 1.e-8){
-          t_assemble_m(k, m) -=
-              val_m *
-              (-sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
-                   const_unit_n_master(i) * const_unit_n_slave(j) -
-               master_coef * diff_prod * cN * t_base_master_col *
-                   const_unit_n_slave(k)) *
-              (-const_unit_n_slave(m) * t_base_master_row +
-               master_coef * (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
-                   const_unit_n_master(j) * const_unit_n_slave(i) /
-                   cN); // base not needed
+        // if (std::abs(nitsche_gap_diff_prod) < 1.e-8){
+        //   t_assemble_m(k, m) -=
+        //       val_m *
+        //       (-sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
+        //            const_unit_n_master(i) * const_unit_n_slave(j) -
+        //        master_coef * diff_prod * cN * t_base_master_col *
+        //            const_unit_n_slave(k)) *
+        //       (const_unit_n_slave(m) * t_base_master_row -
+        //        master_coef * (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
+        //            const_unit_n_master(j) * const_unit_n_slave(i) /
+        //            cN); // base not needed
 
-        t_assemble_m(m, k) -=
-            val_m *
-            (-sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
-                 const_unit_n_master(i) * const_unit_n_slave(j) -
-             master_coef * diff_prod * cN * t_base_master_col *
-                 const_unit_n_slave(k)) *
-            (-const_unit_n_slave(m) * t_base_master_row +
-             master_coef * (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
-                 const_unit_n_master(j) * const_unit_n_slave(i) /
-                 cN); // base not needed
-        }
+        // t_assemble_m(m, k) -=
+        //     val_m *
+        //     (-sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
+        //          const_unit_n_master(i) * const_unit_n_slave(j) -
+        //      master_coef * diff_prod * cN * t_base_master_col *
+        //          const_unit_n_slave(k)) *
+        //     (-const_unit_n_slave(m) * t_base_master_row +
+        //      master_coef * (1. - omegaVal) * thetaSVal * t3_1_row(i, j, m) *
+        //          const_unit_n_master(j) * const_unit_n_slave(i) /
+        //          cN); // base not needed
+        // }
         // cerr << " diff_prod " << diff_prod << "\n";
         // cerr << " sum_prod " << sum_prod << "\n";
 
@@ -2086,8 +2089,8 @@ for (int gg = 0; gg != nb_gauss_pts; gg++) {
     ++t_base_master_col;
   }
 
-  cerr << " proj_normal_stress_master " << proj_normal_stress_master << "\n";
-  cerr << " proj_normal_stress_slave " << proj_normal_stress_slave << " \n";
+  // cerr << " proj_normal_stress_master " << proj_normal_stress_master << "\n";
+  // cerr << " proj_normal_stress_slave " << proj_normal_stress_slave << " \n";
 
   //      << " tilde_c_nitsche_fun " << tilde_c_nitsche_fun << "\n";
   ++proj_normal_stress_master;
@@ -2220,11 +2223,11 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
         double sum_prod = 1. + nitsche_gap_diff_prod;
         double diff_prod = 1. - nitsche_gap_diff_prod;
         double master_coef = 1.;
-        if (nitsche_gap_diff_prod == 0) {
-          sum_prod *= 2;
-          diff_prod *= 2;
-          master_coef = 0.;
-        }
+        // if (nitsche_gap_diff_prod == 0) {
+        //   sum_prod *= 2;
+        //   diff_prod *= 2;
+        //   master_coef = 0.;
+        // }
 
         
         // if (gap_gp > 0) {
@@ -2336,10 +2339,10 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::doWork(
                                     const_unit_n_master(j) * const_unit_n(m) *
                                     t_base_slave_row; // base not needed
 
-              t_assemble_m(m, k) -=
+              t_assemble_m(m, k) +=
                   val_m *
                   (sum_prod * (1. - omegaVal) * t3_1(i, j, k) *
-                       const_unit_n(i) * const_unit_n_master(j) +
+                       const_unit_n(i) * const_unit_n_master(j) -
                    diff_prod * cN * t_base_master_col * const_unit_n(k)) *
                   (const_unit_n(m) * t_base_slave_row -
                    omegaVal * thetaSVal * t3_1_row(i, j, m) * const_unit_n(i) *
@@ -2904,11 +2907,11 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
     double sum_prod = 1. + nitsche_gap_diff_prod;
     double diff_prod = 1. - nitsche_gap_diff_prod;
     double master_coef = 1.;
-    if (nitsche_gap_diff_prod == 0) {
-      sum_prod *= 2;
-      diff_prod *= 2;
-      master_coef = 0.;
-    }
+    // if (nitsche_gap_diff_prod == 0) {
+    //   sum_prod *= 2;
+    //   diff_prod *= 2;
+    //   master_coef = 0.;
+    // }
 
     // if (gap_gp > 0) {
     //   ++gap_gp;
@@ -3000,9 +3003,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
             (sum_prod * omegaVal * t3_1(i, j, k) * const_unit_n(i) *
                  const_unit_n(j) +
              diff_prod * cN * t_base_slave_col * const_unit_n(k)) *
-            (master_coef * const_unit_n(m) * t_base_slave_row -
-             omegaVal * thetaSVal * t3_1_row(i, j, m) * const_unit_n(i) *
-                 const_unit_n(j) / cN); // base not needed
+            (const_unit_n(m) * t_base_slave_row -
+             omegaVal * (thetaSVal / cN) * t3_1_row(i, j, m) * const_unit_n(i) *
+                 const_unit_n(j)); // base not needed
 
         // if(gap_gp > 0)
         // t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
@@ -3071,6 +3074,8 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
   for (std::vector<DataForcesAndSourcesCore::EntData *>::iterator row_data =
            commonDataSimpleContact->masterRowData->begin();
        row_data != commonDataSimpleContact->masterRowData->end(); ++row_data) {
+
+    // cerr << " How Many?? \n";
 
     const int nb_row = (*row_data)->getIndices().size();
     if (!nb_row)
@@ -3147,11 +3152,11 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
       double sum_prod = 1. + nitsche_gap_diff_prod;
       double diff_prod = 1. - nitsche_gap_diff_prod;
       double master_coef = 1.;
-      if (nitsche_gap_diff_prod == 0) {
-        sum_prod *= 2;
-        diff_prod *= 2;
-        master_coef = 0.;
-      }
+      // if (nitsche_gap_diff_prod == 0) {
+      //   sum_prod *= 2;
+      //   diff_prod *= 2;
+      //   master_coef = 0.;
+      // }
       // if (gap_gp > 0) {
       //   ++gap_gp;
       //   continue;
@@ -3203,7 +3208,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
 
       FTensor::Tensor0<double *> t_base_slave_col(&col_data.getN()(gg, 0));
       // half for the average stress story
-      const double val_m = 0.5 * t_w   * area_s;
+      const double val_m = 0.5 * t_w  * area_s;
       for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
         FTensor::Tensor0<double *> t_base_master_row(&(*row_data)->getN()(gg, 0));
 
@@ -3267,6 +3272,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
           //      << proj_normal_stress_slave << " sum_prod " << sum_prod
           //      << " diff_prod " << diff_prod << "\n";
           // if (std::abs(nitsche_gap_diff_prod) > 1.e-8)
+
           t_assemble_m(m, k) += 2. * val_m * omegaVal *
                                 t3_1(i, j, k) * const_unit_n(i) *
                                 const_unit_n(j) * const_unit_n(m) *
@@ -3277,10 +3283,9 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
               (sum_prod * omegaVal * t3_1(i, j, k) * const_unit_n(i) *
                    const_unit_n(j) +
                diff_prod * cN * t_base_slave_col * const_unit_n(k)) *
-              (- master_coef * const_unit_n(m) * t_base_master_row +
-               (1. - omegaVal) * master_coef * thetaSVal * t3_1_row(i, j, m) *
-                   const_unit_n_master(i) * const_unit_n(j) /
-                   cN); // base not needed
+              (-const_unit_n(m) * t_base_master_row +
+               (1. / cN - omegaVal / cN) * thetaSVal * t3_1_row(i, j, m) *
+                   const_unit_n_master(i) * const_unit_n(j)); // base not needed
 
           // if (gap_gp > 0){
           //   t_assemble_m(k, m) -= val_m * t3_1_row(i, j, k) *
@@ -3307,8 +3312,7 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
     } else {
       aij = Aij;
     }
-   
-    
+
     CHKERR MatSetValues(aij, nb_row, &(*row_data)->getIndices()[0], nb_col,
                         &col_data.getIndices()[0], &*NN.data().begin(),
                         ADD_VALUES);
@@ -4206,16 +4210,28 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunNitscheSlave::doWork(
     const double p_n_omega = omegaVal * proj_normal_stress_slave +
                              (1 - omegaVal) * proj_normal_stress_master;
     const double lambda_gap_diff = p_n_omega - cg;
-    const double lambda_gap_sum = p_n_omega + cg;
+    double lambda_gap_sum = p_n_omega + cg;
+
+    if(fabs(lambda_gap_sum) < 1.e-7)
+        lambda_gap_sum = 0;
 
     const double regular_abs = fabs(lambda_gap_sum);
-    tilde_c_fun =
-        0.5 * (lambda_gap_diff + pow(regular_abs, r) / r); // is lagMult Correct?
-    // cerr << "tilde_c_fun " << tilde_c_fun << "\n";
+    
+    tilde_c_fun = 0.5 * (lambda_gap_diff +
+                         pow(regular_abs, r) / r); // is lagMult Correct?
+
+
     const double exponent = r - 1.;
 
     double sign = 0.;
     sign = (std::abs(lambda_gap_sum) < 1.e-8) ? 0 : (lambda_gap_sum < 0) ? -1 : 1;
+
+    if (std::abs(tilde_c_fun) < 1.e-7)
+      tilde_c_fun = 0.;
+
+    //   cerr << " lambda_gap_sum" << lambda_gap_sum << "\n";
+    // cerr << "tilde_c_fun " << tilde_c_fun << "\n"; 
+    
     // cerr << "tilde_c_fun in fun " << tilde_c_fun<<"\n";
     // if (lagrange_slave == 0. && cg == 0.)
     // sign = 1.;
