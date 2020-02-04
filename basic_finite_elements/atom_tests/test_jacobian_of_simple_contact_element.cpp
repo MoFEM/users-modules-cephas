@@ -313,20 +313,21 @@ int main(int argc, char *argv[]) {
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
-    auto snes = MoFEM::createSNES(m_field.get_comm());
-    CHKERR SNESSetDM(snes, dm);
-    SNESConvergedReason snes_reason;
-    SnesCtx *snes_ctx;
+    // auto snes = MoFEM::createSNES(m_field.get_comm());
+    // CHKERR SNESSetDM(snes, dm);
+    // SNESConvergedReason snes_reason;
+    // SnesCtx *snes_ctx;
+
     // create snes nonlinear solver
     {
-      CHKERR SNESSetDM(snes, dm);
-      CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
-      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
-      CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
-      CHKERR SNESSetFromOptions(snes);
+      // CHKERR SNESSetDM(snes, dm);
+      // CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
+      // CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
+      // CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
+      // CHKERR SNESSetFromOptions(snes);
     }
 
-    CHKERR SNESSolve(snes, PETSC_NULL, D);
+    // CHKERR SNESSolve(snes, PETSC_NULL, D);
 
     if (test_jacobian == PETSC_FALSE) {
       double nrm_A0;
@@ -335,16 +336,16 @@ int main(int argc, char *argv[]) {
       char testing_options_fd[] = "-snes_fd";
       CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
 
-      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
-      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
-      CHKERR SNESSetFromOptions(snes);
+      // CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
+      // CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+      // CHKERR SNESSetFromOptions(snes);
 
-      CHKERR SNESSolve(snes, NULL, D);
+      // CHKERR SNESSolve(snes, NULL, D);
       CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
 
       double nrm_A;
       CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
-      PetscPrintf(PETSC_COMM_WORLD, "Matrix noarms %3.4e %3.4e\n", nrm_A,
+      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
                   nrm_A / nrm_A0);
       nrm_A /= nrm_A0;
 
