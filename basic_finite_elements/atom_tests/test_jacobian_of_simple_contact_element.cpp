@@ -344,7 +344,7 @@ int main(int argc, char *argv[]) {
 
       double nrm_A;
       CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
-      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+      PetscPrintf(PETSC_COMM_WORLD, "Matrix noarms %3.4e %3.4e\n", nrm_A,
                   nrm_A / nrm_A0);
       nrm_A /= nrm_A0;
 
