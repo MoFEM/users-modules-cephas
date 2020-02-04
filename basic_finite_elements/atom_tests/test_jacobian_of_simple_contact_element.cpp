@@ -260,9 +260,13 @@ int main(int argc, char *argv[]) {
     auto A = smartCreateDMMatrix(dm);
 
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
 
     CHKERR VecZeroEntries(F);
-
+    CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+    
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
 
