@@ -313,18 +313,18 @@ int main(int argc, char *argv[]) {
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 
-    // auto snes = MoFEM::createSNES(m_field.get_comm());
-    // CHKERR SNESSetDM(snes, dm);
-    // SNESConvergedReason snes_reason;
-    // SnesCtx *snes_ctx;
+    auto snes = MoFEM::createSNES(m_field.get_comm());
+    CHKERR SNESSetDM(snes, dm);
+    SNESConvergedReason snes_reason;
+    SnesCtx *snes_ctx;
 
     // create snes nonlinear solver
     {
-      // CHKERR SNESSetDM(snes, dm);
-      // CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
-      // CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
-      // CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
-      // CHKERR SNESSetFromOptions(snes);
+      CHKERR SNESSetDM(snes, dm);
+      CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
+      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
+      CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
+      CHKERR SNESSetFromOptions(snes);
     }
 
     // CHKERR SNESSolve(snes, PETSC_NULL, D);
