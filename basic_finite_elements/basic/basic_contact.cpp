@@ -1,8 +1,8 @@
 /**
- * \file basic_elastic.cpp
- * \example basic_elastic.cpp
+ * \file basic_contact.cpp
+ * \example basic_contact.cpp
  *
- * Plane stress elastic problem
+ * Example of contact problem
  *
  */
 
@@ -25,15 +25,16 @@
 using namespace MoFEM;
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
-using DomianEleOp = DomianEle::UserDataOperator;
-using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
+using DomainEle = MoFEM::Basic::FaceEle2D;
+using DomainEleOp = DomainEle::UserDataOperator;
+using BoundaryEle = MoFEM::Basic::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 1;
+constexpr int order = 4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
-constexpr double cn = young_modulus;
+constexpr double cn = 1;
+constexpr double spring_stiffness = 1e-6;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -59,7 +60,7 @@ private:
 
   MatrixDouble invJac, jAc;
   boost::shared_ptr<OpContactTools::CommonData> commonDataPtr;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  boost::shared_ptr<PostProcFaceOnRefinedMeshFor2D> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
 
@@ -89,14 +90,14 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
 
   CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  // CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  // CHKERR simple->addDomainField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
-  // CHKERR simple->addBoundaryField("SIGMA", HCURL, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
-  auto skin_ents = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order+1, &skin_ents);
+
+  auto skin_edges = getEntsOnMeshSkin();
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
+  // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -130,9 +131,11 @@ MoFEMErrorCode Example::createCommonData() {
 
   commonDataPtr = boost::make_shared<OpContactTools::CommonData>();
   CHKERR get_matrial_stiffens(commonDataPtr->tD);
+
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->contactStressPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactStressDivergencePtr =
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
@@ -148,6 +151,46 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Boundary condition]
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
+
+  auto fix_disp = [&](const std::string blockset_name) {
+    Range fix_ents;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
+          0) {
+        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
+                                                        true);
+      }
+    }
+    return fix_ents;
+  };
+
+  auto remove_ents = [&](const Range &&ents, const bool fix_x,
+                         const bool fix_y) {
+    auto prb_mng = mField.getInterface<ProblemsManager>();
+    auto simple = mField.getInterface<Simple>();
+    MoFEMFunctionBegin;
+    Range verts;
+    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+    verts.merge(ents);
+    const int lo_coeff = fix_x ? 0 : 1;
+    const int hi_coeff = fix_y ? 1 : 0;
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
+                                         lo_coeff, hi_coeff);
+    MoFEMFunctionReturn(0);
+  };
+
+  Range boundary_ents;
+  boundary_ents.merge(fix_disp("FIX_X"));
+  boundary_ents.merge(fix_disp("FIX_Y"));
+  boundary_ents.merge(fix_disp("FIX_ALL"));
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
+      0, 2);
+
+  CHKERR remove_ents(fix_disp("FIX_X"), true, false);
+  CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
+  CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
+
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -168,12 +211,13 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-    pipeline.push_back(new OpInternalContactLhs("U", "SIGMA"));
+    pipeline.push_back(
+        new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
-      return FTensor::Tensor1<double, 2>{0., -1.};
+      return FTensor::Tensor1<double, 2>{0., 1.};
     };
     pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
 
@@ -183,39 +227,48 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpStress("U", commonDataPtr));
     pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
 
+    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+        "U", commonDataPtr->contactDispPtr));
+
+    pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
+        "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    pipeline.push_back(new OpInternalContactRhs("U", commonDataPtr));
+    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
-    pipeline.push_back(new OpConstrainDisp("U", commonDataPtr));
-    pipeline.push_back(new OpConstrainTraction("SIGMA", commonDataPtr));
-    pipeline.push_back(new OpConstrainLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+        "U", commonDataPtr->contactDispPtr));
+    pipeline.push_back(new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(
-        new OpConstrainLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+        new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSpringLhs("U", "U"));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpConstrainRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(basic->getOpDomainLhsPipeline());
   add_domain_base_ops(basic->getOpDomainRhsPipeline());
   add_domain_ops_lhs(basic->getOpDomainLhsPipeline());
   add_domain_ops_rhs(basic->getOpDomainRhsPipeline());
-  // add_boundary_base_ops(basic->getOpBoundaryLhsPipeline());
-  // add_boundary_base_ops(basic->getOpBoundaryRhsPipeline());
-  // add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
-  // add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * order;
-  };
+  add_boundary_base_ops(basic->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(basic->getOpBoundaryRhsPipeline());
+  add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
+  add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
+
+  auto integration_rule = [](int, int, int approx_order) { return 2 * order; };
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
   CHKERR basic->setBoundaryRhsIntegrationRule(integration_rule);
@@ -236,7 +289,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto solver = basic->createTS();
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
+  auto D = smartCreateDMVector(dm);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
@@ -258,19 +311,33 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe = boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
     postProcFe->generateReferenceElementMesh();
-    auto postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-    postProcFe->generateReferenceElementMesh();
+
+    postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAc));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+    postProcFe->getOpPtrVector().push_back(
+        new OpSetContravariantPiolaTransformFace(jAc));
+    postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
     postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
     postProcFe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorDivergence<2, 2>(
+            "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    postProcFe->getOpPtrVector().push_back(new OpCalculateHVecTensorField<2, 2>(
+        "SIGMA", commonDataPtr->contactStressPtr));
+
     postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
         "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpPostProcContact("SIGMA", postProcFe->postProcMesh,
+                              postProcFe->mapGaussPts, commonDataPtr));
     postProcFe->addFieldValuesPostProc("U");
     MoFEMFunctionReturn(0);
   };

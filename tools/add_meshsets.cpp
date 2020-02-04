@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance;
 
     char mesh_file_name[255];
-    char mesh_out_file[255];
+    char mesh_out_file[255] = "out.h5m";
     PetscBool flg_file = PETSC_FALSE;
     ierr = PetscOptionsBegin(PETSC_COMM_WORLD, "", "none", "none");
     CHKERRQ(ierr);

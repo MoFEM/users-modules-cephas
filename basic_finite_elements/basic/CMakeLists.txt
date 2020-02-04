@@ -15,8 +15,8 @@ include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/basic)
 include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/basic/src)
 
 bfe_build_and_install(
-  second_moment_of_inertia
-  ${CMAKE_CURRENT_SOURCE_DIR}/second_moment_of_inertia.cpp)
+  basic_moment_of_inertia
+  ${CMAKE_CURRENT_SOURCE_DIR}/basic_moment_of_inertia.cpp)
 
 bfe_build_and_install(
     basic_approx

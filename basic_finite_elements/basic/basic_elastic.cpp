@@ -25,8 +25,8 @@
 using namespace MoFEM;
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
-using DomianEleOp = DomianEle::UserDataOperator;
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
@@ -195,7 +195,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
+  auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
   CHKERR KSPSolve(solver, F, D);
@@ -260,7 +260,7 @@ MoFEMErrorCode Example::checkResults() {
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
-  auto res = smartCreateDMDVector(dm);
+  auto res = smartCreateDMVector(dm);
   basic->getDomainRhsFE()->ksp_f = res;
 
   CHKERR VecZeroEntries(res);
