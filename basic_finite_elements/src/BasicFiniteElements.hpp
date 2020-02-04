@@ -65,11 +65,8 @@ extern "C" {
 #include <SaveVertexDofOnTag.hpp>
 #include <HookeElement.hpp>
 #include <SpringElement.hpp>
-<<<<<<< HEAD
 #include <SimpleContact.hpp>
-=======
 #include <SimpleRodElement.hpp>
->>>>>>> lukasz/develop
 
 using namespace BasicFiniteElements;
 
