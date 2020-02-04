@@ -68,3 +68,24 @@ add_test(MultiGridViaOrderSolver
   -pc_mg_type multiplicative
   -log_view)
 
+add_test(Spring
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/spring_LShape.h5m
+  -my_order 2 
+  -ksp_type cg 
+  -pc_type asm 
+  -sub_pc_type lu 
+  -ksp_monitor)
+
+  add_test(SimpleRod
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/simple_rod_beam.h5m
+  -my_order 1 
+  -my_is_calculating_frequency 1
+  -ksp_type cg 
+  -pc_type asm 
+  -sub_pc_type lu 
+  -ksp_monitor)
+
