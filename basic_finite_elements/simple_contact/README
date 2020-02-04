@@ -14,16 +14,12 @@ The following rules for the definition of contact interfaces apply:
 1. External edge of a contact interface may belong to the skin of the solid 
 mesh (i.e. contact interface may cut through the whole solid).
 2. External edge of a contact interface may belong to the interior of the 
-solid mesh if and only if this edge also belongs to another contact interface
-(i.e. contact interfaces may intersect inside of the solid mesh, but a contact 
-interface cannot cut the solid mesh partially, e.g. similar to a crack notch).
-
-Additionally the following rules for including surfaces to contact interfaces 
-apply:
-1. If two surfaces share an external edge, they should be included into the same 
-contact interface.
-2. If two surface do not have shared edges, but the distance between these 
-surfaces is less than 3 elements in the bulk mesh, they should be included 
+solid mesh if and only if this edge also belongs to another contact interface,
+which cuts through the whole solid (i.e. contact interfaces may intersect inside 
+the mesh, but a contact interface cannot cut the solid mesh partially, e.g. 
+similar to a crack notch).
+3. If two surfaces do not have shared edges, but the distance between these 
+surfaces is less than 3 elements in the bulk mesh, they must be included 
 separately into two different contact interfaces.
 
 Contact parameters
