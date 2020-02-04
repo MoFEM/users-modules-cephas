@@ -23,7 +23,7 @@ In the following lessons, we intend to create consistently series of problems, w
 Numrical inegration of function \f$\rho\f$, is given by formula,
 \f[
 \begin{align}
-  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| J_g \| \rho^h_g
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
 \end{align}
 \f]
 where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated function, e.g. density. Typically sum of the inetgration weights is scaled by volume (measure) of refernce element, such that is weights equal to unity, as follows
@@ -40,7 +40,7 @@ Consequenly, for such scalling for Jacobinan we use:
   I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \rho^h_g
 \end{align}
 \f]
-where \f$v=\frac{1}{6}\| J_g \|\f$ is volume of tetrahedrons
+where \f$v=\frac{1}{6}\| \mathbf{J}_g \|\f$ is volume of tetrahedrons
 
 - For triangle
 \f[
@@ -48,7 +48,7 @@ where \f$v=\frac{1}{6}\| J_g \|\f$ is volume of tetrahedrons
   I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a)  \rho^h_g
 \end{align}
 \f]
-where \f$a=\frac{1}{2}\| J_g \|\f$ is area of trianlgle.
+where \f$a=\frac{1}{2}\| \mathbf{J}_g \|\f$ is area of trianlgle.
 
 - For edge
 \f[
@@ -140,12 +140,12 @@ Integration on each element, applying integration formulae, is as follows
 \begin{align}
   I_\mathcal{T} = 
   \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}V \approx
-  \sum_{g=0}^{G-1} W_g \rho\left(\mathbf{x}^h(\pmb\xi_g)\right) \| J_g \| =
-  \sum_{g=0}^{G-1} W_g \rho_g \| J_g \| =
+  \sum_{g=0}^{G-1} W_g \rho\left(\mathbf{x}^h(\pmb\xi_g)\right) \| \mathbf{J}_g \| =
+  \sum_{g=0}^{G-1} W_g \rho_g \| \mathbf{J}_g \| =
   \sum_{g=0}^{G-1} w_g \rho_g
 \end{align}
 \f]
-where \f$\rho_g\f$ is value of integrated function at integrated point \f$\pmb\xi_g\f$ and \f$w_g=\| J_g \| W_g\f$ is integration weight. You can see, that integral is expressed simply as sum of function valaules at integration multiplied by weights, something which can be easly implemented as a computer program. If <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">Gauss quadrature</a> is used with approximate rule, polynomials can be calulated exactly up to order of integration rule \f$r\f$. If function is analaytical, order of error of\f$O(h^r)\f$, where \f$h\f$ is size of the element. We will
+where \f$\rho_g\f$ is value of integrated function at integrated point \f$\pmb\xi_g\f$ and \f$w_g=\| \mathbf{J}_g \| W_g\f$ is integration weight. You can see, that integral is expressed simply as sum of function valaules at integration multiplied by weights, something which can be easly implemented as a computer program. If <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">Gauss quadrature</a> is used with approximate rule, polynomials can be calulated exactly up to order of integration rule \f$r\f$. If function is analaytical, order of error of\f$O(h^r)\f$, where \f$h\f$ is size of the element. We will
 dicuss how to choos integration rule on element later.   
 
 For integration of simpexes, i.e. (vertices), edges, triangles, tetrahedra, usually for convinience and efficiency, integration points are given by <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a> \f$\pmb\lambda\f$, see left of \ref basic_l1_figure_2 "Figure 2". For quadraliterals, like quads and hex, quadrature points are constructed by tensor product of integration rules in 1d, see right of \ref basic_l1_figure_2 "Figure 2". One can construct integration for other elements shapes, for prims by tensor product of integration on triangle and line. For other shapes like for wedge, one can use Duffy transform, i.e. construct integration rule for hexahedron, and collpase edges to nodes, i.e. degenarte  hexahedron to construct wedge. In other words, refernce element is hexahedron, but physical elemnent is a wedge. However at the end numerical integration integartion will be sum of integration weigths multiplied by function values at integration points. 
@@ -181,7 +181,7 @@ Note that on the \ref basic_l1_figure_1 "Figure 1" is a map between reference el
   \sum_m^{M-1} \mathcal{N}_m(\pmb\xi) \left( \overline{\mathbf{x}}_m \right)^i 
 \end{align}
 \f]
-Note that above equation is  not very diffrent from equation \ref lesson1_approx_rho "(3)", the only diffrence is that is evaluated for every coefficient  \f$m=0..d-1\f$, where  \f$d\f$ is dimension of the problem, e.g. for 3D promblem \f$d=3\f$. 
+Note that above equation is  not very diffrent from equation \ref lesson1_approx_rho "(16)", the only diffrence is that is evaluated for every coefficient  \f$m=0..d-1\f$, where  \f$d\f$ is dimension of the problem, e.g. for 3D promblem \f$d=3\f$. 
 
 \subsubsection basic_lessons1_jacobian Jacobian
 
@@ -203,23 +203,23 @@ where Jacobian is
   \right|_\mathbf{P} \left( \overline{\mathbf{x}}_m \right)^i
   \end{align}
 \f]
-Note that in eq. \ref baic_taylor_expansion "(5)", higher order term on the right can be ommited, since we focus attention on inifitisimal elements in reference element and phiscal element, that is  \f$dA\f$ and \f$da\f$, respectively. For example element \f$dA\f$ has size \f$\|d\pmb\xi\| \ll 1 \f$ and can be assumed that \f$\|d\pmb\xi\|^2 = 0\f$, without makeing any error. 
+Note that in eq. \ref baic_taylor_expansion "(18)", higher order term on the right can be ommited, since we focus attention on inifitisimal elements in reference element and phiscal element, that is  \f$dA\f$ and \f$da\f$, respectively. For example element \f$dA\f$ has size \f$\|d\pmb\xi\| \ll 1 \f$ and can be assumed that \f$\|d\pmb\xi\|^2 = 0\f$, without makeing any error. 
 
 Using above derivation for Jacobian, in general 3D case, i.e. tetrahedron, or hexahedron, inifitisimal element volume at integtation point \f$g\f$ in physical configuration can be expressed as 
 \f[
 \begin{align}
   dv = 
-  d\mathbf{x_2}^k (\varepsilon^{ijk} d\mathbf{x_0}^i d\mathbf{x_1}^j) 
+  \left| d\mathbf{x_2}^k (\varepsilon^{ijk} d\mathbf{x_0}^i d\mathbf{x_1}^j) \right| 
   =
-  \varepsilon^{ijk} J^{i0} J^{j1} J^{k2} d\pmb\xi_0^0 d\pmb\xi_1^1 d\pmb\xi_2^2 
+  \left| \varepsilon^{ijk} J^{i0} J^{j1} J^{k2} \left(d\pmb\xi_0 d\pmb\xi_1  d\pmb\xi_2 \right) \right| 
   =
   \| \mathbf{J} \| dV
 \end{align}
 \f]
-taking \f$d\pmb\xi_0^0\f$, \f$d\pmb\xi_1^1\f$, and \f$d\pmb\xi_2^2\f$, are cartesian base vectors and \f$\varepsilon\f$ is levi-civita rensor. \f$J^{i0}\f$, \f$J^{j1}\f$, and \f$J^{k2}\f$ are coulumns of Jacobian evalueted at integration point \f$\pmb\xi_g\f$. Connection between levi-civita tensor and Jacobian determinant can found <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol#Determinants">here</a>. Note that for lower dimenison abouve equation hold. Finally we have all necessery to calulate integral on finite element mesh
+taking \f$d\pmb\xi_0\f$, \f$d\pmb\xi_1\f$, and \f$d\pmb\xi_2\f$, are cartesian base vectors and \f$\varepsilon\f$ is levi-civita rensor. \f$J^{i0}\f$, \f$J^{j1}\f$, and \f$J^{k2}\f$ are coulumns of Jacobian evalueted at integration point \f$\pmb\xi_g\f$. Connection between levi-civita tensor and Jacobian determinant can found <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol#Determinants">here</a>. Note that for lower dimenison abouve equation hold. Finally we have all necessery to calulate integral on finite element mesh
 \f[
 \begin{align}
-  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| J_g \| \rho^h_g
+  I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
 \end{align}
 \f]
 
@@ -292,6 +292,32 @@ That will make seraching for runtime errors esier, and in case of the probele se
 
 Each lesson has example calss, which very similar struture, as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Example
+
+where Example::runProblem called by main programm is as follows
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Run all
+
+Note that every function start and end with error handling
+\code
+MoFEMFunctionBegin;
+\\ function body
+MoFEMFunctionReturn(0);
+\endcode
+that enable to stack functions calls in case of problems.
+
+Example::runProblem calls functions;
+
+- To set up problem,
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set up problem
+
+Note that function add field, wnich is defined by name, space, approximation base, and rank. To approximate density, we choos space of integrable functions and its derivatives, use recipe form \cite NME:NME847 to construct base functions, and rank of the base is one, since dendisty is scalar field. The  order of approximation is set to one, i.e. linear functions are used. 
+
+- Next commond data struture is created
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
+
+
+
+
+
 
 \subsection basic_lesson1_opertors Operators and pipelines
 
