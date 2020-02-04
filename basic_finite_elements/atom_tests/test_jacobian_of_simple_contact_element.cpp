@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(A);
 
-    auto fdA = smartMatDuplicate(A, MAT_DO_NOT_COPY_VALUES);
+    auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
 
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_rhs_simple_contact =
