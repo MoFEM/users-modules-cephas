@@ -304,22 +304,48 @@ MoFEMFunctionReturn(0);
 \endcode
 that enable to stack functions calls in case of problems.
 
-Example::runProblem calls functions;
+\subsubsection basic_lesson1_example_setup Setup problem
 
-- To set up problem,
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set up problem
 
 Note that function add field, wnich is defined by name, space, approximation base, and rank. To approximate density, we choos space of integrable functions and its derivatives, use recipe form \cite NME:NME847 to construct base functions, and rank of the base is one, since dendisty is scalar field. The  order of approximation is set to one, i.e. linear functions are used. 
 
-- Next commond data struture is created
+\subsubsection basic_lesson1_example_common_data CommonData struture 
+
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Common data
+
+is created
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
 
+where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Next memory for  MoFEM::Types::VectorDouble is allocated, as well handled by smart pointer, to store denities at integration points. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. Smart pointers are used to manatin life of dynamically allocated objects. You can think about smart pointers as a regular pointers, and to understanding following code you do not have to know more about them. More explantion is needed for 
+\code
+
+int local_size;
+if(mField.get_comm_rank() == 0) 
+  // First processor
+  local_size = CommonData::LAST_ELEMENT;
+else 
+  // other processors
+  local_size = 0;
+
+commonDataPtr->petscVec = createSmartVectorMPI(
+  mField.get_comm(), local_size, CommonData::LAST_ELEMENT);
+\endcode
+this is smart pointer to PETSc Vector, it is creted by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function need to be provided with comminitator, here by \em mField.get_comm(), which is communicator of MoFEM. Commnicator holds a group of processes that can communicate with each other. Next loacl size of the vector is provided, here is equal 10, since we store mass, three first moments, and six second momments of inertia, in order as it is in CommonData::VecElements. Local size of vector is ten, which is equal to CommonData::VecElements::VecElements on fisrt processor, and zero on other porcessors. It means that all data will be accumulated on processor one. Global size of the vector is a summ of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements.
+
+In all following lessons, including this one, code work in parallel, for distributed meshes. 
+
+\anchor basic_l1_figure_4
+\image html basic_lesson1_partitioning.png "Figure 4: Mesh partitioning" width=600px
 
 
+\subsubsection basic_lesson1_example_common_data Setting initial values of denity
 
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set inital density
 
+Note that we set iniform denisty, whever you in function \em set_density you have access to coordinates, so you can set any distribution density which you like. Function MoFEM::FieldBlas::setVertexDofs set the values to the nodes, where denity field is set on the mesh, by iterating each node, getting it coordintes and calling finction \em set_density, which in turn returns denisty.
 
-\subsection basic_lesson1_opertors Operators and pipelines
+\subsubsection basic_lesson1_opertors Operators and pipelines
 
 \anchor basic_l1_figure_4 
 \image html basic_lesson1_ops.png "Figure 4: Operators and common data" width=800px

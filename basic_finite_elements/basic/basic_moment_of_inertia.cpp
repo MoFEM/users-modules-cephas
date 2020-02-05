@@ -160,16 +160,22 @@ MoFEMErrorCode Example::setUP() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->petscVec = createSmartVectorMPI(
-      mField.get_comm(),
-      (!mField.get_comm_rank()) ? CommonData::LAST_ELEMENT : 0,
-      CommonData::LAST_ELEMENT);
   commonDataPtr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
+
+  int local_size;
+  if (mField.get_comm_rank() == 0)
+    local_size = CommonData::LAST_ELEMENT;
+  else
+    local_size = 0;
+
+  commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
+                                                 CommonData::LAST_ELEMENT);
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
 
-//! [Distributions mass
+//! [Set inital density]
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
   auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
@@ -183,7 +189,7 @@ MoFEMErrorCode Example::bC() {
   CHKERR field_blas->setVertexDofs(set_density, "rho");
   MoFEMFunctionReturn(0);
 }
-//! [Distributions mass]
+//! [Set inital density]
 
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
