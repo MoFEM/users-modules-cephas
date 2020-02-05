@@ -21,6 +21,12 @@ using namespace MoFEM;
 #include <SimpleContact.hpp>
 using namespace boost::numeric;
 
+extern "C" {
+  #include <triangle_ncc_rule.h>
+}
+
+constexpr double SimpleContactProblem::TOL;
+
 MoFEMErrorCode
 SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
