@@ -1120,6 +1120,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
     //      << 0.5 * (proj_normal_stress_master + proj_normal_stress_slave)
     //      << "\n";
     // Here for average stress
+    
     const double val_m =
         t_w * area_m ;
 
@@ -1134,6 +1135,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalNitscheCStressRhsMaster::doWork(
       //     (omegaVal * proj_normal_stress_slave * const_unit_n_slave(i) -
       //      (1. - omegaVal) * t_stress(i,j) * const_unit_n(j)) *
       //     t_base_master;
+      
       t_assemble_m(i) +=
           val_m *
           (omegaVal * proj_normal_stress_slave + (1. - omegaVal) *
@@ -4212,8 +4214,8 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunNitscheSlave::doWork(
     const double lambda_gap_diff = p_n_omega - cg;
     double lambda_gap_sum = p_n_omega + cg;
 
-    if(fabs(lambda_gap_sum) < 1.e-7)
-        lambda_gap_sum = 0;
+    // if(fabs(lambda_gap_sum) < 1.e-7)
+    //     lambda_gap_sum = 0;
 
     const double regular_abs = fabs(lambda_gap_sum);
     
@@ -4226,8 +4228,8 @@ MoFEMErrorCode SimpleContactProblem::OpCalTildeCFunNitscheSlave::doWork(
     double sign = 0.;
     sign = (std::abs(lambda_gap_sum) < 1.e-8) ? 0 : (lambda_gap_sum < 0) ? -1 : 1;
 
-    if (std::abs(tilde_c_fun) < 1.e-7)
-      tilde_c_fun = 0.;
+    // if (std::abs(tilde_c_fun) < 1.e-7)
+    //   tilde_c_fun = 0.;
 
     //   cerr << " lambda_gap_sum" << lambda_gap_sum << "\n";
     // cerr << "tilde_c_fun " << tilde_c_fun << "\n"; 
