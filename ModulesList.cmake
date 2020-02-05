@@ -108,6 +108,7 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
   string(REGEX REPLACE
     ".*/+" ""
     MODULE_NAME ${MODULE_DIRECTORY})
+  string(REGEX REPLACE "-" "_" MODULE_NAME ${MODULE_NAME}) 
   string(TOUPPER ${MODULE_NAME} MODULE_NAME)
   message(STATUS "Add definitions to the compiler command -DWITH_MODULE_${MODULE_NAME}")
   add_definitions(-DWITH_MODULE_${MODULE_NAME})
