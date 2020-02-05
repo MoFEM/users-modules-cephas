@@ -19,21 +19,7 @@
 #ifndef __SIMPLE_CONTACT__
 #define __SIMPLE_CONTACT__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <cblas.h>
-// #include <lapack_wrap.h>
-// #include <gm_rule.h>
-//#include <quad.h>
-#include <triangle_ncc_rule.h>
-
-#ifdef __cplusplus
-}
 #include <boost/enable_shared_from_this.hpp>
-#endif
-
-#define TOL 1.e-8
 
 /** \brief Set of functions declaring elements and setting operators
  * to apply contact conditions between surfaces with matching
@@ -41,6 +27,8 @@ extern "C" {
  */
 
 struct SimpleContactProblem {
+
+  static constexpr double TOL = 1e-8;
 
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
@@ -68,7 +56,7 @@ struct SimpleContactProblem {
 
     MoFEMErrorCode setGaussPts(int order);
 
-    ~SimpleContactElement() {}
+    virtual ~SimpleContactElement() = default;
   };
 
   /**
