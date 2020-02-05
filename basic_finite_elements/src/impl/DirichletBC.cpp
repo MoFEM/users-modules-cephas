@@ -143,25 +143,9 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
 MoFEMErrorCode DirichletDisplacementBc::preProcess() {
   MoFEMFunctionBegin;
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
   CHKERR iNitalize();
 
-  if (snes_ctx == CTX_SNESNONE && ts_ctx == CTX_TSNONE) {
+  if (snes_ctx == CTX_SNESNONE) {
     if (!dofsIndices.empty()) {
       CHKERR VecSetValues(snes_x, dofsIndices.size(), &*dofsIndices.begin(),
                           &*dofsValues.begin(), INSERT_VALUES);
@@ -176,23 +160,7 @@ MoFEMErrorCode DirichletDisplacementBc::preProcess() {
 MoFEMErrorCode DirichletDisplacementBc::postProcess() {
   MoFEMFunctionBegin;
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
-  if (snes_ctx == CTX_SNESNONE && ts_ctx == CTX_TSNONE) {
+  if (snes_ctx == CTX_SNESNONE) {
     if (snes_B) {
       CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
       CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
@@ -576,29 +544,13 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
 MoFEMErrorCode DirichletFixFieldAtEntitiesBc::preProcess() {
   MoFEMFunctionBegin;
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
   CHKERR iNitalize();
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
   MoFEMFunctionBegin;
-  if (snes_ctx == CTX_SNESNONE && ts_ctx == CTX_TSNONE) {
+  if (snes_ctx == CTX_SNESNONE) {
     if (snes_B) {
       CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
       CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);

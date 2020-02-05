@@ -653,22 +653,6 @@ SphericalArcLengthControl::~SphericalArcLengthControl() {}
 
 MoFEMErrorCode SphericalArcLengthControl::preProcess() {
   MoFEMFunctionBegin;
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_x = ts_u;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
   switch (snes_ctx) {
   case CTX_SNESSETFUNCTION: {
     CHKERR calculateDxAndDlambda(snes_x);
@@ -719,22 +703,6 @@ MoFEMErrorCode SphericalArcLengthControl::operator()() {
 
 MoFEMErrorCode SphericalArcLengthControl::postProcess() {
   MoFEMFunctionBegin;
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_x = ts_u;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
   switch (snes_ctx) {
   case CTX_SNESSETFUNCTION: {
     PetscPrintf(arcPtrRaw->mField.get_comm(), "\tlambda = %6.4e\n",

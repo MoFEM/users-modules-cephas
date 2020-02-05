@@ -38,10 +38,14 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
+    char mesh_out_file[255] = "out.h5m";
+
     int time_step = 0;
     CHKERR PetscOptionsBegin(m_field.get_comm(), "", "Read MED tool", "none");
     CHKERR PetscOptionsInt("-med_time_step", "time step", "", time_step,
                            &time_step, PETSC_NULL);
+    CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
+                              "out.h5m", mesh_out_file, 255, PETSC_NULL);
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
@@ -70,7 +74,7 @@ int main(int argc, char *argv[]) {
       std::cout << *cit << endl;
     }
 
-    CHKERR moab.write_file("out.h5m");
+    CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
 
