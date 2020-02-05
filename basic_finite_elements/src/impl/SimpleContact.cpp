@@ -234,7 +234,8 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    t_gap_ptr -= t_normal_at_gp(i) * (t_position_slave_gp(i) - t_position_master_gp(i));
+    t_gap_ptr -=
+        t_normal_at_gp(i) * (t_position_slave_gp(i) - t_position_master_gp(i));
     ++t_position_slave_gp;
     ++t_position_master_gp;
     ++t_gap_ptr;
@@ -294,7 +295,8 @@ MoFEMErrorCode SimpleContactProblem::OpPrintLagMulAtGaussPtsSlave::doWork(
   cout << "-----------------------------" << endl;
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    cout << "gp: " << gg << " | gap: " << t_gap_ptr << " | lm: " << t_lagrange_slave
+    cout << "gp: " << gg << " | gap: " << t_gap_ptr
+         << " | lm: " << t_lagrange_slave
          << " | gap * lm = " << t_gap_ptr * t_lagrange_slave << endl;
     ++t_lagrange_slave;
     ++t_gap_ptr;
@@ -466,7 +468,8 @@ MoFEMErrorCode SimpleContactProblem::OpGetCompFunSlave::doWork(
 
   auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-  auto t_tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
+  auto t_tilde_c_fun =
+      getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     const double cg = cN * t_gap_gp;

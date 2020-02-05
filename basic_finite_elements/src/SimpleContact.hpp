@@ -37,7 +37,7 @@ extern "C" {
 
 struct SimpleContactProblem {
 
-//   constexpr double tOl = 1.e-8;
+  //   constexpr double tOl = 1.e-8;
 
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
@@ -445,8 +445,8 @@ struct SimpleContactProblem {
      * slave surface and assembles components to the RHS global vector.
      *
      * Integrates Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ on slave surface and assembles components to the RHS global
-     * vector
+     * W_{\text c}\f$ on slave surface and assembles components to the RHS
+     * global vector
      *
      * \f[
      * {\delta
@@ -605,13 +605,13 @@ struct SimpleContactProblem {
 
     /**
      * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange multipliers
-     * with respect to Lagrange multipliers on master side and assembles
-     * components to LHS global matrix.
+     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+     * multipliers with respect to Lagrange multipliers on master side and
+     * assembles components to LHS global matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity function and assembles Lagrange
-     * multipliers virtual work \f$ \delta W_{\text c}\f$ with respect to
-     * Lagrange multipliers side and assembles
+     * Computes linearisation of integrated on slave side complementarity
+     * function and assembles Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ with respect to Lagrange multipliers side and assembles
      * components to LHS global matrix
      *
      * \f[
@@ -638,9 +638,9 @@ struct SimpleContactProblem {
    * @brief LHS-operator for the simple contact element
    *
    * Integrates Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange multipliers
-   * with respect to Lagrange multipliers on slave side side and assembles
-   * components to LHS global matrix.
+   * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+   * multipliers with respect to Lagrange multipliers on slave side side and
+   * assembles components to LHS global matrix.
    *
    */
   struct OpCalContactTractionOverLambdaSlaveSlave
@@ -664,9 +664,9 @@ struct SimpleContactProblem {
 
     /**
      * @brief Integrates and assembles Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange multipliers
-     * with respect to Lagrange multipliers on slave side and assembles
-     * components to LHS global matrix.
+     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+     * multipliers with respect to Lagrange multipliers on slave side and
+     * assembles components to LHS global matrix.
      *
      * Computes linearisation of integrated on slave side complementarity
      * function and assembles Lagrange multipliers virtual work, \f$ \delta
