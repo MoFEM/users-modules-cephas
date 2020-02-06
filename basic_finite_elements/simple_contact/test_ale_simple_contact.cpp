@@ -399,6 +399,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
     NonlinearElasticElement elastic(m_field, 2);
 
+    Range slave_tets;
+
     if (is_ale) {
       contact_problem->addContactElementALE("CONTACT_ELEM", "SPATIAL_POSITION",
                                             "MESH_NODE_POSITIONS", "LAGMULT",
@@ -448,7 +450,7 @@ int main(int argc, char *argv[]) {
                                       moab::Interface::UNION);
           tets = tets.subset_by_type(MBTET);
           block_data->tEts = tets;
-
+          slave_tets = tets;
           for (auto &bit : elastic.setOfBlocks) {
             if (bit.second.tEts.contains(tets)) {
               // Range edges, nodes, faces;
@@ -1028,7 +1030,7 @@ else{
     {
       Range range_vertices;
       CHKERR m_field.get_moab().get_adjacencies(
-          slave_tris, 0, false, range_vertices, moab::Interface::UNION);
+          slave_tets, 0, false, range_vertices, moab::Interface::UNION);
 
       for (Range::iterator it_vertices = range_vertices.begin();
            it_vertices != range_vertices.end(); it_vertices++) {
@@ -1046,9 +1048,17 @@ else{
           int dof_rank = dof.getDofCoeffIdx();
           VectorDouble3 coords(3);
 
+          const FieldEntity_multiIndex *field_ents_ptr;
+          CHKERR m_field.get_field_ents(&field_ents_ptr);
+          auto fit = field_ents_ptr->get<Composite_Name_And_Ent_mi_tag>().find(
+              boost::make_tuple("SPATIAL_POSITION", ent));
+
           CHKERR moab.get_coords(&ent, 1, &coords[0]);
 
           if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
+
+            // cerr << " dof_glob_index " << fit->get()->getEntFieldDataPtr()->getIndices()
+            //      << "\n";
             printf("Before x: %e\n", dof.getFieldData());
 
             switch (test_case_x) {
