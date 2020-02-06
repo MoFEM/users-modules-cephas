@@ -2850,11 +2850,13 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
     double diff_prod = 1. - nitsche_gap_diff_prod;
     double coeff = 1.;
     double coeff_2 = 1.;
+    double coeff_3 = 1.;
     if (nitsche_gap_diff_prod == 0) {
-      sum_prod *= 2;
-      diff_prod *= 2;
+      // sum_prod *= 2;
+      // diff_prod *= 2;
       coeff = 0.;
       coeff_2 = 2.;
+      coeff_3 = -1999.;
     }
 
     // if (gap_gp > 0) {
@@ -2943,13 +2945,13 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapSlaveSlave_dx::doWork(
         //      << "\n";
 
         t_assemble_m(m, k) +=
-            val_m * 
-            ( coeff * sum_prod * omegaVal * t3_1(i, j, k) * const_unit_n(i) *
+            val_m *
+            (coeff_2 * sum_prod * omegaVal * t3_1(i, j, k) * const_unit_n(i) *
                  const_unit_n(j) +
-             diff_prod * cN * t_base_slave_col * const_unit_n(k)) *
+             coeff_2 * diff_prod * cN * t_base_slave_col * const_unit_n(k)) *
             (const_unit_n(m) * t_base_slave_row -
-             coeff * omegaVal * thetaSVal * t3_1_row(i, j, m) * const_unit_n(i) *
-                 const_unit_n(j) / cN); // base not needed
+             coeff * omegaVal * thetaSVal * t3_1_row(i, j, m) *
+                 const_unit_n(i) * const_unit_n(j) / cN); // base not needed
 
         MatrixDouble t_tan;
         t_tan.resize(3, 3, false);
