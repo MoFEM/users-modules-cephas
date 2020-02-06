@@ -2105,8 +2105,7 @@ SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::getJac(
 MoFEMErrorCode
 SimpleContactProblem::OpStressDerivativeGapSlaveMaster_dx::getJacRow(
     DataForcesAndSourcesCore::EntData &col_data, int gg) {
-  return get_jac_contact<0>(col_data, gg, commonData.jacStress[gg],
-                            jac_row);
+  return get_jac_contact<0>(col_data, gg, commonData.jacStress[gg], jac_row);
 }
 
 MoFEMErrorCode
@@ -3115,8 +3114,8 @@ MoFEMErrorCode SimpleContactProblem::OpStressDerivativeGapMasterSlave_dx::doWork
       if (nitsche_gap_diff_prod == 0) {
         // sum_prod *= 2;
         // diff_prod *= 2;
-        coef = 0.;
-        // coef_2 = 0.;
+        coef = 2.;
+        coef_2 = 0.;
       }
 
       // if (gap_gp > 0) {
