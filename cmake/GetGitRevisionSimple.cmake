@@ -37,7 +37,7 @@ function(get_git_tag GIT_DIR FALLBACK _gittag)
     string(REGEX REPLACE "\n$" "" GIT_TAG "${GIT_TAG}")
     set(${_gittag} "${GIT_TAG}" PARENT_SCOPE)
   else(NOT ${res})
-    set(${_gittag} "FALLBACK-fallback" PARENT_SCOPE)
+    set(${_gittag} "${FALLBACK}-fallback" PARENT_SCOPE)
   endif(NOT ${res}) 
 endfunction()
 
