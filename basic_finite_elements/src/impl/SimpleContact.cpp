@@ -22,7 +22,7 @@ using namespace MoFEM;
 using namespace boost::numeric;
 
 extern "C" {
-  #include <triangle_ncc_rule.h>
+#include <triangle_ncc_rule.h>
 }
 
 constexpr double SimpleContactProblem::TOL;
