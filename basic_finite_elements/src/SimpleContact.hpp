@@ -41,7 +41,6 @@ struct SimpleContactProblem {
       : public MoFEM::ContactPrismElementForcesAndSourcesCore {
 
     MoFEM::Interface &mField;
-    // map<int, SimpleContactPrismsData> &setOfSimpleContactPrisms;
     bool newtonCotes;
     SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false)
         : MoFEM::ContactPrismElementForcesAndSourcesCore(m_field),
