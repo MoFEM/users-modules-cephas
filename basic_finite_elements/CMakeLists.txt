@@ -23,7 +23,8 @@ set(BFE_DIRS
   basic
   hello_world
   hierarchical_approximation
-  reaction_diffusion_equation)
+  reaction_diffusion_equation
+  simple_contact)
 
 function(bfe_install bfe_mod_dir)
   install(
