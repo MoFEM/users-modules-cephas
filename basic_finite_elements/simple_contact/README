@@ -32,7 +32,7 @@ my_r_value      regularisation parameter, should be in [1.0, 1.1], values higher
                 terms into the contact work
 my_cn_value     augmentation parameter, primarily affects the convergence and 
                 has minimal effect on the solution; recommended initial value is 
-                the Young's modulus of contacting solids (or average in case of 
+                the Young's modulus of contacting solids (or harmonic mean in case of 
                 different values); the optimal value of cn providing minimal 
                 number of iterations for a given tolerance threshold can be 
                 found by repetitively increasing/decreasing the initial value 
