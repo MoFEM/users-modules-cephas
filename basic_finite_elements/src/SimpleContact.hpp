@@ -57,10 +57,10 @@ struct SimpleContactProblem {
     MoFEMErrorCode setGaussPts(int order);
 
     friend ConvectSlaveIntegrationPts;
-
   };
 
-  struct ConvectSlaveIntegrationPts {
+  struct ConvectSlaveIntegrationPts
+      : public boost::enable_shared_from_this<ConvectSlaveIntegrationPts> {
 
     ConvectSlaveIntegrationPts(SimpleContactElement *const fe_ptr,
                                std::string spat_pos, std::string mat_pos)
@@ -68,6 +68,16 @@ struct SimpleContactProblem {
           materialPositionsField(mat_pos) {}
 
     MoFEMErrorCode convectSlaveIntegrationPts();
+
+    inline boost::shared_ptr<MatrixDouble> getDiffKsiSpatialMaster() {
+      return boost::shared_ptr<MatrixDouble>(shared_from_this(),
+                                             &diffKsiMaster);
+    }
+
+    inline boost::shared_ptr<MatrixDouble> getDiffKsiSpatialSlave() {
+      return boost::shared_ptr<MatrixDouble>(shared_from_this(),
+                                             &diffKsiSlave);
+    }
 
   private:
     SimpleContactElement *const fePtr;
@@ -88,7 +98,6 @@ struct SimpleContactProblem {
 
     MatrixDouble diffKsiMaster;
     MatrixDouble diffKsiSlave;
-
   };
 
   /**
