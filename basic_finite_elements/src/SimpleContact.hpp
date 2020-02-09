@@ -1017,48 +1017,7 @@ struct SimpleContactProblem {
   MoFEMErrorCode setContactOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrang_field_name, Vec f_ = PETSC_NULL) {
-    MoFEMFunctionBegin;
-
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
-                                           common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         common_data_simple_contact));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalContactTractionOnMaster(field_name,
-                                           common_data_simple_contact, f_));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalContactTractionOnSlave(field_name,
-                                          common_data_simple_contact, f_));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetCompFunSlave(
-          field_name, common_data_simple_contact, rValue, cnValue));
-
-      fe_rhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalIntCompFunSlave(lagrang_field_name,
-                                   common_data_simple_contact, f_));
-    }
-    MoFEMFunctionReturn(0);
-  }
+      string field_name, string lagrang_field_name, Vec f_ = PETSC_NULL);
 
   /**
    * @brief Function for the simple contact element that sets the user data
@@ -1078,58 +1037,7 @@ struct SimpleContactProblem {
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrang_field_name, Mat aij) {
-    MoFEMFunctionBegin;
-
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
-                                           common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         common_data_simple_contact));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalContactTractionOverLambdaMasterSlave(
-              field_name, lagrang_field_name, common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalContactTractionOverLambdaSlaveSlave(
-              field_name, lagrang_field_name, common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetCompFunSlave(
-          field_name, common_data_simple_contact, rValue, cnValue));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalDerIntCompFunOverLambdaSlaveSlave(
-              lagrang_field_name, common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalDerIntCompFunOverSpatPosSlaveMaster(
-              field_name, lagrang_field_name, cnValue,
-              common_data_simple_contact, aij));
-
-      fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpCalDerIntCompFunOverSpatPosSlaveSlave(
-              field_name, lagrang_field_name, cnValue,
-              common_data_simple_contact, aij));
-    }
-    MoFEMFunctionReturn(0);
-  }
+      string field_name, string lagrang_field_name, Mat aij);
 
   /**
    * @brief Function for the simple contact element that sets the user data
@@ -1154,44 +1062,7 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
-      moab::Interface &moab_out, bool lagrange_field = true) {
-    MoFEMFunctionBegin;
-
-    map<int, SimpleContactPrismsData>::iterator sit =
-        setOfSimpleContactPrism.begin();
-    for (; sit != setOfSimpleContactPrism.end(); sit++) {
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalMaster(field_name, common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsMaster(field_name,
-                                            common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetPositionAtGaussPtsSlave(field_name,
-                                           common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetGapSlave(field_name, common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                         common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpLagGapProdGaussPtsSlave(lagrang_field_name,
-                                        common_data_simple_contact));
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
-                             moab_out, lagrange_field));
-    }
-    MoFEMFunctionReturn(0);
-  }
+      moab::Interface &moab_out, bool lagrange_field = true);
 };
 
 #endif
