@@ -192,6 +192,14 @@ SimpleContactProblem::ContactElement::setGaussPts(int order) {
 
       } while (sqrt(t_xi_slave(I) * t_xi_slave(I)) > tol);
 
+      get_values();
+      assemble();
+      ublas::lu_factorize(A);
+      invA.resize(2, 2, false);
+      noalias(invA) = ublas::identity_matrix<double>(2);
+      ublas::inplace_solve(invA, F, ublas::unit_lower_tag());
+      ublas::inplace_solve(invA, F, ublas::upper_tag()); 
+
     };
 
     ++t_xi_slave;

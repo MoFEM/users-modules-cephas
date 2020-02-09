@@ -77,6 +77,7 @@ struct SimpleContactProblem {
     MatrixDouble masterMaterialCoords;
     MatrixDouble masterSpatialCoords;
     MatrixDouble A;
+    MatrixDouble invA;
     VectorDouble F;
     MatrixDouble slaveN;
     MatrixDouble masterN;
