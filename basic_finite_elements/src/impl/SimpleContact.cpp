@@ -229,7 +229,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         for (size_t n = 0; n != 3; ++n) {
           const double t0 = (t_inv_A(J, K) * t_f(J)) * t_diff(K);
           t_diff_xi_master(I, i) -=
-              (t_inv_A(I, L) * t_tau(i, L)) * ((*slave_base * t0)) +
+              (t_inv_A(I, L) * t_tau(i, L)) * t0 +
               t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
           ++t_diff_xi_slave;
           ++slave_base;
