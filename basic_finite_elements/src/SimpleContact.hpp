@@ -41,7 +41,6 @@ struct SimpleContactProblem {
       : public MoFEM::ContactPrismElementForcesAndSourcesCore {
 
     MoFEM::Interface &mField;
-    // map<int, SimpleContactPrismsData> &setOfSimpleContactPrisms;
     bool newtonCotes;
     SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false)
         : MoFEM::ContactPrismElementForcesAndSourcesCore(m_field),
@@ -387,8 +386,8 @@ struct SimpleContactProblem {
   /**
    * @brief RHS-operator for the simple contact element
    *
-   * Integrates and assembles Lagrange multipliers virtual work on
-   * master surface.
+   * Integrates Lagrange multipliers virtual work on
+   * master surfaceand assemble components to RHS global vector.
    *
    */
   struct OpCalContactTractionOnMaster
@@ -409,11 +408,12 @@ struct SimpleContactProblem {
     VectorDouble vec_f;
 
     /**
-     * @brief Integrates and assembles Lagrange multipliers virtual work on
-     * master surface
+     * @brief Integrates Lagrange multipliers virtual work on
+     * master surface and assembles to global RHS vector
      *
-     * Integrates and assembles Lagrange multipliers virtual work, \f$ \delta
-     * W_{\text c}\f$ on master surface
+     * Integrates Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ on master surface and assembles components to global RHS
+     * vector
      *
      * \f[
      * {\delta
@@ -435,8 +435,8 @@ struct SimpleContactProblem {
   /**
    * @brief RHS-operator for the simple contact element
    *
-   * Integrates and assembles Lagrange multipliers virtual work on
-   * slave surface.
+   * Integrates Lagrange multipliers virtual work on
+   * slave surface and assembles components to the RHS global vector.
    *
    */
   struct OpCalContactTractionOnSlave
@@ -457,11 +457,12 @@ struct SimpleContactProblem {
     VectorDouble vec_f;
 
     /**
-     * @brief Integrates and assembles Lagrange multipliers virtual work on
-     * slave surface
+     * @brief Integrates Lagrange multipliers virtual work on
+     * slave surface and assembles components to the RHS global vector.
      *
-     * Integrates and assembles Lagrange multipliers virtual work, \f$ \delta
-     * W_{\text c}\f$ on slave surface
+     * Integrates Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ on slave surface and assembles components to the RHS
+     * global vector
      *
      * \f[
      * {\delta
@@ -538,7 +539,7 @@ struct SimpleContactProblem {
   /**
    * @brief RHS-operator for the simple contact element
    *
-   * Integrates and assembles complementarity function that fulfills KKT
+   * Integrates complementarity function that fulfills KKT
    * conditions over slave contact area and assembles components of the RHS
    * vector.
    *
@@ -561,11 +562,12 @@ struct SimpleContactProblem {
     VectorDouble vecR;
 
     /**
-     * @brief Integrates and assembles the complementarity function at slave
-     * face gauss points
+     * @brief Integrates the complementarity function at slave
+     * face gauss points and assembles components to the RHS global vector.
      *
-     * Integrates and assembles the complementarity function to fulfil KKT
-     * conditions in the integral sense
+     * Integrates the complementarity function to fulfil KKT
+     * conditions in the integral sense and assembles components to the RHS
+     * global vector
      *
      * \f[
      * {\overline C(\lambda, \mathbf{x}^{(i)},
@@ -581,7 +583,7 @@ struct SimpleContactProblem {
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
      * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
-     * value and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
      * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
      * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
      * \mathbf{x}^{(2)}  \right) \f]
@@ -593,9 +595,9 @@ struct SimpleContactProblem {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates and assembles Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-   * with respect to Lagrange multipliers on master side
+   * Integrates Lagrange multipliers virtual
+   * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+   * multipliers on master side and assembles components of the RHS vector.
    *
    */
   struct OpCalContactTractionOverLambdaMasterSlave
@@ -618,12 +620,15 @@ struct SimpleContactProblem {
     MatrixDouble NN;
 
     /**
-     * @brief  Integrates and assembles Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-     * with respect to Lagrange multipliers on master side
+     * @brief  Integrates Lagrange multipliers virtual
+     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+     * multipliers with respect to Lagrange multipliers on master side and
+     * assembles components to LHS global matrix.
      *
-     * Computes linearisation of and assembles Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ with respect to Lagrange multipliers
+     * Computes linearisation of integrated on slave side complementarity
+     * function and assembles Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ with respect to Lagrange multipliers side and assembles
+     * components to LHS global matrix
      *
      * \f[
      * {\text D} {\delta
@@ -648,9 +653,10 @@ struct SimpleContactProblem {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates and assembles Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-   * with respect to Lagrange multipliers on slave side
+   * Integrates Lagrange multipliers virtual
+   * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+   * multipliers with respect to Lagrange multipliers on slave side side and
+   * assembles components to LHS global matrix.
    *
    */
   struct OpCalContactTractionOverLambdaSlaveSlave
@@ -674,11 +680,13 @@ struct SimpleContactProblem {
 
     /**
      * @brief Integrates and assembles Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative over Lagrange multipliers
-     * with respect to Lagrange multipliers on slave side
+     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
+     * multipliers with respect to Lagrange multipliers on slave side and
+     * assembles components to LHS global matrix.
      *
-     * Computes linearisation of and assembles Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ with respect to Lagrange multipliers
+     * Computes linearisation of integrated on slave side complementarity
+     * function and assembles Lagrange multipliers virtual work, \f$ \delta
+     * W_{\text c}\f$ with respect to Lagrange multipliers
      *
      * \f[
      * {\text D} {\delta
@@ -703,9 +711,10 @@ struct SimpleContactProblem {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates and assembles variation of the complementarity function
+   * Integrates variation of the complementarity function
    * with respect to Lagrange multipliers to fulfils KKT conditions
-   * in the integral sense.
+   * in the integral sense on slave side and assembles
+   * components to LHS global matrix.
    *
    */
   struct OpCalDerIntCompFunOverLambdaSlaveSlave
@@ -728,12 +737,14 @@ struct SimpleContactProblem {
     MatrixDouble NN;
 
     /**
-     * @brief Integrates and assembles the complementarity function at slave
-     * face gauss points
+     * @brief Integrates the complementarity function at slave
+     * face gauss points and assembles
+     * components to LHS global matrix.
      *
-     * Integrates and assembles variation of the complementarity function
+     * Integrates variation of the complementarity function
      * with respect to Lagrange multipliers to fulfils KKT conditions
-     * in the integral sense
+     * in the integral sense nd assembles
+     * components to LHS global matrix.
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -764,9 +775,10 @@ struct SimpleContactProblem {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates and assembles the variation with respect to master spatial
+   * Integrates the variation with respect to master spatial
    * positions of the complementarity function to fulfill KKT conditions in
-   * the integral sense.
+   * the integral senseand assembles
+   * components to LHS global matrix.
    *
    */
   struct OpCalDerIntCompFunOverSpatPosSlaveMaster
@@ -791,12 +803,14 @@ struct SimpleContactProblem {
     MatrixDouble NN;
 
     /**
-     * @brief Integrates and assembles the complementarity function at slave
-     * face gauss points
+     * @brief Integrates linearisation of the complementarity function at slave
+     * face gauss points and assembles
+     * components to LHS global matrix.
      *
-     * Integrates and assembles the variation with respect to master spatial
+     * Integrates the variation with respect to master spatial
      * positions of the complementarity function to fulfill KKT conditions in
-     * the integral sense
+     * the integral sense and assembles
+     * components to LHS global matrix.
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -814,8 +828,8 @@ struct SimpleContactProblem {
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
-     * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
-     * value and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$ is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
      * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
      * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
      * \mathbf{x}^{(2)}  \right) \f]
@@ -829,9 +843,10 @@ struct SimpleContactProblem {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates and assembles the variation with respect to slave spatial
+   * Integrates the variation with respect to slave spatial
    * positions of the complementarity function to fulfill KKT conditions in
-   * the integral sense.
+   * the integral sense and assembles
+   * components to LHS global matrix.
    *
    */
   struct OpCalDerIntCompFunOverSpatPosSlaveSlave
@@ -856,12 +871,14 @@ struct SimpleContactProblem {
     MatrixDouble NN;
 
     /**
-     * @brief Integrates and assembles linearisation of the complementarity
-     * function at slave face gauss points
+     * @brief Integrates linearisation of the complementarity
+     * function at slave face gauss points and assembles
+     * components to LHS global matrix.
      *
      * Integrates and assembles the variation with respect to slave spatial
      * positions of the complementarity function to fulfill KKT conditions in
-     * the integral sense
+     * the integral sense and assembles
+     * components to LHS global matrix.
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
@@ -879,8 +896,8 @@ struct SimpleContactProblem {
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
      * parameter and affects convergence, \f$r\f$ is regularisation parameter
-     * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
-     * value and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$ is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
      * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
      * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
      * \mathbf{x}^{(2)}  \right) \f]

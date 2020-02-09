@@ -38,7 +38,15 @@ file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
 )
-    
+
+add_custom_target(
+    sc_make_link_to_examples_directory
+    ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+    ${CMAKE_CURRENT_SOURCE_DIR}/examples ${CMAKE_CURRENT_BINARY_DIR}/examples
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Make linking to examples directory" VERBATIM)
+
 install(
   DIRECTORY examples
   DESTINATION ${BFE_MOD_DIR}

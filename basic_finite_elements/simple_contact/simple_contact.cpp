@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
       PrismInterface *interface;
       CHKERR m_field.getInterface(interface);
 
-      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, SIDESET, cit)) {
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit)) {
         if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
                              cit->getName().c_str(), cit->getMeshsetId());
