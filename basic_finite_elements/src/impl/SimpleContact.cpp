@@ -249,6 +249,14 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode
+SimpleContactProblem::ConvectContactElement::setGaussPts(int order) {
+  MoFEMFunctionBegin;
+  CHKERR SimpleContactElement::setGaussPts(order);
+  CHKERR convectPtr->convectSlaveIntegrationPts();
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;

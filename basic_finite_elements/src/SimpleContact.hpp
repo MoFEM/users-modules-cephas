@@ -100,6 +100,24 @@ struct SimpleContactProblem {
     MatrixDouble diffKsiSlave;
   };
 
+  struct ConvectContactElement : public SimpleContactElement {
+
+    ConvectContactElement(MoFEM::Interface &m_field, std::string spat_pos,
+                          std::string mat_pos, bool newton_cotes = false)
+        : SimpleContactElement(m_field, newton_cotes),
+          convectPtr(new ConvectSlaveIntegrationPts(this, spat_pos, mat_pos)) {}
+
+    inline boost::shared_ptr<ConvectSlaveIntegrationPts> getConvectPtr() {
+      return convectPtr;
+    }
+
+    MoFEMErrorCode setGaussPts(int order);
+
+  protected:
+    boost::shared_ptr<ConvectSlaveIntegrationPts> convectPtr;
+
+  };
+
   /**
    * @brief Function that adds field data for spatial positions and Lagrange
    * multipliers to rows and columns, provides access to field data and adds
