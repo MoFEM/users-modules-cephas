@@ -51,10 +51,18 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
 }
 
 MoFEMErrorCode
-SimpleContactProblem::ContactElement::setGaussPts(int order) {
+SimpleContactProblem::ConvectSlaveContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
-  
+
   CHKERR SimpleContactElement::setGaussPts(order);
+  CHKERR convectSlaveIntegrationPts();
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
+  MoFEMFunctionBegin;
 
   CHKERR getNodeData(sparialPositionsField, spatialCoords);
   CHKERR getNodeData(materialPositionsField, materialCoords);
@@ -79,8 +87,8 @@ SimpleContactProblem::ContactElement::setGaussPts(int order) {
         "Inconsistent size of slave and master integration points (%d != %d)",
         nb_gauss_pts, gaussPtsMaster.size2());
 
-  slaveN.resize(nb_gauss_pts, 3,false);
-  masterN.resize(nb_gauss_pts, 3,false);
+  slaveN.resize(nb_gauss_pts, 3, false);
+  masterN.resize(nb_gauss_pts, 3, false);
   CHKERR Tools::shapeFunMBTRI(&slaveN(0, 0), &gaussPtsSlave(0, 0),
                               &gaussPtsSlave(1, 0), nb_gauss_pts);
   CHKERR Tools::shapeFunMBTRI(&masterN(0, 0), &gaussPtsMaster(0, 0),
@@ -139,7 +147,6 @@ SimpleContactProblem::ContactElement::setGaussPts(int order) {
     auto t_f = get_t_F();
 
     auto newton_solver = [&]() {
-
       auto get_values = [&]() {
         t_tau(i, I) = 0;
         t_x_slave(i) = 0;
@@ -169,7 +176,7 @@ SimpleContactProblem::ContactElement::setGaussPts(int order) {
         auto t_diff = get_t_diff();
         for (size_t n = 0; n != 3; ++n) {
           t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_x_slave(i);
-        t_f(I) += t_tau(i, I) * (t_x_master(i) - t_x_slave(i));
+          t_f(I) += t_tau(i, I) * (t_x_master(i) - t_x_slave(i));
         };
       };
 
@@ -181,6 +188,8 @@ SimpleContactProblem::ContactElement::setGaussPts(int order) {
       };
 
       constexpr double tol = 1e-12;
+      constexpr int max_it = 10;
+      int it = 0;
       do {
 
         get_values();
@@ -190,16 +199,15 @@ SimpleContactProblem::ContactElement::setGaussPts(int order) {
         ublas::inplace_solve(A, F, ublas::upper_tag());
         update();
 
-      } while (sqrt(t_xi_slave(I) * t_xi_slave(I)) > tol);
+      } while (sqrt(t_xi_slave(I) * t_xi_slave(I)) > tol && (it++) < max_it);
 
       get_values();
       assemble();
       ublas::lu_factorize(A);
       invA.resize(2, 2, false);
       noalias(invA) = ublas::identity_matrix<double>(2);
-      ublas::inplace_solve(invA, F, ublas::unit_lower_tag());
-      ublas::inplace_solve(invA, F, ublas::upper_tag()); 
-
+      ublas::inplace_solve(invA, invA, ublas::unit_lower_tag());
+      ublas::inplace_solve(invA, invA, ublas::upper_tag());
     };
 
     ++t_xi_slave;

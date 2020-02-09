@@ -29,7 +29,6 @@
 struct SimpleContactProblem {
 
   static constexpr double TOL = 1e-8;
-
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
   };
@@ -58,9 +57,9 @@ struct SimpleContactProblem {
     virtual ~SimpleContactElement() = default;
   };
 
-  struct ContactElement : public SimpleContactElement {
+  struct ConvectSlaveContactElement : public SimpleContactElement {
 
-    ContactElement(MoFEM::Interface &m_field, std::string spat_pos,
+    ConvectSlaveContactElement(MoFEM::Interface &m_field, std::string spat_pos,
                    std::string mat_pos, bool newton_cotes = false)
         : SimpleContactElement(m_field, newton_cotes),
           sparialPositionsField(spat_pos), materialPositionsField(mat_pos) {}
@@ -68,6 +67,9 @@ struct SimpleContactProblem {
     MoFEMErrorCode setGaussPts(int order);
 
   private:
+
+    MoFEMErrorCode convectSlaveIntegrationPts();
+
     std::string sparialPositionsField;
     std::string materialPositionsField;
 
@@ -81,7 +83,6 @@ struct SimpleContactProblem {
     VectorDouble F;
     MatrixDouble slaveN;
     MatrixDouble masterN;
-
 
   };
 
