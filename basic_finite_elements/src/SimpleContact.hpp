@@ -59,6 +59,32 @@ struct SimpleContactProblem {
     virtual ~SimpleContactElement() = default;
   };
 
+  struct ContactElement : public SimpleContactElement {
+
+    ContactElement(MoFEM::Interface &m_field, std::string spat_pos,
+                   std::string mat_pos, bool newton_cotes = false)
+        : SimpleContactElement(m_field, newton_cotes),
+          sparialPositionsField(spat_pos), materialPositionsField(mat_pos) {}
+
+    MoFEMErrorCode setGaussPts(int order);
+
+  private:
+    std::string sparialPositionsField;
+    std::string materialPositionsField;
+
+    VectorDouble spatialCoords;
+    VectorDouble materialCoords;
+    MatrixDouble slaveSpatialCoords;
+    MatrixDouble masterMaterialCoords;
+    MatrixDouble masterSpatialCoords;
+    MatrixDouble A;
+    VectorDouble F;
+    MatrixDouble slaveN;
+    MatrixDouble masterN;
+
+
+  };
+
   /**
    * @brief Function that adds field data for spatial positions and Lagrange
    * multipliers to rows and columns, provides access to field data and adds

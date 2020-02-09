@@ -32,27 +32,169 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
   int rule = order + 2;
   int nb_gauss_pts = triangle_ncc_order_num(rule);
-  SimpleContactProblem::SimpleContactElement::gaussPtsMaster.resize(
-      3, nb_gauss_pts, false);
-  SimpleContactProblem::SimpleContactElement::gaussPtsSlave.resize(
-      3, nb_gauss_pts, false);
+  gaussPtsMaster.resize(3, nb_gauss_pts, false);
+  gaussPtsSlave.resize(3, nb_gauss_pts, false);
   double xy_coords[2 * nb_gauss_pts];
   double w_array[nb_gauss_pts];
   triangle_ncc_rule(rule, nb_gauss_pts, xy_coords, w_array);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    SimpleContactProblem::SimpleContactElement::gaussPtsMaster(0, gg) =
-        xy_coords[gg * 2];
-    SimpleContactProblem::SimpleContactElement::gaussPtsMaster(1, gg) =
-        xy_coords[gg * 2 + 1];
-    SimpleContactProblem::SimpleContactElement::gaussPtsMaster(2, gg) =
-        w_array[gg];
-    SimpleContactProblem::SimpleContactElement::gaussPtsSlave(0, gg) =
-        xy_coords[gg * 2];
-    SimpleContactProblem::SimpleContactElement::gaussPtsSlave(1, gg) =
-        xy_coords[gg * 2 + 1];
-    SimpleContactProblem::SimpleContactElement::gaussPtsSlave(2, gg) =
-        w_array[gg];
+    gaussPtsMaster(0, gg) = xy_coords[gg * 2];
+    gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
+    gaussPtsMaster(2, gg) = w_array[gg];
+    gaussPtsSlave(0, gg) = xy_coords[gg * 2];
+    gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
+    gaussPtsSlave(2, gg) = w_array[gg];
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::ContactElement::setGaussPts(int order) {
+  MoFEMFunctionBegin;
+  
+  CHKERR SimpleContactElement::setGaussPts(order);
+
+  CHKERR getNodeData(sparialPositionsField, spatialCoords);
+  CHKERR getNodeData(materialPositionsField, materialCoords);
+
+  slaveSpatialCoords.resize(3, 3, false);
+  masterMaterialCoords.resize(3, 3, false);
+  masterSpatialCoords.resize(3, 3, false);
+  for (size_t n = 0; n != 3; ++n) {
+    for (size_t d = 0; d != 3; ++d) {
+      masterMaterialCoords(n, d) = materialCoords(3 * n + d);
+      masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+      slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+    }
+  }
+  A.resize(2, 2, false);
+  F.resize(2, false);
+
+  const int nb_gauss_pts = gaussPtsSlave.size2();
+  if (nb_gauss_pts != gaussPtsMaster.size2())
+    SETERRQ2(
+        PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+        "Inconsistent size of slave and master integration points (%d != %d)",
+        nb_gauss_pts, gaussPtsMaster.size2());
+
+  slaveN.resize(nb_gauss_pts, 3,false);
+  masterN.resize(nb_gauss_pts, 3,false);
+  CHKERR Tools::shapeFunMBTRI(&slaveN(0, 0), &gaussPtsSlave(0, 0),
+                              &gaussPtsSlave(1, 0), nb_gauss_pts);
+  CHKERR Tools::shapeFunMBTRI(&masterN(0, 0), &gaussPtsMaster(0, 0),
+                              &gaussPtsMaster(1, 0), nb_gauss_pts);
+
+  auto get_t_coords = [](auto &m) {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
+        &m(0, 0), &m(0, 1), &m(0, 2)};
+  };
+
+  auto get_t_xi = [](auto &m) {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 2>{&m(0, 0),
+                                                              &m(1, 0)};
+  };
+
+  auto get_t_diff = []() {
+    return FTensor::Tensor1<FTensor::PackPtr<double const *, 2>, 2>{
+        &Tools::diffShapeFunMBTRI[0], &Tools::diffShapeFunMBTRI[1]};
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'I', 2> I;
+  FTensor::Index<'J', 2> J;
+
+  auto get_t_tau = []() {
+    FTensor::Tensor2<double, 3, 2> t_tau;
+    return t_tau;
+  };
+
+  auto get_t_x = []() {
+    FTensor::Tensor1<double, 3> t_x;
+    return t_x;
+  };
+
+  auto get_t_F = [&]() {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2>{&F[0], &F[1]};
+  };
+
+  auto get_t_A = [&]() {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 0>, 2, 2>{
+        &A(0, 0), &A(0, 1), &A(1, 0), &A(1, 1)};
+  };
+
+  auto t_xi_slave = get_t_xi(gaussPtsSlave);
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    auto t_master_material_coords = get_t_coords(masterMaterialCoords);
+    auto t_slave_spatial_coords = get_t_coords(slaveSpatialCoords);
+    auto t_master_spatial_coords = get_t_coords(slaveSpatialCoords);
+
+    auto t_tau = get_t_tau();
+    auto t_x_slave = get_t_x();
+    auto t_x_master = get_t_x();
+    auto t_mat = get_t_A();
+    auto t_f = get_t_F();
+
+    auto newton_solver = [&]() {
+
+      auto get_values = [&]() {
+        t_tau(i, I) = 0;
+        t_x_slave(i) = 0;
+        t_x_master(i) = 0;
+        double *slave_base = &slaveN(gg, 0);
+        double *master_base = &masterN(gg, 1);
+        auto t_diff = get_t_diff();
+        for (size_t n = 0; n != 3; ++n) {
+
+          t_tau(i, J) +=
+              t_diff(J) * (*master_base) * t_master_material_coords(i);
+          t_x_slave(i) += (*slave_base) * t_slave_spatial_coords(i);
+          t_x_master(i) += (*master_base) * t_master_spatial_coords(i);
+
+          ++t_diff;
+          ++t_master_material_coords;
+          ++t_slave_spatial_coords;
+          ++t_master_spatial_coords;
+          ++slave_base;
+          ++master_base;
+        }
+      };
+
+      auto assemble = [&]() {
+        t_mat(I, J) = 0;
+        t_f(I) = 0;
+        auto t_diff = get_t_diff();
+        for (size_t n = 0; n != 3; ++n) {
+          t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_x_slave(i);
+        t_f(I) += t_tau(i, I) * (t_x_master(i) - t_x_slave(i));
+        };
+      };
+
+      auto update = [&]() {
+        t_xi_slave(I) += t_f(I);
+        slaveN(gg, 0) = Tools::shapeFunMBTRI0(t_xi_slave(0), t_xi_slave(1));
+        slaveN(gg, 1) = Tools::shapeFunMBTRI1(t_xi_slave(0), t_xi_slave(1));
+        slaveN(gg, 2) = Tools::shapeFunMBTRI2(t_xi_slave(0), t_xi_slave(1));
+      };
+
+      constexpr double tol = 1e-12;
+      do {
+
+        get_values();
+        assemble();
+        ublas::lu_factorize(A);
+        ublas::inplace_solve(A, F, ublas::unit_lower_tag());
+        ublas::inplace_solve(A, F, ublas::upper_tag());
+        update();
+
+      } while (sqrt(t_xi_slave(I) * t_xi_slave(I)) > tol);
+
+    };
+
+    ++t_xi_slave;
   }
 
   MoFEMFunctionReturn(0);
