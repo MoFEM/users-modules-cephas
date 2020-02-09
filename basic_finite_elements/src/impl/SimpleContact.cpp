@@ -51,21 +51,11 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
 }
 
 MoFEMErrorCode
-SimpleContactProblem::ConvectSlaveContactElement::setGaussPts(int order) {
+SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   MoFEMFunctionBegin;
 
-  CHKERR SimpleContactElement::setGaussPts(order);
-  CHKERR convectSlaveIntegrationPts();
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode
-SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
-  MoFEMFunctionBegin;
-
-  CHKERR getNodeData(sparialPositionsField, spatialCoords);
-  CHKERR getNodeData(materialPositionsField, materialCoords);
+  CHKERR fePtr->getNodeData(sparialPositionsField, spatialCoords);
+  CHKERR fePtr->getNodeData(materialPositionsField, materialCoords);
 
   slaveSpatialCoords.resize(3, 3, false);
   masterMaterialCoords.resize(3, 3, false);
@@ -80,19 +70,19 @@ SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
   A.resize(2, 2, false);
   F.resize(2, false);
 
-  const int nb_gauss_pts = gaussPtsSlave.size2();
-  if (nb_gauss_pts != gaussPtsMaster.size2())
+  const int nb_gauss_pts = fePtr->gaussPtsSlave.size2();
+  if (nb_gauss_pts != fePtr->gaussPtsMaster.size2())
     SETERRQ2(
         PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
         "Inconsistent size of slave and master integration points (%d != %d)",
-        nb_gauss_pts, gaussPtsMaster.size2());
+        nb_gauss_pts, fePtr->gaussPtsMaster.size2());
 
   slaveN.resize(nb_gauss_pts, 3, false);
   masterN.resize(nb_gauss_pts, 3, false);
-  CHKERR Tools::shapeFunMBTRI(&slaveN(0, 0), &gaussPtsSlave(0, 0),
-                              &gaussPtsSlave(1, 0), nb_gauss_pts);
-  CHKERR Tools::shapeFunMBTRI(&masterN(0, 0), &gaussPtsMaster(0, 0),
-                              &gaussPtsMaster(1, 0), nb_gauss_pts);
+  CHKERR Tools::shapeFunMBTRI(&slaveN(0, 0), &fePtr->gaussPtsSlave(0, 0),
+                              &fePtr->gaussPtsSlave(1, 0), nb_gauss_pts);
+  CHKERR Tools::shapeFunMBTRI(&masterN(0, 0), &fePtr->gaussPtsMaster(0, 0),
+                              &fePtr->gaussPtsMaster(1, 0), nb_gauss_pts);
 
   auto get_t_coords = [](auto &m) {
     return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
@@ -112,6 +102,8 @@ SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'I', 2> I;
   FTensor::Index<'J', 2> J;
+  FTensor::Index<'K', 2> K;
+  FTensor::Index<'L', 2> L;
 
   auto get_t_tau = []() {
     FTensor::Tensor2<double, 3, 2> t_tau;
@@ -127,12 +119,22 @@ SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
     return FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2>{&F[0], &F[1]};
   };
 
-  auto get_t_A = [&]() {
+  auto get_t_A = [&](auto &m) {
     return FTensor::Tensor2<FTensor::PackPtr<double *, 0>, 2, 2>{
-        &A(0, 0), &A(0, 1), &A(1, 0), &A(1, 1)};
+        &m(0, 0), &m(0, 1), &m(1, 0), &m(1, 1)};
   };
 
-  auto t_xi_slave = get_t_xi(gaussPtsSlave);
+  auto t_xi_slave = get_t_xi(fePtr->gaussPtsSlave);
+
+  auto get_diff_ksi = [](auto &m) {
+    return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
+        &m(0, 0), &m(1, 0), &m(2, 0), &m(3, 0), &m(4, 0), &m(5, 0));
+  };
+
+  diffKsiMaster.resize(19, nb_gauss_pts, false);
+  diffKsiSlave.resize(19, nb_gauss_pts, false);
+  auto t_diff_xi_master = get_diff_ksi(diffKsiMaster);
+  auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -143,7 +145,7 @@ SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
     auto t_tau = get_t_tau();
     auto t_x_slave = get_t_x();
     auto t_x_master = get_t_x();
-    auto t_mat = get_t_A();
+    auto t_mat = get_t_A(A);
     auto t_f = get_t_F();
 
     auto newton_solver = [&]() {
@@ -203,14 +205,45 @@ SimpleContactProblem::ConvectSlaveContactElement::convectSlaveIntegrationPts() {
 
       get_values();
       assemble();
+
       ublas::lu_factorize(A);
       invA.resize(2, 2, false);
       noalias(invA) = ublas::identity_matrix<double>(2);
-      ublas::inplace_solve(invA, invA, ublas::unit_lower_tag());
-      ublas::inplace_solve(invA, invA, ublas::upper_tag());
+      ublas::inplace_solve(A, invA, ublas::unit_lower_tag());
+      ublas::inplace_solve(A, invA, ublas::upper_tag());
+
+      auto t_inv_A  =  get_t_A(invA);
+
+      auto get_diff_master = [&]() {
+        double *master_base = &masterN(gg, 1);
+        for (size_t n = 0; n != 3; ++n) {
+          t_diff_xi_master(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*master_base);
+          ++t_diff_xi_master;
+          ++master_base;
+        }
+      };
+
+      auto get_diff_slave = [&]() {
+        auto t_diff = get_t_diff();
+        double *slave_base = &slaveN(gg, 1);
+        for (size_t n = 0; n != 3; ++n) {
+          const double t0 = (t_inv_A(J, K) * t_f(J)) * t_diff(K);
+          t_diff_xi_master(I, i) -=
+              (t_inv_A(I, L) * t_tau(i, L)) * ((*slave_base * t0)) +
+              t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
+          ++t_diff_xi_slave;
+          ++slave_base;
+          ++t_diff;
+        }
+      };
+
+      get_diff_master();
+      get_diff_slave();
+
     };
 
     ++t_xi_slave;
+
   }
 
   MoFEMFunctionReturn(0);

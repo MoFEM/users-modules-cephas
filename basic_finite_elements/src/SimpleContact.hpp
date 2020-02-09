@@ -36,6 +36,8 @@ struct SimpleContactProblem {
   map<int, SimpleContactPrismsData>
       setOfSimpleContactPrism; ///< maps side set id with appropriate FluxData
 
+  struct ConvectSlaveIntegrationPts;
+
   struct SimpleContactElement
       : public MoFEM::ContactPrismElementForcesAndSourcesCore {
 
@@ -54,24 +56,24 @@ struct SimpleContactProblem {
 
     MoFEMErrorCode setGaussPts(int order);
 
-    virtual ~SimpleContactElement() = default;
+    friend ConvectSlaveIntegrationPts;
+
   };
 
-  struct ConvectSlaveContactElement : public SimpleContactElement {
+  struct ConvectSlaveIntegrationPts {
 
-    ConvectSlaveContactElement(MoFEM::Interface &m_field, std::string spat_pos,
-                   std::string mat_pos, bool newton_cotes = false)
-        : SimpleContactElement(m_field, newton_cotes),
-          sparialPositionsField(spat_pos), materialPositionsField(mat_pos) {}
-
-    MoFEMErrorCode setGaussPts(int order);
-
-  private:
+    ConvectSlaveIntegrationPts(SimpleContactElement *const fe_ptr,
+                               std::string spat_pos, std::string mat_pos)
+        : fePtr(fe_ptr), sparialPositionsField(spat_pos),
+          materialPositionsField(mat_pos) {}
 
     MoFEMErrorCode convectSlaveIntegrationPts();
 
-    std::string sparialPositionsField;
-    std::string materialPositionsField;
+  private:
+    SimpleContactElement *const fePtr;
+
+    const std::string sparialPositionsField;
+    const std::string materialPositionsField;
 
     VectorDouble spatialCoords;
     VectorDouble materialCoords;
@@ -83,6 +85,9 @@ struct SimpleContactProblem {
     VectorDouble F;
     MatrixDouble slaveN;
     MatrixDouble masterN;
+
+    MatrixDouble diffKsiMaster;
+    MatrixDouble diffKsiSlave;
 
   };
 
