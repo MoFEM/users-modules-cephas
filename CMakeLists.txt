@@ -15,6 +15,12 @@ cmake_minimum_required (VERSION 3.1.3)
 
 project(MoFEM-UserModules C CXX)
 
+# Set fallback version. Fallback version is version of users moudles which is used
+# as default version if version from the git tags can not be extracted. For exammple 
+# that is a keys when somone commole mofem frome tarball.
+set(UM_FALLBACK_VERSION "0.9.1" CACHE STRING "Fallback version")
+message(STATUS "Falback vecrsion v${UM_FALLBACK_VERSION}")
+
 #search include directories before system directories
 set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 
@@ -40,16 +46,18 @@ if(NOT_PRECOMPILED_HEADRES)
   set(MoFEM_PRECOMPILED_HEADRES OFF CACHE FORCE)
 endif(NOT_PRECOMPILED_HEADRES)
 
-include(cmake/GetGitRevisionDescription.cmake)
-
+# Find MoFEM core package 
+message(STATUS "MOFEM directory ${MOFEM_DIR}")
 find_package(
-  MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR})
-include(cmake/CheckMoFEMVersion.cmake)
+  MoFEM REQUIRED HINTS ${MOFEM_DIR} ../ ../../ $ENV{MOFEM_DIR})  
+add_definitions(
+  -DMoFEM_VERSION_MAJOR=${MoFEM_VERSION_MAJOR} 
+  -DMoFEM_VERSION_MINOR=${MoFEM_VERSION_MINOR} 
+  -DMoFEM_VERSION_BUILD=${MoFEM_VERSION_BUILD})
 
-message(STATUS "MoFEM version ${MoFEM_VERSION}")
 add_definitions(${MoFEM_DEFINE_RESTRICT})
 
-find_package(Git)
+# Find mbconvert
 find_program(
   MBCONVERT NAMES mbconvert
   PATH 

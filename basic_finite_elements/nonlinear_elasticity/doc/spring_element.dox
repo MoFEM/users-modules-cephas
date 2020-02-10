@@ -63,7 +63,7 @@ that, in the current implementation, springs are applied on face elements only.
   };
 \endcode
 
-\medskip
+
 - Public members include (1) \e nF is a sub-vector that stores force at each
 degree of freedom, (2) \e commonDataPtr pointing to spring data associated with
 Gauss points, (3) \e dAta contains block data, and (4) \e is_spatial_position
@@ -78,7 +78,7 @@ which later be used to determine the displacements at Gauss points.
   bool is_spatial_position = true;
 \endcode
 
-\medskip
+
 - Then, the OpSpringFs constructor is implemented
 \code
   OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
@@ -91,7 +91,7 @@ which later be used to determine the displacements at Gauss points.
   }
 \endcode
 
-\medskip
+
 - Finally, the OpSpringFs::doWork method of the OpSpringFs operator is
 implemented as follows  
 \code
@@ -515,7 +515,7 @@ mesh volume all
 save as "/Users/username/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/nonlinear_elasticity/spring_rod.cub" overwrite
 \endcode
 
-\medskip
+
 - The mesh of the rod can be found in \ref figure_spring_rod_mesh "Figure 2"
 where the translation in x and y directions of two vertices at the bottom
 surface are fixed to avoid rigid body rotation and the spring is applied at the bottom surface.
@@ -535,7 +535,7 @@ BasicFiniteElements.hpp (directly included) and \ref All.cpp (via CMake)
     #include <BasicFiniteElements.hpp>
 \endcode
 
-\medskip
+
 - Declaration of the spring element
 \code 
     // Add spring boundary condition applied on surfaces.
@@ -544,7 +544,7 @@ BasicFiniteElements.hpp (directly included) and \ref All.cpp (via CMake)
                                              "MESH_NODE_POSITIONS");
 \endcode
 
-\medskip
+
 - Implementation of spring element by creating new instances and calling
 function MetaSpringBC::setSpringOperators to push operators to them
 \code
@@ -560,14 +560,14 @@ function MetaSpringBC::setSpringOperators to push operators to them
                                             "MESH_NODE_POSITIONS");
 \endcode
 
-\medskip
+
 - Assign global matrix and vector to which springs contribute
 \code
     fe_spring_lhs_ptr->ksp_B = Aij;
     fe_spring_rhs_ptr->ksp_f = F;
 \endcode
 
-\medskip
+
 - Loop over the elements to calculate the contribution of the
 spring boundary condition to the RHS and LHS and assemble them
 \code
@@ -609,7 +609,7 @@ BasicFiniteElements.hpp (directly included) and \ref All.cpp (via CMake)
     #include <BasicFiniteElements.hpp>
 \endcode
 
-\medskip
+
 - Declaration of the spring element
 \code 
     // Add spring boundary condition applied on surfaces.
@@ -618,14 +618,14 @@ BasicFiniteElements.hpp (directly included) and \ref All.cpp (via CMake)
                                              "MESH_NODE_POSITIONS");
 \endcode
 
-\medskip
+
 - Set finite element for spring boundary condition
 \code
     CHKERR m_field.modify_problem_add_finite_element("ELASTIC_MECHANICS",
                                                        "SPRING");
 \endcode
 
-\medskip
+
 - Implementation of spring element by creating new instances and calling
 function MetaSpringBC::setSpringOperators to push operators to them
 \code
@@ -641,7 +641,7 @@ function MetaSpringBC::setSpringOperators to push operators to them
         "MESH_NODE_POSITIONS");
 \endcode
 
-\medskip
+
 - Loop over the elements to calculate the contribution of the
 spring boundary condition to the RHS and LHS
 \code

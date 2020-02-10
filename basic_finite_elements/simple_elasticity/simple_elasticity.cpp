@@ -647,7 +647,7 @@ int main(int argc, char *argv[]) {
         // Takes maximal element of the vector, that should be maximal
         // displacement at the end of the bar
         CHKERR VecNorm(x, NORM_INFINITY, &norm_check);
-        if (fabs(norm_check - x_vec_norm_const) / x_vec_norm_const > 1.e-10) {
+        if (std::abs(norm_check - x_vec_norm_const) / x_vec_norm_const > 1.e-10) {
           SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
            "test failed (nrm 2 %6.4e)", norm_check);
         }

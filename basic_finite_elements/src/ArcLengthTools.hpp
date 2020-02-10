@@ -222,7 +222,6 @@ struct ArcLengthMatShell {
   DEPRECATED ArcLengthMatShell(Mat aij, ArcLengthCtx *arc_ptr_raw,
                                string problem_name);
 
-
   MoFEMErrorCode setLambda(Vec ksp_x, double *lambda, ScatterMode scattermode);
   friend MoFEMErrorCode ArcLengthMatMultShellOp(Mat A, Vec x, Vec f);
 
@@ -255,7 +254,6 @@ struct PCArcLengthCtx {
   ArcLengthCtx *arcPtrRaw; // this is for back compatibility
   /// \deprecated use with shared_ptr
   DEPRECATED PCArcLengthCtx(Mat shell_Aij, Mat aij, ArcLengthCtx *arc_ptr_raw);
-
 
   friend MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x);
   friend MoFEMErrorCode PCSetupArcLength(PC pc);
@@ -418,7 +416,7 @@ private:
 
 #endif // __ARC_LENGTH_TOOLS_HPP__
 
-/***************************************************************************/ /**
+/**
   \defgroup arc_length_control Arc-Length control
   \ingroup user_modules
-  ******************************************************************************/
+**/

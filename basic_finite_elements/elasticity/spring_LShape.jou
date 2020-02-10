@@ -1,0 +1,35 @@
+reset
+set duplicate block elements on
+
+brick x 1 y 2 z 0.5
+brick x 2 y 1 z 0.5
+
+move Curve 23  midpoint location curve 11  include_merged
+unite volume all 
+
+#rotate volume 1 angle 90 about z include_merged
+
+{young_modulus = 10}
+{poisson_ratio = 0}
+block 1 volume all 
+block 1 name 'MAT_ELASTIC'
+block 1 attribute count 2
+block 1 attribute index 1 {young_modulus}
+block 1 attribute index 2 {poisson_ratio}
+
+# Spring
+block 2 surface 3
+block 2 name 'SPRING_BC'
+block 2 attribute count 2
+{spring_stiffness_normal = 5}	
+{spring_stiffness_tangent = 1}
+block 2 attribute index 1 {spring_stiffness_normal}
+block 2 attribute index 2 {spring_stiffness_tangent}
+
+create pressure  on surface 12 magnitude 0.2 
+
+volume all scheme Tetmesh
+volume all size auto factor 8
+mesh volume all
+
+save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/elasticity/spring_LShape.cub" overwrite

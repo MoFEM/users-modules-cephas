@@ -143,25 +143,9 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
 MoFEMErrorCode DirichletDisplacementBc::preProcess() {
   MoFEMFunctionBegin;
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
   CHKERR iNitalize();
 
-  if (snes_ctx == CTX_SNESNONE && ts_ctx == CTX_TSNONE) {
+  if (snes_ctx == CTX_SNESNONE) {
     if (!dofsIndices.empty()) {
       CHKERR VecSetValues(snes_x, dofsIndices.size(), &*dofsIndices.begin(),
                           &*dofsValues.begin(), INSERT_VALUES);
@@ -176,23 +160,7 @@ MoFEMErrorCode DirichletDisplacementBc::preProcess() {
 MoFEMErrorCode DirichletDisplacementBc::postProcess() {
   MoFEMFunctionBegin;
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
-  if (snes_ctx == CTX_SNESNONE && ts_ctx == CTX_TSNONE) {
+  if (snes_ctx == CTX_SNESNONE) {
     if (snes_B) {
       CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
       CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
@@ -458,43 +426,77 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 
 MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
   MoFEMFunctionBegin;
+
+  // function to insert temperature boundary conditions from block
+  auto insert_temp_bc = [&](double &temp, auto &it) {
+    MoFEMFunctionBeginHot;
+    VectorDouble temp_2(1);
+    temp_2[0] = temp;
+    CHKERR MethodForForceScaling::applyScale(this, methodsOp, temp_2);
+    for (int dim = 0; dim < 3; dim++) {
+      Range ents;
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
+                                                 true);
+      if (dim > 1) {
+        Range _edges;
+        CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
+                                                 moab::Interface::UNION);
+        ents.insert(_edges.begin(), _edges.end());
+      }
+      if (dim > 0) {
+        Range _nodes;
+        CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
+        ents.insert(_nodes.begin(), _nodes.end());
+      }
+
+      auto for_each_dof = [&](auto &dof) {
+        MoFEMFunctionBeginHot;
+
+        if (dof->getEntType() == MBVERTEX) {
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = temp_2[0];
+        } else {
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+        }
+        MoFEMFunctionReturnHot(0);
+      };
+
+      CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
+                                      for_each_dof);
+    }
+
+    MoFEMFunctionReturnHot(0);
+  };
+
+  // Loop over blockset to find the block TEMPERATURE.
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             mField, NODESET | TEMPERATURESET, it)) {
-      TemperatureCubitBcData mydata;
-      CHKERR it->getBcDataStructure(mydata);
-      VectorDouble scaled_values(1);
-      scaled_values[0] = mydata.data.value1;
-      CHKERR MethodForForceScaling::applyScale(this, methodsOp, scaled_values);
-      for (int dim = 0; dim < 3; dim++) {
-        Range ents;
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim, ents,
-                                                   true);
-        if (dim > 1) {
-          Range _edges;
-          CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-                                                   moab::Interface::UNION);
-          ents.insert(_edges.begin(), _edges.end());
-        }
-        if (dim > 0) {
-          Range _nodes;
-          CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-          ents.insert(_nodes.begin(), _nodes.end());
-        }
+    bool is_blockset_defined = false;
+    string blocksetName = "TEMPERATURE";
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, blocksetName.length(), blocksetName) == 0) {
+        std::vector<double> mydata;
+        CHKERR it->getAttributes(mydata);
 
-        auto for_each_dof = [&](auto &dof) {
-          MoFEMFunctionBeginHot;
+        if (mydata.empty())
+          SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                  "missing temperature attribute");
 
-          if (dof->getEntType() == MBVERTEX) {
-            mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-          } else {
-            mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          }
-          MoFEMFunctionReturnHot(0);
-        };
+        double my_temp = mydata[0];
+        CHKERR insert_temp_bc(my_temp, it);
 
-        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
-                                        for_each_dof);
+        is_blockset_defined = true;
+      }
+    }
+
+    // If the block TEMPERATURE is not defined, then
+    // look for temperature boundary conditions
+    if (!is_blockset_defined) {
+      for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+               mField, NODESET | TEMPERATURESET, it)) {
+        TemperatureCubitBcData mydata;
+        CHKERR it->getBcDataStructure(mydata);
+        VectorDouble scaled_values(1);
+        scaled_values[0] = mydata.data.value1;
+        CHKERR insert_temp_bc(scaled_values[0], it);
       }
     }
     dofsIndices.resize(mapZeroRows.size());
@@ -506,6 +508,7 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
       dofsValues[ii] = mit->second;
     }
   }
+
   MoFEMFunctionReturn(0);
 }
 
@@ -541,29 +544,13 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
 MoFEMErrorCode DirichletFixFieldAtEntitiesBc::preProcess() {
   MoFEMFunctionBegin;
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    snes_ctx = CTX_SNESSETFUNCTION;
-    snes_x = ts_u;
-    snes_f = ts_F;
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    snes_ctx = CTX_SNESSETJACOBIAN;
-    snes_B = ts_B;
-    break;
-  }
-  default:
-    break;
-  }
-
   CHKERR iNitalize();
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
   MoFEMFunctionBegin;
-  if (snes_ctx == CTX_SNESNONE && ts_ctx == CTX_TSNONE) {
+  if (snes_ctx == CTX_SNESNONE) {
     if (snes_B) {
       CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
       CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);

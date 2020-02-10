@@ -96,8 +96,8 @@ struct GenericSliding {
                  "Element %s: Data inconsistency nb of indices %d",
                  getFEName().c_str(), indices.size());
 
-      CHKERR VecSetOption(getSnesF(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-      CHKERR VecSetValues(getSnesF(), indices.size(), &indices[0],
+      CHKERR VecSetOption(getSNESf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+      CHKERR VecSetValues(getSNESf(), indices.size(), &indices[0],
                           &(*resultsPtr)[shift], ADD_VALUES);
       MoFEMFunctionReturn(0);
     }
@@ -158,7 +158,7 @@ struct GenericSliding {
                      jac(rr, cc));
         }
       }
-      CHKERR MatSetValues(getSnesB(), row_indices.size(), &row_indices[0],
+      CHKERR MatSetValues(getSNESB(), row_indices.size(), &row_indices[0],
                           col_indices.size(), &col_indices[0], &jac(0, 0),
                           ADD_VALUES);
       MoFEMFunctionReturn(0);
@@ -378,24 +378,6 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         snes_f = F;
       }
 
-      switch (ts_ctx) {
-      case CTX_TSSETIFUNCTION: {
-        if (!F) {
-          snes_ctx = CTX_SNESSETFUNCTION;
-          snes_f = ts_F;
-        }
-        break;
-      }
-      case CTX_TSSETIJACOBIAN: {
-        if (!B) {
-          snes_ctx = CTX_SNESSETJACOBIAN;
-          snes_B = ts_B;
-        }
-        break;
-      }
-      default:
-        break;
-      }
       MoFEMFunctionReturn(0);
     }
   };
@@ -902,25 +884,6 @@ struct EdgeSlidingConstrains : public GenericSliding {
 
       if (F != PETSC_NULL) {
         snes_f = F;
-      }
-
-      switch (ts_ctx) {
-      case CTX_TSSETIFUNCTION: {
-        if (!F) {
-          snes_ctx = CTX_SNESSETFUNCTION;
-          snes_f = ts_F;
-        }
-        break;
-      }
-      case CTX_TSSETIJACOBIAN: {
-        if (!B) {
-          snes_ctx = CTX_SNESSETJACOBIAN;
-          snes_B = ts_B;
-        }
-        break;
-      }
-      default:
-        break;
       }
 
       MoFEMFunctionReturn(0);

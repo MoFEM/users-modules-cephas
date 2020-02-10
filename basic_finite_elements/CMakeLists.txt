@@ -20,9 +20,11 @@ set(BFE_DIRS
   cohesive_interface
   magnetostatic
   poisson
+  basic
   hello_world
   hierarchical_approximation
-  reaction_diffusion_equation)
+  reaction_diffusion_equation
+  simple_contact)
 
 function(bfe_install bfe_mod_dir)
   install(
@@ -57,6 +59,19 @@ function(bfe_build_and_install target source)
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${BFE_MOD_DIR})
 endfunction(bfe_build_and_install)
+
+function(bfe_copy_and_install extension file_permissions)
+  file(GLOB files ${CMAKE_CURRENT_SOURCE_DIR}/${extension})
+  foreach(file ${files})
+    file(
+      COPY ${file}
+      DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+      FILE_PERMISSIONS ${file_permissions})     
+    install(FILES ${file}
+      DESTINATION ${BFE_MOD_DIR}
+      PERMISSIONS ${file_permissions})
+  endforeach(file)
+endfunction()
 
 if(MOFEM_UM_BUILD_TESTS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/atom_tests 

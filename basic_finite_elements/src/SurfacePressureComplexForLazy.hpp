@@ -140,6 +140,10 @@ struct NeumannForcesSurfaceComplexForLazy {
     MoFEMErrorCode addForce(int ms_id);
     MoFEMErrorCode addPressure(int ms_id);
 
+    DEPRECATED MoFEMErrorCode addPreassure(int ms_id) {
+      return addPressure(ms_id);
+    }
+
     struct bCForce {
       ForceCubitBcData data;
       Range tRis;

@@ -2,9 +2,9 @@ Check before run
 ================
 
 * Check where is your mesh file
-* Check what verion of openmpi (or other MPI library) are you using
+* Check what version of openmpi (or other MPI library) are you using
 
-Example Static (elastcity)
+Example Static (elasticity)
 ==========================
 
 mpirun -np 2 ./elasticity -my_file LShape.h5m -my_order 2
@@ -35,6 +35,41 @@ mpirun -np 2 ./elasticity \
 -pc_mg_type multiplicative \
 -log_view
 
+Spring - Mesh from Cubit
+======
+mbconvert spring_LShape.cub spring_LShape.h5m
+
+mpirun -np 2 ./elasticity \
+-my_file spring_LShape.h5m \
+-my_order 2 \
+-ksp_type cg \
+-pc_type asm \
+-sub_pc_type lu \
+-ksp_monitor
+
+Spring - Mesh from Salome
+======
+read_med -med_file spring_LShape_salome.med  -meshsets_config spring_LShape_salome.cfg && mv out.h5m spring_LShape_salome.h5m
+
+mpirun -np 2 ./elasticity \
+-my_file spring_LShape_salome.h5m \
+-my_order 2 \
+-ksp_type cg \
+-pc_type asm \
+-sub_pc_type lu \
+-ksp_monitor
+
+
+Simple Rod
+==========
+mpirun -np 2 ./elasticity \
+-my_file simple_rod_beam.h5m \
+-my_order 1 \
+-my_is_calculating_frequency 1 \
+-ksp_type cg \
+-pc_type asm \
+-sub_pc_type lu \ 
+-ksp_monitor
 
 Parameters set by default from param_file.petsc file
 ============================

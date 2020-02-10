@@ -871,3 +871,161 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
 
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
+    const std::string field_name, const std::string vol_fe_name,
+    boost::shared_ptr<MatrixDouble> grad_mat_ptr, bool save_on_tag) {
+  MoFEMFunctionBegin;
+
+  if (!grad_mat_ptr)
+    grad_mat_ptr = boost::make_shared<MatrixDouble>();
+
+  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
+      boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+  // check number of coefficients
+  auto field_ptr = mField.get_field_structure(field_name);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+  switch (nb_coefficients) {
+  case 1:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateScalarFieldGradient<3>(field_name, grad_mat_ptr));
+    break;
+  case 3:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
+    break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "field with that number of coefficients is not implemented");
+  }
+
+  FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+      new OpGetFieldGradientValuesOnSkin(
+          postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
+          my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
+  return OpSwitch<
+      FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
+      FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>();
+}
+
+MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {
+  MoFEMFunctionBegin;
+
+  gaussPts.resize(3, 2, false);
+  gaussPts.clear();
+  gaussPts(0, 0) = 0;
+  gaussPts(1, 0) = 0;
+  gaussPts(0, 1) = 1;
+  gaussPts(1, 1) = 0;
+  mapGaussPts.resize(gaussPts.size2());
+
+  moab::Core core_ref;
+  moab::Interface &moab_ref = core_ref;
+  const EntityHandle *conn;
+  int num_nodes;
+  EntityHandle edge_conn[2];
+  MatrixDouble coords(2, 3);
+  for (int gg = 0; gg != 2; gg++) {
+    coords(gg, 0) = gaussPts(0, gg);
+    coords(gg, 1) = gaussPts(1, gg);
+    coords(gg, 2) = 0;
+    CHKERR moab_ref.create_vertex(&coords(gg, 0), edge_conn[gg]);
+  }
+
+  EntityHandle edge;
+  CHKERR moab_ref.create_element(MBEDGE, edge_conn, 2, edge);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode PostProcEdgeOnRefinedMesh::preProcess() {
+  MoFEMFunctionBeginHot;
+  ParallelComm *pcomm_post_proc_mesh =
+      ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+  if (pcomm_post_proc_mesh != NULL) {
+    delete pcomm_post_proc_mesh;
+  }
+  MoFEMFunctionReturnHot(0);
+}
+
+MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
+  MoFEMFunctionBegin;
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  ParallelComm *pcomm_post_proc_mesh =
+      ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+  if (pcomm_post_proc_mesh == NULL) {
+    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+  }
+  Range edges;
+  CHKERR postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
+  int rank = pcomm->rank();
+  auto set_edges_rank = [&](const auto rank, const auto &edges) {
+    std::vector<EntityHandle> ranks(edges.size(), rank);
+    CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), edges,
+                                     &*ranks.begin());
+  };
+  set_edges_rank(rank, edges);
+  
+  CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
+  MoFEMFunctionReturn(0);
+}
+
+
+MoFEMErrorCode PostProcEdgeOnRefinedMesh::setGaussPts(int order) {
+  MoFEMFunctionBegin;
+  if (gaussPts.size1() == 0) {
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "post-process mesh not generated");
+  }
+
+  const EntityHandle *conn;
+  int num_nodes;
+  EntityHandle edge;
+
+  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
+      elementsMap.end()) {
+    edge = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+  } else {
+    ublas::vector<EntityHandle> edge_conn(2);
+    MatrixDouble coords_edge(2, 3);
+    VectorDouble coords(3);
+    CHKERR mField.get_moab().get_connectivity(
+        numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
+    CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords_edge(0, 0));
+    for (int gg = 0; gg != 2; gg++) {
+      double ksi = gaussPts(0, gg);
+      // double eta = gaussPts(1, gg);
+      double n0 = N_MBEDGE0(ksi);
+      double n1 = N_MBEDGE1(ksi);
+
+      double x = n0 * coords_edge(0, 0) + n1 * coords_edge(1, 0);
+      double y = n0 * coords_edge(0, 1) + n1 * coords_edge(1, 1);
+      double z = n0 * coords_edge(0, 2) + n1 * coords_edge(1, 2);
+
+      coords[0] = x;
+      coords[1] = y;
+      coords[2] = z;
+
+      CHKERR postProcMesh.create_vertex(&coords[0], edge_conn[gg]);
+    }
+    CHKERR postProcMesh.create_element(MBEDGE, &edge_conn[0], 2, edge);
+    elementsMap[numeredEntFiniteElementPtr->getEnt()] = edge;
+  }
+
+  {
+    CHKERR postProcMesh.get_connectivity(edge, conn, num_nodes, false);
+    mapGaussPts.resize(num_nodes);
+    for (int nn = 0; nn < num_nodes; nn++) {
+      mapGaussPts[nn] = conn[nn];
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}

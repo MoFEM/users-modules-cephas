@@ -262,7 +262,7 @@ MoFEMErrorCode DMMGViaApproxOrdersPushBackCoarseningIS(DM dm, IS is, Mat A,
         CHKERR MatShellSetOperation(*subA, MATOP_SOR,
                                     (void (*)(void))sub_mat_sor);
       } else {
-        CHKERR MatGetSubMatrix(A, is2, is2, MAT_INITIAL_MATRIX, subA);
+        CHKERR MatCreateSubMatrix(A, is2, is2, MAT_INITIAL_MATRIX, subA);
       }
     }
     if (dm_field->aO) {
@@ -332,7 +332,7 @@ MoFEMErrorCode DMMGViaApproxOrdersReplaceCoarseningIS(DM dm, IS *is_vec,
             CHKERR AOApplicationToPetscIS(dm_field->aO, is);
           }
           Mat subA;
-          CHKERR MatGetSubMatrix(A, is, is, MAT_INITIAL_MATRIX, &subA);
+          CHKERR MatCreateSubMatrix(A, is, is, MAT_INITIAL_MATRIX, &subA);
           CHKERR PetscObjectReference((PetscObject)subA);
           dm_field->kspOperators[ii] = subA;
           CHKERR MatDestroy(&subA);

@@ -115,6 +115,7 @@ struct MonitorPostProc : public FEMethod {
       CHKERR postProc.writeFile(sss.str().c_str());
     }
 
+    feElasticEnergy.ts_ctx = TSMethod::CTX_TSNONE;
     feElasticEnergy.snes_ctx = SnesMethod::CTX_SNESNONE;
     CHKERR mField.loop_finite_elements("DYNAMICS", "ELASTIC", feElasticEnergy);
     feKineticEnergy.ts_ctx = TSMethod::CTX_TSNONE;

@@ -85,13 +85,21 @@ struct DataAtIntegrationPtsSprings {
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 2) {
+        if (attributes.size() < 2) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                   "should be 2 attributes but is %d", attributes.size());
+                   "Springs should have 2 attributes but there is %d",
+                   attributes.size());
         }
         mapSpring[id].iD = id;
         mapSpring[id].springStiffnessNormal = attributes[0];
         mapSpring[id].springStiffnessTangent = attributes[1];
+
+        // Print spring blocks after being read
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
+                           attributes[0]);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
+                           attributes[1]);
       }
     }
 
@@ -138,8 +146,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (nb_dofs == 0)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
+    if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
     }
 
@@ -154,7 +161,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     // get number of Gauss points
     const int nb_gauss_pts = data.getN().size1();
 
-    // get intergration weights
+    // get integration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // FTensor indices
@@ -272,8 +279,7 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     if (!col_nb_dofs)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-        dAta.tRis.end()) {
+    if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
       MoFEMFunctionReturnHot(0);
     }
 
@@ -349,20 +355,16 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     }
 
     // Add computed values of spring stiffness to the global LHS matrix
-    Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
-                                               : getFEMethod()->snes_B;
-    CHKERR MatSetValues(B, row_nb_dofs, &*row_data.getIndices().begin(),
-                        col_nb_dofs, &*col_data.getIndices().begin(),
-                        &locKs(0, 0), ADD_VALUES);
+    CHKERR MatSetValues(getKSPB(), row_data, col_data, &locKs(0, 0),
+                        ADD_VALUES);
 
     // is symmetric
     if (row_side != col_side || row_type != col_type) {
       transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
       noalias(transLocKs) = trans(locKs);
 
-      CHKERR MatSetValues(B, col_nb_dofs, &*col_data.getIndices().begin(),
-                          row_nb_dofs, &*row_data.getIndices().begin(),
-                          &transLocKs(0, 0), ADD_VALUES);
+      CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocKs(0, 0),
+                          ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
