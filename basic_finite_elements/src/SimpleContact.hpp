@@ -1063,6 +1063,31 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
       moab::Interface &moab_out, bool lagrange_field = true);
+
+  struct OpLhsConvectIntegrationPtsContactTractionOnSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+
+    OpLhsConvectIntegrationPtsContactTractionOnSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    private:
+      MatrixDouble matLhs;
+      boost::shared_ptr<MatrixDouble> diffConvect;
+  };
+
 };
 
 #endif

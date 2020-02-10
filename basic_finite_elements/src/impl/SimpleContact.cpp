@@ -1307,3 +1307,88 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
   }
   MoFEMFunctionReturn(0);
 }
+
+MoFEMErrorCode
+SimpleContactProblem::OpLhsConvectIntegrationPtsContactTractionOnSlave::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  const int nb_row_dofs = row_data.getIndices().size();
+  const int nb_col_dofs = col_data.getIndices().size();
+  if(nb_row_dofs && nb_col_dofs && col_type == MBVERTEX) {
+
+    const int nb_gauss_pts = getGaussPtsSlave().size2();
+    int nb_base_fun_row = nb_row_dofs / 3;
+    int nb_base_fun_col = nb_col_dofs / 3;
+
+    matLhs.resize(nb_row_dofs, nb_col_dofs, false);
+
+    const double area_s =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n[0], &n[1], &n[2]);
+    };
+
+    auto t_lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+    auto t_const_unit_n =
+        get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    auto get_diff_ksi = [](auto &m, auto gg) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
+          &m(0, 3 * gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, 3 * gg),
+          &m(5, gg));
+    };
+
+    auto t_base_row = row_data.getFTensor0N();
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      double val_s = t_w * area_s * t_lagrange_slave;
+      FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
+
+      for (int rr = 0; rr != nb_base_fun_row; ++rr) {
+
+        FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3> t_mat{
+            &matLhs(3 * rr + 0, 0), &matLhs(3 * rr + 0, 1),
+            &matLhs(3 * rr + 0, 2),
+
+            &matLhs(3 * rr + 1, 0), &matLhs(3 * rr + 1, 1),
+            &matLhs(3 * rr + 1, 2),
+
+            &matLhs(3 * rr + 2, 0), &matLhs(3 * rr + 2, 1),
+            &matLhs(3 * rr + 2, 2)};
+
+        auto t_diff_base_col = col_data.getFTensor1DiffN<3>(gg, 0);
+        auto t_diff_convect = get_diff_ksi(*diffConvect, gg);
+
+        for (int cc = 0; cc != nb_base_fun_col; ++cc) {
+          t_mat(i, j) += val_s * t_base_slave * t_const_unit_n(i) *
+                         (t_diff_base_col(k) * t_diff_convect(k, j));
+
+          ++t_diff_base_col;
+          ++t_diff_convect;
+          ++t_mat;
+        }
+
+        ++t_base_row;
+      }
+
+      ++t_lagrange_slave;
+      ++t_w;
+  } // for gauss points
+
+  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
+                      ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
