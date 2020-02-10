@@ -29,14 +29,14 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomianEle = FaceElementForcesAndSourcesCoreBase;
-using DomianEleOp = DomianEle::UserDataOperator;
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
 #include <BaseOps.hpp>
 
-using OpDomainMass = OpTools<DomianEleOp>::OpMass;
-using OpDomainSource = OpTools<DomianEleOp>::OpSource<2>;
+using OpDomainMass = OpTools<DomainEleOp>::OpMass;
+using OpDomainSource = OpTools<DomainEleOp>::OpSource<2>;
 
 struct Example {
 
@@ -67,10 +67,10 @@ private:
   };
   boost::shared_ptr<CommonData> commonDataPtr;
 
-  struct OpError : public DomianEleOp {
+  struct OpError : public DomainEleOp {
     boost::shared_ptr<CommonData> commonDataPtr;
     OpError(boost::shared_ptr<CommonData> &common_data_ptr)
-        : DomianEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
+        : DomainEleOp("U", OPROW), commonDataPtr(common_data_ptr) {}
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };
@@ -105,7 +105,7 @@ MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->resVec = smartCreateDMDVector(simple->getDM());
+  commonDataPtr->resVec = smartCreateDMVector(simple->getDM());
   commonDataPtr->L2Vec = createSmartVectorMPI(
       mField.get_comm(), (!mField.get_comm_rank()) ? 1 : 0, 1);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
@@ -141,7 +141,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
+  auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
   CHKERR KSPSolve(solver, F, D);

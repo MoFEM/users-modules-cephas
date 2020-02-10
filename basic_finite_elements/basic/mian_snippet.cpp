@@ -106,7 +106,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simple->getDM();
-  auto D = smartCreateDMDVector(dm);
+  auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
   CHKERR KSPSolve(solver, F, D);

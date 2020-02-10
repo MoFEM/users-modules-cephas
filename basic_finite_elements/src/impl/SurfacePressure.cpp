@@ -98,24 +98,9 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
-    Vec my_f;
-    if (F == PETSC_NULL) {
-      switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-            FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
-        break;
-      }
-      my_f = getFEMethod()->snes_f;
-    } else {
-      my_f = F;
-    }
-    return my_f;
+    if(F == PETSC_NULL)
+      return getKSPf();
+    return F;
   };
 
   // Assemble force into vector
@@ -192,24 +177,9 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, nF);
 
   auto get_f = [&]() {
-    Vec my_f;
-    if (F == PETSC_NULL) {
-      switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-            FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
-        break;
-      }
-      my_f = getFEMethod()->snes_f;
-    } else {
-      my_f = F;
-    }
-    return my_f;
+    if(F == PETSC_NULL)
+      return getKSPf();
+    return F;
   };
 
   // Assemble force into vector
@@ -266,24 +236,9 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
-    Vec my_f;
-    if (F == PETSC_NULL) {
-      switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-            FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
-        break;
-      }
-      my_f = getFEMethod()->snes_f;
-    } else {
-      my_f = F;
-    }
-    return my_f;
+    if(F == PETSC_NULL)
+      return getKSPf();
+    return F;
   };
 
   CHKERR VecSetValues(get_f(), data, &*Nf.data().begin(), ADD_VALUES);
@@ -601,24 +556,9 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
   }
 
   auto get_f = [&]() {
-    Vec my_f;
-    if (F == PETSC_NULL) {
-      switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-            FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
-        break;
-      }
-      my_f = getFEMethod()->snes_f;
-    } else {
-      my_f = F;
-    }
-    return my_f;
+    if(F == PETSC_NULL)
+      return getKSPf();
+    return F;
   };
 
   auto vec_assemble = [&](Vec my_f) {
@@ -1119,24 +1059,9 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
-    Vec my_f;
-    if (F == PETSC_NULL) {
-      switch (getFEMethod()->ts_ctx) {
-      case FEMethod::CTX_TSSETIFUNCTION: {
-        const_cast<FEMethod *>(getFEMethod())->snes_ctx =
-            FEMethod::CTX_SNESSETFUNCTION;
-        const_cast<FEMethod *>(getFEMethod())->snes_x = getFEMethod()->ts_u;
-        const_cast<FEMethod *>(getFEMethod())->snes_f = getFEMethod()->ts_F;
-        break;
-      }
-      default:
-        break;
-      }
-      my_f = getFEMethod()->snes_f;
-    } else {
-      my_f = F;
-    }
-    return my_f;
+    if(F == PETSC_NULL)
+      return getKSPf();
+    return F;
   };
 
   CHKERR VecSetValues(get_f(), data, &*Nf.data().begin(), ADD_VALUES);

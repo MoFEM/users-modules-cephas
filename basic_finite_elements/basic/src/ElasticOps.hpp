@@ -14,85 +14,82 @@
 
 namespace OpElasticTools {
 
-
 //! [Common data]
 struct CommonData {
   FTensor::Ddg<double, 2, 2> tD;
   boost::shared_ptr<MatrixDouble> mGradPtr;
   boost::shared_ptr<MatrixDouble> mStrainPtr;
   boost::shared_ptr<MatrixDouble> mStressPtr;
-  double E;
-  double mu;
 };
 //! [Common data]
+
+FTensor::Index<'i', 2> i;
+FTensor::Index<'j', 2> j;
+FTensor::Index<'k', 2> k;
+FTensor::Index<'l', 2> l;
 
 //! [Operators definitions]
 typedef boost::function<FTensor::Tensor1<double, 2>(const double, const double)>
     VectorFun;
 
-struct OpStrain : public DomianEleOp {
+struct OpStrain : public DomainEleOp {
   OpStrain(const std::string field_name,
-           boost::shared_ptr<CommonData> &common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+           boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpStress : public DomianEleOp {
+struct OpStress : public DomainEleOp {
   OpStress(const std::string field_name,
-           boost::shared_ptr<CommonData> &common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+           boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpInternalForce : public DomianEleOp {
-  OpInternalForce(const std::string field_name,
-                  boost::shared_ptr<CommonData> &common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+struct OpInternalForceRhs : public DomainEleOp {
+  OpInternalForceRhs(const std::string field_name,
+                     boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpBodyForce : public DomianEleOp {
-  OpBodyForce(const std::string field_name,
-              boost::shared_ptr<CommonData> &common_data_ptr,
-              VectorFun body_force);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+struct OpForceRhs : public DomainEleOp {
+  OpForceRhs(const std::string field_name,
+             boost::shared_ptr<CommonData> common_data_ptr,
+             VectorFun body_force);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
-  VectorFun bodyForce;
+  VectorFun funForce;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpStiffnessMatrix : public DomianEleOp {
-  OpStiffnessMatrix(const std::string row_field_name,
-                    const std::string col_field_name,
-                    boost::shared_ptr<CommonData> &common_data_ptr);
+struct OpStiffnessMatrixLhs : public DomainEleOp {
+  OpStiffnessMatrixLhs(const std::string row_field_name,
+                       const std::string col_field_name,
+                       boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type,
-                        DataForcesAndSourcesCore::EntData &row_data,
-                        DataForcesAndSourcesCore::EntData &col_data);
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
 
 private:
   MatrixDouble locK;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpPostProcElastic : public DomianEleOp {
+struct OpPostProcElastic : public DomainEleOp {
   OpPostProcElastic(const std::string field_name,
                     moab::Interface &post_proc_mesh,
                     std::vector<EntityHandle> &map_gauss_pts,
-                    boost::shared_ptr<CommonData> &common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data);
+                    boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
 private:
   moab::Interface &postProcMesh;
   std::vector<EntityHandle> &mapGaussPts;
@@ -100,20 +97,16 @@ private:
 };
 //! [Operators definitions]
 
-
 OpStrain::OpStrain(const std::string field_name,
-                   boost::shared_ptr<CommonData> &common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+                   boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 //! [Calculate strain]
-MoFEMErrorCode OpStrain::doWork(int side, EntityType type,
-                                DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
+MoFEMErrorCode OpStrain::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mGradPtr->size2();
   commonDataPtr->mStrainPtr->resize(3, nb_gauss_pts);
@@ -129,24 +122,16 @@ MoFEMErrorCode OpStrain::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 //! [Calculate strain]
-
-
 OpStress::OpStress(const std::string field_name,
-                   boost::shared_ptr<CommonData> &common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+                   boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 //! [Calculate stress]
-MoFEMErrorCode OpStress::doWork(int side, EntityType type,
-                                DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
-
+MoFEMErrorCode OpStress::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
   commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
@@ -164,18 +149,14 @@ MoFEMErrorCode OpStress::doWork(int side, EntityType type,
 }
 //! [Calculate stress]
 
-OpInternalForce::OpInternalForce(const std::string field_name,
-                                 boost::shared_ptr<CommonData> &common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
+OpInternalForceRhs::OpInternalForceRhs(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
       commonDataPtr(common_data_ptr) {}
 
 //! [Internal force]
-MoFEMErrorCode
-OpInternalForce::doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-
+MoFEMErrorCode OpInternalForceRhs::doWork(int side, EntityType type,
+                                          EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_dofs = data.getIndices().size();
@@ -214,25 +195,21 @@ OpInternalForce::doWork(int side, EntityType type,
       ++t_w;
     }
 
-    CHKERR VecSetValues(getFEMethod()->ksp_f, data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues(getKSPf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
 }
 //! [Internal force]
 
-OpBodyForce::OpBodyForce(const std::string field_name,
-                         boost::shared_ptr<CommonData> &common_data_ptr,
-                         VectorFun body_force)
-    : DomianEleOp(field_name, DomianEleOp::OPROW),
-      commonDataPtr(common_data_ptr), bodyForce(body_force) {}
+OpForceRhs::OpForceRhs(const std::string field_name,
+                       boost::shared_ptr<CommonData> common_data_ptr,
+                       VectorFun body_force)
+    : DomainEleOp(field_name, DomainEleOp::OPROW),
+      commonDataPtr(common_data_ptr), funForce(body_force) {}
 
 //! [Body force]
-MoFEMErrorCode OpBodyForce::doWork(int side, EntityType type,
-                                   DataForcesAndSourcesCore::EntData &data) {
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-
+MoFEMErrorCode OpForceRhs::doWork(int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   const size_t nb_dofs = data.getIndices().size();
@@ -255,12 +232,12 @@ MoFEMErrorCode OpBodyForce::doWork(int side, EntityType type,
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       double alpha = getMeasure() * t_w;
-      auto t_gravity = bodyForce(t_coords(0), t_coords(1));
+      auto t_force = funForce(t_coords(0), t_coords(1));
 
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
-        t_nf(i) += alpha * t_base * t_gravity(i);
+        t_nf(i) += alpha * t_base * t_force(i);
         ++t_base;
         ++t_nf;
       }
@@ -271,32 +248,32 @@ MoFEMErrorCode OpBodyForce::doWork(int side, EntityType type,
       ++t_coords;
     }
 
-    CHKERR VecSetValues(getFEMethod()->ksp_f, data, nf.data(), ADD_VALUES);
+    if ((getDataCtx() & PetscData::CtxSetTime).any())
+      for (int dd = 0; dd != nb_dofs; ++dd)
+        nf[dd] *= getTStime();
+
+    CHKERR VecSetValues(getKSPf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
 }
 //! [Body force]
 
-OpStiffnessMatrix::OpStiffnessMatrix(
+OpStiffnessMatrixLhs::OpStiffnessMatrixLhs(
     const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> &common_data_ptr)
-    : DomianEleOp(row_field_name, col_field_name, DomianEleOp::OPROWCOL),
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
 }
 
 //! [Stiffness]
-MoFEMErrorCode
-OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data) {
+MoFEMErrorCode OpStiffnessMatrixLhs::doWork(int row_side, int col_side,
+                                            EntityType row_type,
+                                            EntityType col_type,
+                                            EntData &row_data,
+                                            EntData &col_data) {
   MoFEMFunctionBegin;
-  FTensor::Index<'i', 2> i;
-  FTensor::Index<'j', 2> j;
-  FTensor::Index<'k', 2> k;
-  FTensor::Index<'l', 2> l;
 
   const size_t nb_row_dofs = row_data.getIndices().size();
   const size_t nb_col_dofs = col_data.getIndices().size();
@@ -340,8 +317,7 @@ OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
       ++t_w;
     }
 
-    CHKERR MatSetValues(getFEMethod()->ksp_B, row_data, col_data, &locK(0, 0),
-                        ADD_VALUES);
+    CHKERR MatSetValues(getKSPB(), row_data, col_data, &locK(0, 0), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -351,17 +327,16 @@ OpStiffnessMatrix::doWork(int row_side, int col_side, EntityType row_type,
 OpPostProcElastic::OpPostProcElastic(
     const std::string field_name, moab::Interface &post_proc_mesh,
     std::vector<EntityHandle> &map_gauss_pts,
-    boost::shared_ptr<CommonData> &common_data_ptr)
-    : DomianEleOp(field_name, DomianEleOp::OPROW), postProcMesh(post_proc_mesh),
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
       mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 //! [Postprocessing]
-MoFEMErrorCode
-OpPostProcElastic::doWork(int side, EntityType type,
-                         DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode OpPostProcElastic::doWork(int side, EntityType type,
+                                         EntData &data) {
   MoFEMFunctionBegin;
 
   auto get_tag = [&](const std::string name) {
@@ -374,8 +349,8 @@ OpPostProcElastic::doWork(int side, EntityType type,
     return th;
   };
 
-  MatrixDouble3by3 mat(3,3);
-  
+  MatrixDouble3by3 mat(3, 3);
+
   auto set_matrix = [&](auto &t) -> MatrixDouble3by3 & {
     mat.clear();
     for (size_t r = 0; r != 2; ++r)
@@ -393,7 +368,7 @@ OpPostProcElastic::doWork(int side, EntityType type,
   };
 
   auto set_plain_stress_strain = [&](auto &mat, auto &t) -> MatrixDouble3by3 & {
-    mat(2, 2) = -commonDataPtr->mu * (t(0, 0) + t(1, 1));
+    mat(2, 2) = -poisson_ratio * (t(0, 0) + t(1, 1));
     return mat;
   };
 
