@@ -30,6 +30,33 @@ struct SimpleContactProblem {
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
   using EntData = DataForcesAndSourcesCore::EntData;
 
+  static inline double Sign(double x) {
+    if (x == 0)
+      return 0;
+    else if (x > 0)
+      return 1;
+    else
+      return -1;
+  };
+
+  static inline double ConstrainFunction(const double cn, const double g,
+                                   const double l) {
+    if (cn * g <= l)
+      return cn * g;
+    else
+      return l;
+  }
+
+  static inline double ConstrainFunction_dg(const double cn, const double g,
+                                      const double l) {
+    return (1 + Sign(l - cn * g)) / 2;
+  }
+
+  static inline double ConstrainDunction_dl(const double cn, const double g,
+                                      const double l) {
+    return (1 + Sign(cn * g - l)) / 2;
+  }
+
   static constexpr double TOL = 1e-8;
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
