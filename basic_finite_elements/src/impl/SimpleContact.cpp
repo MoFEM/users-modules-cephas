@@ -58,12 +58,12 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   CHKERR fePtr->getNodeData(materialPositionsField, materialCoords);
 
   slaveSpatialCoords.resize(3, 3, false);
-  masterMaterialCoords.resize(3, 3, false);
+  slaveMaterialCoords.resize(3, 3, false);
   masterSpatialCoords.resize(3, 3, false);
   for (size_t n = 0; n != 3; ++n) {
     for (size_t d = 0; d != 3; ++d) {
-      masterMaterialCoords(n, d) = materialCoords(3 * n + d);
       masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+      slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
       slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
     }
   }
@@ -124,7 +124,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         &m(0, 0), &m(0, 1), &m(1, 0), &m(1, 1)};
   };
 
-  auto t_xi_slave = get_t_xi(fePtr->gaussPtsSlave);
+  auto t_xi_master = get_t_xi(fePtr->gaussPtsMaster);
 
   auto get_diff_ksi = [](auto &m) {
     return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
@@ -138,7 +138,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    auto t_master_material_coords = get_t_coords(masterMaterialCoords);
+    auto t_slave_material_coords = get_t_coords(slaveMaterialCoords);
     auto t_slave_spatial_coords = get_t_coords(slaveSpatialCoords);
     auto t_master_spatial_coords = get_t_coords(slaveSpatialCoords);
 
@@ -159,12 +159,12 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         for (size_t n = 0; n != 3; ++n) {
 
           t_tau(i, J) +=
-              t_diff(J) * (*master_base) * t_master_material_coords(i);
+              t_diff(J) * (*master_base) * t_slave_material_coords(i);
           t_x_slave(i) += (*slave_base) * t_slave_spatial_coords(i);
           t_x_master(i) += (*master_base) * t_master_spatial_coords(i);
 
           ++t_diff;
-          ++t_master_material_coords;
+          ++t_slave_material_coords;
           ++t_slave_spatial_coords;
           ++t_master_spatial_coords;
           ++slave_base;
@@ -177,16 +177,16 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         t_f(I) = 0;
         auto t_diff = get_t_diff();
         for (size_t n = 0; n != 3; ++n) {
-          t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_x_slave(i);
-          t_f(I) += t_tau(i, I) * (t_x_master(i) - t_x_slave(i));
+          t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_x_master(i);
+          t_f(I) += t_tau(i, I) * (t_x_slave(i) - t_x_master(i));
         };
       };
 
       auto update = [&]() {
-        t_xi_slave(I) += t_f(I);
-        slaveN(gg, 0) = Tools::shapeFunMBTRI0(t_xi_slave(0), t_xi_slave(1));
-        slaveN(gg, 1) = Tools::shapeFunMBTRI1(t_xi_slave(0), t_xi_slave(1));
-        slaveN(gg, 2) = Tools::shapeFunMBTRI2(t_xi_slave(0), t_xi_slave(1));
+        t_xi_master(I) += t_f(I);
+        masterN(gg, 0) = Tools::shapeFunMBTRI0(t_xi_master(0), t_xi_master(1));
+        masterN(gg, 1) = Tools::shapeFunMBTRI1(t_xi_master(0), t_xi_master(1));
+        masterN(gg, 2) = Tools::shapeFunMBTRI2(t_xi_master(0), t_xi_master(1));
       };
 
       constexpr double tol = 1e-12;
@@ -201,7 +201,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         ublas::inplace_solve(A, F, ublas::upper_tag());
         update();
 
-      } while (sqrt(t_xi_slave(I) * t_xi_slave(I)) > tol && (it++) < max_it);
+      } while (sqrt(t_xi_master(I) * t_xi_master(I)) > tol && (it++) < max_it);
 
       get_values();
       assemble();
@@ -214,23 +214,23 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       auto t_inv_A = get_t_A(invA);
 
-      auto get_diff_master = [&]() {
+      auto get_diff_slave = [&]() {
         double *master_base = &masterN(gg, 1);
         for (size_t n = 0; n != 3; ++n) {
-          t_diff_xi_master(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*master_base);
-          ++t_diff_xi_master;
+          t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*master_base);
+          ++t_diff_xi_slave;
           ++master_base;
         }
       };
 
-      auto get_diff_slave = [&]() {
+      auto get_diff_master = [&]() {
         auto t_diff = get_t_diff();
         double *slave_base = &slaveN(gg, 1);
         for (size_t n = 0; n != 3; ++n) {
           const double t0 = (t_inv_A(J, K) * t_f(J)) * t_diff(K);
           t_diff_xi_master(I, i) -= (t_inv_A(I, L) * t_tau(i, L)) * t0 +
                                     t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
-          ++t_diff_xi_slave;
+          ++t_diff_xi_master;
           ++slave_base;
           ++t_diff;
         }
@@ -240,7 +240,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       get_diff_slave();
     };
 
-    ++t_xi_slave;
+    ++t_xi_master;
   }
 
   MoFEMFunctionReturn(0);
@@ -254,8 +254,9 @@ SimpleContactProblem::ConvectContactElement::setGaussPts(int order) {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
+                                                              EntityType type,
+                                                              EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -288,8 +289,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(int side,
+                                                               EntityType type,
+                                                               EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -321,7 +323,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   const int nb_dofs = data.getFieldData().size();
 
@@ -364,7 +366,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   const int nb_dofs = data.getFieldData().size();
 
@@ -404,8 +406,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(int side,
+                                                           EntityType type,
+                                                           EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -449,7 +452,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -483,7 +486,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpPrintLagMulAtGaussPtsSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)
@@ -508,7 +511,7 @@ MoFEMErrorCode SimpleContactProblem::OpPrintLagMulAtGaussPtsSlave::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpLagGapProdGaussPtsSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)
@@ -540,7 +543,7 @@ MoFEMErrorCode SimpleContactProblem::OpLagGapProdGaussPtsSlave::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnMaster::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -593,7 +596,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnMaster::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -644,8 +647,9 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGetCompFunSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpGetCompFunSlave::doWork(int side,
+                                                               EntityType type,
+                                                               EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -695,8 +699,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetCompFunSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalIntCompFunSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode
+SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
+                                                   EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -735,8 +740,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalIntCompFunSlave::doWork(
 MoFEMErrorCode
 SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   // Both sides are needed since both sides contribute their shape
@@ -803,8 +807,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
 MoFEMErrorCode
 SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   // Both sides are needed since both sides contribute their shape
@@ -873,8 +876,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
 MoFEMErrorCode
 SimpleContactProblem::OpCalDerIntCompFunOverLambdaSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const int nb_row = row_data.getIndices().size();
@@ -940,8 +942,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverLambdaSlaveSlave::doWork(
 MoFEMErrorCode
 SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const int nb_row = row_data.getIndices().size();
@@ -1009,8 +1010,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
 MoFEMErrorCode
 SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const int nb_row = row_data.getIndices().size();
@@ -1073,8 +1073,9 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
+                                                            EntityType type,
+                                                            EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)
@@ -1135,8 +1136,9 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
+                                                                EntityType type,
+                                                                EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)
@@ -1309,15 +1311,14 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpLhsConvectIntegrationPtsContactTractionOnSlave::doWork(
+SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const int nb_row_dofs = row_data.getIndices().size();
   const int nb_col_dofs = col_data.getIndices().size();
-  if(nb_row_dofs && nb_col_dofs && col_type == MBVERTEX) {
+  if (nb_row_dofs && nb_col_dofs && col_type == MBVERTEX) {
 
     const int nb_gauss_pts = getGaussPtsSlave().size2();
     int nb_base_fun_row = nb_row_dofs / 3;
@@ -1384,11 +1385,19 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTractionOnSlave::doWork(
 
       ++t_lagrange_slave;
       ++t_w;
-  } // for gauss points
+    } // for gauss points
 
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
-                      ADD_VALUES);
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
+                        ADD_VALUES);
   }
 
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    EntData &row_data, EntData &col_data) {
+  MoFEMFunctionBegin;
   MoFEMFunctionReturn(0);
 }
