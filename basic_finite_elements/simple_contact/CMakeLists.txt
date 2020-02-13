@@ -11,6 +11,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
+set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
 
 include_directories(${MoFEM_PROJECT_SOURCE_DIR}/third_party)
 include_directories(${MoFEM_PROJECT_SOURCE_DIR}/third_party/phg-quadrule)
@@ -22,35 +26,17 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elasticity)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elastic_materials/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)  
-
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
 
 bfe_build_and_install(simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
 
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/examples
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-)
+bfe_copy_and_install("README" "${permissions_default}")
 
-add_custom_target(
-    sc_make_link_to_examples_directory
-    ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory 
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples ${CMAKE_CURRENT_BINARY_DIR}/examples
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT "Make linking to examples directory" VERBATIM)
+file(
+  COPY examples DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 install(
-  DIRECTORY examples
-  DESTINATION ${BFE_MOD_DIR}
-)
+  DIRECTORY examples DESTINATION ${BFE_MOD_DIR})
   
 add_test(
   test_simple_contact_8cube
@@ -75,6 +61,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/4seasons_contact.cub
   -my_order 2
   -my_cn_value 1e3
+  -snes_monitor
 )
 add_test(
   test_simple_contact_4seasons_compare ${CMAKE_COMMAND} -E compare_files
@@ -90,6 +77,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/Tinterface_contact.cub
   -my_order 2
   -my_cn_value 1e3
+  -snes_monitor
 )
 add_test(
   test_simple_contact_Tinterface_compare ${CMAKE_COMMAND} -E compare_files
@@ -105,6 +93,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_and_mid.cub
   -my_order 2
   -my_cn_value 1e3
+  -snes_monitor
 )
 add_test(
   test_simple_contact_punch_top_and_mid_compare ${CMAKE_COMMAND} -E compare_files
@@ -120,6 +109,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_only.cub
   -my_order 2
   -my_cn_value 1e3
+  -snes_monitor
 )
 add_test(
   test_simple_contact_punch_top_only_compare ${CMAKE_COMMAND} -E compare_files
@@ -135,6 +125,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/plane_axi_contact.cub
   -my_order 2
   -my_cn_value 1e3
+  -snes_monitor
 )
 add_test(
   test_simple_contact_plane_axisymmetric_compare ${CMAKE_COMMAND} -E compare_files
@@ -150,6 +141,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/arc_3surf_contact.cub
   -my_order 2
   -my_cn_value 1e3
+  -snes_monitor
 )
 add_test(
   test_simple_contact_arc_3surfaces_compare ${CMAKE_COMMAND} -E compare_files
@@ -165,6 +157,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
   -my_order 2
   -my_cn_value 1e-1
+  -snes_monitor
 )
 add_test(
   test_simple_contact_smiling_face_compare ${CMAKE_COMMAND} -E compare_files
