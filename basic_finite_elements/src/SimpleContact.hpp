@@ -198,8 +198,6 @@ struct SimpleContactProblem {
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
     boost::shared_ptr<VectorDouble> gapPtr;
     boost::shared_ptr<VectorDouble> lagGapProdPtr;
-    boost::shared_ptr<VectorDouble> tildeCFunPtr;
-    boost::shared_ptr<VectorDouble> lambdaGapDiffProductPtr;
 
     boost::shared_ptr<VectorDouble> normalVectorSlavePtr;
     boost::shared_ptr<VectorDouble> normalVectorMasterPtr;
@@ -214,8 +212,6 @@ struct SimpleContactProblem {
 
       gapPtr = boost::make_shared<VectorDouble>();
       lagGapProdPtr = boost::make_shared<VectorDouble>();
-      tildeCFunPtr = boost::make_shared<VectorDouble>();
-      lambdaGapDiffProductPtr = boost::make_shared<VectorDouble>();
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
     }

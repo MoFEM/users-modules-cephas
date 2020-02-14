@@ -662,8 +662,6 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
   vecR.resize(nb_base_fun_col, false);
   vecR.clear();
 
-  auto tilde_c_fun = getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
   auto t_lagrange_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
   auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
@@ -683,7 +681,6 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
 
     ++t_lagrange_slave;
     ++t_gap_gp;
-    ++tilde_c_fun;
     ++t_w;
   } // for gauss points
 
@@ -913,9 +910,6 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
 
     FTensor::Index<'i', 3> i;
 
-    auto t_lambda_gap_diff_prod =
-        getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
-
     auto t_const_unit_n = get_tensor_from_vec(
         commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
@@ -947,7 +941,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
         }
         ++t_base_lambda; // update cols master
       }
-      ++t_lambda_gap_diff_prod;
+
       ++t_gap_gp;
       ++t_lagrange_slave;
       ++t_w;
@@ -987,8 +981,6 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
 
     FTensor::Index<'i', 3> i;
 
-    auto t_lambda_gap_diff_prod =
-        getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
     auto t_lagrange_slave =
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
@@ -1020,7 +1012,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
         }
         ++t_base_lambda; // update cols master
       }
-      ++t_lambda_gap_diff_prod;
+      
       ++t_gap_gp;
       ++t_lagrange_slave;
       ++t_w;
