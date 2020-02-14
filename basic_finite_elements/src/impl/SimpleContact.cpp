@@ -645,57 +645,6 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGetCompFunSlave::doWork(int side,
-                                                               EntityType type,
-                                                               EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (data.getFieldData().size() == 0)
-    MoFEMFunctionReturnHot(0);
-
-  if (type != MBVERTEX)
-    MoFEMFunctionReturnHot(0);
-
-  const int nb_gauss_pts = data.getN().size1();
-
-  commonDataSimpleContact->tildeCFunPtr.get()->resize(nb_gauss_pts);
-  commonDataSimpleContact->tildeCFunPtr.get()->clear();
-
-  commonDataSimpleContact->lambdaGapDiffProductPtr.get()->resize(nb_gauss_pts);
-  commonDataSimpleContact->lambdaGapDiffProductPtr.get()->clear();
-
-  auto t_lambda_gap_diff_prod =
-      getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
-
-  auto t_lagrange_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-  auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-
-  auto t_tilde_c_fun =
-      getFTensor0FromVec(*commonDataSimpleContact->tildeCFunPtr);
-
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    const double cg = cN * t_gap_gp;
-
-    const double lambda_gap_diff = t_lagrange_slave - cg;
-    const double regular_abs = std::abs(lambda_gap_diff);
-
-    t_tilde_c_fun = (t_lagrange_slave + cg - pow(regular_abs, r) / r);
-
-    const double exponent = r - 1.;
-
-    double sign = 0.;
-    sign = (lambda_gap_diff == 0) ? 0 : (lambda_gap_diff < 0) ? -1 : 1;
-
-    t_lambda_gap_diff_prod = sign * pow(regular_abs, exponent);
-    ++t_lagrange_slave;
-    ++t_gap_gp;
-    ++t_lambda_gap_diff_prod;
-    ++t_tilde_c_fun;
-  }
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode
 SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
                                                    EntData &data) {
@@ -1213,9 +1162,6 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
         new OpCalContactTractionOnSlave(field_name, common_data_simple_contact,
                                         f_));
 
-    fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetCompFunSlave(
-        field_name, common_data_simple_contact, rValue, cnValue));
-
     fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalIntCompFunSlave(
         lagrang_field_name, common_data_simple_contact, cnValue));
   }
@@ -1257,9 +1203,6 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpCalContactTractionOverLambdaSlaveSlave(
             field_name, lagrang_field_name, common_data_simple_contact, aij));
-
-    fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetCompFunSlave(
-        field_name, common_data_simple_contact, rValue, cnValue));
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpCalDerIntCompFunOverLambdaSlaveSlave(

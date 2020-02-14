@@ -478,57 +478,6 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief Operator for the simple contact element
-   *
-   * Computes function that fulfils KKT conditions
-   * when equal to zero
-   *
-   */
-  struct OpGetCompFunSlave : public ContactOp {
-
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    double r;  //@todo: ign: to become input parameter
-    double cN; //@todo: ign: to become input parameter
-
-    /**
-     * @brief Evaluates the complementarity function at slave face
-     * gauss points
-     *
-     * Computes the complementarity function that fulfils KKT conditions when
-     * equal to zero
-     *
-     * \f[
-     * {C(\lambda, \mathbf{x}^{(i)})} :=  \lambda + c_{\text
-     * n} g_{\textrm{n}} - \dfrac{1}{r}{\left| \lambda - c_{\text n}
-     * g_{\textrm{n}}\right|}^{r} \f]
-     *
-     * where \f$ \lambda\f$ is the Lagrange multiplier, \f$\mathbf{x}^{(i)}\f$
-     * are the coordinates of the overlapping gauss points at slave and master
-     * triangles for  \f$i = 1\f$ and \f$i = 2\f$, respectively. Furthermore,
-     * \f$ c_{\text n}\f$ works as an augmentation parameter and affects
-     * convergence, \f$r\f$ is regularisation parameter that can be chosen
-     * in \f$[1, 1.1]\f$ and \f$ g_{\textrm{n}}\f$ is the gap function
-     * evaluated at the slave triangle gauss points as:
-     * \f[
-     * g_{\textrm{n}} = - \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left(
-     * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right)
-     * \f]
-     *
-     *
-     */
-    OpGetCompFunSlave(
-        const string lagrang_field_name, // ign: does it matter?
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        double &r_value, double &cn_value)
-        : ContactOp(lagrang_field_name, UserDataOperator::OPROW,
-                    ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), r(r_value),
-          cN(cn_value) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
-
-  /**
    * @brief RHS-operator for the simple contact element
    *
    * Integrates complementarity function that fulfills KKT
