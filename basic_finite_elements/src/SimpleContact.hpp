@@ -30,32 +30,16 @@ struct SimpleContactProblem {
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
   using EntData = DataForcesAndSourcesCore::EntData;
 
-  static inline double Sign(double x) {
-    if (x == 0)
-      return 0;
-    else if (x > 0)
-      return 1;
-    else
-      return -1;
-  };
+  static inline double Sign(double x);
 
   static inline double ConstrainFunction(const double cn, const double g,
-                                   const double l) {
-    if (cn * g <= l)
-      return cn * g;
-    else
-      return l;
-  }
+                                         const double l);
 
   static inline double ConstrainFunction_dg(const double cn, const double g,
-                                      const double l) {
-    return (1 + Sign(l - cn * g)) / 2;
-  }
+                                            const double l);
 
-  static inline double ConstrainDunction_dl(const double cn, const double g,
-                                      const double l) {
-    return (1 + Sign(cn * g - l)) / 2;
-  }
+  static inline double ConstrainFunction_dl(const double cn, const double g,
+                                            const double l);
 
   static constexpr double TOL = 1e-8;
   struct SimpleContactPrismsData {
@@ -554,17 +538,13 @@ struct SimpleContactProblem {
    */
   struct OpCalIntCompFunSlave : public ContactOp {
 
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    Vec F;
     OpCalIntCompFunSlave(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Vec f_ = PETSC_NULL)
+        const double cn)
         : ContactOp(lagrang_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), F(f_) {}
-
-    VectorDouble vecR;
+          commonDataSimpleContact(common_data_contact), cN(cn) {}
 
     /**
      * @brief Integrates the complementarity function at slave
@@ -594,6 +574,11 @@ struct SimpleContactProblem {
      * \mathbf{x}^{(2)}  \right) \f]
      */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    VectorDouble vecR;
   };
 
   /**
@@ -715,20 +700,17 @@ struct SimpleContactProblem {
    */
   struct OpCalDerIntCompFunOverLambdaSlaveSlave : public ContactOp {
 
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalDerIntCompFunOverLambdaSlaveSlave(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
+        const double cn)
         : ContactOp(lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
-          Aij(aij), commonDataSimpleContact(common_data_contact) {
+          commonDataSimpleContact(common_data_contact), cN(cn) {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
-    MatrixDouble NN;
-
+ 
     /**
      * @brief Integrates the complementarity function at slave
      * face gauss points and assembles
@@ -762,6 +744,12 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+
   };
 
   /**
@@ -775,21 +763,16 @@ struct SimpleContactProblem {
    */
   struct OpCalDerIntCompFunOverSpatPosSlaveMaster : public ContactOp {
 
-    double cN; //@todo: ign: to become input parameter
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalDerIntCompFunOverSpatPosSlaveMaster(
         const string field_name, const string lagrang_field_name,
-        double &cn_value,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
+        const double cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVEMASTER),
-          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+          commonDataSimpleContact(common_data_contact), cN(cn) {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
-    MatrixDouble NN;
 
     /**
      * @brief Integrates linearisation of the complementarity function at slave
@@ -826,6 +809,11 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    double cN;
+    MatrixDouble NN;
   };
 
   /**
@@ -839,21 +827,15 @@ struct SimpleContactProblem {
    */
   struct OpCalDerIntCompFunOverSpatPosSlaveSlave : public ContactOp {
 
-    double cN; //@todo: ign: to become input parameter
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalDerIntCompFunOverSpatPosSlaveSlave(
         const string field_name, const string lagrang_field_name,
-        double &cn_value,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact, const double cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
-          cN(cn_value), Aij(aij), commonDataSimpleContact(common_data_contact) {
+          cN(cn), commonDataSimpleContact(common_data_contact) {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
-    MatrixDouble NN;
 
     /**
      * @brief Integrates linearisation of the complementarity
@@ -890,13 +872,19 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
+
+private:
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
   };
 
   /**
    * @brief Operator for the simple contact element
    *
    * Prints to .vtk file pre-calculated gaps, Lagrange multipliers and their
-   * productat the gauss points on the slave triangle.
+   * product the gauss points on the slave triangle.
    *
    */
   struct OpMakeVtkSlave : public ContactOp {
@@ -1046,5 +1034,34 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> diffConvect;
   };
 };
+
+double SimpleContactProblem::Sign(double x) {
+  if (x == 0)
+    return 0;
+  else if (x > 0)
+    return 1;
+  else
+    return -1;
+};
+
+double SimpleContactProblem::ConstrainFunction(const double cn, const double g,
+                                               const double l) {
+  if ((cn * g) <= l)
+    return cn * g;
+  else
+    return l;
+}
+
+double SimpleContactProblem::ConstrainFunction_dg(const double cn,
+                                                  const double g,
+                                                  const double l) {
+  return (1 + Sign(l - cn * g)) / 2;
+}
+
+inline double SimpleContactProblem::ConstrainFunction_dl(const double cn,
+                                                         const double g,
+                                                         const double l) {
+  return (1 + Sign(cn * g - l)) / 2;
+}
 
 #endif
