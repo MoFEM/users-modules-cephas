@@ -353,8 +353,6 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
 
-    elastic.getLoopFeRhs().snes_f = F;
-
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
@@ -365,17 +363,23 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto fe_rhs_simple_contact = make_contact_element();
-    auto fe_lhs_simple_contact = make_contact_element();
-    auto fe_post_proc_simple_contact = make_contact_element();
+    auto get_contact_rhs = [&]() {
+      auto fe_rhs_simple_contact = make_contact_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
 
-    auto common_data_simple_contact = make_contact_common_data();
-    contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT");
-    contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT");
+    auto get_contact_lhs = [&]() {
+      auto fe_lhs_simple_contact = make_contact_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
@@ -407,7 +411,7 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", get_contact_rhs(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
@@ -419,8 +423,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
-                                  NULL, NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", get_contact_lhs(), NULL,
+                                  NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
@@ -507,6 +511,9 @@ int main(int argc, char *argv[]) {
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
 
+    auto fe_post_proc_simple_contact = make_contact_element();
+    auto common_data_simple_contact = make_contact_common_data();
+    
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
         "SPATIAL_POSITION", "LAGMULT", mb_post);
