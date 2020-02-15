@@ -61,9 +61,6 @@ int main(int argc, char *argv[]) {
         "default approximation order of Lagrange multipliers", "", 1,
         &order_lambda, PETSC_NULL);
 
-    CHKERR PetscOptionsReal("-my_r_value", "default regularisation r value", "",
-                            1., &r_value, PETSC_NULL);
-
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
 

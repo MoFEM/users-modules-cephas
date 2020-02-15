@@ -220,14 +220,13 @@ struct SimpleContactProblem {
     MoFEM::Interface &mField;
   };
 
-  double rValue;
   double cnValue;
   bool newtonCotes;
   MoFEM::Interface &mField;
 
-  SimpleContactProblem(MoFEM::Interface &m_field, double &r_value_regular,
+  SimpleContactProblem(MoFEM::Interface &m_field,
                        double &cn_value, bool newton_cotes = false)
-      : mField(m_field), rValue(r_value_regular), cnValue(cn_value),
+      : mField(m_field), cnValue(cn_value),
         newtonCotes(newton_cotes) {}
 
   /// \brief Computes normal to slave face that is common to all gauss points

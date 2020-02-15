@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
                                  "-snes_rtol 1e-8 \n"
                                  "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
-                                 "-my_r_value 1. \n"
                                  "-my_cn_value 1. \n"
                                  "-my_is_newton_cotes 0 \n"
                                  "-my_is_test 0 \n";
@@ -87,9 +86,6 @@ int main(int argc, char *argv[]) {
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_partitioned, PETSC_NULL);
-
-    CHKERR PetscOptionsReal("-my_r_value", "default regularisation r value", "",
-                            1., &r_value, PETSC_NULL);
 
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
@@ -288,7 +284,7 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<SimpleContactProblem> contact_problem;
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
+        new SimpleContactProblem(m_field, cn_value, is_newton_cotes));
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
