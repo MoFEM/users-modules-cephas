@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool is_test = PETSC_FALSE;
+    PetscBool convect_pts = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -95,6 +96,8 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_is_test", "set if run as test", "",
                             PETSC_FALSE, &is_test, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
+                            PETSC_FALSE, &convect_pts, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -224,13 +227,6 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
 
-    // cout << "contact_prisms: " << contact_prisms.size() << endl;
-    // contact_prisms.print();
-    // cout << "master_tris: " << master_tris.size() << endl;
-    // master_tris.print();
-    // cout << "slave_tris: " << slave_tris.size() << endl;
-    // slave_tris.print();
-
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
@@ -359,24 +355,21 @@ int main(int argc, char *argv[]) {
 
     elastic.getLoopFeRhs().snes_f = F;
 
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_rhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_lhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_post_proc_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
+    auto make_contact_element = [&]() {
+      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+          m_field);
+    };
 
-    boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
-        common_data_simple_contact =
-            boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
-                m_field);
+    auto make_contact_common_data = [&]() {
+      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+          m_field);
+    };
 
+    auto fe_rhs_simple_contact = make_contact_element();
+    auto fe_lhs_simple_contact = make_contact_element();
+    auto fe_post_proc_simple_contact = make_contact_element();
+
+    auto common_data_simple_contact = make_contact_common_data();
     contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
                                             common_data_simple_contact,
                                             "SPATIAL_POSITION", "LAGMULT");
