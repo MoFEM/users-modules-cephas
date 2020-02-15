@@ -278,9 +278,8 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
-    boost::shared_ptr<SimpleContactProblem> contact_problem;
-    contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, cn_value, is_newton_cotes));
+    auto contact_problem = boost::make_shared<SimpleContactProblem>(
+        m_field, cn_value, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
@@ -353,7 +352,8 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
 
-    auto make_contact_element = [&]() {
+    auto make_contact_element =
+        [&]() -> boost::shared_ptr<SimpleContactProblem::SimpleContactElement> {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
