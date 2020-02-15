@@ -915,11 +915,10 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     auto t_w = getFTensor0IntegrationWeightSlave();
-    const double first_prod = cN * area_slave;
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cN, t_gap_gp, t_lagrange_slave) *
-                           t_w * first_prod;
+                           t_w * area_slave;
 
       auto t_base_lambda = row_data.getFTensor0N(gg, 0);
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
@@ -986,11 +985,10 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
         get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
     auto t_w = getFTensor0IntegrationWeightSlave();
-    const double first_prod = cN * area_slave;
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cN, t_gap_gp, t_lagrange_slave) *
-                           t_w * first_prod;
+                           t_w * area_slave;
 
       auto t_base_lambda = row_data.getFTensor0N(gg, 0);
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
@@ -1342,6 +1340,67 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
+
+  /*const int nb_row = row_data.getIndices().size();
+  const int nb_col = col_data.getIndices().size();
+
+  if (nb_row && nb_col) {
+
+    const int nb_gauss_pts = row_data.getN().size1();
+    int nb_base_fun_row = row_data.getFieldData().size();
+    int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+    const double area_slave =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    NN.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
+    NN.clear();
+
+    auto get_tensor_from_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    auto t_const_unit_n =
+        get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+
+    auto t_lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+    auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      const double val_m = SimpleContactProblem::ConstrainFunction(
+                               cN, t_gap_gp, t_lagrange_slave) *
+                           t_w * area_slave;
+
+      auto t_base_lambda = row_data.getFTensor0N(gg, 0);
+      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_base_master = col_data.getFTensor0N(gg, 0);
+        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
+            &NN(bbr, 0), &NN(bbr, 1), &NN(bbr, 2)};
+        const double m = val_m * t_base_lambda;
+
+        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+          t_mat(i) += t_const_unit_n(i) * m * t_base_master;
+
+          ++t_base_master; // update rows
+          ++t_mat;
+        }
+        ++t_base_lambda; // update cols master
+      }
+
+      ++t_gap_gp;
+      ++t_lagrange_slave;
+      ++t_w;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+                        ADD_VALUES);
+  }*/
 
   MoFEMFunctionReturn(0);
 }
