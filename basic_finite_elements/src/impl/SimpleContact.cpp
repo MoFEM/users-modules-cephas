@@ -698,60 +698,59 @@ SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
   // Both sides are needed since both sides contribute their shape
   // function to the stiffness matrix
   const int nb_row = row_data.getIndices().size();
-  if (!nb_row)
-    MoFEMFunctionReturnHot(0);
   const int nb_col = col_data.getIndices().size();
-  if (!nb_col)
-    MoFEMFunctionReturnHot(0);
-  const int nb_gauss_pts = row_data.getN().size1();
 
-  int nb_base_fun_row = row_data.getFieldData().size() / 3;
-  int nb_base_fun_col = col_data.getFieldData().size();
+  if (nb_row && nb_col) {
+    const int nb_gauss_pts = row_data.getN().size1();
 
-  const double area_slave =
-      commonDataSimpleContact->areaSlave; // same area in master and slave
+    int nb_base_fun_row = row_data.getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size();
 
-  auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-    return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                         &m(r + 2, c + 0));
-  };
+    const double area_slave =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
 
-  auto get_tensor_vec = [](VectorDouble &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
+                                           &m(r + 2, c + 0));
+    };
 
-  FTensor::Index<'i', 3> i;
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
 
-  NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-  NN.clear();
+    FTensor::Index<'i', 3> i;
 
-  auto const_unit_n =
-      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+    NN.clear();
 
-  auto t_w = getFTensor0IntegrationWeightMaster();
+    auto const_unit_n =
+        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    double val_m = t_w * area_slave;
+    auto t_w = getFTensor0IntegrationWeightMaster();
 
-    FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      
+      double val_m = t_w * area_slave;
+      auto t_base_lambda = col_data.getFTensor0N(gg, 0);
 
-    for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
-      FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
-      const double m = val_m * t_base_lambda;
-      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
-        auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+        auto t_base_master = row_data.getFTensor0N(gg, 0);
+        const double m = val_m * t_base_lambda;
+        for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+          auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, bbc);
 
-        t_assemble_m(i) -= m * t_base_master * const_unit_n(i);
+          t_assemble_m(i) -= m * t_base_master * const_unit_n(i);
 
-        ++t_base_master; // update rows master
+          ++t_base_master; // update rows master
+        }
+        ++t_base_lambda; // update cols slave
       }
-      ++t_base_lambda; // update cols slave
+      ++t_w;
     }
-    ++t_w;
-  }
 
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
-                      ADD_VALUES);
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+                        ADD_VALUES);
+  }
 
   MoFEMFunctionReturn(0);
 }
