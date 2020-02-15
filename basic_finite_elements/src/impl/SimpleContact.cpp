@@ -1341,10 +1341,10 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
-  /*const int nb_row = row_data.getIndices().size();
+  const int nb_row = row_data.getIndices().size();
   const int nb_col = col_data.getIndices().size();
 
-  if (nb_row && nb_col) {
+  if (nb_row && nb_col && col_type == MBVERTEX) {
 
     const int nb_gauss_pts = row_data.getN().size1();
     int nb_base_fun_row = row_data.getFieldData().size();
@@ -1353,14 +1353,21 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
     const double area_slave =
         commonDataSimpleContact->areaSlave; // same area in master and slave
 
-    NN.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
-    NN.clear();
+    matLhs.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
+    matLhs.clear();
+
+    auto get_diff_ksi = [](auto &m, auto gg) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
+          &m(0, 3 * gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, 3 * gg),
+          &m(5, gg));
+    };
 
     auto get_tensor_from_vec = [](VectorDouble &n) {
       return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
     };
 
     FTensor::Index<'i', 3> i;
+    FTensor::Index<'I', 2> I;
 
     auto t_const_unit_n =
         get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
@@ -1374,23 +1381,38 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
       const double val_m = SimpleContactProblem::ConstrainFunction(
                                cN, t_gap_gp, t_lagrange_slave) *
                            t_w * area_slave;
+      const double val_diff_m_l = SimpleContactProblem::ConstrainFunction_dl(
+                                      cN, t_gap_gp, t_lagrange_slave) *
+                                  t_w * area_slave;
+      const double val_diff_m_g = SimpleContactProblem::ConstrainFunction_dg(
+                                      cN, t_gap_gp, t_lagrange_slave) *
+                                  t_w * area_slave;
 
+      
       auto t_base_lambda = row_data.getFTensor0N(gg, 0);
+      auto t_base_diff_lambda = row_data.getFTensor1DiffN<2>(gg, 0);
+
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
 
-        auto t_base_master = col_data.getFTensor0N(gg, 0);
+        auto t_base_diff_disp = col_data.getFTensor1DiffN<2>(gg, 0);
+        auto t_diff_convect = get_diff_ksi(*diffConvect, gg);
+
         FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
-            &NN(bbr, 0), &NN(bbr, 1), &NN(bbr, 2)};
-        const double m = val_m * t_base_lambda;
+            &matLhs(bbr, 0), &matLhs(bbr, 1), &matLhs(bbr, 2)};
 
         for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-          t_mat(i) += t_const_unit_n(i) * m * t_base_master;
+          t_mat(i) += (val_m + t_base_lambda * val_diff_m_l) *
+                      t_base_diff_lambda(I) * t_diff_convect(I, i);
+          t_mat(i) += t_base_lambda * val_diff_m_g *
+                      t_base_diff_disp(I) * t_diff_convect(I, i);
 
-          ++t_base_master; // update rows
+          ++t_base_diff_disp; 
           ++t_mat;
         }
-        ++t_base_lambda; // update cols master
+
+        ++t_base_lambda; 
+        ++t_base_diff_lambda;
       }
 
       ++t_gap_gp;
@@ -1398,9 +1420,9 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
       ++t_w;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
                         ADD_VALUES);
-  }*/
+  }
 
   MoFEMFunctionReturn(0);
 }

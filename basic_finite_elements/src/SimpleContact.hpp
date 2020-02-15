@@ -954,15 +954,13 @@ struct SimpleContactProblem {
 
   struct OpLhsConvectIntegrationPtsConstrainMasterGap : public ContactOp {
 
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-
     OpLhsConvectIntegrationPtsConstrainMasterGap(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        ContactOp::FaceType face_type,
+        const double cn, ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
         : ContactOp(field_name, UserDataOperator::OPROWCOL, face_type),
-          commonDataSimpleContact(common_data_contact),
+          commonDataSimpleContact(common_data_contact), cN(cn),
           diffConvect(diff_convect) {}
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -971,6 +969,8 @@ struct SimpleContactProblem {
 
   private:
     MatrixDouble matLhs;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
     boost::shared_ptr<MatrixDouble> diffConvect;
   };
 };
