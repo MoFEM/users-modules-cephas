@@ -224,10 +224,9 @@ struct SimpleContactProblem {
   bool newtonCotes;
   MoFEM::Interface &mField;
 
-  SimpleContactProblem(MoFEM::Interface &m_field,
-                       double &cn_value, bool newton_cotes = false)
-      : mField(m_field), cnValue(cn_value),
-        newtonCotes(newton_cotes) {}
+  SimpleContactProblem(MoFEM::Interface &m_field, double &cn_value,
+                       bool newton_cotes = false)
+      : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes) {}
 
   /// \brief Computes normal to slave face that is common to all gauss points
   struct OpGetNormalSlave : public ContactOp {
@@ -632,7 +631,6 @@ struct SimpleContactProblem {
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     MatrixDouble NN;
-
   };
 
   /**
@@ -656,7 +654,7 @@ struct SimpleContactProblem {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
- 
+
     /**
      * @brief Integrates the complementarity function at slave
      * face gauss points and assembles
@@ -695,7 +693,6 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     const double cN;
     MatrixDouble NN;
-
   };
 
   /**
@@ -775,7 +772,8 @@ struct SimpleContactProblem {
 
     OpCalDerIntCompFunOverSpatPosSlaveSlave(
         const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact, const double cn)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        const double cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
           cN(cn), commonDataSimpleContact(common_data_contact) {
@@ -819,8 +817,7 @@ struct SimpleContactProblem {
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
 
-private:
-
+  private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     const double cN;
     MatrixDouble NN;
@@ -1004,9 +1001,9 @@ double SimpleContactProblem::ConstrainFunction_dg(const double cn,
   return (1 + Sign(l - cn * g)) / 2;
 }
 
-inline double SimpleContactProblem::ConstrainFunction_dl(const double cn,
-                                                         const double g,
-                                                         const double l) {
+double SimpleContactProblem::ConstrainFunction_dl(const double cn,
+                                                  const double g,
+                                                  const double l) {
   return (1 + Sign(cn * g - l)) / 2;
 }
 
