@@ -214,7 +214,7 @@ int main(int argc, char *argv[]) {
 
     boost::shared_ptr<SimpleContactProblem> contact_problem;
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
+        new SimpleContactProblem(m_field, cn_value, is_newton_cotes));
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
@@ -288,7 +288,7 @@ int main(int argc, char *argv[]) {
                                             "SPATIAL_POSITION", "LAGMULT");
     contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
                                             common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT", A);
+                                            "SPATIAL_POSITION", "LAGMULT");
 
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
                                   PETSC_NULL, PETSC_NULL);
