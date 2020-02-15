@@ -382,7 +382,7 @@ int main(int argc, char *argv[]) {
                                             "SPATIAL_POSITION", "LAGMULT");
     contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
                                             common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT", Aij);
+                                            "SPATIAL_POSITION", "LAGMULT");
 
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;

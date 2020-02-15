@@ -1163,7 +1163,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name, Mat aij) {
+    string field_name, string lagrang_field_name) {
   MoFEMFunctionBegin;
 
   map<int, SimpleContactPrismsData>::iterator sit =
@@ -1190,11 +1190,11 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpCalContactTractionOverLambdaMasterSlave(
-            field_name, lagrang_field_name, common_data_simple_contact, aij));
+            field_name, lagrang_field_name, common_data_simple_contact));
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpCalContactTractionOverLambdaSlaveSlave(
-            field_name, lagrang_field_name, common_data_simple_contact, aij));
+            field_name, lagrang_field_name, common_data_simple_contact));
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpCalDerIntCompFunOverLambdaSlaveSlave(

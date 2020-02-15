@@ -535,19 +535,15 @@ struct SimpleContactProblem {
    */
   struct OpCalContactTractionOverLambdaMasterSlave : public ContactOp {
 
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalContactTractionOverLambdaMasterSlave(
         const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACEMASTERSLAVE),
-          commonDataSimpleContact(common_data_contact), Aij(aij) {
+          commonDataSimpleContact(common_data_contact) {
       sYmm = false; // This will make sure to loop over all intities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
-    MatrixDouble NN;
 
     /**
      * @brief  Integrates Lagrange multipliers virtual
@@ -577,6 +573,10 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    MatrixDouble NN;
   };
 
   /**
@@ -590,19 +590,16 @@ struct SimpleContactProblem {
    */
   struct OpCalContactTractionOverLambdaSlaveSlave : public ContactOp {
 
-    Mat Aij;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalContactTractionOverLambdaSlaveSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         Mat aij = PETSC_NULL)
         : ContactOp(field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
-          commonDataSimpleContact(common_data_contact), Aij(aij) {
+          commonDataSimpleContact(common_data_contact) {
       sYmm = false; // This will make sure to loop over all intities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
-    MatrixDouble NN;
 
     /**
      * @brief Integrates and assembles Lagrange multipliers virtual
@@ -631,6 +628,11 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    MatrixDouble NN;
+
   };
 
   /**
@@ -907,7 +909,7 @@ private:
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrang_field_name, Mat aij);
+      string field_name, string lagrang_field_name);
 
   /**
    * @brief Function for the simple contact element that sets the user data
