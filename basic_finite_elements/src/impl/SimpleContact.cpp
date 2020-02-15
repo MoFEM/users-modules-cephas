@@ -833,14 +833,10 @@ SimpleContactProblem::OpCalDerIntCompFunOverLambdaSlaveSlave::doWork(
 
   if (nb_row && nb_col) {
     const int nb_gauss_pts = row_data.getN().size1();
-
-    int nb_base_fun_row = row_data.getFieldData().size();
-    int nb_base_fun_col = col_data.getFieldData().size();
-
     const double area_slave =
         commonDataSimpleContact->areaSlave; // same area in master and slave
 
-    NN.resize(nb_base_fun_row, nb_base_fun_col, false);
+    NN.resize(nb_row, nb_col, false);
     NN.clear();
 
     auto t_lagrange_slave =
@@ -853,12 +849,14 @@ SimpleContactProblem::OpCalDerIntCompFunOverLambdaSlaveSlave::doWork(
                                cN, t_gap_gp, t_lagrange_slave) *
                            t_w * area_slave;
 
+      FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_mat(
+          &*NN.data().begin());
+
       auto t_base_lambda_row = row_data.getFTensor0N(gg, 0);
-      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+      for (int bbr = 0; bbr != nb_row; ++bbr) {
         auto t_base_lambda_col = col_data.getFTensor0N(gg, 0);
-        FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_mat(&NN(bbr, 0));
         const double s = val_s * t_base_lambda_row;
-        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+        for (int bbc = 0; bbc != nb_col; ++bbc) {
 
           t_mat += s * t_base_lambda_col;
 
