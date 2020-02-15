@@ -995,13 +995,13 @@ double SimpleContactProblem::ConstrainFunction(const double cn, const double g,
 double SimpleContactProblem::ConstrainFunction_dg(const double cn,
                                                   const double g,
                                                   const double l) {
-  return cn * (1 + Sign(l - cn * g)) / 2;
+  return cn * (1 + Sign(l - cn * g)) / static_cast<double>(2);
 }
 
 double SimpleContactProblem::ConstrainFunction_dl(const double cn,
                                                   const double g,
                                                   const double l) {
-  return (1 + Sign(cn * g - l)) / 2;
+  return (1 + Sign(cn * g - l)) / static_cast<double>(2);
 }
 
 #endif
