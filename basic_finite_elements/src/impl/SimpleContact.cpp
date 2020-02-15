@@ -277,7 +277,8 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
   commonDataSimpleContact->normalVectorSlavePtr.get()->clear();
 
   auto t_normal =
-      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+
   for (int ii = 0; ii != 3; ++ii)
     t_normal(ii) = normal_slave_ptr[ii];
 
@@ -436,7 +437,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(int side,
   auto t_gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
   auto t_normal_at_gp =
-      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     t_gap_ptr -=
@@ -724,7 +725,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
     NN.clear();
 
     auto const_unit_n =
-        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+        get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr.get()));
 
     auto t_w = getFTensor0IntegrationWeightMaster();
 
@@ -789,7 +790,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
     NN.clear();
 
     auto t_const_unit_n =
-        get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+        get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
     auto t_w = getFTensor0IntegrationWeightSlave();
 
@@ -906,8 +907,8 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
 
     FTensor::Index<'i', 3> i;
 
-    auto t_const_unit_n = get_tensor_from_vec(
-        commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+    auto t_const_unit_n =
+        get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
     auto t_lagrange_slave =
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
@@ -981,8 +982,8 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-    auto t_const_unit_n = get_tensor_from_vec(
-        commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+    auto t_const_unit_n =
+        get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
     auto t_w = getFTensor0IntegrationWeightSlave();
     const double first_prod = cN * area_slave;
@@ -1117,7 +1118,7 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name, Vec f_) {
+    string field_name, string lagrang_field_name) {
   MoFEMFunctionBegin;
 
   map<int, SimpleContactPrismsData>::iterator sit =
@@ -1143,12 +1144,12 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
                                        common_data_simple_contact));
 
     fe_rhs_simple_contact->getOpPtrVector().push_back(
-        new OpCalContactTractionOnMaster(field_name, common_data_simple_contact,
-                                         f_));
+        new OpCalContactTractionOnMaster(field_name,
+                                         common_data_simple_contact));
 
     fe_rhs_simple_contact->getOpPtrVector().push_back(
-        new OpCalContactTractionOnSlave(field_name, common_data_simple_contact,
-                                        f_));
+        new OpCalContactTractionOnSlave(field_name,
+                                        common_data_simple_contact));
 
     fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalIntCompFunSlave(
         lagrang_field_name, common_data_simple_contact, cnValue));
@@ -1341,5 +1342,6 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
+
   MoFEMFunctionReturn(0);
 }

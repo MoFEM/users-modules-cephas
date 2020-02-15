@@ -393,13 +393,12 @@ struct SimpleContactProblem {
   struct OpCalContactTractionOnMaster : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    Vec F;
     OpCalContactTractionOnMaster(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         Vec f_ = PETSC_NULL)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
-          commonDataSimpleContact(common_data_contact), F(f_) {}
+          commonDataSimpleContact(common_data_contact) {}
 
     VectorDouble vec_f;
 
@@ -437,13 +436,11 @@ struct SimpleContactProblem {
   struct OpCalContactTractionOnSlave : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    Vec F;
     OpCalContactTractionOnSlave(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Vec f_ = PETSC_NULL)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), F(f_) {}
+          commonDataSimpleContact(common_data_contact) {}
 
     VectorDouble vec_f;
 
@@ -886,7 +883,7 @@ struct SimpleContactProblem {
   MoFEMErrorCode setContactOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrang_field_name, Vec f_ = PETSC_NULL);
+      string field_name, string lagrang_field_name);
 
   /**
    * @brief Function for the simple contact element that sets the user data
