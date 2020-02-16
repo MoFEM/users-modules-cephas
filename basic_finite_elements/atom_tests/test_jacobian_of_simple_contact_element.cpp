@@ -212,9 +212,37 @@ int main(int argc, char *argv[]) {
 
     PetscRandomDestroy(&rctx);
 
-    boost::shared_ptr<SimpleContactProblem> contact_problem;
-    contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, cn_value, is_newton_cotes));
+    auto contact_problem = boost::make_shared<SimpleContactProblem>(
+        m_field, cn_value, is_newton_cotes);
+
+    auto make_contact_element =
+        [&]() -> boost::shared_ptr<SimpleContactProblem::SimpleContactElement> {
+      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+          m_field);
+    };
+
+    auto make_contact_common_data = [&]() {
+      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+          m_field);
+    };
+
+    auto get_contact_rhs = [&](auto contact_problem) {
+      auto fe_rhs_simple_contact = make_contact_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_contact_lhs = [&](auto contact_problem) {
+      auto fe_lhs_simple_contact = make_contact_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
@@ -270,31 +298,12 @@ int main(int argc, char *argv[]) {
 
     auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
 
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_rhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_lhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
-        common_data_simple_contact =
-            boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
-                m_field);
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                  get_contact_rhs(contact_problem), PETSC_NULL,
+                                  PETSC_NULL);
 
-    contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT");
-    contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT");
-
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
-                                  PETSC_NULL, PETSC_NULL);
-
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
-                                  NULL, NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                  get_contact_lhs(contact_problem), NULL, NULL);
 
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =

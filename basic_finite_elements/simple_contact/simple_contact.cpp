@@ -281,6 +281,35 @@ int main(int argc, char *argv[]) {
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
         m_field, cn_value, is_newton_cotes);
 
+    auto make_contact_element =
+        [&]() -> boost::shared_ptr<SimpleContactProblem::SimpleContactElement> {
+      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+          m_field);
+    };
+
+    auto make_contact_common_data = [&]() {
+      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+          m_field);
+    };
+
+    auto get_contact_rhs = [&](auto contact_problem) {
+      auto fe_rhs_simple_contact = make_contact_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_contact_lhs = [&](auto contact_problem) {
+      auto fe_lhs_simple_contact = make_contact_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
@@ -352,35 +381,6 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
 
-    auto make_contact_element =
-        [&]() -> boost::shared_ptr<SimpleContactProblem::SimpleContactElement> {
-      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-          m_field);
-    };
-
-    auto make_contact_common_data = [&]() {
-      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
-          m_field);
-    };
-
-    auto get_contact_rhs = [&]() {
-      auto fe_rhs_simple_contact = make_contact_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
-      return fe_rhs_simple_contact;
-    };
-
-    auto get_contact_lhs = [&]() {
-      auto fe_lhs_simple_contact = make_contact_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
-      return fe_lhs_simple_contact;
-    };
-
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     CHKERR MetaNeumannForces::setMomentumFluxOperators(
@@ -411,8 +411,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", get_contact_rhs(),
-                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                  get_contact_rhs(contact_problem), PETSC_NULL,
+                                  PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
@@ -423,8 +424,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", get_contact_lhs(), NULL,
-                                  NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                  get_contact_lhs(contact_problem), NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
