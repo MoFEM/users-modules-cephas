@@ -228,8 +228,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       } while (eps > tol && (it++) < max_it);
 
-
-
       get_values();
       assemble();
 
@@ -242,23 +240,23 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       auto t_inv_A = get_t_A(invA);
 
       auto get_diff_slave = [&]() {
-        double *master_base = &masterN(gg, 1);
+        double *slave_base = &slaveN(gg, 1);
         for (size_t n = 0; n != 3; ++n) {
-          t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*master_base);
+          t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
           ++t_diff_xi_slave;
-          ++master_base;
+          ++slave_base;
         }
       };
 
       auto get_diff_master = [&]() {
         auto t_diff = get_t_diff();
-        double *slave_base = &slaveN(gg, 1);
+        double *master_base = &masterN(gg, 1);
         for (size_t n = 0; n != 3; ++n) {
           const double t0 = (t_inv_A(J, K) * t_f(J)) * t_diff(K);
           t_diff_xi_master(I, i) -= (t_inv_A(I, L) * t_tau(i, L)) * t0 +
-                                    t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
+                                    t_inv_A(I, J) * t_tau(i, J) * (*master_base);
           ++t_diff_xi_master;
-          ++slave_base;
+          ++master_base;
           ++t_diff;
         }
       };
@@ -1247,26 +1245,26 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsContactTraction(
           field_name, lagrang_field_name, common_data_simple_contact,
-          ContactOp::FACESLAVESLAVE,
+          ContactOp::FACEMASTERSLAVE,
           fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsContactTraction(
           field_name, lagrang_field_name, common_data_simple_contact,
-          ContactOp::FACESLAVEMASTER,
+          ContactOp::FACEMASTERSLAVE,
           fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
 
-  fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpLhsConvectIntegrationPtsConstrainMasterGap(
-          field_name, lagrang_field_name, common_data_simple_contact, cnValue,
-          ContactOp::FACESLAVESLAVE,
-          fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
+  // fe_lhs_simple_contact->getOpPtrVector().push_back(
+  //     new OpLhsConvectIntegrationPtsConstrainMasterGap(
+  //         lagrang_field_name, field_name, common_data_simple_contact, cnValue,
+  //         ContactOp::FACESLAVESLAVE,
+  //         fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
 
-  fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpLhsConvectIntegrationPtsConstrainMasterGap(
-          field_name, lagrang_field_name, common_data_simple_contact, cnValue,
-          ContactOp::FACESLAVEMASTER,
-          fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
+  // fe_lhs_simple_contact->getOpPtrVector().push_back(
+  //     new OpLhsConvectIntegrationPtsConstrainMasterGap(
+  //         lagrang_field_name, field_name, common_data_simple_contact, cnValue,
+  //         ContactOp::FACESLAVEMASTER,
+  //         fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
 
   MoFEMFunctionReturn(0);
 }
@@ -1357,7 +1355,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
       double val_s = t_w * area_s * t_lagrange_slave;
-      FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
+      auto t_base_slave = row_data.getFTensor0N(gg,0);
 
       for (int rr = 0; rr != nb_base_fun_row; ++rr) {
 
@@ -1375,7 +1373,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
         auto t_diff_convect = get_diff_ksi(*diffConvect, gg);
 
         for (int cc = 0; cc != nb_base_fun_col; ++cc) {
-          t_mat(i, j) += val_s * t_base_slave * t_const_unit_n(i) *
+          t_mat(i, j) -= val_s * t_base_slave * t_const_unit_n(i) *
                          (t_diff_base_col(K) * t_diff_convect(K, j));
 
           ++t_diff_base_col;

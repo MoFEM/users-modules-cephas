@@ -963,11 +963,11 @@ struct SimpleContactProblem {
   struct OpLhsConvectIntegrationPtsConstrainMasterGap : public ContactOp {
 
     OpLhsConvectIntegrationPtsConstrainMasterGap(
-        const string field_name, const string lagrange_field_name,
+        const string lagrange_field_name, const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         const double cn, ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
-        : ContactOp(field_name, lagrange_field_name, UserDataOperator::OPROWCOL,
+        : ContactOp(lagrange_field_name, field_name, UserDataOperator::OPROWCOL,
                     face_type),
           commonDataSimpleContact(common_data_contact), cN(cn),
           diffConvect(diff_convect) {}
