@@ -907,6 +907,11 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 
+  MoFEMErrorCode setContactOperatorsLhs(
+      boost::shared_ptr<ConvectContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
+
   /**
    * @brief Function for the simple contact element that sets the user data
    * post processing operators
@@ -937,11 +942,12 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
 
     OpLhsConvectIntegrationPtsContactTraction(
-        const string field_name,
+        const string field_name, const string lagrange_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
-        : ContactOp(field_name, UserDataOperator::OPROWCOL, face_type),
+        : ContactOp(field_name, lagrange_field_name, UserDataOperator::OPROWCOL,
+                    face_type),
           commonDataSimpleContact(common_data_contact),
           diffConvect(diff_convect) {}
 
@@ -957,11 +963,12 @@ struct SimpleContactProblem {
   struct OpLhsConvectIntegrationPtsConstrainMasterGap : public ContactOp {
 
     OpLhsConvectIntegrationPtsConstrainMasterGap(
-        const string field_name,
+        const string field_name, const string lagrange_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         const double cn, ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
-        : ContactOp(field_name, UserDataOperator::OPROWCOL, face_type),
+        : ContactOp(field_name, lagrange_field_name, UserDataOperator::OPROWCOL,
+                    face_type),
           commonDataSimpleContact(common_data_contact), cN(cn),
           diffConvect(diff_convect) {}
 

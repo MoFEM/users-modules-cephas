@@ -1235,6 +1235,42 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
+    boost::shared_ptr<ConvectContactElement> fe_lhs_simple_contact,
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+    string field_name, string lagrang_field_name) {
+  MoFEMFunctionBegin;
+  CHKERR setContactOperatorsLhs(
+      boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),
+      common_data_simple_contact, field_name, lagrang_field_name);
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpLhsConvectIntegrationPtsContactTraction(
+          field_name, lagrang_field_name, common_data_simple_contact,
+          ContactOp::FACESLAVESLAVE,
+          fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpLhsConvectIntegrationPtsContactTraction(
+          field_name, lagrang_field_name, common_data_simple_contact,
+          ContactOp::FACESLAVEMASTER,
+          fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpLhsConvectIntegrationPtsConstrainMasterGap(
+          field_name, lagrang_field_name, common_data_simple_contact, cnValue,
+          ContactOp::FACESLAVESLAVE,
+          fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpLhsConvectIntegrationPtsConstrainMasterGap(
+          field_name, lagrang_field_name, common_data_simple_contact, cnValue,
+          ContactOp::FACESLAVEMASTER,
+          fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
@@ -1299,7 +1335,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
 
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
-    FTensor::Index<'k', 3> k;
+    FTensor::Index<'K', 2> K;
 
     auto get_tensor_vec = [](VectorDouble &n) {
       return FTensor::Tensor1<double *, 3>(&n[0], &n[1], &n[2]);
@@ -1313,8 +1349,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
 
     auto get_diff_ksi = [](auto &m, auto gg) {
       return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
-          &m(0, 3 * gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, 3 * gg),
-          &m(5, gg));
+          &m(0, gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, gg), &m(5, gg));
     };
 
     auto t_base_row = row_data.getFTensor0N();
@@ -1341,7 +1376,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
 
         for (int cc = 0; cc != nb_base_fun_col; ++cc) {
           t_mat(i, j) += val_s * t_base_slave * t_const_unit_n(i) *
-                         (t_diff_base_col(k) * t_diff_convect(k, j));
+                         (t_diff_base_col(K) * t_diff_convect(K, j));
 
           ++t_diff_base_col;
           ++t_diff_convect;
@@ -1385,8 +1420,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
 
     auto get_diff_ksi = [](auto &m, auto gg) {
       return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
-          &m(0, 3 * gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, 3 * gg),
-          &m(5, gg));
+          &m(0, gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, gg), &m(5, gg));
     };
 
     auto get_tensor_from_vec = [](VectorDouble &n) {
