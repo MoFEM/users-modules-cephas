@@ -57,8 +57,6 @@ MoFEMErrorCode
 SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   MoFEMFunctionBegin;
 
-  cerr << "AAA" << endl;
-
   CHKERR fePtr->getNodeData(sparialPositionsField, spatialCoords);
 
   auto get_material_dofs_from_coords = [&]() {
@@ -85,9 +83,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
     }
   }
-  cerr << "masterSpatialCoords " << masterSpatialCoords << endl;
-  cerr << "slaveMaterialCoords " << slaveMaterialCoords << endl;
-  cerr << "slaveSpatialCoords " << slaveSpatialCoords << endl;
 
   A.resize(2, 2, false);
   F.resize(2, false);
@@ -193,11 +188,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
           ++master_base;
         }
 
-        cerr << t_tau << endl;
-        cerr << t_x_slave << endl;
-        cerr << t_x_master << endl;
-
-
       };
 
       auto assemble = [&]() {
@@ -227,19 +217,14 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
         get_values();
         assemble();
-        cerr << A << endl;
-        cerr << F << endl;
 
         ublas::lu_factorize(A);
         ublas::inplace_solve(A, F, ublas::unit_lower_tag());
         ublas::inplace_solve(A, F, ublas::upper_tag());
 
-        cerr << F << endl;
-
         update();
 
         eps = norm_2(F);
-        cerr << it << " " << eps << endl;
 
       } while (eps > tol && (it++) < max_it);
 
@@ -283,11 +268,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     };
 
     newton_solver();
-
-
-       SETERRQ(
-        PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-        "STOP");
 
     ++t_xi_master;
   }
