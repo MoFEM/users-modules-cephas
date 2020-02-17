@@ -30,23 +30,26 @@ constexpr double SimpleContactProblem::TOL;
 MoFEMErrorCode
 SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
-  int rule = order + 2;
-  int nb_gauss_pts = triangle_ncc_order_num(rule);
-  gaussPtsMaster.resize(3, nb_gauss_pts, false);
-  gaussPtsSlave.resize(3, nb_gauss_pts, false);
-  double xy_coords[2 * nb_gauss_pts];
-  double w_array[nb_gauss_pts];
-  triangle_ncc_rule(rule, nb_gauss_pts, xy_coords, w_array);
+  if (newtonCotes) {
+    int rule = order + 2;
+    int nb_gauss_pts = triangle_ncc_order_num(rule);
+    gaussPtsMaster.resize(3, nb_gauss_pts, false);
+    gaussPtsSlave.resize(3, nb_gauss_pts, false);
+    double xy_coords[2 * nb_gauss_pts];
+    double w_array[nb_gauss_pts];
+    triangle_ncc_rule(rule, nb_gauss_pts, xy_coords, w_array);
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    gaussPtsMaster(0, gg) = xy_coords[gg * 2];
-    gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
-    gaussPtsMaster(2, gg) = w_array[gg];
-    gaussPtsSlave(0, gg) = xy_coords[gg * 2];
-    gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
-    gaussPtsSlave(2, gg) = w_array[gg];
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      gaussPtsMaster(0, gg) = xy_coords[gg * 2];
+      gaussPtsMaster(1, gg) = xy_coords[gg * 2 + 1];
+      gaussPtsMaster(2, gg) = w_array[gg];
+      gaussPtsSlave(0, gg) = xy_coords[gg * 2];
+      gaussPtsSlave(1, gg) = xy_coords[gg * 2 + 1];
+      gaussPtsSlave(2, gg) = w_array[gg];
+    }
+  } else {
+    CHKERR ContactEle::setDefaultGaussPts(order);
   }
-
   MoFEMFunctionReturn(0);
 }
 
@@ -54,8 +57,23 @@ MoFEMErrorCode
 SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   MoFEMFunctionBegin;
 
+  cerr << "AAA" << endl;
+
   CHKERR fePtr->getNodeData(sparialPositionsField, spatialCoords);
-  CHKERR fePtr->getNodeData(materialPositionsField, materialCoords);
+
+  auto get_material_dofs_from_coords = [&]() {
+    MoFEMFunctionBegin;
+    materialCoords.resize(18, false);
+    int num_nodes;
+    const EntityHandle *conn;
+    CHKERR fePtr->mField.get_moab().get_connectivity(fePtr->getFEEntityHandle(),
+                                                     conn, num_nodes, true);
+    CHKERR fePtr->mField.get_moab().get_coords(conn, 6,
+                                               &*materialCoords.data().begin());
+    CHKERR fePtr->getNodeData(materialPositionsField, materialCoords, false);
+    MoFEMFunctionReturn(0);
+  };
+  CHKERR get_material_dofs_from_coords();
 
   slaveSpatialCoords.resize(3, 3, false);
   slaveMaterialCoords.resize(3, 3, false);
@@ -67,6 +85,10 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
     }
   }
+  cerr << "masterSpatialCoords " << masterSpatialCoords << endl;
+  cerr << "slaveMaterialCoords " << slaveMaterialCoords << endl;
+  cerr << "slaveSpatialCoords " << slaveSpatialCoords << endl;
+
   A.resize(2, 2, false);
   F.resize(2, false);
 
@@ -138,10 +160,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    auto t_slave_material_coords = get_t_coords(slaveMaterialCoords);
-    auto t_slave_spatial_coords = get_t_coords(slaveSpatialCoords);
-    auto t_master_spatial_coords = get_t_coords(slaveSpatialCoords);
-
     auto t_tau = get_t_tau();
     auto t_x_slave = get_t_x();
     auto t_x_master = get_t_x();
@@ -149,17 +167,21 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     auto t_f = get_t_F();
 
     auto newton_solver = [&]() {
+
       auto get_values = [&]() {
         t_tau(i, I) = 0;
         t_x_slave(i) = 0;
         t_x_master(i) = 0;
+
+        auto t_slave_material_coords = get_t_coords(slaveMaterialCoords);
+        auto t_slave_spatial_coords = get_t_coords(slaveSpatialCoords);
+        auto t_master_spatial_coords = get_t_coords(masterSpatialCoords);
         double *slave_base = &slaveN(gg, 0);
-        double *master_base = &masterN(gg, 1);
+        double *master_base = &masterN(gg, 0);
         auto t_diff = get_t_diff();
         for (size_t n = 0; n != 3; ++n) {
 
-          t_tau(i, J) +=
-              t_diff(J) * (*master_base) * t_slave_material_coords(i);
+          t_tau(i, J) += t_diff(J) * t_slave_material_coords(i);
           t_x_slave(i) += (*slave_base) * t_slave_spatial_coords(i);
           t_x_master(i) += (*master_base) * t_master_spatial_coords(i);
 
@@ -170,16 +192,24 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
           ++slave_base;
           ++master_base;
         }
+
+        cerr << t_tau << endl;
+        cerr << t_x_slave << endl;
+        cerr << t_x_master << endl;
+
+
       };
 
       auto assemble = [&]() {
         t_mat(I, J) = 0;
-        t_f(I) = 0;
+        auto t_master_spatial_coords = get_t_coords(masterSpatialCoords);
         auto t_diff = get_t_diff();
         for (size_t n = 0; n != 3; ++n) {
-          t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_x_master(i);
-          t_f(I) += t_tau(i, I) * (t_x_slave(i) - t_x_master(i));
+          t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_master_spatial_coords(i);
+          ++t_diff;
+          ++t_master_spatial_coords;
         };
+        t_f(I) = t_tau(i, I) * (t_x_slave(i) - t_x_master(i));
       };
 
       auto update = [&]() {
@@ -192,16 +222,28 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       constexpr double tol = 1e-12;
       constexpr int max_it = 10;
       int it = 0;
+      double eps;
       do {
 
         get_values();
         assemble();
+        cerr << A << endl;
+        cerr << F << endl;
+
         ublas::lu_factorize(A);
         ublas::inplace_solve(A, F, ublas::unit_lower_tag());
         ublas::inplace_solve(A, F, ublas::upper_tag());
+
+        cerr << F << endl;
+
         update();
 
-      } while (sqrt(t_xi_master(I) * t_xi_master(I)) > tol && (it++) < max_it);
+        eps = norm_2(F);
+        cerr << it << " " << eps << endl;
+
+      } while (eps > tol && (it++) < max_it);
+
+
 
       get_values();
       assemble();
@@ -239,6 +281,13 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       get_diff_master();
       get_diff_slave();
     };
+
+    newton_solver();
+
+
+       SETERRQ(
+        PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+        "STOP");
 
     ++t_xi_master;
   }

@@ -65,7 +65,7 @@ struct SimpleContactProblem {
         return 2 * order;
     }
 
-    MoFEMErrorCode setGaussPts(int order);
+    virtual MoFEMErrorCode setGaussPts(int order);
 
     friend ConvectSlaveIntegrationPts;
   };
@@ -120,6 +120,8 @@ struct SimpleContactProblem {
     inline boost::shared_ptr<ConvectSlaveIntegrationPts> getConvectPtr() {
       return convectPtr;
     }
+
+    int getRule(int order) { return -1; }
 
     MoFEMErrorCode setGaussPts(int order);
 

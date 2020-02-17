@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = 1.;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool test_jacobian = PETSC_FALSE;
+    PetscBool convect_pts = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -67,6 +68,8 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if Newton-Cotes integration rules are used",
                             "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
+                            PETSC_FALSE, &convect_pts, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -221,13 +224,19 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
+    auto make_convective_element =
+        [&]() -> boost::shared_ptr<SimpleContactProblem::SimpleContactElement> {
+      return boost::make_shared<SimpleContactProblem::ConvectContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
     auto make_contact_common_data = [&]() {
       return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
           m_field);
     };
 
-    auto get_contact_rhs = [&](auto contact_problem) {
-      auto fe_rhs_simple_contact = make_contact_element();
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
                                               common_data_simple_contact,
@@ -235,8 +244,8 @@ int main(int argc, char *argv[]) {
       return fe_rhs_simple_contact;
     };
 
-    auto get_contact_lhs = [&](auto contact_problem) {
-      auto fe_lhs_simple_contact = make_contact_element();
+    auto get_contact_lhs = [&](auto contact_problem, auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
                                               common_data_simple_contact,
@@ -298,12 +307,24 @@ int main(int argc, char *argv[]) {
 
     auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
 
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  get_contact_rhs(contact_problem), PETSC_NULL,
-                                  PETSC_NULL);
-
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-                                  get_contact_lhs(contact_problem), NULL, NULL);
+    if (convect_pts == PETSC_TRUE) {
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_convective_element), PETSC_NULL,
+          PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_contact_lhs(contact_problem, make_convective_element), NULL,
+          NULL);
+    } else {
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
+          PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_contact_lhs(contact_problem, make_contact_element), NULL, NULL);
+    }
 
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
