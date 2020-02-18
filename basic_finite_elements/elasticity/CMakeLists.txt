@@ -15,6 +15,17 @@
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/../nonlinear_elastic_materials/src)
 
+ set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
+
+bfe_copy_and_install("*.cfg" "${permissions_default}")
+bfe_copy_and_install("*.h5m" "${permissions_default}")
+bfe_copy_and_install("*.med" "${permissions_default}")
+bfe_copy_and_install("*.geo" "${permissions_default}")
+bfe_copy_and_install("*.msh" "${permissions_default}")
+
 file(
   COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
@@ -22,32 +33,6 @@ file(
 
 install(
   FILES ${CMAKE_CURRENT_SOURCE_DIR}/README 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/LShape2PartsDirich.h5m
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE) 
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/LShape2PartsDirich.h5m 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/heat_exchange.h5m
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/heat_exchange.h5m 
   DESTINATION ${BFE_MOD_DIR}
   PERMISSIONS OWNER_READ OWNER_WRITE)
 
@@ -82,4 +67,25 @@ add_test(MultiGridViaOrderSolver
   -pc_mg_smoothup 10 -pc_mg_smoothdown 10
   -pc_mg_type multiplicative
   -log_view)
+
+add_test(Spring
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/spring_LShape.h5m
+  -my_order 2 
+  -ksp_type cg 
+  -pc_type asm 
+  -sub_pc_type lu 
+  -ksp_monitor)
+
+  add_test(SimpleRod
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/simple_rod_beam.h5m
+  -my_order 1 
+  -my_is_calculating_frequency 1
+  -ksp_type cg 
+  -pc_type asm 
+  -sub_pc_type lu 
+  -ksp_monitor)
 

@@ -144,6 +144,12 @@ target_link_libraries(extrude_prisms
 )
 install(TARGETS extrude_prisms DESTINATION bin)
 
+cm_export_file("convert.py" export_tools)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/convert.py
+  DESTINATION bin
+  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE 
+  GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+
 if(ADOL-C_LIBRARY)
 
   include_directories(

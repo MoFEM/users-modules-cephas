@@ -40,12 +40,11 @@ struct CommonMaterialData : public GenericMaterial {
   double n;      ///< model parameter
 
   // Initial hydraulic head
-  //
   double Ah;   ///< Initial hydraulic head coefficient
   double AhZ;  ///< Initial hydraulic head coefficient
   double AhZZ; ///< Initial hydraulic head coefficient
 
-  double initalPcEval() const { return Ah + AhZ * z + AhZZ * z * z; }
+  double initialPcEval() const { return Ah + AhZ * z + AhZZ * z * z; }
 
   void addOptions(po::options_description &o, const std::string &prefix) {
     o.add_options()((prefix + ".material_name").c_str(),
@@ -70,7 +69,9 @@ struct CommonMaterialData : public GenericMaterial {
         (prefix + ".Ah").c_str(), po::value<double>(&Ah)->default_value(Ah))(
         (prefix + ".AhZ").c_str(), po::value<double>(&AhZ)->default_value(AhZ))(
         (prefix + ".AhZZ").c_str(),
-        po::value<double>(&AhZZ)->default_value(AhZZ));
+        po::value<double>(&AhZZ)->default_value(AhZZ))(
+        (prefix + ".scaleZ").c_str(),
+        po::value<double>(&scaleZ)->default_value(scaleZ));
   }
 
   void printMatParameters(const int id, const std::string &prefix) const {
@@ -90,6 +91,7 @@ struct CommonMaterialData : public GenericMaterial {
     PetscPrintf(PETSC_COMM_WORLD, "ePsilon0=%6.4g\n", ePsilon0);
     PetscPrintf(PETSC_COMM_WORLD, "ePsilon1=%6.4g\n", ePsilon1);
     PetscPrintf(PETSC_COMM_WORLD, "sCale=%6.4g\n", sCale);
+    PetscPrintf(PETSC_COMM_WORLD, "scaleZ=%6.4g\n", scaleZ);
   }
 
   typedef boost::function<boost::shared_ptr<CommonMaterialData>(

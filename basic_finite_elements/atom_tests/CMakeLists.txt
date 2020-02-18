@@ -395,6 +395,32 @@ add_test(
   -file_name mesh_for_testing_elastic_jacobian.h5m -ale
   )
 
+# Surface pressure element (ALE)
+
+bfe_add_executable(testing_jacobian_of_surface_pressure_element
+${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_surface_pressure_element.cpp
+)
+
+target_link_libraries(testing_jacobian_of_surface_pressure_element
+users_modules
+mofem_finite_elements
+mofem_interfaces
+mofem_multi_indices
+mofem_petsc
+mofem_approx
+mofem_third_party
+mofem_cblas
+${MoFEM_PROJECT_LIBS}
+)
+
+cm_export_file("mesh_for_testing_surface_pressure_element.h5m" export_atom_tests_basic_fe)
+add_test(
+  testing_jacobian_of_surface_pressure_element_ale
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
+  -file_name mesh_for_testing_surface_pressure_element.h5m
+  )
+
 bfe_add_executable(testing_jacobian_of_navier_stokes_element
   ${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_navier_stokes_element.cpp
 )
@@ -427,13 +453,14 @@ target_link_libraries(testing_jacobian_of_navier_stokes_element_with_prisms
   mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
-# Surface pressure element (ALE)
 
-bfe_add_executable(testing_jacobian_of_surface_pressure_element
-${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_surface_pressure_element.cpp
+# SIMPLE CONTACT
+
+bfe_add_executable(test_jacobian_of_simple_contact_element
+${CMAKE_CURRENT_SOURCE_DIR}/test_jacobian_of_simple_contact_element.cpp
 )
 
-target_link_libraries(testing_jacobian_of_surface_pressure_element
+target_link_libraries(test_jacobian_of_simple_contact_element
 users_modules
 mofem_finite_elements
 mofem_interfaces
@@ -445,10 +472,10 @@ mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
 
-cm_export_file("mesh_for_testing_surface_pressure_element.h5m" export_atom_tests_basic_fe)
+cm_export_file("2tets_contact.cub" export_atom_tests_basic_fe)
 add_test(
-  testing_jacobian_of_surface_pressure_element_ale
+  test_jacobian_of_simple_contact_element
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
-  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
-  -file_name mesh_for_testing_surface_pressure_element.h5m
-  )
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_r_value 1 -my_cn_value 1e2 -my_order 3 -my_order_lambda 3
+)

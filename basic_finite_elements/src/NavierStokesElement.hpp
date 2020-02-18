@@ -351,7 +351,7 @@ struct NavierStokesElement {
 
   struct OpCalcDragForce: public FaceUserDataOperator {
 
-    boost::shared_ptr<CommonData> &commonData;
+    boost::shared_ptr<CommonData> commonData;
     BlockData &blockData;
 
     OpCalcDragForce(boost::shared_ptr<CommonData> &common_data,
@@ -372,9 +372,9 @@ struct NavierStokesElement {
 
   struct OpCalcDragTraction : public FaceUserDataOperator {
 
-    boost::shared_ptr<CommonData> &commonData;
+    boost::shared_ptr<CommonData> commonData;
     BlockData &blockData;
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &sideFe;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
     std::string sideFeName;
 
     OpCalcDragTraction(
@@ -398,7 +398,7 @@ struct NavierStokesElement {
 
   struct OpPostProcDrag : public FaceUserDataOperator {
 
-    boost::shared_ptr<CommonData> &commonData;
+    boost::shared_ptr<CommonData> commonData;
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
     BlockData &blockData;
@@ -425,7 +425,7 @@ struct NavierStokesElement {
 
   struct OpPostProcVorticity : public UserDataOperator {
 
-    boost::shared_ptr<CommonData> &commonData;
+    boost::shared_ptr<CommonData> commonData;
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
     BlockData &blockData;

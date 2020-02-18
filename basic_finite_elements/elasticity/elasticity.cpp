@@ -87,6 +87,7 @@ struct BlockOptionData {
 };
 
 using BlockData = NonlinearElasticElement::BlockData;
+using MassBlockData = ConvectiveMassElement::BlockData;
 using VolUserDataOperator = VolumeElementForcesAndSourcesCore::UserDataOperator;
 
 /// Set integration rule
@@ -138,6 +139,7 @@ int main(int argc, char *argv[]) {
     PetscInt test_nb = 0;
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
+    PetscBool is_calculating_frequency = PETSC_FALSE;
 
     // Select base
     enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
@@ -168,6 +170,10 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_block_config", "elastic configure file name",
                               "", "block_conf.in", block_config_file, 255,
                               &flg_block_config);
+
+    CHKERR PetscOptionsBool(
+        "-my_is_calculating_frequency", "set if frequency will be calculated",
+        "", is_calculating_frequency, &is_calculating_frequency, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
@@ -239,6 +245,17 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
 
+    // CHECK IF EDGE BLOCKSET EXIST AND IF IT IS ADD ALL ENTITIES FROM IT
+    // CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+    // MESHSET_OF_EDGE_BLOCKSET, 1, bit_level0);
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 3, "ROD") == 0) {
+        CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+            0, 1, bit_level0);
+      }
+    }
+
     // Declare approximation fields
     FieldApproximationBase base = NOBASE;
     switch (choice_base_value) {
@@ -268,14 +285,42 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_ents_to_field_by_dim(0, 3, "DISPLACEMENT");
     CHKERR m_field.add_ents_to_field_by_dim(0, 3, "MESH_NODE_POSITIONS");
 
+    // Get all edges in the mesh
+    Range all_edges;
+    CHKERR m_field.get_moab().get_entities_by_type(0, MBEDGE, all_edges, true);
+
+    // Get edges associated with simple rod
+    Range edges_in_simple_rod;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 3, "ROD") == 0) {
+        Range edges;
+        CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(),
+                                                       MBEDGE, edges, true);
+        edges_in_simple_rod.merge(edges);
+      }
+    }
+
+    CHKERR m_field.add_ents_to_field_by_type(edges_in_simple_rod, MBEDGE,
+                                             "DISPLACEMENT");
+
+    // Set order of edge in rod to be 1
+    CHKERR m_field.set_field_order(edges_in_simple_rod, "DISPLACEMENT", 1);
+
+    // Get remaining edges (not associated with simple rod) to set order
+    Range edges_to_set_order;
+    edges_to_set_order = subtract(all_edges, edges_in_simple_rod);
+
     // Set approximation order.
     // See Hierarchical Finite Element Bases on Unstructured Tetrahedral
     // Meshes.
     CHKERR m_field.set_field_order(0, MBPRISM, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTET, "DISPLACEMENT", order);
     CHKERR m_field.set_field_order(0, MBTRI, "DISPLACEMENT", order);
+    // CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(edges_to_set_order, "DISPLACEMENT", order);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", 1);
     CHKERR m_field.set_field_order(0, MBQUAD, "DISPLACEMENT", order);
-    CHKERR m_field.set_field_order(0, MBEDGE, "DISPLACEMENT", order);
+
     if (base == AINSWORTH_BERNSTEIN_BEZIER_BASE)
       CHKERR m_field.set_field_order(0, MBVERTEX, "DISPLACEMENT", order);
     else
@@ -424,6 +469,10 @@ int main(int argc, char *argv[]) {
     CHKERR HookeElement::setBlocks(m_field, block_sets_ptr);
     CHKERR setting_blocks_data_and_order_from_config_file(block_sets_ptr);
 
+    boost::shared_ptr<std::map<int, MassBlockData>> mass_block_sets_ptr =
+        boost::make_shared<std::map<int, MassBlockData>>();
+    CHKERR ConvectiveMassElement::setBlocks(m_field, mass_block_sets_ptr);
+
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
@@ -450,6 +499,21 @@ int main(int argc, char *argv[]) {
           "MESH_NODE_POSITIONS", false, true, MBPRISM);
     }
 
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_mass_ptr(
+        new VolumeElementForcesAndSourcesCore(m_field));
+
+    boost::shared_ptr<HookeElement::DataAtIntegrationPts> data_at_pts(
+        new HookeElement::DataAtIntegrationPts());
+
+    for (auto &sit : *block_sets_ptr) {
+      for (auto &mit : *mass_block_sets_ptr) {
+        fe_mass_ptr->getOpPtrVector().push_back(
+            new HookeElement::OpCalculateMassMatrix("DISPLACEMENT",
+                                                    "DISPLACEMENT", sit.second,
+                                                    mit.second, data_at_pts));
+      }
+    }
+
     // Add spring boundary condition applied on surfaces.
     // This is only declaration not implementation.
     CHKERR MetaSpringBC::addSpringElements(m_field, "DISPLACEMENT",
@@ -465,6 +529,25 @@ int main(int argc, char *argv[]) {
     CHKERR MetaSpringBC::setSpringOperators(m_field, fe_spring_lhs_ptr,
                                             fe_spring_rhs_ptr, "DISPLACEMENT",
                                             "MESH_NODE_POSITIONS");
+
+    // Add Simple Rod elements
+    // This is only declaration not implementation.
+    CHKERR MetaSimpleRodElement::addSimpleRodElements(m_field, "DISPLACEMENT",
+                                                      "MESH_NODE_POSITIONS");
+
+    // CHKERR m_field.add_ents_to_finite_element_by_type(edges_in_simple_rod,
+    //                                                   MBEDGE, "SIMPLE_ROD");
+
+    // Implementation of Simple Rod element
+    // Create new instances of edge elements for Simple Rod
+    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_lhs_ptr(
+        new EdgeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr(
+        new EdgeElementForcesAndSourcesCore(m_field));
+
+    CHKERR MetaSimpleRodElement::setSimpleRodOperators(
+        m_field, fe_simple_rod_lhs_ptr, fe_simple_rod_rhs_ptr, "DISPLACEMENT",
+        "MESH_NODE_POSITIONS");
 
     // Add body force element. This is only declaration of element. not its
     // implementation.
@@ -485,6 +568,7 @@ int main(int argc, char *argv[]) {
                                                           true);
       CHKERR m_field.add_ents_to_finite_element_by_dim(tets, 3, "BODY_FORCE");
     }
+    CHKERR m_field.build_finite_elements("BODY_FORCE");
 
     // Add Neumann forces, i.e. pressure or traction forces applied on body
     // surface. This is only declaration not implementation.
@@ -568,6 +652,7 @@ int main(int argc, char *argv[]) {
     // Add elements to DM manager
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
+    CHKERR DMMoFEMAddElement(dm, "SIMPLE_ROD");
     CHKERR DMMoFEMAddElement(dm, "BODY_FORCE");
     CHKERR DMMoFEMAddElement(dm, "FLUID_PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
@@ -575,7 +660,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetUp(dm);
 
     // Create matrices & vectors. Note that native PETSc DM interface is used,
-    // but under the PETSc interface MOFEM implementation is running.
+    // but under the PETSc interface MoFEM implementation is running.
     Vec F, D, D0;
     CHKERR DMCreateGlobalVector(dm, &F);
     CHKERR VecDuplicate(F, &D);
@@ -584,9 +669,21 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix(dm, &Aij);
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
 
+    // Initialise mass matrix
+    Mat Mij;
+    if (is_calculating_frequency == PETSC_TRUE) {
+      CHKERR MatDuplicate(Aij, MAT_DO_NOT_COPY_VALUES, &Mij);
+      CHKERR MatSetOption(Mij, MAT_SPD, PETSC_TRUE);
+      // MatView(Mij, PETSC_VIEWER_STDOUT_SELF);
+    }
+
     // Assign global matrix/vector contributed by springs
     fe_spring_lhs_ptr->ksp_B = Aij;
     fe_spring_rhs_ptr->ksp_f = F;
+
+    // Assign global matrix/vector contributed by Simple Rod
+    fe_simple_rod_lhs_ptr->ksp_B = Aij;
+    fe_simple_rod_rhs_ptr->ksp_f = F;
 
     // Zero vectors and matrices
     CHKERR VecZeroEntries(F);
@@ -669,6 +766,20 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_lhs_ptr);
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_rhs_ptr);
 
+    // Assemble Simple Rod
+    CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_lhs_ptr);
+    CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", fe_simple_rod_rhs_ptr);
+
+    if (is_calculating_frequency == PETSC_TRUE) {
+      // Assemble mass matrix
+      fe_mass_ptr->snes_B = Mij;
+      PetscPrintf(PETSC_COMM_WORLD, "Calculate mass matrix  ...");
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_mass_ptr);
+      PetscPrintf(PETSC_COMM_WORLD, " done\n");
+    }
+
+    // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
+
     // Assemble pressure and traction forces. Run particular implemented for do
     // this, see
     // MetaNeumannForces how this is implemented.
@@ -728,13 +839,23 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMPostProcessFiniteElements(dm, dirichlet_bc_ptr.get());
 
     // Matrix View
-    // MatView(Aij,PETSC_VIEWER_STDOUT_WORLD);
+    PetscViewerPushFormat(
+        PETSC_VIEWER_STDOUT_SELF,
+        PETSC_VIEWER_ASCII_MATLAB); /// PETSC_VIEWER_ASCII_DENSE,
+                                    /// PETSC_VIEWER_ASCII_MATLAB
+    // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
     // MatView(Aij,PETSC_VIEWER_DRAW_WORLD);//PETSC_VIEWER_STDOUT_WORLD);
     // std::string wait;
     // std::cin >> wait;
 
+    if (is_calculating_frequency == PETSC_TRUE) {
+      CHKERR MatAssemblyBegin(Mij, MAT_FINAL_ASSEMBLY);
+      CHKERR MatAssemblyEnd(Mij, MAT_FINAL_ASSEMBLY);
+    }
+
     // Set matrix positive defined and symmetric for Cholesky and icc
     // pre-conditioner
+
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
     CHKERR VecGhostUpdateBegin(F, ADD_VALUES, SCATTER_REVERSE);
     CHKERR VecGhostUpdateEnd(F, ADD_VALUES, SCATTER_REVERSE);
@@ -748,6 +869,7 @@ int main(int argc, char *argv[]) {
     CHKERR KSPSetDM(solver, dm);
     CHKERR KSPSetFromOptions(solver);
     CHKERR KSPSetOperators(solver, Aij, Aij);
+
     // Setup multi-grid pre-conditioner if set from command line
     {
       // from PETSc example ex42.c
@@ -781,6 +903,10 @@ int main(int argc, char *argv[]) {
     post_proc.getOpPtrVector().push_back(new PostProcHookStress(
         m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
         post_proc.commonData, block_sets_ptr.get()));
+
+    PostProcEdgeOnRefinedMesh post_proc_edge(m_field);
+    CHKERR post_proc_edge.generateReferenceElementMesh();
+    CHKERR post_proc_edge.addFieldValuesPostProc("DISPLACEMENT");
 
     PostProcFatPrismOnRefinedMesh prism_post_proc(m_field);
     CHKERR prism_post_proc.generateReferenceElementMesh();
@@ -950,8 +1076,13 @@ int main(int argc, char *argv[]) {
 
     } else {
       // Elastic analysis no temperature field
+      // VecView(F, PETSC_VIEWER_STDOUT_WORLD);
       // Solve for vector D
       CHKERR KSPSolve(solver, F, D);
+
+      // VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+      // cerr << F;
+
       // Add kinetic boundary conditions
       CHKERR VecAXPY(D, 1., D0);
       // Update ghost values
@@ -963,15 +1094,50 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &prism_post_proc);
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
+      CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc_edge);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
-      PetscPrintf(PETSC_COMM_WORLD, "Write output file ..,");
+      PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
       if (mesh_has_tets) {
         CHKERR post_proc.writeFile("out.h5m");
       }
       if (mesh_has_prisms) {
         CHKERR prism_post_proc.writeFile("prism_out.h5m");
       }
+      if (!edges_in_simple_rod.empty())
+        CHKERR post_proc_edge.writeFile("out_edge.h5m");
       PetscPrintf(PETSC_COMM_WORLD, " done\n");
+    }
+
+    if (is_calculating_frequency == PETSC_TRUE) {
+      // Calculate model mass, m = u^T * M * u
+      Vec u1;
+      VecDuplicate(D, &u1);
+      CHKERR MatMult(Mij, D, u1);
+      double model_mass;
+      CHKERR VecDot(u1, D, &model_mass);
+      // PetscPrintf(PETSC_COMM_WORLD, "Model mass  %6.4e\n", model_mass);
+
+      // Calculate model stiffness, k = v^T * K * v where v = u / norm(u)
+      double u_norm;
+      CHKERR VecNorm(D, NORM_2, &u_norm);
+
+      // CHKERR VecScale(D,1./u_norm);     // v obtained
+      CHKERR VecScale(D, 1. / 1.); // v obtained
+      // PetscPrintf(PETSC_COMM_WORLD, "u_norm  %6.4e\n", u_norm);
+
+      Vec v1;
+      VecDuplicate(D, &v1);
+      CHKERR MatMult(Aij, D, v1);
+
+      double model_stiffness;
+      CHKERR VecDot(v1, D, &model_stiffness);
+      // PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n",
+      //             model_stiffness);
+
+      double frequency;
+      double pi = 3.14159265359;
+      frequency = sqrt(model_stiffness / model_mass) / (2 * pi);
+      PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
     }
 
     // Calculate elastic energy

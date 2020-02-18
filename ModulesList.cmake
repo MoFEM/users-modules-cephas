@@ -14,9 +14,16 @@
 # Load precompile headers to the speed-up compilation process.
 include(cmake/PrecompileHeaders.cmake)
 
+# Get user module commit id and pass to cpp for logging
+include(cmake/GetGitRevisionSimple.cmake)
+
 # If the basic UMs are already loaded target to um library. Otherwise, build a
 # basic user modules library.
 if(EXTERNAL_MODULES_BUILD)
+
+  find_package(
+     UM REQUIRED HINTS ${MOFEM_DIR} ${PROJECT_BINARY_DIR} $ENV{MOFEM_DIR})  
+
   if(UM_INSTALL_BREFIX)
     include(
       ${UM_INSTALL_BREFIX}/lib/basic_finite_elements/users_modules_targets.cmake)
@@ -24,7 +31,15 @@ if(EXTERNAL_MODULES_BUILD)
     include(
       ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
   endif(UM_INSTALL_BREFIX)
+
 else(EXTERNAL_MODULES_BUILD)
+
+  get_git_hash(${PROJECT_SOURCE_DIR} GIT_UM_SHA1)
+
+  get_git_tag(${PROJECT_SOURCE_DIR} "v${UM_FALLBACK_VERSION}" GIT_VERSION)
+  get_git_version(
+    ${GIT_VERSION} UM_VERSION_MAJOR UM_VERSION_MINOR UM_VERSION_BUILD)
+
   # Build basic finite element library
   include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
   # Download some known modules (Obsolete). It is used to resting on the
@@ -41,6 +56,20 @@ else(EXTERNAL_MODULES_BUILD)
   # Compile tools
   add_subdirectory(${PROJECT_SOURCE_DIR}/tools)
 endif(EXTERNAL_MODULES_BUILD)
+
+message(STATUS "MoFEM version ${MoFEM_VERSION}")
+set(UM_VERSON 
+  ${UM_VERSION_MAJOR}.${UM_VERSION_MINOR}.${UM_VERSION_BUILD})
+message(STATUS "User Module commit id: " ${GIT_UM_SHA1})
+message(STATUS "UM GIT_TAG ${GIT_VERSION}")
+message(STATUS "UM Version v${UM_VERSON}")
+
+add_definitions(-DUM_VERSION_MAJOR="${UM_VERSION_MAJOR}")
+add_definitions(-DUM_VERSION_MINOR="${UM_VERSION_MINOR}")
+add_definitions(-DUM_VERSION_BUILD="${UM_VERSION_BUILD}")
+add_definitions(-DGIT_UM_SHA1_NAME="${GIT_UM_SHA1}")
+
+include(cmake/CheckMoFEMVersion.cmake)
 
 # Find modules in an external directory. If file InstalledAddModule.cmake if
 # found in the directory, it is recognised that director is module and name of
@@ -79,6 +108,7 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
   string(REGEX REPLACE
     ".*/+" ""
     MODULE_NAME ${MODULE_DIRECTORY})
+  string(REGEX REPLACE "-" "_" MODULE_NAME ${MODULE_NAME}) 
   string(TOUPPER ${MODULE_NAME} MODULE_NAME)
   message(STATUS "Add definitions to the compiler command -DWITH_MODULE_${MODULE_NAME}")
   add_definitions(-DWITH_MODULE_${MODULE_NAME})
@@ -123,3 +153,22 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
   # include module
   include(${LOOP_MODULE})
 endforeach(LOOP_MODULE)
+
+if(NOT EXTERNAL_MODULES_BUILD)
+
+  # Generate config files
+  configure_file(
+    ${PROJECT_SOURCE_DIR}/UMConfig-version.cmake.in
+    ${PROJECT_BINARY_DIR}/UMConfig-version.cmake)
+  configure_file(
+    ${PROJECT_SOURCE_DIR}/UMConfig.cmake.in
+    ${PROJECT_BINARY_DIR}/UMConfig.cmake)
+  # Install project files
+  install(
+    FILES ${PROJECT_BINARY_DIR}/UMConfig.cmake
+    DESTINATION ${CMAKE_INSTALL_PREFIX})
+  install(
+    FILES ${PROJECT_BINARY_DIR}/UMConfig-version.cmake
+    DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+endif(NOT EXTERNAL_MODULES_BUILD)
