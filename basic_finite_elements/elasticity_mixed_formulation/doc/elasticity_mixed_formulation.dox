@@ -166,7 +166,7 @@ finite elements.
     #include <ElasticityMixedFormulation.hpp>
 \endcode
 
-\medskip
+
 - Initialise MoFEM
 \code 
   // Initialise MoFEM
@@ -174,7 +174,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Create mesh database and an interface to interact with it
 \code 
   // Create mesh database
@@ -183,7 +183,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Creat MoAB communicator
 \code 
   MPI_Comm moab_comm_world;
@@ -194,7 +194,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Declare variables and read arguments from the command line
 \code 
 // Get command line options
@@ -233,7 +233,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Read the mesh
 \code 
    // Read whole mesh or part of it if partitioned
@@ -257,7 +257,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Creat MoFEM database
 \code 
 // Create MoFEM database and link it to MoAB
@@ -266,7 +266,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Output boundary condition and material properties from the mesh
 \code 
     // Print boundary conditions and material parameters
@@ -278,7 +278,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Add three fields
 \code 
     // **** ADD FIELDS **** //
@@ -303,7 +303,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Build fields
 \code 
     CHKERR m_field.build_fields();
@@ -318,7 +318,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Add finite elements
 \code 
     // **** ADD ELEMENTS **** //
@@ -336,7 +336,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Add entities to elements and build them
 \code
    // Add entities to that element
@@ -348,7 +348,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Build and setup discrete manager
 \code 
     // **** BUILD DM **** //
@@ -375,7 +375,7 @@ finite elements.
 \endcode
 
 
-\medskip
+
 - Declare share pointers to finit element objects
 \code 
     boost::shared_ptr<FEMethod> nullFE;
@@ -393,7 +393,7 @@ finite elements.
 \subsection elasticity_mixed_formulation_solve_problem Solving the problem
 
 
-\medskip
+
 - Stiffness matrix, vector of DOFs, and right-hand-side (RHS) vector are
 declared and associated to the Discrete Manager
 \code 
@@ -413,7 +413,7 @@ declared and associated to the Discrete Manager
 \endcode
 
 
-\medskip
+
 - Finite element instances are pointed to the matrix and vector
 \code 
     // Assign global matrix/vector
@@ -422,7 +422,7 @@ declared and associated to the Discrete Manager
 \endcode
 
 
-\medskip
+
 - Loop over element to compute and assemble stiffness matrix, vectors of DOFs
 and RHS
 \code 
@@ -478,7 +478,7 @@ and RHS
 \endcode
 
 
-\medskip
+
 - The matrix and vectors have been assembled and now the system of equation is
 solved using KSP solver 
 \code 
@@ -492,7 +492,7 @@ solved using KSP solver
 \endcode
 
 
-\medskip
+
 - Map the solutions to mesh entities
 \code 
     CHKERR DMoFEMMeshToGlobalVector(dm, d, INSERT_VALUES, SCATTER_REVERSE);
@@ -502,7 +502,7 @@ solved using KSP solver
 \subsection elasticity_mixed_formulation_postproc Postprocessing
 
 
-\medskip
+
 -  The solutions are passed to the postprocessor and information is written to
 the output file
 \code 
@@ -517,7 +517,7 @@ the output file
 \endcode
 
 
-\medskip
+
 -  Finally, all dynamic objects Aij, d, F_ext, and Discrete Manager are
 destroyed to release memory
 \code 
@@ -581,14 +581,14 @@ read cubit meshset 12682136550675316782 type SIDESET msId 100
 read cubit meshset 12682136550675316783 type SIDESET msId 102
 \endcode
 
-\medskip
+
 - MoFEM version and commit ID
 \code
 MoFEM version 0.8.15 (MOAB 5.0.2 Petsc Release Version 3.9.3, Jul, 02, 2018 ) 
 git commit id cdfa37ee13d92b014cc527b5ab7b844baf73f98d
 \endcode
 
-\medskip
+
 - Boundary conditions from the mesh
 \code
 D i s p l a c e m e n t 
@@ -608,7 +608,7 @@ Displacement magnitude (Y-Rotation): N/A
 Displacement magnitude (Z-Rotation): N/A
 \endcode
 
-\medskip
+
 - Material used in the mesh
 \code
 meshset 12682136550675316776 type BLOCKSET MAT_ELASTICSET msId 1 name MAT_ELASTIC block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 3
@@ -629,7 +629,7 @@ User attribute 7 = 0
 MAT_ELATIC msId 1 nb. tets 471
 \endcode
 
-\medskip
+
 - Three fields are added to the database. Fields are then built showing the number
 of active degrees of freedom (DOFs) for entities including vertices, edges, triangles (faces).
 \code
@@ -666,7 +666,7 @@ nb added dofs 902 (number of inactive dofs 0)
 Nb. dofs 9506
 \endcode
 
-\medskip
+
 - Three elements are added to the database. Finite elements are then built.
 \code
 add finite element: FORCE_FE
@@ -689,7 +689,7 @@ Nb. entFEAdjacencies 13328
 
 \endcode
 
-\medskip
+
 - Problem is added and then built
 \code
 add problem: DM_ELASTIC_MIX
@@ -718,7 +718,7 @@ partition_ghost_row_dofs: rank = 1 FEs row ghost dofs problem id 000000000000000
 1 KSP Residual norm 3.461359964609e-11
 \endcode
 
-\medskip
+
 - Output file
 \code
 Output file: out.h5m

@@ -133,6 +133,13 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
   PostProcTemplateOnRefineMesh(MoFEM::Interface &m_field)
       : ELEMENT(m_field), postProcMesh(coreMesh) {}
 
+  virtual ~PostProcTemplateOnRefineMesh() {
+    ParallelComm *pcomm_post_proc_mesh =
+        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
+    if (pcomm_post_proc_mesh != NULL)
+      delete pcomm_post_proc_mesh;
+  }
+
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
     THROW_MESSAGE("not implemented");
   }
@@ -231,16 +238,8 @@ template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
    */
   MoFEMErrorCode writeFile(const std::string file_name) {
     MoFEMFunctionBegin;
-    // #ifdef MOAB_HDF5_PARALLEL
     CHKERR postProcMesh.write_file(file_name.c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");
-    // #else
-    //  #warning "No parallel HDF5, not most efficient way of writing files"
-    //  if(mField.get_comm_rank()==0) {
-    //    rval = postProcMesh.write_file(file_name.c_str(),"MOAB","");
-    //    CHKERRG(rval);
-    //  }
-    // #endif
     MoFEMFunctionReturn(0);
   }
 };
@@ -260,15 +259,6 @@ struct PostProcTemplateVolumeOnRefinedMesh
       : PostProcTemplateOnRefineMesh<VOLUME_ELEMENT>(m_field),
         tenNodesPostProcTets(ten_nodes_post_proc_tets),
         nbOfRefLevels(nb_ref_levels) {}
-
-  virtual ~PostProcTemplateVolumeOnRefinedMesh() {
-    moab::Interface &moab = T::coreMesh;
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
 
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
@@ -435,7 +425,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     const int dof_max_order = get_element_max_dofs_order();
     size_t level = (dof_max_order > 0) ? (dof_max_order - 1) / 2 : 0;
-    if (level > (levelGaussPtsOnRefMesh.size() - 1)) 
+    if (level > (levelGaussPtsOnRefMesh.size() - 1))
       level = levelGaussPtsOnRefMesh.size() - 1;
 
     auto &level_ref_gauss_pts = levelGaussPtsOnRefMesh[level];
@@ -529,9 +519,9 @@ struct PostProcTemplateVolumeOnRefinedMesh
     moab::Interface &moab = T::coreMesh;
     ParallelComm *pcomm_post_proc_mesh =
         ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
+    if (pcomm_post_proc_mesh != NULL)
       delete pcomm_post_proc_mesh;
-    }
+
     CHKERR T::postProcMesh.delete_mesh();
     MoFEMFunctionReturnHot(0);
   }
@@ -679,14 +669,6 @@ struct PostProcFatPrismOnRefinedMesh
             MoFEM::FatPrismElementForcesAndSourcesCore>(m_field),
         tenNodesPostProcTets(ten_nodes_post_proc_tets) {}
 
-  virtual ~PostProcFatPrismOnRefinedMesh() {
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
-
   int getRuleTrianglesOnly(int order) { return -1; };
   int getRuleThroughThickness(int order) { return -1; };
 
@@ -743,14 +725,6 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
             m_field),
         sixNodePostProcTris(six_node_post_proc_tris) {}
 
-  virtual ~PostProcFaceOnRefinedMesh() {
-    ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-    if (pcomm_post_proc_mesh != NULL) {
-      delete pcomm_post_proc_mesh;
-    }
-  }
-
   // Gauss pts set on refined mesh
   int getRule(int order) { return -1; };
 
@@ -790,8 +764,8 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          sideOpFe(side_fe), feVolName(vol_fe_name),
-	  gradMatPtr(grad_mat_ptr), tagName(tag_name), saveOnTag(save_on_tag) {}
+          sideOpFe(side_fe), feVolName(vol_fe_name), gradMatPtr(grad_mat_ptr),
+          tagName(tag_name), saveOnTag(save_on_tag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -800,44 +774,57 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   MoFEMErrorCode addFieldValuesGradientPostProcOnSkin(
       const std::string field_name, const std::string vol_fe_name,
       boost::shared_ptr<MatrixDouble> grad_mat_ptr = nullptr,
-      bool save_on_tag = true) {
-    MoFEMFunctionBegin;
+      bool save_on_tag = true);
 
-    if (!grad_mat_ptr)
-      grad_mat_ptr = boost::make_shared<MatrixDouble>();
+private:
+  MatrixDouble gaussPtsTri;
+  MatrixDouble gaussPtsQuad;
+};
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
-        boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+/**
+ * @brief Postprocess 2d face elements
+ *
+ */
+struct PostProcFaceOnRefinedMeshFor2D : public PostProcFaceOnRefinedMesh {
 
-    // check number of coefficients
-    auto field_ptr = mField.get_field_structure(field_name);
-    const int nb_coefficients = field_ptr->getNbOfCoeffs();
+  using PostProcFaceOnRefinedMesh::PostProcFaceOnRefinedMesh;
 
-    switch (nb_coefficients) {
-    case 1:
-      my_side_fe->getOpPtrVector().push_back(
-          new OpCalculateScalarFieldGradient<3>(field_name, grad_mat_ptr));
-      break;
-    case 3:
-      my_side_fe->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
-      break;
-    default:
-      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
-              "field with that number of coefficients is not implemented");
-    }
+  MoFEMErrorCode operator()();
+};
 
-    FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-        new OpGetFieldGradientValuesOnSkin(
-            postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
-            my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
+/**
+ * \brief Postprocess on edge
+ *
+ * \ingroup mofem_fs_post_proc
+ */
+struct PostProcEdgeOnRefinedMesh : public PostProcTemplateOnRefineMesh<
+                                       MoFEM::EdgeElementForcesAndSourcesCore> {
 
-    MoFEMFunctionReturn(0);
+  bool sixNodePostProcTris;
+
+  PostProcEdgeOnRefinedMesh(MoFEM::Interface &m_field,
+                            bool six_node_post_proc_tris = true)
+      : PostProcTemplateOnRefineMesh<MoFEM::EdgeElementForcesAndSourcesCore>(
+            m_field),
+        sixNodePostProcTris(six_node_post_proc_tris) {}
+
+  // Gauss pts set on refined mesh
+  int getRule(int order) { return -1; };
+
+  MoFEMErrorCode generateReferenceElementMesh();
+  MoFEMErrorCode setGaussPts(int order);
+
+  std::map<EntityHandle, EntityHandle> elementsMap;
+
+  MoFEMErrorCode preProcess();
+  MoFEMErrorCode postProcess();
+
+  struct CommonData : PostProcCommonOnRefMesh::CommonData {};
+  CommonData commonData;
+
+  virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
+    return commonData;
   }
-
-  private:
-    MatrixDouble gaussPtsTri;
-    MatrixDouble gaussPtsQuad;
 
 };
 

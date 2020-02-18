@@ -104,7 +104,7 @@ functions, we get
 =
 \int_\Omega v r u \left(1-\frac{u}{k}\right) \textrm{d}\Omega
 \f]
-where \f$\Omega\f$ is solution domian. To have a unique solution, we have to a
+where \f$\Omega\f$ is solution Domain. To have a unique solution, we have to a
 priori enforce essential boundary conditions, such that test functions \f$v\f$
 and tested function \f$u\f$ disappear on the boundary \f$\partial\Omega\f$.
 Also, approximation and tested functions are in
@@ -464,7 +464,7 @@ MoFEM::OpCalculateInvJacForFace(data->invJac));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpSetInvJacH1ForFace(data->invJac));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
-MoFEM::OpCalculateScalarValuesDot("u", dot_val_ptr));
+MoFEM::OpCalculateScalarFieldValuesDot("u", dot_val_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new
 MoFEM::OpCalculateScalarFieldGradient<2>("u", grad_ptr));
 vol_ele_stiff_rhs->getOpPtrVector().push_back(new

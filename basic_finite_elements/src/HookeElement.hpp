@@ -39,7 +39,7 @@
 
 struct NonlinearElasticElement {
 
-  /** \brief data for calculation het conductivity and heat capacity elements
+  /** \brief data for calculation heat conductivity and heat capacity elements
    * \ingroup nonlinear_elastic_elem
    */
   struct BlockData {
@@ -52,7 +52,7 @@ struct NonlinearElasticElement {
   };
 };
 
-#endif
+#endif // __NONLINEAR_ELASTIC_HPP
 
 /** \brief structure grouping operators and data used for calculation of
  * nonlinear elastic element \ingroup nonlinear_elastic_elem
@@ -65,9 +65,24 @@ struct NonlinearElasticElement {
  * loop attach operator.
  *
  */
+
+#ifndef __CONVECTIVE_MASS_ELEMENT_HPP
+struct ConvectiveMassElement {
+  /** \brief data for calculation inertia forces
+   * \ingroup user_modules
+   */
+  struct BlockData {
+    double rho0;     ///< reference density
+    VectorDouble a0; ///< constant acceleration
+    Range tEts;      ///< elements in block set
+  };
+}
+
+#endif //__CONVECTIVE_MASS_ELEMENT_HPP
 struct HookeElement {
 
   using BlockData = NonlinearElasticElement::BlockData;
+  using MassBlockData = ConvectiveMassElement::BlockData;
 
   using EntData = DataForcesAndSourcesCore::EntData;
   using UserDataOperator = ForcesAndSourcesCore::UserDataOperator;
@@ -202,7 +217,118 @@ struct HookeElement {
         blockSetsPtr; ///< Structure keeping data about problem, like
                       ///< material parameters
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
-    int lastEvaluatedId;
+  };
+
+  /** * @brief Assemble mass matrix for elastic element TODO: CHANGE FORMULA *
+   * \f[
+   * {\bf{M}} = \int\limits_\Omega
+   * \f]
+   *
+   */
+  struct OpCalculateMassMatrix
+      : public VolumeElementForcesAndSourcesCore::UserDataOperator {
+
+    MatrixDouble locK;
+    MatrixDouble translocK;
+    BlockData &dAta;
+    MassBlockData &massData;
+
+    boost::shared_ptr<DataAtIntegrationPts> commonData;
+
+    OpCalculateMassMatrix(const std::string row_field,
+                          const std::string col_field, BlockData &data,
+                          MassBlockData &mass_data,
+                          boost::shared_ptr<DataAtIntegrationPts> &common_data,
+                          bool symm = true)
+        : VolumeElementForcesAndSourcesCore::UserDataOperator(
+              row_field, col_field, OPROWCOL, symm),
+          commonData(common_data), dAta(data), massData(mass_data) {}
+
+    PetscErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+
+      auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+        return FTensor::Tensor2<double *, 3, 3>(
+            &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1),
+            &m(3 * r + 0, 3 * c + 2), &m(3 * r + 1, 3 * c + 0),
+            &m(3 * r + 1, 3 * c + 1), &m(3 * r + 1, 3 * c + 2),
+            &m(3 * r + 2, 3 * c + 0), &m(3 * r + 2, 3 * c + 1),
+            &m(3 * r + 2, 3 * c + 2));
+      };
+
+      const int row_nb_dofs = row_data.getIndices().size();
+      if (!row_nb_dofs)
+        MoFEMFunctionReturnHot(0);
+      const int col_nb_dofs = col_data.getIndices().size();
+      if (!col_nb_dofs)
+        MoFEMFunctionReturnHot(0);
+      if (dAta.tEts.find(getFEEntityHandle()) == dAta.tEts.end()) {
+        MoFEMFunctionReturnHot(0);
+      }
+      if (massData.tEts.find(getFEEntityHandle()) == massData.tEts.end()) {
+        MoFEMFunctionReturnHot(0);
+      }
+
+      const bool diagonal_block =
+          (row_type == col_type) && (row_side == col_side);
+      // get number of integration points
+      // Set size can clear local tangent matrix
+      locK.resize(row_nb_dofs, col_nb_dofs, false);
+      locK.clear();
+
+      const int row_nb_gauss_pts = row_data.getN().size1();
+      const int row_nb_base_functions = row_data.getN().size2();
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
+
+      double density = massData.rho0;
+   
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // integrate local matrix for entity block
+      for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+
+        auto t_row_base_func = row_data.getFTensor0N(gg, 0);
+
+        // Get volume and integration weight
+        double w = getVolume() * t_w;
+
+        for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
+          auto t_col_base_func = col_data.getFTensor0N(gg, 0);
+          for (int col_bb = 0; col_bb != col_nb_dofs / 3; col_bb++) {
+            auto t_assemble = get_tensor2(locK, row_bb, col_bb);
+            t_assemble(i, j) += density * t_row_base_func * t_col_base_func * w;
+            // Next base function for column
+            ++t_col_base_func;
+          }
+          // Next base function for row
+          ++t_row_base_func;
+        }
+        // Next integration point for getting weight
+        ++t_w;
+      }
+
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locK(0, 0),
+                          ADD_VALUES);
+
+      // is symmetric
+      if (row_type != col_type || row_side != col_side) {
+        translocK.resize(col_nb_dofs, row_nb_dofs, false);
+        noalias(translocK) = trans(locK);
+
+        CHKERR MatSetValues(getKSPB(), col_data, row_data, &translocK(0, 0),
+                            ADD_VALUES);
+      }
+
+      MoFEMFunctionReturn(0);
+    }
   };
 
   struct OpCalculateStiffnessScaledByDensityField : public VolUserDataOperator {
@@ -503,11 +629,7 @@ HookeElement::OpCalculateStrain<D>::OpCalculateStrain(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <bool D>
@@ -646,13 +768,8 @@ HookeElement::OpCalculateHomogeneousStiffness<S>::
         boost::shared_ptr<map<int, BlockData>> &block_sets_ptr,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
-      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts),
-      lastEvaluatedId(-1) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+      blockSetsPtr(block_sets_ptr), dataAtPts(data_at_pts) {
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
@@ -661,50 +778,43 @@ MoFEMErrorCode HookeElement::OpCalculateHomogeneousStiffness<S>::doWork(
   MoFEMFunctionBegin;
 
   for (auto &m : (*blockSetsPtr)) {
-    if (m.second.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) !=
-        m.second.tEts.end())
-      // NOTE: The stiffness Matrix is calculated only once, since is
-      // constant for
-      // all integration points and all elements in the block.
-      if (lastEvaluatedId != m.second.iD) {
+    if (m.second.tEts.find(getFEEntityHandle()) != m.second.tEts.end()) {
 
-        lastEvaluatedId = m.second.iD;
+      dataAtPts->stiffnessMat->resize(36, 1, false);
+      FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+          MAT_TO_DDG(dataAtPts->stiffnessMat));
+      const double young = m.second.E;
+      const double poisson = m.second.PoissonRatio;
 
-        dataAtPts->stiffnessMat->resize(36, 1, false);
-        FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
-            MAT_TO_DDG(dataAtPts->stiffnessMat));
-        const double young = m.second.E;
-        const double poisson = m.second.PoissonRatio;
+      // coefficient used in intermediate calculation
+      const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
 
-        // coefficient used in intermediate calculation
-        const double coefficient = young / ((1 + poisson) * (1 - 2 * poisson));
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'l', 3> l;
 
-        FTensor::Index<'i', 3> i;
-        FTensor::Index<'j', 3> j;
-        FTensor::Index<'k', 3> k;
-        FTensor::Index<'l', 3> l;
+      t_D(i, j, k, l) = 0.;
 
-        t_D(i, j, k, l) = 0.;
+      t_D(0, 0, 0, 0) = 1 - poisson;
+      t_D(1, 1, 1, 1) = 1 - poisson;
+      t_D(2, 2, 2, 2) = 1 - poisson;
 
-        t_D(0, 0, 0, 0) = 1 - poisson;
-        t_D(1, 1, 1, 1) = 1 - poisson;
-        t_D(2, 2, 2, 2) = 1 - poisson;
+      t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
+      t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
+      t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
 
-        t_D(0, 1, 0, 1) = 0.5 * (1 - 2 * poisson);
-        t_D(0, 2, 0, 2) = 0.5 * (1 - 2 * poisson);
-        t_D(1, 2, 1, 2) = 0.5 * (1 - 2 * poisson);
+      t_D(0, 0, 1, 1) = poisson;
+      t_D(1, 1, 0, 0) = poisson;
+      t_D(0, 0, 2, 2) = poisson;
+      t_D(2, 2, 0, 0) = poisson;
+      t_D(1, 1, 2, 2) = poisson;
+      t_D(2, 2, 1, 1) = poisson;
 
-        t_D(0, 0, 1, 1) = poisson;
-        t_D(1, 1, 0, 0) = poisson;
-        t_D(0, 0, 2, 2) = poisson;
-        t_D(2, 2, 0, 0) = poisson;
-        t_D(1, 1, 2, 2) = poisson;
-        t_D(2, 2, 1, 1) = poisson;
+      t_D(i, j, k, l) *= coefficient;
 
-        t_D(i, j, k, l) *= coefficient;
-
-        break;
-      }
+      break;
+    }
   }
 
   MoFEMFunctionReturn(0);
@@ -716,11 +826,7 @@ HookeElement::OpCalculateStress<S>::OpCalculateStress(
     boost::shared_ptr<DataAtIntegrationPts> data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>
@@ -1143,11 +1249,7 @@ HookeElement::OpAleLhsPre_dX_dx<S>::OpAleLhsPre_dX_dx(
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts)
     : VolUserDataOperator(row_field, col_field, OPROW, true),
       dataAtPts(data_at_pts) {
-  doEdges = false;
-  doQuads = false;
-  doTris = false;
-  doTets = false;
-  doPrisms = false;
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
 
 template <int S>

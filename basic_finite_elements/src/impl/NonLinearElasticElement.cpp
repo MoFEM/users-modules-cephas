@@ -63,26 +63,6 @@ MoFEMErrorCode NonlinearElasticElement::MyVolumeFE::preProcess() {
     snes_f = F;
   }
 
-  switch (ts_ctx) {
-  case CTX_TSSETIFUNCTION: {
-    if (!F) {
-      snes_ctx = CTX_SNESSETFUNCTION;
-      snes_f = ts_F;
-    }
-    break;
-  }
-  case CTX_TSSETIJACOBIAN: {
-    if (!A) {
-      snes_ctx = CTX_SNESSETJACOBIAN;
-      snes_B = ts_B;
-    }
-    break;
-  }
-  default:
-    break;
-  }
-
- 
   switch (snes_ctx) {
   case CTX_SNESNONE:
     CHKERR VecZeroEntries(V);
@@ -738,6 +718,7 @@ MoFEMErrorCode NonlinearElasticElement::OpEnergy::doWork(
     MoFEMFunctionReturnHot(0);
   if (dAta.tEts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
       dAta.tEts.end()) {
+    MoFEMFunctionReturnHot(0);
   }
 
   std::vector<MatrixDouble> &F =
