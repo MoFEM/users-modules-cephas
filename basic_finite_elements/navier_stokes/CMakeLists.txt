@@ -27,14 +27,11 @@ bfe_build_and_install(navier_stokes_prisms
 bfe_build_and_install(add_prisms_layer
   ${CMAKE_CURRENT_SOURCE_DIR}/add_prisms_layer.cpp
 )
-<<<<<<< HEAD
-=======
 # file(
 #   COPY ${CMAKE_CURRENT_SOURCE_DIR}/bc.cfg
 #   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
 #   FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
 
->>>>>>> ashvarts/navier_stokes
 #testing
 # add_test(elasticity_mixed_formulation
 #   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/elasticity_mixed_formulation
