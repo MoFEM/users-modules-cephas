@@ -30,36 +30,48 @@ using namespace boost::numeric;
 #include <NavierStokesElement.hpp>
 
 MoFEMErrorCode NavierStokesElement::setNavierStokesOperators(
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_rhs_ptr,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_lhs_ptr,
     const std::string velocity_field, const std::string pressure_field,
-    boost::shared_ptr<CommonData> common_data) {
+    boost::shared_ptr<CommonData> common_data, const EntityType type) {
   MoFEMFunctionBegin;
 
   for (auto &sit : common_data->setOfBlocksData) {
 
-    feLhs->getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
+    if (type == MBPRISM) {
+      boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+    }
+
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
         velocity_field, common_data->dispPtr));
-    feLhs->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
         velocity_field, common_data->gradDispPtr));
-    feLhs->getOpPtrVector().push_back(new OpAssembleLhsDiagLin(
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsDiagLin(
         velocity_field, velocity_field, common_data, sit.second));
-    feLhs->getOpPtrVector().push_back(new OpAssembleLhsDiagNonLin(
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsDiagNonLin(
         velocity_field, velocity_field, common_data, sit.second));
-    feLhs->getOpPtrVector().push_back(new OpAssembleLhsOffDiag(
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsOffDiag(
         velocity_field, pressure_field, common_data, sit.second));
 
-    feRhs->getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
+    fe_rhs_ptr->getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
         velocity_field, common_data->dispPtr));
-    feRhs->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
+    fe_rhs_ptr->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
         velocity_field, common_data->gradDispPtr));
-    feRhs->getOpPtrVector().push_back(
+    fe_rhs_ptr->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
-    feRhs->getOpPtrVector().push_back(
+    fe_rhs_ptr->getOpPtrVector().push_back(
         new OpAssembleRhsVelocityLin(velocity_field, common_data, sit.second));
-    feRhs->getOpPtrVector().push_back(new OpAssembleRhsVelocityNonLin(
+    fe_rhs_ptr->getOpPtrVector().push_back(new OpAssembleRhsVelocityNonLin(
         velocity_field, common_data, sit.second));
-    feRhs->getOpPtrVector().push_back(
+    fe_rhs_ptr->getOpPtrVector().push_back(
         new OpAssembleRhsPressure(pressure_field, common_data, sit.second));
   }
 
@@ -67,26 +79,38 @@ MoFEMErrorCode NavierStokesElement::setNavierStokesOperators(
 };
 
 MoFEMErrorCode NavierStokesElement::setStokesOperators(
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_rhs_ptr,
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_lhs_ptr,
     const std::string velocity_field, const std::string pressure_field,
-    boost::shared_ptr<CommonData> common_data) {
+    boost::shared_ptr<CommonData> common_data, const EntityType type) {
   MoFEMFunctionBegin;
 
   for (auto &sit : common_data->setOfBlocksData) {
 
-    feLhs->getOpPtrVector().push_back(new OpAssembleLhsDiagLin(
+    if (type == MBPRISM) {
+      boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+    }
+
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsDiagLin(
         velocity_field, velocity_field, common_data, sit.second));
-    feLhs->getOpPtrVector().push_back(new OpAssembleLhsOffDiag(
+    fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsOffDiag(
         velocity_field, pressure_field, common_data, sit.second));
 
-    feRhs->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
+    fe_rhs_ptr->getOpPtrVector().push_back(new OpCalculateVectorFieldGradient<3, 3>(
         velocity_field, common_data->gradDispPtr));
-    feRhs->getOpPtrVector().push_back(
+    fe_rhs_ptr->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues(pressure_field, common_data->pPtr));
-    feRhs->getOpPtrVector().push_back(
+    fe_rhs_ptr->getOpPtrVector().push_back(
         new OpAssembleRhsVelocityLin(velocity_field, common_data, sit.second));
-    feRhs->getOpPtrVector().push_back(
+    fe_rhs_ptr->getOpPtrVector().push_back(
         new OpAssembleRhsPressure(pressure_field, common_data, sit.second));
   }
 

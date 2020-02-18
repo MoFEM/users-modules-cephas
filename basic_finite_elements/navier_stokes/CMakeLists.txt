@@ -15,15 +15,15 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-bfe_build_and_install(stokes
-  ${CMAKE_CURRENT_SOURCE_DIR}/stokes.cpp
-)
+# bfe_build_and_install(stokes
+#   ${CMAKE_CURRENT_SOURCE_DIR}/stokes.cpp
+# )
 bfe_build_and_install(navier_stokes
   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes.cpp
 )
-bfe_build_and_install(navier_stokes_prisms
-  ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes_prisms.cpp
-)
+# bfe_build_and_install(navier_stokes_prisms
+#   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes_prisms.cpp
+# )
 bfe_build_and_install(add_prisms_layer
   ${CMAKE_CURRENT_SOURCE_DIR}/add_prisms_layer.cpp
 )

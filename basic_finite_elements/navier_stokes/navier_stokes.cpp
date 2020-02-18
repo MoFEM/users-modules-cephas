@@ -22,6 +22,7 @@
  *
  * */
 #include <BasicFiniteElements.hpp>
+#include <NavierStokesProblem.hpp>
 
 using namespace boost::numeric;
 using namespace MoFEM;
@@ -80,67 +81,72 @@ int main(int argc, char *argv[]) {
     double step_size = 0.0;
 
     PetscBool is_partitioned = PETSC_FALSE;
-    PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
+    PetscBool flg_test = PETSC_FALSE;
 
     PetscBool stokes_flow = PETSC_FALSE;
+    PetscBool discont_pressure = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "NAVIER_STOKES problem",
                              "none");
 
-    CHKERR PetscOptionsString("-file", "mesh file name", "", "mesh.h5m",
+    CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_mesh_file);
     // Set approximation order
-    CHKERR PetscOptionsInt("-order_p", "approximation order_p", "", order_p,
+    CHKERR PetscOptionsInt("-my_order_p", "approximation order_p", "", order_p,
                            &order_p, PETSC_NULL);
-    CHKERR PetscOptionsInt("-order_u", "approximation order_u", "", order_u,
+    CHKERR PetscOptionsInt("-my_order_u", "approximation order_u", "", order_u,
                            &order_u, PETSC_NULL);
-    CHKERR PetscOptionsInt("-ho_levels", "number of ho levels", "",
+    CHKERR PetscOptionsInt("-my_ho_levels", "number of ho levels", "",
                            nb_ho_levels, &nb_ho_levels, PETSC_NULL);
 
     CHKERR PetscOptionsInt(
         "-output_step", "frequency how often results are dumped on hard disk",
         "", 1, &outPutStep, NULL);
-    CHKERR PetscOptionsInt("-restart_step",
-                           "frequency how often restrt file is written", "", 1,
+    CHKERR PetscOptionsInt("-my_restart_freq",
+                           "frequency how often restart file is written", "", 1,
                            &restartStep, NULL);
 
-    CHKERR PetscOptionsInt("-steps", "number of steps", "", nbSubSteps,
+    CHKERR PetscOptionsInt("-my_step_num", "number of steps", "", nbSubSteps,
                            &nbSubSteps, PETSC_NULL);
 
-    CHKERR PetscOptionsInt("-desired_it_num", "desired number of iterations",
+    CHKERR PetscOptionsInt("-my_desired_it_num", "desired number of iterations",
                            "", desired_iteration_number,
                            &desired_iteration_number, PETSC_NULL);
 
-    CHKERR PetscOptionsInt("-steps_max_div", "number of steps", "", maxDivStep,
-                           &maxDivStep, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_step_max_div", "number of steps", "",
+                           maxDivStep, &maxDivStep, PETSC_NULL);
 
-    CHKERR PetscOptionsScalar("-lambda", "lambda", "", lambda1, &lambda1,
+    CHKERR PetscOptionsScalar("-my_lambda", "lambda", "", lambda1, &lambda1,
                               PETSC_NULL);
-    CHKERR PetscOptionsScalar("-lambda_init", "initial lambda", "", lambda0,
+    CHKERR PetscOptionsScalar("-my_lambda_init", "initial lambda", "", lambda0,
                               &lambda0, PETSC_NULL);
-    CHKERR PetscOptionsScalar("-lambda_step", "initial step in lambda", "",
+    CHKERR PetscOptionsScalar("-my_lambda_step", "initial step in lambda", "",
                               step_size, &step_size, PETSC_NULL);
 
-    CHKERR PetscOptionsScalar("-adapt_step_exp", "adaptive step exponent", "",
-                              adapt_step_exp, &adapt_step_exp, PETSC_NULL);
-    CHKERR PetscOptionsScalar("-length_scale", "length scale", "", length_scale,
-                              &length_scale, PETSC_NULL);
+    CHKERR PetscOptionsScalar("-my_adapt_step_exp", "adaptive step exponent",
+                              "", adapt_step_exp, &adapt_step_exp, PETSC_NULL);
+    CHKERR PetscOptionsScalar("-my_length_scale", "length scale", "",
+                              length_scale, &length_scale, PETSC_NULL);
 
-    CHKERR PetscOptionsString("-load_table", "load history file name", "",
+    CHKERR PetscOptionsString("-my_load_table", "load history file name", "",
                               "load_table.txt", load_file_name, 255,
                               &flg_load_file);
 
-    CHKERR PetscOptionsScalar("-step_red", "step reductcion while diverge", "",
+    CHKERR PetscOptionsScalar("-my_step_red", "step reduction when diverge", "",
                               stepRed, &stepRed, PETSC_NULL);
 
-    CHKERR PetscOptionsBool("-is_partitioned", "is_partitioned?", "",
+    CHKERR PetscOptionsBool("-my_is_partitioned", "is_partitioned?", "",
                             is_partitioned, &is_partitioned, PETSC_NULL);
 
-    CHKERR PetscOptionsBool("-stokes_flow", "stokes flow", "", stokes_flow,
+    CHKERR PetscOptionsBool("-my_stokes_flow", "stokes flow", "", stokes_flow,
                             &stokes_flow, PETSC_NULL);
 
+    CHKERR PetscOptionsBool("-my_discont_pressure", "discontinuous pressure",
+                            "", discont_pressure, &discont_pressure,
+                            PETSC_NULL);
+
     // Set testing (used by CTest)
-    CHKERR PetscOptionsBool("-test", "if true is ctest", "", flg_test,
+    CHKERR PetscOptionsBool("-my_test", "if true is ctest", "", flg_test,
                             &flg_test, PETSC_NULL);
     ierr = PetscOptionsEnd();
 
@@ -181,6 +187,15 @@ int main(int argc, char *argv[]) {
     // CHKERR meshsets_mng_ptr->printForceSet();
     // CHKERR meshsets_mng_ptr->printMaterialsSet();
 
+    bool mesh_has_tets = false;
+    bool mesh_has_prisms = false;
+    int nb_tets = 0;
+    int nb_prisms = 0;
+    CHKERR moab.get_number_entities_by_type(0, MBTET, nb_tets, true);
+    CHKERR moab.get_number_entities_by_type(0, MBPRISM, nb_prisms, true);
+    mesh_has_tets = nb_tets > 0;
+    mesh_has_prisms = nb_prisms > 0;
+
     BitRefLevel bit_level0;
     bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
@@ -188,27 +203,35 @@ int main(int argc, char *argv[]) {
 
     if (!is_restart) {
       // **** ADD FIELDS **** //
-      CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-      CHKERR m_field.add_field("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
+      CHKERR m_field.add_field("VELOCITY", H1, AINSWORTH_LEGENDRE_BASE, 3);
+      if (!discont_pressure)
+        CHKERR m_field.add_field("PRESSURE", H1, AINSWORTH_LEGENDRE_BASE, 1);
+      else
+        CHKERR m_field.add_field("PRESSURE", L2, AINSWORTH_LEGENDRE_BASE, 1);
       CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1,
                                AINSWORTH_LEGENDRE_BASE, 3);
-      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
-      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
-      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+
+      CHKERR m_field.add_ents_to_field_by_dim(0, 3, "VELOCITY");
+      CHKERR m_field.add_ents_to_field_by_dim(0, 3, "PRESSURE");
+      CHKERR m_field.add_ents_to_field_by_dim(0, 3, "MESH_NODE_POSITIONS");
     }
 
-    CHKERR m_field.set_field_order(0, MBVERTEX, "U", 1);
-    CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
-    CHKERR m_field.set_field_order(0, MBTRI, "U", order_u);
-    CHKERR m_field.set_field_order(0, MBTET, "U", order_u);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "VELOCITY", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "VELOCITY", order_u);
+    CHKERR m_field.set_field_order(0, MBTRI, "VELOCITY", order_u);
+    CHKERR m_field.set_field_order(0, MBTET, "VELOCITY", order_u);
+    CHKERR m_field.set_field_order(0, MBQUAD, "VELOCITY", order_u);
+    CHKERR m_field.set_field_order(0, MBPRISM, "VELOCITY", order_u);
 
-    CHKERR m_field.set_field_order(0, MBVERTEX, "P", 1);
-    CHKERR m_field.set_field_order(0, MBEDGE, "P", order_p);
-    CHKERR m_field.set_field_order(0, MBTRI, "P", order_p);
-    CHKERR m_field.set_field_order(0, MBTET, "P", order_p);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "PRESSURE", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "PRESSURE", order_p);
+    CHKERR m_field.set_field_order(0, MBTRI, "PRESSURE", order_p);
+    CHKERR m_field.set_field_order(0, MBTET, "PRESSURE", order_p);
+    CHKERR m_field.set_field_order(0, MBQUAD, "PRESSURE", order_p);
+    CHKERR m_field.set_field_order(0, MBPRISM, "PRESSURE", order_p);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "SOLID") == 0) {
+      if (bit->getName().compare(0, 5, "INT_SOLID") == 0) {
         Range ents;
         CHKERR m_field.get_moab().get_entities_by_type(bit->getMeshset(), MBTRI,
                                                        ents, true);
@@ -230,8 +253,10 @@ int main(int argc, char *argv[]) {
 
         int add_order = 1;
         for (int ll = nb_ho_levels - 1; ll >= 0; ll--) {
-          CHKERR m_field.set_field_order(levels[ll], "U", order_u + add_order);
-          CHKERR m_field.set_field_order(levels[ll], "P", order_p + add_order);
+          CHKERR m_field.set_field_order(levels[ll], "VELOCITY",
+                                         order_u + add_order);
+          CHKERR m_field.set_field_order(levels[ll], "PRESSURE",
+                                         order_p + add_order);
           ++add_order;
         }
       }
@@ -242,7 +267,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Setting geometry order everywhere
       Range tets, edges;
-      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+      CHKERR m_field.get_moab().get_entities_by_dimension(0, 3, tets);
       CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
                                                 moab::Interface::UNION);
 
@@ -258,55 +283,60 @@ int main(int argc, char *argv[]) {
                                                       "MESH_NODE_POSITIONS");
     CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
     // setup elements for loading
-    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "U");
-    CHKERR MetaNodalForces::addElement(m_field, "U");
-    CHKERR MetaEdgeForces::addElement(m_field, "U");
+    CHKERR MetaNeummanForces::addNeumannBCElements(m_field, "VELOCITY");
+    CHKERR MetaNodalForces::addElement(m_field, "VELOCITY");
+    CHKERR MetaEdgeForces::addElement(m_field, "VELOCITY");
 
     // **** ADD ELEMENTS **** //
 
     if (!is_restart) {
       // Add finite element (this defines element, declaration comes later)
       CHKERR m_field.add_finite_element("NAVIER_STOKES");
-      CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES", "U");
-      CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES", "U");
-      CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES", "U");
+      CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES",
+                                                         "VELOCITY");
+      CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES",
+                                                         "VELOCITY");
+      CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES",
+                                                          "VELOCITY");
 
-      CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES", "P");
-      CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES", "P");
-      CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES", "P");
+      CHKERR m_field.modify_finite_element_add_field_row("NAVIER_STOKES",
+                                                         "PRESSURE");
+      CHKERR m_field.modify_finite_element_add_field_col("NAVIER_STOKES",
+                                                         "PRESSURE");
+      CHKERR m_field.modify_finite_element_add_field_data("NAVIER_STOKES",
+                                                          "PRESSURE");
       CHKERR m_field.modify_finite_element_add_field_data(
           "NAVIER_STOKES", "MESH_NODE_POSITIONS");
 
       CHKERR m_field.add_finite_element("DRAG");
-      CHKERR m_field.modify_finite_element_add_field_row("DRAG", "U");
-      CHKERR m_field.modify_finite_element_add_field_col("DRAG", "U");
-      CHKERR m_field.modify_finite_element_add_field_data("DRAG", "U");
+      CHKERR m_field.modify_finite_element_add_field_row("DRAG", "VELOCITY");
+      CHKERR m_field.modify_finite_element_add_field_col("DRAG", "VELOCITY");
+      CHKERR m_field.modify_finite_element_add_field_data("DRAG", "VELOCITY");
 
-      CHKERR m_field.modify_finite_element_add_field_row("DRAG", "P");
-      CHKERR m_field.modify_finite_element_add_field_col("DRAG", "P");
-      CHKERR m_field.modify_finite_element_add_field_data("DRAG", "P");
+      CHKERR m_field.modify_finite_element_add_field_row("DRAG", "PRESSURE");
+      CHKERR m_field.modify_finite_element_add_field_col("DRAG", "PRESSURE");
+      CHKERR m_field.modify_finite_element_add_field_data("DRAG", "PRESSURE");
       CHKERR m_field.modify_finite_element_add_field_data(
           "DRAG", "MESH_NODE_POSITIONS");
       // Add entities to that element
-      CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
-                                                        "NAVIER_STOKES");
+      CHKERR m_field.add_ents_to_finite_element_by_dim(0, 3, "NAVIER_STOKES");
     }
 
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>();
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+      if (bit->getName().compare(0, 9, "MAT_FLUID") == 0) {
         const int id = bit->getMeshsetId();
-        CHKERR m_field.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].eNts,
-            true);
+        CHKERR m_field.get_moab().get_entities_by_dimension(
+            bit->getMeshset(), 3, commonData->setOfBlocksData[id].eNts, true);
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
-        if (attributes.size() != 2) {
+        if (attributes.size() < 2) {
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                   "should be 2 attributes but is %d", attributes.size());
+                   "should be at least 2 attributes but is %d",
+                   attributes.size());
         }
         commonData->setOfBlocksData[id].iD = id;
         commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
@@ -316,7 +346,7 @@ int main(int argc, char *argv[]) {
 
     Range solid_faces;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "SOLID") == 0) {
+      if (bit->getName().compare(0, 5, "INT_SOLID") == 0) {
         Range tets, tet;
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
@@ -343,8 +373,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-
-
     EntityHandle tree_root;
     AdaptiveKDTree myTree(&moab);
     BoundBox box;
@@ -356,7 +384,7 @@ int main(int argc, char *argv[]) {
       CHKERR myTree.build_tree(solid_faces, &tree_root);
     } else {
       Range tets;
-      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+      CHKERR m_field.get_moab().get_entities_by_dimension(0, 3, tets);
       CHKERR myTree.build_tree(tets, &tree_root);
     }
 
@@ -381,8 +409,8 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
           L, "MESH_NODE_POSITIONS");
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(U, "U");
-      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(P, "P");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(U, "VELOCITY");
+      CHKERR m_field.getInterface<FieldBlas>()->fieldScale(P, "PRESSURE");
       MoFEMFunctionReturn(0);
     };
 
@@ -415,33 +443,50 @@ int main(int argc, char *argv[]) {
     // setup the DM
     CHKERR DMSetUp(dm);
 
-    boost::shared_ptr<FEMethod> nullFE;
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs(
+    boost::shared_ptr<FEMethod> null_fe;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_lhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_rhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
 
-    feLhs->getRuleHook = NavierStokesElement::VolRule();
-    feRhs->getRuleHook = NavierStokesElement::VolRule();
+    fe_lhs_ptr->getRuleHook = NavierStokesElement::VolRule();
+    fe_rhs_ptr->getRuleHook = NavierStokesElement::VolRule();
 
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe(
+    boost::shared_ptr<FatPrism> prism_fe_lhs_ptr(new FatPrism(m_field));
+    boost::shared_ptr<FatPrism> prism_fe_rhs_ptr(new FatPrism(m_field));
+
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> drag_fe_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_drag_fe_ptr(
         new VolumeElementForcesAndSourcesCoreOnSide(m_field));
 
-    dragFe->getRuleHook = NavierStokesElement::FaceRule();
+    drag_fe_ptr->getRuleHook = NavierStokesElement::FaceRule();
 
     if (!solid_faces.empty()) {
-      NavierStokesElement::setCalcDragOperators(
-          dragFe, sideDragFe, "NAVIER_STOKES", "U", "P", commonData);
+      NavierStokesElement::setCalcDragOperators(drag_fe_ptr, side_drag_fe_ptr,
+                                                "NAVIER_STOKES", "VELOCITY",
+                                                "PRESSURE", commonData);
     }
 
-    if (stokes_flow) {
-      CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
-                                                     commonData);
-    } else {
-      CHKERR NavierStokesElement::setNavierStokesOperators(feRhs, feLhs, "U",
-                                                           "P", commonData);
+    if (mesh_has_tets) {
+      if (stokes_flow) {
+        CHKERR NavierStokesElement::setStokesOperators(
+            fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", commonData);
+      } else {
+        CHKERR NavierStokesElement::setNavierStokesOperators(
+            fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", commonData);
+      }
+    }
+    if (mesh_has_prisms) {
+      if (stokes_flow) {
+        CHKERR NavierStokesElement::setStokesOperators(
+            prism_fe_rhs_ptr, prism_fe_lhs_ptr, "VELOCITY", "PRESSURE",
+            commonData, MBPRISM);
+      } else {
+        CHKERR NavierStokesElement::setNavierStokesOperators(
+            prism_fe_rhs_ptr, prism_fe_lhs_ptr, "VELOCITY", "PRESSURE",
+            commonData, MBPRISM);
+      }
     }
 
     Mat Aij;      // Stiffness matrix
@@ -475,7 +520,7 @@ int main(int argc, char *argv[]) {
 
     // STANDARD DIRICHLET BC
     boost::shared_ptr<DirichletDisplacementBc> dirichlet_bc_ptr(
-        new DirichletDisplacementBc(m_field, "U", Aij, D, F));
+        new DirichletDisplacementBc(m_field, "VELOCITY", Aij, D, F));
     if (flg_load_file == PETSC_TRUE) {
       dirichlet_bc_ptr->methodsOp.push_back(
           new TimeForceScale("-load_table", false));
@@ -486,7 +531,7 @@ int main(int argc, char *argv[]) {
 
     // VELOCITY DIRICHLET BC
     boost::shared_ptr<DirichletVelocityBc> dirichlet_vel_bc_ptr(
-        new DirichletVelocityBc(m_field, "U", Aij, D, F));
+        new DirichletVelocityBc(m_field, "VELOCITY", Aij, D, F));
     if (flg_load_file == PETSC_TRUE) {
       dirichlet_vel_bc_ptr->methodsOp.push_back(
           new TimeForceScale("-load_table", false));
@@ -498,7 +543,8 @@ int main(int argc, char *argv[]) {
 
     // PRESSURE DIRICHLET BC
     boost::shared_ptr<DirichletSetFieldFromBlock> dirichlet_pres_bc_ptr(
-        new DirichletSetFieldFromBlock(m_field, "P", "PRESS", Aij, D, F));
+        new DirichletSetFieldFromBlock(m_field, "PRESSURE", "PRESS", Aij, D,
+                                       F));
     // dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_pres_bc_ptr->snes_x = D;
 
@@ -518,7 +564,7 @@ int main(int argc, char *argv[]) {
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
     CHKERR MetaNeummanForces::setMomentumFluxOperators(m_field, neumann_forces,
-                                                       NULL, "U");
+                                                       NULL, "VELOCITY");
     {
       boost::ptr_map<std::string, NeummanForcesSurface>::iterator mit =
           neumann_forces.begin();
@@ -529,27 +575,33 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR DMMoFEMSNESSetFunction(dm, "NAVIER_STOKES", feRhs, nullFE, nullFE);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, nullFE, nullFE,
+    CHKERR DMMoFEMSNESSetFunction(dm, "NAVIER_STOKES", fe_rhs_ptr, null_fe,
+                                  null_fe);
+    CHKERR DMMoFEMSNESSetFunction(dm, "NAVIER_STOKES", prism_fe_rhs_ptr,
+                                  null_fe, null_fe);
+    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_vel_bc_ptr);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, nullFE, nullFE,
+    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_bc_ptr);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, nullFE, nullFE,
+    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_pres_bc_ptr);
 
     // Set operators for SNES snes
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, nullFE,
-                                  dirichlet_vel_bc_ptr, nullFE);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, nullFE, dirichlet_bc_ptr,
-                                  nullFE);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, nullFE,
-                                  dirichlet_pres_bc_ptr, nullFE);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", feLhs, nullFE, nullFE);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, nullFE, nullFE,
+    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe,
+                                  dirichlet_vel_bc_ptr, null_fe);
+    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, dirichlet_bc_ptr,
+                                  null_fe);
+    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe,
+                                  dirichlet_pres_bc_ptr, null_fe);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", fe_lhs_ptr, null_fe,
+                                  null_fe);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", prism_fe_lhs_ptr,
+                                  null_fe, null_fe);
+    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_vel_bc_ptr);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, nullFE, nullFE,
+    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_bc_ptr);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, nullFE, nullFE,
+    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_pres_bc_ptr);
 
     // **** SOLVE **** //
@@ -593,8 +645,62 @@ int main(int argc, char *argv[]) {
     if (fabs(step_size) < 1e-14)
       step_size = lambda1 / nbSubSteps;
 
-    boost::shared_ptr<PostProcVolumeOnRefinedMesh> postProcPtr;
-    boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr;
+    boost::shared_ptr<PostProcVolumeOnRefinedMesh> post_proc_ptr;
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_drag_ptr;
+
+    boost::shared_ptr<PostProcFatPrismOnRefinedMesh> prism_post_proc_ptr;
+
+    // for postprocessing:
+
+    post_proc_ptr = boost::make_shared<PostProcVolumeOnRefinedMesh>(m_field);
+
+    if (mesh_has_tets) {
+      CHKERR post_proc_ptr->generateReferenceElementMesh();
+      CHKERR post_proc_ptr->addFieldValuesPostProc("VELOCITY");
+      CHKERR post_proc_ptr->addFieldValuesPostProc("PRESSURE");
+      CHKERR post_proc_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+      CHKERR post_proc_ptr->addFieldValuesGradientPostProc("VELOCITY");
+
+      // loop over blocks
+      for (auto &sit : commonData->setOfBlocksData) {
+
+        post_proc_ptr->getOpPtrVector().push_back(
+            new OpCalculateVectorFieldGradient<3, 3>("VELOCITY",
+                                                     commonData->gradDispPtr));
+        post_proc_ptr->getOpPtrVector().push_back(
+            new NavierStokesElement::OpPostProcVorticity(
+                post_proc_ptr->postProcMesh, post_proc_ptr->mapGaussPts,
+                commonData, sit.second));
+      }
+    }
+
+    prism_post_proc_ptr =
+        boost::make_shared<PostProcFatPrismOnRefinedMesh>(m_field);
+
+    if (mesh_has_prisms) {
+      CHKERR prism_post_proc_ptr->generateReferenceElementMesh();
+      CHKERR prism_post_proc_ptr->addFieldValuesPostProc("VELOCITY");
+      CHKERR prism_post_proc_ptr->addFieldValuesPostProc("PRESSURE");
+      CHKERR prism_post_proc_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+      CHKERR prism_post_proc_ptr->addFieldValuesGradientPostProc("VELOCITY");
+
+      boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+      prism_post_proc_ptr->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      prism_post_proc_ptr->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+    }
+
+    if (!solid_faces.empty()) {
+
+      post_proc_drag_ptr =
+          boost::make_shared<PostProcFaceOnRefinedMesh>(m_field);
+      CHKERR post_proc_drag_ptr->generateReferenceElementMesh();
+
+      CHKERR NavierStokesElement::setPostProcDragOperators(
+          post_proc_drag_ptr, side_drag_fe_ptr, "NAVIER_STOKES", "VELOCITY",
+          "PRESSURE", commonData);
+    }
 
     double lambda = lambda0;
     double frac = 0;
@@ -709,69 +815,37 @@ int main(int argc, char *argv[]) {
 
       if (ss % outPutStep == 0) {
 
-        // for postprocessing:
-        if (!postProcPtr) {
-
-          postProcPtr =
-              boost::make_shared<PostProcVolumeOnRefinedMesh>(m_field);
-          CHKERR postProcPtr->generateReferenceElementMesh();
-          CHKERR postProcPtr->addFieldValuesPostProc("U");
-          CHKERR postProcPtr->addFieldValuesPostProc("P");
-          CHKERR postProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
-          CHKERR postProcPtr->addFieldValuesGradientPostProc("U");
-
-          // loop over blocks
-          for (auto &sit : commonData->setOfBlocksData) {
-
-            postProcPtr->getOpPtrVector().push_back(
-                new OpCalculateVectorFieldGradient<3, 3>(
-                    "U", commonData->gradDispPtr));
-            postProcPtr->getOpPtrVector().push_back(
-                new NavierStokesElement::OpPostProcVorticity(
-                    postProcPtr->postProcMesh, postProcPtr->mapGaussPts,
-                    commonData, sit.second));
-          }
-        }
-
-        if (!solid_faces.empty() && !postProcDragPtr) {
-
-          postProcDragPtr =
-              boost::make_shared<PostProcFaceOnRefinedMesh>(m_field);
-          CHKERR postProcDragPtr->generateReferenceElementMesh();
-
-          CHKERR NavierStokesElement::setPostProcDragOperators(
-              postProcDragPtr, sideDragFe, "NAVIER_STOKES", "U", "P",
-              commonData);
-        }
-
         CHKERR scale_problem(U, L, P);
 
-        CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", postProcPtr);
-        string out_file_name;
-        std::ostringstream stm;
-        stm << "out_" << ss << ".h5m";
-        out_file_name = stm.str();
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                           out_file_name.c_str());
-        CHKERR postProcPtr->postProcMesh.write_file(
-            out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+        CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", post_proc_ptr);
+        CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES",
+                                        prism_post_proc_ptr);
+
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write output file ...\n");
+
+        if (mesh_has_tets)
+          CHKERR post_proc_ptr->postProcMesh.write_file("out.h5m", "MOAB",
+                                                        "PARALLEL=WRITE_PART");
+        if (mesh_has_prisms)
+          CHKERR prism_post_proc_ptr->postProcMesh.write_file(
+              "out_prism.h5m", "MOAB", "PARALLEL=WRITE_PART");
 
         if (!solid_faces.empty()) {
 
-          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", postProcDragPtr);
+          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", post_proc_drag_ptr);
           string out_file_name;
           std::ostringstream stm;
           stm << "out_drag_" << ss << ".h5m";
           out_file_name = stm.str();
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
                              out_file_name.c_str());
-          CHKERR postProcDragPtr->postProcMesh.write_file(
+          CHKERR post_proc_drag_ptr->postProcMesh.write_file(
               out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
 
           commonData->pressureDragForce.clear();
           commonData->viscousDragForce.clear();
           commonData->totalDragForce.clear();
-          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", dragFe);
+          CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", drag_fe_ptr);
 
           compute_global_drag(commonData->pressureDragForce, vecGlobalDrag);
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "pressure drag: (%g, %g, %g)\n",

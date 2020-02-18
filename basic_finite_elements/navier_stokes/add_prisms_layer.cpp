@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
     CHKERR prisms_from_surface_interface->seedPrismsEntities(prisms,
                                                              bit_level0);
 
-    cout << "FLUID: " << prisms.size() << " prism(s)" << endl;
+    //cout << "FLUID: " << prisms.size() << " prism(s)" << endl;
     // prisms.print();
 
     auto add_quads_set = [&](const int old_set_id, const int new_set_id,
@@ -176,8 +176,8 @@ int main(int argc, char *argv[]) {
                                   moab::Interface::UNION);
 
       quads = quads.subset_by_type(MBQUAD);
-      cout << "first layer faces: " << quads.size() << endl;
-      quads.print();
+      //cout << "first layer faces: " << quads.size() << endl;
+      //quads.print();
 
       quads_layer = quads;
       for (int i = 1; i < nb_layers; i++) {
@@ -190,16 +190,16 @@ int main(int argc, char *argv[]) {
                                     moab::Interface::UNION);
         adj_quads = adj_quads.subset_by_type(MBQUAD);
         adj_quads = subtract(adj_quads, quads);
-        cout << "adj quads: " << adj_quads.size() << endl;
-        adj_quads.print();
+        //cout << "adj quads: " << adj_quads.size() << endl;
+        //adj_quads.print();
 
         CHKERR moab.get_adjacencies(quads_layer, 3, true, prisms_layer,
                                     moab::Interface::UNION);
         CHKERR moab.get_adjacencies(prisms_layer, 2, true, tris_layer,
                                     moab::Interface::UNION);
         tris_layer = tris_layer.subset_by_type(MBTRI);
-        cout << "prism layer tris: " << tris_layer.size() << endl;
-        tris_layer.print();
+        //cout << "prism layer tris: " << tris_layer.size() << endl;
+        //tris_layer.print();
 
         CHKERR moab.get_adjacencies(tris_layer, 3, true, prisms_next_layer,
                                     moab::Interface::UNION);
@@ -213,24 +213,24 @@ int main(int argc, char *argv[]) {
 
         quads_layer = intersect(quads_layer, adj_quads);
 
-        cout << "quads layer: " << quads_layer.size() << endl;
-        quads_layer.print();
+        //cout << "quads layer: " << quads_layer.size() << endl;
+        //quads_layer.print();
 
         Range nodes;
         CHKERR moab.get_connectivity(quads_layer, nodes);
         MatrixDouble coords(nodes.size(), 3);
         CHKERR moab.get_coords(nodes, &coords(0, 0));
 
-        for (int j = 0; j < nodes.size(); j++) {
-          cout << coords(j, 0) << " " << coords(j, 1) << " "
-               << coords(j, 2) << endl;
-        }
+        // for (int j = 0; j < nodes.size(); j++) {
+        //   cout << coords(j, 0) << " " << coords(j, 1) << " "
+        //        << coords(j, 2) << endl;
+        // }
 
         quads.merge(quads_layer);
       }
 
-      cout << new_set_name << ": " << quads.size() << " face(s)" << endl;
-      quads.print();
+      //cout << new_set_name << ": " << quads.size() << " face(s)" << endl;
+      //quads.print();
 
       CHKERR mmanager_ptr->addMeshset(BLOCKSET, new_set_id, new_set_name);
       CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, new_set_id, quads);
@@ -272,8 +272,8 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    add_quads_set(ID_INLET_EDGE, ID_INLET_PRESS, "MESHSET_INLET_PRESS");
-    add_quads_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "MESHSET_OUTLET_PRESS");
+    add_quads_set(ID_INLET_EDGE, ID_INLET_PRESS, "INLET_PRESS");
+    add_quads_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "OUTLET_PRESS");
 
     add_quads_set(ID_SYMMETRY_EDGE, ID_SYMMETRY_DISP, "SYMMETRY_DISP");
     add_quads_set(ID_INLET_EDGE, ID_INLET_DISP, "INLET_DISP");

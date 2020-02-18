@@ -127,14 +127,13 @@ struct NavierStokesElement {
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
       const std::string velocity_field, const std::string pressure_field,
-      boost::shared_ptr<CommonData> common_data);
+      boost::shared_ptr<CommonData> common_data, const EntityType type = MBTET);
 
-  static MoFEMErrorCode
-  setStokesOperators(boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
-                     boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
-                     const std::string velocity_field,
-                     const std::string pressure_field,
-                     boost::shared_ptr<CommonData> common_data);
+  static MoFEMErrorCode setStokesOperators(
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
+      const std::string velocity_field, const std::string pressure_field,
+      boost::shared_ptr<CommonData> common_data, const EntityType type = MBTET);
 
   static MoFEMErrorCode setCalcDragOperators(
       boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe,

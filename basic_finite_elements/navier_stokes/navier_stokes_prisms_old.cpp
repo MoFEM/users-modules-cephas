@@ -335,7 +335,7 @@ int main(int argc, char *argv[]) {
         boost::make_shared<NavierStokesElement::CommonData>();
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+      if (bit->getName().compare(0, 5, "MAT_FLUID") == 0) {
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
             bit->getMeshset(), MBPRISM, commonData->setOfBlocksData[id].eNts,
