@@ -272,50 +272,50 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
     newton_solver();
 
-    auto center_diffKsiMaster = diffKsiMaster;
-    auto center_diffKsiSlave = diffKsiSlave;
-    auto centre_ksi = fePtr->gaussPtsMaster;
+    // auto center_diffKsiMaster = diffKsiMaster;
+    // auto center_diffKsiSlave = diffKsiSlave;
+    // auto centre_ksi = fePtr->gaussPtsMaster;
  
-    constexpr double e = 1e-8;
-    constexpr int node = 0;
-    constexpr int dim = 1;
+    // constexpr double e = 1e-8;
+    // constexpr int node = 1;
+    // constexpr int dim = 2;
 
-    for (size_t n = 0; n != 3; ++n) {
-      for (size_t d = 0; d != 3; ++d) {
-        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-      }
-    }
-    masterSpatialCoords(node, dim) += e;
+    // for (size_t n = 0; n != 3; ++n) {
+    //   for (size_t d = 0; d != 3; ++d) {
+    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+    //   }
+    // }
+    // masterSpatialCoords(node, dim) += e;
 
-    newton_solver();
+    // newton_solver();
 
-    auto plus_ksi = fePtr->gaussPtsMaster;
+    // auto plus_ksi = fePtr->gaussPtsMaster;
 
-     for (size_t n = 0; n != 3; ++n) {
-      for (size_t d = 0; d != 3; ++d) {
-        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-      }
-    }
-    masterSpatialCoords(node, dim) -= e;
+    //  for (size_t n = 0; n != 3; ++n) {
+    //   for (size_t d = 0; d != 3; ++d) {
+    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+    //   }
+    // }
+    // masterSpatialCoords(node, dim) -= e;
 
-    newton_solver();
+    // newton_solver();
 
-    auto minus_ksi = fePtr->gaussPtsMaster;
+    // auto minus_ksi = fePtr->gaussPtsMaster;
 
-    auto diff = (plus_ksi - minus_ksi) / (2 * e);
-    cerr << diff << endl;
-    cerr << center_diffKsiMaster << " : "
-         << center_diffKsiMaster(3 * 0 + dim, node * gg) << " "
-         << center_diffKsiMaster(3 * 1 + dim, node * gg) << endl;
-    cerr << center_diffKsiMaster(3 * 0 + dim, node * gg) - diff(0, 0) << " "
-         << center_diffKsiMaster(3 * 1 + dim, node * gg) - diff(1, 0) << endl
-         << endl;
+    // auto diff = (plus_ksi - minus_ksi) / (2 * e);
+    // cerr << diff << endl;
+    // cerr << center_diffKsiMaster << " : "
+    //      << center_diffKsiMaster(3 * 0 + dim, node * gg) << " "
+    //      << center_diffKsiMaster(3 * 1 + dim, node * gg) << endl;
+    // cerr << center_diffKsiMaster(3 * 0 + dim, node * gg) - diff(0, 0) << " "
+    //      << center_diffKsiMaster(3 * 1 + dim, node * gg) - diff(1, 0) << endl
+    //      << endl;
 
-    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "STOP");
+    // SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "STOP");
 
     ++t_xi_master;
   }
@@ -1373,13 +1373,14 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
 
   const int nb_row_dofs = row_data.getIndices().size();
   const int nb_col_dofs = col_data.getIndices().size();
-  if (nb_row_dofs && nb_col_dofs && col_type == MBVERTEX) {
+  if (nb_row_dofs && (nb_col_dofs && col_type == MBVERTEX)) {
 
     const int nb_gauss_pts = getGaussPtsSlave().size2();
     int nb_base_fun_row = nb_row_dofs / 3;
     int nb_base_fun_col = nb_col_dofs / 3;
 
     matLhs.resize(nb_row_dofs, nb_col_dofs, false);
+    matLhs.clear();
 
     const double area_s =
         commonDataSimpleContact->areaSlave; // same area in master and slave

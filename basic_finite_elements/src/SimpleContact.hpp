@@ -967,7 +967,7 @@ struct SimpleContactProblem {
     OpCalculateGradXi(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
