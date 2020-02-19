@@ -253,11 +253,13 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       auto get_diff_master = [&]() {
         auto t_diff = get_t_diff();
-        double *master_base = &masterN(gg, 1);
+        double *master_base = &masterN(gg, 0);
+        FTensor::Tensor4<double, 2,2,2,2> t_diff_A;
+        t_diff_A(I,J,K,L) = -t_inv_A(I,K)*t_inv_A(L,J);
         for (size_t n = 0; n != 3; ++n) {
-          const double t0 = (t_inv_A(J, K) * t_f(J)) * t_diff(K);
-          t_diff_xi_master(I, i) -= (t_inv_A(I, L) * t_tau(i, L)) * t0 +
-                                    t_inv_A(I, J) * t_tau(i, J) * (*master_base);
+          t_diff_xi_master(I, i) =
+              (t_diff_A(I, J, K, L) * (t_f(J) * t_diff(L))) * t_tau(i, K) -
+              t_inv_A(I, J) * t_tau(i, J) * (*master_base);
           ++t_diff_xi_master;
           ++master_base;
           ++t_diff;
