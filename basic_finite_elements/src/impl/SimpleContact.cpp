@@ -1243,19 +1243,19 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
       common_data_simple_contact, field_name, lagrang_field_name);
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpCalculateGradXi(field_name, common_data_simple_contact));
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsContactTraction(
-          field_name, lagrang_field_name, common_data_simple_contact,
+          field_name, field_name, common_data_simple_contact,
           ContactOp::FACEMASTERSLAVE,
           fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsContactTraction(
-          field_name, lagrang_field_name, common_data_simple_contact,
-          ContactOp::FACEMASTERSLAVE,
+          field_name, field_name, common_data_simple_contact,
+          ContactOp::FACEMASTERMASTER,
           fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
-
-  fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpCalculateGradXi(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsConstrainMasterGap(
@@ -1336,7 +1336,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
 
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
-    FTensor::Index<'K', 2> K;
+    FTensor::Index<'I', 2> I;
 
     auto get_tensor_vec = [](VectorDouble &n) {
       return FTensor::Tensor1<double *, 3>(&n[0], &n[1], &n[2]);
@@ -1358,7 +1358,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
       double val_s = t_w * area_s * t_lagrange_slave;
-      auto t_base_slave = row_data.getFTensor0N(gg,0);
+      auto t_diff_base_row = row_data.getFTensor1DiffN<2>(gg, 0);
 
       for (int rr = 0; rr != nb_base_fun_row; ++rr) {
 
@@ -1372,19 +1372,17 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
             &matLhs(3 * rr + 2, 0), &matLhs(3 * rr + 2, 1),
             &matLhs(3 * rr + 2, 2)};
 
-        auto t_diff_base_col = col_data.getFTensor1DiffN<3>(gg, 0);
         auto t_diff_convect = get_diff_ksi(*diffConvect, gg);
 
         for (int cc = 0; cc != nb_base_fun_col; ++cc) {
-          t_mat(i, j) -= val_s * t_base_slave * t_const_unit_n(i) *
-                         (t_diff_base_col(K) * t_diff_convect(K, j));
+          t_mat(i, j) -= val_s * (t_diff_base_row(I) * t_diff_convect(I, j)) *
+                         t_const_unit_n(i);
 
-          ++t_diff_base_col;
           ++t_diff_convect;
           ++t_mat;
         }
 
-        ++t_base_row;
+        ++t_diff_base_row;
       }
 
       ++t_lagrange_slave;
@@ -1402,13 +1400,13 @@ MoFEMErrorCode SimpleContactProblem::OpCalculateGradXi::doWork(int side,
                                                                EntityType type,
                                                                EntData &data) {
   MoFEMFunctionBegin;
-  const int nb_dofs = data.getIndices().size();
+  const int nb_dofs = data.getFieldData().size();
   const int nb_integration_pts = getGaussPtsSlave().size2();
   auto &xi_grad_mat =
       *(commonDataSimpleContact->gradKsiPositionAtGaussPtsSlavePtr);
   xi_grad_mat.resize(6, nb_integration_pts, false);
   if (type == MBVERTEX)
-    xi_grad_mat.resize(6, nb_integration_pts, false);
+    xi_grad_mat.clear();
 
   FTensor::Index<'i', 3> i;
   FTensor::Index<'I', 2> I;
@@ -1422,6 +1420,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalculateGradXi::doWork(int side,
       auto t_diff_base = data.getFTensor1DiffN<2>(gg, 0);
       for (size_t bb = 0; bb != nb_dofs / 3; ++bb) {
         t_grad(i, I) += t_diff_base(I) * t_data(i);
+        ++t_data;
         ++t_diff_base;
       }
       ++t_grad;

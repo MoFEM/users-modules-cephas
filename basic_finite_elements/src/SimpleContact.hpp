@@ -944,14 +944,14 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
 
     OpLhsConvectIntegrationPtsContactTraction(
-        const string field_name, const string lagrange_field_name,
+        const string row_field_name, const string col_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
-        : ContactOp(field_name, lagrange_field_name, UserDataOperator::OPROWCOL,
+        : ContactOp(row_field_name, col_field_name, UserDataOperator::OPROWCOL,
                     face_type),
           commonDataSimpleContact(common_data_contact),
-          diffConvect(diff_convect) {}
+          diffConvect(diff_convect) { sYmm = false; }
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
@@ -986,7 +986,9 @@ struct SimpleContactProblem {
         : ContactOp(lagrange_field_name, field_name, UserDataOperator::OPROWCOL,
                     face_type),
           commonDataSimpleContact(common_data_contact), cN(cn),
-          diffConvect(diff_convect) {}
+          diffConvect(diff_convect) {
+      sYmm = false;
+    }
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
