@@ -161,7 +161,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     auto t_f = get_t_F();
 
     auto newton_solver = [&]() {
-
       auto get_values = [&]() {
         t_tau(i, I) = 0;
         t_x_slave(i) = 0;
@@ -186,7 +185,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
           ++slave_base;
           ++master_base;
         }
-
       };
 
       auto assemble = [&]() {
@@ -255,8 +253,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, gg);
         auto t_diff = get_t_diff();
         double *master_base = &masterN(gg, 0);
-        FTensor::Tensor4<double, 2,2,2,2> t_diff_A;
-        t_diff_A(I,J,K,L) = -t_inv_A(I,K)*t_inv_A(L,J);
+        FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_A;
+        t_diff_A(I, J, K, L) = -t_inv_A(I, K) * t_inv_A(L, J);
         for (size_t n = 0; n != 3; ++n) {
           t_diff_xi_master(I, i) =
               (t_diff_A(I, J, K, L) * (t_f(J) * t_diff(L))) * t_tau(i, K) -
@@ -276,7 +274,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     // auto center_diffKsiMaster = diffKsiMaster;
     // auto center_diffKsiSlave = diffKsiSlave;
     // auto centre_ksi = fePtr->gaussPtsMaster;
- 
+
     // constexpr double e = 1e-8;
     // constexpr int node = 1;
     // constexpr int dim = 2;
@@ -1554,12 +1552,12 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
           t_mat(i) += t_base_lambda * val_diff_m_g * t_const_unit_n(j) *
                       t_grad(j, I) * t_diff_convect(I, i);
 
-          ++t_base_diff_disp; 
+          ++t_base_diff_disp;
           ++t_diff_convect;
           ++t_mat;
         }
 
-        ++t_base_lambda; 
+        ++t_base_lambda;
         ++t_base_diff_lambda;
       }
 
