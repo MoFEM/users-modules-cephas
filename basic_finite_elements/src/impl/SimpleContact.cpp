@@ -148,8 +148,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         &m(0, 0), &m(1, 0), &m(2, 0), &m(3, 0), &m(4, 0), &m(5, 0));
   };
 
-  diffKsiMaster.resize(19, nb_gauss_pts, false);
-  diffKsiSlave.resize(19, nb_gauss_pts, false);
+  diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
+  diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
   auto t_diff_xi_master = get_diff_ksi(diffKsiMaster);
   auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave);
 
@@ -213,6 +213,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       constexpr int max_it = 10;
       int it = 0;
       double eps;
+
       do {
 
         get_values();
@@ -227,6 +228,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         eps = norm_2(F);
 
       } while (eps > tol && (it++) < max_it);
+
+      cerr << "it " << it << " " << eps << endl;
 
       get_values();
       assemble();
@@ -266,6 +269,51 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     };
 
     newton_solver();
+
+    auto center_diffKsiMaster = diffKsiMaster;
+    auto center_diffKsiSlave = diffKsiSlave;
+    auto centre_ksi = fePtr->gaussPtsMaster;
+ 
+    constexpr double e = 1e-8;
+    constexpr int node = 0;
+    constexpr int dim = 1;
+
+    for (size_t n = 0; n != 3; ++n) {
+      for (size_t d = 0; d != 3; ++d) {
+        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+      }
+    }
+    masterSpatialCoords(node, dim) += e;
+
+    newton_solver();
+
+    auto plus_ksi = fePtr->gaussPtsMaster;
+
+     for (size_t n = 0; n != 3; ++n) {
+      for (size_t d = 0; d != 3; ++d) {
+        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+      }
+    }
+    masterSpatialCoords(node, dim) -= e;
+
+    newton_solver();
+
+    auto minus_ksi = fePtr->gaussPtsMaster;
+
+    auto diff = (plus_ksi - minus_ksi) / (2 * e);
+    cerr << diff << endl;
+    cerr << center_diffKsiMaster << " : "
+         << center_diffKsiMaster(3 * 0 + dim, node * gg) << " "
+         << center_diffKsiMaster(3 * 1 + dim, node * gg) << endl;
+    cerr << center_diffKsiMaster(3 * 0 + dim, node * gg) - diff(0, 0) << " "
+         << center_diffKsiMaster(3 * 1 + dim, node * gg) - diff(1, 0) << endl
+         << endl;
+
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "STOP");
 
     ++t_xi_master;
   }

@@ -370,7 +370,7 @@ struct SimpleContactProblem {
   /**
    * @brief Operator for the simple contact element
    *
-   * Calgulates the product of Lagrange multipliers with gaps evaluated at the
+   * Calculates the product of Lagrange multipliers with gaps evaluated at the
    * gauss points on the slave triangle.
    *
    */
