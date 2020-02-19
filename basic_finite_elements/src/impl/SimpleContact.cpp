@@ -143,15 +143,14 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
   auto t_xi_master = get_t_xi(fePtr->gaussPtsMaster);
 
-  auto get_diff_ksi = [](auto &m) {
+  auto get_diff_ksi = [](auto &m, const int gg) {
     return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
-        &m(0, 0), &m(1, 0), &m(2, 0), &m(3, 0), &m(4, 0), &m(5, 0));
+        &m(0, 3 * gg), &m(1, 3 * gg), &m(2, 3 * gg), &m(3, 3 * gg),
+        &m(4, 3 * gg), &m(5, 3 * gg));
   };
 
   diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
   diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
-  auto t_diff_xi_master = get_diff_ksi(diffKsiMaster);
-  auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -229,7 +228,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       } while (eps > tol && (it++) < max_it);
 
-      cerr << "it " << it << " " << eps << endl;
+      // cerr << "it " << it << " " << eps << endl;
 
       get_values();
       assemble();
@@ -243,7 +242,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       auto t_inv_A = get_t_A(invA);
 
       auto get_diff_slave = [&]() {
-        double *slave_base = &slaveN(gg, 1);
+        auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave, gg);
+        double *slave_base = &slaveN(gg, 0);
         for (size_t n = 0; n != 3; ++n) {
           t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
           ++t_diff_xi_slave;
@@ -252,6 +252,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       };
 
       auto get_diff_master = [&]() {
+        auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, gg);
         auto t_diff = get_t_diff();
         double *master_base = &masterN(gg, 0);
         FTensor::Tensor4<double, 2,2,2,2> t_diff_A;
