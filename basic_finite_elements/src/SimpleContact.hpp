@@ -196,6 +196,7 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
+    boost::shared_ptr<MatrixDouble> gradKsiPositionAtGaussPtsSlavePtr;
 
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
     boost::shared_ptr<VectorDouble> gapPtr;
@@ -210,6 +211,7 @@ struct SimpleContactProblem {
     CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
+      gradKsiPositionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
       lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
 
       gapPtr = boost::make_shared<VectorDouble>();
@@ -958,6 +960,20 @@ struct SimpleContactProblem {
   private:
     MatrixDouble matLhs;
     boost::shared_ptr<MatrixDouble> diffConvect;
+  };
+
+  struct OpCalculateGradXi : public ContactOp {
+
+    OpCalculateGradXi(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
   };
 
   struct OpLhsConvectIntegrationPtsConstrainMasterGap : public ContactOp {
