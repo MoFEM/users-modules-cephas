@@ -218,14 +218,12 @@ int main(int argc, char *argv[]) {
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
         m_field, cn_value, is_newton_cotes);
 
-    auto make_contact_element =
-        [&]() -> boost::shared_ptr<SimpleContactProblem::SimpleContactElement> {
+    auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
 
-    auto make_convective_element = [&]()
-        -> boost::shared_ptr<SimpleContactProblem::ConvectContactElement> {
+    auto make_convective_element = [&]() {
       return boost::make_shared<SimpleContactProblem::ConvectContactElement>(
           m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
     };
