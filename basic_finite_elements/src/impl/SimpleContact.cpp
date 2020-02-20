@@ -225,9 +225,6 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       } while (eps > tol && (it++) < max_it);
 
-      // cerr << "GG " << gg << " " << nb_gauss_pts << endl;
-      // cerr << "it " << it << " " << eps << endl;
-
       get_values();
       assemble();
 
@@ -270,57 +267,9 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     };
 
     newton_solver();
-    // cerr << diffKsiMaster << endl;
-
-    // auto center_diffKsiMaster = diffKsiMaster;
-    // auto center_diffKsiSlave = diffKsiSlave;
-    // auto centre_ksi = fePtr->gaussPtsMaster;
-
-    // constexpr double e = 1e-8;
-    // constexpr int node = 2;
-    // constexpr int dim = 0;
-
-    // for (size_t n = 0; n != 3; ++n) {
-    //   for (size_t d = 0; d != 3; ++d) {
-    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-    //   }
-    // }
-    // masterSpatialCoords(node, dim) += e;
-
-    // newton_solver();
-
-    // auto plus_ksi = fePtr->gaussPtsMaster;
-
-    //  for (size_t n = 0; n != 3; ++n) {
-    //   for (size_t d = 0; d != 3; ++d) {
-    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-    //   }
-    // }
-    // masterSpatialCoords(node, dim) -= e;
-
-    // newton_solver();
-
-    // auto minus_ksi = fePtr->gaussPtsMaster;
-
-    // auto diff = (plus_ksi - minus_ksi) / (2 * e);
-    // cerr << diff << endl;
-    // cerr << center_diffKsiMaster << " : "
-    //      << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) << " "
-    //      << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) << endl;
-    // cerr << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) - diff(0, gg) << " "
-    //      << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) - diff(1, gg)
-    //      << endl
-    //      << endl;
 
     ++t_xi_master;
   }
-
-    // SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "STOP");
-
 
   MoFEMFunctionReturn(0);
 }
