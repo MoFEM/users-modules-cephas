@@ -1078,7 +1078,18 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
                                   th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
                                   &def_vals);
 
-  double coords[3];
+  auto get_tag_pos = [&](const std::string name) {
+    Tag th;
+    constexpr std::array<double, 3> def_vals = {0, 0, 0};
+    CHKERR moabOut.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE,
+                                  th, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                  def_vals.data());
+    return th;
+  };
+  auto th_pos_master = get_tag_pos("MASTER_SPATIAL_POSITION");
+  auto th_pos_slave = get_tag_pos("SLAVE_SPATIAL_POSITION");
+  auto th_master_coords = get_tag_pos("MASTER_GAUSS_PTS_COORDS");
+
   EntityHandle new_vertex = getFEEntityHandle();
 
   auto t_gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
@@ -1087,24 +1098,43 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
   auto t_lag_gap_prod_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
+   auto t_position_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
+   auto t_position_slave = getFTensor1FromMat<3>(
+       *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    for (int dd = 0; dd != 3; ++dd) {
-      coords[dd] = getCoordsAtGaussPtsSlave()(gg, dd);
-    }
+   std::array<double, 3> pos_vec;
 
-    VectorDouble &data_disp = data.getFieldData();
-    CHKERR moabOut.create_vertex(&coords[0], new_vertex);
+   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &t_gap_ptr);
+     const double *slave_coords_ptr = &(getCoordsAtGaussPtsSlave()(gg, 0));
+     CHKERR moabOut.create_vertex(slave_coords_ptr, new_vertex);
+     CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &t_gap_ptr);
 
-    CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
-                                &t_lag_gap_prod_slave);
-    CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &t_lagrange_slave);
+     CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
+                                 &t_lag_gap_prod_slave);
+     CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1,
+                                 &t_lagrange_slave);
 
-    ++t_gap_ptr;
-    ++t_lagrange_slave;
-    ++t_lag_gap_prod_slave;
+     auto get_vec_ptr = [&](auto t) {
+       for (int dd = 0; dd != 3; ++dd)
+         pos_vec[dd] = t(dd);
+       return pos_vec.data();
+     };
+
+     CHKERR moabOut.tag_set_data(th_pos_master, &new_vertex, 1,
+                                 get_vec_ptr(t_position_master));
+     CHKERR moabOut.tag_set_data(th_pos_slave, &new_vertex, 1,
+                                 get_vec_ptr(t_position_slave));
+     const double *master_coords_ptr = &(getCoordsAtGaussPtsMaster()(gg, 0));
+     CHKERR moabOut.tag_set_data(th_master_coords, &new_vertex, 1,
+                                 master_coords_ptr);
+
+     ++t_gap_ptr;
+     ++t_lagrange_slave;
+     ++t_lag_gap_prod_slave;
+     ++t_position_master;
+     ++t_position_slave;
   }
   MoFEMFunctionReturn(0);
 }
