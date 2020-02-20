@@ -141,16 +141,15 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         &m(0, 0), &m(0, 1), &m(1, 0), &m(1, 1)};
   };
 
-  auto t_xi_master = get_t_xi(fePtr->gaussPtsMaster);
-
   auto get_diff_ksi = [](auto &m, const int gg) {
     return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
-        &m(0, 3 * gg), &m(1, 3 * gg), &m(2, 3 * gg), &m(3, 3 * gg),
-        &m(4, 3 * gg), &m(5, 3 * gg));
+        &m(0, gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, gg), &m(5, gg));
   };
 
   diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
   diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
+
+  auto t_xi_master = get_t_xi(fePtr->gaussPtsMaster);
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -226,7 +225,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       } while (eps > tol && (it++) < max_it);
 
-      // cerr << "it " << it << " " << eps << endl;
+      cerr << "GG " << gg << " " << nb_gauss_pts << endl;
+      cerr << "it " << it << " " << eps << endl;
 
       get_values();
       assemble();
@@ -240,7 +240,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       auto t_inv_A = get_t_A(invA);
 
       auto get_diff_slave = [&]() {
-        auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave, gg);
+        auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave, 3 * gg);
         double *slave_base = &slaveN(gg, 0);
         for (size_t n = 0; n != 3; ++n) {
           t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
@@ -250,7 +250,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       };
 
       auto get_diff_master = [&]() {
-        auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, gg);
+        auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, 3 * gg);
         auto t_diff = get_t_diff();
         double *master_base = &masterN(gg, 0);
         FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_A;
@@ -270,54 +270,57 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     };
 
     newton_solver();
+    cerr << diffKsiMaster << endl;
 
-    // auto center_diffKsiMaster = diffKsiMaster;
-    // auto center_diffKsiSlave = diffKsiSlave;
-    // auto centre_ksi = fePtr->gaussPtsMaster;
+    auto center_diffKsiMaster = diffKsiMaster;
+    auto center_diffKsiSlave = diffKsiSlave;
+    auto centre_ksi = fePtr->gaussPtsMaster;
 
-    // constexpr double e = 1e-8;
-    // constexpr int node = 1;
-    // constexpr int dim = 2;
+    constexpr double e = 1e-8;
+    constexpr int node = 2;
+    constexpr int dim = 0;
 
-    // for (size_t n = 0; n != 3; ++n) {
-    //   for (size_t d = 0; d != 3; ++d) {
-    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-    //   }
-    // }
-    // masterSpatialCoords(node, dim) += e;
+    for (size_t n = 0; n != 3; ++n) {
+      for (size_t d = 0; d != 3; ++d) {
+        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+      }
+    }
+    masterSpatialCoords(node, dim) += e;
 
-    // newton_solver();
+    newton_solver();
 
-    // auto plus_ksi = fePtr->gaussPtsMaster;
+    auto plus_ksi = fePtr->gaussPtsMaster;
 
-    //  for (size_t n = 0; n != 3; ++n) {
-    //   for (size_t d = 0; d != 3; ++d) {
-    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-    //   }
-    // }
-    // masterSpatialCoords(node, dim) -= e;
+     for (size_t n = 0; n != 3; ++n) {
+      for (size_t d = 0; d != 3; ++d) {
+        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+      }
+    }
+    masterSpatialCoords(node, dim) -= e;
 
-    // newton_solver();
+    newton_solver();
 
-    // auto minus_ksi = fePtr->gaussPtsMaster;
+    auto minus_ksi = fePtr->gaussPtsMaster;
 
-    // auto diff = (plus_ksi - minus_ksi) / (2 * e);
-    // cerr << diff << endl;
-    // cerr << center_diffKsiMaster << " : "
-    //      << center_diffKsiMaster(3 * 0 + dim, node * gg) << " "
-    //      << center_diffKsiMaster(3 * 1 + dim, node * gg) << endl;
-    // cerr << center_diffKsiMaster(3 * 0 + dim, node * gg) - diff(0, 0) << " "
-    //      << center_diffKsiMaster(3 * 1 + dim, node * gg) - diff(1, 0) << endl
-    //      << endl;
-
-    // SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "STOP");
+    auto diff = (plus_ksi - minus_ksi) / (2 * e);
+    cerr << diff << endl;
+    cerr << center_diffKsiMaster << " : "
+         << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) << " "
+         << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) << endl;
+    cerr << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) - diff(0, gg) << " "
+         << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) - diff(1, gg)
+         << endl
+         << endl;
 
     ++t_xi_master;
   }
+
+    // SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "STOP");
+
 
   MoFEMFunctionReturn(0);
 }
