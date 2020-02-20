@@ -531,9 +531,16 @@ int main(int argc, char *argv[]) {
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
 
-    auto fe_post_proc_simple_contact = make_contact_element();
     auto common_data_simple_contact = make_contact_common_data();
-    
+
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_post_proc_simple_contact;
+    if (convect_pts == PETSC_TRUE) {
+      fe_post_proc_simple_contact = make_convective_element();
+    } else {
+      fe_post_proc_simple_contact = make_contact_element();
+    }
+
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
         "SPATIAL_POSITION", "LAGMULT", mb_post);
