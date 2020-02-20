@@ -48,7 +48,7 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
       gaussPtsSlave(2, gg) = w_array[gg];
     }
   } else {
-    CHKERR ContactEle::setDefaultGaussPts(order);
+    CHKERR ContactEle::setDefaultGaussPts(2);
   }
   MoFEMFunctionReturn(0);
 }
@@ -225,8 +225,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       } while (eps > tol && (it++) < max_it);
 
-      cerr << "GG " << gg << " " << nb_gauss_pts << endl;
-      cerr << "it " << it << " " << eps << endl;
+      // cerr << "GG " << gg << " " << nb_gauss_pts << endl;
+      // cerr << "it " << it << " " << eps << endl;
 
       get_values();
       assemble();
@@ -270,51 +270,51 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     };
 
     newton_solver();
-    cerr << diffKsiMaster << endl;
+    // cerr << diffKsiMaster << endl;
 
-    auto center_diffKsiMaster = diffKsiMaster;
-    auto center_diffKsiSlave = diffKsiSlave;
-    auto centre_ksi = fePtr->gaussPtsMaster;
+    // auto center_diffKsiMaster = diffKsiMaster;
+    // auto center_diffKsiSlave = diffKsiSlave;
+    // auto centre_ksi = fePtr->gaussPtsMaster;
 
-    constexpr double e = 1e-8;
-    constexpr int node = 2;
-    constexpr int dim = 0;
+    // constexpr double e = 1e-8;
+    // constexpr int node = 2;
+    // constexpr int dim = 0;
 
-    for (size_t n = 0; n != 3; ++n) {
-      for (size_t d = 0; d != 3; ++d) {
-        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-      }
-    }
-    masterSpatialCoords(node, dim) += e;
+    // for (size_t n = 0; n != 3; ++n) {
+    //   for (size_t d = 0; d != 3; ++d) {
+    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+    //   }
+    // }
+    // masterSpatialCoords(node, dim) += e;
 
-    newton_solver();
+    // newton_solver();
 
-    auto plus_ksi = fePtr->gaussPtsMaster;
+    // auto plus_ksi = fePtr->gaussPtsMaster;
 
-     for (size_t n = 0; n != 3; ++n) {
-      for (size_t d = 0; d != 3; ++d) {
-        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
-        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-      }
-    }
-    masterSpatialCoords(node, dim) -= e;
+    //  for (size_t n = 0; n != 3; ++n) {
+    //   for (size_t d = 0; d != 3; ++d) {
+    //     masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+    //     slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+    //     slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+    //   }
+    // }
+    // masterSpatialCoords(node, dim) -= e;
 
-    newton_solver();
+    // newton_solver();
 
-    auto minus_ksi = fePtr->gaussPtsMaster;
+    // auto minus_ksi = fePtr->gaussPtsMaster;
 
-    auto diff = (plus_ksi - minus_ksi) / (2 * e);
-    cerr << diff << endl;
-    cerr << center_diffKsiMaster << " : "
-         << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) << " "
-         << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) << endl;
-    cerr << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) - diff(0, gg) << " "
-         << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) - diff(1, gg)
-         << endl
-         << endl;
+    // auto diff = (plus_ksi - minus_ksi) / (2 * e);
+    // cerr << diff << endl;
+    // cerr << center_diffKsiMaster << " : "
+    //      << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) << " "
+    //      << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) << endl;
+    // cerr << center_diffKsiMaster(3 * 0 + dim, node + 3 * gg) - diff(0, gg) << " "
+    //      << center_diffKsiMaster(3 * 1 + dim, node + 3 * gg) - diff(1, gg)
+    //      << endl
+    //      << endl;
 
     ++t_xi_master;
   }
@@ -1425,7 +1425,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
             &matLhs(3 * rr + 2, 0), &matLhs(3 * rr + 2, 1),
             &matLhs(3 * rr + 2, 2)};
 
-        auto t_diff_convect = get_diff_ksi(*diffConvect, gg);
+        auto t_diff_convect = get_diff_ksi(*diffConvect, 3 * gg);
 
         for (int cc = 0; cc != nb_base_fun_col; ++cc) {
           t_mat(i, j) -= val_s * (t_diff_base_row(I) * t_diff_convect(I, j)) *
@@ -1548,7 +1548,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
 
         auto t_base_diff_disp = col_data.getFTensor1DiffN<2>(gg, 0);
-        auto t_diff_convect = get_diff_ksi(*diffConvect, gg);
+        auto t_diff_convect = get_diff_ksi(*diffConvect, 3 * gg);
 
         for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
