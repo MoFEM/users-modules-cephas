@@ -78,7 +78,7 @@ struct SimpleContactProblem {
         : fePtr(fe_ptr), sparialPositionsField(spat_pos),
           materialPositionsField(mat_pos) {}
 
-    MoFEMErrorCode convectSlaveIntegrationPts();
+    template <bool CONVECT_MASTER> MoFEMErrorCode convectSlaveIntegrationPts();
 
     inline boost::shared_ptr<MatrixDouble> getDiffKsiSpatialMaster() {
       return boost::shared_ptr<MatrixDouble>(shared_from_this(),
@@ -110,9 +110,9 @@ struct SimpleContactProblem {
     MatrixDouble diffKsiSlave;
   };
 
-  struct ConvectContactElement : public SimpleContactElement {
+  struct ConvectMasterContactElement : public SimpleContactElement {
 
-    ConvectContactElement(MoFEM::Interface &m_field, std::string spat_pos,
+    ConvectMasterContactElement(MoFEM::Interface &m_field, std::string spat_pos,
                           std::string mat_pos, bool newton_cotes = false)
         : SimpleContactElement(m_field, newton_cotes),
           convectPtr(new ConvectSlaveIntegrationPts(this, spat_pos, mat_pos)) {}
@@ -127,6 +127,14 @@ struct SimpleContactProblem {
 
   protected:
     boost::shared_ptr<ConvectSlaveIntegrationPts> convectPtr;
+  };
+
+  struct ConvectSlaveContactElement : public ConvectMasterContactElement {
+    using ConvectMasterContactElement::ConvectMasterContactElement;
+    
+    int getRule(int order) { return -1; }
+
+    MoFEMErrorCode setGaussPts(int order);
   };
 
   /**
@@ -910,7 +918,7 @@ struct SimpleContactProblem {
       string field_name, string lagrang_field_name);
 
   MoFEMErrorCode setContactOperatorsLhs(
-      boost::shared_ptr<ConvectContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 

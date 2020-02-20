@@ -53,6 +53,7 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionReturn(0);
 }
 
+template <bool CONVECT_MASTER>
 MoFEMErrorCode
 SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   MoFEMFunctionBegin;
@@ -149,7 +150,42 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
   diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
 
-  auto t_xi_master = get_t_xi(fePtr->gaussPtsMaster);
+  auto get_master_gauss_pts = [&]() -> MatrixDouble & {
+    if(CONVECT_MASTER)
+      return fePtr->gaussPtsMaster;
+    else
+      return fePtr->gaussPtsSlave;
+  };
+
+  auto get_slave_spatial_coords = [&]() -> MatrixDouble & {
+    if (CONVECT_MASTER)
+      return slaveSpatialCoords;
+    else 
+      return masterSpatialCoords;
+  };
+
+  auto get_master_spatial_coords = [&]() -> MatrixDouble & {
+    if (CONVECT_MASTER)
+      return masterSpatialCoords;
+    else
+      return slaveSpatialCoords;
+  };
+
+  auto get_slave_n = [&]() -> MatrixDouble & {
+    if (CONVECT_MASTER)
+      return slaveN;
+    else
+      return masterN;
+  };
+
+  auto get_master_n = [&]() -> MatrixDouble & { 
+    if (CONVECT_MASTER)
+      return masterN;
+    else
+      return slaveN;
+   };
+
+  auto t_xi_master = get_t_xi(get_master_gauss_pts());
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -166,10 +202,11 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         t_x_master(i) = 0;
 
         auto t_slave_material_coords = get_t_coords(slaveMaterialCoords);
-        auto t_slave_spatial_coords = get_t_coords(slaveSpatialCoords);
-        auto t_master_spatial_coords = get_t_coords(masterSpatialCoords);
-        double *slave_base = &slaveN(gg, 0);
-        double *master_base = &masterN(gg, 0);
+        auto t_slave_spatial_coords = get_t_coords(get_slave_spatial_coords());
+        auto t_master_spatial_coords =
+            get_t_coords(get_master_spatial_coords());
+        double *slave_base = &get_slave_n()(gg, 0);
+        double *master_base = &get_master_n()(gg, 0);
         auto t_diff = get_t_diff();
         for (size_t n = 0; n != 3; ++n) {
 
@@ -188,7 +225,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       auto assemble = [&]() {
         t_mat(I, J) = 0;
-        auto t_master_spatial_coords = get_t_coords(masterSpatialCoords);
+        auto t_master_spatial_coords =
+            get_t_coords(get_master_spatial_coords());
         auto t_diff = get_t_diff();
         for (size_t n = 0; n != 3; ++n) {
           t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_master_spatial_coords(i);
@@ -238,7 +276,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
       auto get_diff_slave = [&]() {
         auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave, 3 * gg);
-        double *slave_base = &slaveN(gg, 0);
+        double *slave_base = &get_slave_n()(gg, 0);
         for (size_t n = 0; n != 3; ++n) {
           t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
           ++t_diff_xi_slave;
@@ -249,7 +287,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
       auto get_diff_master = [&]() {
         auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, 3 * gg);
         auto t_diff = get_t_diff();
-        double *master_base = &masterN(gg, 0);
+        double *master_base = &get_master_n()(gg, 0);
         FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_A;
         t_diff_A(I, J, K, L) = -t_inv_A(I, K) * t_inv_A(L, J);
         for (size_t n = 0; n != 3; ++n) {
@@ -275,10 +313,18 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 }
 
 MoFEMErrorCode
-SimpleContactProblem::ConvectContactElement::setGaussPts(int order) {
+SimpleContactProblem::ConvectMasterContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
   CHKERR SimpleContactElement::setGaussPts(order);
-  CHKERR convectPtr->convectSlaveIntegrationPts();
+  CHKERR convectPtr->convectSlaveIntegrationPts<true>();
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::ConvectSlaveContactElement::setGaussPts(int order) {
+  MoFEMFunctionBegin;
+  CHKERR SimpleContactElement::setGaussPts(order);
+  CHKERR convectPtr->convectSlaveIntegrationPts<false>();
   MoFEMFunctionReturn(0);
 }
 
@@ -1265,7 +1311,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 }
 
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
-    boost::shared_ptr<ConvectContactElement> fe_lhs_simple_contact,
+    boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrang_field_name) {
   MoFEMFunctionBegin;

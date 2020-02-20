@@ -284,7 +284,7 @@ int main(int argc, char *argv[]) {
     };
 
     auto make_convective_element = [&]() {
-      return boost::make_shared<SimpleContactProblem::ConvectContactElement>(
+      return boost::make_shared<SimpleContactProblem::ConvectMasterContactElement>(
           m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
     };
 
