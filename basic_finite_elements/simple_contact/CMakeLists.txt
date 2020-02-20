@@ -165,3 +165,20 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
+add_test(
+  test_simple_contact_smiling_fac_convectivee
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_is_test
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
+  -my_order 2
+  -my_cn_value 1e-1
+  -my_convect 1
+  -snes_monitor
+)
+add_test(
+  test_simple_contact_smiling_face_convective_compare ${CMAKE_COMMAND} -E compare_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_smiling_face_convective.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
+)
+
