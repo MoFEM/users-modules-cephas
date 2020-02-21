@@ -242,6 +242,26 @@ int main(int argc, char *argv[]) {
       return fe_rhs_simple_contact;
     };
 
+    auto get_master_traction_rhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_traction_lhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
     auto get_contact_lhs = [&](auto contact_problem, auto make_element) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
@@ -314,6 +334,14 @@ int main(int argc, char *argv[]) {
           dm, "CONTACT_ELEM",
           get_contact_lhs(contact_problem, make_convective_element), NULL,
           NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_convective_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem, make_convective_element),
+          NULL, NULL);
     } else {
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
@@ -322,6 +350,14 @@ int main(int argc, char *argv[]) {
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
           get_contact_lhs(contact_problem, make_contact_element), NULL, NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem, make_contact_element), NULL,
+          NULL);
     }
 
     if (test_jacobian == PETSC_TRUE) {

@@ -922,6 +922,21 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 
+  MoFEMErrorCode setMasterForceOperatorsRhs(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
+
+  MoFEMErrorCode setMasterForceOperatorsLhs(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
+
+  MoFEMErrorCode setMasterForceOperatorsLhs(
+      boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
+
   /**
    * @brief Function for the simple contact element that sets the user data
    * post processing operators

@@ -302,6 +302,15 @@ int main(int argc, char *argv[]) {
       return fe_rhs_simple_contact;
     };
 
+    auto get_slave_traction_rhs = [&](auto contact_problem, auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
     auto get_contact_lhs = [&](auto contact_problem, auto make_element) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
