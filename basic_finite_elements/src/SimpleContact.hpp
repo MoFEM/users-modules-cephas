@@ -397,8 +397,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalContactTractionOnMaster(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Vec f_ = PETSC_NULL)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
