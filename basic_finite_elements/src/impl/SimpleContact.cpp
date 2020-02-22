@@ -212,38 +212,45 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
               Tools::shapeFunMBTRI2(t_xi_master(0), t_xi_master(1));
         };
 
-        constexpr double tol = 1e-12;
-        constexpr int max_it = 10;
-        int it = 0;
-        double eps;
-
-        do {
-
-          get_values();
-          assemble();
-
+        auto linear_solver = [&]() {
           ublas::lu_factorize(A);
           ublas::inplace_solve(A, F, ublas::unit_lower_tag());
           ublas::inplace_solve(A, F, ublas::upper_tag());
+        };
 
-          update();
+        auto invert_A = [&]() {
+          ublas::lu_factorize(A);
+          invA.resize(2, 2, false);
+          noalias(invA) = ublas::identity_matrix<double>(2);
+          ublas::inplace_solve(A, invA, ublas::unit_lower_tag());
+          ublas::inplace_solve(A, invA, ublas::upper_tag());
+        };
 
-          eps = norm_2(F);
+        auto nonlinear_solve = [&]() {
+          constexpr double tol = 1e-12;
+          constexpr int max_it = 10;
+          int it = 0;
+          double eps;
 
-        } while (eps > tol && (it++) < max_it);
+          do {
 
+            get_values();
+            assemble();
+            linear_solver();
+            update();
+
+            eps = norm_2(F);
+
+          } while (eps > tol && (it++) < max_it);
+        };
+
+        nonlinear_solve();
         get_values();
         assemble();
-
-        ublas::lu_factorize(A);
-        invA.resize(2, 2, false);
-        noalias(invA) = ublas::identity_matrix<double>(2);
-        ublas::inplace_solve(A, invA, ublas::unit_lower_tag());
-        ublas::inplace_solve(A, invA, ublas::upper_tag());
-
-        auto t_inv_A = get_t_A(invA);
+        invert_A();
 
         auto get_diff_slave = [&]() {
+          auto t_inv_A = get_t_A(invA);
           auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave, 3 * gg);
           double *slave_base = &slaveN(gg, 0);
           for (size_t n = 0; n != 3; ++n) {
@@ -254,6 +261,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         };
 
         auto get_diff_master = [&]() {
+          auto t_inv_A = get_t_A(invA);
           auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, 3 * gg);
           auto t_diff = get_t_diff();
           double *master_base = &masterN(gg, 0);
