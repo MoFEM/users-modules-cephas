@@ -283,8 +283,15 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto make_convective_element = [&]() {
-      return boost::make_shared<SimpleContactProblem::ConvectMasterContactElement>(
+    auto make_convective_master_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectMasterContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
+    auto make_convective_slave_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectSlaveContactElement>(
           m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
     };
 
@@ -302,13 +309,24 @@ int main(int argc, char *argv[]) {
       return fe_rhs_simple_contact;
     };
 
-    auto get_slave_traction_rhs = [&](auto contact_problem, auto make_element) {
+    auto get_master_traction_rhs = [&](auto contact_problem,
+                                       auto make_element) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT");
       return fe_rhs_simple_contact;
+    };
+
+    auto get_master_traction_lhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_lhs_simple_contact;
     };
 
     auto get_contact_lhs = [&](auto contact_problem, auto make_element) {
@@ -426,13 +444,22 @@ int main(int argc, char *argv[]) {
     if (convect_pts == PETSC_TRUE) {
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_convective_element), PETSC_NULL,
-          PETSC_NULL);
+          get_contact_rhs(contact_problem, make_convective_master_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem,
+                                  make_convective_slave_element),
+          PETSC_NULL, PETSC_NULL);
     } else {
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
           get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
           PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element),
+          PETSC_NULL, PETSC_NULL);
     }
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
@@ -447,12 +474,21 @@ int main(int argc, char *argv[]) {
     if (convect_pts == PETSC_TRUE) {
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
-          get_contact_lhs(contact_problem, make_convective_element), NULL,
+          get_contact_lhs(contact_problem, make_convective_master_element), NULL,
           NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem,
+                                  make_convective_slave_element),
+          NULL, NULL);
     } else {
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
           get_contact_lhs(contact_problem, make_contact_element), NULL, NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem, make_contact_element), NULL,
+          NULL);
     }
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
@@ -545,7 +581,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_post_proc_simple_contact;
     if (convect_pts == PETSC_TRUE) {
-      fe_post_proc_simple_contact = make_convective_element();
+      fe_post_proc_simple_contact = make_convective_master_element();
     } else {
       fe_post_proc_simple_contact = make_contact_element();
     }
