@@ -101,36 +101,9 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     MoFEMFunctionReturn(0);
   };
 
-  auto get_diff_ksi_master = [&]() -> MatrixDouble & { return diffKsiMaster; };
-
-  auto get_diff_ksi_slave = [&]() -> MatrixDouble & { return diffKsiSlave; };
-
-  auto get_slave_material_coords = [&]() -> MatrixDouble & {
-    return slaveMaterialCoords;
-  };
-
-  auto get_master_gauss_pts = [&]() -> MatrixDouble & {
-    return fePtr->gaussPtsMaster;
-  };
-
-  auto get_slave_spatial_coords = [&]() -> MatrixDouble & {
-    return slaveSpatialCoords;
-  };
-
-  auto get_master_spatial_coords = [&]() -> MatrixDouble & {
-    return masterSpatialCoords;
-  };
-
-  auto get_slave_n = [&]() -> MatrixDouble & { return slaveN; };
-
-  auto get_master_n = [&]() -> MatrixDouble & { return masterN; };
-
-  auto convect_points = [get_diff_ksi_master, get_diff_ksi_slave,
-                         get_slave_material_coords, get_master_gauss_pts,
-                         get_slave_spatial_coords, get_master_spatial_coords,
-                         get_slave_n, get_master_n](const int nb_gauss_pts) {
+  auto convect_points = [&](const int nb_gauss_pts) {
     MatrixDouble3by3 A(2, 2);
-    MatrixDouble3by3 invA(2,2);
+    MatrixDouble3by3 invA(2, 2);
     VectorDouble3 F(2);
 
     auto get_t_coords = [](auto &m) {
@@ -178,10 +151,10 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     FTensor::Index<'K', 2> K;
     FTensor::Index<'L', 2> L;
 
-    get_diff_ksi_master().resize(6, 3 * nb_gauss_pts, false);
-    get_diff_ksi_slave().resize(6, 3 * nb_gauss_pts, false);
+    diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
+    diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
 
-    auto t_xi_master = get_t_xi(get_master_gauss_pts());
+    auto t_xi_master = get_t_xi(fePtr->gaussPtsMaster);
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
       auto t_tau = get_t_tau();
@@ -196,14 +169,11 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
           t_x_slave(i) = 0;
           t_x_master(i) = 0;
 
-          auto t_slave_material_coords =
-              get_t_coords(get_slave_material_coords());
-          auto t_slave_spatial_coords =
-              get_t_coords(get_slave_spatial_coords());
-          auto t_master_spatial_coords =
-              get_t_coords(get_master_spatial_coords());
-          double *slave_base = &get_slave_n()(gg, 0);
-          double *master_base = &get_master_n()(gg, 0);
+          auto t_slave_material_coords = get_t_coords(slaveMaterialCoords);
+          auto t_slave_spatial_coords = get_t_coords(slaveSpatialCoords);
+          auto t_master_spatial_coords = get_t_coords(masterSpatialCoords);
+          double *slave_base = &slaveN(gg, 0);
+          double *master_base = &masterN(gg, 0);
           auto t_diff = get_t_diff();
           for (size_t n = 0; n != 3; ++n) {
 
@@ -222,8 +192,7 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
         auto assemble = [&]() {
           t_mat(I, J) = 0;
-          auto t_master_spatial_coords =
-              get_t_coords(get_master_spatial_coords());
+          auto t_master_spatial_coords = get_t_coords(masterSpatialCoords);
           auto t_diff = get_t_diff();
           for (size_t n = 0; n != 3; ++n) {
             t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_master_spatial_coords(i);
@@ -235,11 +204,11 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
         auto update = [&]() {
           t_xi_master(I) += t_f(I);
-          get_master_n()(gg, 0) =
+          masterN(gg, 0) =
               Tools::shapeFunMBTRI0(t_xi_master(0), t_xi_master(1));
-          get_master_n()(gg, 1) =
+          masterN(gg, 1) =
               Tools::shapeFunMBTRI1(t_xi_master(0), t_xi_master(1));
-          get_master_n()(gg, 2) =
+          masterN(gg, 2) =
               Tools::shapeFunMBTRI2(t_xi_master(0), t_xi_master(1));
         };
 
@@ -275,8 +244,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         auto t_inv_A = get_t_A(invA);
 
         auto get_diff_slave = [&]() {
-          auto t_diff_xi_slave = get_diff_ksi(get_diff_ksi_slave(), 3 * gg);
-          double *slave_base = &get_slave_n()(gg, 0);
+          auto t_diff_xi_slave = get_diff_ksi(diffKsiSlave, 3 * gg);
+          double *slave_base = &slaveN(gg, 0);
           for (size_t n = 0; n != 3; ++n) {
             t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
             ++t_diff_xi_slave;
@@ -285,9 +254,9 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
         };
 
         auto get_diff_master = [&]() {
-          auto t_diff_xi_master = get_diff_ksi(get_diff_ksi_master(), 3 * gg);
+          auto t_diff_xi_master = get_diff_ksi(diffKsiMaster, 3 * gg);
           auto t_diff = get_t_diff();
-          double *master_base = &get_master_n()(gg, 0);
+          double *master_base = &masterN(gg, 0);
           FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_A;
           t_diff_A(I, J, K, L) = -t_inv_A(I, K) * t_inv_A(L, J);
           for (size_t n = 0; n != 3; ++n) {
