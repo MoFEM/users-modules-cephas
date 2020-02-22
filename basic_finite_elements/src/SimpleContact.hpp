@@ -78,7 +78,7 @@ struct SimpleContactProblem {
         : fePtr(fe_ptr), sparialPositionsField(spat_pos),
           materialPositionsField(mat_pos) {}
 
-    template <bool CONVECT_MASTER> MoFEMErrorCode convectSlaveIntegrationPts();
+    MoFEMErrorCode convectSlaveIntegrationPts();
 
     inline boost::shared_ptr<MatrixDouble> getDiffKsiSpatialMaster() {
       return boost::shared_ptr<MatrixDouble>(shared_from_this(),

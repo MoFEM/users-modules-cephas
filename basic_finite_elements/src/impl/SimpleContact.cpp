@@ -53,12 +53,9 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionReturn(0);
 }
 
-template <bool CONVECT_MASTER>
 MoFEMErrorCode
 SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
   MoFEMFunctionBegin;
-
-  CHKERR fePtr->getNodeData(sparialPositionsField, spatialCoords);
 
   auto get_material_dofs_from_coords = [&]() {
     MoFEMFunctionBegin;
@@ -72,269 +69,249 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     CHKERR fePtr->getNodeData(materialPositionsField, materialCoords, false);
     MoFEMFunctionReturn(0);
   };
-  CHKERR get_material_dofs_from_coords();
 
-  slaveSpatialCoords.resize(3, 3, false);
-  slaveMaterialCoords.resize(3, 3, false);
-  masterSpatialCoords.resize(3, 3, false);
-  masterMaterialCoords.resize(3, 3, false);
-  for (size_t n = 0; n != 3; ++n) {
-    for (size_t d = 0; d != 3; ++d) {
-      masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
-      slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
-      masterMaterialCoords(n, d) = materialCoords(3 * n + d);
-      slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+  auto get_dofs_data_for_slave_and_master = [&] {
+    slaveSpatialCoords.resize(3, 3, false);
+    slaveMaterialCoords.resize(3, 3, false);
+    masterSpatialCoords.resize(3, 3, false);
+    masterMaterialCoords.resize(3, 3, false);
+    for (size_t n = 0; n != 3; ++n) {
+      for (size_t d = 0; d != 3; ++d) {
+        masterSpatialCoords(n, d) = spatialCoords(3 * n + d);
+        slaveSpatialCoords(n, d) = spatialCoords(3 * (n + 3) + d);
+        masterMaterialCoords(n, d) = materialCoords(3 * n + d);
+        slaveMaterialCoords(n, d) = materialCoords(3 * (n + 3) + d);
+      }
     }
-  }
-
-  A.resize(2, 2, false);
-  F.resize(2, false);
-
-  const int nb_gauss_pts = fePtr->gaussPtsSlave.size2();
-  if (nb_gauss_pts != fePtr->gaussPtsMaster.size2())
-    SETERRQ2(
-        PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-        "Inconsistent size of slave and master integration points (%d != %d)",
-        nb_gauss_pts, fePtr->gaussPtsMaster.size2());
-
-  slaveN.resize(nb_gauss_pts, 3, false);
-  masterN.resize(nb_gauss_pts, 3, false);
-  CHKERR Tools::shapeFunMBTRI(&slaveN(0, 0), &fePtr->gaussPtsSlave(0, 0),
-                              &fePtr->gaussPtsSlave(1, 0), nb_gauss_pts);
-  CHKERR Tools::shapeFunMBTRI(&masterN(0, 0), &fePtr->gaussPtsMaster(0, 0),
-                              &fePtr->gaussPtsMaster(1, 0), nb_gauss_pts);
-
-  auto get_t_coords = [](auto &m) {
-    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
-        &m(0, 0), &m(0, 1), &m(0, 2)};
   };
 
-  auto get_t_xi = [](auto &m) {
-    return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 2>{&m(0, 0),
-                                                              &m(1, 0)};
+  auto calculate_shape_base_functions = [&](const int nb_gauss_pts) {
+    MoFEMFunctionBegin;
+    if (nb_gauss_pts != fePtr->gaussPtsMaster.size2())
+      SETERRQ2(
+          PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+          "Inconsistent size of slave and master integration points (%d != %d)",
+          nb_gauss_pts, fePtr->gaussPtsMaster.size2());
+    slaveN.resize(nb_gauss_pts, 3, false);
+    masterN.resize(nb_gauss_pts, 3, false);
+    CHKERR Tools::shapeFunMBTRI(&slaveN(0, 0), &fePtr->gaussPtsSlave(0, 0),
+                                &fePtr->gaussPtsSlave(1, 0), nb_gauss_pts);
+    CHKERR Tools::shapeFunMBTRI(&masterN(0, 0), &fePtr->gaussPtsMaster(0, 0),
+                                &fePtr->gaussPtsMaster(1, 0), nb_gauss_pts);
+    MoFEMFunctionReturn(0);
   };
 
-  auto get_t_diff = []() {
-    return FTensor::Tensor1<FTensor::PackPtr<double const *, 2>, 2>{
-        &Tools::diffShapeFunMBTRI[0], &Tools::diffShapeFunMBTRI[1]};
-  };
+  auto get_diff_ksi_master = [&]() -> MatrixDouble & { return diffKsiMaster; };
 
-  FTensor::Index<'i', 3> i;
-  FTensor::Index<'I', 2> I;
-  FTensor::Index<'J', 2> J;
-  FTensor::Index<'K', 2> K;
-  FTensor::Index<'L', 2> L;
-
-  auto get_t_tau = []() {
-    FTensor::Tensor2<double, 3, 2> t_tau;
-    return t_tau;
-  };
-
-  auto get_t_x = []() {
-    FTensor::Tensor1<double, 3> t_x;
-    return t_x;
-  };
-
-  auto get_t_F = [&]() {
-    return FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2>{&F[0], &F[1]};
-  };
-
-  auto get_t_A = [&](auto &m) {
-    return FTensor::Tensor2<FTensor::PackPtr<double *, 0>, 2, 2>{
-        &m(0, 0), &m(0, 1), &m(1, 0), &m(1, 1)};
-  };
-
-  auto get_diff_ksi = [](auto &m, const int gg) {
-    return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
-        &m(0, gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, gg), &m(5, gg));
-  };
-
-  diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
-  diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
-
-  auto get_diff_ksi_master = [&]() -> MatrixDouble & {
-    if (CONVECT_MASTER)
-      return diffKsiMaster;
-    else
-      return diffKsiSlave;
-  };
-
-  auto get_diff_ksi_slave = [&]() -> MatrixDouble & {
-    if (CONVECT_MASTER)
-      return diffKsiSlave;
-    else
-      return diffKsiMaster;
-  };
+  auto get_diff_ksi_slave = [&]() -> MatrixDouble & { return diffKsiSlave; };
 
   auto get_slave_material_coords = [&]() -> MatrixDouble & {
-    if (CONVECT_MASTER)
-      return slaveMaterialCoords;
-    else
-      return masterMaterialCoords;
+    return slaveMaterialCoords;
   };
 
   auto get_master_gauss_pts = [&]() -> MatrixDouble & {
-    if(CONVECT_MASTER)
-      return fePtr->gaussPtsMaster;
-    else
-      return fePtr->gaussPtsSlave;
+    return fePtr->gaussPtsMaster;
   };
 
   auto get_slave_spatial_coords = [&]() -> MatrixDouble & {
-    if (CONVECT_MASTER)
-      return slaveSpatialCoords;
-    else 
-      return masterSpatialCoords;
+    return slaveSpatialCoords;
   };
 
   auto get_master_spatial_coords = [&]() -> MatrixDouble & {
-    if (CONVECT_MASTER)
-      return masterSpatialCoords;
-    else
-      return slaveSpatialCoords;
+    return masterSpatialCoords;
   };
 
-  auto get_slave_n = [&]() -> MatrixDouble & {
-    if (CONVECT_MASTER)
-      return slaveN;
-    else
-      return masterN;
-  };
+  auto get_slave_n = [&]() -> MatrixDouble & { return slaveN; };
 
-  auto get_master_n = [&]() -> MatrixDouble & { 
-    if (CONVECT_MASTER)
-      return masterN;
-    else
-      return slaveN;
-   };
+  auto get_master_n = [&]() -> MatrixDouble & { return masterN; };
 
-  auto t_xi_master = get_t_xi(get_master_gauss_pts());
+  auto convect_points = [&](const int nb_gauss_pts) {
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    auto get_t_coords = [](auto &m) {
+      return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
+          &m(0, 0), &m(0, 1), &m(0, 2)};
+    };
 
-    auto t_tau = get_t_tau();
-    auto t_x_slave = get_t_x();
-    auto t_x_master = get_t_x();
-    auto t_mat = get_t_A(A);
-    auto t_f = get_t_F();
+    auto get_t_xi = [](auto &m) {
+      return FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 2>{&m(0, 0),
+                                                                &m(1, 0)};
+    };
 
-    auto newton_solver = [&]() {
-      auto get_values = [&]() {
-        t_tau(i, I) = 0;
-        t_x_slave(i) = 0;
-        t_x_master(i) = 0;
+    auto get_t_diff = []() {
+      return FTensor::Tensor1<FTensor::PackPtr<double const *, 2>, 2>{
+          &Tools::diffShapeFunMBTRI[0], &Tools::diffShapeFunMBTRI[1]};
+    };
 
-        auto t_slave_material_coords =
-            get_t_coords(get_slave_material_coords());
-        auto t_slave_spatial_coords = get_t_coords(get_slave_spatial_coords());
-        auto t_master_spatial_coords =
-            get_t_coords(get_master_spatial_coords());
-        double *slave_base = &get_slave_n()(gg, 0);
-        double *master_base = &get_master_n()(gg, 0);
-        auto t_diff = get_t_diff();
-        for (size_t n = 0; n != 3; ++n) {
+    auto get_t_tau = []() {
+      FTensor::Tensor2<double, 3, 2> t_tau;
+      return t_tau;
+    };
 
-          t_tau(i, J) += t_diff(J) * t_slave_material_coords(i);
-          t_x_slave(i) += (*slave_base) * t_slave_spatial_coords(i);
-          t_x_master(i) += (*master_base) * t_master_spatial_coords(i);
+    auto get_t_x = []() {
+      FTensor::Tensor1<double, 3> t_x;
+      return t_x;
+    };
 
-          ++t_diff;
-          ++t_slave_material_coords;
-          ++t_slave_spatial_coords;
-          ++t_master_spatial_coords;
-          ++slave_base;
-          ++master_base;
-        }
-      };
+    auto get_t_F = [&]() {
+      return FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2>{&F[0], &F[1]};
+    };
 
-      auto assemble = [&]() {
-        t_mat(I, J) = 0;
-        auto t_master_spatial_coords =
-            get_t_coords(get_master_spatial_coords());
-        auto t_diff = get_t_diff();
-        for (size_t n = 0; n != 3; ++n) {
-          t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_master_spatial_coords(i);
-          ++t_diff;
-          ++t_master_spatial_coords;
+    auto get_t_A = [&](auto &m) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 0>, 2, 2>{
+          &m(0, 0), &m(0, 1), &m(1, 0), &m(1, 1)};
+    };
+
+    auto get_diff_ksi = [](auto &m, const int gg) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 3>(
+          &m(0, gg), &m(1, gg), &m(2, gg), &m(3, gg), &m(4, gg), &m(5, gg));
+    };
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'I', 2> I;
+    FTensor::Index<'J', 2> J;
+    FTensor::Index<'K', 2> K;
+    FTensor::Index<'L', 2> L;
+
+    A.resize(2, 2, false);
+    F.resize(2, false);
+    diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
+    diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
+
+    auto t_xi_master = get_t_xi(get_master_gauss_pts());
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      auto t_tau = get_t_tau();
+      auto t_x_slave = get_t_x();
+      auto t_x_master = get_t_x();
+      auto t_mat = get_t_A(A);
+      auto t_f = get_t_F();
+
+      auto newton_solver = [&]() {
+        auto get_values = [&]() {
+          t_tau(i, I) = 0;
+          t_x_slave(i) = 0;
+          t_x_master(i) = 0;
+
+          auto t_slave_material_coords =
+              get_t_coords(get_slave_material_coords());
+          auto t_slave_spatial_coords =
+              get_t_coords(get_slave_spatial_coords());
+          auto t_master_spatial_coords =
+              get_t_coords(get_master_spatial_coords());
+          double *slave_base = &get_slave_n()(gg, 0);
+          double *master_base = &get_master_n()(gg, 0);
+          auto t_diff = get_t_diff();
+          for (size_t n = 0; n != 3; ++n) {
+
+            t_tau(i, J) += t_diff(J) * t_slave_material_coords(i);
+            t_x_slave(i) += (*slave_base) * t_slave_spatial_coords(i);
+            t_x_master(i) += (*master_base) * t_master_spatial_coords(i);
+
+            ++t_diff;
+            ++t_slave_material_coords;
+            ++t_slave_spatial_coords;
+            ++t_master_spatial_coords;
+            ++slave_base;
+            ++master_base;
+          }
         };
-        t_f(I) = t_tau(i, I) * (t_x_slave(i) - t_x_master(i));
-      };
 
-      auto update = [&]() {
-        t_xi_master(I) += t_f(I);
-        get_master_n()(gg, 0) =
-            Tools::shapeFunMBTRI0(t_xi_master(0), t_xi_master(1));
-        get_master_n()(gg, 1) =
-            Tools::shapeFunMBTRI1(t_xi_master(0), t_xi_master(1));
-        get_master_n()(gg, 2) =
-            Tools::shapeFunMBTRI2(t_xi_master(0), t_xi_master(1));
-      };
+        auto assemble = [&]() {
+          t_mat(I, J) = 0;
+          auto t_master_spatial_coords =
+              get_t_coords(get_master_spatial_coords());
+          auto t_diff = get_t_diff();
+          for (size_t n = 0; n != 3; ++n) {
+            t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_master_spatial_coords(i);
+            ++t_diff;
+            ++t_master_spatial_coords;
+          };
+          t_f(I) = t_tau(i, I) * (t_x_slave(i) - t_x_master(i));
+        };
 
-      constexpr double tol = 1e-12;
-      constexpr int max_it = 10;
-      int it = 0;
-      double eps;
+        auto update = [&]() {
+          t_xi_master(I) += t_f(I);
+          get_master_n()(gg, 0) =
+              Tools::shapeFunMBTRI0(t_xi_master(0), t_xi_master(1));
+          get_master_n()(gg, 1) =
+              Tools::shapeFunMBTRI1(t_xi_master(0), t_xi_master(1));
+          get_master_n()(gg, 2) =
+              Tools::shapeFunMBTRI2(t_xi_master(0), t_xi_master(1));
+        };
 
-      do {
+        constexpr double tol = 1e-12;
+        constexpr int max_it = 10;
+        int it = 0;
+        double eps;
+
+        do {
+
+          get_values();
+          assemble();
+
+          ublas::lu_factorize(A);
+          ublas::inplace_solve(A, F, ublas::unit_lower_tag());
+          ublas::inplace_solve(A, F, ublas::upper_tag());
+
+          update();
+
+          eps = norm_2(F);
+
+        } while (eps > tol && (it++) < max_it);
 
         get_values();
         assemble();
 
         ublas::lu_factorize(A);
-        ublas::inplace_solve(A, F, ublas::unit_lower_tag());
-        ublas::inplace_solve(A, F, ublas::upper_tag());
+        invA.resize(2, 2, false);
+        noalias(invA) = ublas::identity_matrix<double>(2);
+        ublas::inplace_solve(A, invA, ublas::unit_lower_tag());
+        ublas::inplace_solve(A, invA, ublas::upper_tag());
 
-        update();
+        auto t_inv_A = get_t_A(invA);
 
-        eps = norm_2(F);
+        auto get_diff_slave = [&]() {
+          auto t_diff_xi_slave = get_diff_ksi(get_diff_ksi_slave(), 3 * gg);
+          double *slave_base = &get_slave_n()(gg, 0);
+          for (size_t n = 0; n != 3; ++n) {
+            t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
+            ++t_diff_xi_slave;
+            ++slave_base;
+          }
+        };
 
-      } while (eps > tol && (it++) < max_it);
+        auto get_diff_master = [&]() {
+          auto t_diff_xi_master = get_diff_ksi(get_diff_ksi_master(), 3 * gg);
+          auto t_diff = get_t_diff();
+          double *master_base = &get_master_n()(gg, 0);
+          FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_A;
+          t_diff_A(I, J, K, L) = -t_inv_A(I, K) * t_inv_A(L, J);
+          for (size_t n = 0; n != 3; ++n) {
+            t_diff_xi_master(I, i) =
+                (t_diff_A(I, J, K, L) * (t_f(J) * t_diff(L))) * t_tau(i, K) -
+                t_inv_A(I, J) * t_tau(i, J) * (*master_base);
+            ++t_diff_xi_master;
+            ++master_base;
+            ++t_diff;
+          }
+        };
 
-      get_values();
-      assemble();
-
-      ublas::lu_factorize(A);
-      invA.resize(2, 2, false);
-      noalias(invA) = ublas::identity_matrix<double>(2);
-      ublas::inplace_solve(A, invA, ublas::unit_lower_tag());
-      ublas::inplace_solve(A, invA, ublas::upper_tag());
-
-      auto t_inv_A = get_t_A(invA);
-
-      auto get_diff_slave = [&]() {
-        auto t_diff_xi_slave = get_diff_ksi(get_diff_ksi_slave(), 3 * gg);
-        double *slave_base = &get_slave_n()(gg, 0);
-        for (size_t n = 0; n != 3; ++n) {
-          t_diff_xi_slave(I, i) = t_inv_A(I, J) * t_tau(i, J) * (*slave_base);
-          ++t_diff_xi_slave;
-          ++slave_base;
-        }
+        get_diff_master();
+        get_diff_slave();
       };
 
-      auto get_diff_master = [&]() {
-        auto t_diff_xi_master = get_diff_ksi(get_diff_ksi_master(), 3 * gg);
-        auto t_diff = get_t_diff();
-        double *master_base = &get_master_n()(gg, 0);
-        FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_A;
-        t_diff_A(I, J, K, L) = -t_inv_A(I, K) * t_inv_A(L, J);
-        for (size_t n = 0; n != 3; ++n) {
-          t_diff_xi_master(I, i) =
-              (t_diff_A(I, J, K, L) * (t_f(J) * t_diff(L))) * t_tau(i, K) -
-              t_inv_A(I, J) * t_tau(i, J) * (*master_base);
-          ++t_diff_xi_master;
-          ++master_base;
-          ++t_diff;
-        }
-      };
+      newton_solver();
 
-      get_diff_master();
-      get_diff_slave();
-    };
+      ++t_xi_master;
+    }
+  };
 
-    newton_solver();
-
-    ++t_xi_master;
-  }
+  const int nb_gauss_pts = fePtr->gaussPtsSlave.size2();
+  CHKERR fePtr->getNodeData(sparialPositionsField, spatialCoords);
+  CHKERR get_material_dofs_from_coords();
+  get_dofs_data_for_slave_and_master();
+  CHKERR calculate_shape_base_functions(nb_gauss_pts);
+  convect_points(nb_gauss_pts);
 
   MoFEMFunctionReturn(0);
 }
@@ -343,7 +320,7 @@ MoFEMErrorCode
 SimpleContactProblem::ConvectMasterContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
   CHKERR SimpleContactElement::setGaussPts(order);
-  CHKERR convectPtr->convectSlaveIntegrationPts<true>();
+  CHKERR convectPtr->convectSlaveIntegrationPts();
   MoFEMFunctionReturn(0);
 }
 
@@ -1146,8 +1123,8 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   auto get_tag_pos = [&](const std::string name) {
     Tag th;
     constexpr std::array<double, 3> def_vals = {0, 0, 0};
-    CHKERR moabOut.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE,
-                                  th, MB_TAG_CREAT | MB_TAG_SPARSE,
+    CHKERR moabOut.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE, th,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE,
                                   def_vals.data());
     return th;
   };
@@ -1163,43 +1140,42 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
   auto t_lag_gap_prod_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagGapProdPtr);
-   auto t_position_master = getFTensor1FromMat<3>(
+  auto t_position_master = getFTensor1FromMat<3>(
       *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
-   auto t_position_slave = getFTensor1FromMat<3>(
-       *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+  auto t_position_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
 
-   std::array<double, 3> pos_vec;
+  std::array<double, 3> pos_vec;
 
-   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-     const double *slave_coords_ptr = &(getCoordsAtGaussPtsSlave()(gg, 0));
-     CHKERR moabOut.create_vertex(slave_coords_ptr, new_vertex);
-     CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &t_gap_ptr);
+    const double *slave_coords_ptr = &(getCoordsAtGaussPtsSlave()(gg, 0));
+    CHKERR moabOut.create_vertex(slave_coords_ptr, new_vertex);
+    CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &t_gap_ptr);
 
-     CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
-                                 &t_lag_gap_prod_slave);
-     CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1,
-                                 &t_lagrange_slave);
+    CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
+                                &t_lag_gap_prod_slave);
+    CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &t_lagrange_slave);
 
-     auto get_vec_ptr = [&](auto t) {
-       for (int dd = 0; dd != 3; ++dd)
-         pos_vec[dd] = t(dd);
-       return pos_vec.data();
-     };
+    auto get_vec_ptr = [&](auto t) {
+      for (int dd = 0; dd != 3; ++dd)
+        pos_vec[dd] = t(dd);
+      return pos_vec.data();
+    };
 
-     CHKERR moabOut.tag_set_data(th_pos_master, &new_vertex, 1,
-                                 get_vec_ptr(t_position_master));
-     CHKERR moabOut.tag_set_data(th_pos_slave, &new_vertex, 1,
-                                 get_vec_ptr(t_position_slave));
-     const double *master_coords_ptr = &(getCoordsAtGaussPtsMaster()(gg, 0));
-     CHKERR moabOut.tag_set_data(th_master_coords, &new_vertex, 1,
-                                 master_coords_ptr);
+    CHKERR moabOut.tag_set_data(th_pos_master, &new_vertex, 1,
+                                get_vec_ptr(t_position_master));
+    CHKERR moabOut.tag_set_data(th_pos_slave, &new_vertex, 1,
+                                get_vec_ptr(t_position_slave));
+    const double *master_coords_ptr = &(getCoordsAtGaussPtsMaster()(gg, 0));
+    CHKERR moabOut.tag_set_data(th_master_coords, &new_vertex, 1,
+                                master_coords_ptr);
 
-     ++t_gap_ptr;
-     ++t_lagrange_slave;
-     ++t_lag_gap_prod_slave;
-     ++t_position_master;
-     ++t_position_slave;
+    ++t_gap_ptr;
+    ++t_lagrange_slave;
+    ++t_lag_gap_prod_slave;
+    ++t_position_master;
+    ++t_position_slave;
   }
   MoFEMFunctionReturn(0);
 }
@@ -1524,14 +1500,12 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalculateGradPositionXi::doWork(int side,
-                                                               EntityType type,
-                                                               EntData &data) {
+MoFEMErrorCode SimpleContactProblem::OpCalculateGradPositionXi::doWork(
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
   const int nb_dofs = data.getFieldData().size();
   const int nb_integration_pts = getGaussPtsSlave().size2();
-  auto &xi_grad_mat =
-      *(commonDataSimpleContact->gradKsiPositionAtGaussPtsPtr);
+  auto &xi_grad_mat = *(commonDataSimpleContact->gradKsiPositionAtGaussPtsPtr);
   xi_grad_mat.resize(6, nb_integration_pts, false);
   if (type == MBVERTEX)
     xi_grad_mat.clear();
