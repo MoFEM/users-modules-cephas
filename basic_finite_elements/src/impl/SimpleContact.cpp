@@ -680,14 +680,14 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
 
       double val_m = t_w * area_m;
 
-      auto t_base_master = data.getFTensor0N(gg, 0);
+      auto t_base_slave = data.getFTensor0N(gg, 0);
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
           &vecF[0], &vecF[1], &vecF[2]};
 
       for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
-        const double m = val_m * t_base_master * t_lagrange_slave;
+        const double m = val_m * t_base_slave * t_lagrange_slave;
         t_assemble_m(i) += m * t_const_unit_n(i);
-        ++t_base_master;
+        ++t_base_slave;
         ++t_assemble_m;
       }
 
@@ -1231,9 +1231,6 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrang_field_name) {
   MoFEMFunctionBegin;
-
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetNormalSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetNormalSlave(field_name, common_data_simple_contact));
