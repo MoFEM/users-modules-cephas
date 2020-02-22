@@ -166,7 +166,7 @@ add_test(
 )
 
 add_test(
-  test_simple_contact_smiling_fac_convectivee
+  test_simple_contact_smiling_fac_convective
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
   -my_is_test
