@@ -678,8 +678,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
 
     double val_s = t_w * area_s * t_lagrange_slave;
 
-    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
-
+      auto t_base_slave = data.getFTensor0N(gg, 0);
     FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_s{
         &vec_f[0], &vec_f[1], &vec_f[2]};
 
