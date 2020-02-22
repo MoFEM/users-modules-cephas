@@ -125,7 +125,13 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
   auto get_master_n = [&]() -> MatrixDouble & { return masterN; };
 
-  auto convect_points = [&](const int nb_gauss_pts) {
+  auto convect_points = [get_diff_ksi_master, get_diff_ksi_slave,
+                         get_slave_material_coords, get_master_gauss_pts,
+                         get_slave_spatial_coords, get_master_spatial_coords,
+                         get_slave_n, get_master_n](const int nb_gauss_pts) {
+    MatrixDouble3by3 A(2, 2);
+    MatrixDouble3by3 invA(2,2);
+    VectorDouble3 F(2);
 
     auto get_t_coords = [](auto &m) {
       return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
@@ -172,10 +178,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     FTensor::Index<'K', 2> K;
     FTensor::Index<'L', 2> L;
 
-    A.resize(2, 2, false);
-    F.resize(2, false);
-    diffKsiMaster.resize(6, 3 * nb_gauss_pts, false);
-    diffKsiSlave.resize(6, 3 * nb_gauss_pts, false);
+    get_diff_ksi_master().resize(6, 3 * nb_gauss_pts, false);
+    get_diff_ksi_slave().resize(6, 3 * nb_gauss_pts, false);
 
     auto t_xi_master = get_t_xi(get_master_gauss_pts());
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {

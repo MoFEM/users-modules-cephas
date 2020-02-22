@@ -101,9 +101,6 @@ struct SimpleContactProblem {
     MatrixDouble slaveMaterialCoords;
     MatrixDouble masterSpatialCoords;
     MatrixDouble masterMaterialCoords;
-    MatrixDouble A;
-    MatrixDouble invA;
-    VectorDouble F;
     MatrixDouble slaveN;
     MatrixDouble masterN;
 
