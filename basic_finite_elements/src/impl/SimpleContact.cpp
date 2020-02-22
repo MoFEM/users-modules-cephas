@@ -650,50 +650,53 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
-  if (data.getIndices().size() == 0)
-    MoFEMFunctionReturnHot(0);
+  const int nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
 
-  const int nb_gauss_pts = data.getN().size1();
-  int nb_base_fun_col = data.getFieldData().size() / 3;
+    const int nb_gauss_pts = data.getN().size1();
+    int nb_base_fun_col = nb_dofs / 3;
 
-  vec_f.resize(3 * nb_base_fun_col, false);
-  vec_f.clear();
+    vecF.resize(nb_dofs, false);
+    vecF.clear();
 
-  const double area_s =
-      commonDataSimpleContact->areaSlave; // same area in master and slave
+    const double area_m =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
 
-  auto get_tensor_vec = [](VectorDouble &n, const int r) {
-    return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
-  };
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
 
-  FTensor::Index<'i', 3> i;
-  auto t_lagrange_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+    FTensor::Index<'i', 3> i;
 
-  auto t_const_unit_n =
-      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+    auto t_lagrange_slave =
+        getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
-  auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_const_unit_n = get_tensor_vec(
+        commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    auto t_w = getFTensor0IntegrationWeightSlave();
 
-    double val_s = t_w * area_s * t_lagrange_slave;
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      auto t_base_slave = data.getFTensor0N(gg, 0);
-    FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_s{
-        &vec_f[0], &vec_f[1], &vec_f[2]};
+      double val_m = t_w * area_m;
 
-    for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
-      t_assemble_s(i) += val_s * t_base_slave * t_const_unit_n(i);
-      ++t_base_slave;
-      ++t_assemble_s;
-    }
+      auto t_base_master = data.getFTensor0N(gg, 0);
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
+          &vecF[0], &vecF[1], &vecF[2]};
 
-    ++t_lagrange_slave;
-    ++t_w;
-  } // for gauss points
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+        const double m = val_m * t_base_master * t_lagrange_slave;
+        t_assemble_m(i) += m * t_const_unit_n(i);
+        ++t_base_master;
+        ++t_assemble_m;
+      }
 
-  CHKERR VecSetValues(getSNESf(), data, &vec_f[0], ADD_VALUES);
+      ++t_lagrange_slave;
+      ++t_w;
+    } // for gauss points
+
+    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+  }
   MoFEMFunctionReturn(0);
 }
 

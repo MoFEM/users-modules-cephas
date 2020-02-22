@@ -437,14 +437,11 @@ struct SimpleContactProblem {
    */
   struct OpCalContactTractionOnSlave : public ContactOp {
 
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpCalContactTractionOnSlave(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
-
-    VectorDouble vec_f;
 
     /**
      * @brief Integrates Lagrange multipliers virtual work on
@@ -468,6 +465,10 @@ struct SimpleContactProblem {
      * points at slave triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    VectorDouble vecF;
   };
 
   /**
