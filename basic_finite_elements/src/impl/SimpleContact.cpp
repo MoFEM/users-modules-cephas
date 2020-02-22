@@ -820,6 +820,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
 
   if (nb_row && nb_col) {
     const int nb_gauss_pts = row_data.getN().size1();
+
     int nb_base_fun_row = row_data.getFieldData().size() / 3;
     int nb_base_fun_col = col_data.getFieldData().size();
 
@@ -827,8 +828,8 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
         commonDataSimpleContact->areaSlave; // same area in master and slave
 
     auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-      return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                           &m(r + 2, c + 0));
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c), &m(r + 1, c),
+                                           &m(r + 2, c));
     };
 
     auto get_tensor_vec = [](VectorDouble &n) {
@@ -840,29 +841,28 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
     NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
     NN.clear();
 
-    auto t_const_unit_n =
-        get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+    auto const_unit_n =
+        get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr.get()));
 
-    auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_w = getFTensor0IntegrationWeightMaster();
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      double val_s = t_w * area_slave;
 
-      auto t_base_lambda = col_data.getFTensor0N(gg, 0);
+      double val_m = t_w * area_slave;
+      auto t_base_master = row_data.getFTensor0N(gg, 0);
 
-      for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+        auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 0);
+        auto t_base_lambda = col_data.getFTensor0N(gg, 0);
+        const double m  = val_m * t_base_master;
+        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+          const double n = m * t_base_lambda;
+          t_assemble_m(i) += n * const_unit_n(i);
+          ++t_assemble_m;
+          ++t_base_lambda; // update cols slave
 
-        const double s = val_s * t_base_lambda;
-
-        auto t_base_slave = row_data.getFTensor0N(gg, 0);
-        for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-          auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, bbc);
-
-          t_assemble_s(i) += s * t_base_slave * t_const_unit_n(i);
-
-          ++t_base_slave; // update rows
         }
-        ++t_base_lambda; // update cols slave
+        ++t_base_master; // update rows master
       }
       ++t_w;
     }
