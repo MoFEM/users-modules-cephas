@@ -399,7 +399,7 @@ struct SimpleContactProblem {
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
         Vec f_ = PETSC_NULL)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
     VectorDouble vec_f;
@@ -441,7 +441,7 @@ struct SimpleContactProblem {
     OpCalContactTractionOnSlave(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
     VectorDouble vec_f;
