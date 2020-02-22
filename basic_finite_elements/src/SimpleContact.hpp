@@ -78,7 +78,7 @@ struct SimpleContactProblem {
         : fePtr(fe_ptr), sparialPositionsField(spat_pos),
           materialPositionsField(mat_pos) {}
 
-    MoFEMErrorCode convectSlaveIntegrationPts();
+    template <bool CONVECT_MASTER> MoFEMErrorCode convectSlaveIntegrationPts();
 
     inline boost::shared_ptr<MatrixDouble> getDiffKsiSpatialMaster() {
       return boost::shared_ptr<MatrixDouble>(shared_from_this(),
@@ -125,6 +125,14 @@ struct SimpleContactProblem {
 
   protected:
     boost::shared_ptr<ConvectSlaveIntegrationPts> convectPtr;
+  };
+
+  struct ConvectSlaveContactElement : public ConvectMasterContactElement {
+    using ConvectMasterContactElement::ConvectMasterContactElement;
+
+    int getRule(int order) { return -1; }
+
+    MoFEMErrorCode setGaussPts(int order);
   };
 
   /**
@@ -195,6 +203,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
     boost::shared_ptr<MatrixDouble> gradKsiPositionAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> gradKsiLambdaAtGaussPtsPtr;
 
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
     boost::shared_ptr<VectorDouble> gapPtr;
@@ -210,6 +219,7 @@ struct SimpleContactProblem {
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
       gradKsiPositionAtGaussPtsPtr = boost::make_shared<MatrixDouble>();
+      gradKsiLambdaAtGaussPtsPtr = boost::make_shared<MatrixDouble>();
       lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
 
       gapPtr = boost::make_shared<VectorDouble>();
@@ -924,7 +934,7 @@ struct SimpleContactProblem {
       string field_name, string lagrang_field_name);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
-      boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 
@@ -984,6 +994,20 @@ struct SimpleContactProblem {
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  };
+
+  struct OpCalculateGradLambdaXi : public ContactOp {
+
+    OpCalculateGradLambdaXi(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
