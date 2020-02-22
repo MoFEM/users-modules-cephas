@@ -100,6 +100,7 @@ struct SimpleContactProblem {
     MatrixDouble slaveSpatialCoords;
     MatrixDouble slaveMaterialCoords;
     MatrixDouble masterSpatialCoords;
+    MatrixDouble masterMaterialCoords;
     MatrixDouble A;
     MatrixDouble invA;
     VectorDouble F;
@@ -113,7 +114,7 @@ struct SimpleContactProblem {
   struct ConvectMasterContactElement : public SimpleContactElement {
 
     ConvectMasterContactElement(MoFEM::Interface &m_field, std::string spat_pos,
-                          std::string mat_pos, bool newton_cotes = false)
+                                std::string mat_pos, bool newton_cotes = false)
         : SimpleContactElement(m_field, newton_cotes),
           convectPtr(new ConvectSlaveIntegrationPts(this, spat_pos, mat_pos)) {}
 
@@ -131,7 +132,7 @@ struct SimpleContactProblem {
 
   struct ConvectSlaveContactElement : public ConvectMasterContactElement {
     using ConvectMasterContactElement::ConvectMasterContactElement;
-    
+
     int getRule(int order) { return -1; }
 
     MoFEMErrorCode setGaussPts(int order);
@@ -204,7 +205,8 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
-    boost::shared_ptr<MatrixDouble> gradKsiPositionAtGaussPtsSlavePtr;
+    boost::shared_ptr<MatrixDouble> gradKsiPositionAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> gradKsiLambdaAtGaussPtsPtr;
 
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
     boost::shared_ptr<VectorDouble> gapPtr;
@@ -219,7 +221,8 @@ struct SimpleContactProblem {
     CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
-      gradKsiPositionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
+      gradKsiPositionAtGaussPtsPtr = boost::make_shared<MatrixDouble>();
+      gradKsiLambdaAtGaussPtsPtr = boost::make_shared<MatrixDouble>();
       lagMultAtGaussPtsPtr = boost::make_shared<VectorDouble>();
 
       gapPtr = boost::make_shared<VectorDouble>();
@@ -933,7 +936,7 @@ struct SimpleContactProblem {
       string field_name, string lagrang_field_name);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
-      boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 
@@ -974,7 +977,9 @@ struct SimpleContactProblem {
         : ContactOp(row_field_name, col_field_name, UserDataOperator::OPROWCOL,
                     face_type),
           commonDataSimpleContact(common_data_contact),
-          diffConvect(diff_convect) { sYmm = false; }
+          diffConvect(diff_convect) {
+      sYmm = false;
+    }
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
@@ -985,12 +990,26 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> diffConvect;
   };
 
-  struct OpCalculateGradXi : public ContactOp {
+  struct OpCalculateGradPositionXi : public ContactOp {
 
-    OpCalculateGradXi(
+    OpCalculateGradPositionXi(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  };
+
+  struct OpCalculateGradLambdaXi : public ContactOp {
+
+    OpCalculateGradLambdaXi(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);

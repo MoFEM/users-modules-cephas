@@ -223,8 +223,15 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto make_convective_element = [&]() {
-      return boost::make_shared<SimpleContactProblem::ConvectMasterContactElement>(
+    auto make_convective_master_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectMasterContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
+    auto make_convective_slave_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectSlaveContactElement>(
           m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
     };
 
@@ -328,19 +335,21 @@ int main(int argc, char *argv[]) {
     if (convect_pts == PETSC_TRUE) {
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_convective_element), PETSC_NULL,
-          PETSC_NULL);
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_contact_lhs(contact_problem, make_convective_element), NULL,
-          NULL);
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_master_traction_rhs(contact_problem, make_convective_element),
+          get_contact_rhs(contact_problem, make_convective_master_element),
           PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
-          get_master_traction_lhs(contact_problem, make_convective_element),
+          get_contact_lhs(contact_problem, make_convective_master_element), NULL,
+          NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem,
+                                  make_convective_slave_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem,
+                                  make_convective_slave_element),
           NULL, NULL);
     } else {
       CHKERR DMMoFEMSNESSetFunction(
