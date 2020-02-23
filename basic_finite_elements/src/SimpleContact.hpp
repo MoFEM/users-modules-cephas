@@ -70,6 +70,12 @@ struct SimpleContactProblem {
     friend ConvectSlaveIntegrationPts;
   };
 
+  /**
+   * @brief Class used to convect integration points on slave and master, and to
+   * calculate  directional direvatives of change integration position point as
+   * variation os spatial positions on contact surfaces.
+   *
+   */
   struct ConvectSlaveIntegrationPts
       : public boost::enable_shared_from_this<ConvectSlaveIntegrationPts> {
 
@@ -108,6 +114,12 @@ struct SimpleContactProblem {
     MatrixDouble diffKsiSlave;
   };
 
+  /**
+   * @brief Element used to integrate on slave surfaces. It convects integration
+   * points on slaves, so that quantities like gap from master are evaluated at
+   * correct points.
+   *
+   */
   struct ConvectMasterContactElement : public SimpleContactElement {
 
     ConvectMasterContactElement(MoFEM::Interface &m_field, std::string spat_pos,
@@ -127,6 +139,12 @@ struct SimpleContactProblem {
     boost::shared_ptr<ConvectSlaveIntegrationPts> convectPtr;
   };
 
+  /**
+   * @brief Element used to integrate on master surfaces. It convects
+   * integration points on slaves, so that quantities like Lagrange multiplier
+   * from master are evaluated at correct points.
+   *
+   */
   struct ConvectSlaveContactElement : public ConvectMasterContactElement {
     using ConvectMasterContactElement::ConvectMasterContactElement;
 
@@ -918,6 +936,13 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 
+  /**
+   * @copydoc SimpleContactProblem::setContactOperatorsLhs
+   *
+   * \note This overloaded variant add additional operators for convected
+   * integration points.
+   *
+   */
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
@@ -963,6 +988,11 @@ struct SimpleContactProblem {
       MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
       moab::Interface &moab_out, bool lagrange_field = true);
 
+  /**
+   * @brief Calculate tangent operator for contact force for change of
+   * integration point positions, as result of change os spatial positions.
+   *
+   */
   struct OpLhsConvectIntegrationPtsContactTraction : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
@@ -988,6 +1018,10 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> diffConvect;
   };
 
+  /**
+   * @brief Evaluate gradient position on reference master surface.
+   * 
+   */
   struct OpCalculateGradPositionXi : public ContactOp {
 
     OpCalculateGradPositionXi(
@@ -1002,6 +1036,10 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
   };
 
+  /**
+   * @brief Evaluate gradient of Lagrange multipliers on reference slave surface
+   * 
+   */
   struct OpCalculateGradLambdaXi : public ContactOp {
 
     OpCalculateGradLambdaXi(
@@ -1016,6 +1054,11 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
   };
 
+  /**
+   * @brief Tangent opeerator for contrains equation for change of spatial
+   * positions on master and slave.
+   *
+   */
   struct OpLhsConvectIntegrationPtsConstrainMasterGap : public ContactOp {
 
     OpLhsConvectIntegrationPtsConstrainMasterGap(
