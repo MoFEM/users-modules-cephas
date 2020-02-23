@@ -2,9 +2,11 @@
 
 \section basic_lessons1_itro Introduction
 
-Basic lessons intended to give new MoFEM developer freedom to implement bespoke finite element codes. In this and following tutorials we assume that the user can programme, and is at least has basic fluency in C++ programming. Also, assume that the reader is an engineer, physicist, or mathematician, which is interested in solving Partial Differential Equations (PDEs) using finite elements. Finally, we try to keep mathematical abstraction as basic as it can be.  
+Basic lessons intended to give new MoFEM developer, that is You, freedom to implement bespoke finite element codes. In this and following tutorials we assume that the you can programme, and is at least have basic fluency in C++ programming. Also, assume that the you are engineer or physicist, or mathematician, someone which is interested in solving Partial Differential Equations (PDEs) using finite elements. Finally, we try to keep mathematical abstraction as basic as it can be. 
 
-Presented porblems, except first, are for 2D problems, however are implemented in such way that can be extended to 3D. Once reader get understanding, as a excercise cna extedn implementation to 3D case.
+If you will be reading these lessons, and you do not understand tutorial; it very likely ower fault not expressing ideas clear enough. If that is the case, please ask equations on our <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> forum, or join us on <a href="https://mofem.slack.com/">Slack</a>. Your comments will enable us to improve this work, and if you are keen to contribute, starting from improving tutorials is the best way. 
+
+All presented problems, except first, are for 2D problems. However,  all examples are implemented in such a way that can be extended to 3D. Once you get understanding, as an exercise, you can implement the 3D case.
 
 \tableofcontents
 
