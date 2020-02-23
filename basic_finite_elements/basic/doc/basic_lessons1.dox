@@ -357,16 +357,21 @@ Before calculation can be performed, some bookkeeping has to be done to manage c
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set up problem
 
-Note that function add field, wnich is defined by name, space, approximation base, and rank. To approximate density, we choos space of integrable functions and its derivatives, use recipe form \cite NME:NME847 to construct base functions, and rank of the base is one, since dendisty is scalar field. The  order of approximation is set to one, i.e. linear functions are used. 
+Note that function adds field, which is defined by name, space, approximation base, and rank. To approximate density, we choose space of integrable functions and its derivatives, use recipe form \cite NME:NME847 to construct base functions, and rank of the base is one since density is a scalar field. The order of approximation is set to one, i.e. linear functions are used. 
 
-\subsubsection basic_lesson1_example_common_data CommonData struture 
+\subsubsection basic_lesson1_example_common_data Common data struture 
 
+The common data structure is used to exchange data between operators run by finite elements. It is a convenient method that allows to group data evaluated at integration points which in element, or aggregate data from all elements to be later used by other parts of the code. You will find common data in all examples for the following lessons, and other parts of MoFEM implementations. 
+
+Common data structure is defined as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Common data
 
-is created
+and instance is created by method
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
 
-where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Next memory for  MoFEM::Types::VectorDouble is allocated, as well handled by smart pointer, to store denities at integration points. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. Smart pointers are used to manatin life of dynamically allocated objects. You can think about smart pointers as a regular pointers, and to understanding following code you do not have to know more about them. More explantion is needed for 
+where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a> and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to vector  rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. 
+
+Smart pointers, boost::shared_ptr and MoFEM::SmartPetscObj, are used to maintain the life of dynamically allocated objects. You can think about smart pointers as a regular pointer, and to an understanding following code you do not have to know more about them. More explanation is needed for
 \code
 
 int local_size;
@@ -380,25 +385,27 @@ else
 commonDataPtr->petscVec = createSmartVectorMPI(
   mField.get_comm(), local_size, CommonData::LAST_ELEMENT);
 \endcode
-this is smart pointer to PETSc Vector, it is creted by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function need to be provided with comminitator, here by \em mField.get_comm(), which is communicator of MoFEM. Commnicator holds a group of processes that can communicate with each other. Next loacl size of the vector is provided, here is equal 10, since we store mass, three first moments, and six second momments of inertia, in order as it is in CommonData::VecElements. Local size of vector is ten, which is equal to CommonData::VecElements::VecElements on fisrt processor, and zero on other porcessors. It means that all data will be accumulated on processor one. Global size of the vector is a summ of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements.
+this is smart pointer to PETSc Vector, it is created by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here is equal 10, since we store mass, three first moments, and six-second moments of inertia, in order as it is in CommonData::VecElements. Local size of the vector is ten, which is equal to CommonData::VecElements::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor one. The global size of the vector is a sum of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements.
 
-In all following lessons, including this one, code work in parallel, for distributed meshes. 
+In all the following lessons, including this one, we implemented code to make it work distributed meshes. 
 
-\anchor basic_l1_figure_4
-\image html basic_lesson1_partitioning.png "Figure 4: Mesh partitioning" width=600px
+\anchor basic_l1_figure_4 
+\image html basic_lesson1_partitioning.png "Figure 4: Mesh partitioning" width=800px
 
-
-\subsubsection basic_lesson1_example_common_data Setting initial values of denity
+\subsubsection basic_lesson1_bc Setting density field
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set inital density
 
-Note that we set iniform denisty, whever you in function \em set_density you have access to coordinates, so you can set any distribution density which you like. Function MoFEM::FieldBlas::setVertexDofs set the values to the nodes, where denity field is set on the mesh, by iterating each node, getting it coordintes and calling finction \em set_density, which in turn returns denisty.
+For simplicity, dentistry is set to unity, at each mesh node. That creates a uniform density field. However, applying easy modification, arbitrary density field can be set. Function \em set_density argument has coordinates, so you can set any distribution density which you like. Core function MoFEM::FieldBlas::setVertexDofs doing hard work, set the values to the mesh nodes,  by iterating each node, getting it coordinates and calling function provided by the user, i.e. \em set_density.
 
 \subsubsection basic_lesson1_opertors Operators and pipelines
 
-\anchor basic_l1_figure_4 
-\image html basic_lesson1_ops.png "Figure 4: Operators and common data" width=800px
+In MoFEM developer is relieved from the operation of bookkeeping of DOFs, finite elements,  assembly, etc. The developer does not iterate over finite elements.  That is for some problem tedious task, in particular when the mesh is distributed on many processors and contains a different type of elements. Instead, the developer provides MoFEM with operators who are executed on each element. In particular, those operators are executed on each subentity of the element, for example, finite triangle element is made from entities; nodes, three edges and triangle itself. Operators are executed for each entity of finite element. In this lesson, because of the simplicity of the problem, and that density field is exclusively defined on nodes, operators are run for nodes only.
 
+On each finite element, several operators can be run in sequence. In principle, operators are used to breaking down a complex problem on simpler tasks. Each operator is implemented such that it iterates over integration points on the element. Operators are derived classes and provide some basic functions,  vary for different element shapes, however always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
+
+\anchor basic_l1_figure_4 
+\image html basic_lesson1_ops.png "Figure 4: Operators and common data" width=800px 
 
 \subsection basci_lesson1_code Code
 

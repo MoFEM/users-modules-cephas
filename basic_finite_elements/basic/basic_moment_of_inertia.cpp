@@ -68,10 +68,15 @@ private:
 //! [Example]
 
 //! [Common data]
-struct Example::CommonData {
+struct Example::CommonData
+    : public boost::enable_shared_from_this<Example::CommonData> {
 
-  boost::shared_ptr<VectorDouble>
-      rhoAtIntegrationPts; ///< Storing density at integration point
+  VectorDouble rhoAtIntegrationPts; ///< Storing density at integration point
+
+  inline boost::shared_ptr<VectorDouble> getRhoAtIntegrationPtsPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(),
+                                           &rhoAtIntegrationPts);
+  }
 
   /**
    * @brief Vector to indicate indices for storing, zero, first and second
@@ -160,7 +165,6 @@ MoFEMErrorCode Example::setUP() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
 
   int local_size;
   if (mField.get_comm_rank() == 0)
@@ -198,7 +202,7 @@ MoFEMErrorCode Example::OPs() {
 
   // Push operator which calculate values of densities at integration points
   basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
-      "rho", commonDataPtr->rhoAtIntegrationPts));
+      "rho", commonDataPtr->getRhoAtIntegrationPtsPtr()));
 
   // Push operator to pipeline to calculate zero moment of inertia, that is mass
   // and when density is one everywere it is area
@@ -343,8 +347,8 @@ MoFEMErrorCode Example::OpZero::doWork(int side, EntityType type,
     const int nb_integration_pts =
         getGaussPts().size2(); // Number of integration points
     auto t_w = getFTensor0IntegrationWeight(); // Integration weights
-    auto t_rho = getFTensor0FromVec(*(
-        commonDataPtr->rhoAtIntegrationPts)); // Density at integration weights
+    auto t_rho = getFTensor0FromVec(
+        commonDataPtr->rhoAtIntegrationPts); // Density at integration weights
     const double volume = getMeasure();
 
     // Integrate area of the element
@@ -370,8 +374,8 @@ MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type,
   if (type == MBVERTEX) {
     const int nb_integration_pts = getGaussPts().size2();
     auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
-    auto t_rho = getFTensor0FromVec(*(
-        commonDataPtr->rhoAtIntegrationPts)); ///< Density at integration points
+    auto t_rho = getFTensor0FromVec(
+        commonDataPtr->rhoAtIntegrationPts); ///< Density at integration points
     auto t_coords =
         getFTensor1CoordsAtGaussPts();  ///< Coordinates at integration points
     const double volume = getMeasure(); ///< Get Volume of element
@@ -409,7 +413,7 @@ MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type,
 
     const int nb_integration_pts = getGaussPts().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_rho = getFTensor0FromVec(*(commonDataPtr->rhoAtIntegrationPts));
+    auto t_rho = getFTensor0FromVec(commonDataPtr->rhoAtIntegrationPts);
     auto t_coords = getFTensor1CoordsAtGaussPts();
     const double volume = getMeasure();
 
