@@ -10,13 +10,15 @@ All presented problems, except first, are for 2D problems. However,  all example
 
 \tableofcontents
 
+In the following lessons, we intend to create consistently series of problems, which will give you the freedom to solve a large class of nonlinear problems.  
+
 MoFEM provides interfaces with varying level of abstraction, lower abstraction, harder to use, demanding more knowledge about how MoFEM works and designs. Higher abstraction, limits flexibility, but makes implementation faster and simpler. Here we use \em Simple and \em Basic interfaces, which are complementary to each other.
 
-The \em Simple interface is used to add approximation fields and delivers Discrete Manager (DM) to create matrices. Is simple, since it assumes that fields and finite elements are set on the whole domain or whole boundary of the mesh. It assumes that problem has fix dimension, and not allows for mixing shells, beams and solid elements. The simple interface allows for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with triangles and quads, and heterogenous approximation order. Despite some restrictions, \em Simple interface enables to fast implementation of a large class of problems.
+The \em Simple interface is used to add approximation fields and delivers Discrete Manager (DM) to create matrices. Is \rm Simple interface, since it assumes that fields and finite elements are set on the whole domain or whole boundary of the mesh. It assumes that problem has fix dimension, and not allows for mixing shells, beams and solid elements. From the other hand,  the \em Simple interface allows for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with triangles and quads, and heterogenous approximation order. Despite some restrictions, \em Simple interface enables to fast implementation of a large class of problems.
 
-The \em Basic interface is used to simplified creation of operator pipelines. The pipeline is a sequence of operations which one has to run to assemble the right-hand vector or stiffness matrix.  <em>User data operator</em>  (UDO) is, for example, a differential operator which takes gradient of the field, or calculate strain, or use previously calculated strain in the pipeline to calculate stress, and in the end, calculate vector on the right-hand side.  In other words, the pipeline is a complex problem broken on simple tasks, i.e. user data opretors, for short UDOs. 
+The \em Basic interface is used to simplified creation of operator pipelines. The pipeline is a sequence of operations which one has to run to assemble the right-hand vector or stiffness matrix.  <em>User data operator</em>  (UDO) is, for example, a differential operator which takes gradient of the field, or calculate strain, or use previously calculated strain in the pipeline to calculate stress, and in the end, calculate vector on the right-hand side.  In other words, the pipeline is a complex problem broken on simple tasks, i.e. user data operators, for short UDOs.
 
-In the following lessons, we intend to create consistently series of problems, which will give you the freedom to solve a large class of nonlinear problems.  
+It might not be apparent for you why we have \em Simple interface and \em Basic interface. \em Simple interface managed DOFs, i.e. approximation fields on the mesh manage entities on which finite elements are set and problems composed from finite elements.  However, do not provide a mechanism on how you assemble the vector of internal force, tangent matrix, or integrate. The tools for later are provided in \em Basic interface.  
 
 \section basic_lessons1_start Essentials
 
@@ -28,13 +30,14 @@ Numrical inegration of function \f$\rho\f$, is given by formula,
   I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
 \end{align}
 \f]
-where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated function, e.g. density. Typically sum of the inetgration weights is scaled by volume (measure) of refernce element, such that is weights equal to unity, as follows
+where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated function, e.g. density. Typically sum of the integration weights is scaled by volume (measure) of reference element, such that is weights equal to unity, as follows
 \f[
 \begin{align}
   \sum_{g=0}^{G-1} W_g  = 1 
 \end{align}
 \f]
-Consequenly, for such scalling for Jacobinan we use:
+
+Consequently, for such scaling for Jacobinan we use:
 
 - For tetrahedron 
 \f[
@@ -42,7 +45,7 @@ Consequenly, for such scalling for Jacobinan we use:
   I(f) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \rho^h_g
 \end{align}
 \f]
-where \f$v=\frac{1}{6}\| \mathbf{J}_g \|\f$ is volume of tetrahedrons
+where \f$v=\frac{1}{6}\| \mathbf{J}_g \|\f$ is volume of tetrahedon. 
 
 - For triangle
 \f[
@@ -64,13 +67,15 @@ where \f$l\f$ is length.
 
 The distribution of mass in the body can be characterised by inertia moments, with respect to some origin and coordinate system. Moments have practical applications, are used for analysis motion of rigid bodies, or to characterise crosssection are in structural analysis. 
 
-- Zero inertia momenbt is a body mass, 
+Moments are tensors, which zero moments have one scalar coefficient, first moments are vectors, and second moments are second-order tensors, which coefficients for convenience can be organised matrices. This coefficient of moments depend on the observer, i.e. coordinate system, but is a strict rule, i.e. tensorial transformation rule, how coefficients of moments change with the observer.   For zero moments, area, all is simple, the volume of an object can not be changed by looking at it from the different point and angle, so it the same in every coordinate system.
+
+- Zero inertia moment is a body mass, 
 \f[
 \begin{align}
 M := \int_\Omega \rho(\mathbf{x}) \textrm{d}V
 \end{align}
 \f]
-wjere \f$\rho\f$ is material density and \f$\Omega\f$ is a body domain. Mass characterise how much force need to be applied for desired body acceleration, as statet Newton law
+where \f$\rho\f$ is the material density, and \f$\Omega\f$ is a body domain. Mass characterise how much force needs to be applied for desired body acceleration, as stated Newton law
 \f[
 \begin{align}
 a^i = M f^i
@@ -83,33 +88,33 @@ E_k = \frac{v^i M v^i}{2}
 \end{align}
 \f]
 
-- First inertaia moment, is given by
+- First inertia moment, is given by
 \f[
 \begin{align}
 S^i := \int_\Omega \rho(\mathbf{x}) x^i \textrm{d}V
 \end{align}
 \f]
-where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravirty of the body can be calulated as
+where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravity of the body can be calculated a
 \f[
 \begin{align}
 x_c^i = \frac{S^i}{M}.
 \end{align}
 \f]
-where \f$\mathbf{x}_c\f$ is gravity centre of the body, or system of the bodies. Note at centre of gravity fisrt moment of inertia is zero.
+where \f$\mathbf{x}_c\f$ is gravity centre of the body, or system of the bodies, note at centre of gravity first moment of inertia is zero.
 
-- Second inertaia moment is defined as
+- Second inertia moment is defined as
 \f[
 \begin{align}
 I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}V
 \end{align}
 \f]
-where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wiki/Outer_product">here</a>. Second mmomment of inertia, analogously to mass, characterise how much torque has to be applied at body origin for deired body acceleration, as follows
+where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wiki/Outer_product">here</a>. The second moment of inertia, analogously to mass, characterise how much torque has to be applied at body origin for desired body acceleration, as follow
 \f[
 \begin{align}
 \omega^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
 \end{align}
 \f]
-ane kinematic energy is 
+and kinematic energy is 
 \f[
 \begin{align}
 E_k = \frac{\omega^i I^{ij} \omega^j}{2}
