@@ -476,9 +476,10 @@ Debugging is a way of searching for errors, which enables to run step over each 
 
 Writing of the code is relatively quick, searching for bugs and errors is usually very time-consuming. When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LDB  debugger.
 
-VSCode has built-in functionality to debug code, for details on how to use it, see <https://code.visualstudio.com/docs/introvideos/debugging>
+VSCode has built-in functionality to debug code, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>.
 
-\subsection basci_lesson1_code Code
+\section basci_lesson1_code Code
 
 \include users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp 
+
 */
