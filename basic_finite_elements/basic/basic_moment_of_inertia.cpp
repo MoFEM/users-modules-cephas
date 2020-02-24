@@ -36,7 +36,6 @@ using EntData = DataForcesAndSourcesCore::EntData;
 FTensor::Index<'i', 3> i;
 FTensor::Index<'j', 3> j;
 
-
 //! [Example]
 struct Example {
 
@@ -55,15 +54,15 @@ private:
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
-  struct CommonData;;
+  struct CommonData;
+  ;
   boost::shared_ptr<CommonData> commonDataPtr;
 
-  struct OpZero; 
+  struct OpZero;
 
   struct OpFirst;
 
-  struct OpSecond; 
-
+  struct OpSecond;
 };
 //! [Example]
 
@@ -105,7 +104,9 @@ struct Example::CommonData
 //! [Operators]
 struct Example::OpZero : public OpElement {
   OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
-      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
@@ -114,7 +115,9 @@ private:
 
 struct Example::OpFirst : public OpElement {
   OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
-      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
@@ -123,14 +126,15 @@ private:
 
 struct Example::OpSecond : public OpElement {
   OpSecond(boost::shared_ptr<CommonData> &common_data_ptr)
-      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 //! [Operators]
-
 
 //! [Run all]
 MoFEMErrorCode Example::runProblem() {
@@ -228,7 +232,7 @@ MoFEMErrorCode Example::OPs() {
 //! [Do calculations]
 MoFEMErrorCode Example::integrateElements() {
   MoFEMFunctionBegin;
-  
+
   Basic *basic = mField.getInterface<Basic>();
   // Zero global vector
   CHKERR VecZeroEntries(commonDataPtr->petscVec);
@@ -338,14 +342,14 @@ int main(int argc, char *argv[]) {
 }
 //! [main]
 
-//! [FirstOp]
+//! [ZeroOp]
 MoFEMErrorCode Example::OpZero::doWork(int side, EntityType type,
                                        EntData &data) {
   MoFEMFunctionBegin;
   if (type == MBVERTEX) {
 
     const int nb_integration_pts =
-        getGaussPts().size2(); // Number of integration points
+        getGaussPts().size2();                 // Number of integration points
     auto t_w = getFTensor0IntegrationWeight(); // Integration weights
     auto t_rho = getFTensor0FromVec(
         commonDataPtr->rhoAtIntegrationPts); // Density at integration weights
@@ -366,89 +370,87 @@ MoFEMErrorCode Example::OpZero::doWork(int side, EntityType type,
   }
   MoFEMFunctionReturn(0);
 }
-//! [FirstOps]
+//! [ZeroOp]
 
+//! [FirstOp]
 MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type,
                                         EntData &data) {
   MoFEMFunctionBegin;
-  if (type == MBVERTEX) {
-    const int nb_integration_pts = getGaussPts().size2();
-    auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
-    auto t_rho = getFTensor0FromVec(
-        commonDataPtr->rhoAtIntegrationPts); ///< Density at integration points
-    auto t_coords =
-        getFTensor1CoordsAtGaussPts();  ///< Coordinates at integration points
-    const double volume = getMeasure(); ///< Get Volume of element
+  const int nb_integration_pts = getGaussPts().size2();
+  auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
+  auto t_rho = getFTensor0FromVec(
+      commonDataPtr->rhoAtIntegrationPts); ///< Density at integration points
+  auto t_coords =
+      getFTensor1CoordsAtGaussPts();  ///< Coordinates at integration points
+  const double volume = getMeasure(); ///< Get Volume of element
 
-    FTensor::Tensor1<double, 3>
-        t_s;    ///< First moment of inertia is tensor of rank 1, i.e. vector.
-    t_s(i) = 0; // Zero entries
+  FTensor::Tensor1<double, 3>
+      t_s;    ///< First moment of inertia is tensor of rank 1, i.e. vector.
+  t_s(i) = 0; // Zero entries
 
-    // Integrate
-    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+  // Integrate
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
-      t_s(i) += t_w * t_rho * volume * t_coords(i);
+    t_s(i) += t_w * t_rho * volume * t_coords(i);
 
-      ++t_w;      // move weight to next integration pts
-      ++t_rho;    // move density
-      ++t_coords; // move coordinate
-    }
-
-    // Set array of indices
-    constexpr std::array<int, 3> indices = {
-        CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z};
-
-    // Assemble first moment of inertia
-    CHKERR VecSetValues(commonDataPtr->petscVec, 3, indices.data(), &t_s(0),
-                        ADD_VALUES);
+    ++t_w;      // move weight to next integration pts
+    ++t_rho;    // move density
+    ++t_coords; // move coordinate
   }
+
+  // Set array of indices
+  constexpr std::array<int, 3> indices = {
+      CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z};
+
+  // Assemble first moment of inertia
+  CHKERR VecSetValues(commonDataPtr->petscVec, 3, indices.data(), &t_s(0),
+                      ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
+//! [FirstOp]
 
 //! [SecondOp]
 MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type,
                                          EntData &data) {
   MoFEMFunctionBegin;
-  if (type == MBVERTEX) {
 
-    const int nb_integration_pts = getGaussPts().size2();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_rho = getFTensor0FromVec(commonDataPtr->rhoAtIntegrationPts);
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    const double volume = getMeasure();
+  const int nb_integration_pts = getGaussPts().size2();
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_rho = getFTensor0FromVec(commonDataPtr->rhoAtIntegrationPts);
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+  const double volume = getMeasure();
 
-    // Create storage for symmetric tensor
-    std::array<double, 6> element_local_value;
+  // Create storage for symmetric tensor
+  std::array<double, 6> element_local_value;
 
-    // Crate symmetric tensor with points to the storrage
-    FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
-        &element_local_value[CommonData::SECOND_XX],
-        &element_local_value[CommonData::SECOND_XY],
-        &element_local_value[CommonData::SECOND_XZ],
-        &element_local_value[CommonData::SECOND_YY],
-        &element_local_value[CommonData::SECOND_YZ],
-        &element_local_value[CommonData::SECOND_ZZ]);
+  // Crate symmetric tensor with points to the storrage
+  FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
+      &element_local_value[CommonData::SECOND_XX],
+      &element_local_value[CommonData::SECOND_XY],
+      &element_local_value[CommonData::SECOND_XZ],
+      &element_local_value[CommonData::SECOND_YY],
+      &element_local_value[CommonData::SECOND_YZ],
+      &element_local_value[CommonData::SECOND_ZZ]);
 
-    // Integate
-    for (int gg = 0; gg != nb_integration_pts; ++gg) {
+  // Integate
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
-      // Symbol "^" indicate multiplication which yield symmetric tensor
-      t_I(i, j) += (t_w * t_rho * volume) * (t_coords(i) ^ t_coords(j));
+    // Symbol "^" indicate multiplication which yield symmetric tensor
+    t_I(i, j) += (t_w * t_rho * volume) * (t_coords(i) ^ t_coords(j));
 
-      ++t_w;
-      ++t_rho;
-      ++t_coords;
-    }
-
-    // Set array of indices
-    constexpr std::array<int, 6> indices = {
-        CommonData::SECOND_XX, CommonData::SECOND_XY, CommonData::SECOND_XZ,
-        CommonData::SECOND_YY, CommonData::SECOND_YZ, CommonData::SECOND_ZZ};
-
-    // Assemble second moment of inertia
-    CHKERR VecSetValues(commonDataPtr->petscVec, 6, indices.data(),
-                        &element_local_value[0], ADD_VALUES);
+    ++t_w;
+    ++t_rho;
+    ++t_coords;
   }
+
+  // Set array of indices
+  constexpr std::array<int, 6> indices = {
+      CommonData::SECOND_XX, CommonData::SECOND_XY, CommonData::SECOND_XZ,
+      CommonData::SECOND_YY, CommonData::SECOND_YZ, CommonData::SECOND_ZZ};
+
+  // Assemble second moment of inertia
+  CHKERR VecSetValues(commonDataPtr->petscVec, 6, indices.data(),
+                      &element_local_value[0], ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 //! [SecondOp]
