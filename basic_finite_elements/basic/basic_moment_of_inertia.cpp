@@ -101,7 +101,6 @@ struct Example::CommonData
 };
 //! [Common data]
 
-//! [Operators]
 struct Example::OpZero : public OpElement {
   OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
       : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {
@@ -112,7 +111,6 @@ struct Example::OpZero : public OpElement {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
-//! [Operators]
 
 
 struct Example::OpFirst : public OpElement {
@@ -126,6 +124,7 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+//! [Operator]
 struct Example::OpSecond : public OpElement {
   OpSecond(boost::shared_ptr<CommonData> &common_data_ptr)
       : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {
@@ -136,6 +135,7 @@ struct Example::OpSecond : public OpElement {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
+//! [Operator]
 
 //! [Run all]
 MoFEMErrorCode Example::runProblem() {
@@ -230,15 +230,15 @@ MoFEMErrorCode Example::OPs() {
 }
 //! [Push operators to pipeline]
 
-//! [Do calculations]
+//! [Integrate]
 MoFEMErrorCode Example::integrateElements() {
   MoFEMFunctionBegin;
 
-  Basic *basic = mField.getInterface<Basic>();
   // Zero global vector
   CHKERR VecZeroEntries(commonDataPtr->petscVec);
 
   // Integrate elements by executing operators in the pipeline
+  Basic *basic = mField.getInterface<Basic>();
   CHKERR basic->loopFiniteElements();
 
   // Assemble vector
@@ -246,7 +246,7 @@ MoFEMErrorCode Example::integrateElements() {
   CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
   MoFEMFunctionReturn(0);
 }
-//! [Do calculations]
+//! [Integrate]
 
 //! [Print results]
 MoFEMErrorCode Example::postProcess() {
@@ -381,7 +381,7 @@ MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type,
   auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
   auto t_rho = getFTensor0FromVec(
       commonDataPtr->rhoAtIntegrationPts); ///< Density at integration points
-  auto t_coords =
+  auto t_x =
       getFTensor1CoordsAtGaussPts();  ///< Coordinates at integration points
   const double volume = getMeasure(); ///< Get Volume of element
 
@@ -392,11 +392,11 @@ MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type,
   // Integrate
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
-    t_s(i) += t_w * t_rho * volume * t_coords(i);
+    t_s(i) += t_w * t_rho * volume * t_x(i);
 
     ++t_w;      // move weight to next integration pts
     ++t_rho;    // move density
-    ++t_coords; // move coordinate
+    ++t_x; // move coordinate
   }
 
   // Set array of indices
@@ -418,7 +418,7 @@ MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type,
   const int nb_integration_pts = getGaussPts().size2();
   auto t_w = getFTensor0IntegrationWeight();
   auto t_rho = getFTensor0FromVec(commonDataPtr->rhoAtIntegrationPts);
-  auto t_coords = getFTensor1CoordsAtGaussPts();
+  auto t_x = getFTensor1CoordsAtGaussPts();
   const double volume = getMeasure();
 
   // Create storage for symmetric tensor
@@ -426,22 +426,19 @@ MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type,
 
   // Crate symmetric tensor with points to the storrage
   FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
-      &element_local_value[CommonData::SECOND_XX],
-      &element_local_value[CommonData::SECOND_XY],
-      &element_local_value[CommonData::SECOND_XZ],
-      &element_local_value[CommonData::SECOND_YY],
-      &element_local_value[CommonData::SECOND_YZ],
-      &element_local_value[CommonData::SECOND_ZZ]);
+      &element_local_value[0], &element_local_value[1], &element_local_value[2],
+      &element_local_value[3], &element_local_value[4],
+      &element_local_value[5]);
 
   // Integate
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
     // Symbol "^" indicate multiplication which yield symmetric tensor
-    t_I(i, j) += (t_w * t_rho * volume) * (t_coords(i) ^ t_coords(j));
+    t_I(i, j) += (t_w * t_rho * volume) * (t_x(i) ^ t_x(j));
 
     ++t_w;
     ++t_rho;
-    ++t_coords;
+    ++t_x;
   }
 
   // Set array of indices
