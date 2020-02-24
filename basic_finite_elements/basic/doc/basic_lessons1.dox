@@ -407,6 +407,13 @@ On each finite element, several operators can be run in sequence. In principle, 
 \anchor basic_l1_figure_4 
 \image html basic_lesson1_ops.png "Figure 4: Operators and common data" width=800px 
 
+
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp FirstOp
+
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp FirstOp
+
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp SecondOp
+
 \subsection basci_lesson1_code Code
 
 \include users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp 
