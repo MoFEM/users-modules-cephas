@@ -342,14 +342,17 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
   const int nb_through_thickness = 3;
 
   std::vector<PointsMap3D_multiIndex> pointsMapVector;
+  PointsMap3D_multiIndex pointsMap;
 
-      if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
-          elementsMap.end()) {
+  if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
+      elementsMap.end()) {
+    pointsMapVector = pointsMapVectorMap[numeredEntFiniteElementPtr->getEnt()];
   } else {
     pointsMapVector.resize(0);
     gaussPtsTrianglesOnly.resize(3, nb_on_triangle, false);
     gaussPtsTrianglesOnly.clear();
-    gaussPtsThroughThickness.resize(2, nb_through_thickness * level_thick, false);
+    gaussPtsThroughThickness.resize(2, nb_through_thickness * level_thick,
+                                    false);
     gaussPtsThroughThickness.clear();
 
     MatrixDouble gauss_pts_triangles_only, gauss_pts_through_thickness;
@@ -456,46 +459,37 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
                               n1 * e1 * coords_prism_global(4, dd) +
                               n2 * e1 * coords_prism_global(5, dd);
         }
-        // cerr << coords_global[0] << " " << coords_global[1] << " " <<
-        // coords_global[2] << endl;
         CHKERR postProcMesh.set_coords(&conn[nn], 1, coords_global);
       }
     }
+
+    pointsMapVectorMap[numeredEntFiniteElementPtr->getEnt()] = pointsMapVector;
   }
 
   mapGaussPts.clear();
   mapGaussPts.resize(nb_through_thickness * nb_on_triangle * level_thick);
   fill(mapGaussPts.begin(), mapGaussPts.end(), 0);
   int gg = 0;
-  //for (int ll = 0; ll < level_thick; ll++) {
-    // prism = elementsMap[numeredEntFiniteElementPtr->getEnt()][ll];
-    // pointsMap = pointsMapVector[ll];
-    // CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes,
-    //                                                false);
-    int ll;
+  int ll;
 
-    for (unsigned int ggf = 0;
-         ggf != gaussPtsTrianglesOnly.size2(); ggf++) {
-      const double ksi = gaussPtsTrianglesOnly(0, ggf);
-      const double eta = gaussPtsTrianglesOnly(1, ggf);
-      for (unsigned int ggt = 0;
-           ggt != gaussPtsThroughThickness.size2(); ggt++, gg++) {
-        ll = ggt / 3;
-        prism = elementsMap[numeredEntFiniteElementPtr->getEnt()][ll];
-        pointsMap = pointsMapVector[ll];
-        CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+  for (unsigned int ggf = 0; ggf != gaussPtsTrianglesOnly.size2(); ggf++) {
+    const double ksi = gaussPtsTrianglesOnly(0, ggf);
+    const double eta = gaussPtsTrianglesOnly(1, ggf);
+    for (unsigned int ggt = 0; ggt != gaussPtsThroughThickness.size2();
+         ggt++, gg++) {
+      ll = ggt / 3;
+      prism = elementsMap[numeredEntFiniteElementPtr->getEnt()][ll];
+      pointsMap = pointsMapVector[ll];
+      CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
 
-        const double zeta =
-            gaussPtsThroughThickness(0, ggt);
-        PointsMap3D_multiIndex::iterator it;
-        it =
-            pointsMap.find(boost::make_tuple(ksi * 100, eta * 100, zeta * 100));
-        if (it != pointsMap.end()) {
-           mapGaussPts[gg] = conn[it->nN];
-        }
+      const double zeta = gaussPtsThroughThickness(0, ggt);
+      PointsMap3D_multiIndex::iterator it;
+      it = pointsMap.find(boost::make_tuple(ksi * 100, eta * 100, zeta * 100));
+      if (it != pointsMap.end()) {
+        mapGaussPts[gg] = conn[it->nN];
       }
     }
- // }
+  }
 
   int g = 0;
 
@@ -680,7 +674,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
   MoFEMFunctionBegin;
-  if (gaussPtsTri.size1() == 0 && gaussPtsQuad.size1() == 0) 
+  if (gaussPtsTri.size1() == 0 && gaussPtsQuad.size1() == 0)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "post-process mesh not generated");
 
@@ -999,11 +993,10 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
                                      &*ranks.begin());
   };
   set_edges_rank(rank, edges);
-  
+
   CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
   MoFEMFunctionReturn(0);
 }
-
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::setGaussPts(int order) {
   MoFEMFunctionBegin;
