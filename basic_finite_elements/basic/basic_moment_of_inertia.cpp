@@ -112,6 +112,8 @@ struct Example::OpZero : public OpElement {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
+//! [Operators]
+
 
 struct Example::OpFirst : public OpElement {
   OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
@@ -134,7 +136,6 @@ struct Example::OpSecond : public OpElement {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
-//! [Operators]
 
 //! [Run all]
 MoFEMErrorCode Example::runProblem() {
