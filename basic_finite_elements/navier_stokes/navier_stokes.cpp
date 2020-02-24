@@ -59,28 +59,31 @@ int main(int argc, char *argv[]) {
     char load_file_name[255];
 
     PetscBool flg_mesh_file;
-    PetscBool flg_load_file;
-    int order_p = 2; // default approximation order_p
-    int order_u = 3; // default approximation order_u
+    // PetscBool flg_load_file;
+    int order_p = 1; // default approximation order_p
+    int order_u = 2; // default approximation order_u
     int nb_ho_levels = 0;
 
-    int desired_iteration_number = 6;
+    int desired_iteration_number = 5;
 
-    int nbSubSteps = 1;   // default number of steps
-    double scale_init = 0;   
-    double scale_final = 0;
+    int nbSubSteps = 1; // default number of steps
+
+    double re_number = 1.0;
+
+    double lambda_init = 1.0;
+    double lambda_step = 1.0;
+    double lambda = 0.0;
+
+    double adapt_step_exp = 0.5;
 
     double stepRed = 0.5; // stepsize reduction while diverging
     int maxDivStep = 10;  // maximum number of diverged steps
     int outPutStep = 1;   // how often post processing data is saved to h5m file
     int restartStep = 1;  // how often post restart data is saved to h5m file
 
-    double adapt_step_exp = 0.5;
-    double scale_step = 0.0;
-
-    double pressure_scale = 0.0;
-    double length_scale = 0.0;
-    double velocity_scale = 0.0;
+    double pressure_scale = 1.0;
+    double length_scale = 1.0;
+    double velocity_scale = 1.0;
 
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool flg_test = PETSC_FALSE;
@@ -89,6 +92,7 @@ int main(int argc, char *argv[]) {
 
     PetscBool stokes_flow = PETSC_FALSE;
     PetscBool discont_pressure = PETSC_FALSE;
+    PetscBool adaptive_step = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "NAVIER_STOKES problem",
                              "none");
@@ -120,23 +124,23 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-my_step_max_div", "number of steps", "",
                            maxDivStep, &maxDivStep, PETSC_NULL);
 
-    CHKERR PetscOptionsScalar("-my_scale_init", "initial scale", "", scale_init,
-                              &scale_init, PETSC_NULL);
-    CHKERR PetscOptionsScalar("-my_scale_step", "scale step", "",
-                              scale_step, &scale_step, PETSC_NULL);
+    CHKERR PetscOptionsScalar("-my_lambda_init", "lambda initial", "",
+                              lambda_init, &lambda_init, PETSC_NULL);
 
     CHKERR PetscOptionsScalar("-my_adapt_step_exp", "adaptive step exponent",
                               "", adapt_step_exp, &adapt_step_exp, PETSC_NULL);
 
-    CHKERR PetscOptionsString("-my_load_table", "load history file name", "",
-                              "load_table.txt", load_file_name, 255,
-                              &flg_load_file);
+    // CHKERR PetscOptionsString("-my_load_table", "load history file name", "",
+    //                           "load_table.txt", load_file_name, 255,
+    //                           &flg_load_file);
 
     CHKERR PetscOptionsScalar("-my_step_red", "step reduction when diverge", "",
                               stepRed, &stepRed, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned", "is_partitioned?", "",
                             is_partitioned, &is_partitioned, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_adaptive_step", "adaptive step", "",
+                            adaptive_step, &adaptive_step, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_stokes_flow", "stokes flow", "", stokes_flow,
                             &stokes_flow, PETSC_NULL);
@@ -144,13 +148,12 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_discont_pressure", "discontinuous pressure",
                             "", discont_pressure, &discont_pressure,
                             PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_save_restart", "save restart",
-                            "", save_restart, &save_restart,
-                            PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_save_restart", "save restart", "",
+                            save_restart, &save_restart, PETSC_NULL);
     CHKERR PetscOptionsScalar("-my_length_scale", "length scale", "",
                               length_scale, &length_scale, PETSC_NULL);
-    CHKERR PetscOptionsScalar("-my_pressure_scale", "pressure scale", "",
-                              pressure_scale, &pressure_scale, PETSC_NULL);
+    // CHKERR PetscOptionsScalar("-my_pressure_scale", "pressure scale", "",
+    //                           pressure_scale, &pressure_scale, PETSC_NULL);
     CHKERR PetscOptionsScalar("-my_velocity_scale", "velocity scale", "",
                               velocity_scale, &velocity_scale, PETSC_NULL);
 
@@ -162,7 +165,7 @@ int main(int argc, char *argv[]) {
     if (flg_mesh_file != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
-    
+
     // Read whole mesh or part of it if partitioned
     if (is_partitioned == PETSC_TRUE) {
       // This is a case of distributed mesh and algebra. In that case each
@@ -184,34 +187,9 @@ int main(int argc, char *argv[]) {
 
     bool is_restart = string(mesh_file_name).compare(0, 8, "restart_") == 0;
 
-    auto is_zero = [](double x) {
-      return (fabs(x) < DBL_EPSILON);
-    };
-
     // Create MoFEM database and link it to MoAB
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
-
-    if (is_zero(velocity_scale) && is_zero(pressure_scale)) {
-      SETERRQ(PETSC_COMM_SELF, 1,
-              "Either velocity or pressure scale must be set");
-    }
-    if (!is_zero(velocity_scale) && !is_zero(pressure_scale)) {
-      SETERRQ(PETSC_COMM_SELF, 1,
-              "Velocity and pressure scales cannot be both set");
-    }
-
-    bool velocity_control = false;
-
-    if (!is_zero(velocity_scale)) {
-      scale_final = velocity_scale;
-      velocity_control = true;
-    }
-    else {
-      scale_final = pressure_scale;
-    }
-    
-    
 
     // Print boundary conditions and material parameters
     MeshsetsManager *meshsets_mng_ptr;
@@ -310,7 +288,7 @@ int main(int argc, char *argv[]) {
     //   CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
     //   MoFEMFunctionReturn(0);
     // };
-    //CHKERR setting_second_order_geometry();
+    // CHKERR setting_second_order_geometry();
     CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.build_fields();
 
@@ -361,6 +339,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>();
 
+    double rho, mu, Re;
+
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 9, "MAT_FLUID") == 0) {
         const int id = bit->getMeshsetId();
@@ -377,6 +357,9 @@ int main(int argc, char *argv[]) {
         commonData->setOfBlocksData[id].iD = id;
         commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
         commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+
+        mu = commonData->setOfBlocksData[id].fluidViscosity;
+        rho = commonData->setOfBlocksData[id].fluidDensity;
       }
     }
 
@@ -409,39 +392,11 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    EntityHandle tree_root;
-    AdaptiveKDTree myTree(&moab);
-    BoundBox box;
-
-    if (!solid_faces.empty()) {
-      // solid_faces.print();
-      CHKERR m_field.add_ents_to_finite_element_by_type(solid_faces, MBTRI,
-                                                        "DRAG");
-      CHKERR myTree.build_tree(solid_faces, &tree_root);
-    } else {
-      Range tets;
-      CHKERR m_field.get_moab().get_entities_by_dimension(0, 3, tets);
-      CHKERR myTree.build_tree(tets, &tree_root);
-    }
-
-    if (is_zero(length_scale)) {
-      // get the overall bounding box corners
-      CHKERR myTree.get_bounding_box(box, &tree_root);
-      length_scale =
-          max(max(box.bMax[0] - box.bMin[0], box.bMax[1] - box.bMin[1]),
-              box.bMax[2] - box.bMin[2]);
-    }
-
-    // CHKERR m_field.getInterface<FieldBlas>()->fieldScale((1.0 / length_scale),
-    //                                                      "MESH_NODE_POSITIONS");
-
-    double Re;
-
     auto scale_problem = [&](double U, double L, double P) {
       MoFEMFunctionBegin;
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
           L, "MESH_NODE_POSITIONS");
-      //FIXME: fix getHoGaussPtsDetJac for prisms
+      // FIXME: fix getHoGaussPtsDetJac for prisms
       ProjectionFieldOn10NodeTet ent_method_on_10nodeTet(
           m_field, "MESH_NODE_POSITIONS", true, true);
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_on_10nodeTet);
@@ -452,6 +407,32 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(P, "PRESSURE");
       MoFEMFunctionReturn(0);
     };
+
+    pressure_scale = mu * velocity_scale / length_scale;
+    NavierStokesElement::LoadScale::lambda = 1.0 / pressure_scale;
+    CHKERR scale_problem(1.0 / velocity_scale, 1.0 / length_scale,
+                         1.0 / pressure_scale);
+
+    // EntityHandle tree_root;
+    // AdaptiveKDTree myTree(&moab);
+    // BoundBox box;
+    // if (!solid_faces.empty()) {
+    //   // solid_faces.print();
+    //   CHKERR m_field.add_ents_to_finite_element_by_type(solid_faces, MBTRI,
+    //                                                     "DRAG");
+    //   CHKERR myTree.build_tree(solid_faces, &tree_root);
+    // } else {
+    //   Range tets;
+    //   CHKERR m_field.get_moab().get_entities_by_dimension(0, 3, tets);
+    //   CHKERR myTree.build_tree(tets, &tree_root);
+    // }
+    // if (is_zero(length_scale)) {
+    //   // get the overall bounding box corners
+    //   CHKERR myTree.get_bounding_box(box, &tree_root);
+    //   length_scale =
+    //       max(max(box.bMax[0] - box.bMin[0], box.bMax[1] - box.bMin[1]),
+    //           box.bMax[2] - box.bMin[2]);
+    // }
 
     // build finite elements
     CHKERR m_field.build_finite_elements();
@@ -549,7 +530,8 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
 
-    CHKERR VecZeroEntries(D0);
+    // CHKERR VecZeroEntries(D0);
+    CHKERR VecCopy(D, D0);
     CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
 
@@ -560,10 +542,10 @@ int main(int argc, char *argv[]) {
     // STANDARD DIRICHLET BC
     boost::shared_ptr<DirichletDisplacementBc> dirichlet_bc_ptr(
         new DirichletDisplacementBc(m_field, "VELOCITY", Aij, D, F));
-    if (flg_load_file == PETSC_TRUE) {
-      dirichlet_bc_ptr->methodsOp.push_back(
-          new TimeForceScale("-load_table", false));
-    }
+    // if (flg_load_file == PETSC_TRUE) {
+    //   dirichlet_bc_ptr->methodsOp.push_back(
+    //       new TimeForceScale("-load_table", false));
+    // }
     dirichlet_bc_ptr->methodsOp.push_back(new NavierStokesElement::LoadScale());
     // dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
@@ -571,34 +553,14 @@ int main(int argc, char *argv[]) {
     // VELOCITY DIRICHLET BC
     boost::shared_ptr<DirichletVelocityBc> dirichlet_vel_bc_ptr(
         new DirichletVelocityBc(m_field, "VELOCITY", Aij, D, F));
-    if (flg_load_file == PETSC_TRUE) {
-      dirichlet_vel_bc_ptr->methodsOp.push_back(
-          new TimeForceScale("-load_table", false));
-    }
+    // if (flg_load_file == PETSC_TRUE) {
+    //   dirichlet_vel_bc_ptr->methodsOp.push_back(
+    //       new TimeForceScale("-load_table", false));
+    // }
     dirichlet_vel_bc_ptr->methodsOp.push_back(
         new NavierStokesElement::LoadScale());
     // dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
     dirichlet_vel_bc_ptr->snes_x = D;
-
-    // PRESSURE DIRICHLET BC
-    boost::shared_ptr<DirichletSetFieldFromBlock> dirichlet_pres_bc_ptr(
-        new DirichletSetFieldFromBlock(m_field, "PRESSURE", "PRESS", Aij, D,
-                                       F));
-    // dirichlet_pres_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-    dirichlet_pres_bc_ptr->snes_x = D;
-
-    // CHKERR DMoFEMPreProcessFiniteElements(dm,
-    // dirichlet_vel_bc_ptr.get()); CHKERR
-    // DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get()); CHKERR
-    // DMoFEMPreProcessFiniteElements(dm, dirichlet_pres_bc_ptr.get());
-
-    // CHKERR VecAssemblyBegin(D);
-    // CHKERR VecAssemblyEnd(D);
-
-    // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES,
-    // SCATTER_REVERSE);
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
@@ -622,16 +584,12 @@ int main(int argc, char *argv[]) {
                                   dirichlet_vel_bc_ptr);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_bc_ptr);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
-                                  dirichlet_pres_bc_ptr);
 
     // Set operators for SNES snes
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe,
                                   dirichlet_vel_bc_ptr, null_fe);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, dirichlet_bc_ptr,
                                   null_fe);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe,
-                                  dirichlet_pres_bc_ptr, null_fe);
     CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", fe_lhs_ptr, null_fe,
                                   null_fe);
     CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", prism_fe_lhs_ptr,
@@ -640,8 +598,6 @@ int main(int argc, char *argv[]) {
                                   dirichlet_vel_bc_ptr);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_bc_ptr);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
-                                  dirichlet_pres_bc_ptr);
 
     // **** SOLVE **** //
 
@@ -680,9 +636,6 @@ int main(int argc, char *argv[]) {
 
     SNESConvergedReason snes_reason;
     int number_of_diverges = 0;
-
-    if (is_zero(scale_step))
-      scale_step = scale_final / nbSubSteps;
 
     boost::shared_ptr<PostProcVolumeOnRefinedMesh> post_proc_ptr;
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_drag_ptr;
@@ -741,14 +694,11 @@ int main(int argc, char *argv[]) {
           "PRESSURE", commonData);
     }
 
-    double scale = scale_init;
     double frac = 0;
     // if (flg_load_file == PETSC_TRUE)
     //   NavierStokesElement::LoadScale::lambda = lambda0;
     // else
     //   NavierStokesElement::LoadScale::lambda = 0;
-
-    // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
 
     int ss = 0;
     if (is_restart) {
@@ -758,78 +708,61 @@ int main(int argc, char *argv[]) {
       ss++;
     }
 
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "L: %6.4e\n", length_scale);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscosity: %6.4e\n", mu);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Density: %6.4e\n", rho);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Length scale: %6.4e\n", length_scale);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Velocity scale: %6.4e\n",
+                       velocity_scale);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure scale: %6.4e\n",
+                       pressure_scale);
+    if (stokes_flow) {
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Re number: 0 (Stokes Flow)\n");
+    } else {
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Re number: %6.4e\n",
+                         rho / mu * velocity_scale * length_scale);
+    }
 
-    while (scale < scale_final - 1e-12) {
+    if (nbSubSteps > 1) {
+      lambda_step = 1.0 / nbSubSteps;
+    } else {
+      lambda_step = lambda_init;
+    }
 
-      if (flg_load_file == PETSC_TRUE) {
-        dirichlet_vel_bc_ptr->ts_t = ss;
-        dirichlet_bc_ptr->ts_t = ss;
-      } else
-        scale += scale_step;
+    while (lambda < 1.0 - 1e-12) {
 
-      for (auto &bit : commonData->setOfBlocksData) {
-        double rho = bit.second.fluidDensity;
-        double mu = bit.second.fluidViscosity;
-        
-        if (velocity_control) {
-          velocity_scale = scale;
-          if (stokes_flow) {
-            pressure_scale = mu * velocity_scale / length_scale;
-          }
-          else {
-            pressure_scale = rho * velocity_scale * velocity_scale;
-          }
-        }
-        else {
-          pressure_scale = scale;
-          if (stokes_flow) {
-            velocity_scale = pressure_scale * length_scale / mu;
-          }
-          else {
-            velocity_scale = sqrt(pressure_scale / rho);
-          }
-        }
-        
-        Re = rho * velocity_scale * length_scale / mu;
+      lambda += lambda_step;
 
-        if (stokes_flow) {
-          Re = 0.0;
-          bit.second.inertiaCoef = 0;
+      // if (flg_load_file == PETSC_TRUE) {
+      //   dirichlet_vel_bc_ptr->ts_t = ss;
+      //   dirichlet_bc_ptr->ts_t = ss;
+      // } else
+      //   lambda += lambda_step;
+
+      if (stokes_flow) {
+        re_number = 0.0;
+        for (auto &bit : commonData->setOfBlocksData) {
+          bit.second.inertiaCoef = 0.0;
           bit.second.viscousCoef = 1.0;
-        } else {
-          bit.second.inertiaCoef = 1.0;
-          bit.second.viscousCoef = 1.0 / Re;
         }
-
-        bit.second.dimScales.length = length_scale;
-        bit.second.dimScales.velocity = velocity_scale;
-        bit.second.dimScales.pressure = pressure_scale;
-        bit.second.dimScales.reNumber = Re;
-
-        NavierStokesElement::LoadScale::lambda = 1.0 / pressure_scale;
+      } else {
+        re_number = rho / mu * velocity_scale * length_scale * lambda;
+        for (auto &bit : commonData->setOfBlocksData) {
+          bit.second.inertiaCoef = re_number;
+          bit.second.viscousCoef = 1.0;
+        }
       }
 
-      CHKERR scale_problem(1.0 / velocity_scale, 1.0 / length_scale,
-                           1.0 / pressure_scale);
-      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-
-
       CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                         "Step: %d | Size: %6.4e | U: %6.4e | P: %6.4e | Re: %6.4e \n", ss,
-                         scale_step, velocity_scale, pressure_scale, Re);
+                         "Step: %d | Lambda: %6.4e | Inc: %6.4e | Re: %6.4e \n",
+                         ss, lambda, lambda_step, re_number);
 
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-      CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_pres_bc_ptr.get());
+     
       CHKERR VecAssemblyBegin(D);
       CHKERR VecAssemblyEnd(D);
-
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
       CHKERR SNESSolve(snes, PETSC_NULL, D);
 
@@ -840,8 +773,8 @@ int main(int argc, char *argv[]) {
       if (snes_reason < 0) {
 
         if (number_of_diverges < maxDivStep) {
-          scale -= scale_step;
-          scale_step *= stepRed;
+          lambda -= lambda_step;
+          lambda_step *= stepRed;
 
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Reducing step... \n");
           number_of_diverges++;
@@ -859,14 +792,25 @@ int main(int argc, char *argv[]) {
         }
       }
 
+      // double sol_norm;
+      // CHKERR VecNorm(D, NORM_2, &sol_norm);
+      // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Solution norm: %9.8e\n",
+      //                    sol_norm);
+
       number_of_diverges = 0;
 
       // ADAPTIVE STEPPING
-      if (its > 0)
-        frac = (double)desired_iteration_number / its;
-      else
-        frac = (double)desired_iteration_number / (its + 1);
-      scale_step *= pow(frac, adapt_step_exp);
+      if (adaptive_step) {
+        if (its > 0)
+          frac = (double)desired_iteration_number / its;
+        else
+          frac = (double)desired_iteration_number / (its + 1);
+        lambda_step *= pow(frac, adapt_step_exp);
+      }
+
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
       CHKERR VecCopy(D, D0);
 
@@ -875,31 +819,38 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
 
-      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
       CHKERR scale_problem(velocity_scale, length_scale, pressure_scale);
-
+      
       if (ss % outPutStep == 0) {
 
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", post_proc_ptr);
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES",
                                         prism_post_proc_ptr);
 
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write output files\n");
+        string out_file_name;
 
-        if (mesh_has_tets)
-          CHKERR post_proc_ptr->postProcMesh.write_file("out.h5m", "MOAB",
-                                                        "PARALLEL=WRITE_PART");
-        if (mesh_has_prisms)
+        if (mesh_has_tets) {
+          std::ostringstream stm;
+          stm << "out_" << ss << ".h5m";
+          out_file_name = stm.str();
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                             out_file_name.c_str());
+          CHKERR post_proc_ptr->postProcMesh.write_file(
+              out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+        }
+        if (mesh_has_prisms) {
+          std::ostringstream stm;
+          stm << "out_prism_" << ss << ".h5m";
+          out_file_name = stm.str();
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                             out_file_name.c_str());
           CHKERR prism_post_proc_ptr->postProcMesh.write_file(
-              "out_prism.h5m", "MOAB", "PARALLEL=WRITE_PART");
+              out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+        }
 
         if (!solid_faces.empty()) {
 
           CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", post_proc_drag_ptr);
-          string out_file_name;
           std::ostringstream stm;
           stm << "out_drag_" << ss << ".h5m";
           out_file_name = stm.str();
@@ -928,7 +879,6 @@ int main(int argc, char *argv[]) {
                              vecGlobalDrag[0], vecGlobalDrag[1],
                              vecGlobalDrag[2]);
         }
-
       }
 
       if (save_restart && ss % restartStep == 0) {
@@ -937,11 +887,12 @@ int main(int argc, char *argv[]) {
               "restart_" + boost::lexical_cast<std::string>(ss) + ".h5m";
           CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write restart file %s\n",
                              file_name.c_str());
-          CHKERR m_field.get_moab().write_mesh(file_name.c_str()); 
+          CHKERR m_field.get_moab().write_mesh(file_name.c_str());
         }
       }
 
-      // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
+      CHKERR scale_problem(1.0 / velocity_scale, 1.0 / length_scale,
+                           1.0 / pressure_scale);
 
       ss++;
     }
