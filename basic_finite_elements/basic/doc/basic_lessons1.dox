@@ -468,7 +468,10 @@ After looping over integration points is made, local element vector \em t_I is a
 
 \subsection basic_lesson1_checking Checking code validity
 
-In function Example::checkResults test is run for a well-known solution. Test like that verifies if volume, first moment and the second moment is calculated correctly. Writing of tests is essential, simplify writting and modification of the code. Enables code developed, and without test development of sustainable is impossible, You should always try to write a test for your code.   
+In function Example::checkResults test is run for a well-known solution. Test like that verifies if volume, first moment and the second moment are calculated correctly. Writing of tests is essential, simplify writing and modification of the code. Enables code developed, and without test development of sustainable is impossible, You should always try to write a test for your code.  
+
+See how code for first lsson is tested here
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Test example
 
 \section Debugging 
 
