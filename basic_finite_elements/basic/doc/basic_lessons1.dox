@@ -445,7 +445,7 @@ Operators are derived classes, where essential part is overloaded function Examp
 Finally we can look at function Example::OpSecond::doWork
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp SecondOp
 
-We choose that operator since it is most complex from all three operators. We will dissect that code to understand it better.  We start by getting a number of integration points, which depend on the previously set integration rule. In the following lines, tensor (scalar) is set to weights and densities, and tensor of rank one (vector) is set to coordinates. Three tensors point to values at the first integration point.  
+We choose that operator since it is most complex from all three operators. We will dissect that code to understand it better.  We start by getting a number of integration points, which depend on the previously set integration rule. In the following lines, three tensors are declared, i.e. tensor (scalar) is set to weights and densities, and tensor of rank one (vector) is set to coordinates. Those three tensors point to values at the first integration point.  
 
 Next, we create an array to store local values of the second moment of inertia. The second order of inertia is a symmetric tensor of rank two, which in three dimensions has six independent components. The array is continuous in the memory, it takes the shape of the tensor when the following code is run
 \code
@@ -468,12 +468,12 @@ After looping over integration points is made, local element vector \em t_I is a
 
 \subsection basic_lesson1_checking Checking code validity
 
-In function Example::checkResults test is run for a well-known solution. Test like that verifies if volume, first moment and the second moment are calculated correctly. Writing of tests is essential, simplify writing and modification of the code. Enables code developed, and without test development of sustainable is impossible, You should always try to write a test for your code.  
+In function Example::checkResults test is run for a well-known solution. Test like that verifies if volume, first moment and the second moment are calculated correctly. Writing of tests is essential, make code writing faster. Enables code developed in future, since is easy to check if code changes, refactring and improvemnts do not break test. Without testing, development of sustainable is impossible. You should always try to write a test for your code.  
 
 See how code for first lsson is tested here
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Test example
 
-The test is written for cube volume, of size one by one and coordinate system in the centre of the cube.  For such code chack if calculated results in many analytical results. Size of the cube should 1. First moments should be zero since the cube centre is coordinate stem origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
+The test is written for cube volume, of size one by one and coordinate system in the centre of the cube.  For such code chack if calculated results in many analytical results. Size of the cube should be 1. First moments should be zero since the cube centre is coordinate stem origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
 
 Code validate results if option \em -test is added in the command line. Code will run for any other mesh, however for other geometries if you run code with option \em -tets very likely you will get an error. 
 
