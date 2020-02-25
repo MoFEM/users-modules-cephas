@@ -472,11 +472,13 @@ In function Example::checkResults test is run for a well-known solution. Test li
 
 \section Debugging 
 
-Debugging is a way of searching for errors, which enables to run step over each line of the code and observe how the state of the code changes, i.e. see variables. This is very useful which will help you learn and develop code quicker.
+Debugging is a way of searching for errors. The debugger is a program which each run source code lines step by step, under control of the user, and the allow to observe how the state of variables.  
 
-Writing of the code is relatively quick, searching for bugs and errors is usually very time-consuming. When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LDB  debugger.
+Code has to be compiled with debugging flags, and when installing code for developers,  code is built in two versions, optimised fast version, and version with no optimisation with debugging flags for debugging and code development, 
 
-VSCode has built-in functionality to debug code, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>.
+Writing of the code is relatively quick, searching for bugs and errors is usually very time-consuming. When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LLDB  debugger.
+
+VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>.
 
 \section basci_lesson1_code Code
 
