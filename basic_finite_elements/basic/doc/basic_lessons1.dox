@@ -473,6 +473,10 @@ In function Example::checkResults test is run for a well-known solution. Test li
 See how code for first lsson is tested here
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Test example
 
+The test is written for cube volume, of size one by one and coordinate system in the centre of the cube.  For such code chack if calculated results in many analytical results. Size of the cube should 1. First moments should be zero since the cube centre is coordinate stem origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
+
+Code validate results if option \em -test is added in the command line. Code will run for any other mesh, however for other geometries if you run code with option \em -tets very likely you will get an error. 
+
 \section Debugging 
 
 Debugging is a way of searching for errors. The debugger is a program which each run source code lines step by step, under control of the user, and the allow to observe how the state of variables.  
