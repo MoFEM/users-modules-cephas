@@ -488,7 +488,17 @@ You can see that line code
 \code
 CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
 \endcode
-checks if the test option is set in the command line. Following code, verify if prescribed values are equal to calculated values. The test is written for cube volume, of size one by one and coordinate system in the centre of the cube. Zero moments, i.e. volume, should be one. First moments should be zero since the cube centre is coordinate at the origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
+checks if the test option is set in the command line. Code in brackers verify if prescribed values are equal to calculated values. For example 
+\code
+for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
+                   CommonData::SECOND_ZZ}) {
+      if (std::abs(array[i] - expected_second_moment) > eps)
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
+                 array[i]);
+    }
+\endcode
+iterate over diagonal values, and calculated value is not equal to expected value thorw error using PTESc function  <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Sys/SETERRQ2.html">SETERRQ2</a>. The test is written for cube volume, of size one by one and coordinate system in the centre of the cube. Zero moments, i.e. volume, should be one. First moments should be zero since the cube centre is coordinate at the origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
 
 Writing a code test is essential. MoFEM is a complex system with several contributors, which most of them focused attention on the part of the code. Running tests like this one, contributors know that they not broken anything. That makes code development sustainable. 
 
