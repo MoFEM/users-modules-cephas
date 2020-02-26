@@ -470,14 +470,31 @@ After looping over integration points is made, local element vector \em t_I is a
 
 \subsection basic_lesson1_checking Checking code validity
 
-In function Example::checkResults test is run for a well-known solution. Test like that verifies if volume, first moment and the second moment are calculated correctly. Writing of tests is essential, make code writing faster. Enables code developed in future, since is easy to check if code changes, refactring and improvemnts do not break test. Without testing, development of sustainable is impossible. You should always try to write a test for your code.  
+Code is tested every time is code is changed and committed into the repository. The user with the command can trigger code testing
+\code
+ctest -VV
+\endcode
 
-See how code for first lsson is tested here
+In particular cmake function testing code executing function
+\code
+./basic_moment_of_inertia -file_name cube.h5m -test
+\endcode
+and code is valideted in function Example::checkResults.
+
+In function Example::checkResults test is run for a well-known solution for mesh in \em cube.h5m. Test like that verifies if volume, first moment and the second moment are calculated correctly. Funcion testing code is as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Test example
 
-The test is written for cube volume, of size one by one and coordinate system in the centre of the cube.  For such code chack if calculated results in many analytical results. Size of the cube should be 1. First moments should be zero since the cube centre is coordinate stem origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
+You can see that line code
+\code
+CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
+\endcode
+checks if the test option is set in the command line. Following code, verify if prescribed values are equal to calculated values. The test is written for cube volume, of size one by one and coordinate system in the centre of the cube. Zero moments, i.e. volume, should be one. First moments should be zero since the cube centre is coordinate at the origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
 
-Code validate results if option \em -test is added in the command line. Code will run for any other mesh, however for other geometries if you run code with option \em -tets very likely you will get an error. 
+Writing a code test is essential. MoFEM is a complex system with several contributors, which most of them focused attention on the part of the code. Running tests like this one, contributors know that they not broken anything. That makes code development sustainable. 
+
+Also, writing tests makes writing code faster and simpler, since once you write the code, it needs refactoring and improvements. The test will reassure you that optimisations and changes do not break working code.
+
+Moreover, once your commits are submitted to the repository, MoFEM Jenkins server will the test independently, validating if your code is running not other system and computers. Results of that test are available here <http://cdash.eng.gla.ac.uk/cdash/index.php>.
 
 \section Debugging 
 
