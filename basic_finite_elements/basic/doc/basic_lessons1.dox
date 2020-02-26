@@ -508,13 +508,13 @@ Moreover, once your commits are submitted to the repository, MoFEM Jenkins serve
 
 \section Debugging 
 
-Debugging is a way of searching for errors. The debugger is a program which each run source code lines step by step, under control of the user, and the allow to observe how the state of variables.  
+Debugging is used to find errors or to understanding what code does. Debugger is a program for debugging, which enables user to execute code line by line and observe, or break (stop) code at desired lines of the source code.
 
-Code has to be compiled with debugging flags, and when installing code for developers,  code is built in two versions, optimised fast version, and version with no optimisation with debugging flags for debugging and code development, 
+Code has to be compiled with debugging flags, and when you installed code using script, code with debugging flags is available in \em $HOME/mofem_install/um/build_debug/basic_finite_elements/basic.
 
-Writing of the code is relatively quick, searching for bugs and errors is usually very time-consuming. When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LLDB  debugger.
+When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LLDB  debugger.
 
-VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>.
+VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>. 
 
 \section basci_lesson1_code Code
 
