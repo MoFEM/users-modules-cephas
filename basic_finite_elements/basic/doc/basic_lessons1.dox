@@ -6,7 +6,9 @@ Basic lessons intended to give new MoFEM developer, that is You, freedom to impl
 
 If you will be reading these lessons, and you do not understand tutorial; it is very likely ower fault not expressing ideas clear enough. If that is the case, please ask equations on our <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> forum, or join us on <a href="https://mofem.slack.com/">Slack</a>. Your comments will enable us to improve this work, and if you are keen to contribute, starting from improving tutorials is the best way. 
 
-All presented problems, except first, are for 2D problems. However,  all examples are implemented in such a way that can be extended to 3D. Once you get understanding, as an exercise, you can implement the 3D case.
+\note Each questions on <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can be tagged/labelled. If you tag question as lesson1, all other and your question could be easily grouped and searched. Please tag questions.
+
+All presented problems, except first, are for 2D problems. However,  all examples are implemented in such a way that can be extended to 3D. Once you get understanding, as an exercise, you can implement the 3D case. 
 
 \tableofcontents
 
@@ -16,7 +18,7 @@ MoFEM provides interfaces with varying level of abstraction, lower abstraction, 
 
 The \em Simple interface is used to add approximation fields and delivers Discrete Manager (DM) to create matrices. Is \em Simple interface, since it assumes that fields and finite elements are set on the whole domain or whole boundary of the mesh. It assumes that problem has fix dimension, and not allows for mixing shells, beams and solid elements. From the other hand,  the \em Simple interface allows for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with triangles and quads, and heterogenous approximation order. Despite some restrictions, \em Simple interface enables to fast implementation of a large class of problems.
 
-The \em Basic interface is used to simplified creation of operator pipelines. The pipeline is a sequence of operations which one has to be run to assemble the right-hand vector or stiffness matrix.  <em>User data operator</em>  (UDO) is, for example, a differential operator which takes gradient of the field, or calculate strain, or use previously calculated strain in the pipeline to calculate stress, and in the end, calculate vector on the right-hand side.  In other words, the pipeline is a methode, to bereak complex problem into simple tasks, i.e. user data operators, for short UDOs.
+The \em Basic interface is used to simplified creation of operator pipelines. The pipeline is a sequence of operations which one has to be run to assemble the right-hand vector or stiffness matrix.  <em>User data operator</em>  (UDO) is, for example, a differential operator which takes gradient of the field, or calculate strain, or use previously calculated strain in the pipeline to calculate stress, and in the end, calculate vector on the right-hand side.  In other words, the pipeline is a method, to break a complex problem into simple tasks, i.e. user data operators, for short UDOs.
 
 It might not be apparent for you why we have \em Simple interface and \em Basic interface. \em Simple interface managed DOFs, i.e. approximation fields on the mesh manage entities on which finite elements are set and problems composed from finite elements.  However, do not provide a mechanism on how you assemble the vector of internal force, tangent matrix, or integrate. The tools for later are provided in \em Basic interface.  
 
@@ -65,9 +67,9 @@ where \f$l\f$ is length.
 
 \subsection basic_lesson1_moments Moments of inertia
 
-The distribution of mass in the body can be characterised by inertia moments, with respect to some origin and coordinate system. Moments have practical applications, are used for analysis motion of rigid bodies, or to characterise crosssection are in structural analysis. 
+The distribution of mass in the body can be characterised by inertia moments. inertia moments have practical applications, are used for analysis motion of rigid bodies, or to characterise crosssection are in structural analysis. 
 
-Moments are tensors, which zero moments have one scalar coefficient, first moments are 1d arrays, i.e. vectors, and second moments are second-order tensors, which coefficients for convenience can be organised in 2d table, i.e. matrix. This coefficient of moments depend on the observer, i.e. coordinate system, but is a strict rule, i.e. tensorial transformation rule, how coefficients of moments change with the observer.   For zero moments, area, all is simple, the volume of an object can not be changed by looking at it from the different point and angle, so it the same in every coordinate system.
+Moments are tensors, which zero moments have one scalar coefficient, first moments are 1d arrays, i.e. vectors, and second moments are second-order tensors, which coefficients for convenience can be organised in 2d table, i.e. matrix. This coefficient of moments depend on the observer, i.e. coordinate system, but is a strict rule, i.e. tensorial transformation rule, how coefficients of moments change with the observer. For zero moments, area, all is simple, the volume of an object can not be changed by looking at it from the different point and angle, so it the same in every coordinate system.
 
 - Zero inertia moment is a body mass, 
 \f[
@@ -114,7 +116,7 @@ where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wik
 \omega^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
 \end{align}
 \f]
-and kinematic energy is 
+where \f$\boldsymbol\tau\f$ is a torque vector, and \f$\varepsilon^{jmn}\f$ is  <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbl</a>. The term in the bracket is a cross product of the force vector and arm on which force acts. The kinematic energy of the rotating body is 
 \f[
 \begin{align}
 E_k = \frac{\omega^i I^{ij} \omega^j}{2}
