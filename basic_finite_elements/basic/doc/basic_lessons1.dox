@@ -508,13 +508,24 @@ Moreover, once your commits are submitted to the repository, MoFEM Jenkins serve
 
 \section Debugging 
 
-Debugging is used to find errors or to understanding what code does. Debugger is a program for debugging, which enables user to execute code line by line and observe, or break (stop) code at desired lines of the source code.
+Debugging is method used to find errors or to understanding what code does. Debugger is a program for debugging, which enables user to execute code line by line and observe, or break (stop) code at desired lines of the source code. 
+When you work in Linux, you can use GDB to debug code.If you work on OSX, you will instead you will use LLDB  debugger.
 
 Code has to be compiled with debugging flags, and when you installed code using script, code with debugging flags is available in \em $HOME/mofem_install/um/build_debug/basic_finite_elements/basic.
 
-When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LLDB  debugger.
-
-VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>. 
+VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>. Here is an example of the launch (in VSCode) configuration for LLDB and example from this lesson
+\code
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "basic_moment_of_inertia",
+      "program": "basic_moment_of_inertia",
+      "args": [
+        "-file_name", "cube.h5m"
+      ],
+      "cwd": "$HOME/mofem_install/um/build_debug/basic_finite_elements/basic"  
+    }
+\endcode
 
 \section basci_lesson1_code Code
 
