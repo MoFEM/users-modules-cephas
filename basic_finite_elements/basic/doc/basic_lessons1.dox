@@ -249,7 +249,7 @@ If you want to develop code in MoFEM, and you properly have if you are reading t
 
 All files executable are located in, and there you will compile code.
 \code
-$HOME/mofem_install/build_debug/basic_finite_elements/basic
+$HOME/mofem_install/um/build_debug/basic_finite_elements/basic
 \endcode
 whereas source code is located in 
 \code
@@ -260,7 +260,7 @@ This is called out of source compilation since code and programs are located in 
 
 \note In default MoFEM installation you can create executables under another location, that  is
 \code 
-$HOME/mofem_install/build_opt/basic_finite_elements/basic
+$HOME/mofem_install/um/build_opt/basic_finite_elements/basic
 \endcode
 Under \em build_opt location is optimised code, which is much faster, but harder to inspect with debugger. 
 
