@@ -296,7 +296,7 @@ First moment of inertia [ -4.3368e-19, -1.4095e-17, -1.3878e-17 ]
 Second moment of inertia [ 3.4961e-312, 1.0000e+00, 0.0000e+00; 6.9531e-310 8.3333e-02; -6.0715e-18 ]
 \endcode
 
-Code print at the beginning version of the MoFEM library.  I the same line versions of MOAB and PETSc are printed respectively. That will enable to reproduce errors if occurred and fix bugs. Next information is printed that element has been added, i.e. \em dFE, and field DOFs for density field, i.e. \em rho. Here only DOFs on vertices are added. Thus linear approximation of density is considered. After that information about a number of finite elements is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of DOFs on rows & columns, i.e. 64, and other information related to mesh partitioning. Most of that information is obsolete for this particular less. Finally, the results are printed.
+Code print at the beginning version of the MoFEM library.  I the same line versions of MOAB and PETSc are printed respectively. That will enable to reproduce errors if occurred and fix bugs. Next information is printed that element has been added, i.e. \em dFE, and field DOFs for density field, i.e. \em rho. Here only DOFs on vertices are added. Thus linear approximation of density is considered. After that information about a number of finite elements is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of DOFs on rows & columns, i.e. 64, and other information related to mesh partitioning. Finally, the results are printed.
 
 
 \subsection basic_lesson1_programming Editor
@@ -314,7 +314,7 @@ You can use the above snipped to start your code. Main functions is responsible 
 
 - The main programme begins with registering MoFEM DM interface in PETSc data structures. That enables transparent control of MoFEN database by PETSc solvers, and vice-versa use PETSc standard interface to create matrices, vectors, and other PETSc objects
 
-- Next, MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MoAB database stores data about mesh, whereas MoFM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level on top of MOAB databse since finite element data are stored on data tags created on mesh entities. 
+- Next, the MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MOAB database stores data about mesh, whereas MoFM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level of abstraction, on top of the MOAB database since finite element data are stored on data tags created on mesh entities. 
 
 - Finally, problem-specific example class is created, and calculations are executed in Example::runProblem.
 
@@ -335,7 +335,7 @@ That part of the code is responsible for handling all the error, initiated insid
 \endcode
 Catching errors will make searching for runtime errors easier, and in case of the problem allow for seeking help, see \ref guidelines_bug_reporting.
 
-\note When you programme, you can encounter two type of error, <em>compilation errors</em>, and <em>runtime errors</em>. <em>Compilation errors</em> most often a syntax error, prevent the compiler from making program, you see them when you run \em make programme. Runtime errors are because some bug in programme, segmentation-fault, overflow, bad algorithm or you run of computer resources, memory. Those errors need to be handled, to indicate user what is the problem, where it is.
+\note When you programme, you can encounter two type of error, <em>compilation errors</em>, and <em>runtime errors</em>. <em>Compilation errors</em> most often a syntax error, prevent the compiler from making program, you see them when you run \em make programme. Runtime errors are because some bug in programme, segmentation-fault, overflow, bad algorithm or you run of computer resources, e.g. memory. Those errors need to be handled, to indicate user what is the problem, where it is.
 
 \subsection basic_lesson1_example_class Exmaple class
 
@@ -371,7 +371,7 @@ Common data structure is defined as follows
 and instance is created by method
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
 
-where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a> and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to vector  rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. 
+where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a> and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to vector  \em rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. 
 
 Smart pointers, boost::shared_ptr and MoFEM::SmartPetscObj, are used to maintain the life of dynamically allocated objects. You can think about smart pointers as a regular pointer, and to an understanding following code you do not have to know more about them. More explanation is needed for
 \code
@@ -387,7 +387,7 @@ else
 commonDataPtr->petscVec = createSmartVectorMPI(
   mField.get_comm(), local_size, CommonData::LAST_ELEMENT);
 \endcode
-this is smart pointer to PETSc Vector, it is created by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here is equal 10, since we store mass, three first moments, and six-second moments of inertia, in order as it is in CommonData::VecElements. Local size of the vector is ten, which is equal to CommonData::VecElements::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor one. The global size of the vector is a sum of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements.
+this is smart pointer to PETSc Vector, it is created by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here is equal 10, since we store mass, three first moments, and six-second moments of inertia, in order as it is in Example::CommonData::VecElements. Local size of the vector is ten, which is equal to Example::CommonData::VecElements::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor one. The global size of the vector is a sum of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements, see \ref basic_l1_figure_4 "Figure 4".
 
 In all the following lessons, including this one, we implemented code to make it work distributed meshes. 
 
@@ -404,11 +404,13 @@ For simplicity, dentistry is set to unity, at each mesh node. That creates a uni
 
 To make calculations in MoFEM, you can use \em Basic interface. You need to provide code with operators who are executed on finite element entities on the mesh. Operators can do various tasks, for example, evaluate field values at integration points, e.g. calculating \f$\rho_g^h\f$. You will use operators as well to compute integrals when you calculate volume, the first moment of inertia, or second moment of inertia. In other examples, operators are used to calculating differential operators, like gradient, divergence, etc., or assemble internal force vector. 
 
-You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. That is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, used while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. It only has to be provided with problem specific set of operators. 
+You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. That is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, used while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. Solver only has to be provided with problem specific set of operators, however implememtation of operators is independent on type of solver. 
 
 The developer provides MoFEM with operators who are executed on each element. In particular, those operators are executed on each subentity of the element, for example, finite triangle element is made from entities; nodes, three edges and triangle itself. Operators are executed for each entity of finite element. In this lesson, since density field is exclusively defined on nodes, operators are run for nodes only. However, that is a special case.
 
 On each finite element, several operators can be run in sequence. In principle, operators are used to breaking down a complex problem on simpler tasks. Each operator is implemented such that it iterates over integration points on the element. Operators are derived classes and provide some basic functions,  vary for different element shapes, however always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
+
+Writing operator for your problem, you do not have to think what type of entity element is, implementation is independent on element shape, approximation order, and if other fields used on the element. 
 
 Shape functions on each finite element can differ, depending on what approximation spaces You choose to use. Also, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson in function Example::setUP we have defined density filed as
 \code 
