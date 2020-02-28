@@ -2,25 +2,57 @@
 
 \section basic_lessons1_itro Introduction
 
-Basic lessons intended to give new MoFEM developer, that is You, freedom to implement bespoke finite element codes. In this and following tutorials we assume that the you can programme, and is at least have basic fluency in C++ programming. Also, we assume that the you are engineer or physicist, or mathematician, someone which is interested in solving Partial Differential Equations (PDEs) using finite elements. Finally, we try to keep mathematical abstraction as basic as it can be. 
+This is a basic lesson intended to give new developers an introduction to the implementation
+of bespoke finite element codes in MoFEM library. In this and other tutorials the assumption is that you, as a new MoFEM 
+developer, have at least a basic fluency in C++ programming. It is also assumed that  you are an engineer, 
+a physicist, or a mathematician who have interest in solving Partial Differential Equations (PDEs) using finite 
+element methods. In this tutorial, the mathematical abstractions are kept as basic as possible. 
 
-If you will be reading these lessons, and you do not understand tutorial; it is very likely ower fault not expressing ideas clear enough. If that is the case, please ask equations on our <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> forum, or join us on <a href="https://mofem.slack.com/">Slack</a>. Your comments will enable us to improve this work, and if you are keen to contribute, starting from improving tutorials is the best way. 
+If you are reading these lessons, and fail to understand its content, it is most likely that it is the authors' 
+fault for not expressing ideas clear enough. If that is the case, you can ask questions on our
+<a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a>, or join us our group discussion platform on 
+<a href="https://mofem.slack.com/">Slack</a>. Your comments are valuable to us and help to improve the work. 
+If you are keen to contribute, starting from improving tutorials is the best way. 
 
-\note Each questions on <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can be tagged/labelled. If you tag question as lesson1, all other and your question could be easily grouped and searched. Please tag questions.
+\note The questions in the <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can 
+be tagged/labelled. If you tag question as lesson1, your's and others' question will be easily grouped 
+and searched, so that it would be convenient for us (authors) to respond to the question effectively. It will also be very helpful to our 
+community if each question asked in this forum labelled in this way.  
 
-All presented problems, except first, are for 2D problems. However,  all examples are implemented in such a way that can be extended to 3D. Once you get understanding, as an exercise, you can implement the 3D case. 
+All problems presented in this tutorial, except the first one, are in 2D. However,  the implementation is designed in such away that
+one can extend them to 3D with relative ease. Once you have good understanding of the tutorial, as an exercise, you can implement the 3D extension. 
 
 \tableofcontents
 
-In the following lessons, we intend to create consistently series of problems, which will give you the freedom to solve a large class of nonlinear problems.  
+This is the beginning of a series of tutorials which are intended to be expanded, in a consistent way, into a much larger project in
+which a broad class of nonlinear problems can be solved.      
 
-MoFEM provides interfaces with varying level of abstraction, lower abstraction, harder to use, demanding more knowledge about how MoFEM works and designs. Higher abstraction, limits flexibility, but makes implementation faster and simpler. Here we use \em Simple and \em Basic interfaces, which are complementary to each other.
+MoFEM provides interfaces with varying level of abstractions. The lower level abstraction is harder to use, and demanding much detailed 
+knowledge about the design MoFEM and how it works. Higher level abstraction limits flexibility, but makes implementation 
+faster and simpler. Here, we use \em Simple and \em Basic interfaces, which complement each other.
 
-The \em Simple interface is used to add approximation fields and delivers Discrete Manager (DM) to create matrices. Is \em Simple interface, since it assumes that fields and finite elements are set on the whole domain or whole boundary of the mesh. It assumes that problem has fix dimension, and not allows for mixing shells, beams and solid elements. From the other hand,  the \em Simple interface allows for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with triangles and quads, and heterogenous approximation order. Despite some restrictions, \em Simple interface enables to fast implementation of a large class of problems.
+The \em Simple interface is used to add approximation fields (e.g., density, displacement, e.t.c.) and delivers Discrete Manager (DM) 
+(is a class which handles management of degree-of-freedoms between the mesh and the discrete system) instances to create matrices.  
+It assumes that fields and finite elements spaces, such as \f$L^2\f$, \f$H^1\f$, e.t.c., are set on the entire domain or boundary 
+of the mesh. But this not always the case, as a problem may consist of various field at various part of the domain. The \em Simple 
+interface also assumes that the problem being implemented has fixed dimension, and not allow for mixing of dimensions, such as shells 
+(2D in 3D ambient space), beams (1D in 3D ambient space) and solid elements. On the other hand,  the \em Simple interface allows 
+for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with 
+triangles and quads, and heterogeneous approximation order. Despite the above mentioned restrictions, \em Simple interface enables fast implementation 
+of a large class of problems.
 
-The \em Basic interface is used to simplified creation of operator pipelines. The pipeline is a sequence of operations which one has to be run to assemble the right-hand vector or stiffness matrix.  <em>User data operator</em>  (UDO) is, for example, a differential operator which takes gradient of the field, or calculate strain, or use previously calculated strain in the pipeline to calculate stress, and in the end, calculate vector on the right-hand side.  In other words, the pipeline is a method, to break a complex problem into simple tasks, i.e. user data operators, for short UDOs.
+MoFEM philosophy of finite element implementation relies on operator piplienes. Pipelining is a concept used to organise operations in 
+a sequential manner that run to assemble the right-hand vector or stiffness matrix. The \em Basic interface is used to simplify 
+creation of operator pipelines. The <em>User data operator</em>  (UDO), is an abstract class that can be specialised to implement various kinds of operators, 
+for example, a differential operator that calculate  the gradient of a field, calculate strains, or use previously calculated strain in the pipeline to 
+calculate  stress, and finally, calculate the right-hand-side vector. In other words, the pipeline is a method, to break a complex problem into simple 
+tasks or data operators.
 
-It might not be apparent for you why we have \em Simple interface and \em Basic interface. \em Simple interface managed DOFs, i.e. approximation fields on the mesh manage entities on which finite elements are set and problems composed from finite elements.  However, do not provide a mechanism on how you assemble the vector of internal force, tangent matrix, or integrate. The tools for later are provided in \em Basic interface.  
+It might not be apparent from the outset why we need \em Simple interface and \em Basic interface. It it will later become clear that \em Basic interface 
+actually expand the capabilities of the \em Simple interface. For instance, although  \em Simple interface provide a clear way of handles managed DOFs, 
+i.e. approximation fields on the mesh manage entities on which finite elements are set and problems composed from finite elements, it does not provide 
+a mechanism how to assemble vector of internal forces and tangent matrix, or integrate of a finite element. Such tools are provided by \em Basic interface, 
+will be dealt in later tutorials.  
 
 \section basic_lessons1_start Essentials
 
@@ -32,7 +64,9 @@ Numrical inegration of function \f$\rho\f$, is given by formula,
   I(\rho) = \int_\Omega \rho \textrm{d}V \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
 \end{align}
 \f]
-where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated function, e.g. density. Typically sum of the integration weights is scaled by volume (measure) of reference element, such that is weights equal to unity, as follows
+where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated 
+function, e.g. density. Typically sum of the integration weights is scaled by volume (measure) of reference element, 
+such that is weights equal to unity, as follows
 \f[
 \begin{align}
   \sum_{g=0}^{G-1} W_g  = 1 
