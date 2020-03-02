@@ -1,0 +1,59 @@
+Contact interaction between elastic solids having matching meshes in the 
+contact interface.
+
+Definition of the contact interface(s)
+======================================
+
+Contacting solids should be merged (i.e. glued) along the apparent contact 
+interface(s) in the input mesh. Each contact interface should be introduced in
+the bulk of the mesh as a SIDESET with a name starting with "INT_CONTACT". An
+arbitrary number of contact interfaces may be defined, each including an 
+arbitrary number of meshed surfaces.
+
+The following rules for the definition of contact interfaces apply:
+1. External edge of a contact interface may belong to the skin of the solid 
+mesh (i.e. contact interface may cut through the whole solid).
+2. External edge of a contact interface may belong to the interior of the 
+solid mesh if and only if this edge also belongs to another contact interface,
+which cuts through the whole solid (i.e. contact interfaces may intersect inside 
+the mesh, but a contact interface cannot cut the solid mesh partially, e.g. 
+similar to a crack notch).
+3. If two surfaces do not have shared edges, but the distance between these 
+surfaces is less than 3 elements in the bulk mesh, they must be included 
+separately into two different contact interfaces.
+
+Contact parameters
+==================
+
+my_order        approximation order for the field of spatial positions
+my_order_lambda approximation order for the field of Lagrange multipliers
+my_cn_value     augmentation parameter, primarily affects the convergence and 
+                has minimal effect on the solution; recommended initial value is 
+                the Young's modulus of contacting solids (or harmonic mean in case of 
+                different values); the optimal value of cn providing minimal 
+                number of iterations for a given tolerance threshold can be 
+                found by repetitively increasing/decreasing the initial value 
+                by e.g. a factor of 10
+
+Example
+=======
+
+mpirun -np 2 ./simple_contact -my_file examples/punch_top_only.cub \
+-my_order 2 -my_cn_value 1e3
+
+Parameters set by default from param_file.petsc file
+====================================================
+
+-ksp_type fgmres
+-pc_type lu 
+-pc_factor_mat_solver_package mumps 
+-snes_type newtonls 
+-snes_linesearch_type basic 
+-snes_max_it 10 
+-snes_atol 1e-8 
+-snes_rtol 1e-8 
+-my_order 1 
+-my_order_lambda 1 
+-my_cn_value 1. 
+-my_is_newton_cotes 0 
+-my_is_test 0 
