@@ -674,7 +674,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnMaster::doWork(
     vecF.clear();
 
     const double area_m =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+        commonDataSimpleContact->areaMaster; // same area in master and slave
 
     auto get_tensor_vec = [](VectorDouble &n, const int r) {
       return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
@@ -688,7 +688,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnMaster::doWork(
     auto t_const_unit_n = get_tensor_vec(
         commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
 
-    auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_w = getFTensor0IntegrationWeightMaster();
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -829,8 +829,8 @@ SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
     int nb_base_fun_row = row_data.getFieldData().size() / 3;
     int nb_base_fun_col = col_data.getFieldData().size();
 
-    const double area_slave =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+    const double area_master =
+        commonDataSimpleContact->areaMaster; // same area in master and slave
 
     auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
       return FTensor::Tensor1<double *, 3>(&m(r + 0, c), &m(r + 1, c),
@@ -853,7 +853,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      double val_m = t_w * area_slave;
+      double val_m = t_w * area_master;
       auto t_base_master = row_data.getFTensor0N(gg, 0);
 
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
@@ -916,7 +916,7 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
     auto const_unit_n =
         get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr.get()));
 
-    auto t_w = getFTensor0IntegrationWeightMaster();
+    auto t_w = getFTensor0IntegrationWeightSlave();
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -1016,8 +1016,8 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     int nb_base_fun_row = row_data.getFieldData().size();
     int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
-    const double area_slave =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+    const double area_master =
+        commonDataSimpleContact->areaMaster; // same area in master and slave
 
     NN.resize(nb_base_fun_row, 3 * nb_base_fun_col, false);
     NN.clear();
@@ -1035,11 +1035,11 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-    auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_w = getFTensor0IntegrationWeightMaster();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cN, t_gap_gp, t_lagrange_slave) *
-                           t_w * area_slave;
+                           t_w * area_master;
 
       auto t_base_lambda = row_data.getFTensor0N(gg, 0);
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
@@ -1304,6 +1304,9 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
       new OpGetNormalSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
+      new OpGetNormalMaster(field_name, common_data_simple_contact));
+
+  fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
 
@@ -1321,6 +1324,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpGetNormalSlave(field_name, common_data_simple_contact));
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpGetNormalMaster(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsMaster(field_name,
@@ -1362,6 +1368,9 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpGetNormalSlave(field_name, common_data_simple_contact));
+
+  fe_lhs_simple_contact->getOpPtrVector().push_back(
+      new OpGetNormalMaster(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
