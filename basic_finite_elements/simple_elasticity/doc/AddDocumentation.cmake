@@ -14,6 +14,5 @@
 # copy dox/figures to html directory created by doxygen
 add_custom_target(simple_elasticity
   ${CMAKE_COMMAND} -E copy_directory
-  ${PROJECT_SOURCE_DIR}/users_modules/basic_finite_elements/simple_elasticity/doc/figures ${PROJECT_BINARY_DIR}/html
-)
+  ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
 add_dependencies(doc simple_elasticity)

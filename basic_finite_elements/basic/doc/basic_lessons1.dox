@@ -2,25 +2,57 @@
 
 \section basic_lessons1_itro Introduction
 
-Basic lessons intended to give new MoFEM developer, that is You, freedom to implement bespoke finite element codes. In this and following tutorials we assume that you can programme, and you have at least basic fluency in C++ programming. Also, we assume that you are an engineer, physicist, mathematician, or someone who is interested in solving Partial Differential Equations (PDEs) using finite elements. Finally, we try to keep mathematical abstraction as basic as it can be. 
+This is a basic lesson intended to give new developers an introduction to the implementation
+of bespoke finite element codes in MoFEM library. In this and other tutorials the assumption is that you, as a new MoFEM 
+developer, have at least a basic fluency in C++ programming. It is also assumed that  you are an engineer, 
+a physicist, or a mathematician who have interest in solving Partial Differential Equations (PDEs) using finite 
+element methods. In this tutorial, the mathematical abstractions are kept as basic as possible. 
 
-If you are reading these lessons, and you do not understand the tutorials; it is likely our fault for not expressing ideas clearly enough. If that is the case, please ask equations on our <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> forum, or join us on <a href="https://mofem.slack.com/">Slack</a>. Your comments will enable us to improve this work, and improving these tutorials is the best way to start if you are keen to contribute.
+If you are reading these lessons, and fail to understand its content, it is most likely that it is the authors' 
+fault for not expressing ideas clear enough. If that is the case, you can ask questions on our
+<a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a>, or join us our group discussion platform on 
+<a href="https://mofem.slack.com/">Slack</a>. Your comments are valuable to us and help to improve the work. 
+If you are keen to contribute, starting from improving tutorials is the best way. 
 
-\note Each question on <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can be tagged/labelled. If you tag your questions with lesson1, so other and your question could be easily grouped and searched. Please tag questions.
+\note The questions in the <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can 
+be tagged/labelled. If you tag question as lesson1, your's and others' question will be easily grouped 
+and searched, so that it would be convenient for us (authors) to respond to the question effectively. It will also be very helpful to our 
+community if each question asked in this forum labelled in this way.  
 
-All presented problems, except first, are for 2D problems. However,  all examples are implemented in a way that can be extended to 3D. Once you understand the 2D exercise, you can implement the 3D case. 
+All problems presented in this tutorial, except the first one, are in 2D. However,  the implementation is designed in such away that
+one can extend them to 3D with relative ease. Once you have good understanding of the tutorial, as an exercise, you can implement the 3D extension. 
 
 \tableofcontents
 
-In the following lessons, we intend to create a consistent series of problems, which will give you the freedom to solve a large class of nonlinear problems.  
+This is the beginning of a series of tutorials which are intended to be expanded, in a consistent way, into a much larger project in
+which a broad class of nonlinear problems can be solved.      
 
-MoFEM provides interfaces with varying level of abstraction, lower abstraction, harder to use, demanding more knowledge about how MoFEM works and designs. Higher abstraction, limits flexibility, but makes implementation faster and simpler. Here we use \em Simple and \em Basic interfaces, which are complementary to each other.
+MoFEM provides interfaces with varying level of abstractions. The lower level abstraction is harder to use, and demands much detailed 
+knowledge about the design MoFEM and how it works. Higher level abstraction limits flexibility, but makes implementation 
+faster and simpler. Here, we use \em Simple and \em Basic interfaces, which complement each other.
 
-The \em Simple interface is used to add approximation fields and delivers Discrete Manager (DM) to create matrices. It is \em Simple interface, since it assumes that fields and finite elements are set on the whole domain or whole boundary of the mesh. It assumes that problem has fixed dimensions, and does not allow for mixing shells, beams and solid elements. From the other hand,  the \em Simple interface allows for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with triangles and quads, and heterogenous approximation order. Despite some restrictions, \em Simple interface enables fast implementation of a large class of problems.
+The \em Simple interface is used to add approximation fields (e.g., density, displacement, e.t.c.) and delivers Discrete Manager (DM) 
+(is a class which handles management of degree-of-freedoms between the mesh and the discrete system) instances to create matrices.  
+It assumes that fields and finite elements spaces, such as \f$L^2\f$, \f$H^1\f$, e.t.c., are set on the entire domain or boundary 
+of the mesh. But this not always the case, as a problem may consist of various field at various part of the domain. The \em Simple 
+interface also assumes that the problem being implemented has fixed dimension, and does not allow for mixing of dimensions, such as shells 
+(2D in 3D ambient space), beams (1D in 3D ambient space) and solid elements. On the other hand,  the \em Simple interface allows 
+for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with 
+triangles and quads, and heterogeneous approximation order. Despite the above mentioned restrictions, \em Simple interface enables fast implementation 
+of a large class of problems.
 
-The \em Basic interface is used to simplify creation of operator pipelines. A pipeline is a sequence of operations which have to be run to assemble the right-hand vector or stiffness matrix.  <em>User data operator</em>  (UDO) is, for example, a differential operator which takes gradient of the field, or calculate strain, or use previously calculated strain in the pipeline to calculate stress, and in the end, calculate vector on the right-hand side.  In other words, a pipeline is a method, to break a complex problem into simple tasks, i.e. user data operators, for short UDOs.
+MoFEM philosophy of finite element implementation relies on operator piplienes. Pipelining is a concept used to organise operations in 
+a sequential manner that run to assemble the right-hand vector or stiffness matrix. The \em Basic interface is used to simplify 
+creation of operator pipelines. The <em>User data operator</em>  (UDO), is an abstract class that can be specialised to implement various kinds of operators, 
+for example, a differential operator that calculate  the gradient of a field, calculate strains, or use previously calculated strain in the pipeline to 
+calculate  stress, and finally, calculate the right-hand-side vector. In other words, the pipeline is a method, to break a complex problem into simple 
+tasks or data operators.
 
-It might not be apparent for you why we have \em Simple interface and \em Basic interface. \em Simple interface manages DOFs, i.e. approximation fields on the mesh manage entities on which finite elements are set and problems composed from finite elements. \em Simple interface, however, does not provide a mechanism on how you assemble the vector of internal force, tangent matrix, or integrate. The tools for the later are provided in \em Basic interface.  
+It might not be apparent from the outset why we need \em Simple interface and \em Basic interface. It it will later become clear that \em Basic interface 
+actually expand the capabilities of the \em Simple interface. For instance, although  \em Simple interface provide a clear way of handles managed DOFs, 
+i.e. approximation fields on the mesh manage entities on which finite elements are set and problems composed from finite elements, it does not provide 
+a mechanism how to assemble vector of internal forces and tangent matrix, or integrate of a finite element. Such tools are provided by \em Basic interface, 
+will be dealt in later tutorials.  
 
 \section basic_lessons1_start Essentials
 
@@ -32,7 +64,9 @@ Numrical inegration of function \f$\rho\f$, is given by formula,
   I(\rho) = \int_\Omega \rho \textrm{d}V \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
 \end{align}
 \f]
-where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated function, e.g. density. Typically sum of the integration weights is scaled by volume (measure) of reference element, such that is weights equal to unity, as follows
+where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated 
+function, e.g. density. Typically sum of the integration weights is scaled by volume (measure) of reference element, 
+such that is weights equal to unity, as follows
 \f[
 \begin{align}
   \sum_{g=0}^{G-1} W_g  = 1 
@@ -249,7 +283,7 @@ If you want to develop code in MoFEM, and you probably do if you are reading thi
 
 All files executable are located in, and there you will compile code.
 \code
-$HOME/mofem_install/build_debug/basic_finite_elements/basic
+$HOME/mofem_install/um/build_debug/basic_finite_elements/basic
 \endcode
 whereas source code is located in 
 \code
@@ -260,7 +294,7 @@ This is called out of source compilation since code and programs are located in 
 
 \note In default MoFEM installation you can create executables under another location, that  is
 \code 
-$HOME/mofem_install/build_opt/basic_finite_elements/basic
+$HOME/mofem_install/um/build_opt/basic_finite_elements/basic
 \endcode
 Under \em build_opt location is optimised code, which is much faster, but harder to inspect with debugger. 
 
@@ -296,7 +330,7 @@ First moment of inertia [ -4.3368e-19, -1.4095e-17, -1.3878e-17 ]
 Second moment of inertia [ 3.4961e-312, 1.0000e+00, 0.0000e+00; 6.9531e-310 8.3333e-02; -6.0715e-18 ]
 \endcode
 
-Code print at the beginning version of the MoFEM library.  In the same line versions of MOAB and PETSc are printed respectively. That will enable to reproduce errors if occurred and fix bugs. Next information is printed that element has been added, i.e. \em dFE, and field DOFs for density field, i.e. \em rho. Here only DOFs on vertices are added. Thus linear approximation of density is considered. After that, information about a number of finite elements is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of DOFs on rows & columns, i.e. 64, and other information related to mesh partitioning. Most of that information is obsolete for this particular less. Finally, the results are printed.
+Code prints, at the beginning, the version of the MoFEM library. In the same line versions of MOAB and PETSc are printed respectively. This will enable to reproduce errors if occurred and fix bugs. Next information is printed that element has been added, i.e. \em dFE, and field DOFs for density field, i.e. \em rho. Here only DOFs on vertices are added. Thus linear approximation of density is considered. After that information about a number of finite elements is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of DOFs on rows & columns, i.e. 64, and other information related to mesh partitioning. Finally, the results are printed.
 
 
 \subsection basic_lesson1_programming Editor
@@ -314,7 +348,7 @@ You can use the above snipped to start your code. Main function is responsible f
 
 - The main programme begins with registering MoFEM DM interface in PETSc data structures. That enables transparent control of MoFEM database by PETSc solvers, and vice-versa use PETSc standard interface to create matrices, vectors, and other PETSc objects
 
-- Next, MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MoAB database stores data about mesh, whereas MoFM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level on top of MOAB databse since finite element data are stored on data tags created on mesh entities. 
+- Next, the MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MOAB database stores data about mesh, whereas MoFM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level of abstraction, on top of the MOAB database since finite element data are stored on data tags created on mesh entities. 
 
 - Finally, problem-specific example class is created, and calculations are executed in Example::runProblem.
 
@@ -335,7 +369,7 @@ That part of the code is responsible for handling all the error, initiated insid
 \endcode
 Catching errors will make searching for runtime errors easier, and in case of the problem allow for seeking help, see \ref guidelines_bug_reporting.
 
-\note When you programme, you can encounter two types of error, <em>compilation errors</em>, and <em>runtime errors</em>. <em>Compilation errors</em> are most often a syntax error, they prevent the compiler from making the program, you see them when you run \em make programme. Runtime errors are because of some bug in the programme, segmentation-fault, overflow, bad algorithm or because you run out of computer resources, memory. Those errors need to be handled, to indicate user what is the problem, where it is.
+\note When you programme, you can encounter two types of error, <em>compilation errors</em>, and <em>runtime errors</em>. <em>Compilation errors</em> are most often a syntax error, which prevent the compiler from making program, you see them when you run \em make programme. Runtime errors are caused by some bug in the programme, segmentation-fault, overflow, bad algorithm or you run of computer resources, e.g. memory. Those errors need to be handled, to indicate user what is the problem, where it is.
 
 \subsection basic_lesson1_example_class Exmaple class
 
@@ -371,7 +405,7 @@ Common data structure is defined as follows
 and instance is created by method
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
 
-where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a> and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to vector  rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. 
+where memory for Example::CommonData is allocted and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a> and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to vector  \em rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. 
 
 Smart pointers, boost::shared_ptr and MoFEM::SmartPetscObj, are used to maintain the life of dynamically allocated objects. You can think about smart pointers as a regular pointer, and to an understanding following code you do not have to know more about them. More explanation is needed for
 \code
@@ -387,7 +421,7 @@ else
 commonDataPtr->petscVec = createSmartVectorMPI(
   mField.get_comm(), local_size, CommonData::LAST_ELEMENT);
 \endcode
-this is smart pointer to PETSc Vector, it is created by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here is equal 10, since we store mass, three first moments, and six-second moments of inertia, in order as it is in CommonData::VecElements. Local size of the vector is ten, which is equal to CommonData::VecElements::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor one. The global size of the vector is a sum of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements.
+this is smart pointer to PETSc Vector, it is created by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here is equal 10, since we store mass, three first moments, and six-second moments of inertia, in order as it is in Example::CommonData::VecElements. Local size of the vector is ten, which is equal to Example::CommonData::VecElements::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor one. The global size of the vector is a sum of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements, see \ref basic_l1_figure_4 "Figure 4".
 
 In all the following lessons, including this one, we implemented code to make it work distributed meshes. 
 
@@ -404,11 +438,13 @@ For simplicity, dentistry is set to unity, at each mesh node. That creates a uni
 
 To make calculations in MoFEM, you can use \em Basic interface. You need to provide code with operators who are executed on finite element entities on the mesh. Operators can do various tasks, for example, evaluate field values at integration points, e.g. calculating \f$\rho_g^h\f$. You will use operators as well to compute integrals when you calculate volume, the first moment of inertia, or second moment of inertia. In other examples, operators are used to calculating differential operators, like gradient, divergence, etc., or assemble internal force vector. 
 
-You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. That is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, used while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. It only has to be provided with problem specific set of operators. 
+You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. That is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, used while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. Solver only has to be provided with problem specific set of operators, however implememtation of operators is independent on type of solver. 
 
 The developer provides MoFEM with operators who are executed on each element. In particular, those operators are executed on each subentity of the element, for example, finite triangle element is made from entities; nodes, three edges and triangle itself. Operators are executed for each entity of finite element. In this lesson, since density field is exclusively defined on nodes, operators are run for nodes only. However, that is a special case.
 
 On each finite element, several operators can be run in sequence. In principle, operators are used to breaking down a complex problem on simpler tasks. Each operator is implemented such that it iterates over integration points on the element. Operators are derived classes and provide some basic functions,  vary for different element shapes, however always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
+
+Writing operator for your problem, you do not have to think what type of entity element is, implementation is independent on element shape, approximation order, and if other fields used on the element. 
 
 Shape functions on each finite element can differ, depending on what approximation spaces You choose to use. Also, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson in function Example::setUP we have defined density filed as
 \code 
@@ -423,7 +459,7 @@ On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to c
 
 Operators have to be pushed into pipelines through MoFEM::Basic interface.  MoFEM::Basic has several streams of pipelines, to evaluate matrices and vector, and which are executed on domain and boundary (skin) elements. Here we integrate vector iterating domain element, see \ref basic_l1_figure_5 "Figure 5", red box on the left. Operators are pushed to the pipeline by executing the following code
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Push operators to pipeline
-In snipped above you can see four operators pushed in sequence, like in \ref basic_l1_figure_5 "Figure 5". Operators are pushed to basic->getOpDomainRhsPipeline(), that is a sequence to calculate vectors on domain finite elements. We call it sequence since operators are executed on finite elements in order which are pushed. 
+In snipped above you can see four operators pushed in sequence, like in \ref basic_l1_figure_5 "Figure 5". Operators are pushed to \em basic->getOpDomainRhsPipeline(), that is a sequence to calculate vectors on domain finite elements. We call it sequence since operators are executed on finite elements in order which are pushed.
 
 To set integration points at which base functions are evluated, user needs to specify inetgartion rule, that is done by following code
 \code
@@ -470,24 +506,62 @@ After looping over integration points is made, local element vector \em t_I is a
 
 \subsection basic_lesson1_checking Checking code validity
 
-In function Example::checkResults test is run for a well-known solution. Test like that verifies if volume, first moment and the second moment are calculated correctly. Writing of tests is essential, make code writing faster. Enables code developed in future, since is easy to check if code changes, refactring and improvemnts do not break test. Without testing, development of sustainable is impossible. You should always try to write a test for your code.  
+Code is tested every time is code is changed and committed into the repository. The user with the command can trigger code testing
+\code
+ctest -VV
+\endcode
 
-See how code for first lsson is tested here
+In particular cmake function testing code executing function
+\code
+./basic_moment_of_inertia -file_name cube.h5m -test
+\endcode
+and code is valideted in function Example::checkResults.
+
+In function Example::checkResults test is run for a well-known solution for mesh in \em cube.h5m. Test like that verifies if volume, first moment and the second moment are calculated correctly. Funcion testing code is as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Test example
 
-The test is written for cube volume, of size one by one and coordinate system in the centre of the cube.  For such code chack if calculated results in many analytical results. Size of the cube should be 1. First moments should be zero since the cube centre is coordinate stem origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
+You can see that line code
+\code
+CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
+\endcode
+checks if the test option is set in the command line. Code in brackers verify if prescribed values are equal to calculated values. For example 
+\code
+for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
+                   CommonData::SECOND_ZZ}) {
+      if (std::abs(array[i] - expected_second_moment) > eps)
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
+                 array[i]);
+    }
+\endcode
+iterate over diagonal values, and calculated value is not equal to expected value thorw error using PTESc function  <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Sys/SETERRQ2.html">SETERRQ2</a>. The test is written for cube volume, of size one by one and coordinate system in the centre of the cube. Zero moments, i.e. volume, should be one. First moments should be zero since the cube centre is coordinate at the origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
 
-Code validate results if option \em -test is added in the command line. Code will run for any other mesh, however for other geometries if you run code with option \em -tets very likely you will get an error. 
+Writing a code test is essential. MoFEM is a complex system with several contributors, which most of them focused attention on the part of the code. Running tests like this one, contributors know that they not broken anything. That makes code development sustainable. 
+
+Also, writing tests makes writing code faster and simpler, since once you write the code, it needs refactoring and improvements. The test will reassure you that optimisations and changes do not break working code.
+
+Moreover, once your commits are submitted to the repository, MoFEM Jenkins server will the test independently, validating if your code is running not other system and computers. Results of that test are available here <http://cdash.eng.gla.ac.uk/cdash/index.php>.
 
 \section Debugging 
 
-Debugging is a way of searching for errors. The debugger is a program which each run source code lines step by step, under control of the user, and the allow to observe how the state of variables.  
+Debugging is method used to find errors or to understanding what code does. Debugger is a program for debugging, which enables user to execute code line by line and observe, or break (stop) code at desired lines of the source code. 
+When you work in Linux, you can use GDB to debug code.If you work on OSX, you will instead you will use LLDB  debugger.
 
-Code has to be compiled with debugging flags, and when installing code for developers,  code is built in two versions, optimised fast version, and version with no optimisation with debugging flags for debugging and code development, 
+Code has to be compiled with debugging flags, and when you installed code using script, code with debugging flags is available in \em $HOME/mofem_install/um/build_debug/basic_finite_elements/basic.
 
-Writing of the code is relatively quick, searching for bugs and errors is usually very time-consuming. When you work in Linux, you can use GDB to debug code. It is many examples and tutorials on how to debug code, for example, see <https://youtu.be/bWH-nL7v5F4>. If you work on OSX, you will instead you will use LLDB  debugger.
-
-VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>.
+VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>. Here is an example of the launch (in VSCode) configuration for LLDB and example from this lesson
+\code
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "basic_moment_of_inertia",
+      "program": "basic_moment_of_inertia",
+      "args": [
+        "-file_name", "cube.h5m"
+      ],
+      "cwd": "$HOME/mofem_install/um/build_debug/basic_finite_elements/basic"  
+    }
+\endcode
 
 \section basci_lesson1_code Code
 
