@@ -311,6 +311,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
+  FTensor::Number<0> N0;
+  FTensor::Number<1> N1;
 
   auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
     return FTensor::Tensor2<double *, 3, 3>(
@@ -319,64 +321,40 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
         &m(r + 2, c + 2));
   };
 
-  auto make_vec_der =
-      [](VectorDouble3 &der_ksi, VectorDouble3 &der_eta,
-         VectorDouble3 &normal_der, MatrixDouble &der_normal_mat,
-         FTensor::Tensor0<double *> &t_N_over_ksi,
-         FTensor::Tensor0<double *> &t_N_over_eta, MatrixDouble &spin,
-         boost::shared_ptr<DataAtIntegrationPts> &dataAtIntegrationPts,
-         const int &gg) {
-        der_normal_mat.clear();
+  auto get_tensor1 = [](VectorDouble &v) {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(
+        &v(0), &v(1), &v(2));
+  };
 
-        for (int dd = 0; dd != 3; ++dd) {
+  auto make_vec_der = [&](MatrixDouble &der_normal_mat,
+                          FTensor::Tensor1<double *, 2> &t_N,
+                          FTensor::Tensor1<double *, 3> &t_1,
+                          FTensor::Tensor1<double *, 3> &t_2) {
+    der_normal_mat.clear();
 
-          der_ksi.clear();
-          der_eta.clear();
-          normal_der.clear();
-
-          der_ksi[dd] = t_N_over_ksi;
-          der_eta[dd] = t_N_over_eta;
-
-          spin.clear();
-          CHKERR Spin(&*spin.data().begin(), &*der_ksi.data().begin());
-
-          // n= t1 x t2 =  spin(t1)t2
-          normal_der = prod(spin, dataAtIntegrationPts->tangent[gg][1]);
-
-          spin.clear();
-          CHKERR Spin(&*spin.data().begin(),
-                      &*dataAtIntegrationPts->tangent[gg][0].data().begin());
-
-          // n= t1 x t2 =  spin(t1)t2
-          normal_der += prod(spin, der_eta);
-
-          for (int kk = 0; kk != 3; ++kk) {
-            der_normal_mat(kk, dd) += normal_der[kk];
-          }
-        }
-      };
+    auto t_n = get_tensor2(der_normal_mat, 0, 0);
+    t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+    t_n(i, j) -= FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+  };
 
   MatrixDouble der_normal_mat;
   der_normal_mat.resize(3, 3, false);
-
-  MatrixDouble spin;
-  spin.resize(3, 3, false);
-
-  VectorDouble3 normal_der(3);
-  VectorDouble3 der_ksi(3);
-  VectorDouble3 der_eta(3);
 
   double lambda = 1;
   if (surfacePressure->arcLengthDof) {
     lambda = surfacePressure->arcLengthDof->getFieldData();
   }
 
+  auto t_w = getFTensor0IntegrationWeight();
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    double val = getGaussPts()(2, gg) * lambda;
+    double val = 0.5 * t_w * lambda;
 
-    FTensor::Tensor0<double *> t_N_over_ksi(&col_data.getDiffN()(gg, 0));
-    FTensor::Tensor0<double *> t_N_over_eta(&col_data.getDiffN()(gg, 1));
+    FTensor::Tensor1<double *, 2> t_N(&col_data.getDiffN()(gg, 0),
+                                               &col_data.getDiffN()(gg, 1), 2);
+    auto t_1 = get_tensor1(dataAtIntegrationPts->tangent[gg][0]);
+    auto t_2 = get_tensor1(dataAtIntegrationPts->tangent[gg][1]);
 
     int bbc = 0;
     for (; bbc != nb_base_fun_col; bbc++) {
@@ -386,8 +364,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
 
-        make_vec_der(der_ksi, der_eta, normal_der, der_normal_mat, t_N_over_ksi,
-                     t_N_over_eta, spin, dataAtIntegrationPts, gg);
+        make_vec_der(der_normal_mat, t_N, t_1, t_2);
 
         auto d_n = get_tensor2(der_normal_mat, 0, 0);
 
@@ -395,15 +372,13 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
 
         // TODO: handle hoGeometry
         t_assemble(i, k) +=
-            0.5 * val * dAta.data.data.value1 * t_base * d_n(i, k);
+             val * dAta.data.data.value1 * t_base * d_n(i, k);
 
         ++t_base;
       }
-      ++t_N_over_ksi;
-      ++t_N_over_eta;
-      ++t_N_over_ksi;
-      ++t_N_over_eta;
+      ++t_N;
     }
+    ++t_w;
   }
 
   // get pointer to first global index on row
@@ -634,51 +609,24 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
         &m(r + 2, c + 2));
   };
 
-  auto make_vec_der =
-      [](VectorDouble3 &der_ksi, VectorDouble3 &der_eta,
-         VectorDouble3 &normal_der, MatrixDouble &der_normal_mat,
-         FTensor::Tensor0<double *> &t_N_over_ksi,
-         FTensor::Tensor0<double *> &t_N_over_eta, MatrixDouble &spin,
-         boost::shared_ptr<DataAtIntegrationPts> dataAtPts, const int &gg) {
-        der_normal_mat.clear();
+  auto get_tensor1 = [](VectorDouble &v) {
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(&v(0), &v(1),
+                                                              &v(2));
+  };
 
-        for (int dd = 0; dd != 3; ++dd) {
+  auto make_vec_der = [&](MatrixDouble &der_normal_mat,
+                          FTensor::Tensor1<double *, 2> &t_N,
+                          FTensor::Tensor1<double *, 3> &t_1,
+                          FTensor::Tensor1<double *, 3> &t_2) {
+    der_normal_mat.clear();
 
-          der_ksi.clear();
-          der_eta.clear();
-          normal_der.clear();
-
-          der_ksi[dd] = t_N_over_ksi;
-          der_eta[dd] = t_N_over_eta;
-
-          spin.clear();
-          CHKERR Spin(&*spin.data().begin(), &*der_ksi.data().begin());
-
-          // n= t1 x t2 =  spin(t1)t2
-          normal_der = prod(spin, dataAtPts->tangent[gg][1]);
-
-          spin.clear();
-          CHKERR Spin(&*spin.data().begin(),
-                      &*dataAtPts->tangent[gg][0].data().begin());
-
-          // n= t1 x t2 =  spin(t1)t2
-          normal_der += prod(spin, der_eta);
-
-          for (int kk = 0; kk != 3; ++kk) {
-            der_normal_mat(kk, dd) += normal_der[kk];
-          }
-        }
-      };
+    auto t_n = get_tensor2(der_normal_mat, 0, 0);
+    t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+    t_n(i, j) -= FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+  };
 
   MatrixDouble der_normal_mat;
   der_normal_mat.resize(3, 3, false);
-
-  MatrixDouble spin;
-  spin.resize(3, 3, false);
-
-  VectorDouble3 normal_der(3);
-  VectorDouble3 der_ksi(3);
-  VectorDouble3 der_eta(3);
 
   dataAtPts->faceRowData = nullptr;
   CHKERR loopSideVolumes(sideFeName, *sideFe);
@@ -690,12 +638,16 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
     lambda = surfacePressure->arcLengthDof->getFieldData();
   }
 
+  auto t_w = getFTensor0IntegrationWeight();
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    double val = getGaussPts()(2, gg) * lambda;
+    double val = 0.5 * t_w * lambda;
 
-    FTensor::Tensor0<double *> t_N_over_ksi(&col_data.getDiffN()(gg, 0));
-    FTensor::Tensor0<double *> t_N_over_eta(&col_data.getDiffN()(gg, 1));
+    FTensor::Tensor1<double *, 2> t_N(&col_data.getDiffN()(gg, 0),
+                                      &col_data.getDiffN()(gg, 1), 2);
+    auto t_1 = get_tensor1(dataAtPts->tangent[gg][0]);
+    auto t_2 = get_tensor1(dataAtPts->tangent[gg][1]);
 
     int bbc = 0;
     for (; bbc != nb_base_fun_col; bbc++) {
@@ -705,8 +657,7 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
 
-        make_vec_der(der_ksi, der_eta, normal_der, der_normal_mat, t_N_over_ksi,
-                     t_N_over_eta, spin, dataAtPts, gg);
+        make_vec_der(der_normal_mat, t_N, t_1, t_2);
 
         auto d_n = get_tensor2(der_normal_mat, 0, 0);
 
@@ -714,16 +665,14 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
         // TODO: handle hoGeometry
 
         t_assemble(i, k) +=
-            -0.5 * val * dAta.data.data.value1 * t_base * t_F(j, i) * d_n(j, k);
+            -val * dAta.data.data.value1 * t_base * t_F(j, i) * d_n(j, k);
 
         ++t_base;
       }
-      ++t_N_over_ksi;
-      ++t_N_over_eta;
-      ++t_N_over_ksi;
-      ++t_N_over_eta;
+      ++t_N;
     }
     ++t_F;
+    ++t_w;
   }
 
   MoFEMFunctionReturn(0);
