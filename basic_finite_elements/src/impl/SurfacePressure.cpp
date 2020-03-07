@@ -2,7 +2,7 @@
   \brief Implementation of pressure and forces on triangles surface
 
   \todo Note that ALE version was not tested for quad elements, and is not
-  guarantee that will work.   
+  guarantee that will work.
 */
 
 /* This file is part of MoFEM.
@@ -98,7 +98,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
-    if(F == PETSC_NULL)
+    if (F == PETSC_NULL)
       return getKSPf();
     return F;
   };
@@ -177,7 +177,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, nF);
 
   auto get_f = [&]() {
-    if(F == PETSC_NULL)
+    if (F == PETSC_NULL)
       return getKSPf();
     return F;
   };
@@ -236,7 +236,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
-    if(F == PETSC_NULL)
+    if (F == PETSC_NULL)
       return getKSPf();
     return F;
   };
@@ -322,8 +322,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   };
 
   auto get_tensor1 = [](VectorDouble &v) {
-    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(
-        &v(0), &v(1), &v(2));
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(&v(0), &v(1),
+                                                              &v(2));
   };
 
   auto make_vec_der = [&](MatrixDouble &der_normal_mat,
@@ -352,7 +352,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
     double val = 0.5 * t_w * lambda;
 
     FTensor::Tensor1<double *, 2> t_N(&col_data.getDiffN()(gg, 0),
-                                               &col_data.getDiffN()(gg, 1), 2);
+                                      &col_data.getDiffN()(gg, 1), 2);
     auto t_1 = get_tensor1(dataAtIntegrationPts->tangent[gg][0]);
     auto t_2 = get_tensor1(dataAtIntegrationPts->tangent[gg][1]);
 
@@ -371,8 +371,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
 
         // TODO: handle hoGeometry
-        t_assemble(i, k) +=
-             val * dAta.data.data.value1 * t_base * d_n(i, k);
+        t_assemble(i, k) += val * dAta.data.data.value1 * t_base * d_n(i, k);
 
         ++t_base;
       }
@@ -531,7 +530,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
   }
 
   auto get_f = [&]() {
-    if(F == PETSC_NULL)
+    if (F == PETSC_NULL)
       return getKSPf();
     return F;
   };
@@ -1008,7 +1007,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
   CHKERR MethodForForceScaling::applyScale(getFEMethod(), methodsOp, Nf);
 
   auto get_f = [&]() {
-    if(F == PETSC_NULL)
+    if (F == PETSC_NULL)
       return getKSPf();
     return F;
   };
