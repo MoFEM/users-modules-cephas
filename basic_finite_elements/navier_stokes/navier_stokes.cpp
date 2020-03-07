@@ -216,10 +216,11 @@ int main(int argc, char *argv[]) {
     if (!is_restart) {
       // **** ADD FIELDS **** //
       CHKERR m_field.add_field("VELOCITY", H1, AINSWORTH_LEGENDRE_BASE, 3);
-      if (!discont_pressure)
+      if (discont_pressure) {
+        CHKERR m_field.add_field("PRESSURE", L2, AINSWORTH_LEGENDRE_BASE, 1);
+      } else {
         CHKERR m_field.add_field("PRESSURE", H1, AINSWORTH_LEGENDRE_BASE, 1);
-      else
-        CHKERR m_field.add_field("PRESSURE", L2, DEMKOWICZ_JACOBI_BASE, 1);
+      }
 
       CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1,
                                AINSWORTH_LEGENDRE_BASE, 3);
@@ -236,11 +237,13 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBQUAD, "VELOCITY", order_u);
     CHKERR m_field.set_field_order(0, MBPRISM, "VELOCITY", order_u);
 
-    CHKERR m_field.set_field_order(0, MBVERTEX, "PRESSURE", 1);
-    CHKERR m_field.set_field_order(0, MBEDGE, "PRESSURE", order_p);
-    CHKERR m_field.set_field_order(0, MBTRI, "PRESSURE", order_p);
+    if (!discont_pressure) {
+      CHKERR m_field.set_field_order(0, MBVERTEX, "PRESSURE", 1);
+      CHKERR m_field.set_field_order(0, MBEDGE, "PRESSURE", order_p);
+      CHKERR m_field.set_field_order(0, MBTRI, "PRESSURE", order_p);
+      CHKERR m_field.set_field_order(0, MBQUAD, "PRESSURE", order_p);
+    }
     CHKERR m_field.set_field_order(0, MBTET, "PRESSURE", order_p);
-    CHKERR m_field.set_field_order(0, MBQUAD, "PRESSURE", order_p);
     CHKERR m_field.set_field_order(0, MBPRISM, "PRESSURE", order_p);
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
