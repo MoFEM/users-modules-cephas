@@ -204,7 +204,8 @@ struct NeumannForcesSurface {
 
   struct DataAtIntegrationPts {
 
-    vector<vector<VectorDouble>> tangent;
+    boost::shared_ptr<MatrixDouble> tangent1;
+    boost::shared_ptr<MatrixDouble> tangent2;
 
     boost::shared_ptr<MatrixDouble> hMat;
     boost::shared_ptr<MatrixDouble> FMat;
@@ -220,6 +221,8 @@ struct NeumannForcesSurface {
       HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      tangent1 = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      tangent2 = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
       faceRowData = nullptr;
     }

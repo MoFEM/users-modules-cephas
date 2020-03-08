@@ -256,31 +256,36 @@ MoFEMErrorCode NeumannForcesSurface::OpGetTangent::doWork(
   ngp = data.getN().size1();
 
   unsigned int nb_dofs = data.getFieldData().size() / 3;
-
+  FTensor::Index<'i', 3> i;
   if (type == MBVERTEX) {
-    dataAtIntegrationPts->tangent.resize(ngp);
+    dataAtIntegrationPts->tangent1->resize(3, ngp, false);
+    dataAtIntegrationPts->tangent1->clear();
 
-    for (unsigned int gg = 0; gg != ngp; ++gg) {
-      dataAtIntegrationPts->tangent[gg].resize(2);
-      dataAtIntegrationPts->tangent[gg][0].resize(3);
-      dataAtIntegrationPts->tangent[gg][1].resize(3);
-      dataAtIntegrationPts->tangent[gg][0].clear();
-      dataAtIntegrationPts->tangent[gg][1].clear();
-    }
+    dataAtIntegrationPts->tangent2->resize(3, ngp, false);
+    dataAtIntegrationPts->tangent2->clear();
   }
+
+  auto t_1 = getFTensor1FromMat<3>(*dataAtIntegrationPts->tangent1);
+  auto t_2 = getFTensor1FromMat<3>(*dataAtIntegrationPts->tangent2);
 
   for (unsigned int gg = 0; gg != ngp; ++gg) {
-    for (unsigned int dd = 0; dd != 3; ++dd) {
-      dataAtIntegrationPts->tangent[gg][0][dd] += cblas_ddot(
-          nb_dofs, &data.getDiffN()(gg, 0), 2, &data.getFieldData()[dd],
-          3); // tangent-1
-      dataAtIntegrationPts->tangent[gg][1][dd] += cblas_ddot(
-          nb_dofs, &data.getDiffN()(gg, 1), 2, &data.getFieldData()[dd],
-          3); // tangent-2
+    FTensor::Tensor1<double *, 2> t_N(&data.getDiffN()(gg, 0),
+                                      &data.getDiffN()(gg, 1), 2);
+
+    FTensor::Tensor1<double *, 3> t_dof(&data.getFieldData()[0],
+                                          &data.getFieldData()[1],
+                                          &data.getFieldData()[2], 3);
+    for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
+      t_1(i) += t_dof(i) * t_N(0);
+      t_2(i) += t_dof(i) * t_N(1);
+      ++t_dof;
+      ++t_N;
     }
+    ++t_1;
+    ++t_2;
   }
 
-  MoFEMFunctionReturn(0);
+    MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
@@ -344,24 +349,21 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   }
 
   auto t_w = getFTensor0IntegrationWeight();
-
+  auto t_1 = getFTensor1FromMat<3>(*dataAtIntegrationPts->tangent1);
+  auto t_2 = getFTensor1FromMat<3>(*dataAtIntegrationPts->tangent2);
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
     double val = 0.5 * t_w * lambda;
-
     FTensor::Tensor1<double *, 2> t_N(&col_data.getDiffN()(gg, 0),
                                       &col_data.getDiffN()(gg, 1), 2);
-    auto t_1 = get_tensor1(dataAtIntegrationPts->tangent[gg][0]);
-    auto t_2 = get_tensor1(dataAtIntegrationPts->tangent[gg][1]);
 
     int bbc = 0;
     for (; bbc != nb_base_fun_col; bbc++) {
-
       FTensor::Tensor0<double *> t_base(&row_data.getN()(gg, 0));
 
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
-
+        
         make_vec_der(der_normal_mat, t_N, t_1, t_2);
 
         auto d_n = get_tensor2(der_normal_mat, 0, 0);
@@ -376,6 +378,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
       ++t_N;
     }
     ++t_w;
+    ++t_1;
+    ++t_2;
   }
 
   // get pointer to first global index on row
@@ -636,6 +640,8 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
   }
 
   auto t_w = getFTensor0IntegrationWeight();
+  auto t_1 = getFTensor1FromMat<3>(*dataAtPts->tangent1);
+  auto t_2 = getFTensor1FromMat<3>(*dataAtPts->tangent2);
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
@@ -643,8 +649,6 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
 
     FTensor::Tensor1<double *, 2> t_N(&col_data.getDiffN()(gg, 0),
                                       &col_data.getDiffN()(gg, 1), 2);
-    auto t_1 = get_tensor1(dataAtPts->tangent[gg][0]);
-    auto t_2 = get_tensor1(dataAtPts->tangent[gg][1]);
 
     int bbc = 0;
     for (; bbc != nb_base_fun_col; bbc++) {
@@ -670,6 +674,8 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
     }
     ++t_F;
     ++t_w;
+    ++t_1;
+    ++t_2;
   }
 
   MoFEMFunctionReturn(0);
