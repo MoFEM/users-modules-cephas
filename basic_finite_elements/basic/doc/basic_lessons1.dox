@@ -4,8 +4,9 @@
 
 This is a basic lesson intended to give new developers an introduction to the implementation
 of bespoke finite element codes in MoFEM library. In this and other tutorials, the assumption is that you, as a new MoFEM 
-developer, have at least an essential fluency in C++ programming. It is also assumed that  you are an engineer, 
-a physicist, or a mathematician who have an interest in solving Partial Differential Equations (PDEs) using finite 
+developer, have at least an essential fluency in C++ programming. It is also
+assumed that  you are an engineer or
+a physicist or a mathematician who has an interest in solving Partial Differential Equations (PDEs) using finite 
 element methods. In this tutorial, the mathematical abstractions are kept as basic as possible. 
 
 If you are reading these lessons, and fail to understand its content, it is most likely that it is the authors' 
@@ -31,37 +32,50 @@ MoFEM provides interfaces with varying level of abstractions. The lower level ab
 knowledge about the design MoFEM and how it works. Higher-level abstraction limits flexibility, but makes implementation 
 faster and simpler. Here, we use \em Simple and \em Basic interfaces, which complement each other.
 
-The \em Simple interface is used to add approximation fields (e.g., density, displacement, e.t.c.). It also delivers a Discrete Manager (DM), which is a class that handles the management of degree-of-freedoms between the mesh and the discrete system. Instances of DM can create global matrices and vectors.    
-It assumes that fields and finite elements spaces, such as \f$L^2\f$, \f$H^1\f$, e.t.c., are set on the entire domain or boundary 
-of the mesh. However, this not always the case, as a problem may consist of various fields at different parts of the domain. The \em Simple interface also assumes that the problem being implemented has fixed dimension, and does not allow for mixing of dimensions, such as shells 
-(2D in 3D ambient space), beams (1D in 3D ambient space) and solid elements. On the other hand,  the \em Simple interface allows 
-for multiple fields, integration on the domain, boundary and skeleton.  It also permits heterogeneous mesh, e.g. meshes with 
-triangles and quads, and heterogeneous approximation order. Despite the above-mentioned restrictions, \em Simple interface enables fast implementation 
-of a large class of problems.
+The \em Simple interface is used to add approximation fields (e.g., density,
+displacement, e.t.c.). It also delivers a Discrete Manager (DM), which is a
+class that handles the management of degree-of-freedoms between the mesh and the
+discrete system. Instances of DM can create global matrices and vectors.
+The \em Simple interface allows 
+for multiple fields, integration on the domain, boundary and skeleton.  It also
+permits heterogeneous mesh, e.g. meshes with triangles and quads, and
+heterogeneous approximation order. 
+However, it assumes that fields and finite elements spaces, such as \f$L^2\f$, \f$H^1\f$, e.t.c., are set on the entire domain or boundary 
+of the mesh. This is not always the case, as a problem may consist of various
+fields at different parts of the domain. The \em Simple interface also assumes
+that the problem being implemented has fixed dimension, and does not allow for
+mixing of dimensions, such as shells (2D in 3D ambient space), beams (1D in 3D
+ambient space) and solid elements. 
+Despite the above-mentioned restrictions, \em Simple interface enables fast
+implementation of a large class of problems. 
 
 MoFEM philosophy of finite element implementation relies on operator pipelines. Pipelining is a concept used to organise operations in 
-a sequential manner that run to assemble the right-hand vector or stiffness matrix. The \em Basic interface is used to simplify the
+a sequential manner that run to assemble the right-hand-side vector or stiffness matrix. The \em Basic interface is used to simplify the
 creation of operator pipelines. The <em>User data operator</em>  (UDO), is an abstract class that can be specialised to implement various kinds of operators. For example, a differential operator that calculates the gradient of a field, calculate strains, or use previously calculated strain in the pipeline to 
-calculate  stress, and finally, calculate the right-hand-side vector. In other words, the pipeline is a method, to break a complex problem into simple 
+calculate  stress, and finally, calculate the right-hand-side vector. In other words, the pipeline is a method to break a complex problem into simple 
 tasks or data operators.
 
 It might not be apparent from the outset why we need \em Simple interface and \em Basic interface. It will later become clear that \em Basic interface 
 expands the capabilities of the \em Simple interface. \em Simple interface provides a clear way of handling DOFs, i.e. approximation fields on the mesh, managing entities and problems on which finite elements are set. 
-However, it does not provide a mechanism to assemble a vector of internal forces and tangent matrix or integrate a finite element. Such tools are provided by \em Basic interface, will be dealt with in later tutorials.  
+However, it does not provide a mechanism to assemble a vector of internal forces
+and tangent matrix or integrate a finite element. Such tools are provided by \em
+Basic interface and will be dealt with in later tutorials in the series.  
 
 \section basic_lessons1_start Essentials
 
 \subsection basic_lessons1_siplexes Integration of simplexes 
 
-Numerical integration of function \f$\rho\f$, is given by formula,
+Numerical integration of function \f$\rho\f$ is given by the following formula
 \f[
 \begin{align}
-  I(\rho) = \int_\Omega \rho \textrm{d}V \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
+  I(\rho) = \int_\Omega \rho \textrm{d}\Omega \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
 \end{align}
 \f]
-where \f$W_g\f$ is integration weight, \f$J_g\f$ is determinant of Jacobian, and \f$\rho^h_g\f$ is integrated 
-function, e.g. density. Typically sum of the integration weights is scaled by volume (measure) of reference element, 
-such that is weights equal to unity, as follows
+where \f$W_g\f$ is the integration weight, \f$J_g\f$ is the determinant of
+Jacobian, \f$\rho^h_g\f$ is the integrated 
+function, e.g. density, \f$G\f$ is the number of integration points per each
+element, and \f$N\f$ is the total number of elements in a mesh. Typically, sum
+of the integration weights is scaled by volume (measure) of the reference element, such that it equals to unity, as follows
 \f[
 \begin{align}
   \sum_{g=0}^{G-1} W_g  = 1 
@@ -76,7 +90,7 @@ Consequently, for such scaling for Jacobian we use:
   I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \rho^h_g
 \end{align}
 \f]
-where \f$v\f$ is volume of reference tetrahedron. 
+where \f$v\f$ is the volume of the reference tetrahedron. 
 
 - For triangle
 \f[
@@ -84,30 +98,36 @@ where \f$v\f$ is volume of reference tetrahedron.
   I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a)  \rho^h_g
 \end{align}
 \f]
-where \f$a\f$ is area of reference triangle.
+where \f$a\f$ is the area of the reference triangle.
 
 - For edge
 \f[
 \begin{align}
-  I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g l) \rho^h_g
+  I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g \ell) \rho^h_g
 \end{align}
 \f]
-where \f$l\f$ is length.
+where \f$\ell\f$ is the length.
 
 \subsection basic_lesson1_moments Moments of inertia
 
-The distribution of mass in the body can be characterised by inertia moments. Inertia moments have practical applications; they are used for analysis motion of rigid bodies, or to characterise crosssection are in structural analysis. 
+The distribution of mass in the body can be characterised by inertia moments. Inertia moments have practical applications, they are used for analysis motion of rigid bodies, or to characterise cross-section area in structural analysis. 
 
-In general inertia moments are tensors. Zero moments have one scalar coefficient; first moments are 1D arrays, i.e. vectors, and second moment is second-order tensors, which coefficients for convenience can be organised in 2d table, i.e. matrix. 
-This coefficient of moments depend on the observer, i.e. coordinate system, but is a strict rule, i.e. tensorial transformation rule, how coefficients of moments change with the observer. For zero moments, area, all is simple, the volume of an object can not be changed by looking at it from the different point and angle, so it the same in every coordinate system.
+In general, inertia moments are tensors. Zero moments have one scalar coefficient, first moments are 1D arrays, i.e. vectors, and second moment is second-order tensors, whose coefficients, for convenience, can be organised in 2D table, i.e. matrix. 
+This coefficient of moments depend on the observer, i.e. coordinate system, but
+there is a strict rule, i.e. tensorial transformation rule, how coefficients of
+moments change with the observer. For zero moments, area, all is simple, the
+volume of an object cannot be changed by looking at it from different points and
+angles, so it is the same in every coordinate system.
 
 - Zero inertia moment is a body mass, 
 \f[
 \begin{align}
-M := \int_\Omega \rho(\mathbf{x}) \textrm{d}V
+M := \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega
 \end{align}
 \f]
-where \f$\rho\f$ is the material density, and \f$\Omega\f$ is a body domain. Mass characterise how much force needs to be applied for desired body acceleration,\f$\a^i\f$, as stated by Newton's law:
+where \f$\rho\f$ is the material density, and \f$\Omega\f$ is a body domain.
+Mass characterises how much force needs to be applied for a desired body
+acceleration \f$a^i\f$ as stated by Newton's law:
 \f[
 \begin{align}
 a^i = M f^i
@@ -123,7 +143,7 @@ E_k = \frac{v^i M v^i}{2}
 - First inertia moment, is given by:
 \f[
 \begin{align}
-S^i := \int_\Omega \rho(\mathbf{x}) x^i \textrm{d}V
+S^i := \int_\Omega \rho(\mathbf{x}) x^i \textrm{d}\Omega
 \end{align}
 \f]
 where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravity of the body can be calculated as:
@@ -132,12 +152,13 @@ where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravity of the bod
 x_c^i = \frac{S^i}{M}.
 \end{align}
 \f]
-where \f$\mathbf{x}_c\f$ is gravity centre of the body, or system of the bodies, note at centre of gravity first moment of inertia is zero.
+where \f$\mathbf{x}_c\f$ is gravity centre of the body, or system of the bodies,
+noting that, at centre of gravity, first moment of inertia is zero.
 
 - Second inertia moment is defined as
 \f[
 \begin{align}
-I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}V
+I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}\Omega
 \end{align}
 \f]
 where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wiki/Outer_product">here</a>. The second moment of inertia, analogously to mass, characterises how much torque has to be applied at body origin for desired body acceleration, as follows:
@@ -146,7 +167,7 @@ where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wik
 \omega^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
 \end{align}
 \f]
-where \f$\boldsymbol\tau\f$ is a torque vector, and \f$\varepsilon^{jmn}\f$ is  <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>. The term in the bracket is a cross product of the force vector and arm on which force acts. The kinematic energy of the rotating body is 
+where \f$\boldsymbol\tau\f$ is a torque vector, and \f$\varepsilon^{jmn}\f$ is  <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>. The term in the bracket is the cross product of the force vector and arm on which force acts. The kinematic energy of the rotating body is 
 \f[
 \begin{align}
 E_k = \frac{\omega^i I^{ij} \omega^j}{2}
@@ -155,7 +176,7 @@ E_k = \frac{\omega^i I^{ij} \omega^j}{2}
 
 \section basic_lessons1_theory Theory 
 
-This section is not essential; you can skip it and come back to it later for a more in-depth understanding of the problem, move to implementation.
+This section is not essential, you can skip it and come back later for a more in-depth understanding of the problem, move to implementation.
 
 \subsection basic_lessons1_elements Integral over elements
 
@@ -196,7 +217,7 @@ Finally,  in the end, we will use the integration rule from the shelf. However, 
 
 \subsubsection basic_lessons1_approx Approximation of density field
 
-The remaining question is how to evaluate filed \f$\rho(\mathbf{x}^h_g)\f$ at integration points? In this case
+The remaining question is how to evaluate field \f$\rho(\mathbf{x}^h_g)\f$ at integration points? In this case
 \anchor lesson1_approx_rho
 \f[
 \begin{align}
@@ -224,11 +245,14 @@ can be achieved by using higher-order polynomials to approximate function \f$\rh
   \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi) \overline{x}^m_i 
 \end{align}
 \f]
-Above equation is not very different from equation \ref lesson1_approx_rho "(16)", the only difference is that is evaluated for every coefficient  \f$i=0..(d-1)\f$, where  \f$d\f$ is dimension of the problem, e.g. for 3D problem \f$d=3\f$. 
+ Equation \ref lesson1_map "(17)" is not very different from equation \ref
+ lesson1_approx_rho "(16)", the only difference is that is evaluated for every
+ coefficient  \f$i=0..(d-1)\f$, where  \f$d\f$ is the dimension of the problem,
+ e.g. for 3D problem \f$d=3\f$. 
 
 \subsubsection basic_lessons1_jacobian Jacobian
 
-Note that integration over the physical element is problematic; it is much easier to construct integration rule on the reference element and integrate on it. To change the integration domain form physical element to the reference element, the concept of a map, the tangent map, and Jacobian, is useful, to change physical integration coordinates to reference coordinates. Calculation of integration rule for an element can be complicated and time-consuming, however, if the rule on reference element is used, it can be precalculated and stored in the table to be used for all elements on the mesh.
+Note that integration over the physical element is problematic; it is much easier to construct integration rule on the reference element and integrate on it. To change the integration domain from physical element to the reference element, the concept of a map, the tangent map, and Jacobian, is useful, to change physical integration coordinates to reference coordinates. Calculation of integration rule for an element can be complicated and time-consuming, however, if the rule on reference element is used, it can be precalculated and stored in the table to be used for all elements on the mesh.
 
 From \ref basic_l1_figure_3 "Figure 3" we can see that infinitesimal local element can be mapped to element in physical space, that can be done by mapping infinitesimal vectors \f$d\pmb\xi_i\f$ into \f$d\mathbf{x}_i\f$, and it can be derived as follows. Expanding map at point \f$\mathbf{q}\f$ into Taylor series, we get
 \anchor baic_taylor_expansion
@@ -291,15 +315,15 @@ This is called out of source compilation since code and programs are located in 
 
 \note In default MoFEM installation you can create executables under another location, that  is
 \code 
-$HOME/mofem_install/um/build_opt/basic_finite_elements/basic
+$HOME/mofem_install/um/build_release/basic_finite_elements/basic
 \endcode
-Under \em build_opt location is optimised code, which is much faster, but harder to inspect with debugger. 
+Executable files \em build_release location are optimised, running much faster, but harder to inspect with debugger. 
 
 \subsection running_lesson_1 Running code
 
 To run code
 \code
-cd $HOME/mofem_install/build_opt/basic_finite_elements/basic
+cd $HOME/mofem_install/build_release/basic_finite_elements/basic
 ./basic_moment_of_inertia -file_name cube.h5m
 \endcode
 
@@ -327,25 +351,44 @@ First moment of inertia [ -4.3368e-19, -1.4095e-17, -1.3878e-17 ]
 Second moment of inertia [ 3.4961e-312, 1.0000e+00, 0.0000e+00; 6.9531e-310 8.3333e-02; -6.0715e-18 ]
 \endcode
 
-Code prints, at the beginning, the version of the MoFEM library. In the same line versions of MOAB and PETSc are printed respectively. This will enable to reproduce errors if occurred and fix bugs. Next information is printed that element has been added, i.e. \em dFE, and field DOFs for density field, i.e. \em rho. Here only DOFs on vertices are added. Thus linear approximation of density is considered. After that information about a number of finite elements is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of DOFs on rows & columns, i.e. 64, and other information related to mesh partitioning. Finally, the results are printed.
+Code prints, at the beginning, the version of the MoFEM library. In the same
+line versions of MOAB and PETSc are printed respectively. This will enable to
+reproduce errors if occurred and fix bugs. Next information is printed that
+element has been added, i.e. \em dFE, and field DOFs for density field, i.e. \em
+rho. Here only DOFs on vertices are added. Thus linear approximation of density
+is considered. After that, the information about the number of finite elements
+is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of
+DOFs on rows & columns, i.e. 64, and other information related to mesh
+partitioning. Finally, the results are printed.
 
 
 \subsection basic_lesson1_programming Editor
 
-You can use your favourite editor, vim, emacs, sublime, atom.io, if you have one, however, if you have no preferences we recommend <a href="https://code.visualstudio.com">vscode</a>. We have some tips on how you can configure it to make it work well with MoFEM, see \ref configure_vs_code.
+You can use your favourite editor, vim, emacs, sublime, atom.io, if you have
+one, however, if you have no preferences we recommend <a
+href="https://code.visualstudio.com">VS Code</a>. We have some tips on how you
+can configure it to make it work well with MoFEM, see \ref configure_vs_code.
 
-\note We have some programming conventions, and style of programming, see \ref coding_practice. You do not have to jump and learn conventions, you will pick-up style on the way, how children pick-up cultural conventions when they grow up. In MoFEM we are using clang-format, to help us unify programming style. Most of the editors use clang-format. For example how to do that in vscode is described <a href="https://code.visualstudio.com/docs/cpp/cpp-ide">here</a>. Keeping the same style, and learning and following programming conventions is important in the long term. MoFEM is open community code, and if everyone follows the agreed style, it improves code readability, and people understand each other better. 
+\note We have some programming conventions, and style of programming, see \ref
+coding_practice. You do not have to jump and learn conventions, you will pick-up
+style on the way like how children pick-up cultural conventions when they grow up.
+In MoFEM, we are using clang-format to help us unify programming style. Most of
+the editors use clang-format. For example, how to do that in VS Code is described
+<a href="https://code.visualstudio.com/docs/cpp/cpp-ide">here</a>. Keeping the
+same style, and learning and following programming conventions is important in
+the long term. MoFEM is open community code, and if everyone follows the agreed
+style, it improves code readability, and people understand each other better. 
 
 \subsection basci_lesson1_main Main function
 
 The main function is relatively short, and looks the same for every program 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp  main
 
-You can use the above snipped to start your code. Main function is responsible for kick-starting the job, and it has stages;
+You can use the above snippet to start your code. Main function is responsible for kick-starting the job, and it has stages;
 
 - The main programme begins with registering MoFEM DM interface in PETSc data structures. That enables transparent control of MoFEM database by PETSc solvers, and vice-versa use PETSc standard interface to create matrices, vectors, and other PETSc objects
 
-- Next, the MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MOAB database stores data about mesh, whereas MoFM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level of abstraction, on top of the MOAB database since finite element data are stored on data tags created on mesh entities. 
+- Next, the MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MOAB database stores data about mesh, whereas MoFEM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level of abstraction, on top of the MOAB database since finite element data are stored on data tags created on mesh entities. 
 
 - Finally, problem-specific example class is created, and calculations are executed in Example::runProblem.
 
@@ -358,19 +401,26 @@ try {
 }
 CATCH_ERRORS;
 \endcode
-That part of the code is responsible for handling all the error, initiated inside PETSc, MOAB, Boost, standard library, and MoFEM or developer functions. PETSc, MOAB, and MoFEM functions return error code, to handle them properly, do as follow
+This part of the code is responsible for handling all the errors, initiated inside PETSc, MOAB, Boost, standard library, and MoFEM or developer functions. PETSc, MOAB, and MoFEM functions return error code, to handle them properly, do as follow
 \code
   CHKERR PetscFunction();   // PETSc function
   CHKERR moab.function();   // MOAB function
   CHKERR m_field.function(); // MoFEM function
 \endcode
-Catching errors will make searching for runtime errors easier, and in case of the problem allow for seeking help, see \ref guidelines_bug_reporting.
+Catching errors will make searching for runtime errors easier, and in case of
+the problem appearing, for seeking help, see \ref guidelines_bug_reporting.
 
-\note When you programme, you can encounter two types of error, <em>compilation errors</em>, and <em>runtime errors</em>. <em>Compilation errors</em> are most often a syntax error, which prevent the compiler from making program, you see them when you run \em make programme. Runtime errors are caused by some bug in the programme, segmentation-fault, overflow, bad algorithm or you run of computer resources, e.g. memory. Those errors need to be handled, to indicate user what is the problem, where it is.
+\note When you program, you can encounter two types of error, <em>compilation
+errors</em> and <em>runtime errors</em>. <em>Compilation errors</em> are most
+often a syntax error, which prevents the compiler from making program, you see
+them when you run \em make programme. <em>Runtime errors</em> are caused by some
+bug in the programme such as segmentation-fault, overflow, bad algorithm or you
+run out of computer resources, e.g. memory. Those errors need to be handled, to
+indicate user what is the problem, where it is.
 
 \subsection basic_lesson1_example_class Example class
 
-Each lesson has an example class, which has a very similar structure to following:
+Each lesson in the tutorial series has an example class, which has a very similar structure as following:
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Example
 
 where Example::runProblem called by the main programme is as follows
@@ -382,7 +432,7 @@ MoFEMFunctionBegin;
 \\ function body
 MoFEMFunctionReturn(0);
 \endcode
-That enable to stack functions calls in case of problems. We use functions stack to see what functions, on what lines have been called prior to the error.
+That enables stacking functions calls in case of problems. We use functions stack to see what functions, on what lines have been called prior to the error.
 
 \subsubsection basic_lesson1_example_setup Setup problem
 
@@ -390,11 +440,15 @@ Before calculation can be performed, some bookkeeping has to be done to manage c
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set up problem
 
-Note that function adds field, which is defined by name, space, approximation base, and rank. To approximate density, we choose space of integrable functions and its derivatives, use recipe form \cite NME:NME847 to construct base functions, and rank of the base is one since density is a scalar field. The order of approximation is set to one, i.e. linear functions are used. 
+Note that function adds field, which is defined by name, space, approximation base, and rank. To approximate density, we choose space of integrable functions and its derivatives, use recipe from \cite NME:NME847 to construct base functions, and rank of the base is one since density is a scalar field. The order of approximation is set to one, i.e. linear functions are used. 
 
 \subsubsection basic_lesson1_example_common_data Common data structure 
 
-The common data structure is used to exchange data between operators run by finite elements. It is a convenient method that allows to group data evaluated at integration points which in element, or aggregate data from all elements to be later used by other parts of the code. You will find common data in all examples for the following lessons, and other parts of MoFEM implementations. 
+The common data structure is used to exchange data between operators run by
+finite elements. It is a convenient method that allows to group data evaluated
+at integration points which are in element, or aggregate data from all elements to
+be used later by other parts of the code. You will find common data in all
+examples for the following lessons, and other parts of MoFEM implementations. 
 
 Common data structure is defined as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Common data
@@ -402,7 +456,14 @@ Common data structure is defined as follows
 and instance is created by method
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
 
-where memory for Example::CommonData is allocated and handled by <a href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared pointer</a>. Using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a> and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to vector  \em rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is created, we using here MoFEM::SmartPetscObj, which is special smart pointer for handling PETSc objects. 
+where memory for Example::CommonData is allocated and handled by <a
+href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared
+pointer</a>. Using <a
+href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a>
+and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to
+vector  \em rhoAtIntegrationPtsPtr can be obtained. Finally PETSc vector is
+created, we are using here MoFEM::SmartPetscObj, which is a special smart
+pointer for handling PETSc objects. 
 
 Smart pointers, boost::shared_ptr and MoFEM::SmartPetscObj, are used to maintain the life of dynamically allocated objects. You can think about smart pointers as a regular pointer, and to an understanding following code you do not have to know more about them. More explanation is needed for
 \code
@@ -418,9 +479,24 @@ else
 commonDataPtr->petscVec = createSmartVectorMPI(
   mField.get_comm(), local_size, CommonData::LAST_ELEMENT);
 \endcode
-this is smart pointer to PETSc Vector, it is created by function MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here is equal 10, since we store mass, three first moments, and six-second moments of inertia, in order as it is in Example::CommonData::VecElements. Local size of the vector is ten, which is equal to Example::CommonData::VecElements::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor one. The global size of the vector is a sum of all local size, and thus is ten, i.e. CommonData::VecElements::VecElements, see \ref basic_l1_figure_4 "Figure 4".
+this is smart pointer to PETSc Vector, it is created by function
+MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described
+<a
+href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>.
+Function needs to be provided with commentator, hereby \em mField.get_comm(),
+which is a communicator of MoFEM. Communicator holds a group of processes that
+can communicate with each other. Next local size of the vector is provided, here
+is equal 10, since we store mass, three first moments, and six second moments of
+inertia, in the order as it is in Example::CommonData::VecElements. Local size of
+the vector is ten, which is equal to
+Example::CommonData::VecElements on the first processor, and zero
+on other processors. It means that all data will be accumulated on processor
+0 as shown in \ref basic_l1_figure_4 "Figure
+4". The global size of the vector is a sum of all local size, and thus is ten,
+i.e. CommonData::VecElements.
 
-In all the following lessons, including this one, we implemented code to make it work distributed meshes. 
+In all the following lessons, including this one, we implemented code to make it
+work with distributed meshes. 
 
 \anchor basic_l1_figure_4 
 \image html basic_lesson1_partitioning.png "Figure 4: Mesh partitioning" width=800px
@@ -433,30 +509,57 @@ For simplicity, dentistry is set to unity, at each mesh node. That creates a uni
 
 \subsubsection basic_lesson1_operators Operators and pipelines
 
-To make calculations in MoFEM, you can use \em Basic interface. You need to provide code with operators who are executed on finite element entities on the mesh. Operators can do various tasks, for example, evaluate field values at integration points, e.g. calculating \f$\rho_g^h\f$. You will use operators as well to compute integrals when you calculate volume, the first moment of inertia, or second moment of inertia. In other examples, operators are used to calculating differential operators, like gradient, divergence, etc., or assemble internal force vector. 
+To make calculations in MoFEM, you can use \em Basic interface. You need to provide code with operators which are executed on finite element entities on the mesh. Operators can do various tasks, for example, evaluate field values at integration points, e.g. calculating \f$\rho_g^h\f$. You will use operators as well to compute integrals when you calculate volume, the first moment of inertia, or second moment of inertia. In other examples, operators are used to calculating differential operators, like gradient, divergence, etc., or assemble internal force vector. 
 
-You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. That is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, used while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. Solver only has to be provided with problem specific set of operators, however implementation of operators is independent on type of solver. 
+You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. There is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, used while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. Solver only has to be provided with problem specific set of operators, however implementation of operators is independent on type of solver. 
 
-The developer provides MoFEM with operators who are executed on each element. In particular, those operators are executed on each sub-entity of the element, for example, finite triangle element is made from entities; nodes, three edges and triangle itself. Operators are executed for each entity of finite element. In this lesson, since density field is exclusively defined on nodes, operators are run for nodes only. However, that is a special case.
+The developer provides MoFEM with operators which are executed on each element.
+In particular, those operators are executed on each sub-entity of the element,
+for example, finite triangle element is made from entities of nodes, three edges
+and triangle itself. Operators are executed for each entity of finite element.
+In this lesson, since density field is exclusively defined on nodes, operators
+are run for nodes only. However, this is a special case.
 
-On each finite element, several operators can be run in sequence. In principle, operators are used to breaking down a complex problem on simpler tasks. Each operator is implemented such that it iterates over integration points on the element. Operators are derived classes and provide some basic functions,  vary for different element shapes, however always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
+On each finite element, several operators can be run in sequence. In principle, operators are used to break down a complex problem in simpler tasks. Each operator is implemented such that it iterates over integration points on the element. Operators are derived classes and provide some basic functions,  vary for different element shapes, however always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
 
-Writing operator for your problem, you do not have to think what type of entity element is, implementation is independent on element shape, approximation order, and if other fields used on the element. 
+Writing operator for your problem, you do not have to think about what type of
+entity element is, implementation is independent on element shape, approximation
+order, and if there are other fields used on the element. 
 
-Shape functions on each finite element can differ, depending on what approximation spaces You choose to use. Also, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson in function Example::setUP we have defined density filed as
+Shape functions on each finite element can be different, depending on what approximation spaces you choose to use. Also, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson, in function Example::setUP we have defined density field as
 \code 
 CHKERR simple->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE, 1);
 CHKERR simple->setFieldOrder("rho", 1);
 \endcode
-\em H1 means that standard-conforming elements are used, and approximation order is one. Conforming element means that approximation function is continuous along element edges and at the node. \em H1 means that is piecewise continuous, mathematically speaking such function is integrable and gradients of the function are integrable. Integrable means that when you calculate integral, it has finite value, different than \f$+/-\infty\f$, i.e. is some real number. Approximation order 1, means that is linear piecewise continuous. To build approximation base, we are using recipe AINSWORTH_LEGENDRE_BASE, which is described in details here \cite ainsworth2001essential. However, since we use the first order, shape functions are  no different  as presented in \ref basic_l1_figure_2 "Figure 2".
+\em H1 means that standard-conforming elements are used, and approximation order
+is one. Conforming element means that approximation function is continuous along
+element edges and at the node. \em H1 means that is piecewise continuous,
+mathematically speaking such function itself is integrable and gradients of the
+function are also integrable. Integrable means that when you calculate integral, it
+gives finite value, other than \f$+/-\infty\f$, i.e. the result is a real
+number. 
+Approximation order 1 means that is linear piecewise continuous. To build
+approximation base, we are using recipe AINSWORTH_LEGENDRE_BASE, which is
+described in details here \cite ainsworth2001essential. However, since we use
+the first order, shape functions are  no different  as presented in \ref
+basic_l1_figure_2 "Figure 2".
 
-Our main task in this lesson is to calculate volume, the first moment of inertia and the second moment of inertia. In order to do that, on each element, we have to calculate density integration points, then calculate moments. That is depicted on \ref basic_l1_figure_5 "Figure 5 " by user data operators (UDOs) shown by four green boxes. \ref basic_l1_figure_5 "Figure 5" also depict the flow of data between operators, through \em Example::CommonData structure. 
+Our main task in this lesson is to calculate volume, the first moment of inertia
+and the second moment of inertia. In order to do that, on each element, we have
+to calculate density at integration points, then calculate moments of inertia. That is
+depicted on \ref basic_l1_figure_5 "Figure 5 " by user data operators (UDOs)
+shown by four green boxes. \ref basic_l1_figure_5 "Figure 5" also depict the
+flow of data between operators, through \em Example::CommonData structure. 
 
 On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values at integration points, in Example::CommonData::rhoAtIntegrationPts. Then in operators Example::OpZero, Example::OpFirst, and Example::OpSecond, the vector which has a size equal to the number of integration points on the element is used to evaluate moments. Moments from each element are assembled to Example::CommonData::petscVec. Once all elements are evaluated, vector Example::CommonData::petscVec results which are printed at the end of the programme. 
 
 Operators have to be pushed into pipelines through MoFEM::Basic interface.  MoFEM::Basic has several streams of pipelines, to evaluate matrices and vector, and which are executed on domain and boundary (skin) elements. Here we integrate vector iterating domain element, see \ref basic_l1_figure_5 "Figure 5", red box on the left. Operators are pushed to the pipeline by executing the following code
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Push operators to pipeline
-In snipped above you can see four operators pushed in sequence, like in \ref basic_l1_figure_5 "Figure 5". Operators are pushed to \em basic->getOpDomainRhsPipeline(), that is a sequence to calculate vectors on domain finite elements. We call it sequence since operators are executed on finite elements in order which are pushed.
+In snipped above you can see four operators pushed in sequence, like in \ref
+basic_l1_figure_5 "Figure 5". Operators are pushed to \em
+basic->getOpDomainRhsPipeline(), that is a sequence to calculate vectors on
+domain finite elements. We call it sequence since operators are executed on
+finite elements in the order that they are pushed.
 
 To set integration points at which base functions are evaluated, user needs to specify integration rule, that is done by following code
 \code
@@ -471,7 +574,12 @@ Function \em integration_rule calculate rule by taking approximation order and a
 Calculations are triggered in function
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Integrate
 
-in particular by MoFEM::Basic::loopFiniteElements. At that point created sequence, implementation of operators, and evaluation is triggered. This is when all is happening, the rest of the code is declaration and definition of the problem. Snipped above as well show that vector of moments, i.e. Example::CommonData::petscVec, is zeroed, and after integration over all elements is assembled.
+in particular by MoFEM::Basic::loopFiniteElements. At that point created
+sequence, implementation of operators, and evaluation is triggered. This is when
+all is happening, the rest of the code is declaration and definition of the
+problem. Snipped above as well shows that vector of moments, i.e.
+Example::CommonData::petscVec, is zeroed after integration over all elements is
+assembled.
 
 Operator Example::OpSecond second is defined as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Operator
@@ -480,7 +588,7 @@ Operators are derived classes, where essential part is overloaded function Examp
 Finally we can look at function Example::OpSecond::doWork
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp SecondOp
 
-We choose that operator since it is most complex from all three operators. We will dissect that code to understand it better.  We start by getting a number of integration points, which depend on the previously set integration rule. In the following lines, three tensors are declared, i.e. tensor (scalar) is set to weights and densities, and tensor of rank one (vector) is set to coordinates. Those three tensors point to values at the first integration point.  
+We choose that operator since it is the most complex one among all three operators. We will dissect that code to understand it better.  We start by getting a number of integration points, which depend on the previously set integration rule. In the following lines, three tensors are declared, i.e. tensor (scalar) is set to weights and densities, and tensor of rank one (vector) is set to coordinates. Those three tensors point to values at the first integration point.  
 
 Next, we create an array to store local values of the second moment of inertia. The second order of inertia is a symmetric tensor of rank two, which in three dimensions has six independent components. The array is continuous in the memory, it takes the shape of the tensor when the following code is run
 \code
@@ -497,9 +605,18 @@ With all above at hand finally loop over integration points is made, and all fun
 ++t_x;
 \endcode
 
-After looping over integration points is made, local element vector \em t_I is assembled into a global vector Example::CommonData::petscVec. Note that vector Example::CommonData::petscVec store all moments of inertia, on first index first moment, i.e. volume, on next three indices store the first moment, and on last six indices second moment. For better clarity, indices are enumerated by Example::CommonData::VecElements.
+After looping over integration points is made, local element vector \em t_I is
+assembled into a global vector Example::CommonData::petscVec. Note that vector
+Example::CommonData::petscVec store all moments of inertia, first index stores
+the zero moment, i.e. volume, next three indices store the first moment, and
+last six indices store the second moment. For better clarity, indices are
+enumerated by Example::CommonData::VecElements.
 
-\note At this point, you might feel that you are overwhelmed with information. This is natural, try to play with the code, make changes, or to debug it. Do not try to understand all at once, start with the thing you can understand and control. Each of the current MoFEM contributors and developers was at the stage were are you now.
+\note At this point, you might feel that you are overwhelmed with information.
+This is natural, try to play with the code, make changes, or to debug it. Do not
+try to understand all at once, start with the thing you can understand and
+control. Each of the current MoFEM contributors and developers was at the stage
+where you are now.
 
 \subsection basic_lesson1_checking Checking code validity
 
@@ -542,11 +659,16 @@ Moreover, once your commits are submitted to the repository, MoFEM Jenkins serve
 \section Debugging 
 
 Debugging is method used to find errors or to understanding what code does. Debugger is a program for debugging, which enables user to execute code line by line and observe, or break (stop) code at desired lines of the source code. 
-When you work in Linux, you can use GDB to debug code.If you work on OSX, you will instead you will use LLDB  debugger.
+When you work in Linux, you can use GDB to debug code.If you work on macOS, you will instead you will use LLDB  debugger.
 
-Code has to be compiled with debugging flags, and when you installed code using script, code with debugging flags is available in \em $HOME/mofem_install/um/build_debug/basic_finite_elements/basic.
+Code has to be compiled with debugging flags, and when you installed MoFEM using
+<a href="http://mofem.eng.gla.ac.uk/mofem/html/install_spack.html#installation_scripts">script for developer</a>, code with debugging flags is available in \em 
+$HOME/mofem_install/um/build_debug/basic_finite_elements/basic.
 
-VSCode has built-in functionality to debug code, both on Linux and OSX, for details on how to use it, see <https://code.visualstudio.com/docs/editor/debugging>. Here is an example of the launch (in VSCode) configuration for LLDB and example from this lesson
+VS Code has built-in functionality to debug code, both on Linux and macOS, for
+details on how to use it, see
+<https://code.visualstudio.com/docs/editor/debugging>. Here is an example of the
+launch (in VS Code) configuration for LLDB and example from this lesson
 \code
     {
       "type": "lldb",
