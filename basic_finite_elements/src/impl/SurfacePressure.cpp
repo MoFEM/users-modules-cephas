@@ -273,8 +273,8 @@ MoFEMErrorCode NeumannForcesSurface::OpGetTangent::doWork(
                                       &data.getDiffN()(gg, 1), 2);
 
     FTensor::Tensor1<double *, 3> t_dof(&data.getFieldData()[0],
-                                          &data.getFieldData()[1],
-                                          &data.getFieldData()[2], 3);
+                                        &data.getFieldData()[1],
+                                        &data.getFieldData()[2], 3);
     for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
       t_1(i) += t_dof(i) * t_N(0);
       t_2(i) += t_dof(i) * t_N(1);
@@ -285,7 +285,7 @@ MoFEMErrorCode NeumannForcesSurface::OpGetTangent::doWork(
     ++t_2;
   }
 
-    MoFEMFunctionReturn(0);
+  MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
@@ -316,7 +316,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
-  
+
   auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
     return FTensor::Tensor2<double *, 3, 3>(
         &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
@@ -363,7 +363,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
 
       int bbr = 0;
       for (; bbr != nb_base_fun_row; bbr++) {
-        
+
         make_vec_der(der_normal_mat, t_N, t_1, t_2);
 
         auto d_n = get_tensor2(der_normal_mat, 0, 0);
