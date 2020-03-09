@@ -319,8 +319,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   };
 
   auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                          FTensor::Tensor1<double *, 3> t_1,
-                          FTensor::Tensor1<double *, 3> t_2) {
+                         FTensor::Tensor1<double *, 3> t_1,
+                         FTensor::Tensor1<double *, 3> t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
@@ -353,7 +353,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
       for (; bbr != nb_base_fun_row; ++bbr) {
 
         auto t_d_n = make_vec_der(t_N, t_1, t_2);
-        
+
         auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
 
         // TODO: handle hoGeometry
@@ -597,8 +597,8 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
   };
 
   auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
-                          FTensor::Tensor1<double *, 3> t_1,
-                          FTensor::Tensor1<double *, 3> t_2) {
+                         FTensor::Tensor1<double *, 3> t_1,
+                         FTensor::Tensor1<double *, 3> t_2) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;

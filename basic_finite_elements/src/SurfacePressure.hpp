@@ -224,9 +224,7 @@ struct NeumannForcesSurface {
 
     EntData *faceRowData;
 
-    DataAtIntegrationPts() {
-      faceRowData = nullptr;
-    }
+    DataAtIntegrationPts() { faceRowData = nullptr; }
 
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
