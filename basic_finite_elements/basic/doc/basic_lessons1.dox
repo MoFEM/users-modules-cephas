@@ -518,7 +518,7 @@ CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 \endcode
 Function \em integration_rule calculate rule by taking approximation order and adding two. Since under the second moment, the integral function is polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and two emerge from term \f$x^ix^j\f$. This is the highest polynomials evaluated out of three operators. Integration rule set as above enables to calculate three moments of inertia exactly, and only error comes from geometry approximation and approximation of density by piecewise polynomial.
 
-Since we use piecewise linear polynomial to approximate density,\f $p=1\f$, and thus highest order polynomial is for the second moment of inertia and is three, so integration rule set by the code will be three. Note setting integration rule to a higher value would increase the number of integration points, and that will not change results. Although, setting higher integration rule that is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
+Since we use piecewise linear polynomial to approximate density, i.e. \f$p=1\f$, and thus highest order polynomial is for the second moment of inertia and is three, so integration rule set by the code will be three. Note setting integration rule to a higher value would increase the number of integration points, and that will not change results. Although, setting higher integration rule that is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
 
 \anchor basic_l1_figure_7
 \image html basic_lesson1_ops.png "Figure 7: Operators and common data" width=800px 
@@ -526,12 +526,7 @@ Since we use piecewise linear polynomial to approximate density,\f $p=1\f$, and 
 Calculations are triggered in function
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Integrate
 
-in particular by MoFEM::Basic::loopFiniteElements. At that point created
-sequence, implementation of operators, and evaluation is triggered. This is when
-all is happening, the rest of the code is declaration and definition of the
-problem. The snippet above shows as well that vector of moments, i.e.
-Example::CommonData::petscVec, is zeroed after integration over all elements is
-assembled.
+in particular by MoFEM::Basic::loopFiniteElements. At that point created sequence, implementation of operators, and evaluation are triggered. This is when all is happening, the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed, next after integration over all elements are assembled.
 
 Operator Example::OpSecond second is defined as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Operator
