@@ -365,7 +365,7 @@ This part of the code is responsible for handling all the errors, initiated insi
   CHKERR m_field.function(); // MoFEM function
 \endcode
 Catching errors will make searching for runtime errors easier, and in case of
-the problem appearing, for seeking help, see \ref guidelines_bug_reporting.
+the problem appearing, for seeking help, see \ref guidelines_bug_reporting. CHKERR is a macro which check error code returned by the function, and if returned code indicates an error, program stops and print error.
 
 \note When you program, you can encounter two types of error, <em>compilation
 errors</em> and <em>runtime errors</em>. <em>Compilation errors</em> are most
