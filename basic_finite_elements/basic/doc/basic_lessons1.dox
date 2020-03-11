@@ -1,5 +1,7 @@
 /*! \page basic_lessons1 Integration on finite  element mesh
 
+\note Draft version
+
 \section basic_lessons1_itro Introduction
 
 The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except collocation method) used to solve partial differential equations (PDEs).
