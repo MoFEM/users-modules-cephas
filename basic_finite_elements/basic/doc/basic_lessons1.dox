@@ -2,19 +2,17 @@
 
 \section basic_lessons1_itro Introduction
 
-The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except collocations methods) used to solve partial differential equations (PDEs).
+The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except collocation method) used to solve partial differential equations (PDEs).
 
 The most straightforward interpretation of the finite element method is considering it as a method for integration of functions on complex shapes.  The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad,  tetrahedron, or hex, and on each element, integration rule on primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which over and over, the same simple procedure is executed. Such repeatable tasks make it a perfect method for a computer.
 
 We will present the problem of numerical integration by calculating moments of inertia. Moments of inertia characterise the distribution and amount of the mass in the body and have various engineering applications. 
 
-First, we explain essentials, then provide a definition of the moments. Following section is dedicated to the Theory, and finally, we show implementation details in the MoFEM.
+First, we explain essentials, then provide a definition of the moments. Next section is dedicated to the theory, and finally, we show implementation details in the MoFEM. 
 
 \section basic_lessons1_start Essentials
 
 \subsection basic_lessons1_siplexes Integration on simplexes.
-
-\note In geometry, a simplex is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions.
 
 Numerical integration of function \f$\rho\f$ is given by the following formula
 \f[
@@ -32,6 +30,7 @@ of the integration weights is scaled by volume (measure) of the reference elemen
   \sum_{g=0}^{G-1} W_g  = 1 
 \end{align}
 \f]
+In the following sections, we explain how the above sum is evaluated and give some details about Jaconian.  
 
 Consequently, for such scaling for Jacobian we use:
 
@@ -58,6 +57,8 @@ where \f$a\f$ is the area of the reference triangle.
 \end{align}
 \f]
 where \f$\ell\f$ is the length.
+
+\note In geometry, a simplex is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions.
 
 \tableofcontents
 
@@ -139,7 +140,7 @@ The integral of function \f$\rho(\mathbf{x})\f$, where coordinate \f$\mathbf{x}\
   I(\rho) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} f(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} I_\mathcal{T}
 \end{align}
 \f]
-You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by a mesh. Mesh is assembled from non-overlapping elements, see mesh on the left \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 2", you can see that geometry is complex, and contains patches from a sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>Shape Functions</em>. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$, to indicate that given quantity is approximated, and thus there is some error associated with the approximation.
+You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by a mesh. Mesh is assembled from non-overlapping elements, see mesh on the left \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from a sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>Shape Functions</em>. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$, to indicate that given quantity is approximated, and thus there is some error associated with the approximation.
 
 \anchor basic_l1_figure_1
 \image html basic_shape_function.png "Figure 1: Finite element mesh shape functions, and integration points" width=800px
@@ -225,7 +226,7 @@ where Jacobian is
   \right|_\mathbf{P} \overline{\mathbf{x}}^m_i
   \end{align}
 \f]
-In eq. \ref baic_taylor_expansion "(18)", higher-order term on the right can be omitted, since we focus attention on infinitesimal elements in reference element and physical element, that is  \f$dA\f$ and \f$da\f$, respectively. For example element \f$dA\f$ has size \f$\|d\pmb\xi\| \ll 1 \f$ and can be assumed that \f$\|d\pmb\xi\|^2 = 0\f$, without making any error. Note that once the higher-order terms are omitted, equation mapping domain in vicinity of point in reference element, into the domain in vicinity of the physical element is linear, and we called it a tangent map. Is the tangent map since it is accurate only for in vicinity point. Like a tangent plane pinned to the earth, glob can represent distances accurately between locations only in small vicinity where is pinned. 
+In eq. \ref baic_taylor_expansion "(18)", higher-order term on the right can be omitted, since we focus attention on infinitesimal elements in reference element and physical element, that is  \f$dA\f$ and \f$da\f$, respectively. For example element \f$dA\f$ has size \f$\|d\pmb\xi\| \ll 1 \f$ and can be assumed that \f$\|d\pmb\xi\|^2 = 0\f$, without making any error. Note that once the higher-order terms are omitted, equation mapping domain in vicinity of point in reference element, into the domain in vicinity of the physical element is linear, and we called it a tangent map. Is the tangent map since it is accurate only for in the vicinity of the tangent point. Like a tangent plane pinned to the earth, glob can represent distances accurately between locations only in the small range from where is pinned. 
 
 Using above derivation for Jacobian, in general, 3D case, i.e. tetrahedron, or hexahedron, infinitesimal element volume at integration point \f$g\f$ in physical configuration can be expressed as
 \f[
@@ -354,6 +355,8 @@ You can use the above snippet to start your code. The main function is responsib
 Errors are caught at the end, see 
 \code
 try {
+
+  // Some code here
 
 }
 CATCH_ERRORS;
@@ -515,6 +518,8 @@ CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 \endcode
 Function \em integration_rule calculate rule by taking approximation order and adding two. Since under the second moment, the integral function is polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and two emerge from term \f$x^ix^j\f$. This is the highest polynomials evaluated out of three operators. Integration rule set as above enables to calculate three moments of inertia exactly, and only error comes from geometry approximation and approximation of density by piecewise polynomial.
 
+Since we use piecewise linear polynomial to approximate density,\f $p=1\f$, and thus highest order polynomial is for the second moment of inertia and is three, so integration rule set by the code will be three. Note setting integration rule to a higher value would increase the number of integration points, and that will not change results. Although, setting higher integration rule that is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
+
 \anchor basic_l1_figure_7
 \image html basic_lesson1_ops.png "Figure 7: Operators and common data" width=800px 
 
@@ -632,6 +637,5 @@ launch (in VS Code) configuration for LLDB and example from this lesson
 \section basci_lesson1_code Code
 
 The full source code is available here \ref basic/basic_moment_of_inertia.cpp .
-// \include users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp 
 
 */
