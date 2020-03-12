@@ -2,12 +2,16 @@
 
 \section basic_lessons1_who Who we think you are.
 
-This is a basic lesson intended to give new developers an introduction to the implementation of bespoke finite element codes in MoFEM library. In this and other tutorials, the assumption is that you, as a new MoFEM developer, have at least an essential fluency in C++ programming. It is also assumed that  you are an engineer or a physicist or a mathematician who has an interest in solving Partial Differential Equations (PDEs) using finite element methods. In this tutorial, the mathematical abstractions are kept as basic as possible. 
+This series of basic lessions intended to give new developers an introduction to
+the implementation of bespoke finite element codes in MoFEM library. It is
+assumed that you, as a new MoFEM developer, have at
+least an essential fluency in C++ programming and that you are
+an engineer/physicist/mathematician who has an interest in solving
+Partial Differential Equations (PDEs) using finite element methods. In these lessons, the mathematical abstractions are kept as basic as possible.  
 
-If you are reading these lessons, and fail to understand its content, it is most likely that it is the authors' fault for not expressing ideas clear enough. If that is the case, you can ask questions on our
+If you follow on of the lessons and fail to understand its content, it is most likely our fault not expressing ideas clear enough. If that is the case, you can ask questions on our
 <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a>, or join us our group discussion platform on 
-<a href="https://mofem.slack.com/">Slack</a>. Your comments are valuable to us and help to improve the work. 
-If you are keen to contribute, starting from improving tutorials is the best way. 
+<a href="https://mofem.slack.com/">Slack</a>. Your comments are valuable to us and help to improve the work. If you are keen to contribute, starting from improving tutorials is the best way. 
 
 \note The questions in the <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can 
 be tagged/labelled. If you tag question as lesson1, yours and others' questions will be easily grouped 
@@ -25,22 +29,42 @@ which a broad class of nonlinear problems can be solved.
 \section basic_lessons1_interfaces MoFEM interfaces
 
 
-MoFEM provides interfaces with varying level of abstractions. The lower level abstraction is harder to use, and demands much detailed 
-knowledge about the design MoFEM and how it works. Higher-level abstraction limits flexibility, but makes implementation 
-faster and simpler. Here, we use \em Simple and \em Basic interfaces, which complement each other.
+MoFEM provides different interfaces with varying purposes and level of abstractions.
+
+Categorised by purposes, there are two main groups of the interfaces. The first
+group involves the book keeping which builds the rules (definition) for
+generation of integration points, managing degrees of freedom (DOFs), and assembling of the matrix/vector. 
+This group includes \em Core interface and \em Simple interface. Meanwhile, the
+second group deals with the operator implementation that calculates 
+the actual value of each component in matrices/vectors that is going to be
+filled using one of the interfaces in the previous group. An example of an
+interface that belongs to this second group is \em Basic interface.
+
+
+Catergorised by the level of abstraction, there are also two main groups of
+interfaces, namely higher-level and lower-level. Higher-level abstraction, e.g.
+\em Simple interface enables faster and simpler implementation but with limit
+flexibility in terms of range of problems that can be solved. Meanwhile, the
+lower-level abstraction, e.g. \em Core interface, offers highest flexibility but
+can be harder to use and demands more detailed knowledge about the design MoFEM
+and how it works. 
+
+For the purpose of preliminary tutorials, we use the combination of \em Simple
+and \em Basic interfaces that complement to each other. More details about the
+two interfaces are explained in the following parts.
 
 \anchor basic_l1_figure_0
 \image html mofem_apis_les1.png "Figure: MoFEM programming interfaces" width=700px
 
 The \em Simple interface is used to add approximation fields (e.g., density,
-displacement, e.t.c.). It also delivers a Discrete Manager (DM), which is a
-class that handles the management of degree-of-freedoms between the mesh and the
+displacement, etc.). It also delivers a Discrete Manager (DM), which is a
+class that handles the management of DOFs between the mesh and the
 discrete system. Instances of DM can create global matrices and vectors.
 The \em Simple interface allows 
 for multiple fields, integration on the domain, boundary and skeleton.  It also
 permits heterogeneous mesh, e.g. meshes with triangles and quads, and
 heterogeneous approximation order. 
-However, it assumes that fields and finite elements spaces, such as \f$L^2\f$, \f$H^1\f$, e.t.c., are set on the entire domain or boundary 
+However, it assumes that fields and finite element spaces, such as \f$L^2\f$, \f$H^1\f$, etc., are set on the entire domain or boundary 
 of the mesh. This is not always the case, as a problem may consist of various
 fields at different parts of the domain. The \em Simple interface also assumes
 that the problem being implemented has fixed dimension, and does not allow for
