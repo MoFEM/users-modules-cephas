@@ -2,14 +2,14 @@
 
 \section basic_lessons1_who Who we think you are.
 
-This series of basic lessions intended to give new developers an introduction to
+This series of basic lessons is intended to give new developers an introduction to
 the implementation of bespoke finite element codes in MoFEM library. It is
 assumed that you, as a new MoFEM developer, have at
 least an essential fluency in C++ programming and that you are
 an engineer/physicist/mathematician who has an interest in solving
 Partial Differential Equations (PDEs) using finite element methods. In these lessons, the mathematical abstractions are kept as basic as possible.  
 
-If you follow on of the lessons and fail to understand its content, it is most likely our fault not expressing ideas clear enough. If that is the case, you can ask questions on our
+If you follow one of the lessons and fail to understand its content, it is most likely our fault not expressing ideas clear enough. If that is the case, you can ask questions on our
 <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a>, or join us our group discussion platform on 
 <a href="https://mofem.slack.com/">Slack</a>. Your comments are valuable to us and help to improve the work. If you are keen to contribute, starting from improving tutorials is the best way. 
 
@@ -32,8 +32,8 @@ which a broad class of nonlinear problems can be solved.
 MoFEM provides different interfaces with varying purposes and level of abstractions.
 
 Categorised by purposes, there are two main groups of the interfaces. The first
-group involves the book keeping which builds the rules (definition) for
-generation of integration points, managing degrees of freedom (DOFs), and assembling of the matrix/vector. 
+group involves the bookkeeping which builds the rules (definition) for
+the generation of integration points, managing degrees of freedom (DOFs), and assembling of the matrix/vector. 
 This group includes \em Core interface and \em Simple interface. Meanwhile, the
 second group deals with the operator implementation that calculates 
 the actual value of each component in matrices/vectors that is going to be
@@ -41,8 +41,8 @@ filled using one of the interfaces in the previous group. An example of an
 interface that belongs to this second group is \em Basic interface.
 
 
-Catergorised by the level of abstraction, there are also two main groups of
-interfaces, namely higher-level and lower-level. Higher-level abstraction, e.g.
+Categorised by the level of abstraction, there are also two main groups of
+interfaces, namely higher-level and lower-level. The higher-level abstraction, e.g.
 \em Simple interface enables faster and simpler implementation but with limit
 flexibility in terms of range of problems that can be solved. Meanwhile, the
 lower-level abstraction, e.g. \em Core interface, offers highest flexibility but
