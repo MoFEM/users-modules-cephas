@@ -8,13 +8,13 @@ The most straightforward interpretation of the finite element method is consider
 
 We will present the problem of numerical integration by calculating moments of inertia. Moments of inertia characterise the distribution and amount of the mass in the body and have various engineering applications. 
 
-First, we explain essentials, then provide a definition of the moments. Following section is dedicated to the Theory, and finally, we show implementation details in the MoFEM.
+First, we explain essentials, then provide a definition of the moments. Following section is dedicated to the Theory, and finally, we show implementation in MoFEM.
 
 \section basic_lessons1_start Essentials
 
 \subsection basic_lessons1_siplexes Integration on simplexes.
 
-\note In geometry, a simplex is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions.
+\note In geometry, a <a href="https://en.wikipedia.org/wiki/Simplex">simplex</a> is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions.
 
 Numerical integration of function \f$\rho\f$ is given by the following formula
 \f[
@@ -65,7 +65,7 @@ where \f$\ell\f$ is the length.
 
 The distribution of mass in the body can be characterised by inertia moments. Inertia moments have practical applications, they are used for analysis motion of rigid bodies, or to characterise cross-section area in structural analysis. 
 
-In general, inertia moments are tensors. Zero moments have one scalar coefficient, first moments are 1D arrays, i.e. vectors, and second moment is second-order tensors, whose coefficients, for convenience, can be organised in 2D table, i.e. matrix. 
+In general, inertia moments are tensors. Zero moments have one scalar coefficient, first moments are 1D arrays, i.e. vectors, and second moments are second-order tensors, whose coefficients, for convenience, can be organised in 2D table, i.e. matrix. 
 This coefficient of moments depend on the observer, i.e. coordinate system, but
 there is a strict rule, i.e. tensorial transformation rule, how coefficients of
 moments change with the observer. For zero moments, area, all is simple, the
@@ -136,10 +136,10 @@ This section is not essential, you can skip it and come back later for a more in
 The integral of function \f$\rho(\mathbf{x})\f$, where coordinate \f$\mathbf{x}\in V\f$, is a sum of integrals over all primitives shapes (elements) constituting whole integral domain 
 \f[
 \begin{align}
-  I(\rho) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} f(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} I_\mathcal{T}
+  I(\rho) = \int_V \rho(\mathbf{x}) \textrm{d}V \approx \int_{V^h} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}V = \sum_{e=0}^{N-1} I_\mathcal{T}
 \end{align}
 \f]
-You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by a mesh. Mesh is assembled from non-overlapping elements, see mesh on the left \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from a sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>Shape Functions</em>. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$, to indicate that given quantity is approximated, and thus there is some error associated with the approximation.
+You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by a mesh. Mesh is assembled from non-overlapping elements, see mesh on the right of \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains patches from a sphere and some edges are circles. Those are not precisely circles, and not exactly part of the surface of the sphere since volume and its skin are represented by tetrahedrons and triangles respectively. Those elements have a straight edge, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the volume is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>Shape Functions</em>. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$, to indicate that given quantity is approximated, and thus there is some error associated with the approximation.
 
 \anchor basic_l1_figure_1
 \image html basic_shape_function.png "Figure 1: Finite element mesh shape functions, and integration points" width=800px
