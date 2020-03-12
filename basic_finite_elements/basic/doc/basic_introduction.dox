@@ -44,7 +44,7 @@ Categorised by the level of abstraction, there are also two main groups of
 interfaces, namely higher-level and lower-level. The higher-level abstraction, e.g.
 \em Simple interface enables faster and simpler implementation but with limit
 flexibility in terms of range of problems that can be solved. Meanwhile, the
-lower-level abstraction, e.g. \em Core interface, offers highest flexibility but
+lower-level abstraction, e.g. \em Core interface, offers the highest flexibility but
 can be harder to use and demands more detailed knowledge about the design MoFEM
 and how it works. 
 
