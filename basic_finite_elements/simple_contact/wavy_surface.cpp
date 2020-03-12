@@ -42,8 +42,9 @@ int main(int argc, char *argv[]) {
 
     // Read parameters from line command
     PetscBool flg_mesh_file = PETSC_TRUE;
+    PetscBool flg_out_file = PETSC_TRUE;
     char mesh_file_name[255];
-    char out_file_name[255];
+    char out_file_name[255] = "out.h5m";
 
     double lambda = 1.0;
     double delta = 0.01;
@@ -55,7 +56,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_mesh_file);
     CHKERR PetscOptionsString("-my_out_file", "out file name", "", "out.h5m",
-                              out_file_name, 255, &flg_mesh_file);
+                              out_file_name, 255, &flg_out_file);
 
     CHKERR PetscOptionsInt("-my_dim", "dimension (2 or 3)", "", dim, &dim,
                            PETSC_NULL);
