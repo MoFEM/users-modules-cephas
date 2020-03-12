@@ -4,15 +4,15 @@
 
 This is a basic lesson intended to give new developers an introduction to the implementation of bespoke finite element codes in MoFEM library. In this and other tutorials, the assumption is that you, as a new MoFEM developer, have at least an essential fluency in C++ programming. It is also assumed that  you are an engineer or a physicist or a mathematician who has an interest in solving Partial Differential Equations (PDEs) using finite element methods. In this tutorial, the mathematical abstractions are kept as basic as possible. 
 
-If you are reading these lessons, and fail to understand its content, it is most likely that it is the authors' fault for not expressing ideas clear enough. If that is the case, you can ask questions on our
-<a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a>, or join us our group discussion platform on 
+If you are reading these lessons, and fail to understand its content, it is most likely that it is the authors' fault for not expressing ideas clearly enough. If that is the case, you can ask questions on our
+<a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a>, or join our group discussion platform on 
 <a href="https://mofem.slack.com/">Slack</a>. Your comments are valuable to us and help to improve the work. 
 If you are keen to contribute, starting from improving tutorials is the best way. 
 
 \note The questions in the <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can 
 be tagged/labelled. If you tag question as lesson1, yours and others' questions will be easily grouped 
 and searched, so that it would be convenient for us (authors) to respond to the question effectively. It will also be very helpful to our 
-community if each question asked in this forum labelled in this way.  
+community if each question asked in this forum is labelled this way.  
 
 All problems presented in this tutorial, except the first one, are in 2D. However,  the implementation is designed in such a way that
 one can extend them to 3D with relative ease. Once you have a good understanding of the tutorial, as an exercise, you can implement the 3D extension. 
