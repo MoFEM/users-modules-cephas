@@ -475,8 +475,8 @@ are run for nodes only. However, this is a special case.
 On each finite element, several operators can be run in sequence. In principle, operators are used to break down a complex problem in simpler tasks. Each operator is implemented such that it iterates over integration points on the element. User operators are derived from a base class `UserDataOperator` and have by default several basic functions which  vary for different element shapes. However, they always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
 
 Writing operator for your problem, you do not have to think about what type of
-entity element is, implementation is independent on element shape, approximation
-order, and if there are other fields used on the element. 
+entity element is. The implementation is independent on element shape, approximation
+order, and other fields used on the element, if there are any. 
 
 Shape functions on each finite element can be different, depending on what approximation spaces you choose to use. Also, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson, in function Example::setUP we have defined density field as
 \code 
@@ -496,16 +496,16 @@ described in details here \cite ainsworth2001essential. However, since we use
 the first order, shape functions are  no different  as presented in \ref
 basic_l1_figure_3 "Figure 3".
 
-Our main task in this lesson is to calculate volume, the first moment of inertia
+Our main task in this lesson is to calculate the mass, the first moment of inertia
 and the second moment of inertia. In order to do that, on each element, we have
 to calculate density at integration points, then calculate moments of inertia. That is
-depicted on \ref basic_l1_figure_6 "Figure 6 " by user data operators (UDOs)
-shown by four green boxes. \ref basic_l1_figure_6 "Figure 6" also depict the
+depicted on \ref basic_l1_figure_7 "Figure 7 " by user data operators (UDOs)
+shown by four green boxes. \ref basic_l1_figure_7 "Figure 7" also depicts the
 flow of data between operators, through \em Example::CommonData structure. 
 
-On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values at integration points, in Example::CommonData::rhoAtIntegrationPts. Then in operators Example::OpZero, Example::OpFirst, and Example::OpSecond, the vector which has a size equal to the number of integration points on the element is used to evaluate moments. Moments from each element are assembled to Example::CommonData::petscVec. Once all elements are evaluated, vector Example::CommonData::petscVec results which are printed at the end of the programme. 
+On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values at integration points, in Example::CommonData::rhoAtIntegrationPts. Then in operators Example::OpZero, Example::OpFirst, and Example::OpSecond, the vector which has a size equal to the number of integration points on the element is used to evaluate moments. Moments from each element are assembled to Example::CommonData::petscVec. Once all elements are evaluated, vector Example::CommonData::petscVec results are printed at the end of the programme. 
 
-Operators have to be pushed into pipelines through MoFEM::Basic interface.  MoFEM::Basic has several streams of pipelines, to evaluate matrices and vector, and which are executed on domain and boundary (skin) elements. Here we integrate vector iterating domain element, see \ref basic_l1_figure_6 "Figure 6", red box on the left. Operators are pushed to the pipeline by executing the following code
+Operators have to be pushed into pipelines through MoFEM::Basic interface.  MoFEM::Basic has several streams of pipelines, to evaluate matrices and vectors, and which are executed on domain and boundary (skin) elements. Here we integrate vector iterating domain element, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Push operators to pipeline
 In the snippet above, you can see four operators pushed in sequence, like in \ref
 basic_l1_figure_7 "Figure 7". Operators are pushed to \em
@@ -518,7 +518,7 @@ To set integration points at which base functions are evaluated, the user needs 
 auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
 CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 \endcode
-Function \em integration_rule calculate rule by taking approximation order and adding two. Since under the second moment, the integral function is polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and two emerge from term \f$x^ix^j\f$. This is the highest polynomials evaluated out of three operators. Integration rule set as above enables to calculate three moments of inertia exactly, and only error comes from geometry approximation and approximation of density by piecewise polynomial.
+Function \em integration_rule calculate rule by taking approximation order and adding two. Since under the second moment, the integral function is polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and two emerge from term \f$x^ix^j\f$. This is the highest polynomials evaluated out of three operators. Integration rule set as above enables to calculate three moments of inertia exactly, and the only errors come from geometry approximation and approximation of density by piecewise polynomial.
 
 Since we use piecewise linear polynomial to approximate density, i.e. \f$p=1\f$, and thus highest order polynomial is for the second moment of inertia and is three, so integration rule set by the code will be three. Note setting integration rule to a higher value would increase the number of integration points, and that will not change results. Although, setting higher integration rule that is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
 
