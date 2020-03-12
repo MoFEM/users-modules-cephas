@@ -1031,6 +1031,12 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     auto t_const_unit_n =
         get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
+    auto t_const_unit_master =
+        get_tensor_from_vec(*(commonDataSimpleContact->normalVectorMasterPtr));
+
+    // cerr << "Master " << t_const_unit_master << "\n";
+    // cerr << "Slave " << t_const_unit_n << "\n";
+
     auto t_lagrange_slave =
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
