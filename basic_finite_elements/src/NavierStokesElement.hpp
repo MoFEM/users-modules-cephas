@@ -80,6 +80,8 @@ struct NavierStokesElement {
     VectorDouble3 viscousDragForce;
     VectorDouble3 totalDragForce;
 
+    VectorDouble3 volumeFlux;
+
     std::map<int, BlockData> setOfBlocksData;
     std::map<int, BlockData> setOfFacesData;
 
@@ -148,6 +150,11 @@ struct NavierStokesElement {
       std::string side_fe_name, const std::string velocity_field,
       const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data);
+
+  static MoFEMErrorCode setCalcVolumeFluxOperators(
+      boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_flux_ptr,
+      const std::string velocity_field,
+      boost::shared_ptr<CommonData> common_data, const EntityType type = MBTET);
 
   /**
    * \brief Set integration rule to volume elements
@@ -447,6 +454,32 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };
+
+//   struct OpCalcVolumeFlux : public UserDataOperator {
+
+//     boost::shared_ptr<CommonData> commonData;
+//     moab::Interface &postProcMesh;
+//     std::vector<EntityHandle> &mapGaussPts;
+//     BlockData &blockData;
+
+//     OpPostProcVorticity(moab::Interface &post_proc_mesh,
+//                         std::vector<EntityHandle> &map_gauss_pts,
+//                         boost::shared_ptr<CommonData> &common_data,
+//                         BlockData &block_data)
+//         : UserDataOperator("U", UserDataOperator::OPROW),
+//           commonData(common_data), postProcMesh(post_proc_mesh),
+//           mapGaussPts(map_gauss_pts), blockData(block_data) {
+//       doVertices = true;
+//       doEdges = false;
+//       doQuads = false;
+//       doTris = false;  
+//       doTets = false;
+//       doPrisms = false;
+//     };
+ 
+//     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+//   };
+// };
 
 struct DirichletVelocityBc : public DirichletDisplacementBc {
 

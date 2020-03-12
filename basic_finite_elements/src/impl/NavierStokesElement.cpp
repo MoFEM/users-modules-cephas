@@ -41,9 +41,13 @@ MoFEMErrorCode NavierStokesElement::setNavierStokesOperators(
     if (type == MBPRISM) {
       boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
       fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpMultiplyDeterminantOfJacobianAndWeightsForFatPrisms());
+      fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateInvJacForFatPrism(inv_jac_ptr));
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpMultiplyDeterminantOfJacobianAndWeightsForFatPrisms());
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateInvJacForFatPrism(inv_jac_ptr));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -92,9 +96,13 @@ MoFEMErrorCode NavierStokesElement::setStokesOperators(
     if (type == MBPRISM) {
       boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
       fe_lhs_ptr->getOpPtrVector().push_back(
+          new OpMultiplyDeterminantOfJacobianAndWeightsForFatPrisms());
+      fe_lhs_ptr->getOpPtrVector().push_back(
           new OpCalculateInvJacForFatPrism(inv_jac_ptr));
       fe_lhs_ptr->getOpPtrVector().push_back(
           new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      fe_rhs_ptr->getOpPtrVector().push_back(
+          new OpMultiplyDeterminantOfJacobianAndWeightsForFatPrisms());
       fe_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateInvJacForFatPrism(inv_jac_ptr));
       fe_rhs_ptr->getOpPtrVector().push_back(
@@ -115,6 +123,30 @@ MoFEMErrorCode NavierStokesElement::setStokesOperators(
         new OpAssembleRhsVelocityLin(velocity_field, common_data, sit.second));
     fe_rhs_ptr->getOpPtrVector().push_back(
         new OpAssembleRhsPressure(pressure_field, common_data, sit.second));
+  }
+
+  MoFEMFunctionReturn(0);
+};
+
+MoFEMErrorCode NavierStokesElement::setCalcVolumeFluxOperators(
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_flux_ptr,
+    const std::string velocity_field, boost::shared_ptr<CommonData> common_data,
+    const EntityType type) {
+  MoFEMFunctionBegin;
+
+  for (auto &sit : common_data->setOfBlocksData) {
+
+    if (type == MBPRISM) {
+      boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+      fe_flux_ptr->getOpPtrVector().push_back(
+          new OpMultiplyDeterminantOfJacobianAndWeightsForFatPrisms());
+      fe_flux_ptr->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      fe_flux_ptr->getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+    }
+    // fe_flux_ptr->getOpPtrVector().push_back(
+    //     new OpCalcVolumeFlux(velocity_field, common_data, sit.second));
   }
 
   MoFEMFunctionReturn(0);
@@ -1036,6 +1068,83 @@ MoFEMErrorCode NavierStokesElement::OpPostProcVorticity::doWork(int side,
 
   MoFEMFunctionReturn(0);
 }
+
+// MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux
+//     : doWork(int side, EntityType type, EntData &data) {
+//   MoFEMFunctionBegin;
+//   // if (type != MBVERTEX)
+//   //   PetscFunctionReturn(0);
+//   // double def_VAL[9];
+//   // bzero(def_VAL, 9 * sizeof(double));
+
+//   // commonData->getBlockData(blockData);
+//   const int row_nb_base_functions = row_data.getN().size2();
+
+//   auto row_diff_base_functions = row_data.getFTensor1DiffN<3>();
+
+//   FTensor::Index<'i', 3> i;
+//   FTensor::Index<'j', 3> j;
+
+//   // integrate local matrix for entity block
+//   for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+
+//     // Get volume and integration weight
+//     double w = getVolume() * getGaussPts()(3, gg);
+//     if (getHoGaussPtsDetJac().size() > 0) {
+//       w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+//     }
+
+//     // double const alpha = w * blockData.fluidViscosity;
+//     double const alpha = w * blockData.viscousCoef;
+
+//     int row_bb = 0;
+//     for (; row_bb != row_nb_dofs / 3; row_bb++) {
+
+//       auto col_diff_base_functions = col_data.getFTensor1DiffN<3>(gg, 0);
+
+//       const int final_bb = isOnDiagonal ? row_bb + 1 : col_nb_dofs / 3;
+//       // const int final_bb = col_nb_dofs / 3;
+//       int col_bb = 0;
+
+//       for (; col_bb != final_bb; col_bb++) {
+
+//         auto t_assemble = get_tensor2(locMat, 3 * row_bb, 3 * col_bb);
+
+//         for (int i : {0, 1, 2}) {
+//           for (int j : {0, 1, 2}) {
+//             t_assemble(i, i) +=
+//                 alpha * row_diff_base_functions(j) * col_diff_base_functions(j);
+//             t_assemble(i, j) +=
+//                 alpha * row_diff_base_functions(j) * col_diff_base_functions(i);
+//           }
+//         }
+
+//         // Next base function for column
+//         ++col_diff_base_functions;
+//       }
+
+//       // Next base function for row
+//       ++row_diff_base_functions;
+//     }
+
+//     for (; row_bb != row_nb_base_functions; row_bb++) {
+//       ++row_diff_base_functions;
+//     }
+//   }
+
+//   if (isOnDiagonal) {
+//     for (int row_bb = 0; row_bb != row_nb_dofs / 3; row_bb++) {
+//       int col_bb = 0;
+//       for (; col_bb != row_bb + 1; col_bb++) {
+//         auto t_assemble = get_tensor2(locMat, 3 * row_bb, 3 * col_bb);
+//         auto t_off_side = get_tensor2(locMat, 3 * col_bb, 3 * row_bb);
+//         t_off_side(i, j) = t_assemble(j, i);
+//       }
+//     }
+//   }
+
+//   MoFEMFunctionReturn(0);
+// }
 
 VectorDouble3 stokes_flow_velocity(double x, double y, double z) {
   double r = sqrt(x * x + y * y + z * z);

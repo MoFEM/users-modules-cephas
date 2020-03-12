@@ -237,12 +237,15 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBQUAD, "VELOCITY", order_u);
     CHKERR m_field.set_field_order(0, MBPRISM, "VELOCITY", order_u);
 
+    
+
     if (!discont_pressure) {
       CHKERR m_field.set_field_order(0, MBVERTEX, "PRESSURE", 1);
       CHKERR m_field.set_field_order(0, MBEDGE, "PRESSURE", order_p);
       CHKERR m_field.set_field_order(0, MBTRI, "PRESSURE", order_p);
       CHKERR m_field.set_field_order(0, MBQUAD, "PRESSURE", order_p);
     }
+
     CHKERR m_field.set_field_order(0, MBTET, "PRESSURE", order_p);
     CHKERR m_field.set_field_order(0, MBPRISM, "PRESSURE", order_p);
 
@@ -472,11 +475,16 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_rhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
 
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_flux_ptr(
+        new VolumeElementForcesAndSourcesCore(m_field));
+
     fe_lhs_ptr->getRuleHook = NavierStokesElement::VolRule();
     fe_rhs_ptr->getRuleHook = NavierStokesElement::VolRule();
+    fe_flux_ptr->getRuleHook = NavierStokesElement::VolRule();
 
     boost::shared_ptr<FatPrism> prism_fe_lhs_ptr(new FatPrism(m_field));
     boost::shared_ptr<FatPrism> prism_fe_rhs_ptr(new FatPrism(m_field));
+    boost::shared_ptr<FatPrism> prism_fe_flux_ptr(new FatPrism(m_field));
 
     boost::shared_ptr<FaceElementForcesAndSourcesCore> drag_fe_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
@@ -662,10 +670,10 @@ int main(int argc, char *argv[]) {
         post_proc_ptr->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>("VELOCITY",
                                                      commonData->gradDispPtr));
-        post_proc_ptr->getOpPtrVector().push_back(
-            new NavierStokesElement::OpPostProcVorticity(
-                post_proc_ptr->postProcMesh, post_proc_ptr->mapGaussPts,
-                commonData, sit.second));
+        // post_proc_ptr->getOpPtrVector().push_back(
+        //     new NavierStokesElement::OpPostProcVorticity(
+        //         post_proc_ptr->postProcMesh, post_proc_ptr->mapGaussPts,
+        //         commonData, sit.second));
       }
     }
 
@@ -680,6 +688,8 @@ int main(int argc, char *argv[]) {
       CHKERR prism_post_proc_ptr->addFieldValuesGradientPostProc("VELOCITY");
 
       boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+      prism_post_proc_ptr->getOpPtrVector().push_back(
+          new OpMultiplyDeterminantOfJacobianAndWeightsForFatPrisms());
       prism_post_proc_ptr->getOpPtrVector().push_back(
           new OpCalculateInvJacForFatPrism(inv_jac_ptr));
       prism_post_proc_ptr->getOpPtrVector().push_back(
@@ -829,6 +839,11 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", post_proc_ptr);
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES",
                                         prism_post_proc_ptr);
+        
+        // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Volume flux: (%g, %g, %g)\n",
+        //                      vecGlobalDrag[0], vecGlobalDrag[1],
+        //                      vecGlobalDrag[2]);
+
 
         string out_file_name;
 
