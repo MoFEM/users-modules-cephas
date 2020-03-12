@@ -49,7 +49,7 @@ can be harder to use and demands more detailed knowledge about the design MoFEM
 and how it works. 
 
 For the purpose of preliminary tutorials, we use the combination of \em Simple
-and \em Basic interfaces that complement to each other. More details about the
+and \em Basic interfaces that complement each other. More details about the
 two interfaces are explained in the following parts.
 
 \anchor basic_l1_figure_0
