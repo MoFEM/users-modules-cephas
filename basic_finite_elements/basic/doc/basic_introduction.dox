@@ -61,4 +61,6 @@ However, it does not provide a mechanism to assemble a vector of internal forces
 and tangent matrix or integrate a finite element. Such tools are provided by \em
 Basic interface and will be dealt with in later tutorials in the series.  
 
+About MoFEM data structures, you can learn from  \ref general_data_structure. However, we recommend looking that document later. We recommend going to lesson one, i.e. \ref basic_lessons1.
+
 */
