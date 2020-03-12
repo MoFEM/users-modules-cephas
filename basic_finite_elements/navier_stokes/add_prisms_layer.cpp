@@ -103,6 +103,22 @@ int main(int argc, char *argv[]) {
     cout << "Solid surface: " << tris.size() << " face(s)" << endl;
     // tris.print();
 
+    // Range nodes;
+    // CHKERR moab.get_connectivity(tris, nodes);
+    // double coords[3], director[3];
+    // double B = 0.05;
+    // double L = 1.0;
+    // for (Range::iterator nit = nodes.begin(); nit != nodes.end(); nit++) {
+    //   CHKERR moab.get_coords(&*nit, 1, coords);
+    //   director[0] = 0.0;
+    //   director[1] = 0.0;
+    //   director[2] = -B * (1. - cos(2 * M_PI * coords[0] / L) *
+    //                                cos(2 * M_PI * coords[1] / L));
+    //   // director[2] = - 0.01; //-B * (1 - coords[0])
+    //   cblas_daxpy(3, 1, director, 1, coords, 1);
+    //   CHKERR moab.set_coords(&*nit, 1, coords);
+    // }
+
     auto set_thickness = [&](const Range &prisms, int nb_layers) {
       MoFEMFunctionBegin;
       Range nodes_f4;
@@ -300,8 +316,18 @@ int main(int argc, char *argv[]) {
 
     EntityHandle rootset = moab.get_root_set();
 
+    Range faces;
+    CHKERR skinner.find_skin(0, prisms, 2, faces);
+    EntityHandle out_meshset_skin;
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_skin);
+    CHKERR moab.add_entities(out_meshset_skin, faces);
+
     CHKERR moab.write_file("prisms_layer.h5m", "MOAB", "", &rootset, 1);
     CHKERR moab.write_file("prisms_layer.vtk", "VTK", "", &rootset, 1);
+    CHKERR moab.write_file("prisms_layer_skin.vtk", "VTK", "",
+                           &out_meshset_skin, 1);
+
+    CHKERR moab.delete_entities(&out_meshset_skin, 1);                       
   }
   CATCH_ERRORS;
 

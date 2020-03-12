@@ -68,9 +68,9 @@ struct NavierStokesElement {
 
     MatrixDouble invJac;
 
-    boost::shared_ptr<MatrixDouble> gradDispPtr;
-    boost::shared_ptr<MatrixDouble> dispPtr;
-    boost::shared_ptr<VectorDouble> pPtr;
+    boost::shared_ptr<MatrixDouble> gradVelPtr;
+    boost::shared_ptr<MatrixDouble> velPtr;
+    boost::shared_ptr<VectorDouble> pressPtr;
 
     boost::shared_ptr<MatrixDouble> pressureDragTract;
     boost::shared_ptr<MatrixDouble> viscousDragTract;
@@ -87,9 +87,9 @@ struct NavierStokesElement {
 
     CommonData() {
 
-      gradDispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      dispPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      pPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
+      gradVelPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      velPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      pressPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
       pressureDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       viscousDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
@@ -355,6 +355,22 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &data);
   };
 
+  struct OpCalcVolumeFlux : public UserDataOperator {
+
+    boost::shared_ptr<CommonData> commonData;
+    BlockData &blockData;
+    int nbRows; ///< number of dofs on row
+    int nbIntegrationPts;
+
+    OpAssembleRhs(const string field_name,
+                  boost::shared_ptr<CommonData> common_data,
+                  BlockData &block_data)
+        : UserDataOperator(field_name, UserDataOperator::OPROW),
+          commonData(common_data), blockData(block_data){};
+
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
+  };
+
   struct OpCalcDragForce: public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -454,32 +470,6 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 };
-
-//   struct OpCalcVolumeFlux : public UserDataOperator {
-
-//     boost::shared_ptr<CommonData> commonData;
-//     moab::Interface &postProcMesh;
-//     std::vector<EntityHandle> &mapGaussPts;
-//     BlockData &blockData;
-
-//     OpPostProcVorticity(moab::Interface &post_proc_mesh,
-//                         std::vector<EntityHandle> &map_gauss_pts,
-//                         boost::shared_ptr<CommonData> &common_data,
-//                         BlockData &block_data)
-//         : UserDataOperator("U", UserDataOperator::OPROW),
-//           commonData(common_data), postProcMesh(post_proc_mesh),
-//           mapGaussPts(map_gauss_pts), blockData(block_data) {
-//       doVertices = true;
-//       doEdges = false;
-//       doQuads = false;
-//       doTris = false;  
-//       doTets = false;
-//       doPrisms = false;
-//     };
- 
-//     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-//   };
-// };
 
 struct DirichletVelocityBc : public DirichletDisplacementBc {
 

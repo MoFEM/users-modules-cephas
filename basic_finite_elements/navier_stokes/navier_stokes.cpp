@@ -669,7 +669,7 @@ int main(int argc, char *argv[]) {
 
         post_proc_ptr->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>("VELOCITY",
-                                                     commonData->gradDispPtr));
+                                                     commonData->gradVelPtr));
         // post_proc_ptr->getOpPtrVector().push_back(
         //     new NavierStokesElement::OpPostProcVorticity(
         //         post_proc_ptr->postProcMesh, post_proc_ptr->mapGaussPts,
