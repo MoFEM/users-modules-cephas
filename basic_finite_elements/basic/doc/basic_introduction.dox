@@ -16,7 +16,7 @@ If you follow on of the lessons and fail to understand its content, it is most l
 \note The questions in the <a href="https://groups.google.com/forum/#!forum/mofem-group">Q&A</a> can 
 be tagged/labelled. If you tag question as lesson1, yours and others' questions will be easily grouped 
 and searched, so that it would be convenient for us (authors) to respond to the question effectively. It will also be very helpful to our 
-community if each question asked in this forum labelled in this way.  
+community if each question asked in this forum is labelled this way.  
 
 All problems presented in this tutorial, except the first one, are in 2D. However,  the implementation is designed in such a way that
 one can extend them to 3D with relative ease. Once you have a good understanding of the tutorial, as an exercise, you can implement the 3D extension. 
