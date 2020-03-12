@@ -29,6 +29,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 bfe_build_and_install(simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
+bfe_build_and_install(wavy_surface
+    ${CMAKE_CURRENT_SOURCE_DIR}/wavy_surface.cpp)
 
 bfe_copy_and_install("README" "${permissions_default}")
 
