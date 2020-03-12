@@ -68,7 +68,7 @@ where \f$\ell\f$ is the length.
 
 The distribution of mass in the body can be characterised by inertia moments. Inertia moments have practical applications, they are used for analysis motion of rigid bodies, or to characterise cross-section area in structural analysis. 
 
-In general, inertia moments are tensors. Zero moments have one scalar coefficient, first moments are 1D arrays, i.e. vectors, and second moments are second-order tensors, whose coefficients, for convenience, can be organised in 2D table, i.e. matrix. 
+In general, inertia moments are tensors. Zero moments have one scalar coefficient, first moment is 1D arrays, i.e. vector, and second moment is second-order tensor, whose coefficients, for convenience, can be organised in 2D table, i.e. matrix. 
 This coefficient of moments depend on the observer, i.e. coordinate system, but
 there is a strict rule, i.e. tensorial transformation rule, how coefficients of
 moments change with the observer. For zero moments, area, all is simple, the
