@@ -32,14 +32,13 @@ which a broad class of nonlinear problems can be solved.
 MoFEM provides different interfaces with varying purposes and level of abstractions.
 
 Categorised by purposes, there are two main groups of the interfaces. The first
-group involves the bookkeeping which builds the rules (definition) for
-the generation of integration points, managing degrees of freedom (DOFs), and assembling of the matrix/vector. 
+the group involves the bookkeeping which builds the rules (definition) for 
+managing fields, finite elements, problems, which enable to construct DOFs, and define the structure of matrix and vectors, for serial and parallel problems.
 This group includes \em Core interface and \em Simple interface. Meanwhile, the
 second group deals with the operator implementation that calculates 
 the actual value of each component in matrices/vectors that is going to be
 filled using one of the interfaces in the previous group. An example of an
 interface that belongs to this second group is \em Basic interface.
-
 
 Categorised by the level of abstraction, there are also two main groups of
 interfaces, namely higher-level and lower-level. The higher-level abstraction, e.g.
