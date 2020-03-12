@@ -737,19 +737,10 @@ MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(EntData &data) {
         &v(r + 0), &v(r + 1), &v(r + 2));
   };
 
-  // set size of local vector
-  locVec.resize(nbRows, false);
-  // clear local entity vector
-  locVec.clear();
-
   int nb_base_functions = data.getN().size2();
 
-  // get base function gradient on rows
-  auto t_v_grad = data.getFTensor1DiffN<3>();
-
-  auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradVelPtr);
-  auto t_p = getFTensor0FromVec(*commonData->pressPtr);
-
+  auto t_u = getFTensor1FromMat<3>(*commonData->velPtr);
+  
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
 
