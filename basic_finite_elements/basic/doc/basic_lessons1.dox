@@ -6,7 +6,7 @@
 
 The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except collocation method) used to solve partial differential equations (PDEs).
 
-The most straightforward interpretation of the finite element method is considering it as a method for integration of functions on complex shapes.  The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad,  tetrahedron, or hex, and on each element, integration rule on primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which over and over, the same simple procedure is executed. Such repeatable tasks make it a perfect method for a computer.
+The most straightforward interpretation of the finite element method is considering it as a method for integration of functions on complex shapes.  The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad,  tetrahedron, or hexahedron, and on each element, integration rule on primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which over and over, the same simple procedure is executed. Such repeatable tasks make it a perfect method for a computer.
 
 We will present the problem of numerical integration by calculating moments of inertia. Moments of inertia characterise the distribution and amount of the mass in the body and have various engineering applications. 
 
@@ -16,7 +16,7 @@ First, we explain essentials, then provide a definition of the moments. Next sec
 
 \subsection basic_lessons1_siplexes Integration on simplexes.
 
-Numerical integration of function \f$\rho\f$ is given by the following formula
+Numerical integration of density function \f$\rho(x)\f$ is given by the following formula
 \f[
 \begin{align}
   I(\rho) = \int_\Omega \rho \textrm{d}\Omega \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
@@ -503,6 +503,9 @@ depicted on \ref basic_l1_figure_7 "Figure 7 " by user data operators (UDOs)
 shown by four green boxes. \ref basic_l1_figure_7 "Figure 7" also depicts the
 flow of data between operators, through \em Example::CommonData structure. 
 
+\anchor basic_l1_figure_7
+\image html basic_lesson1_ops.png "Figure 7: Operators and common data" width=800px 
+
 On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values at integration points, in Example::CommonData::rhoAtIntegrationPts. Then in operators Example::OpZero, Example::OpFirst, and Example::OpSecond, the vector which has a size equal to the number of integration points on the element is used to evaluate moments. Moments from each element are assembled to Example::CommonData::petscVec. Once all elements are evaluated, vector Example::CommonData::petscVec results are printed at the end of the programme. 
 
 Operators have to be pushed into pipelines through MoFEM::Basic interface.  MoFEM::Basic has several streams of pipelines, to evaluate matrices and vectors, and which are executed on domain and boundary (skin) elements. Here we integrate vector iterating domain element, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code
@@ -521,9 +524,6 @@ CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 Function \em integration_rule calculate rule by taking approximation order and adding two. Since under the second moment, the integral function is polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and two emerge from term \f$x^ix^j\f$. This is the highest polynomials evaluated out of three operators. Integration rule set as above enables to calculate three moments of inertia exactly, and the only errors come from geometry approximation and approximation of density by piecewise polynomial.
 
 Since we use piecewise linear polynomial to approximate density, i.e. \f$p=1\f$, and thus highest order polynomial is for the second moment of inertia and is three, so integration rule set by the code will be three. Note setting integration rule to a higher value would increase the number of integration points, and that will not change results. Although, setting higher integration rule that is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
-
-\anchor basic_l1_figure_7
-\image html basic_lesson1_ops.png "Figure 7: Operators and common data" width=800px 
 
 Calculations are triggered in function
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Integrate
