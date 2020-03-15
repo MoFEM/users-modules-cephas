@@ -319,9 +319,16 @@ int main(int argc, char *argv[]) {
 
 if(is_lag){
     if (is_hdiv_trace) {
+      Range slave_tets;
+      CHKERR moab.get_adjacencies(slave_tris, 3, false, slave_tets,
+                                  moab::Interface::UNION);
+      slave_tets = slave_tets.subset_by_type(MBTET);
+
       CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 1);
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+
     } else {
       CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
                                MB_TAG_SPARSE, MF_ZERO);
@@ -708,8 +715,9 @@ CHKERR m_field.build_fields();
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR m_field.modify_finite_element_adjacency_table(
-        "DUMMY_CONTACT_ELEM", MBPRISM, add_adjacencies_for_nitsche_prism);
+    if (is_nitsche)
+      CHKERR m_field.modify_finite_element_adjacency_table(
+          "DUMMY_CONTACT_ELEM", MBPRISM, add_adjacencies_for_nitsche_prism);
 
     // contact_problem->commonDataSimpleContact->elasticityCommonData
     //     .forcesOnlyOnEntitiesRow();

@@ -303,6 +303,11 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
+    CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
+    CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
+    // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
+
     Range slave_tets;   
     if (is_lag) {
       CHKERR moab.get_adjacencies(slave_tris, 3, false, slave_tets,
@@ -323,13 +328,16 @@ int main(int argc, char *argv[]) {
       cerr << "  IS LAG tris " << full_slave_tets_tris.size() << "\n";
       cerr << "  IS LAG tets " << slave_tets.size() << "\n";
 
-      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
-      CHKERR m_field.add_ents_to_field_by_type(full_slave_tets_tris, MBTRI,
-                                               "LAGMULT");
+      // CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
+      
 
-      CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", order_lambda);      
+      // CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
+      // CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+
+      // CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", order_lambda);
+      // CHKERR m_field.set_field_order(slave_tets, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(slave_tris, "LAGMULT",
+                                     order_lambda);
     }
 
     // CHKERR m_field.add_field("LAGMULT", L2, AINSWORTH_LEGENDRE_BASE, 1,
@@ -675,6 +683,11 @@ int main(int argc, char *argv[]) {
         fe_lhs_simple_contact =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
+
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_lhs_simple_contact_2 =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_post_proc_simple_contact =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -688,17 +701,21 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_hdiv_rhs_slave_tet =
         boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
 
-    if (is_lag) {
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_hdiv_lhs_slave_tet =
+        boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
 
+    if (is_lag) {
+      cerr << "========= CHECK Hdiv 3D ==========\n";
       contact_problem->setContactOperatorsRhsOperatorsHdiv3D(
           fe_rhs_simple_contact, fe_hdiv_rhs_slave_tet,
           common_data_simple_contact, "SPATIAL_POSITION", "LAGMULT",
           "HDIVMATERIAL");
 
-      contact_problem->setContactOperatorsLhsOperatorsHdiv(
-          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", Aij);
-      
+      contact_problem->setContactOperatorsLhsOperatorsHdiv3D(
+          fe_rhs_simple_contact, fe_lhs_simple_contact_2, fe_hdiv_lhs_slave_tet,
+          common_data_simple_contact, "SPATIAL_POSITION", "LAGMULT",
+          "HDIVMATERIAL");
+
 } else {
   if (is_nitsche){
     contact_problem->setContactNitschePenaltyRhsOperators(
@@ -762,6 +779,9 @@ for (; mit != neumann_forces.end(); mit++) {
                                   dirichlet_bc_ptr.get(), NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact.get(),
                                   PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "HDIVMATERIAL",
+                                  fe_hdiv_rhs_slave_tet.get(), PETSC_NULL,
+                                  PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr,
@@ -773,6 +793,12 @@ for (; mit != neumann_forces.end(); mit++) {
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
     CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact.get(),
+                                  NULL, NULL);
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "HDIVMATERIAL",
+                                  fe_hdiv_lhs_slave_tet.get(), NULL, NULL);
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact_2.get(),
                                   NULL, NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
@@ -861,27 +887,30 @@ for (; mit != neumann_forces.end(); mit++) {
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
 
-    if (is_hdiv_trace) {
-      contact_problem->setContactOperatorsForPostProcHdiv(
-          fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
-          mb_post,
-          contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
-          contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
-          is_lag);
-    } else {
-      contact_problem->setContactOperatorsForPostProc(
-          fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
-          mb_post, contact_problem->commonDataSimpleContact
-              ->setOfMasterFacesData[1],
-          contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
-          is_lag);
+    // if (is_hdiv_trace) {
+    //   cerr << "HWASFAGEWDGWDBWd ~~~~~~~\n";
+    //   contact_problem->setContactOperatorsForPostProcHdiv(
+    //       fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+    //       "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
+    //       mb_post,
+    //       contact_problem->commonDataSimpleContact->setOfMasterFacesData[1],
+    //       contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
+    //       is_lag);
+    // } else {
+    //   cerr << "HWASFAGEWDGWDBWd asdasfsfasgsagasg\n";
 
-      fe_post_proc_simple_contact_vertex->getOpPtrVector().push_back(
-          new SimpleContactProblem::OpLagMultOnVertex(m_field, "LAGMULT",
-                                                      mb_post_vertex));
-    }
+    //   contact_problem->setContactOperatorsForPostProc(
+    //       fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+    //       "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "ELASTIC",
+    //       mb_post, contact_problem->commonDataSimpleContact
+    //           ->setOfMasterFacesData[1],
+    //       contact_problem->commonDataSimpleContact->setOfSlaveFacesData[1],
+    //       is_lag);
+
+    //   fe_post_proc_simple_contact_vertex->getOpPtrVector().push_back(
+    //       new SimpleContactProblem::OpLagMultOnVertex(m_field, "LAGMULT",
+    //                                                   mb_post_vertex));
+    // }
 
     // contact_problem->setContactOperatorsForPostProcL2(
     //     fe_post_proc_simple_contact, common_data_simple_contact, m_field,

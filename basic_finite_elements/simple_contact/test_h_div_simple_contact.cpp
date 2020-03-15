@@ -351,15 +351,24 @@ int main(int argc, char *argv[]) {
     nodes.pop_front();
     nodes.pop_back();
 
+    boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
+    boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
+    NonlinearElasticElement elastic(m_field, 2);
+    CHKERR elastic.setBlocks(hooke_double_ptr, hooke_adouble_ptr);
+    CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
+
+    CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+                                false, false);
+
     //contact_problem->commonDataSimpleContact->forcesOnlyOnEntitiesRow = nodes;
 
 //    contact_problem->commonDataSimpleContact->forcesOnlyOnEntitiesCol = nodes;
 
     // add fields to the global matrix by adding the element
 
-    boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
-    boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
-    NonlinearElasticElement elastic(m_field, 2);
+    // boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
+    // boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
+    // NonlinearElasticElement elastic(m_field, 2);
 
     Range slave_tets;
 
@@ -381,12 +390,24 @@ int main(int argc, char *argv[]) {
     cerr << "  IS LAG tets " << slave_tets.size() << "\n";
 
     CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
-    CHKERR m_field.add_ents_to_field_by_type(full_slave_tets_tris, MBTRI,
-                                             "LAGMULT");
 
-    CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
-    CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-    CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", order_lambda);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
+    // CHKERR m_field.add_ents_to_field_by_type(0, MBTRI, "LAGMULT");
+    CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
+    // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
+
+    // CHKERR m_field.add_ents_to_field_by_type(full_slave_tets_tris, MBTRI,
+    //                                          "LAGMULT");
+
+    // CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
+    // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+    // CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", order_lambda);
+
+    // CHKERR m_field.set_field_order(slave_tets, "LAGMULT", order_lambda);
+    CHKERR m_field.set_field_order(slave_tris, "LAGMULT",
+                                   order_lambda);
+
+    
 
     CHKERR m_field.add_finite_element("HDIVMATERIAL", MF_ZERO);
 
@@ -411,6 +432,9 @@ int main(int argc, char *argv[]) {
                                                       "HDIVMATERIAL");
     CHKERR m_field.build_finite_elements("HDIVMATERIAL", &slave_tets);
 
+    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                       "LAGMULT", contact_prisms);
+
     // build field
     CHKERR m_field.build_fields();
 
@@ -424,12 +448,6 @@ int main(int argc, char *argv[]) {
       Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
     }
-
-
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
-
-    
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
@@ -450,6 +468,7 @@ int main(int argc, char *argv[]) {
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
     CHKERR DMMoFEMAddElement(dm, "HDIVMATERIAL");
+    CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMSetUp(dm);
 
     PetscRandom rctx;
@@ -665,16 +684,17 @@ if(is_lag){
 
       printf("Before Lambda: %e  and rank %d \n", dof.getFieldData(), dof_rank);
 
-      switch (test_case_lambda) {
+      if (dof_rank != 0){
+        switch (test_case_lambda) {
 
-      case 1:
-        dof.getFieldData() = -2.5;
-        break;
-      case 2:
-        dof.getFieldData() = +2.5;
-        break;
+        case 1:
+          dof.getFieldData() = -2.5;
+          break;
+        case 2:
+          dof.getFieldData() = +2.5;
+          break;
+        }
       }
-
       printf("After  Lambda: %e\n", dof.getFieldData());
     }
   }
@@ -699,6 +719,12 @@ if(is_lag){
         fe_lhs_simple_contact =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
+
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_lhs_simple_contact_2 =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+
     boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
         common_data_simple_contact =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
@@ -707,32 +733,48 @@ if(is_lag){
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_hdiv_rhs_slave_tet =
         boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
 
+    boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_hdiv_lhs_slave_tet =
+        boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
+
     contact_problem->setContactOperatorsRhsOperatorsHdiv3D(
         fe_rhs_simple_contact, fe_hdiv_rhs_slave_tet, common_data_simple_contact,
         "SPATIAL_POSITION", "LAGMULT", "HDIVMATERIAL");
+
+    contact_problem->setContactOperatorsLhsOperatorsHdiv3D(
+        fe_lhs_simple_contact, fe_lhs_simple_contact_2, fe_hdiv_lhs_slave_tet,
+        common_data_simple_contact, "SPATIAL_POSITION", "LAGMULT",
+        "HDIVMATERIAL");
 
     // contact_problem->setContactOperatorsLhsOperatorsHdiv(
     //     fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
     //     "LAGMULT", Aij);
 
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  fe_rhs_simple_contact.get(), PETSC_NULL,
-                                  PETSC_NULL);
-
     CHKERR DMMoFEMSNESSetFunction(dm, "HDIVMATERIAL",
                                   fe_hdiv_rhs_slave_tet.get(), PETSC_NULL,
                                   PETSC_NULL);
 
+    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                  fe_rhs_simple_contact.get(), PETSC_NULL,
+                                  PETSC_NULL);
+
+
     CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
                                   fe_lhs_simple_contact.get(), NULL, NULL);
 
-    if (!is_ale) {
-      // CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
-      //                               PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "HDIVMATERIAL",
+                                  fe_hdiv_lhs_slave_tet.get(), NULL, NULL);
 
-      // CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
-      //                               NULL, NULL);
-                                  }
+    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                  fe_lhs_simple_contact_2.get(), NULL, NULL);
+                                  
+
+    // if (!is_ale) {
+      CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
+                                    PETSC_NULL, PETSC_NULL);
+
+      CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
+                                    NULL, NULL);
+                                  // }
 
     
     SNES snes;
