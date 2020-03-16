@@ -875,6 +875,30 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Prints to .vtk file pre-calculated gaps, Lagrange multipliers and their
+   * product the gauss points on the slave triangle.
+   *
+   */
+  struct OpMakeVtkMaster : public ContactOp {
+
+    MoFEM::Interface &mField;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    moab::Interface &moabOut;
+    bool lagFieldSet;
+
+    OpMakeVtkMaster(MoFEM::Interface &m_field, string field_name,
+                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                   moab::Interface &moab_out, bool lagrange_field = true)
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
+          mField(m_field), commonDataSimpleContact(common_data),
+          moabOut(moab_out), lagFieldSet(lagrange_field) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
   struct OpMakeTestTextFile : public ContactOp {
 
     MoFEM::Interface &mField;

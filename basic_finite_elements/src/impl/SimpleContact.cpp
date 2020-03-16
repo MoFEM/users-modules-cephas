@@ -1239,6 +1239,34 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpMakeVtkMaster::doWork(int side,
+                                                            EntityType type,
+                                                            EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  int nb_dofs = data.getFieldData().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+  int nb_gauss_pts = data.getN().size1();
+
+  double def_vals;
+  def_vals = 0;
+  
+  EntityHandle new_vertex = getFEEntityHandle();
+
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    const double *master_coords_ptr = &(getCoordsAtGaussPtsMaster()(gg, 0));
+    CHKERR moabOut.create_vertex(master_coords_ptr, new_vertex);
+  
+  }
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
                                                                 EntityType type,
                                                                 EntData &data) {
@@ -1482,6 +1510,10 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     fe_post_proc_simple_contact->getOpPtrVector().push_back(
         new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
                            moab_out, lagrange_field));
+
+    // fe_post_proc_simple_contact->getOpPtrVector().push_back(
+    //     new OpMakeVtkMaster(m_field, field_name, common_data_simple_contact,
+    //                        moab_out, lagrange_field));
   }
   MoFEMFunctionReturn(0);
 }
