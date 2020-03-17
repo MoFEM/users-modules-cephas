@@ -1,102 +1,97 @@
-/*! \page basic_lessons1 Integration on finite  element mesh
+/*! \page basic_lessons1 Integration on finite element mesh
 
 \note Draft version
 
-\section basic_lessons1_itro Introduction
+\section basic_lessons1_intro Introduction
 
-The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except collocation method) used to solve partial differential equations (PDEs).
+The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except for the collocation method) used to solve partial differential equations (PDEs).
 
-The most straightforward interpretation of the finite element method is considering it as a method for integration of functions on complex shapes.  The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad,  tetrahedron, or hexahedron, and on each element, integration rule on primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which over and over, the same simple procedure is executed. Such repeatable tasks make it a perfect method for a computer.
+The most straightforward interpretation of the finite element method is considering it as a method for integration of functions on complex shapes. The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad, tetrahedron, or hexahedron, and on each element integration rule for the primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which the same simple procedure is executed over and over. Such repeatable tasks make it a perfect method for a computer.
 
 We will present the problem of numerical integration by calculating moments of inertia. Moments of inertia characterise the distribution and amount of the mass in the body and have various engineering applications. 
 
-First, we explain essentials, then provide a definition of the moments. Next section is dedicated to the theory, and finally, we show implementation details in MoFEM. 
+First, we explain essentials, then provide a definition of the moments of inertia. Next section is dedicated to the theory, and finally we show details of implementation in MoFEM. 
 
 \section basic_lessons1_start Essentials
 
-\subsection basic_lessons1_siplexes Integration on simplexes.
+\subsection basic_lessons1_simplexes Integration on simplexes
 
-Numerical integration of density function \f$\rho(x)\f$ is given by the following formula
+\note In geometry, a simplex is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions. Note that an edge is also considered as a particular case of the simplex, see <a href="https://en.wikipedia.org/wiki/Simplex">Simplex</a> for more details.
+
+Numerical integration of a function \f$\rho(x)\f$ is given by the following general formula:
 \f[
 \begin{align}
-  I(\rho) = \int_\Omega \rho \textrm{d}\Omega \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g \| \mathbf{J}_g \| \rho^h_g
+\label{eq:num_int}
+  I(\rho) = \int_\Omega \rho\,\textrm{d}\Omega \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g\|\mathbf{J}_g^e\|\rho^e_g
 \end{align}
 \f]
-where \f$W_g\f$ is the integration weight, \f$J_g\f$ is the determinant of
-Jacobian, \f$\rho^h_g\f$ is the integrated 
-function, e.g. density, \f$G\f$ is the number of integration points per each
-element, and \f$N\f$ is the total number of elements in a mesh. Typically, sum
-of the integration weights is scaled by volume (measure) of the reference element, such that it equals to unity, as follows
+where \f$W_g\f$ is the integration weight, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the local coordinate system to the Cartesian one, \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point, \f$G\f$ is the number of integration points per each element, and \f$N\f$ is the total number of elements in a mesh. Typically, the sum of the integration weights equals to unity:
 \f[
 \begin{align}
-  \sum_{g=0}^{G-1} W_g  = 1 
+  \sum_{g=0}^{G-1} W_g = 1.
 \end{align}
 \f]
-In the following sections, we explain how the above sum is evaluated and give some details about Jaconian.  
+Furthermore, for the case of simplexes the numerical integration formula \eqref{eq:num_int}   takes a more straightforward form:
 
-Consequently, for such scaling for Jacobian we use:
-
-- For tetrahedron 
+- For a tetrahedron
 \f[
 \begin{align}
-  I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \rho^h_g
+  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \, \rho^e_g,
 \end{align}
 \f]
-where \f$v\f$ is the volume of the reference tetrahedron. 
+where \f$v\f$ is the volume of an element (tetrahedron); 
 
-- For triangle
+- For a triangle
 \f[
 \begin{align}
-  I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a)  \rho^h_g
+  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a) \, \rho^e_g,
 \end{align}
 \f]
-where \f$a\f$ is the area of the reference triangle.
+where \f$a\f$ is the area of an element (triangle);
 
-- For edge
+- For an edge
 \f[
 \begin{align}
-  I(\rho^h) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g \ell) \rho^h_g
+  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g \ell) \, \rho^e_g,
 \end{align}
 \f]
-where \f$\ell\f$ is the length.
+where \f$\ell\f$ is the length of a line element (edge).
 
-\note In geometry, a simplex is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions.
+In the following sections we explain how the above sums are evaluated and give some additional details about the Jacobian.  
+
 
 \tableofcontents
 
 \subsection basic_lesson1_moments Moments of inertia
 
-The distribution of mass in the body can be characterised by inertia moments. Inertia moments have practical applications, they are used for analysis motion of rigid bodies, or to characterise cross-section area in structural analysis. 
+The distribution of mass in the body can be characterised by moments of inertia. Moments of inertia have practical applications, they are used for analysis of motion of rigid bodies, or to characterise cross-section area in the structural analysis. 
 
-In general, inertia moments are tensors. Zero moments have one scalar coefficient, first moment is 1D arrays, i.e. vector, and second moment is second-order tensor, whose coefficients, for convenience, can be organised in 2D table, i.e. matrix. 
-This coefficient of moments depend on the observer, i.e. coordinate system, but
-there is a strict rule, i.e. tensorial transformation rule, how coefficients of
-moments change with the observer. For zero moments, area, all is simple, the
-volume of an object cannot be changed by looking at it from different points and
-angles, so it is the same in every coordinate system.
+In general, moments of inertia are tensors. Zero moment is represented by a single scalar coefficient, first moment is a 1D array, i.e.  a vector of coefficients, and second moment is a second-order tensor, coefficients of which for convenience can be organised in a 2D table, i.e. a matrix. Note that these coefficients depend on the observer, i.e. coordinate system, while the tensorial transformation rule describes how coefficients of moments of inertia change with the observer. 
 
 - Zero inertia moment is a body mass, 
 \f[
 \begin{align}
-M := \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega
+M := \int_\Omega \rho(\mathbf{x}) \, \textrm{d}\Omega,
 \end{align}
 \f]
 where \f$\rho\f$ is the material density, and \f$\Omega\f$ is a body domain.
 Mass characterises how much force needs to be applied for a desired body
-acceleration \f$a^i\f$ as stated by Newton's law:
+acceleration \f$\mathbf{a}=\{a^i\}\f$ as stated by the Newton's law:
 \f[
 \begin{align}
-a^i = M f^i
+a^i = M f^i,
 \end{align}
 \f]
-where \f$f^i\f$ is force, and kinematic energy can be expressed as:
+where \f$\mathbf{f}=\{f^i\}\f$ is the force. Moreover, kinematic energy can be expressed as:
 \f[
 \begin{align}
-E_k = \frac{v^i M v^i}{2}
+E_k = \frac{v^i M v^i}{2},
 \end{align}
 \f]
+where \f$\mathbf{v}=\{v^i\}\f$ is the velocity, and the summation over repeating indices is assumed. 
+Note also, that for the zero moment the tensorial transformation rule is straightforward: the mass of an object cannot be changed by looking at it from different points and angles, so it is the same in every coordinate system.
 
-- First inertia moment, is given by:
+- First inertia moment is given by:
 \f[
 \begin{align}
 S^i := \int_\Omega \rho(\mathbf{x}) x^i \textrm{d}\Omega
@@ -108,22 +103,21 @@ where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravity of the bod
 x_c^i = \frac{S^i}{M}.
 \end{align}
 \f]
-where \f$\mathbf{x}_c\f$ is gravity centre of the body, or system of the bodies,
-noting that, at centre of gravity, first moment of inertia is zero.
+where \f$\mathbf{x}_c=\{x_c^i\}\f$ is gravity centre of the body, or system of bodies. Note that if the origin is placed at centre of gravity, then the first moment of inertia is zero.
 
-- Second inertia moment is defined as
+- Second inertia moment is defined as:
 \f[
 \begin{align}
 I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}\Omega
 \end{align}
 \f]
-where \f$(x^ix^j)\f$ is outer product, see <a href="https://en.wikipedia.org/wiki/Outer_product">here</a>. The second moment of inertia, analogously to mass, characterises how much torque has to be applied at body origin for desired body acceleration, as follows:
+where \f$(x^ix^j)\f$ is the <a href="https://en.wikipedia.org/wiki/Outer_product">Outer product</a>. The second moment of inertia, analogously to mass, characterises how much torque has to be applied at body origin for desired body acceleration \f$\boldsymbol\omega=\{\omega^i\}\f$, as follows:
 \f[
 \begin{align}
 \omega^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
 \end{align}
 \f]
-where \f$\boldsymbol\tau\f$ is a torque vector, and \f$\varepsilon^{jmn}\f$ is  <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>. The term in the bracket is the cross product of the force vector and arm on which force acts. The kinematic energy of the rotating body is 
+where \f$\boldsymbol\tau=\{\tau^j\}\f$ is a torque vector, and \f$\varepsilon^{jmn}\f$ is <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>, while the term in brackets is the cross product of the force vector and arm on which this force acts. Finally, the kinematic energy of the rotating body is 
 \f[
 \begin{align}
 E_k = \frac{\omega^i I^{ij} \omega^j}{2}
