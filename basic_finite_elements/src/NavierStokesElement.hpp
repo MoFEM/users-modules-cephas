@@ -79,7 +79,6 @@ struct NavierStokesElement {
     VectorDouble3 pressureDragForce;
     VectorDouble3 viscousDragForce;
     VectorDouble3 totalDragForce;
-
     VectorDouble3 volumeFlux;
 
     std::map<int, BlockData> setOfBlocksData;
@@ -98,10 +97,12 @@ struct NavierStokesElement {
       pressureDragForce = VectorDouble3(3);
       viscousDragForce = VectorDouble3(3);
       totalDragForce = VectorDouble3(3);
+      volumeFlux = VectorDouble3(3);
 
       pressureDragForce.clear();
       viscousDragForce.clear();
       totalDragForce.clear();
+      volumeFlux.clear();
     }
 
     MoFEMErrorCode getParameters() {
@@ -362,13 +363,13 @@ struct NavierStokesElement {
     int nbRows; ///< number of dofs on row
     int nbIntegrationPts;
 
-    OpAssembleRhs(const string field_name,
+    OpCalcVolumeFlux(const string field_name,
                   boost::shared_ptr<CommonData> common_data,
                   BlockData &block_data)
         : UserDataOperator(field_name, UserDataOperator::OPROW),
           commonData(common_data), blockData(block_data){};
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
   struct OpCalcDragForce: public FaceUserDataOperator {

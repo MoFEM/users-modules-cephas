@@ -237,8 +237,6 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBQUAD, "VELOCITY", order_u);
     CHKERR m_field.set_field_order(0, MBPRISM, "VELOCITY", order_u);
 
-    
-
     if (!discont_pressure) {
       CHKERR m_field.set_field_order(0, MBVERTEX, "PRESSURE", 1);
       CHKERR m_field.set_field_order(0, MBEDGE, "PRESSURE", order_p);
@@ -474,7 +472,6 @@ int main(int argc, char *argv[]) {
         new VolumeElementForcesAndSourcesCore(m_field));
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_rhs_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
-
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_flux_ptr(
         new VolumeElementForcesAndSourcesCore(m_field));
 
@@ -507,6 +504,8 @@ int main(int argc, char *argv[]) {
         CHKERR NavierStokesElement::setNavierStokesOperators(
             fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", commonData);
       }
+      CHKERR NavierStokesElement::setCalcVolumeFluxOperators(
+          fe_flux_ptr, "VELOCITY", commonData);
     }
     if (mesh_has_prisms) {
       if (stokes_flow) {
@@ -518,6 +517,8 @@ int main(int argc, char *argv[]) {
             prism_fe_rhs_ptr, prism_fe_lhs_ptr, "VELOCITY", "PRESSURE",
             commonData, MBPRISM);
       }
+      CHKERR NavierStokesElement::setCalcVolumeFluxOperators(
+          prism_fe_flux_ptr, "VELOCITY", commonData, MBPRISM);
     }
 
     Mat Aij;      // Stiffness matrix
@@ -626,9 +627,9 @@ int main(int argc, char *argv[]) {
 
     Vec G;
     CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
-    VectorDouble3 vecGlobalDrag = VectorDouble3(3);
+    VectorDouble3 vecGlobal = VectorDouble3(3);
 
-    auto compute_global_drag = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
+    auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
       MoFEMFunctionBegin;
 
       CHKERR VecZeroEntries(G);
@@ -771,7 +772,7 @@ int main(int argc, char *argv[]) {
 
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-     
+
       CHKERR VecAssemblyBegin(D);
       CHKERR VecAssemblyEnd(D);
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -833,17 +834,20 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
 
       CHKERR scale_problem(velocity_scale, length_scale, pressure_scale);
-      
+
       if (ss % outPutStep == 0) {
 
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", post_proc_ptr);
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES",
                                         prism_post_proc_ptr);
-        
-        // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Volume flux: (%g, %g, %g)\n",
-        //                      vecGlobalDrag[0], vecGlobalDrag[1],
-        //                      vecGlobalDrag[2]);
 
+        commonData->volumeFlux.clear();
+        CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", fe_flux_ptr);
+        CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", prism_fe_flux_ptr);
+
+        compute_global_vec(commonData->volumeFlux, vecGlobal);
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Volumetric flux: (%g, %g, %g)\n",
+                           vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
         string out_file_name;
 
@@ -882,20 +886,17 @@ int main(int argc, char *argv[]) {
           commonData->totalDragForce.clear();
           CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", drag_fe_ptr);
 
-          compute_global_drag(commonData->pressureDragForce, vecGlobalDrag);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "pressure drag: (%g, %g, %g)\n",
-                             vecGlobalDrag[0], vecGlobalDrag[1],
-                             vecGlobalDrag[2]);
+          compute_global_vec(commonData->pressureDragForce, vecGlobal);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g, %g)\n",
+                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
-          compute_global_drag(commonData->viscousDragForce, vecGlobalDrag);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "viscous drag: (%g, %g, %g)\n",
-                             vecGlobalDrag[0], vecGlobalDrag[1],
-                             vecGlobalDrag[2]);
+          compute_global_vec(commonData->viscousDragForce, vecGlobal);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g, %g)\n",
+                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
-          compute_global_drag(commonData->totalDragForce, vecGlobalDrag);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "total drag: (%g, %g, %g)\n",
-                             vecGlobalDrag[0], vecGlobalDrag[1],
-                             vecGlobalDrag[2]);
+          compute_global_vec(commonData->totalDragForce, vecGlobal);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
+                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
         }
       }
 

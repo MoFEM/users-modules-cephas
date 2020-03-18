@@ -145,8 +145,11 @@ MoFEMErrorCode NavierStokesElement::setCalcVolumeFluxOperators(
       fe_flux_ptr->getOpPtrVector().push_back(
           new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
     }
-    // fe_flux_ptr->getOpPtrVector().push_back(
-    //     new OpCalcVolumeFlux(velocity_field, common_data, sit.second));
+    fe_flux_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(velocity_field,
+                                            common_data->velPtr));
+    fe_flux_ptr->getOpPtrVector().push_back(
+        new OpCalcVolumeFlux(velocity_field, common_data, sit.second));
   }
 
   MoFEMFunctionReturn(0);
@@ -729,15 +732,20 @@ NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
 /**
  * \brief Integrate local constrains vector
  */
-MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(EntData &data) {
+MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(int side,
+                                                             EntityType type,
+                                                             EntData &data) {
   MoFEMFunctionBegin;
 
-  auto get_tensor1 = [](VectorDouble &v, const int r) {
-    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(
-        &v(r + 0), &v(r + 1), &v(r + 2));
-  };
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
 
-  int nb_base_functions = data.getN().size2();
+  if (blockData.eNts.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+      blockData.eNts.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+
+  const int nb_gauss_pts = commonData->velPtr->size2();
 
   auto t_u = getFTensor1FromMat<3>(*commonData->velPtr);
   
@@ -745,50 +753,19 @@ MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(EntData &data) {
   FTensor::Index<'j', 3> j;
 
   // loop over all integration points
-  for (int gg = 0; gg != nbIntegrationPts; gg++) {
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    double d1 = getVolume();
-    double d2 = getGaussPts()(3, gg);
     double w = getVolume() * getGaussPts()(3, gg);
 
     if (getHoGaussPtsDetJac().size() > 0) {
       w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    // evaluate constant term
-    // const double alpha = w * blockData.fluidViscosity;
-    const double alpha = w * blockData.viscousCoef;
+    for (int dd = 0; dd != 3; dd++) {
+      commonData->volumeFlux[dd] += w * t_u(dd);
+    } 
 
-    auto t_a = get_tensor1(locVec, 0);
-    int rr = 0;
-
-    // loop over base functions
-    for (; rr != nbRows / 3; rr++) {
-      // add to local vector source term
-
-      // for (int i : {0, 1, 2}) {
-      //   for (int j : {0, 1, 2}) {
-      //     t_a(i) += alpha * t_u_grad(i, j) * t_v_grad(j);
-      //     t_a(j) += alpha * t_u_grad(i, j) * t_v_grad(i);
-      //   }
-      //   t_a(i) -= w * t_p * t_v_grad(i);
-      // }
-
-      t_a(i) += alpha * t_u_grad(i, j) * t_v_grad(j);
-      t_a(j) += alpha * t_u_grad(i, j) * t_v_grad(i);
-
-      t_a(i) -= w * t_p * t_v_grad(i);
-
-      ++t_a;      // move to next element of local vector
-      ++t_v_grad; // move to next gradient of base function
-    }
-
-    for (; rr != nb_base_functions; rr++) {
-      ++t_v_grad;
-    }
-
-    ++t_u_grad;
-    ++t_p;
+    ++t_u;
   }
 
   MoFEMFunctionReturn(0);
