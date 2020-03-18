@@ -66,9 +66,9 @@ In the following sections we explain how the above sums are evaluated and give s
 
 The distribution of mass in the body can be characterised by moments of inertia. Moments of inertia have practical applications, they are used for analysis of motion of rigid bodies, or to characterise cross-section area in the structural analysis. 
 
-In general, moments of inertia are tensors. Zero moment is represented by a single scalar coefficient, first moment is a 1D array, i.e.  a vector of coefficients, and second moment is a second-order tensor, coefficients of which for convenience can be organised in a 2D table, i.e. a matrix. Note that these coefficients depend on the observer, i.e. coordinate system, while the tensorial transformation rule describes how coefficients of moments of inertia change with the observer. 
+In general, moments of inertia are tensors. Zero moment is represented by a single scalar coefficient, first moment is a 1D array, i.e.  a vector of coefficients, and second moment is a second-order tensor, coefficients of which for convenience can be organised in a 2D table, i.e. a matrix. Note that these coefficients depend on the observer, i.e. coordinate system, and the tensorial transformation rule describes how coefficients of moments of inertia change with the observer. 
 
-- Zero inertia moment is a body mass, 
+- Zero inertia moment is the body mass, 
 \f[
 \begin{align}
 M := \int_\Omega \rho(\mathbf{x}) \, \textrm{d}\Omega,
@@ -94,33 +94,33 @@ Note also, that for the zero moment the tensorial transformation rule is straigh
 - First inertia moment is given by:
 \f[
 \begin{align}
-S^i := \int_\Omega \rho(\mathbf{x}) x^i \textrm{d}\Omega
+S^i := \int_\Omega \rho(\mathbf{x}) \, x^i \textrm{d}\Omega
 \end{align}
 \f]
-where \f$x^i\f$ is coordinate in \f$i\f$ direction. Center of gravity of the body can be calculated as:
+where \f$x^i\f$ is the coordinate in the \f$i\f$ direction. Center of gravity of the body can be calculated as:
 \f[
 \begin{align}
 x_c^i = \frac{S^i}{M}.
 \end{align}
 \f]
-where \f$\mathbf{x}_c=\{x_c^i\}\f$ is gravity centre of the body, or system of bodies. Note that if the origin is placed at centre of gravity, then the first moment of inertia is zero.
+where \f$\mathbf{x}_c=\{x_c^i\}\f$ is the centre of gravity of the body, or system of bodies. Note that if the origin is placed at the centre of gravity, then the first moment of inertia is zero.
 
-- Second inertia moment is defined as:
+- Second moment of inertia is defined as:
 \f[
 \begin{align}
 I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}\Omega
 \end{align}
 \f]
-where \f$(x^ix^j)\f$ is the <a href="https://en.wikipedia.org/wiki/Outer_product">Outer product</a>. The second moment of inertia, analogously to mass, characterises how much torque has to be applied at body origin for desired body acceleration \f$\boldsymbol\omega=\{\omega^i\}\f$, as follows:
+where \f$(x^ix^j)\f$ is the <a href="https://en.wikipedia.org/wiki/Outer_product">Outer product</a>. The second moment of inertia, analogously to mass, characterises how much torque has to be applied at body origin for desired body angular acceleration \f$\boldsymbol\alpha=\{\alpha^i\}\f$, as follows:
 \f[
 \begin{align}
-\omega^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
+\alpha^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
 \end{align}
 \f]
-where \f$\boldsymbol\tau=\{\tau^j\}\f$ is a torque vector, and \f$\varepsilon^{jmn}\f$ is <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>, while the term in brackets is the cross product of the force vector and arm on which this force acts. Finally, the kinematic energy of the rotating body is 
+where \f$\boldsymbol\tau=\{\tau^j\}\f$ is the torque vector, and \f$\varepsilon^{jmn}\f$ is the <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>, while the term in brackets is the cross product of the force vector and arm on which this force acts. Finally, the kinematic energy of the rotating body is 
 \f[
 \begin{align}
-E_k = \frac{\omega^i I^{ij} \omega^j}{2}
+E_k = \frac{\omega^i I^{ij} \omega^j}{2}.
 \end{align}
 \f]
 
@@ -250,38 +250,38 @@ taking \f$d\pmb\xi_0\f$, \f$d\pmb\xi_1\f$, and \f$d\pmb\xi_2\f$, are cartesian b
 
 \subsection basic_lesson1_installations Installation
 
-If you want to develop code in MoFEM, and you probably do if you are reading this tutorial, you have to install MoFEM for developer version, to do that follow instructions here \ref install_spack.
+If you want to develop code in MoFEM, and you probably do if you are reading this tutorial, you will need to install developer version of MoFEM following instructions here \ref install_spack.
 
-The compilation of the code and executable files are located in
+Executable files are located in
 \code
 $HOME/mofem_install/um/build_debug/basic_finite_elements/basic
 \endcode
-whereas source code is located in 
+whereas the source code is located in 
 \code
 $HOME/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/basic
 \endcode
-This is called out of source compilation since code and programs are located in two different locations. It is a convenient way if you have different compilation options or linking different libraries, and you like to test all, against the same source code. Code in \em build_debug is compiled with debugging flags and is not optimised. Using the debugger you can run such code line by line, which can help you understand how it works and find errors in your code. Information on how to debug code can be found
+This is called `out-of-source compilation` since code and programs are located in two different locations. It is a convenient way if you have different compilation options or linking different libraries, and you would like to test to test them all against the same source code. Code in \em build_debug is compiled with debugging flags and is not optimised. Using the debugger you can run such code line by line, which can help you understand how it works and find errors in your code. Information on how to debug code can be found
 <a href="https://code.visualstudio.com/docs/introvideos/debugging">here</a>.
 
-\note In default MoFEM installation you can create executables under another location, that  is
+\note In the default MoFEM installation you can create executables under another location which is
 \code 
 $HOME/mofem_install/um/build_release/basic_finite_elements/basic
 \endcode
-Executable files \em build_release location are optimised, running much faster, but harder to inspect with debugger. 
+Executable files \em build_release location are optimised, and are running much faster but are also harder to inspect with the debugger. 
 
 \subsection running_lesson_1 Running code
 
-To run code
+To run code type
 \code
 cd $HOME/mofem_install/build_release/basic_finite_elements/basic
 ./basic_moment_of_inertia -file_name cube.h5m
 \endcode
 
-Code is executed for the simple cube, see \ref basic_lesson1_figure5 "Figure 5", which has size one for all edges and coordinate origin in the centre of the cube. 
+Code is executed for the cube mesh, see \ref basic_lesson1_figure5 "Figure 5", which has unit size for all edges and coordinates origin is in the centre of the cube. 
 \anchor basic_lesson1_figure5
 \image html basic_lesson1_cube.png "Figure 5: Cube" width=700px
 
-Code output should be following
+Code output should be similar to the following:
 \code
 MoFEM version 0.9.1 (MOAB 5.1.0 Petsc Release Version 3.11.3, Jun, 26, 2019 ) 
 git commit id 9b6655832763d7fc44c80e01d36bae166a69ed80
@@ -335,7 +335,7 @@ style, it improves code readability, and people understand each other better.
 
 \subsection basci_lesson1_main Main function
 
-The main function is relatively short and looks the same for every program 
+The main function is relatively short and looks the same for any program in this set of tutorials.
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp  main
 
 You can use the above snippet to start your code. The main function is responsible for kick-starting the job, and it has stages;
