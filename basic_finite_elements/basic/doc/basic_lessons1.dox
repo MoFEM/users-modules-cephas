@@ -66,7 +66,7 @@ In the following sections we explain how the above sums are evaluated and give s
 
 The distribution of mass in the body can be characterised by moments of inertia. Moments of inertia have practical applications, they are used for analysis of motion of rigid bodies, or to characterise cross-section area in the structural analysis. 
 
-In general, moments of inertia are tensors. Zero moment is represented by a single scalar coefficient, first moment is a 1D array, i.e.  a vector of coefficients, and second moment is a second-order tensor, coefficients of which for convenience can be organised in a 2D table, i.e. a matrix. Note that these coefficients depend on the observer, i.e. coordinate system, and the tensorial transformation rule describes how coefficients of moments of inertia change with the observer. 
+In general, moments of inertia are tensors. Zero moment is represented by a single scalar coefficient, first moment is a 1D array, i.e. a vector of coefficients, and second moment is a second-order tensor, coefficients of which for convenience can be organised in a 2D table, i.e. a matrix. Note that these coefficients depend on the observer, i.e. coordinate system, and the tensorial transformation rule describes how coefficients of moments of inertia change with the observer. 
 
 - Zero inertia moment is the body mass, 
 \f[
@@ -260,24 +260,24 @@ whereas the source code is located in
 \code
 $HOME/mofem_install/mofem-cephas/mofem/users_modules/basic_finite_elements/basic
 \endcode
-This is called `out-of-source compilation` since code and programs are located in two different locations. It is a convenient way if you have different compilation options or linking different libraries, and you would like to test to test them all against the same source code. Code in \em build_debug is compiled with debugging flags and is not optimised. Using the debugger you can run such code line by line, which can help you understand how it works and find errors in your code. Information on how to debug code can be found
+This is called \em out-of-source \em compilation since code and programs are located in two different locations. It is a convenient way if you have different compilation options or linking different libraries, and you would like to test to test them all against the same source code. Code in `build_debug` is compiled with debugging flags and is not optimised. Using the debugger you can run such code line by line, which can help you understand how it works and find errors in your code. Information on how to debug code can be found
 <a href="https://code.visualstudio.com/docs/introvideos/debugging">here</a>.
 
 \note In the default MoFEM installation you can create executables under another location which is
 \code 
 $HOME/mofem_install/um/build_release/basic_finite_elements/basic
 \endcode
-Executable files \em build_release location are optimised, and are running much faster but are also harder to inspect with the debugger. 
+Executable files `build_release` location are optimised, and are running much faster but are also harder to inspect with the debugger. 
 
 \subsection running_lesson_1 Running code
 
-To run code type
+To run code type:
 \code
 cd $HOME/mofem_install/build_release/basic_finite_elements/basic
 ./basic_moment_of_inertia -file_name cube.h5m
 \endcode
 
-Code is executed for the cube mesh, see \ref basic_lesson1_figure5 "Figure 5", which has unit size for all edges and coordinates origin is in the centre of the cube. 
+Code is executed for the mesh of a cube, see \ref basic_lesson1_figure5 "Figure 5", which has unit size for all edges and coordinates origin is in the centre of the cube. 
 \anchor basic_lesson1_figure5
 \image html basic_lesson1_cube.png "Figure 5: Cube" width=700px
 
@@ -305,44 +305,35 @@ First moment of inertia [ -4.3368e-19, -1.4095e-17, -1.3878e-17 ]
 Second moment of inertia [ 3.4961e-312, 1.0000e+00, 0.0000e+00; 6.9531e-310 8.3333e-02; -6.0715e-18 ]
 \endcode
 
-The code prints at the beginning the version of the MoFEM library. In the same
+At the beginning the code prints the version of the MoFEM library. In the same
 line, versions of MOAB and PETSc are printed respectively. This will enable to
-reproduce errors if occurred and fix bugs. Next information printed is about
-elements added, i.e. \em dFE, and field DOFs for density field, i.e. \em
-rho. Here only DOFs on vertices are added. Thus linear approximation of density
-is considered. After that, the information about the number of finite elements
-is printed, i.e. 162, and the problem itself, i.e. SimpleProblem, the number of
-DOFs on rows & columns, i.e. 64, and other information related to mesh
-partitioning. Finally, the results are printed.
-
+reproduce errors if occurred and fix bugs. Next information printed is about the name of  finite elements being added, i.e. `dFE`, which stands for "domain finite element", and the name given to the density field, i.e. `rho`. For this field DOFs are added only on vertices, thus the linear approximation of density is considered. After that, the information about the number of finite elements is printed, i.e. `Nb. FEs 162`, the name of the problem itself, i.e. `SimpleProblem`, the number of DOFs on rows & columns, i.e. `row dofs 64`, `col dofs 64`, and other information related to mesh partitioning. Finally, the results are printed.
 
 \subsection basic_lesson1_programming Editor
 
-You can use your favourite editor, vim, emacs, sublime, atom.io, if you have
-one, however, if you have no preferences we recommend <a
+You can use your favourite editor if you have one, e.g. vim, emacs, sublime, atom.io, etc, however, if you have no preferences, we recommend <a
 href="https://code.visualstudio.com">VS Code</a>. We have some tips on how you
-can configure it to make it work well with MoFEM, see \ref configure_vs_code.
+can configure it to make it work well with MoFEM, see \ref configure_vs_code
 
-\note We have some programming conventions, and style of programming, see \ref
-coding_practice. You do not have to jump and learn conventions; you will pick-up
-style on the way like children pick-up cultural conventions when they grow up.
+\note We have some programming conventions, and follow a certain style of programming, see \ref
+coding_practice. You do not have to learn these conventions right away; it is usually natural to pick up the style on the way like children pick up cultural conventions when they grow up.
 In MoFEM, we are using clang-format to help us unify programming style. Most of
-the editors use clang-format. For example, how to do that in VS Code is described
+the editors support clang-format, for example, how to do that in VS Code is described
 <a href="https://code.visualstudio.com/docs/cpp/cpp-ide">here</a>. Keeping the
-same style, and learning and following programming conventions is essential in
-the long term. MoFEM is open community code, and if everyone follows the agreed
+same style, learning and following programming conventions is essential for
+the long-term development. MoFEM is an open community code, and if everyone follows the agreed
 style, it improves code readability, and people understand each other better. 
 
 \subsection basci_lesson1_main Main function
 
-The main function is relatively short and looks the same for any program in this set of tutorials.
-\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp  main
+The main function is relatively short and looks the same for each program in this set of tutorials:
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp main
 
-You can use the above snippet to start your code. The main function is responsible for kick-starting the job, and it has stages;
+You can use the above snippet to start your code. The main function is responsible for kick-starting the job, and it has following stages:
 
-- The main programme begins with registering MoFEM DM interface in PETSc data structures. That enables transparent control of MoFEM database by PETSc solvers, and vice-versa use PETSc standard interface to create matrices, vectors, and other PETSc objects
+- The main program begins with registering MoFEM DM interface in PETSc data structures. That enables transparent control of MoFEM database by PETSc solvers, and vice-versa: to use PETSc standard interface to create matrices, vectors, and other PETSc objects;
 
-- Next, the MOAB database is created and connected to the interface. A similar approach is made for MoFEM database. MOAB database stores data about mesh, whereas MoFEM database stores data about finite element method, approximation bases, finite elements and problems. MoFEM is another level of abstraction, on top of the MOAB database since finite element data are stored on data tags created on mesh entities. 
+- Next, the MOAB database is created and connected to the interface. A similar approach is used for the MoFEM database. MOAB database stores data about mesh, whereas MoFEM database stores data about finite element method, approximation bases, finite elements and problems. Therefore, MoFEM is another level of abstraction on top of the MOAB database, since finite element data is stored on data tags created on mesh entities;
 
 - Finally, problem-specific example class is created, and calculations are executed in Example::runProblem.
 
@@ -357,29 +348,28 @@ try {
 }
 CATCH_ERRORS;
 \endcode
-This part of the code is responsible for handling all the errors, initiated inside PETSc, MOAB, Boost, standard library, and MoFEM or developer functions. PETSc, MOAB, and MoFEM functions return error code, to handle them properly, do as follow
+This part of the code is responsible for handling all errors initiated inside PETSc, MOAB, Boost, standard library, and MoFEM or developer functions. PETSc, MOAB, and MoFEM functions return error codes, to handle them properly the following macro is used:
 \code
   CHKERR PetscFunction();   // PETSc function
   CHKERR moab.function();   // MOAB function
   CHKERR m_field.function(); // MoFEM function
 \endcode
 Catching errors will make searching for runtime errors easier, and in case of
-the problem appearing, for seeking help, see \ref guidelines_bug_reporting. CHKERR is a macro which check error code returned by the function, and if returned code indicates an error, program stops and prints the relevant error.
+the problem appearing see \ref guidelines_bug_reporting for seeking help. `CHKERR` is a macro which checks error code returned by the function, and if returned code indicates an error, program stops and prints the corresponding error.
 
-\note When you program, you can encounter two types of error, <em>compilation
+\note In programming you can encounter two types of error, <em>compilation
 errors</em> and <em>runtime errors</em>. <em>Compilation errors</em> are most
-often a syntax error, which prevents the compiler from making program, you see
-them when you run \em make programme. <em>Runtime errors</em> are caused by some
-bug in the programme such as segmentation-fault, overflow, bad algorithm or you
-run out of computer resources, e.g. memory. Those errors need to be handled, to
+often syntax errors, which prevent the compiler from making program, i.e. you see
+them when you run \em make for your program. <em>Runtime errors</em> are caused by bugs in the program code such as segmentation fault, overflow, bad algorithm or you
+run out of computer resources, e.g. memory. Those errors need to be handled to properly
 indicate user what and where the problem is.
 
 \subsection basic_lesson1_example_class Example class
 
-Each lesson in the tutorial series has an example class, which has a very similar structure as following:
+Each lesson in the tutorial series has an example class which has a very similar structure to the following:
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Example
 
-where Example::runProblem called by the main programme is as follows
+Function Example::runProblem called by the main program has the following code:
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Run all
 
 Note that every function starts and ends with error handling
@@ -388,60 +378,54 @@ MoFEMFunctionBegin;
 \\ function body
 MoFEMFunctionReturn(0);
 \endcode
-That enables stacking functions calls in case of problems. We use functions stack to see what functions, on what lines have been called prior to the error.
+This enables stacking functions calls in case of problems. We use function stacks to see which functions, and on which lines, have been called prior to the error.
 
 \subsubsection basic_lesson1_example_setup Setup problem
 
-Before calculation can be performed, some bookkeeping has to be done to manage complexities related to finite element problem. MoFEM does most of that boring job transparently, and only needs to be provided with initial information.
+Before calculation can be performed, some bookkeeping has to be done to manage complexities related to the finite element method. MoFEM does most of this boring job "in the back-end" and only needs to be provided with initial information:
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set up problem
 
-Note that function adds field, which is defined by name, space, approximation base, and rank. To approximate density, we choose space of integrable functions and its derivatives, use a recipe from \cite NME:NME847 to construct base functions, and rank of the base is one since density is a scalar field. The order of approximation is set to one, i.e. linear functions are used. 
+We use MoFEM::Simple interface to read command line options, load mesh file, add a field and set its order. Note that the field is added by function `addDomainField` and is defined by name, space, approximation base and rank. To approximate density, we choose space \em H1 of integrable functions with integrable derivatives and use a recipe from \cite NME:NME847 to construct base functions, while the rank (number of coefficients) of the base is one since density is a scalar field. The order of approximation is set to one, i.e. linear base functions are used. 
 
 \subsubsection basic_lesson1_example_common_data Common data structure 
 
-The common data structure is used to exchange data between operators run by
+The common data structure is used to exchange data between operators run on 
 finite elements. It is a convenient method that allows to group data evaluated
-at integration points which are in element, or aggregate data from all elements to
+at integration points of an element, or aggregate data from all elements to
 be used later by other parts of the code. You will find common data in all
-examples for the following lessons, and other parts of MoFEM implementations. 
+examples for the following lessons, and other parts of MoFEM implementation. 
 
-Common data structure is defined as follows
+Common data structure is defined as follows:
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Common data
 
-and instance is created by method
+while an instance of Example::CommonData class is created by the following method:
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Create common data
 
-where memory for Example::CommonData is allocated and handled by <a
+where memory for Example::CommonData is allocated and handled by a <a
 href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared
-pointer</a>. Using <a
-href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a>
-and function Example::CommonData::getRhoAtIntegrationPtsPtr shared pointer to
-vector  \em rhoAtIntegrationPtsPtr can be obtained. Finally, PETSc vector is
-created. Here we are using MoFEM::SmartPetscObj, which is a special smart
+pointer</a>. Moreover, using <a href="https://www.boost.org/doc/libs/1_64_0/libs/smart_ptr/enable_shared_from_this.html">enable_shared_from_this</a>
+and function Example::CommonData::getRhoAtIntegrationPtsPtr a shared pointer to
+a vector `rhoAtIntegrationPtsPtr` can be obtained. Finally, a PETSc vector is
+created and stored using MoFEM::SmartPetscObj, which is a special smart
 pointer for handling PETSc objects. 
 
-Smart pointers, boost::shared_ptr and MoFEM::SmartPetscObj, are used to maintain the life of dynamically allocated objects. You can think about smart pointers as a regular pointer, and to understand the following code you do not have to know more about them. More explanation is needed for
+Smart pointers, such as <a href="https://www.boost.org/doc/libs/1_72_0/libs/smart_ptr/doc/html/smart_ptr.html#shared_ptr">boost::shared_ptr</a> and MoFEM::SmartPetscObj, are used to maintain the life of dynamically allocated objects. You can think about smart pointers as regular C/C++ pointers, and to understand the following code you do not have to know more about them. However, more explanation is needed for the following code:
 \code
+  int local_size;
+  if (mField.get_comm_rank() == 0) // get_comm_rank() gets processor number
+    // processor 0
+    local_size = CommonData::LAST_ELEMENT; // last element gives size of vector
+  else
+    // other processors (e.g. 1, 2, 3, etc.)
+    local_size = 0; // local size of vector is zero on other processors
 
-int local_size;
-if(mField.get_comm_rank() == 0) // mField.get_comm_rank() gets procesor number
-  // First processor
-  local_size = CommonData::LAST_ELEMENT; // Last element is size of vector
-else 
-  // other processors
-  local_size = 0; // local size of vector is zero on other processors
-
-commonDataPtr->petscVec = createSmartVectorMPI(
-  mField.get_comm(), local_size, CommonData::LAST_ELEMENT);
+  commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
+                                                 CommonData::LAST_ELEMENT);
 \endcode
-this is a smart pointer to PETSc Vector, it is created by function
-MoFEM::createSmartVectorMPI which calls PETSc function VecCreateMPI, described
-<a
-href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecCreateMPI.html">here</a>. PETSc vector enables access vector from multiple processes and is used in parallel computing. Function needs to be provided with commentator, hereby \em mField.get_comm(), which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next local size of the vector is provided, here it is equal to 10, since we store mass, three first moments, and six second moments of inertia, in the order as it is in Example::CommonData::VecElements. Local size of the vector is ten, which is equal to Example::CommonData::VecElements on the first processor, and zero on other processors. It means that all data will be accumulated on processor 0 as shown in \ref basic_l1_figure_6 "Figure 6". The global size of the vector is a sum of all local size, and thus is ten,
-i.e. CommonData::VecElements.
+`commonDataPtr->petscVec` is a smart pointer to a PETSc MPI Vector, which supports access from multiple processes and is useful for parallel computing. Function MoFEM::createSmartVectorMPI needs to be provided with a communicator, e.g. `mField.get_comm()`, which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next, we determine the local size of the vector which will be used to store mass, three coefficients for the first moment and six coefficients for the second moment of inertia, i.e. 10 coefficients in total in the order defined in Example::CommonData::VecElements. Note that the local size of the vector is 10 on the processor 0, and zero on other processors. It means that all data will be accumulated on processor 0 as shown in \ref basic_l1_figure_6 "Figure 6". The global size of the vector is a sum of all local size, and thus is also 10.
 
-In all the following lessons, including this one, we implemented code to make it
+Note that in all the following lessons, including this one, we implemented code to make it
 work with distributed meshes. 
 
 \anchor basic_l1_figure_6
@@ -449,91 +433,85 @@ work with distributed meshes.
 
 \subsubsection basic_lesson1_bc Setting density field
 
-\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set initial density
+\snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Set density distribution
 
-For simplicity, density is set to unity, at each mesh node. That creates a uniform density field. However, applying easy modification, arbitrary density field can be set. Function \em set_density argument has coordinates, so you can set any density distribution you like. Core function MoFEM::FieldBlas::setVertexDofs is doing hard work to set the values to the mesh nodes by iterating each node, getting its coordinates and calling function provided by the user, i.e. \em set_density.
+For simplicity, density is set to unity in each node of the mesh, which represents a uniform density field. However, an arbitrary density field can be set using a small modification. Namely, function `set_density` in Example::setFieldValues gets coordinates as its arguments, thus you could set any density distribution you would like. Note that the MoFEM Core function MoFEM::FieldBlas::setVertexDofs is doing the hard work of setting field values to the mesh nodes. This function iterates over all nodes, gets each node's coordinates and calls the function provided by the user, i.e. `set_density`.
 
 \subsubsection basic_lesson1_operators Operators and pipelines
 
-To make calculations in MoFEM, you can use the \em Basic interface. You need to provide code with operators which are executed on finite element entities on the mesh. Operators can do various tasks, for example, evaluate field values at integration points, e.g. calculating \f$\rho_g^h\f$. You will use operators as well to compute integrals when you calculate volume, the first moment of inertia, or second moment of inertia. In other examples, operators are used for calculating differential operators, like gradient, divergence, etc., or assemble internal force vector. 
+For computing moments of inertia, as well as for solving a multitude of other problems, a MoFEM developer only needs to provide the code with operators which are executed on finite element entities of the mesh. Operators can do various tasks, for example, evaluate field values at integration points, e.g. calculating \f$\rho_g^h\f$. You will use operators as well to compute integrals when you calculate mass, the first and second moments of inertia. In other examples, operators are used for calculating differential operators, e.g. gradient, divergence, etc., or assemble internal forces vector. 
 
-You do not have to write code which integrates explicitly over finite element entities on the mesh, MoFEM will do that for you once you provide sequences of operators to use. There is a reason for that since we aim to write code for finite elements which is generic and can be used in different contexts. For example, while the linear solver is used, or Newton iterations have to be done, or implicit/explicit time solver. Each solver does the tasks, integrate finite elements in a different order, thus solve iterates over the element. Solver only has to be provided with problem specific set of operators; however, the implementation of operators is independent on the type of solver. 
+A developer does not have to write explicitly the code which integrates over finite element entities of the mesh, MoFEM will do that for you once you provide sequences (pipelines) of operators to use. There is a reason for this approach since we aim to write a finite element code which is generic and can be used in different contexts. For example, for solving a variety of problems described by Partial Differential Equations (PDEs) different solvers may be required: linear solvers, non-linear Newton-Raphson solvers, or implicit/explicit time solvers. Each solver does its own tasks, iterating over finite elements in a different order. In the MoFEM approach, a solver only has to be provided with problem specific set of operators, while the implementation of operators is independent of the type of solver. 
 
-The developer provides MoFEM with operators which are executed on each element.
-In particular, those operators are executed on each sub-entity of the element,
-for example, finite triangle element is made from entities of nodes, three edges
-and triangle itself. Operators are executed for each entity of finite element.
-In this lesson, since density field is exclusively defined on nodes, operators
-are run for nodes only. However, this is a special case.
+Thus, a developer provides MoFEM with operators which are executed on each element.
+More precisely, these operators are executed on each sub-entity of each element, since, 
+for example, a triangle element consists of nodes, three edges and triangle face itself. In this lesson, since density field is exclusively defined on nodes, operators are run for nodes only. However, note that this is a special case.
 
-On each finite element, several operators can be run in sequence. In principle, operators are used to break down a complex problem in simpler tasks. Each operator is implemented such that it iterates over integration points on the element. User operators are derived from a base class `UserDataOperator` and have by default several basic functions which  vary for different element shapes. However, they always provide integration points, shape functions at integrations points, finite element measure (length, area, or volume). 
+On each finite element, several operators can be run in a sequence. In principle, operators are used to break down a complex problem into simpler tasks. Each operator is implemented such that it iterates over integration points of an element. User-defined operators are derived from a base class `UserDataOperator` and have by default several basic functions which slightly vary for different element shapes. However, they always provide integration points, values of shape functions and their gradients at integrations points and finite element measures (length, area, or volume). Note that writing an operator for your problem, you do not have to make it specific for any particular element shape. In other words, the implementation of user-defined operators is independent of element shape, approximation order, and other fields used on the element, if there are any. 
 
-Writing operator for your problem, you do not have to think about what type of
-entity element is. The implementation is independent on element shape, approximation
-order, and other fields used on the element, if there are any. 
-
-Shape functions on each finite element can be different, depending on what approximation spaces you choose to use. Also, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson, in function Example::setUP we have defined density field as
+Shape functions on each finite element can be different, depending on approximation spaces you choose to use. Moreover, shape functions will depend on base and approximation order. Similarly, the number of DOFs and DOFs values on element entities depend on the field type. In this lesson, in function Example::setUP we have defined density field as follows:
 \code 
 CHKERR simple->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE, 1);
 CHKERR simple->setFieldOrder("rho", 1);
 \endcode
-\em H1 means that standard-conforming elements are used, and approximation order
-is one. Conforming element have approximation function that is continuous along
-element edges and at the node. Mathematically speaking, function in \em H1 is piecewise continuous,
-i.e. it is integrable and gradients of the
-function are also integrable. Integrable means that when you calculate integral, it
-gives finite value, other than \f$+/-\infty\f$, i.e. the result is a real
-number. 
-Approximation order 1 means that is linear piecewise continuous. To build
-approximation base, we are using recipe AINSWORTH_LEGENDRE_BASE, which is
-described in details here \cite ainsworth2001essential. However, since we use
-the first order, shape functions are  no different  as presented in \ref
+where the choice of space `H1` means that standard conforming elements are used, while the approximation order is set to one. Conforming elements have base functions that are continuous across
+element edges and at nodes. Mathematically speaking, function in space `H1` is piecewise continuous,
+i.e. it is integrable and gradients of the function are also integrable. Integrable means that when you calculate integral of the function, it gives a finite value, rather than \f$+/-\infty\f$, i.e. the result is a real
+number. Approximation order 1 means that base functions are linear piecewise continuous. To build
+approximation base, we are using recipe `AINSWORTH_LEGENDRE_BASE`, which is
+described in details in \cite ainsworth2001essential. However, since we use only
+the first order, shape functions are no different from those presented in \ref
 basic_l1_figure_3 "Figure 3".
 
 Our main task in this lesson is to calculate the mass, the first moment of inertia
-and the second moment of inertia. In order to do that, on each element, we have
-to calculate density at integration points, then calculate moments of inertia. That is
-depicted on \ref basic_l1_figure_7 "Figure 7 " by user data operators (UDOs)
+and the second moment of inertia. In order to do that, on each element we have
+to first calculate density at integration points, and then integrate it to obtain moments of inertia. That is depicted in \ref basic_l1_figure_7 "Figure 7 " by user data operators (UDOs)
 shown by four green boxes. \ref basic_l1_figure_7 "Figure 7" also depicts the
-flow of data between operators, through \em Example::CommonData structure. 
+flow of data between operators through `Example::CommonData` structure. 
 
 \anchor basic_l1_figure_7
-\image html basic_lesson1_ops.png "Figure 7: Operators and common data" width=800px 
+\image html basic_lesson1_ops.png "Figure 7: Operators and common data" width=800px
 
-On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values at integration points, in Example::CommonData::rhoAtIntegrationPts. Then in operators Example::OpZero, Example::OpFirst, and Example::OpSecond, the vector which has a size equal to the number of integration points on the element is used to evaluate moments. Moments from each element are assembled to Example::CommonData::petscVec. Once all elements are evaluated, vector Example::CommonData::petscVec results are printed at the end of the programme. 
+On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values of density at integration points and store them in Example::CommonData::rhoAtIntegrationPts, which is a vector with a size equal to the number of integration points on the element. Then operators Example::OpZero, Example::OpFirst, and Example::OpSecond are used to evaluate moments, assembling their values to Example::CommonData::petscVec. Once all elements are iterated, vector Example::CommonData::petscVec results are printed at the end of the program. 
 
-Operators have to be pushed into pipelines through MoFEM::Basic interface.  MoFEM::Basic has several streams of pipelines, to evaluate matrices and vectors, and which are executed on domain and boundary (skin) elements. Here we integrate vector iterating domain element, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code
+To compute moments of inertia in MoFEM, you can use the most simplistic MoFEM::Basic interface, which provides pipelines where the discussed above operators can be pushed. More precisely, MoFEM::Basic has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code:
+
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Push operators to pipeline
-In the snippet above, you can see four operators pushed in sequence, like in \ref
-basic_l1_figure_7 "Figure 7". Operators are pushed to \em
-basic->getOpDomainRhsPipeline(), that is a sequence to calculate vectors on
-domain finite elements. We call it sequence since operators are executed on
-finite elements in the order that they are pushed.
 
-To set integration points at which base functions are evaluated, the user needs to specify integration rule, that is done by the following code
+In the snippet above, you can see four operators pushed into the pipeline, as described in \ref
+basic_l1_figure_7 "Figure 7". Operators are pushed to `basic->getOpDomainRhsPipeline`, which is a pipeline to calculate vectors on domain finite elements. Note that operators are executed on each finite element in the order that they are pushed to the pipeline.
+
+To set integration points at which base functions are evaluated, the user needs to specify integration rule, which is done by the following code:
 \code
 auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
 CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
 \endcode
-Function \em integration_rule calculate rule by taking approximation order and adding two. Since under the second moment, the integral function is polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and two emerge from term \f$x^ix^j\f$. This is the highest polynomials evaluated out of three operators. Integration rule set as above enables to calculate three moments of inertia exactly, and the only errors come from geometry approximation and approximation of density by piecewise polynomial.
+Function `integration_rule` provides this rule, which is defined as the highest polynomial order under the integral for a given problem. Here the integration rule equals to the approximation order of the density field plus 2: for the second moment of inertia the function under integral is a polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and 2 emerge from the term \f$x^ix^j\f$. This is the highest polynomial evaluated out of three operators, therefore the integration rule set as above enables to calculate three moments of inertia exactly, and the only errors come from geometry approximation and approximation of the density by a piecewise polynomial.
 
-Since we use piecewise linear polynomial to approximate density, i.e. \f$p=1\f$, and thus highest order polynomial is for the second moment of inertia and is three, so integration rule set by the code will be three. Note setting integration rule to a higher value would increase the number of integration points, and that will not change results. Although, setting higher integration rule that is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
+Since we use a piecewise linear polynomial to approximate density, i.e. \f$p=1\f$, the integration rule set by the code will be 3. Note that setting integration rule to a higher value would increase the number of integration points, and that will not change results. However, setting higher integration rule than is needed makes code slower since functions have to be evaluated in more points, and CPU has to do more operations. 
 
-Calculations are triggered in function
+Once the problem is set up and user operators are pushed to an appropriate pipeline, the calculation can be triggered in the function
+
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Integrate
 
-in particular by MoFEM::Basic::loopFiniteElements. At that point created sequence, implementation of operators, and evaluation are triggered. This is when all is happening, the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed, next after integration over all elements are assembled.
+in particular, by MoFEM::Basic::loopFiniteElements. This is where all computations are happening, while the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed before the loop over all elements is performed, and finally PETSCc functions are called to appropriately finalise assembly of an MPI Vector.
 
-Operator Example::OpSecond second is defined as follows
+Operator Example::OpSecond is defined as follows:
+
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Operator
-Operators are derived classes, where essential part is overloaded function Example::OpSecond::doWork, which is called by MoFEM::Basic::loopFiniteElements on each element and integration takes place.
 
-Finally we can look at function Example::OpSecond::doWork
+Operators are derived classes, where essential part is an overloaded function Example::OpSecond::doWork, which is called by MoFEM::Basic::loopFiniteElements on each finite element:
+
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp SecondOp
 
-We choose that operator since it is the most complex one among all three operators. We will dissect that code to understand it better.  We start by getting a number of integration points, which depend on the previously set integration rule. In the following lines, three tensors are declared, i.e. tensor (scalar) is set to weights and densities, and tensor of rank one (vector) is set to coordinates. Those three tensors point to values at the first integration point.  
+We will discuss this operator since it is the most complex one among all three operators. We will dissect this code to understand it better.  We start by getting a number of integration points, which depends on the previously set integration rule. In the following lines, three tensors are declared: two rank zero (scalar) tensors are set to integration weights and density values, respectively, and a tensor of rank one (vector) is set to coordinates of integration points. Note that these three tensors currently point to corresponding values at the first integration point, however, subsequently they will iterate through all the integration points of the element using the following code:
+\code
+++t_w;
+++t_rho;
+++t_x;
+\endcode
 
-Next, we create an array to store local values of the second moment of inertia. The second order of inertia is a symmetric tensor of rank two, which in three dimensions has six independent components. The array is continuous in the memory; it takes the shape of the tensor when the following code is run
+Next, we create an array to store local values of the second moment of inertia. The second order of inertia is a symmetric tensor of rank two, which in three dimensions has six independent components. The array is continuous in the memory, it takes the shape of the rank two tensor when the following code is run
 \code
 FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
   &element_local_value[0], &element_local_value[1], &element_local_value[2],
@@ -541,29 +519,29 @@ FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
   &element_local_value[5]);
 \endcode
 
-With all above at hand finally loop over integration points is made, and all function is evaluated, and aggregated in second order tensor. Note following code in the loop
+With all above at hand finally the loop over all integration points is performed, and the components of the second order tensor are computed. Note that at the following line
 \code
-++t_w;
-++t_rho;
-++t_x;
+t_I(i, j) += (t_w * t_rho * volume) * (t_x(i) ^ t_x(j));
+\endcode
+Iteration over all 6 components of the symmetric second order tensor is performed using the special indices `i` and `j` defined before the integration point loop as:
+\code
+FTensor::Index<'i', 3> i;
+FTensor::Index<'j', 3> j;
 \endcode
 
-After looping over integration points is made, local element vector \em t_I is
+After the loop over integration points is finished, local element vector `element_local_value` is
 assembled into a global vector Example::CommonData::petscVec. Note that vector
-Example::CommonData::petscVec store all moments of inertia, first index stores
-the zero moment, i.e. volume, next three indices store the first moment, and
-last six indices store the second moment. For better clarity, indices are
+Example::CommonData::petscVec stores all moments of inertia, first index stores
+the zero moment, i.e. mass, next three indices store the first moment, and
+last six indices store the second moment. For clarity, indices are
 enumerated by Example::CommonData::VecElements.
 
 \note At this point, you might feel that you are overwhelmed with information.
-This is natural, try to play with the code, make changes, or to debug it. Do not
-try to understand all at once, start with the thing you can understand and
-control. Each of the current MoFEM contributors and developers was at the stage
-where you are now.
+This is natural, you can play with the code, make changes, or debug it. You do not have understand all of it at once, and starting with the part you can more easily understand and control could be helpful. Each of the current MoFEM contributors and developers was at the same stage where you are right now.
 
 \subsection basic_lesson1_checking Checking code validity
 
-Code is tested every time is code is changed and committed into the repository. The user with the command can trigger code testing
+The whole MoFEM code is tested every time changes and pushed into the repository. The user can also trigger the test locally using the following command:
 \code
 ctest -VV
 \endcode
@@ -574,7 +552,7 @@ In particular cmake function testing code executing function
 \endcode
 and code is validated in function Example::checkResults.
 
-In function Example::checkResults test is run for a well-known solution for mesh in \em cube.h5m. Test like that verifies if volume, first moment and the second moment are calculated correctly. Function testing code is as follows
+In function Example::checkResults test is run for a well-known solution for mesh in `cube.h5m`. Test like that verifies if mass (or volume in case of unit density), first moment and the second moment are calculated correctly. Function testing code is as follows
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Test example
 
 You can see that line code
@@ -587,17 +565,13 @@ for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
                    CommonData::SECOND_ZZ}) {
       if (std::abs(array[i] - expected_second_moment) > eps)
         SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                 "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
+                 "Wrong second moment %6.4e != %6.4e", expected_second_moment,
                  array[i]);
     }
 \endcode
-iterates over diagonal values, and if the calculated value is not equal to expected value program throws an error using PTESc function  <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Sys/SETERRQ2.html">SETERRQ2</a>. The test is written for cube volume, of size one by one and coordinate system in the centre of the cube. Zero moments, i.e. volume, should be one. First moments should be zero since the cube centre is coordinate at the origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the axis of the cube aligns with the axis of the coordinate system. 
+iterates over diagonal values of the second order tensor, and if the calculated value is not equal to expected value program throws an error using PTESc function  <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Sys/SETERRQ2.html">SETERRQ2</a>. The test is written for a cube volume, of size one by one and coordinate system in the centre of the cube. Zero moment, i.e. volume in case of unit density, should be 1. First moments should be zero since the cube centre is placed at the origin. Diagonal values of the second-order moment should be \f$1/12\f$, and off-diagonal terms of second-order should be zero since the sides of the cube are aligned with the axis of the coordinate system. 
 
-Writing a code test is essential. MoFEM is a complex system with several contributors, which most of them focused attention on the part of the code. Running tests like this one, contributors know that they not broken anything. That makes code development sustainable. 
-
-Also, writing tests makes writing code faster and simpler, since once you write the code, it needs refactoring and improvements. The test will reassure you that optimisations and changes do not break working code.
-
-Moreover, once your commits are submitted to the repository, MoFEM Jenkins server will the test independently, validating if your code is running not other system and computers. Results of that test are available here <http://cdash.eng.gla.ac.uk/cdash/index.php>.
+Writing a code test is essential. MoFEM is a complex system with multiple contributors, which most of them focused attention on the part of the code. Running tests like this one, contributors know that they not broken anything. That makes code development sustainable. Also, writing tests makes writing code faster and simpler, since once you write the code, it needs refactoring and improvements. The test will reassure you that optimisations and changes do not break working code. Moreover, once your commits are submitted to the repository, MoFEM Jenkins server will the test independently, validating if your code is running not other system and computers. Results of that test are available here <http://cdash.eng.gla.ac.uk/cdash/index.php>.
 
 \section Debugging 
 
@@ -613,16 +587,16 @@ details on how to use it, see
 <https://code.visualstudio.com/docs/editor/debugging>. Here is an example of the
 launch (in VS Code) configuration for LLDB and example from this lesson
 \code
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "basic_moment_of_inertia",
-      "program": "basic_moment_of_inertia",
-      "args": [
-        "-file_name", "cube.h5m"
-      ],
-      "cwd": "$HOME/mofem_install/um/build_debug/basic_finite_elements/basic"  
-    }
+{
+  "type": "lldb",
+  "request": "launch",
+  "name": "basic_moment_of_inertia",
+  "program": "basic_moment_of_inertia",
+  "args": [
+    "-file_name", "cube.h5m"
+  ],
+  "cwd": "$HOME/mofem_install/um/build_debug/basic_finite_elements/basic"  
+}
 \endcode
 
 \section basci_lesson1_code Code

@@ -2,9 +2,9 @@
  * \file basic_moment_of_inertia.cpp
  * \example basic_moment_of_inertia.cpp
  *
- * \brief Calculate mass and second moment of inertia.
+ * \brief Calculate zero, first and second moments of inertia.
  *
- * Example intend to show how to write user data operator and integrate
+ * Example intended to show how to write user data operator and integrate
  * scalar field.
  *
  */
@@ -33,9 +33,6 @@ using Element = MoFEM::VolumeElementForcesAndSourcesCoreBase;
 using OpElement = Element::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
-FTensor::Index<'i', 3> i;
-FTensor::Index<'j', 3> j;
-
 //! [Example]
 struct Example {
 
@@ -46,16 +43,16 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
-  MoFEMErrorCode setUP();
+  MoFEMErrorCode setUp();
   MoFEMErrorCode createCommonData();
-  MoFEMErrorCode bC();
-  MoFEMErrorCode OPs();
+  MoFEMErrorCode setFieldValues();
+  MoFEMErrorCode pushOperators();
   MoFEMErrorCode integrateElements();
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
   struct CommonData;
-  ;
+
   boost::shared_ptr<CommonData> commonDataPtr;
 
   struct OpZero;
@@ -70,7 +67,7 @@ private:
 struct Example::CommonData
     : public boost::enable_shared_from_this<Example::CommonData> {
 
-  VectorDouble rhoAtIntegrationPts; ///< Storing density at integration point
+  VectorDouble rhoAtIntegrationPts; ///< Storing density at integration points
 
   inline boost::shared_ptr<VectorDouble> getRhoAtIntegrationPtsPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(),
@@ -78,8 +75,8 @@ struct Example::CommonData
   }
 
   /**
-   * @brief Vector to indicate indices for storing, zero, first and second
-   * moment.
+   * @brief Vector to indicate indices for storing zero, first and second
+   * moments of inertia.
    *
    */
   enum VecElements {
@@ -97,7 +94,7 @@ struct Example::CommonData
   };
 
   SmartPetscObj<Vec>
-      petscVec; ///< Smart pinter which stores PETSc distributed vector
+      petscVec; ///< Smart pointer which stores PETSc distributed vector
 };
 //! [Common data]
 
@@ -111,7 +108,6 @@ struct Example::OpZero : public OpElement {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
-
 
 struct Example::OpFirst : public OpElement {
   OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
@@ -140,10 +136,10 @@ private:
 //! [Run all]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
-  CHKERR setUP();
+  CHKERR setUp();
   CHKERR createCommonData();
-  CHKERR bC();
-  CHKERR OPs();
+  CHKERR setFieldValues();
+  CHKERR pushOperators();
   CHKERR integrateElements();
   CHKERR postProcess();
   CHKERR checkResults();
@@ -152,7 +148,7 @@ MoFEMErrorCode Example::runProblem() {
 //! [Run all]
 
 //! [Set up problem]
-MoFEMErrorCode Example::setUP() {
+MoFEMErrorCode Example::setUp() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   CHKERR simple->getOptions();
@@ -172,10 +168,12 @@ MoFEMErrorCode Example::createCommonData() {
   commonDataPtr = boost::make_shared<CommonData>();
 
   int local_size;
-  if (mField.get_comm_rank() == 0)
-    local_size = CommonData::LAST_ELEMENT;
+  if (mField.get_comm_rank() == 0) // get_comm_rank() gets processor number
+    // processor 0
+    local_size = CommonData::LAST_ELEMENT; // last element gives size of vector
   else
-    local_size = 0;
+    // other processors (e.g. 1, 2, 3, etc.)
+    local_size = 0; // local size of vector is zero on other processors
 
   commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
                                                  CommonData::LAST_ELEMENT);
@@ -184,8 +182,8 @@ MoFEMErrorCode Example::createCommonData() {
 }
 //! [Create common data]
 
-//! [Set inital density]
-MoFEMErrorCode Example::bC() {
+//! [Set density distribution]
+MoFEMErrorCode Example::setFieldValues() {
   MoFEMFunctionBegin;
   auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
                          double *ycoord, double *zcoord) {
@@ -198,33 +196,32 @@ MoFEMErrorCode Example::bC() {
   CHKERR field_blas->setVertexDofs(set_density, "rho");
   MoFEMFunctionReturn(0);
 }
-//! [Set inital density]
+//! [Set density distribution]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode Example::OPs() {
+MoFEMErrorCode Example::pushOperators() {
   MoFEMFunctionBegin;
   Basic *basic = mField.getInterface<Basic>();
 
-  // Push operator which calculate values of densities at integration points
+  // Push an operator which calculates values of density at integration points
   basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
       "rho", commonDataPtr->getRhoAtIntegrationPtsPtr()));
 
-  // Push operator to pipeline to calculate zero moment of inertia, that is mass
-  // and when density is one everywere it is area
+  // Push an operator to pipeline to calculate zero moment of inertia (mass)
   basic->getOpDomainRhsPipeline().push_back(new OpZero(commonDataPtr));
 
-  // Push operator to pipeline to calculate first moment of inertaia
+  // Push an operator to the pipeline to calculate first moment of inertaia
   basic->getOpDomainRhsPipeline().push_back(new OpFirst(commonDataPtr));
 
-  // Push operator to pipeline to calculate second moment of inertaia
+  // Push an operator to the pipeline to calculate second moment of inertaia
   basic->getOpDomainRhsPipeline().push_back(new OpSecond(commonDataPtr));
 
-  // Set integration rule. Integration rule is equal to polynomial order of
-  // density plus the 2, since to calculate second moment of inertia term x*x is
-  // present
+  // Set integration rule. Integration rule is equal to the polynomial order of
+  // the density field plus 2, since under the integral of the second moment of
+  // inertia term x*x is present
   auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
 
-  // Add integration rule to element
+  // Add integration rule to the element
   CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
   MoFEMFunctionReturn(0);
 }
@@ -233,7 +230,6 @@ MoFEMErrorCode Example::OPs() {
 //! [Integrate]
 MoFEMErrorCode Example::integrateElements() {
   MoFEMFunctionBegin;
-
   // Zero global vector
   CHKERR VecZeroEntries(commonDataPtr->petscVec);
 
@@ -241,7 +237,7 @@ MoFEMErrorCode Example::integrateElements() {
   Basic *basic = mField.getInterface<Basic>();
   CHKERR basic->loopFiniteElements();
 
-  // Assemble vector
+  // Assemble MPI vector
   CHKERR VecAssemblyBegin(commonDataPtr->petscVec);
   CHKERR VecAssemblyEnd(commonDataPtr->petscVec);
   MoFEMFunctionReturn(0);
@@ -253,7 +249,6 @@ MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
-  //! [Print results]
   if (mField.get_comm_rank() == 0) {
     PetscPrintf(PETSC_COMM_SELF, "Mass %6.4e\n", array[CommonData::ZERO]);
     PetscPrintf(PETSC_COMM_SELF,
@@ -282,25 +277,25 @@ MoFEMErrorCode Example::checkResults() {
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test, PETSC_NULL);
   if (mField.get_comm_rank() == 0 && test) {
     constexpr double eps = 1e-8;
-    constexpr double expected_area = 1.;
+    constexpr double expected_volume = 1.;
     constexpr double expected_first_moment = 0.;
     constexpr double expected_second_moment = 1. / 12.;
-    if (std::abs(array[CommonData::ZERO] - expected_area) > eps)
+    if (std::abs(array[CommonData::ZERO] - expected_volume) > eps)
       SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-               "Wrong area %6.4e !+ %6.4e", expected_area,
+               "Wrong area %6.4e != %6.4e", expected_volume,
                array[CommonData::ZERO]);
     for (auto i :
          {CommonData::FIRST_X, CommonData::FIRST_Y, CommonData::FIRST_Z}) {
       if (std::abs(array[i] - expected_first_moment) > eps)
         SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                 "Wrong first moment %6.4e !+ %6.4e", expected_first_moment,
+                 "Wrong first moment %6.4e != %6.4e", expected_first_moment,
                  array[i]);
     }
     for (auto i : {CommonData::SECOND_XX, CommonData::SECOND_YY,
                    CommonData::SECOND_ZZ}) {
       if (std::abs(array[i] - expected_second_moment) > eps)
         SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                 "Wrong second moment %6.4e !+ %6.4e", expected_second_moment,
+                 "Wrong second moment %6.4e != %6.4e", expected_second_moment,
                  array[i]);
     }
   }
@@ -313,7 +308,7 @@ MoFEMErrorCode Example::checkResults() {
 //! [main]
 int main(int argc, char *argv[]) {
 
-  // Initialisation MoFEM/PETSc and MoAB data strutures
+  // Initialisation of MoFEM/PETSc and MoAB data structures
   MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
 
   // Error handling
@@ -322,7 +317,7 @@ int main(int argc, char *argv[]) {
     //! [Register MoFEM discrete manager in PETSc]
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
-    //! [Register MoFEM discrete manager in PETSc
+    //! [Register MoFEM discrete manager in PETSc]
 
     //! [Create MoAB]
     moab::Core mb_instance;              ///< mesh database
@@ -331,7 +326,7 @@ int main(int argc, char *argv[]) {
 
     //! [Create MoFEM]
     MoFEM::Core core(moab);           ///< finite element database
-    MoFEM::Interface &m_field = core; ///< finite element database insterface
+    MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
     Example ex(m_field);
@@ -385,6 +380,8 @@ MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type,
       getFTensor1CoordsAtGaussPts();  ///< Coordinates at integration points
   const double volume = getMeasure(); ///< Get Volume of element
 
+  FTensor::Index<'i', 3> i;
+
   FTensor::Tensor1<double, 3>
       t_s;    ///< First moment of inertia is tensor of rank 1, i.e. vector.
   t_s(i) = 0; // Zero entries
@@ -394,9 +391,9 @@ MoFEMErrorCode Example::OpFirst::doWork(int side, EntityType type,
 
     t_s(i) += t_w * t_rho * volume * t_x(i);
 
-    ++t_w;      // move weight to next integration pts
-    ++t_rho;    // move density
-    ++t_x; // move coordinate
+    ++t_w;   // move weight to next integration pts
+    ++t_rho; // move density
+    ++t_x;   // move coordinate
   }
 
   // Set array of indices
@@ -421,24 +418,28 @@ MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type,
   auto t_x = getFTensor1CoordsAtGaussPts();
   const double volume = getMeasure();
 
-  // Create storage for symmetric tensor
+  // Create storage for a symmetric tensor
   std::array<double, 6> element_local_value;
+  std::fill(element_local_value.begin(), element_local_value.end(), 0.0);
 
-  // Crate symmetric tensor with points to the storrage
+  // Create symmetric tensor using pointers to the storage
   FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
       &element_local_value[0], &element_local_value[1], &element_local_value[2],
       &element_local_value[3], &element_local_value[4],
       &element_local_value[5]);
 
-  // Integate
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  // Integrate
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
-    // Symbol "^" indicate multiplication which yield symmetric tensor
+    // Symbol "^" indicates outer product which yields a symmetric tensor
     t_I(i, j) += (t_w * t_rho * volume) * (t_x(i) ^ t_x(j));
 
-    ++t_w;
-    ++t_rho;
-    ++t_x;
+    ++t_w;   // move weight pointer to the next integration point
+    ++t_rho; // move density pointer
+    ++t_x;   // move coordinate pointer
   }
 
   // Set array of indices
@@ -449,6 +450,7 @@ MoFEMErrorCode Example::OpSecond::doWork(int side, EntityType type,
   // Assemble second moment of inertia
   CHKERR VecSetValues(commonDataPtr->petscVec, 6, indices.data(),
                       &element_local_value[0], ADD_VALUES);
+
   MoFEMFunctionReturn(0);
 }
 //! [SecondOp]
