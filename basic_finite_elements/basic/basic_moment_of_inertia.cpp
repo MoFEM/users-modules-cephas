@@ -152,7 +152,7 @@ MoFEMErrorCode Example::setUp() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   CHKERR simple->getOptions();
-  CHKERR simple->loadFile("");
+  CHKERR simple->loadFile();
   // Add field
   CHKERR simple->addDomainField("rho", H1, AINSWORTH_LEGENDRE_BASE, 1);
   constexpr int order = 1;
