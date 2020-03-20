@@ -351,7 +351,7 @@ of specialised operators saving results on nodes and allows to refine mesh when
 ho-approximation is used. The result can be stored for example on 10-node
 tetrahedra if needed. More details about implementation of
 PoissonExample::CreateFiniteElements and operators is in \ref poisson_tut2.
-PipelineManager of user data operators are explained here \ref general_data_structure.
+Basic of user data operators are explained here \ref general_data_structure.
 
 \image html poisson_tut1_fig3.png "Figure 3. Operators of volume finite element" width=700px
 \image html poisson_tut1_fig4.png "Figure 4. Operators of boundary finite element" width=400px
