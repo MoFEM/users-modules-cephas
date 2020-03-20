@@ -2,7 +2,7 @@
  * \file basic_helmholtz.cpp
  * \example basic_helmholtz.cpp
  *
- * Using Basic interface calculate the divergence of base functions, and
+ * Using PipelineManager interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
@@ -102,7 +102,7 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto vol_source_function = [](const double x, const double y,
                                 const double z) {
@@ -124,34 +124,34 @@ MoFEMErrorCode Example::OPs() {
 
   auto set_domain = [&]() {
     MoFEMFunctionBegin;
-    basic->getOpDomainLhsPipeline().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
-    basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-    basic->getOpDomainLhsPipeline().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainGradGrad("U_REAL", "U_REAL", beta));
-    basic->getOpDomainLhsPipeline().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainGradGrad("U_IMAG", "U_IMAG", beta));
 
-    basic->getOpDomainLhsPipeline().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainMass("U_REAL", "U_REAL", k2));
-    basic->getOpDomainLhsPipeline().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainMass("U_IMAG", "U_IMAG", k2));
 
-    basic->getOpDomainRhsPipeline().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainSource("U_REAL", vol_source_function));
 
-    CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-    CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
 
   auto set_boundary = [&]() {
     MoFEMFunctionBegin;
-    basic->getOpBoundaryLhsPipeline().push_back(
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryMass("U_IMAG", "U_REAL", kp));
-    basic->getOpBoundaryLhsPipeline().push_back(
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryMass("U_REAL", "U_IMAG", km));
-    CHKERR basic->setBoundaryLhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
 
@@ -166,8 +166,8 @@ MoFEMErrorCode Example::OPs() {
 MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
-  auto solver = basic->createKSP();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 
@@ -186,17 +186,17 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
-  basic->getDomainLhsFE().reset();
-  basic->getDomainRhsFE().reset();
-  basic->getBoundaryLhsFE().reset();
-  basic->getBoundaryRhsFE().reset();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("U_REAL");
   post_proc_fe->addFieldValuesPostProc("U_IMAG");
-  basic->getDomainRhsFE() = post_proc_fe;
-  CHKERR basic->loopFiniteElements();
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_helmholtz.h5m");
   MoFEMFunctionReturn(0);
 }

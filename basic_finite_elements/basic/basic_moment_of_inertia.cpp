@@ -201,20 +201,20 @@ MoFEMErrorCode Example::setFieldValues() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::pushOperators() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   // Push an operator which calculates values of density at integration points
-  basic->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
       "rho", commonDataPtr->getRhoAtIntegrationPtsPtr()));
 
   // Push an operator to pipeline to calculate zero moment of inertia (mass)
-  basic->getOpDomainRhsPipeline().push_back(new OpZero(commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpZero(commonDataPtr));
 
   // Push an operator to the pipeline to calculate first moment of inertaia
-  basic->getOpDomainRhsPipeline().push_back(new OpFirst(commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpFirst(commonDataPtr));
 
   // Push an operator to the pipeline to calculate second moment of inertaia
-  basic->getOpDomainRhsPipeline().push_back(new OpSecond(commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSecond(commonDataPtr));
 
   // Set integration rule. Integration rule is equal to the polynomial order of
   // the density field plus 2, since under the integral of the second moment of
@@ -222,7 +222,7 @@ MoFEMErrorCode Example::pushOperators() {
   auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
 
   // Add integration rule to the element
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -234,8 +234,8 @@ MoFEMErrorCode Example::integrateElements() {
   CHKERR VecZeroEntries(commonDataPtr->petscVec);
 
   // Integrate elements by executing operators in the pipeline
-  Basic *basic = mField.getInterface<Basic>();
-  CHKERR basic->loopFiniteElements();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  CHKERR pipeline_mng->loopFiniteElements();
 
   // Assemble MPI vector
   CHKERR VecAssemblyBegin(commonDataPtr->petscVec);

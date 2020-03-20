@@ -181,7 +181,7 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpCalculateInvJacForFace(invJac));
@@ -236,16 +236,16 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
   };
 
-  add_domain_base_ops(basic->getOpDomainLhsPipeline());
-  add_domain_ops_lhs(basic->getOpDomainLhsPipeline());
-  add_domain_base_ops(basic->getOpDomainRhsPipeline());
-  add_domain_ops_rhs(basic->getOpDomainRhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
   };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -256,10 +256,10 @@ MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
-  auto solver = basic->createTS();
+  auto solver = pipeline_mng->createTS();
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);

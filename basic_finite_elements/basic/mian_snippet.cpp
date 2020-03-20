@@ -2,7 +2,7 @@
  * \file main_snippet.cpp
  * \example main_snippet.cpp
  *
- * Using Basic interface calculate the divergence of base functions, and
+ * Using PipelineManager interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
@@ -100,8 +100,8 @@ MoFEMErrorCode Example::OPs() {
 MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
-  auto solver = basic->createKSP();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 

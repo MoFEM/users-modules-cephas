@@ -474,17 +474,17 @@ flow of data between operators through `Example::CommonData` structure.
 
 On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values of density at integration points and store them in Example::CommonData::rhoAtIntegrationPts, which is a vector with a size equal to the number of integration points on the element. Then operators Example::OpZero, Example::OpFirst, and Example::OpSecond are used to evaluate moments, assembling their values to Example::CommonData::petscVec. Once all elements are iterated, vector Example::CommonData::petscVec results are printed at the end of the program. 
 
-To compute moments of inertia in MoFEM, you can use the most simplistic MoFEM::Basic interface, which provides pipelines where the discussed above operators can be pushed. More precisely, MoFEM::Basic has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code:
+To compute moments of inertia in MoFEM, you can use the most simplistic PipelineManager interface, which provides pipelines where the discussed above operators can be pushed. More precisely, PipelineManager has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code:
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Push operators to pipeline
 
 In the snippet above, you can see four operators pushed into the pipeline, as described in \ref
-basic_l1_figure_7 "Figure 7". Operators are pushed to `basic->getOpDomainRhsPipeline`, which is a pipeline to calculate vectors on domain finite elements. Note that operators are executed on each finite element in the order that they are pushed to the pipeline.
+basic_l1_figure_7 "Figure 7". Operators are pushed to `pipeline_mng->getOpDomainRhsPipeline`, which is a pipeline to calculate vectors on domain finite elements. Note that operators are executed on each finite element in the order that they are pushed to the pipeline.
 
 To set integration points at which base functions are evaluated, the user needs to specify integration rule, which is done by the following code:
 \code
 auto integration_rule = [](int, int, int p_data) { return p_data + 2; };
-CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
+CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
 \endcode
 Function `integration_rule` provides this rule, which is defined as the highest polynomial order under the integral for a given problem. Here the integration rule equals to the approximation order of the density field plus 2: for the second moment of inertia the function under integral is a polynomial of order \f$p+2\f$, where p is the order of the polynomial used to approximate density, and 2 emerge from the term \f$x^ix^j\f$. This is the highest polynomial evaluated out of three operators, therefore the integration rule set as above enables to calculate three moments of inertia exactly, and the only errors come from geometry approximation and approximation of the density by a piecewise polynomial.
 
@@ -494,13 +494,13 @@ Once the problem is set up and user operators are pushed to an appropriate pipel
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Integrate
 
-in particular, by MoFEM::Basic::loopFiniteElements. This is where all computations are happening, while the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed before the loop over all elements is performed, and finally PETSCc functions are called to appropriately finalise assembly of an MPI Vector.
+in particular, by PipelineManager::loopFiniteElements. This is where all computations are happening, while the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed before the loop over all elements is performed, and finally PETSCc functions are called to appropriately finalise assembly of an MPI Vector.
 
 Operator Example::OpSecond is defined as follows:
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp Operator
 
-Operators are derived classes, where essential part is an overloaded function Example::OpSecond::doWork, which is called by MoFEM::Basic::loopFiniteElements on each finite element:
+Operators are derived classes, where essential part is an overloaded function Example::OpSecond::doWork, which is called by PipelineManager::loopFiniteElements on each finite element:
 
 \snippet users_modules/basic_finite_elements/basic/basic_moment_of_inertia.cpp SecondOp
 

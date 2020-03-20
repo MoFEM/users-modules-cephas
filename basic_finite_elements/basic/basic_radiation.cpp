@@ -2,7 +2,7 @@
  * \file basic_radiation.cpp
  * \example basic_radiation.cpp
  *
- * Using Basic interface calculate the divergence of base functions, and
+ * Using PipelineManager interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
@@ -164,35 +164,35 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
-  basic->getOpDomainLhsPipeline().push_back(
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   auto beta = [](const double r, const double, const double) {
     return 2e3 * 2 * M_PI * r;
   };
-  basic->getOpDomainLhsPipeline().push_back(new OpDomainGradGrad("U", "U", beta));
-  CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpDomainGradGrad("U", "U", beta));
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>("U", approxGradVals));
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpVolGradGradResidual("U", beta, approxGradVals));
-  CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
 
-  basic->getOpBoundaryRhsPipeline().push_back(
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", approxVals));
-  basic->getOpBoundaryRhsPipeline().push_back(new OpRadiationRhs(approxVals));
-  basic->getOpBoundaryRhsPipeline().push_back(new OpFluxRhs());
-  CHKERR basic->setBoundaryRhsIntegrationRule(integrationRule);
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpRadiationRhs(approxVals));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpFluxRhs());
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integrationRule);
 
-  basic->getOpBoundaryLhsPipeline().push_back(
+  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", approxVals));
-  basic->getOpBoundaryLhsPipeline().push_back(new OpRadiationLhs(approxVals));
-  CHKERR basic->setBoundaryLhsIntegrationRule(integrationRule);
+  pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpRadiationLhs(approxVals));
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -201,8 +201,8 @@ MoFEMErrorCode Example::OPs() {
 MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
-  auto ts = basic->createTS();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto ts = pipeline_mng->createTS();
 
   double ftime = 1;
   CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
@@ -234,15 +234,15 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
-  basic->getDomainLhsFE().reset();
-  basic->getBoundaryLhsFE().reset();
-  basic->getBoundaryRhsFE().reset();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("U");
-  basic->getDomainRhsFE() = post_proc_fe;
-  CHKERR basic->loopFiniteElements();
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_radiation.h5m");
   MoFEMFunctionReturn(0);
 }

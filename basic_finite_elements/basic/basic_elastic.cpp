@@ -161,25 +161,25 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  basic->getOpDomainLhsPipeline().push_back(
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainLhsPipeline().push_back(
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., -1.};
   };
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpForceRhs("U", commonDataPtr, gravity));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
   };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -189,8 +189,8 @@ MoFEMErrorCode Example::OPs() {
 MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
-  auto solver = basic->createKSP();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 
@@ -209,9 +209,9 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Postprocess results]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  basic->getDomainLhsFE().reset();
+  pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->getOpPtrVector().push_back(
@@ -225,8 +225,8 @@ MoFEMErrorCode Example::postProcess() {
       new OpPostProcElastic("U", post_proc_fe->postProcMesh,
                             post_proc_fe->mapGaussPts, commonDataPtr));
   post_proc_fe->addFieldValuesPostProc("U");
-  basic->getDomainRhsFE() = post_proc_fe;
-  CHKERR basic->loopFiniteElements();
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_elastic.h5m");
   MoFEMFunctionReturn(0);
 }
@@ -235,36 +235,36 @@ MoFEMErrorCode Example::postProcess() {
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   MoFEMFunctionBegin;
-  basic->getDomainRhsFE().reset();
-  basic->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getDomainLhsFE().reset();
 
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForceRhs("U", commonDataPtr));
 
   auto gravity = [](double x, double y) {
     return FTensor::Tensor1<double, 2>{0., 1.};
   };
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpForceRhs("U", commonDataPtr, gravity));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
   auto res = smartCreateDMVector(dm);
-  basic->getDomainRhsFE()->ksp_f = res;
+  pipeline_mng->getDomainRhsFE()->ksp_f = res;
 
   CHKERR VecZeroEntries(res);
-  CHKERR basic->loopFiniteElements();
+  CHKERR pipeline_mng->loopFiniteElements();
   CHKERR VecGhostUpdateBegin(res, ADD_VALUES, SCATTER_REVERSE);
   CHKERR VecGhostUpdateEnd(res, ADD_VALUES, SCATTER_REVERSE);
   CHKERR VecAssemblyBegin(res);

@@ -2,7 +2,7 @@
  * \file basic_approx.cpp
  * \example basic_approx.cpp
  *
- * Using Basic interface calculate the divergence of base functions, and
+ * Using PipelineManager interface calculate the divergence of base functions, and
  * integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
@@ -120,13 +120,13 @@ MoFEMErrorCode Example::bC() { return 0; }
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto beta = [](const double, const double, const double) { return 1; };
-  basic->getOpDomainLhsPipeline().push_back(new OpDomainMass("U", "U", beta));
-  basic->getOpDomainRhsPipeline().push_back(
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpDomainMass("U", "U", beta));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDomainSource("U", Example::approxFunction));
-  CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
-  CHKERR basic->setDomainLhsIntegrationRule(integrationRule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
@@ -135,8 +135,8 @@ MoFEMErrorCode Example::OPs() {
 MoFEMErrorCode Example::kspSolve() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
-  auto solver = basic->createKSP();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 
@@ -154,13 +154,13 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Solve]
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
-  basic->getDomainLhsFE().reset();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc("U");
-  basic->getDomainRhsFE() = post_proc_fe;
-  CHKERR basic->loopFiniteElements();
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_approx.h5m");
   MoFEMFunctionReturn(0);
 }
@@ -169,15 +169,15 @@ MoFEMErrorCode Example::postProcess() {
 //! [Solve]
 MoFEMErrorCode Example::checkResults() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
-  basic->getDomainLhsFE().reset();
-  basic->getDomainRhsFE().reset();
-  basic->getOpDomainRhsPipeline().clear();
-  basic->getOpDomainRhsPipeline().push_back(
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getOpDomainRhsPipeline().clear();
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
-  basic->getOpDomainRhsPipeline().push_back(new OpError(commonDataPtr));
-  CHKERR basic->setDomainRhsIntegrationRule(integrationRule);
-  CHKERR basic->loopFiniteElements();
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpError(commonDataPtr));
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
+  CHKERR pipeline_mng->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->L2Vec);
   CHKERR VecAssemblyEnd(commonDataPtr->L2Vec);
   CHKERR VecAssemblyBegin(commonDataPtr->resVec);

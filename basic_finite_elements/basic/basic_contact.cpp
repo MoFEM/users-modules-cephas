@@ -25,9 +25,9 @@
 using namespace MoFEM;
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = MoFEM::Basic::FaceEle2D;
+using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
-using BoundaryEle = MoFEM::Basic::EdgeEle2D;
+using BoundaryEle = PipelineManager::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
 constexpr int order = 4;
@@ -198,7 +198,7 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     pipeline.push_back(new OpCalculateJacForFace(jAc));
@@ -258,21 +258,21 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
   };
 
-  add_domain_base_ops(basic->getOpDomainLhsPipeline());
-  add_domain_base_ops(basic->getOpDomainRhsPipeline());
-  add_domain_ops_lhs(basic->getOpDomainLhsPipeline());
-  add_domain_ops_rhs(basic->getOpDomainRhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
+  add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
 
-  add_boundary_base_ops(basic->getOpBoundaryLhsPipeline());
-  add_boundary_base_ops(basic->getOpBoundaryRhsPipeline());
-  add_boundary_ops_lhs(basic->getOpBoundaryLhsPipeline());
-  add_boundary_ops_rhs(basic->getOpBoundaryRhsPipeline());
+  add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) { return 2 * order; };
-  CHKERR basic->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR basic->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR basic->setBoundaryRhsIntegrationRule(integration_rule);
-  CHKERR basic->setBoundaryLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -283,10 +283,10 @@ MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionBegin;
 
   Simple *simple = mField.getInterface<Simple>();
-  Basic *basic = mField.getInterface<Basic>();
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
-  auto solver = basic->createTS();
+  auto solver = pipeline_mng->createTS();
 
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
