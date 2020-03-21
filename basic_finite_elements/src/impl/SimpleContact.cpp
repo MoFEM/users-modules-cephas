@@ -603,6 +603,40 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpCalLagrangeMultPostProc::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
+    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->clear();
+  }
+
+  int nb_base_fun_row = data.getFieldData().size();
+
+  auto t_lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
+
+    FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[0]);
+    for (int bb = 0; bb != nb_base_fun_row; bb++) {
+      t_lagrange_slave += t_base_lambda * t_field_data_slave;
+      ++t_base_lambda;
+      ++t_field_data_slave;
+    }
+    ++t_lagrange_slave;    
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpPrintLagMulAtGaussPtsSlave::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -1034,9 +1068,6 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     auto t_const_unit_master =
         get_tensor_from_vec(*(commonDataSimpleContact->normalVectorMasterPtr));
 
-    // cerr << "Master " << t_const_unit_master << "\n";
-    // cerr << "Slave " << t_const_unit_n << "\n";
-
     auto t_lagrange_slave =
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
@@ -1239,34 +1270,6 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpMakeVtkMaster::doWork(int side,
-                                                            EntityType type,
-                                                            EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (type != MBVERTEX)
-    MoFEMFunctionReturnHot(0);
-
-  int nb_dofs = data.getFieldData().size();
-  if (nb_dofs == 0)
-    MoFEMFunctionReturnHot(0);
-  int nb_gauss_pts = data.getN().size1();
-
-  double def_vals;
-  def_vals = 0;
-  
-  EntityHandle new_vertex = getFEEntityHandle();
-
-
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-
-    const double *master_coords_ptr = &(getCoordsAtGaussPtsMaster()(gg, 0));
-    CHKERR moabOut.create_vertex(master_coords_ptr, new_vertex);
-  
-  }
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
                                                                 EntityType type,
                                                                 EntData &data) {
@@ -1294,6 +1297,49 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
     ++t_gap_ptr;
     ++t_lagrange_slave;
   }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpPostProcContactContinuous::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
+
+  double def_VAL[9];
+  bzero(def_VAL, 9 * sizeof(double));
+
+  // Tag th_spatial_pos;
+  Tag th_lag_mult;
+
+  // CHKERR postProcMesh.tag_get_handle(fieldName.c_str(), 3, MB_TYPE_DOUBLE,
+  //                                    th_spatial_pos,
+  //                                    MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+  CHKERR postProcMesh.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
+                                     th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                     def_VAL);
+
+  auto t_lagrange =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  // auto t_position_slave = getFTensor1FromMat<3>(
+  //     *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+
+  const int nb_gauss_pts =
+      commonDataSimpleContact->lagMultAtGaussPtsPtr->size();
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    // CHKERR postProcMesh.tag_set_data(th_spatial_pos,
+    // &mapGaussPts[gg], 1,
+    //                                  &t_position_slave);
+    CHKERR postProcMesh.tag_set_data(th_lag_mult, &mapGaussPts[gg], 1,
+                                     &t_lagrange);
+
+    // ++t_position_slave;
+    ++t_lagrange;
+  }
+
   MoFEMFunctionReturn(0);
 }
 
@@ -1510,11 +1556,26 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     fe_post_proc_simple_contact->getOpPtrVector().push_back(
         new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
                            moab_out, lagrange_field));
+    }
+  MoFEMFunctionReturn(0);
+}
 
-    // fe_post_proc_simple_contact->getOpPtrVector().push_back(
-    //     new OpMakeVtkMaster(m_field, field_name, common_data_simple_contact,
-    //                        moab_out, lagrange_field));
-  }
+MoFEMErrorCode SimpleContactProblem::setPostProcContactOperators(
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
+    const std::string field_name,
+    const std::string lagrang_field_name,
+    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact) {
+  MoFEMFunctionBegin;
+
+  post_proc_contact_ptr->getOpPtrVector().push_back(
+      new OpCalLagrangeMultPostProc(lagrang_field_name,
+                                    common_data_simple_contact));
+
+  post_proc_contact_ptr->getOpPtrVector().push_back(
+      new OpPostProcContactContinuous(
+          lagrang_field_name, field_name, post_proc_contact_ptr->postProcMesh,
+          post_proc_contact_ptr->mapGaussPts, common_data_simple_contact));
+
   MoFEMFunctionReturn(0);
 }
 

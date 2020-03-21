@@ -29,6 +29,7 @@ struct SimpleContactProblem {
   using ContactEle = ContactPrismElementForcesAndSourcesCore;
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
   using EntData = DataForcesAndSourcesCore::EntData;
+  using FaceUserDataOperator = FaceElementForcesAndSourcesCore::UserDataOperator;
 
   static inline double Sign(double x);
 
@@ -875,30 +876,6 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
-  /**
-   * @brief Operator for the simple contact element
-   *
-   * Prints to .vtk file pre-calculated gaps, Lagrange multipliers and their
-   * product the gauss points on the slave triangle.
-   *
-   */
-  struct OpMakeVtkMaster : public ContactOp {
-
-    MoFEM::Interface &mField;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    moab::Interface &moabOut;
-    bool lagFieldSet;
-
-    OpMakeVtkMaster(MoFEM::Interface &m_field, string field_name,
-                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
-                   moab::Interface &moab_out, bool lagrange_field = true)
-        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
-          mField(m_field), commonDataSimpleContact(common_data),
-          moabOut(moab_out), lagFieldSet(lagrange_field) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
-
   struct OpMakeTestTextFile : public ContactOp {
 
     MoFEM::Interface &mField;
@@ -916,6 +893,51 @@ struct SimpleContactProblem {
       mySplit << fixed << setprecision(8);
       mySplit << "[0] Lagrange multiplier [1] Gap" << endl;
     }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+
+  struct OpCalLagrangeMultPostProc : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+
+
+    OpCalLagrangeMultPostProc(
+        const string lag_mult_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              lag_mult_name, UserDataOperator::OPROW),
+          commonDataSimpleContact(common_data_simple_contact){};
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpPostProcContactContinuous : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    string lagMultName;
+    string fieldName;
+
+    OpPostProcContactContinuous(
+        const string lag_mult_name, const string field_name,
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              lag_mult_name, UserDataOperator::OPROW),
+          lagMultName(lag_mult_name), fieldName(field_name),
+          commonDataSimpleContact(common_data_simple_contact),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {
+      doVertices = true;
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    };
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
@@ -959,6 +981,14 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
+
+
+//add description
+  MoFEMErrorCode setPostProcContactOperators(
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
+      const std::string field_name,
+      const std::string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> common_data);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs
