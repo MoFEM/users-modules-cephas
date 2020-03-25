@@ -202,27 +202,29 @@ struct NeumannForcesSurface {
                           DataForcesAndSourcesCore::EntData &data);
   };
 
-  struct DataAtIntegrationPts {
+  struct DataAtIntegrationPts
+      : public boost::enable_shared_from_this<DataAtIntegrationPts> {
 
-    vector<vector<VectorDouble>> tangent;
+    MatrixDouble tangent1;
+    MatrixDouble tangent2;
 
-    boost::shared_ptr<MatrixDouble> hMat;
-    boost::shared_ptr<MatrixDouble> FMat;
-    boost::shared_ptr<MatrixDouble> HMat;
-    boost::shared_ptr<VectorDouble> detHVec;
-    boost::shared_ptr<MatrixDouble> invHMat;
+    MatrixDouble hMat;
+    MatrixDouble FMat;
+    MatrixDouble HMat;
+    VectorDouble detHVec;
+    MatrixDouble invHMat;
+
+    inline boost::shared_ptr<MatrixDouble> getSmallhMatPtr() {
+      return boost::shared_ptr<MatrixDouble>(shared_from_this(), &hMat);
+    }
+
+    inline boost::shared_ptr<MatrixDouble> getHMatPtr() {
+      return boost::shared_ptr<MatrixDouble>(shared_from_this(), &HMat);
+    }
 
     EntData *faceRowData;
 
-    DataAtIntegrationPts() {
-      hMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      FMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      HMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      detHVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
-      invHMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-
-      faceRowData = nullptr;
-    }
+    DataAtIntegrationPts() { faceRowData = nullptr; }
 
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
