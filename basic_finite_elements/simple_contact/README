@@ -27,9 +27,6 @@ Contact parameters
 
 my_order        approximation order for the field of spatial positions
 my_order_lambda approximation order for the field of Lagrange multipliers
-my_r_value      regularisation parameter, should be in [1.0, 1.1], values higher
-                than 1.0 speed-up the convergence but introduce artificial     
-                terms into the contact work
 my_cn_value     augmentation parameter, primarily affects the convergence and 
                 has minimal effect on the solution; recommended initial value is 
                 the Young's modulus of contacting solids (or harmonic mean in case of 
@@ -57,7 +54,6 @@ Parameters set by default from param_file.petsc file
 -snes_rtol 1e-8 
 -my_order 1 
 -my_order_lambda 1 
--my_r_value 1. 
 -my_cn_value 1. 
 -my_is_newton_cotes 0 
 -my_is_test 0 

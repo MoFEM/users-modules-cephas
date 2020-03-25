@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = 1.;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool test_jacobian = PETSC_FALSE;
+    PetscBool convect_pts = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -61,15 +62,14 @@ int main(int argc, char *argv[]) {
         "default approximation order of Lagrange multipliers", "", 1,
         &order_lambda, PETSC_NULL);
 
-    CHKERR PetscOptionsReal("-my_r_value", "default regularisation r value", "",
-                            1., &r_value, PETSC_NULL);
-
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if Newton-Cotes integration rules are used",
                             "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
+                            PETSC_FALSE, &convect_pts, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -215,9 +215,68 @@ int main(int argc, char *argv[]) {
 
     PetscRandomDestroy(&rctx);
 
-    boost::shared_ptr<SimpleContactProblem> contact_problem;
-    contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
+    auto contact_problem = boost::make_shared<SimpleContactProblem>(
+        m_field, cn_value, is_newton_cotes);
+
+    auto make_contact_element = [&]() {
+      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+          m_field);
+    };
+
+    auto make_convective_master_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectMasterContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
+    auto make_convective_slave_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectSlaveContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
+    auto make_contact_common_data = [&]() {
+      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+          m_field);
+    };
+
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_contact_lhs = [&](auto contact_problem, auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
+    auto get_master_traction_rhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_traction_lhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
@@ -273,31 +332,44 @@ int main(int argc, char *argv[]) {
 
     auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
 
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_rhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_lhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
-        common_data_simple_contact =
-            boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
-                m_field);
-
-    contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT");
-    contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT", A);
-
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
-                                  PETSC_NULL, PETSC_NULL);
-
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
-                                  NULL, NULL);
+    if (convect_pts == PETSC_TRUE) {
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_convective_master_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_contact_lhs(contact_problem,
+                                 make_convective_master_element),
+          NULL, NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem,
+                                  make_convective_slave_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem,
+                                  make_convective_slave_element),
+          NULL, NULL);
+    } else {
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
+          PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_contact_lhs(contact_problem, make_contact_element), NULL,
+          NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem, make_contact_element), NULL,
+          NULL);
+    }
 
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
@@ -352,11 +424,10 @@ int main(int argc, char *argv[]) {
                 "difference matrix is too big");
       }
     }
-  }
-  CATCH_ERRORS;
+    } CATCH_ERRORS;
 
-  // finish work cleaning memory, getting statistics, etc
-  MoFEM::Core::Finalize();
+    // finish work cleaning memory, getting statistics, etc
+    MoFEM::Core::Finalize();
 
-  return 0;
+    return 0;
 }

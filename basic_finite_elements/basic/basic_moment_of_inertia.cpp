@@ -36,6 +36,8 @@ using EntData = DataForcesAndSourcesCore::EntData;
 FTensor::Index<'i', 3> i;
 FTensor::Index<'j', 3> j;
 
+
+//! [Example]
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -53,67 +55,77 @@ private:
   MoFEMErrorCode postProcess();
   MoFEMErrorCode checkResults();
 
-  //! [Common data]
-  struct CommonData {
-
-    boost::shared_ptr<VectorDouble>
-        rhoAtIntegrationPts; ///< Storing density at integration point
-
-    /**
-     * @brief Vector to indicate indices for storing, zero, first and second
-     * moment.
-     *
-     */
-    enum VecElements {
-      ZERO = 0,
-      FIRST_X,
-      FIRST_Y,
-      FIRST_Z,
-      SECOND_XX,
-      SECOND_XY,
-      SECOND_XZ,
-      SECOND_YY,
-      SECOND_YZ,
-      SECOND_ZZ,
-      LAST_ELEMENT
-    };
-
-    SmartPetscObj<Vec>
-        petscVec; ///< Smart pinter which stores PETSc distributed vector
-  };
+  struct CommonData;;
   boost::shared_ptr<CommonData> commonDataPtr;
-  
-  //! [Common data]
 
-  //! [Operators]
-  struct OpZero : public OpElement {
-    OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
-        : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  struct OpZero; 
 
-  private:
-    boost::shared_ptr<CommonData> commonDataPtr;
-  };
+  struct OpFirst;
 
-  struct OpFirst : public OpElement {
-    OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
-        : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  struct OpSecond; 
 
-  private:
-    boost::shared_ptr<CommonData> commonDataPtr;
-  };
-
-  struct OpSecond : public OpElement {
-    OpSecond(boost::shared_ptr<CommonData> &common_data_ptr)
-        : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-  private:
-    boost::shared_ptr<CommonData> commonDataPtr;
-  };
-  //! [Operators]
 };
+//! [Example]
+
+//! [Common data]
+struct Example::CommonData {
+
+  boost::shared_ptr<VectorDouble>
+      rhoAtIntegrationPts; ///< Storing density at integration point
+
+  /**
+   * @brief Vector to indicate indices for storing, zero, first and second
+   * moment.
+   *
+   */
+  enum VecElements {
+    ZERO = 0,
+    FIRST_X,
+    FIRST_Y,
+    FIRST_Z,
+    SECOND_XX,
+    SECOND_XY,
+    SECOND_XZ,
+    SECOND_YY,
+    SECOND_YZ,
+    SECOND_ZZ,
+    LAST_ELEMENT
+  };
+
+  SmartPetscObj<Vec>
+      petscVec; ///< Smart pinter which stores PETSc distributed vector
+};
+//! [Common data]
+
+//! [Operators]
+struct Example::OpZero : public OpElement {
+  OpZero(boost::shared_ptr<CommonData> &common_data_ptr)
+      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct Example::OpFirst : public OpElement {
+  OpFirst(boost::shared_ptr<CommonData> &common_data_ptr)
+      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct Example::OpSecond : public OpElement {
+  OpSecond(boost::shared_ptr<CommonData> &common_data_ptr)
+      : OpElement("rho", OPROW), commonDataPtr(common_data_ptr) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+//! [Operators]
+
 
 //! [Run all]
 MoFEMErrorCode Example::runProblem() {
@@ -148,16 +160,22 @@ MoFEMErrorCode Example::setUP() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->petscVec = createSmartVectorMPI(
-      mField.get_comm(),
-      (!mField.get_comm_rank()) ? CommonData::LAST_ELEMENT : 0,
-      CommonData::LAST_ELEMENT);
   commonDataPtr->rhoAtIntegrationPts = boost::make_shared<VectorDouble>();
+
+  int local_size;
+  if (mField.get_comm_rank() == 0)
+    local_size = CommonData::LAST_ELEMENT;
+  else
+    local_size = 0;
+
+  commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
+                                                 CommonData::LAST_ELEMENT);
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
 
-//! [Distributions mass
+//! [Set inital density]
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
   auto set_density = [&](VectorAdaptor &&field_data, double *xcoord,
@@ -171,7 +189,7 @@ MoFEMErrorCode Example::bC() {
   CHKERR field_blas->setVertexDofs(set_density, "rho");
   MoFEMFunctionReturn(0);
 }
-//! [Distributions mass]
+//! [Set inital density]
 
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
@@ -283,10 +301,13 @@ MoFEMErrorCode Example::checkResults() {
 }
 //! [Test example]
 
+//! [main]
 int main(int argc, char *argv[]) {
 
+  // Initialisation MoFEM/PETSc and MoAB data strutures
   MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
 
+  // Error handling
   try {
 
     //! [Register MoFEM discrete manager in PETSc]
@@ -311,6 +332,7 @@ int main(int argc, char *argv[]) {
 
   CHKERR MoFEM::Core::Finalize();
 }
+//! [main]
 
 //! [FirstOp]
 MoFEMErrorCode Example::OpZero::doWork(int side, EntityType type,
