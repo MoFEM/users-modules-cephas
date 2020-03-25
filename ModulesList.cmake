@@ -32,6 +32,15 @@ if(EXTERNAL_MODULES_BUILD)
       ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
   endif(UM_INSTALL_BREFIX)
 
+
+if(UM_INSTALL_BREFIX)
+    include(
+      ${UM_INSTALL_BREFIX}/lib/extended_contact/users_modules_targets.cmake)
+  else(UM_INSTALL_BREFIX)
+    include(
+      ${MoFEM_INSTALL_DIR}/lib/extended_contact/users_modules_targets.cmake)
+  endif(UM_INSTALL_BREFIX)
+
 else(EXTERNAL_MODULES_BUILD)
 
   get_git_hash(${PROJECT_SOURCE_DIR} GIT_UM_SHA1)
@@ -42,6 +51,8 @@ else(EXTERNAL_MODULES_BUILD)
 
   # Build basic finite element library
   include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
+  # Build basic finite element library
+  #include(${PROJECT_SOURCE_DIR}/extended_contact/UMBuildLib.cmake)
   # Download some known modules (Obsolete). It is used to resting on the
   # developemnt server to automatically clone some modules from git repsitort
   # to root source directory.
