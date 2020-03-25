@@ -1,34 +1,47 @@
 /*! \page lesson1 Integration on finite element mesh
 
-\note Draft version
-
 \section basic_lessons1_intro Introduction
 
-The first lesson is solely committed to numerical integration. Integration is essential for most of the numerical methods (except for the collocation method) used to solve partial differential equations (PDEs).
+The first lesson is solely devoted to numerical integration. Integration is essential for most of the numerical methods (except for the collocation method) used to solve partial differential equations (PDEs).
 
-The most straightforward interpretation of the finite element method is considering it as a method for integration of functions on complex shapes. The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad, tetrahedron, or hexahedron, and on each element integration rule for the primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which the same simple procedure is executed over and over. Such repeatable tasks make it a perfect method for a computer.
+The most straightforward interpretation of the finite element method is to consider it as a method for integration of functions on complex shapes. The integration domain is divided into elements with primitive shapes, e.g. edge, triangle, quad, tetrahedron, or hexahedron, and on each element integration rule for the primitive shape is evaluated. Thus a complex problem is broken into many simple elements, on which the same simple procedure is executed over and over. Such repeatable tasks make it a perfect method for a computer.
 
 We will present the problem of numerical integration by calculating moments of inertia. Moments of inertia characterise the distribution and amount of the mass in the body and have various engineering applications. 
 
-First, we explain essentials, then provide a definition of the moments of inertia. Next section is dedicated to the theory, and finally we show details of implementation in MoFEM. 
+First, we explain essential formulas and provide a definition of moments of inertia. Next section is dedicated to the theory, and finally we show details of implementation in MoFEM. 
 
 \section basic_lessons1_start Essentials
 
-\subsection basic_lessons1_simplexes Integration on simplexes
-
 \note In geometry, a simplex is a generalization of the notion of a triangle or tetrahedron to arbitrary dimensions. Note that an edge is also considered as a particular case of the simplex, see <a href="https://en.wikipedia.org/wiki/Simplex">Simplex</a> for more details.
 
-Numerical integration of a function \f$\rho(x)\f$ is given by the following general formula:
+\subsection basic_lessons1_notations Notations
+
+For future references we provide a table of some essential mathematical notations which will be used in this and subsequent lessons:
+
+<table>
+<caption id="multi_row"> Mathematical notations </caption>
+<tr><th rowspan="2"> Subscripts (lower indices) and \n superscripts (upper indices) <th colspan="3"> Font style
+<tr><th> normal <th> bold <th> normal with overline
+<tr><th> without sub- or superscript <td style="text-align:center"> scalar (0-rank tensor) \n \em Ex.: \f$\rho, M, v, a, \ell\f$ <td style="text-align:center">  higher-rank (1,2, ...)  tensor \n \em Ex.: \f$\mathbf{x}, \boldsymbol{\xi}, \boldsymbol{\lambda}, \mathbf{S}, \mathbf{I}\f$ <td style="text-align:center">  coefficients vector \n \em Ex.: \f$\bar{x}, \bar{\rho}\f$ 
+<tr><th> with subscript (lower index) <td style="text-align:center">  scalar value at a point \n \em Ex.: \f$W_g, w_g, \rho_g \f$ <td style="text-align:center">  tensor value at a point \n \em Ex.: \f$\mathbf{x}_i, \boldsymbol{\xi}_g, \mathbf{J}_g, \boldsymbol{\lambda}_i, \lambda_i\f$ <td style="text-align:center">  element of a coefficients vector \n \em Ex.: \f$\bar{\rho}_n\f$ 
+<tr><th> with superscript (upper), \n except \f$e\f$ and \f$h\f$ <td style="text-align:center">  component of a tensor \n \em Ex.: \f$x^i, S^i, I^{ij}, \xi^i, \lambda^i, J^{ij}\f$ <td style="text-align:center">  coordinate basis vector \n \em Ex.: \f$\mathbf{x}^i, \boldsymbol{\xi}^i\f$ <td style="text-align:center">  spatial component of an element of \n a coefficients vector, \em Ex.: \f$\bar{x}_n^i\f$ 
+<tr><th> with superscript (upper) \f$e\f$ <td colspan="3" style="text-align:center"> corresponding to \f$e\f$-th element \n \em Ex.: \f$\rho_g^e, \mathbf{J}_g^e, \mathcal{T}^e\f$ 
+<tr><th> with superscript (upper) \f$h\f$ <td colspan="2" style="text-align:center"> reference to the approximation \n \em Ex.: \f$\Omega^h, \rho^h, \rho_g^h, \mathbf{x}^h, \mathbf{x}_g^h\f$ <td style="text-align:center">  not used
+</table>
+
+\subsection basic_lessons1_simplexes Integration on simplexes
+
+Numerical integration of a function \f$\rho(x)\f$ by using the finite element method is given by the following general formula:
 \f[
 \begin{align}
 \label{eq:num_int}
-  I(\rho) = \int_\Omega \rho\,\textrm{d}\Omega \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g\|\mathbf{J}_g^e\|\rho^e_g
+  I(\rho) = \int_\Omega \rho\,\textrm{d}\Omega \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} W_g\|\mathbf{J}_g^e\|\rho^e_g
 \end{align}
 \f]
-where \f$W_g\f$ is the integration weight, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the local coordinate system to the Cartesian one, \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point, \f$G\f$ is the number of integration points per each element, and \f$N\f$ is the total number of elements in a mesh. Typically, the sum of the integration weights equals to unity:
+where \f$W_g\f$ is the weight of the \f$g\f$-th integration point, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the reference coordinate system to the physical one (evaluated at the \f$g\f$-th integration point), and \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point, \f$G\f$ is the number of integration points per each element, and \f$M\f$ is the total number of elements in a mesh. Typically, the sum of the integration weights equals to unity:
 \f[
 \begin{align}
-  \sum_{g=0}^{G-1} W_g = 1.
+\sum_{g=0}^{G-1} W_g = 1.
 \end{align}
 \f]
 Furthermore, for the case of simplexes the numerical integration formula \eqref{eq:num_int}   takes a more straightforward form:
@@ -36,7 +49,7 @@ Furthermore, for the case of simplexes the numerical integration formula \eqref{
 - For a tetrahedron
 \f[
 \begin{align}
-  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \, \rho^e_g,
+  I(\rho) \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} (W_g v) \, \rho^e_g,
 \end{align}
 \f]
 where \f$v\f$ is the volume of an element (tetrahedron); 
@@ -44,7 +57,7 @@ where \f$v\f$ is the volume of an element (tetrahedron);
 - For a triangle
 \f[
 \begin{align}
-  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a) \, \rho^e_g,
+  I(\rho) \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} (W_g a) \, \rho^e_g,
 \end{align}
 \f]
 where \f$a\f$ is the area of an element (triangle);
@@ -52,12 +65,12 @@ where \f$a\f$ is the area of an element (triangle);
 - For an edge
 \f[
 \begin{align}
-  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g \ell) \, \rho^e_g,
+  I(\rho) \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} (W_g \ell) \, \rho^e_g,
 \end{align}
 \f]
 where \f$\ell\f$ is the length of a line element (edge).
 
-In the following sections we explain how the above sums are evaluated and give some additional details about the Jacobian.  
+In the following sections we explain how the above sums are evaluated and give additional details about the Jacobian.  
 
 
 \tableofcontents
@@ -68,21 +81,21 @@ The distribution of mass in the body can be characterised by moments of inertia.
 
 In general, moments of inertia are tensors. Zero moment is represented by a single scalar coefficient, first moment is a 1D array, i.e. a vector of coefficients, and second moment is a second-order tensor, coefficients of which for convenience can be organised in a 2D table, i.e. a matrix. Note that these coefficients depend on the observer, i.e. coordinate system, and the tensorial transformation rule describes how coefficients of moments of inertia change with the observer. 
 
-- Zero inertia moment is the body mass, 
+- Zero moment of inertia is the mass of the body:
 \f[
 \begin{align}
 M := \int_\Omega \rho(\mathbf{x}) \, \textrm{d}\Omega,
 \end{align}
 \f]
-where \f$\rho\f$ is the material density, and \f$\Omega\f$ is a body domain.
-Mass characterises how much force needs to be applied for a desired body
+where \f$\rho\f$ is the material density, and \f$\Omega\f$ is the body domain.
+Mass characterises how much force is to be applied for a desired body
 acceleration \f$\mathbf{a}=\{a^i\}\f$ as stated by the Newton's law:
 \f[
 \begin{align}
 a^i = M f^i,
 \end{align}
 \f]
-where \f$\mathbf{f}=\{f^i\}\f$ is the force. Moreover, kinematic energy can be expressed as:
+where \f$\mathbf{f}=\{f^i\}\f$ is the force. Moreover, the kinematic energy can be expressed as:
 \f[
 \begin{align}
 E_k = \frac{v^i M v^i}{2},
@@ -91,33 +104,33 @@ E_k = \frac{v^i M v^i}{2},
 where \f$\mathbf{v}=\{v^i\}\f$ is the velocity, and the summation over repeating indices is assumed. 
 Note also, that for the zero moment the tensorial transformation rule is straightforward: the mass of an object cannot be changed by looking at it from different points and angles, so it is the same in every coordinate system.
 
-- First inertia moment is given by:
+- First moment of inertia \f$\mathbf{S}=\{S^i\}\f$ is given by:
 \f[
 \begin{align}
 S^i := \int_\Omega \rho(\mathbf{x}) \, x^i \textrm{d}\Omega
 \end{align}
 \f]
-where \f$x^i\f$ is the coordinate in the \f$i\f$ direction. Center of gravity of the body can be calculated as:
+where \f$x^i\f$ is the coordinate in the \f$i\f$ direction. According to that, the center of gravity of the body can be calculated as:
 \f[
 \begin{align}
-x_c^i = \frac{S^i}{M}.
+x_c^i = \frac{S^i}{M},
 \end{align}
 \f]
-where \f$\mathbf{x}_c=\{x_c^i\}\f$ is the centre of gravity of the body, or system of bodies. Note that if the origin is placed at the centre of gravity, then the first moment of inertia is zero.
+where \f$\mathbf{x}_c=\{x_c^i\}\f$ are the coordinates of the centre of gravity of the body, or system of bodies. Note that if the origin is placed at the centre of gravity, then the first moment of inertia is zero.
 
-- Second moment of inertia is defined as:
+- Second moment of inertia \f$\mathbf{I}=\{I^{ij}\}\f$ is defined as:
 \f[
 \begin{align}
-I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}\Omega
+I^{ij} := \int_\Omega \rho(\mathbf{x}) \left(x^ix^j\right) \textrm{d}\Omega,
 \end{align}
 \f]
-where \f$(x^ix^j)\f$ is the <a href="https://en.wikipedia.org/wiki/Outer_product">Outer product</a>. The second moment of inertia, analogously to mass, characterises how much torque has to be applied at body origin for desired body angular acceleration \f$\boldsymbol\alpha=\{\alpha^i\}\f$, as follows:
+where the term \f$(x^ix^j)\f$ represents the <a href="https://en.wikipedia.org/wiki/Outer_product">Outer product</a>. Second moment of inertia, analogously to mass, characterises how much torque is to be applied at the origin for desired body angular acceleration \f$\boldsymbol\alpha=\{\alpha^i\}\f$, as follows:
 \f[
 \begin{align}
 \alpha^i = I^{ij} \tau^j = I^{ij} (\varepsilon^{jmn} x^m f^n)
 \end{align}
 \f]
-where \f$\boldsymbol\tau=\{\tau^j\}\f$ is the torque vector, and \f$\varepsilon^{jmn}\f$ is the <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>, while the term in brackets is the cross product of the force vector and arm on which this force acts. Finally, the kinematic energy of the rotating body is 
+where \f$\boldsymbol\tau=\{\tau^j\}\f$ is the torque vector, and \f$\varepsilon^{jmn}\f$ is the <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a>, while the term in brackets is the cross product of the force vector and arm on which this force acts. Finally, the kinematic energy of the rotating body can be computed as
 \f[
 \begin{align}
 E_k = \frac{\omega^i I^{ij} \omega^j}{2}.
@@ -130,13 +143,23 @@ This section is not essential and can be skipped, you may move to implementation
 
 \subsection basic_lessons1_elements Integral over elements
 
-The integral of function \f$\rho(\mathbf{x})\f$, where coordinate \f$\mathbf{x}\in \Omega\f$, is a sum of integrals over all primitives shapes (elements) constituting the whole integral domain:
+We start by dividing the integration domain \f$\Omega\f$ into a union of non-overlapping primitive shapes (elements) \f$\mathcal{T}^e\f$, such that:
 \f[
 \begin{align}
-  I(\rho) = \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega \approx \int_{\Omega^h} \rho(\mathbf{x}^h) \textrm{d}\Omega = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}\Omega = \sum_{e=0}^{N-1} I_\mathcal{T}
+\cup_{e=0}^{M-1}\mathcal{T}^e=\Omega^h,
 \end{align}
 \f]
-You may note that in the above equation value of integral is approximated since the domain of integration is not exact, and represented by a mesh. Mesh is assembled from non-overlapping elements, see mesh on the right of \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains curved edges like circles. Those are not precisely circles, and not exactly the geometry of the body. Finite elements have straight edges, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the body geometry is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of the geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>Shape Functions</em>. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$, to indicate that given quantity is approximated, and thus there is some error associated with the approximation.
+where \f$\Omega^h\f$ is termed as the discretisation (approximation) of the domain \f$\Omega\f$, see \ref basic_l1_figure_1 "Figure 1". Note that subscript \em h refers here to the lateral size of an element, e.g. maximal edge length.
+
+ The integral of function \f$\rho(\mathbf{x})\f$, where coordinates \f$\mathbf{x}\in \Omega\f$, can be computed as a sum of integrals over all elements:
+\f[
+\begin{align}
+  I(\rho) = \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega \approx \int_{\Omega^h} \rho(\mathbf{x}^h) \textrm{d}\Omega = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}\Omega = \sum_{e=0}^{N-1} I_\mathcal{T},
+\end{align}
+\f]
+where \f$\mathcal{T}^e\f$ is the domain of \f$e\f$-th element, and \f$\mathbf{x}^h\f$ is the interpolation of the coordinates on an element using <em>shape functions</em>, which introduces an error into the result know as the \em approximation \em error. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$ to indicate that given quantity is approximated on each element. Moreover, an additional error is introduced by substituting the integration domain \f$\Omega\f$ by a discrete mesh \f$\Omega^h\f$.
+
+Indeed, the mesh is assembled from non-overlapping elements, see mesh on the right of \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains curved edges like circles. Those are not precisely circles, and not exactly the geometry of the body. Finite elements have straight edges, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the body geometry is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of the geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>shape functions</em>. 
 
 \anchor basic_l1_figure_1
 \image html lesson1_shape_function.png "Figure 1: Finite element mesh shape functions, and integration points" width=800px
