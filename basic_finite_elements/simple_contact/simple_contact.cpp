@@ -278,19 +278,24 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
-  if (true){
-  CHKERR m_field.add_finite_element("CONTACT_VTK");
-  CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK", "SPATIAL_POSITION");
-  CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK", "SPATIAL_POSITION");
-  CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK", "SPATIAL_POSITION");
+    if (true) {
+      CHKERR m_field.add_finite_element("CONTACT_VTK");
+      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+                                                         "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+                                                         "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+                                                          "SPATIAL_POSITION");
 
-  CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK", "LAGMULT");
-  CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK", "LAGMULT");
-  CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK", "LAGMULT");
-  CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
-                                                    "CONTACT_VTK");
-  }
-
+      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+                                                         "LAGMULT");
+      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+                                                         "LAGMULT");
+      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+                                                          "LAGMULT");
+      CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
+                                                        "CONTACT_VTK");
+    }
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -396,7 +401,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
-    if(true){
+    if (true) {
       CHKERR DMMoFEMAddElement(dm, "CONTACT_VTK");
     }
 
@@ -654,12 +659,13 @@ int main(int argc, char *argv[]) {
       auto common_post_proc_data_simple_contact = make_contact_common_data();
 
       CHKERR contact_problem->setPostProcContactOperators(
-          post_proc_contact_ptr,
-          "SPATIAL_POSITION", "LAGMULT", common_post_proc_data_simple_contact);
+          post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+          common_post_proc_data_simple_contact);
 
       // CHKERR contact_problem->setPostProcContactOperators(
       //     post_proc_contact_ptr, side_contact_element, "CONTACT_VTK",
-      //     "SPATIAL_POSITION", "LAGMULT", common_post_proc_data_simple_contact);
+      //     "SPATIAL_POSITION", "LAGMULT",
+      //     common_post_proc_data_simple_contact);
 
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
       std::ostringstream stm;
@@ -674,23 +680,23 @@ int main(int argc, char *argv[]) {
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
 
-      EntityHandle out_meshset_slave_tris;
-      EntityHandle out_meshset_master_tris;
+    EntityHandle out_meshset_slave_tris;
+    EntityHandle out_meshset_master_tris;
 
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
 
-      CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-      CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
 
-      CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                             &out_meshset_slave_tris, 1);
-      CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                             &out_meshset_master_tris, 1);
+    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                           &out_meshset_slave_tris, 1);
+    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                           &out_meshset_master_tris, 1);
 
-      CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
-      CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
-    }
+    CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
+    CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
+  }
   CATCH_ERRORS;
 
   // finish work cleaning memory, getting statistics, etc

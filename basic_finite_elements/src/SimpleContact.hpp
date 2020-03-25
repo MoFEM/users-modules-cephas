@@ -29,7 +29,8 @@ struct SimpleContactProblem {
   using ContactEle = ContactPrismElementForcesAndSourcesCore;
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
   using EntData = DataForcesAndSourcesCore::EntData;
-  using FaceUserDataOperator = FaceElementForcesAndSourcesCore::UserDataOperator;
+  using FaceUserDataOperator =
+      FaceElementForcesAndSourcesCore::UserDataOperator;
 
   static inline double Sign(double x);
 
@@ -897,11 +898,9 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
-
   struct OpCalLagrangeMultPostProc : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-
 
     OpCalLagrangeMultPostProc(
         const string lag_mult_name,
@@ -982,12 +981,10 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
 
-
-//add description
+  // add description
   MoFEMErrorCode setPostProcContactOperators(
       boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
-      const std::string field_name,
-      const std::string lagrang_field_name,
+      const std::string field_name, const std::string lagrang_field_name,
       boost::shared_ptr<CommonDataSimpleContact> common_data);
 
   /**
@@ -1074,7 +1071,7 @@ struct SimpleContactProblem {
 
   /**
    * @brief Evaluate gradient position on reference master surface.
-   * 
+   *
    */
   struct OpCalculateGradPositionXi : public ContactOp {
 
@@ -1092,7 +1089,7 @@ struct SimpleContactProblem {
 
   /**
    * @brief Evaluate gradient of Lagrange multipliers on reference slave surface
-   * 
+   *
    */
   struct OpCalculateGradLambdaXi : public ContactOp {
 

@@ -229,9 +229,12 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
           t_x_slave(i) = 0;
           t_x_master(i) = 0;
 
-          auto t_slave_material_coords = get_t_coords(get_slave_material_coords());
-          auto t_slave_spatial_coords = get_t_coords(get_slave_spatial_coords());
-          auto t_master_spatial_coords = get_t_coords(get_master_spatial_coords());
+          auto t_slave_material_coords =
+              get_t_coords(get_slave_material_coords());
+          auto t_slave_spatial_coords =
+              get_t_coords(get_slave_spatial_coords());
+          auto t_master_spatial_coords =
+              get_t_coords(get_master_spatial_coords());
           double *slave_base = &get_slave_n()(gg, 0);
           double *master_base = &get_master_n()(gg, 0);
           auto t_diff = get_t_diff();
@@ -252,7 +255,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
         auto assemble = [&]() {
           t_mat(I, J) = 0;
-          auto t_master_spatial_coords = get_t_coords(get_master_spatial_coords());
+          auto t_master_spatial_coords =
+              get_t_coords(get_master_spatial_coords());
           auto t_diff = get_t_diff();
           for (size_t n = 0; n != 3; ++n) {
             t_mat(I, J) += t_diff(J) * t_tau(i, I) * t_master_spatial_coords(i);
@@ -631,7 +635,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalLagrangeMultPostProc::doWork(
       ++t_base_lambda;
       ++t_field_data_slave;
     }
-    ++t_lagrange_slave;    
+    ++t_lagrange_slave;
   }
 
   MoFEMFunctionReturn(0);
@@ -893,13 +897,12 @@ SimpleContactProblem::OpCalContactTractionOverLambdaMasterSlave::doWork(
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
         auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 0);
         auto t_base_lambda = col_data.getFTensor0N(gg, 0);
-        const double m  = val_m * t_base_master;
+        const double m = val_m * t_base_master;
         for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
           const double n = m * t_base_lambda;
           t_assemble_m(i) -= n * const_unit_n(i);
           ++t_assemble_m;
           ++t_base_lambda; // update cols slave
-
         }
         ++t_base_master; // update rows master
       }
@@ -960,13 +963,12 @@ SimpleContactProblem::OpCalContactTractionOverLambdaSlaveSlave::doWork(
       for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
         auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 0);
         auto t_base_lambda = col_data.getFTensor0N(gg, 0);
-        const double m  = val_m * t_base_master;
+        const double m = val_m * t_base_master;
         for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
           const double n = m * t_base_lambda;
           t_assemble_m(i) += n * const_unit_n(i);
           ++t_assemble_m;
           ++t_base_lambda; // update cols slave
-
         }
         ++t_base_master; // update rows master
       }
@@ -1310,12 +1312,8 @@ MoFEMErrorCode SimpleContactProblem::OpPostProcContactContinuous::doWork(
   double def_VAL[9];
   bzero(def_VAL, 9 * sizeof(double));
 
-  // Tag th_spatial_pos;
   Tag th_lag_mult;
 
-  // CHKERR postProcMesh.tag_get_handle(fieldName.c_str(), 3, MB_TYPE_DOUBLE,
-  //                                    th_spatial_pos,
-  //                                    MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
   CHKERR postProcMesh.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
                                      th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
                                      def_VAL);
@@ -1323,20 +1321,12 @@ MoFEMErrorCode SimpleContactProblem::OpPostProcContactContinuous::doWork(
   auto t_lagrange =
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
-  // auto t_position_slave = getFTensor1FromMat<3>(
-  //     *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
-
   const int nb_gauss_pts =
       commonDataSimpleContact->lagMultAtGaussPtsPtr->size();
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    // CHKERR postProcMesh.tag_set_data(th_spatial_pos,
-    // &mapGaussPts[gg], 1,
-    //                                  &t_position_slave);
     CHKERR postProcMesh.tag_set_data(th_lag_mult, &mapGaussPts[gg], 1,
                                      &t_lagrange);
-
-    // ++t_position_slave;
     ++t_lagrange;
   }
 
@@ -1556,14 +1546,13 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     fe_post_proc_simple_contact->getOpPtrVector().push_back(
         new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
                            moab_out, lagrange_field));
-    }
+  }
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode SimpleContactProblem::setPostProcContactOperators(
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
-    const std::string field_name,
-    const std::string lagrang_field_name,
+    const std::string field_name, const std::string lagrang_field_name,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact) {
   MoFEMFunctionBegin;
 
@@ -1610,7 +1599,6 @@ SimpleContactProblem::OpCalculateGradLambdaXi::doWork(int side, EntityType type,
 
   MoFEMFunctionReturn(0);
 }
-
 
 MoFEMErrorCode
 SimpleContactProblem::OpLhsConvectIntegrationPtsContactTraction::doWork(
