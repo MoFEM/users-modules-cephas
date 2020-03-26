@@ -14,6 +14,5 @@
 # copy dox/figures to html directory created by doxygen
 add_custom_target(hierarchical_approximation
   ${CMAKE_COMMAND} -E copy_directory
-  ${PROJECT_SOURCE_DIR}/users_modules/basic_finite_elements/hierarchical_approximation/doc/figures ${PROJECT_BINARY_DIR}/html
-)
+  ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
 add_dependencies(doc hierarchical_approximation)
