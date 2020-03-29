@@ -31,14 +31,14 @@ For future references we provide a table of some essential mathematical notation
 
 \subsection basic_lessons1_simplexes Integration on simplexes
 
-Numerical integration of a function \f$\rho(x)\f$ by using the finite element method is given by the following general formula:
+Numerical integration of a function \f$\rho(x)\f$ by the means of the finite element method is given by the following general formula:
 \f[
 \begin{align}
 \label{eq:num_int}
   I(\rho) = \int_\Omega \rho\,\textrm{d}\Omega \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} W_g\|\mathbf{J}_g^e\|\rho^e_g
 \end{align}
 \f]
-where \f$W_g\f$ is the weight of the \f$g\f$-th integration point, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the reference coordinate system to the physical one (evaluated at the \f$g\f$-th integration point), and \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point, \f$G\f$ is the number of integration points per each element, and \f$M\f$ is the total number of elements in a mesh. Typically, the sum of the integration weights equals to unity:
+where \f$W_g\f$ is the weight of the \f$g\f$-th integration point, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the physical (global) coordinate system to the reference (local) coordinate system (evaluated at the \f$g\f$-th integration point), and \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point. Finally, \f$G\f$ is the number of integration points per each element, and \f$M\f$ is the total number of elements in a mesh. Typically, the sum of the integration weights equals to unity:
 \f[
 \begin{align}
 \sum_{g=0}^{G-1} W_g = 1.
@@ -143,79 +143,99 @@ This section is not essential and can be skipped, you may move to implementation
 
 \subsection basic_lessons1_elements Integral over elements
 
-We start by dividing the integration domain \f$\Omega\f$ into a union of non-overlapping primitive shapes (elements) \f$\mathcal{T}^e\f$, such that:
+We start by dividing the integration domain \f$\Omega\f$ into a union of non-overlapping primitive shapes (elements) \f$\mathcal{T}^e\f$ such that:
 \f[
 \begin{align}
-\cup_{e=0}^{M-1}\mathcal{T}^e=\Omega^h,
+\bigcup_{e=0}^{M-1}\mathcal{T}^e=\Omega^h,
 \end{align}
 \f]
-where \f$\Omega^h\f$ is termed as the discretisation (approximation) of the domain \f$\Omega\f$, see \ref basic_l1_figure_1 "Figure 1". Note that subscript \em h refers here to the lateral size of an element, e.g. maximal edge length.
-
- The integral of function \f$\rho(\mathbf{x})\f$, where coordinates \f$\mathbf{x}\in \Omega\f$, can be computed as a sum of integrals over all elements:
-\f[
-\begin{align}
-  I(\rho) = \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega \approx \int_{\Omega^h} \rho(\mathbf{x}^h) \textrm{d}\Omega = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}^h) \textrm{d}\Omega = \sum_{e=0}^{N-1} I_\mathcal{T},
-\end{align}
-\f]
-where \f$\mathcal{T}^e\f$ is the domain of \f$e\f$-th element, and \f$\mathbf{x}^h\f$ is the interpolation of the coordinates on an element using <em>shape functions</em>, which introduces an error into the result know as the \em approximation \em error. For the rest of the tutorials, we will be using \f$(\cdot)^h\f$ to indicate that given quantity is approximated on each element. Moreover, an additional error is introduced by substituting the integration domain \f$\Omega\f$ by a discrete mesh \f$\Omega^h\f$.
-
-Indeed, the mesh is assembled from non-overlapping elements, see mesh on the right of \ref basic_l1_figure_1 "Figure 1". Taking a closer look at \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex, and contains curved edges like circles. Those are not precisely circles, and not exactly the geometry of the body. Finite elements have straight edges, so there is some difference between the mathematical model and its finite element discretisation. However, it is good news that error, i.e. difference between the mathematical model and discretisation can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the body are flat, and edges are straight, the body geometry is approximated exactly. One can also generalise, and describe edges of elements by polynomials of second and higher-orders, that also enables control of the geometry error. However, in this tutorial, we restrict ourselves, and geometry will be represented by linear <em>shape functions</em>. 
+where \f$\Omega^h\f$ is termed the discretisation (approximation) of the domain \f$\Omega\f$, see \ref basic_l1_figure_1 "Figure 1". For the rest of the tutorials, we will be using \f$(\cdot)^h\f$ to indicate a reference of the given quantity the approximation. Note that subscript \em h historically refers to the lateral size of an element, e.g. maximal edge length.
 
 \anchor basic_l1_figure_1
-\image html lesson1_shape_function.png "Figure 1: Finite element mesh shape functions, and integration points" width=800px
+\image html lesson1_discretisation.png "Figure 1: Discretisation of the integration domain" width=600px
 
-\subsubsection basic_lessons1_rule Integration in the element
+The integral of function the \f$\rho(\mathbf{x})\f$, where coordinates \f$\mathbf{x}\in \Omega\f$, can be computed approximately as a sum of integrals over all elements:
+\f[
+\begin{align}
+  I(\rho) = \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega \approx \int_{\Omega^h} \rho(\mathbf{x}) \textrm{d}\Omega = \sum_{e=0}^{M-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}\Omega = \sum_{e=0}^{M-1} I_{\mathcal{T}^e},
+\end{align}
+\f]
+where \f$I_{\mathcal{T}^e}\f$ is the integral over the element \f$\mathcal{T}^e\f$. 
+
+The error in this computation is introduced by substituting the integration domain \f$\Omega\f$ by a discrete mesh \f$\Omega^h\f$. Taking a closer look at the domain \f$\Omega\f$ in \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex and contains curved edges. In the discretised domain \f$\Omega^h\f$ these edges are not represented precisely, since finite elements have straight edges, thus there is some difference between the mathematical model and its finite element discretisation. However, it is good news that the error, i.e. difference between the mathematical model and its discretised version, can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the domain \f$\Omega\f$ are flat, i.e. edges are straight, then the geometry is approximated exactly. At the same time, one can also generalise and describe edges of elements by polynomials of second and higher orders, which enables even more control of the geometrical error. However, in this tutorial, we restrict ourselves to representing the geometry by linear <em>shape functions</em>. 
+
+\subsubsection basic_lessons1_rule Integration on the element
+
+Next we discuss how the integral over a single element \f$\mathcal{T}^e\f$ is computed. The repeated task of integrating over elements can be simplified if we perform the change of coordinates for each element from the spatial (global) coordinate system \f$\{\mathbf{x}^0, \mathbf{x}^1, \mathbf{x}^2\}\f$ to a reference (local) coordinate system \f$\{\boldsymbol{\xi}^0, \boldsymbol{\xi}^1, \boldsymbol{\xi}^2\}\f$. Thus, the integration can be performed on a reference element which will be the same for all physical elements, see \ref basic_l1_figure_2 "Figure 2". 
+
+\anchor basic_l1_figure_2
+\image html lesson1_reference_element.png "Figure 2: Integration on a reference element" width=800px
+
+For example, for a triangle element after such change of coordinates the integral can be computed as:
+\f[
+\begin{align}
+  I_\mathcal{T} = 
+  \int_{\mathcal{T}} \rho(\mathbf{x})\, \textrm{d}x = \int\limits_{0}^{1}\int\limits_{0}^{1-\xi^0} \rho(\mathbf{x}(\boldsymbol{\xi})) \|\mathbf{J}\|\, \textrm{d}\xi^0\textrm{d}\xi^1,
+\end{align}
+\f]
+where \f$\mathbf{J}\f$ is the Jacobian of transformation of coordinates. Moreover, for integration on simplexes, e.g. on triangles, it is often useful to introduce <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a> \f$\pmb\lambda\f$, see \ref basic_l1_figure_2 "Figure 2". In that case the integral is computed as:
+\f[
+\begin{align}
+  I_\mathcal{T} = 
+  \int_{\mathcal{T}} \rho(\mathbf{x})\, \textrm{d}x = \int\limits_{0}^{1}\int\limits_{0}^{1-\lambda^0} \rho(\mathbf{x}(\lambda^0, \lambda^1, \lambda^2)) \|\mathbf{J}\|\, \textrm{d}\lambda^0\textrm{d}\lambda^1.
+\end{align}
+\f]
+
+The integral \f$I_\mathcal{T}\f$ will not be computed analytically. Since the function \f$\rho(\mathbf{x})\f$ in general can be arbitrary, numerical integration is used, in particular the <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">Gauss quadrature rule</a> is the most popular for the finite-element method. This approach requires evaluation of the integrated function \f$\rho(\mathbf{x})\f$ at so-called integration (Gauss) points, locations of which are pre-defined for the reference element, see see \ref basic_l1_figure_3 "Figure 3".
 
 Integration on each element, applying integration formulae, is as follows:
 \f[
 \begin{align}
   I_\mathcal{T} = 
-  \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}V \approx
-  \sum_{g=0}^{G-1} W_g \rho\left(\mathbf{x}^h(\pmb\xi_g)\right) \| \mathbf{J}_g \| =
-  \sum_{g=0}^{G-1} W_g \rho^h_g \| \mathbf{J}_g \| =
-  \sum_{g=0}^{G-1} w_g \rho^h_g
+  \int_{\mathcal{T}} \rho(\mathbf{x}) \textrm{d}\mathcal{T} \approx
+  \sum_{g=0}^{G-1} W_g \rho\left(\mathbf{x}(\pmb\xi_g)\right) \|\mathbf{J}_g\|,
 \end{align}
 \f]
-where \f$\rho_g\f$ is value of integrated function at integrated point \f$\pmb\xi_g\f$ and \f$w_g=\| \mathbf{J}_g \| W_g\f$ is integration weight, see \ref basic_l1_figure_2 "Figure 2". You can see, that integral is expressed simply as the sum of function values at integration multiplied by weights, something which can be easily implemented as a computer program. For a given <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">Gauss quadrature</a>  polynomials can be calculated exactly up to order of integration rule \f$r\f$, without any numerical error. So the only error of integration comes from the fact that integrated function is approximated, i.e. \f$\rho_g \approx \rho_g^h\f$. If the function is analytical, the order of error is of\f$O(h^r)\f$, where \f$h\f$ is the size of the element. We will discuss how to choose the integration rule on an element in the next lesson.
-
-\anchor basic_l1_figure_2
-\image html lesson1_integration_pt_lesson1.png "Figure 2: Integration points on element" width=600px
-
-For integration on simplexes, i.e. (vertices), edges, triangles, tetrahedra, usually for convenience and efficiency, integration points are given by <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a> \f$\pmb\lambda\f$, see left of \ref basic_l1_figure_3 "Figure 3". For quadrilaterals, like quads and hex, quadrature points are constructed by the tensor product of integration rules in 1D, see right of \ref basic_l1_figure_3 "Figure 3". One can construct integration for other elements shapes, for prisms by the tensor product of integration on triangle and line. For other shapes like for wedge, one can use Duffy transform. Duffy integration is constructed from hexahedron integration rule; then nodes are collapsed. Such procedure degenerate hexahedron, for example, to wedge. In other words, the reference element is hexahedron, but the physical element is a wedge. 
-
-Finally,  in the end, we will use the integration rule from the shelf. However, at the moment, no matter what is the shape of a finite element, or how iteration points and weight are calculated. We have to remember the numerical integration will be the sum of integration weights multiplied by function values at integration points, and we are using that in this lesson.  Implementation of such integration is trivial, with the use of a single loop.
+where \f$\rho\left(\mathbf{x}(\pmb\xi_g)\right)\f$ is the value of the function at integration point \f$\pmb\xi_g\f$, \f$W_g\f$ is the integration weight of this point and \f$\mathbf{J}_g\f$ is the value of the Jacobian at the same integration point. Note that for brevity we will also use a notation \f$w_g=\| \mathbf{J}_g \| W_g\f$. You can see that integral is expressed simply as the sum of function values at integration multiplied by weights, something which can be easily implemented as a computer program, see also \ref basic_l1_figure_3 "Figure 3". For a given <a href="https://en.wikipedia.org/wiki/Gaussian_quadrature">Gauss quadrature formula</a> polynomials can be calculated exactly up to order of integration rule \f$r\f$, without any numerical error. Therefore, the only error of integration comes from the fact that integrated function is approximated by polynomials, i.e. \f$\rho_g \approx \rho_g^h\f$. If the function is analytical (i.e. differentiable infinite number of times), the order of error is of\f$O(h^r)\f$, where \f$h\f$ is the size of the element. We will discuss how to choose the integration rule on an element in the following section.
 
 \anchor basic_l1_figure_3
-\image html lesson1_shape_function_quad_and_tri.png "Figure 3: Shape functions on triangle and quadrilateral" width=800px
+\image html lesson1_integration_pt_lesson1.png "Figure 3: Integration points on an element" width=700px
+
+For integration on simplexes, i.e. (vertices), edges, triangles, tetrahedra, for convenience and efficiency integration points are often given by <a href="https://en.wikipedia.org/wiki/Barycentric_coordinate_system">barycentric coordinates</a> \f$\pmb\lambda\f$. For quadrilaterals and hexahedra, quadrature points are constructed by the tensor product of integration rules in 1D, see right of \ref basic_l1_figure_4 "Figure 4". In the same way one can construct integration for other elements shapes, e.g. for prisms by the tensor product of integration on triangle and edge. For some element shapes like for the wedge, one can use Duffy transform. Duffy integration is constructed from hexahedron integration rule, and subsequently some of the nodes nodes are collapsed. Such procedure degenerate a hexahedron to a wedge, in other words, the reference element is a hexahedron, but the physical element is a wedge. 
+
+Finally, in the example code below we will use the integration rule from the shelf. Moreover, at the moment, no matter what is the shape of a finite element, or how iteration points and weight are calculated. We have to remember the numerical integration will be the sum of integration weights multiplied by function values at integration points, and we are using that in this lesson. Implementation of such integration is trivial with the use of a single loop.
 
 \subsubsection basic_lessons1_approx Approximation of density field
 
-The remaining question is how to evaluate field \f$\rho(\mathbf{x}^h_g)\f$ at integration points? In this case
+The remaining question is how to evaluate field \f$\rho(\mathbf{x}(\pmb\xi_g))\f$ at integration points? 
+In real-world problems the data such as the density field is not given by an analytical function, but is rather known from another simulation or an experiment only at nodes of the finite-element mesh. Therefore, to make our code more general, we will compute the values of the density field at integration points using the following interpolation:
 \anchor lesson1_approx_rho
 \f[
 \begin{align}
-  \rho_g = \rho(\mathbf{x}^h(\pmb\xi_g)) 
-  \approx \rho^h_g = \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi_g) \overline{\rho}^m
+  \rho_g = \rho(\mathbf{x}(\pmb\xi_g)) 
+  \approx \rho^h_g = \sum_{n=0}^{N-1} \mathcal{N}_n(\pmb\xi_g) \bar{\rho}_n
 \end{align}
 \f]
-where \f$\rho^h_g\f$ is interpolated value at integration point \f$\pmb\xi_g\f$, \f$\mathcal{N}_m\f$ is shape function at node \f$m\f$, \f$M\f$ is number of nodes on the element, see \ref basic_l1_figure_4 "Figure 4", and \f$\overline{\rho}_i\f$ is value of function \f$\rho(\mathbf{x}_i)\f$ at node \f$i\f$ with coordinates \f$\mathbf{x}_i\f$. Note that finite  element interpolate function \f$\rho(\mathbf{x})\f$, since at nodes 
-\f$\overline{\rho}_i = \rho(\mathbf{x}_i)\f$, and between nodes function is 
-approximated. For linear shape functions, as in \ref basic_l1_figure_3 "Figure 3", approximation error is order of \f$O(h^2)\f$, where \f$h\f$ is size of element (mesh). The symbol big \f$O\f$ is a mathematical notation that describes how the error changes when the mesh size changes. In this particular case, it means that for every reduction of mesh size by ten times, approximation error reduces one hundred times. By making mesh smaller, the error of approximation can be controlled to achieve desired accuracy. It is another way to improve the quality of the approximation and achieve arbitrary error order, that is \f$O(h^{p+1})\f$. That 
-can be achieved by using higher-order polynomials to approximate function \f$\rho\f$, see for more details here \ref hierarchical_approximation_1.
+where \f$\rho^h_g\f$ is the interpolated value at integration point \f$\pmb\xi_g\f$, \f$\mathcal{N}_n\f$ is shape function at node \f$n\f$, \f$N\f$ is the number of nodes in the element, see \ref basic_l1_figure_4 "Figure 4", and \f$\bar{\rho}_n\f$ is the value of the density field at node \f$n\f$. Note that the same shape functions are used here for approximation of the geometry and for approximation of a field, this approach is known as the <em>isoparametric</em> finite element method. For linear shape functions, as in \ref basic_l1_figure_4 "Figure 4", approximation error is order of \f$O(h^2)\f$, where \f$h\f$ is size of element (e.g. maximal length of an edge). The <a href="https://en.wikipedia.org/wiki/Big_O_notation">symbol big \f$O\f$</a> is a mathematical notation which describes in this case how the error changes with the mesh size \f$h\f$. In this particular case, it means that for every reduction of mesh size by ten times, approximation error reduces one hundred times. By making mesh smaller, the error of approximation can be controlled to achieve desired accuracy. Another way to improve the quality of the approximation and achieve arbitrary error order, is to use higher-order polynomials to approximate function \f$\rho\f$, see \ref hierarchical_approximation_1 for more details. Note that for a polynomial of order \f$p\f$ the approximation error is of order \f$O(h^{p+1})\f$.
 
-\note A numerical method does not have to be exact (if it is that is great), but it is not the holy grail. We always aim for the method to be consistent, i.e. solution coverage to the exact solution, converges fast, and is robust, i.e. can solve real problems, not academic exercises. 
+\anchor basic_l1_figure_4
+\image html lesson1_shape_function_quad_and_tri.png "Figure 4: Shape functions on triangle and quadrilateral" width=800px
+
+\note A numerical method does not have to be exact (if it is that is great), but it is not the "holy grail". We always aim for the method to be consistent, i.e. solution must converge to the exact solution, converges should be fast, and method should be robust, i.e. can solve real-world problems, not only academic exercises. 
 
 \subsubsection basic_lessons1_map Mapping reference and physical element
 
-\anchor basic_l1_figure_4
-\image html lesson1_map.png "Figure 4: Map reference element to physical element" width=700px
+Here we present more details regarding the transformation between the physical and reference coordinate systems, while the next section is devoted to computation of the Jacobian.
 
- \ref basic_l1_figure_4 "Figure 4" presents a map between the reference element (red triangle) and element in physical configuration (blue triangle). Maps transform, shift, rotate and stretch element (see \ref basic_l1_figure_4 "Figure 4"), and establish one to one relation (at least for all points without element boundary) between coordinates in reference element \f$\pmb\xi\f$ and physical coordinates \f$\mathbf{x}\f$ as follow
+\anchor basic_l1_figure_5
+\image html lesson1_map.png "Figure 5: Map reference element to physical element" width=800px
+
+ \ref basic_l1_figure_5 "Figure 5" presents a map between the reference element (red triangle) and element in physical configuration (blue triangle). Maps transform, shift, rotate and stretch element (see \ref basic_l1_figure_5 "Figure 5"), and establish one to one relation (at least for all points without element boundary) between coordinates in reference element \f$\pmb\xi\f$ and physical coordinates \f$\mathbf{x}\f$ as follows:  
 \anchor lesson1_map
 \f[
 \begin{align}
-  x_i^h (\pmb\xi) = 
-  \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi) \overline{x}^m_i 
+  \left(x^h\right)^i (\pmb\xi) = 
+  \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi) \left(\bar{x}_m\right)^i 
 \end{align}
 \f]
  Equation \ref lesson1_map "(17)" is not very different from equation \ref
@@ -225,9 +245,9 @@ can be achieved by using higher-order polynomials to approximate function \f$\rh
 
 \subsubsection basic_lessons1_jacobian Jacobian
 
-Note that integration over the physical element is problematic; it is much easier to construct integration rule on the reference element and integrate on it. To change the integration domain from physical element to the reference element, the concept of a map, the tangent map, and Jacobian, is useful, to change physical integration coordinates to reference coordinates. Calculation of integration rule for an element can be complicated and time-consuming, however, if the rule on reference element is used, it can be precalculated and stored in the table to be used for all elements on the mesh.
+Note that integration over the physical element is problematic; it is much easier to construct integration rule on the reference element and integrate on it. To change the integration domain from physical element to the reference element, the concept of a map, the tangent map, and Jacobian, is useful, to change physical integration coordinates to reference coordinates. Calculation of integration rule for an element can be complicated and time-consuming, however, if the rule on reference element is used, it can be pre-calculated and stored in the table to be used for all elements on the mesh.
 
-From \ref basic_l1_figure_4 "Figure 4" we can see that infinitesimal local element can be mapped to element in physical space by mapping infinitesimal vectors \f$d\pmb\xi_i\f$ into \f$d\mathbf{x}_i\f$. Expanding such map at point \f$\mathbf{q}\f$ into Taylor series, we get
+From \ref basic_l1_figure_5 "Figure 5" we can see that infinitesimal local element can be mapped to element in physical space by mapping infinitesimal vectors \f$d\pmb\xi_i\f$ into \f$d\mathbf{x}_i\f$. Expanding such map at point \f$\mathbf{q}\f$ into Taylor series, we get
 \anchor baic_taylor_expansion
 \f[
   \begin{align}
@@ -300,9 +320,9 @@ cd $HOME/mofem_install/build_release/basic_finite_elements/lessons
 ./basic_moment_of_inertia -file_name cube.h5m
 \endcode
 
-Code is executed for the mesh of a cube, see \ref basic_lesson1_figure5 "Figure 5", which has unit size for all edges and coordinates origin is in the centre of the cube. 
+Code is executed for the mesh of a cube, see \ref basic_lesson1_figure5 "Figure 6", which has unit size for all edges and coordinates origin is in the centre of the cube. 
 \anchor basic_lesson1_figure5
-\image html lesson1_cube.png "Figure 5: Cube" width=700px
+\image html lesson1_cube.png "Figure 6: Cube" width=700px
 
 Code output should be similar to the following:
 \code
@@ -446,13 +466,13 @@ Smart pointers, such as <a href="https://www.boost.org/doc/libs/1_72_0/libs/smar
   commonDataPtr->petscVec = createSmartVectorMPI(mField.get_comm(), local_size,
                                                  CommonData::LAST_ELEMENT);
 \endcode
-`commonDataPtr->petscVec` is a smart pointer to a PETSc MPI Vector, which supports access from multiple processes and is useful for parallel computing. Function MoFEM::createSmartVectorMPI needs to be provided with a communicator, e.g. `mField.get_comm()`, which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next, we determine the local size of the vector which will be used to store mass, three coefficients for the first moment and six coefficients for the second moment of inertia, i.e. 10 coefficients in total in the order defined in Example::CommonData::VecElements. Note that the local size of the vector is 10 on the processor 0, and zero on other processors. It means that all data will be accumulated on processor 0 as shown in \ref basic_l1_figure_6 "Figure 6". The global size of the vector is a sum of all local size, and thus is also 10.
+`commonDataPtr->petscVec` is a smart pointer to a PETSc MPI Vector, which supports access from multiple processes and is useful for parallel computing. Function MoFEM::createSmartVectorMPI needs to be provided with a communicator, e.g. `mField.get_comm()`, which is a communicator of MoFEM. Communicator holds a group of processes that can communicate with each other. Next, we determine the local size of the vector which will be used to store mass, three coefficients for the first moment and six coefficients for the second moment of inertia, i.e. 10 coefficients in total in the order defined in Example::CommonData::VecElements. Note that the local size of the vector is 10 on the processor 0, and zero on other processors. It means that all data will be accumulated on processor 0 as shown in \ref basic_l1_figure_7 "Figure 7". The global size of the vector is a sum of all local size, and thus is also 10.
 
 Note that in all the following lessons, including this one, we implemented code to make it
 work with distributed meshes. 
 
-\anchor basic_l1_figure_6
-\image html lesson1_partitioning.png "Figure 6: Mesh partitioning" width=800px
+\anchor basic_l1_figure_7
+\image html lesson1_partitioning.png "Figure 7: Mesh partitioning" width=800px
 
 \subsubsection basic_lesson1_bc Setting density field
 
@@ -484,25 +504,25 @@ number. Approximation order 1 means that base functions are linear piecewise con
 approximation base, we are using recipe `AINSWORTH_LEGENDRE_BASE`, which is
 described in details in \cite ainsworth2001essential. However, since we use only
 the first order, shape functions are no different from those presented in \ref
-basic_l1_figure_3 "Figure 3".
+basic_l1_figure_4 "Figure 4".
 
 Our main task in this lesson is to calculate the mass, the first moment of inertia
 and the second moment of inertia. In order to do that, on each element we have
-to first calculate density at integration points, and then integrate it to obtain moments of inertia. That is depicted in \ref basic_l1_figure_7 "Figure 7 " by user data operators (UDOs)
-shown by four green boxes. \ref basic_l1_figure_7 "Figure 7" also depicts the
+to first calculate density at integration points, and then integrate it to obtain moments of inertia. That is depicted in \ref basic_l1_figure_8 "Figure 8" by user data operators (UDOs)
+shown by four green boxes. \ref basic_l1_figure_8 "Figure 8" also depicts the
 flow of data between operators through `Example::CommonData` structure. 
 
-\anchor basic_l1_figure_7
-\image html lesson1_ops.png "Figure 7: Operators and common data" width=800px
+\anchor basic_l1_figure_8
+\image html lesson1_ops.png "Figure 8: Operators and common data" width=800px
 
 On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values of density at integration points and store them in Example::CommonData::rhoAtIntegrationPts, which is a vector with a size equal to the number of integration points on the element. Then operators Example::OpZero, Example::OpFirst, and Example::OpSecond are used to evaluate moments, assembling their values to Example::CommonData::petscVec. Once all elements are iterated, vector Example::CommonData::petscVec results are printed at the end of the program. 
 
-To compute moments of inertia in MoFEM, you can use the most simplistic PipelineManager interface, which provides pipelines where the discussed above operators can be pushed. More precisely, PipelineManager has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_7 "Figure 7", red box on the left. Operators are pushed to the pipeline by executing the following code:
+To compute moments of inertia in MoFEM, you can use the most simplistic PipelineManager interface, which provides pipelines where the discussed above operators can be pushed. More precisely, PipelineManager has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_8 "Figure 8", red box on the left. Operators are pushed to the pipeline by executing the following code:
 
 \snippet users_modules/basic_finite_elements/lessons/lesson1_moment_of_inertia.cpp Push operators to pipeline
 
 In the snippet above, you can see four operators pushed into the pipeline, as described in \ref
-basic_l1_figure_7 "Figure 7". Operators are pushed to `pipeline_mng->getOpDomainRhsPipeline`, which is a pipeline to calculate vectors on domain finite elements. Note that operators are executed on each finite element in the order that they are pushed to the pipeline.
+basic_l1_figure_8 "Figure 8". Operators are pushed to `pipeline_mng->getOpDomainRhsPipeline`, which is a pipeline to calculate vectors on domain finite elements. Note that operators are executed on each finite element in the order that they are pushed to the pipeline.
 
 To set integration points at which base functions are evaluated, the user needs to specify integration rule, which is done by the following code:
 \code
