@@ -233,8 +233,7 @@ Here we present more details regarding the transformation between the physical a
   \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi) \bar{x}_m^i 
 \end{align}
 \f]
- Equation \eqnref{q:interp_coord} is not very different from equation \ref
-\eqnref{q:interp_rho}, the only difference is that is evaluated for every
+ Equation \eqref{eq:interp_coord} is not very different from equation \eqref{eq:interp_rho}, the only difference is that is evaluated for every
  coefficient  \f$i=0..(d-1)\f$, where  \f$d\f$ is the dimension of the problem,
  e.g. for 3D problem \f$d=3\f$. 
 
