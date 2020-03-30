@@ -233,7 +233,7 @@ Here we present more details regarding the transformation between the physical a
 \end{align}
 \f]
  Equation \ref lesson1_map "(17)" is not very different from equation \ref
- lesson1_approx_rho "(16)", the only difference is that is evaluated for every
+ lesson1_approx_rho "(18)", the only difference is that is evaluated for every
  coefficient  \f$i=0..(d-1)\f$, where  \f$d\f$ is the dimension of the problem,
  e.g. for 3D problem \f$d=3\f$. 
 
