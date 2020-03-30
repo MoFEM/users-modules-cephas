@@ -647,10 +647,6 @@ int main(int argc, char *argv[]) {
 
     if (true) {
 
-      // boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-      //     side_contact_element(
-      //         new VolumeElementForcesAndSourcesCoreOnVolumeSide(m_field));
-
       boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
           new PostProcFaceOnRefinedMesh(m_field));
 
@@ -662,15 +658,10 @@ int main(int argc, char *argv[]) {
           post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
           common_post_proc_data_simple_contact);
 
-      // CHKERR contact_problem->setPostProcContactOperators(
-      //     post_proc_contact_ptr, side_contact_element, "CONTACT_VTK",
-      //     "SPATIAL_POSITION", "LAGMULT",
-      //     common_post_proc_data_simple_contact);
-
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
       std::ostringstream stm;
-      // stm << "out_drag_" << ss << ".h5m";
-      stm << "out_lagrange_for_vtk_"
+      std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
+      stm << "file_name_for_lagrange"
           << ".h5m";
 
       out_file_name = stm.str();
