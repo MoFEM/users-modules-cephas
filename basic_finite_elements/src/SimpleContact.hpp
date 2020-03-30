@@ -29,6 +29,8 @@ struct SimpleContactProblem {
   using ContactEle = ContactPrismElementForcesAndSourcesCore;
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
   using EntData = DataForcesAndSourcesCore::EntData;
+  using FaceUserDataOperator =
+      FaceElementForcesAndSourcesCore::UserDataOperator;
 
   static inline double Sign(double x);
 
@@ -896,6 +898,49 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  struct OpCalLagrangeMultPostProc : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+
+    OpCalLagrangeMultPostProc(
+        const string lag_mult_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              lag_mult_name, UserDataOperator::OPROW),
+          commonDataSimpleContact(common_data_simple_contact){};
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpPostProcContactContinuous : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    string lagMultName;
+    string fieldName;
+
+    OpPostProcContactContinuous(
+        const string lag_mult_name, const string field_name,
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              lag_mult_name, UserDataOperator::OPROW),
+          lagMultName(lag_mult_name), fieldName(field_name),
+          commonDataSimpleContact(common_data_simple_contact),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {
+      doVertices = true;
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    };
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
   /**
    * @brief Function for the simple contact element that sets the user data
    * RHS-operators
@@ -935,6 +980,12 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
+
+  // add description
+  MoFEMErrorCode setPostProcContactOperators(
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
+      const std::string field_name, const std::string lagrang_field_name,
+      boost::shared_ptr<CommonDataSimpleContact> common_data);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs
@@ -1020,7 +1071,7 @@ struct SimpleContactProblem {
 
   /**
    * @brief Evaluate gradient position on reference master surface.
-   * 
+   *
    */
   struct OpCalculateGradPositionXi : public ContactOp {
 
@@ -1038,7 +1089,7 @@ struct SimpleContactProblem {
 
   /**
    * @brief Evaluate gradient of Lagrange multipliers on reference slave surface
-   * 
+   *
    */
   struct OpCalculateGradLambdaXi : public ContactOp {
 
