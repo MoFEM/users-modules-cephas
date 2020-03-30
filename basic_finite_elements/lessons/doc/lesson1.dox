@@ -16,17 +16,17 @@ First, we explain essential formulas and provide a definition of moments of iner
 
 \subsection basic_lessons1_notations Notations
 
-For future references we provide a table of some essential mathematical notations which will be used in this and subsequent lessons:
+For future references we provide a table of some essential mathematical notations which will be used in this and following lessons:
 
 <table>
 <caption id="multi_row"> Mathematical notations </caption>
 <tr><th rowspan="2"> Subscripts (lower indices) and \n superscripts (upper indices) <th colspan="3"> Font style
-<tr><th> normal <th> bold <th> normal with overline
-<tr><th> without sub- or superscript <td style="text-align:center"> scalar (0-rank tensor) \n \em e.g. \f$\rho, M, v, a, \ell\f$ <td style="text-align:center">  higher-rank (1,2, ...)  tensor \n \em e.g. \f$\mathbf{x}, \boldsymbol{\xi}, \boldsymbol{\lambda}, \mathbf{S}, \mathbf{I}\f$ <td style="text-align:center">  coefficients vector \n \em e.g. \f$\bar{x}, \bar{\rho}\f$ 
-<tr><th> with subscript (lower index) <td style="text-align:center">  scalar value at a point \n \em e.g. \f$W_g, w_g, \rho_g \f$ <td style="text-align:center">  tensor value at a point \n \em e.g. \f$\mathbf{x}_i, \boldsymbol{\xi}_g, \mathbf{J}_g, \boldsymbol{\lambda}_i, \lambda_i\f$ <td style="text-align:center">  element of a coefficients vector \n \em e.g. \f$\bar{\rho}_n\f$ 
-<tr><th> with superscript (upper), \n except \f$(.)^e\f$ and \f$(.)^h\f$ <td style="text-align:center">  component of a tensor \n \em e.g. \f$x^i, S^i, I^{ij}, \xi^i, \lambda^i, J^{ij}\f$ <td style="text-align:center">  coordinate basis vector \n \em e.g. \f$\mathbf{x}^i, \boldsymbol{\xi}^i\f$ <td style="text-align:center">  spatial component of an element of \n a coefficients vector, \em e.g. \f$\bar{x}_n^i\f$ 
-<tr><th> with superscript (upper) \f$(.)^e\f$ <td colspan="3" style="text-align:center"> corresponding to \f$e\f$-th element \n \em e.g. \f$\rho_g^e, \mathbf{J}_g^e, \mathcal{T}^e\f$ 
-<tr><th> with superscript (upper) \f$(.)^h\f$ <td colspan="2" style="text-align:center"> reference to the approximation \n \em e.g. \f$\Omega^h, \rho^h, \rho_g^h, \mathbf{x}^h, \mathbf{x}_g^h\f$ <td style="text-align:center">  not used
+<tr><th> normal <th> bold <th> normal with overline (bar)
+<tr><th> without sub- or superscript <td style="text-align:center"> scalar (0-rank tensor) \n \em e.g. \f$\rho, M, v, a, \ell\f$ <td style="text-align:center">  higher-rank (1,2, ...)  tensor \n \em e.g. \f$\mathbf{x}, \boldsymbol{\xi}, \boldsymbol{\lambda}, \mathbf{S}, \mathbf{I}, \mathbf{J}\f$ <td style="text-align:center">  coefficients vector \n \em e.g. \f$\bar{x}, \bar{\rho}\f$ 
+<tr><th> with subscript (lower index) <td style="text-align:center">  scalar value at a point \n \em e.g. \f$W_g, w_g, \rho_g \f$ <td style="text-align:center">  tensor value at a point \n \em e.g. \f$\mathbf{x}_i, \boldsymbol{\xi}_g, \mathbf{J}_g, \boldsymbol{\lambda}_i\f$ <td style="text-align:center">  element of a coefficients vector \n \em e.g. \f$\bar{\rho}_m\f$ 
+<tr><th> with superscript (upper), \n except \f$(.)^e\f$ and \f$(.)^h\f$ <td style="text-align:center">  component of a tensor \n \em e.g. \f$x^i, S^i, I^{ij}, \xi^i, \lambda^i, J^{ij}\f$ <td style="text-align:center">  coordinate basis vector \n \em e.g. \f$\mathbf{x}^i, \boldsymbol{\xi}^i\f$ <td style="text-align:center">  spatial component of an element of \n a coefficients vector, \em e.g. \f$\bar{x}_m^i\f$ 
+<tr><th> with superscript \f$(.)^e\f$ <td colspan="3" style="text-align:center"> corresponding to \f$e\f$-th element \n \em e.g. \f$\rho_g^e, \mathbf{J}_g^e, \mathcal{T}^e\f$ 
+<tr><th> with superscript \f$(.)^h\f$ <td colspan="2" style="text-align:center"> reference to the approximation \n \em e.g. \f$\Omega^h, \rho^h, \rho_g^h, \mathbf{x}^h, \mathbf{x}_g^h\f$ <td style="text-align:center">  not used
 </table>
 
 \subsection basic_lessons1_simplexes Integration on simplexes
@@ -35,10 +35,10 @@ Numerical integration of a function \f$\rho(x)\f$ by the means of the finite ele
 \f[
 \begin{align}
 \label{eq:num_int}
-  I(\rho) = \int_\Omega \rho\,\textrm{d}\Omega \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} W_g\|\mathbf{J}_g^e\|\rho^e_g
+  I(\rho) = \int_\Omega \rho\,\textrm{d}\Omega \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} W_g\|\mathbf{J}_g^e\|\rho^e_g
 \end{align}
 \f]
-where \f$W_g\f$ is the weight of the \f$g\f$-th integration point, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the physical (global) coordinate system to the reference (local) coordinate system (evaluated at the \f$g\f$-th integration point), and \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point. Finally, \f$G\f$ is the number of integration points per each element, and \f$M\f$ is the total number of elements in a mesh. Typically, the sum of the integration weights equals to unity:
+where \f$W_g\f$ is the weight of the \f$g\f$-th integration point, \f$\|\mathbf{J}_g^e\|\f$ is the determinant of the Jacobian of the \f$e\f$-th element's transformation from the physical (global) coordinate system to the reference (local) coordinate system (evaluated at the \f$g\f$-th integration point), and \f$\rho^e_g\f$ is the value of the function at \f$g\f$-th integration point. Finally, \f$G\f$ is the number of integration points per each element, and \f$N\f$ is the total number of elements in a mesh. Typically, the sum of integration weights in each element equals to unity:
 \f[
 \begin{align}
 \sum_{g=0}^{G-1} W_g = 1.
@@ -49,7 +49,7 @@ Furthermore, for the case of simplexes the numerical integration formula \eqref{
 - For a tetrahedron
 \f[
 \begin{align}
-  I(\rho) \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} (W_g v) \, \rho^e_g,
+  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g v) \, \rho^e_g,
 \end{align}
 \f]
 where \f$v\f$ is the volume of an element (tetrahedron); 
@@ -57,7 +57,7 @@ where \f$v\f$ is the volume of an element (tetrahedron);
 - For a triangle
 \f[
 \begin{align}
-  I(\rho) \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} (W_g a) \, \rho^e_g,
+  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g a) \, \rho^e_g,
 \end{align}
 \f]
 where \f$a\f$ is the area of an element (triangle);
@@ -65,13 +65,12 @@ where \f$a\f$ is the area of an element (triangle);
 - For an edge
 \f[
 \begin{align}
-  I(\rho) \approx \sum_{e=0}^{M-1} \sum_{g=0}^{G-1} (W_g \ell) \, \rho^e_g,
+  I(\rho) \approx \sum_{e=0}^{N-1} \sum_{g=0}^{G-1} (W_g \ell) \, \rho^e_g,
 \end{align}
 \f]
 where \f$\ell\f$ is the length of a line element (edge).
 
 In the following sections we explain how the above sums are evaluated and give additional details about the Jacobian.  
-
 
 \tableofcontents
 
@@ -110,7 +109,7 @@ Note also, that for the zero moment the tensorial transformation rule is straigh
 S^i := \int_\Omega \rho(\mathbf{x}) \, x^i \textrm{d}\Omega
 \end{align}
 \f]
-where \f$x^i\f$ is the coordinate in the \f$i\f$ direction. According to that, the center of gravity of the body can be calculated as:
+where \f$x^i\f$ is the coordinate in the \f$i\f$-th direction. According to that, the center of gravity of the body can be calculated as:
 \f[
 \begin{align}
 x_c^i = \frac{S^i}{M},
@@ -141,14 +140,14 @@ E_k = \frac{\omega^i I^{ij} \omega^j}{2}.
 
 This section is not essential and can be skipped, you may move to implementation and come back later for a more in-depth understanding of the problem.
 
-\note In this section formulas describing numerical integration using the finite-element method will be given for the general case of 3D domains of integration. However, for clarity in figures we will show illustrative examples with 2D domains. Note that the program provided in this lesson is designed for a general 3D case, nevertheless, integration on 2D domains can be also performed after a small code alteration.
+\note In this section formulas describing numerical integration are provided for the general case of 3D integration domains. At the same time, for clarity in figures we will show illustrative examples with 2D domains. Note that the program provided in this lesson is designed for a general 3D case, however, integration on 2D domains can be also performed after a small code alteration.
 
 \subsection basic_lessons1_elements Integral over elements
 
 We start by dividing the integration domain \f$\Omega\f$ into a union of non-overlapping primitive shapes (elements) \f$\mathcal{T}^e\f$ such that:
 \f[
 \begin{align}
-\bigcup_{e=0}^{M-1}\mathcal{T}^e=\Omega^h,
+\bigcup_{e=0}^{N-1}\mathcal{T}^e=\Omega^h,
 \end{align}
 \f]
 where \f$\Omega^h\f$ is termed as the discretisation (approximation) of the domain \f$\Omega\f$, see \ref basic_l1_figure_1 "Figure 1". For the rest of the tutorials, we will be using \f$(\cdot)^h\f$ to indicate a reference of the given quantity the approximation. Note that subscript \em h historically refers to the lateral size of an element, e.g. maximal edge length.
@@ -159,14 +158,14 @@ where \f$\Omega^h\f$ is termed as the discretisation (approximation) of the doma
 The integral of function the \f$\rho(\mathbf{x})\f$, where coordinates \f$\mathbf{x}\in \Omega\f$, can be computed approximately as a sum of integrals over all elements:
 \f[
 \begin{align}
-  I(\rho) = \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega \approx \int_{\Omega^h} \rho(\mathbf{x}) \textrm{d}\Omega = \sum_{e=0}^{M-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}\Omega = \sum_{e=0}^{M-1} I_{\mathcal{T}^e},
+  I(\rho) = \int_\Omega \rho(\mathbf{x}) \textrm{d}\Omega \approx \int_{\Omega^h} \rho(\mathbf{x}) \textrm{d}\Omega = \sum_{e=0}^{N-1} \int_{\mathcal{T}^e} \rho(\mathbf{x}) \textrm{d}\Omega = \sum_{e=0}^{N-1} I_{\mathcal{T}^e},
 \end{align}
 \f]
 where \f$I_{\mathcal{T}^e}\f$ is the integral over the element \f$\mathcal{T}^e\f$. The error in this computation is introduced by substituting the integration domain \f$\Omega\f$ by a discrete mesh \f$\Omega^h\f$. Taking a closer look at the domain \f$\Omega\f$ in \ref basic_l1_figure_1 "Figure 1", you can see that geometry is complex and contains curved edges. In the discretised domain \f$\Omega^h\f$ these edges are not represented precisely, since finite elements have straight edges, thus there is some difference between the mathematical model and its finite element discretisation. However, it is good news that the error, i.e. difference between the mathematical model and its discretised version, can be controlled. You can refine the mesh until error becomes small enough, as small as you need. From the other hand, if the surfaces of the domain \f$\Omega\f$ are flat, i.e. edges are straight, then the geometry is approximated exactly. At the same time, one can also generalise and describe edges of elements by polynomials of second and higher orders, which enables even more control of the geometrical error. However, in this tutorial, we restrict ourselves to representing the geometry by linear <em>shape functions</em>. 
 
-\subsubsection basic_lessons1_rule Integration on the element
+\subsection basic_lessons1_rule Integration on the element
 
-Next we discuss how the integral over a single element \f$\mathcal{T}^e\f$ is computed. The repeated task of integrating over elements can be simplified if we perform the change of coordinates for each element from the spatial (global) coordinate system \f$\{\mathbf{x}^0, \mathbf{x}^1, \mathbf{x}^2\}\f$ to a reference (local) coordinate system \f$\{\boldsymbol{\xi}^0, \boldsymbol{\xi}^1, \boldsymbol{\xi}^2\}\f$. Thus, the integration can be performed on a reference element which will be the same for all physical elements, see \ref basic_l1_figure_2 "Figure 2". 
+Next we discuss how the integral over a single element \f$\mathcal{T}^e\f$ is computed. The repeated task of integrating over elements can be simplified if we perform the change of coordinates for each element from the physical (global) coordinate system \f$\{\mathbf{x}^0, \mathbf{x}^1, \mathbf{x}^2\}\f$ to a reference (local) coordinate system \f$\{\boldsymbol{\xi}^0, \boldsymbol{\xi}^1, \boldsymbol{\xi}^2\}\f$. Thus, the integration can be performed on a reference element which will be the same for all physical elements, see \ref basic_l1_figure_2 "Figure 2". 
 
 \anchor basic_l1_figure_2
 \image html lesson1_reference_element.png "Figure 2: Integration on a reference element" width=800px
@@ -199,25 +198,26 @@ For integration on simplexes, i.e. (vertices), edges, triangles, tetrahedra, for
 
 Finally, in the example code below we will use the integration rule from the shelf. Moreover, at the moment, no matter what is the shape of a finite element, or how integration points and weights are calculated. We have to remember the numerical integration will be the sum of integration weights multiplied by function values at integration points, and we are using that in this lesson. Implementation of such integration is trivial with the use of a single loop.
 
-\subsubsection basic_lessons1_approx Approximation of density field
+\subsection basic_lessons1_approx Approximation of density field
 
 The remaining question is how to evaluate field \f$\rho(\mathbf{x}(\pmb\xi_g))\f$ at integration points? 
 In real-world problems the data such as the density field is not given by an analytical function, but is rather known from another simulation or an experiment only at nodes of the finite-element mesh. Therefore, to make our code more general, we will compute the values of the density field at integration points using the following interpolation:
 \anchor lesson1_approx_rho
 \f[
 \begin{align}
+  \label{eq:interp_rho}
   \rho_g = \rho(\mathbf{x}(\pmb\xi_g)) 
-  \approx \rho^h_g = \sum_{n=0}^{N-1} \mathcal{N}_n(\pmb\xi_g) \bar{\rho}_n
+  \approx \rho^h_g = \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi_g) \bar{\rho}_m
 \end{align}
 \f]
-where \f$\rho^h_g\f$ is the interpolated value at integration point \f$\pmb\xi_g\f$, \f$\mathcal{N}_n\f$ is shape function at node \f$n\f$, \f$N\f$ is the number of nodes in the element, see \ref basic_l1_figure_4 "Figure 4", and \f$\bar{\rho}_n\f$ is the value of the density field at node \f$n\f$. Note that the same shape functions are used here for approximation of the geometry and for approximation of a field, this approach is known as the <em>isoparametric</em> finite element method. For linear shape functions, as in \ref basic_l1_figure_4 "Figure 4", approximation error is order of \f$O(h^2)\f$, where \f$h\f$ is size of element (e.g. maximal length of an edge). The <a href="https://en.wikipedia.org/wiki/Big_O_notation">symbol big \f$O\f$</a> is a mathematical notation which describes in this case how the error changes with the mesh size \f$h\f$. In this particular case, it means that for every reduction of mesh size by ten times, approximation error reduces one hundred times. By making mesh smaller, the error of approximation can be controlled to achieve desired accuracy. Another way to improve the quality of the approximation and achieve arbitrary error order, is to use higher-order polynomials to approximate function \f$\rho\f$, see \ref hierarchical_approximation_1 for more details. Note that for a polynomial of order \f$p\f$ the approximation error is of order \f$O(h^{p+1})\f$.
+where \f$\rho^h_g\f$ is the interpolated value at integration point \f$\pmb\xi_g\f$, \f$\mathcal{N}_m\f$ is shape function at node \f$m\f$, \f$M\f$ is the number of nodes in the element, see \ref basic_l1_figure_4 "Figure 4", and \f$\bar{\rho}_m\f$ is the value of the density field at node \f$m\f$. Note that the same shape functions are used here for approximation of the geometry and for approximation of a field, this approach is known as the <em>isoparametric</em> finite element method. For linear shape functions, as in \ref basic_l1_figure_4 "Figure 4", approximation error is order of \f$O(h^2)\f$, where \f$h\f$ is size of element (e.g. maximal length of an edge). The <a href="https://en.wikipedia.org/wiki/Big_O_notation">symbol big \f$O\f$</a> is a mathematical notation which describes in this case how the error changes with the mesh size \f$h\f$. In this particular case, it means that for every reduction of mesh size by ten times, approximation error reduces one hundred times. By making mesh smaller, the error of approximation can be controlled to achieve desired accuracy. Another way to improve the quality of the approximation and achieve arbitrary error order, is to use higher-order polynomials to approximate function \f$\rho\f$, see \ref hierarchical_approximation_1 for more details. Note that for a polynomial of order \f$p\f$ the approximation error is of order \f$O(h^{p+1})\f$.
 
 \anchor basic_l1_figure_4
 \image html lesson1_shape_function_quad_and_tri.png "Figure 4: Shape functions on triangle and quadrilateral" width=800px
 
 \note A numerical method does not have to be exact (if it is that is great), but it is not the "Holy Grail". We always aim for the method to be consistent, i.e. solution must converge to the exact solution, converges should be fast, and method should be robust, i.e. can solve real-world problems, not only academic exercises. 
 
-\subsubsection basic_lessons1_map Mapping reference and physical element
+\subsection basic_lessons1_map Mapping reference and physical element
 
 Here we present more details regarding the transformation between the physical and reference coordinate systems, while the next section is devoted to computation of the Jacobian.
 
@@ -228,62 +228,63 @@ Here we present more details regarding the transformation between the physical a
 \anchor lesson1_map
 \f[
 \begin{align}
+  \label{eq:interp_coord}
   \left(x^h\right)^i (\pmb\xi) = 
   \sum_{m=0}^{M-1} \mathcal{N}_m(\pmb\xi) \bar{x}_m^i 
 \end{align}
 \f]
- Equation \ref lesson1_map "(17)" is not very different from equation \ref
- lesson1_approx_rho "(18)", the only difference is that is evaluated for every
+ Equation \eqnref{q:interp_coord} is not very different from equation \ref
+\eqnref{q:interp_rho}, the only difference is that is evaluated for every
  coefficient  \f$i=0..(d-1)\f$, where  \f$d\f$ is the dimension of the problem,
  e.g. for 3D problem \f$d=3\f$. 
 
-\subsubsection basic_lessons1_jacobian Jacobian
+\subsection basic_lessons1_jacobian Jacobian
 
 Note that integration over the physical element is problematic; it is much easier to construct integration rule on the reference element and integrate on it. This way weights and integration point coordinates can be pre-calculated and stored in the table to be used for all elements on the mesh. To change the integration domain from physical element to the reference element, the concepts of a map, the tangent map and Jacobian are needed. 
 
-From \ref basic_l1_figure_5 "Figure 5" we can see that an infinitesimal element in the reference configuration can be mapped to an infinitesimal element in the physical space by mapping infinitesimal vectors \f$d\pmb\xi\f$ into \f$d\mathbf{x}\f$. Expanding such map at any point \f$\mathbf{q}\f$ into Taylor series, we get:
+From \ref basic_l1_figure_5 "Figure 5" we can see that an infinitesimal element in the reference configuration can be mapped to an infinitesimal element in the physical space by mapping infinitesimal vectors \f$\textrm{d}\pmb\xi\f$ into \f$\textrm{d}\mathbf{x}\f$. Expanding such map at any point \f$\mathbf{q}\f$ into Taylor series, we get:
 \anchor basic_taylor_expansion
 \f[
   \begin{align}
   x_\mathbf{q}^i = 
-  x_\mathbf{p}^i + dx^i = 
-  x_\mathbf{p}^i + J^{ij}(\xi_\mathbf{P}) d\xi^j + O\left(\|d\xi\|^2\right),
+  x_\mathbf{p}^i + \textrm{d}x^i = 
+  x_\mathbf{p}^i + J^{ij}(\xi_\mathbf{P}) \textrm{d}\xi^j + O\left(\|\textrm{d}\xi\|^2\right),
   \end{align}
 \f]
 where Jacobian is
 \f[
   \begin{align}
   J^{ij}(\pmb\xi_\mathbf{P})  = 
-  \sum_{n=0}^{N-1} \left.
-  \frac{\partial \mathcal{N}_n}{\partial \xi^j}
-  \right|_\mathbf{P} \bar{x}_n^i
+  \sum_{m=0}^{M-1} \left.
+  \frac{\partial \mathcal{N}_m}{\partial \xi^j}
+  \right|_\mathbf{P} \bar{x}_m^i
   \end{align}
 \f]
-Therefore, the the infinitesimal vector \f$d\mathbf{x}\f$ can be computed as:
+Therefore, the infinitesimal vector \f$\textrm{d}\mathbf{x}\f$ can be computed as:
 \f[
   \begin{align}
-  dx^i = J^{ij}(\xi_\mathbf{P}) d\xi^j,
+  \textrm{d}x^i = J^{ij}(\xi_\mathbf{P}) \textrm{d}\xi^j,
   \end{align}
 \f]
-omitting higher-order terms on the right-hand side, since we focus our attention on infinitesimal elements in reference and physical configurations, and, consequently, it can be assumed that \f$\|d\pmb\xi\|^2 = 0\f$ without making any error. Note that once the higher-order terms are omitted, equation mapping domain in vicinity of a point in reference element into the domain in vicinity of the physical element is linear. This is called the tangent map since it is accurate only  in the vicinity of the tangent point. Like a tangent plane pinned to the earth, glob can represent distances accurately between locations only in the small range from where it is pinned. 
+omitting higher-order terms on the right-hand side, since we focus our attention on infinitesimal elements in reference and physical configurations, and, consequently, it can be assumed that \f$\|\textrm{d}\pmb\xi\|^2 = 0\f$ without making any error. Note that once the higher-order terms are omitted, equation mapping domain in the vicinity of a point in the reference element into the domain in the vicinity of a point in the physical element is linear. This is called the tangent map since it is accurate only  in the vicinity of the tangent point. Like a tangent plane pinned to the earth, glob can represent distances accurately between locations only in the small range from where it is pinned. 
 
-Using above derivation for the Jacobian, in the general 3D case, i.e. for tetrahedron or hexahedron, infinitesimal element volume \f$dv\f$ at any point in physical configuration can be expressed as
+Using above derivation for the Jacobian, in the general 3D case, i.e. for tetrahedron or hexahedron, infinitesimal element volume \f$\textrm{d}v\f$ at any point in the physical configuration can be expressed as
 \f[
 \begin{align}
-dv = \varepsilon^{ijk} dx_0^i dx_1^j dx_2^k = \varepsilon^{ijk} J^{i\alpha}d\xi^\alpha_0 J^{j\beta}d\xi^\beta_1 J^{k\gamma}d\xi^\gamma_2
+\textrm{d}v = \varepsilon^{ijk} \textrm{d}x_0^i \textrm{d}x_1^j \textrm{d}x_2^k = \varepsilon^{ijk} J^{i\alpha}\textrm{d}\xi^\alpha_0 J^{j\beta}\textrm{d}\xi^\beta_1 J^{k\gamma}\textrm{d}\xi^\gamma_2
 \end{align}
 \f]
-where \f$\varepsilon^{ijk}\f$ is the <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a> and the Einstein summation is assumed. Since in the reference configuration vectors \f$d\pmb\xi_0, d\pmb\xi_1, d\pmb\xi_2\f$ are collinear with the coordinate base vectors  \f$\pmb\xi^0, \pmb\xi^1, \pmb\xi^2\f$ , respectively, only components with \f$\alpha = 0, \beta = 1, \gamma = 2\f$ are non-zero. Therefore,
+where \f$\varepsilon^{ijk}\f$ is the <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol">Levi-Civita symbol</a> and the Einstein summation is assumed. Since in the reference configuration vectors \f$\textrm{d}\pmb\xi_0, \textrm{d}\pmb\xi_1, \textrm{d}\pmb\xi_2\f$ are collinear with the coordinate base vectors  \f$\pmb\xi^0, \pmb\xi^1, \pmb\xi^2\f$ , respectively, only components with \f$\alpha = 0, \beta = 1, \gamma = 2\f$ are non-zero. Therefore,
 \f[
 \begin{align}
-dv = \varepsilon^{ijk} J^{i0} J^{j1} J^{k2} \left(d\xi^0_0 d\xi^1_1 d\xi^2_2\right) = \varepsilon^{ijk}
-J^{i0} J^{j1} J^{k2} dV,
+\textrm{d}v = \varepsilon^{ijk} J^{i0} J^{j1} J^{k2} \left(\textrm{d}\xi^0_0 \textrm{d}\xi^1_1 \textrm{d}\xi^2_2\right) = \varepsilon^{ijk}
+J^{i0} J^{j1} J^{k2} \textrm{d}V,
 \end{align}
 \f]
-where \f$dV\f$ is the volume of the infinitesimal element in the reference configuration and \f$J^{i0}\f$, \f$J^{j1}\f$, and \f$J^{k2}\f$ are columns of the Jacobian. Using the connection between the Levi-Civita symbol and the determinant of the Jacobian (see details <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol#Determinants">here</a>), we may write:
+where \f$\textrm{d}V\f$ is the volume of the infinitesimal element in the reference configuration and \f$J^{i0}\f$, \f$J^{j1}\f$, and \f$J^{k2}\f$ are columns of the Jacobian. Using the connection between the Levi-Civita symbol and the determinant of the Jacobian (see details <a href="https://en.wikipedia.org/wiki/Levi-Civita_symbol#Determinants">here</a>), we may write:
 \f[
 \begin{align}
-  dv = \| \mathbf{J} \| dV,
+  \textrm{d}v = \| \mathbf{J} \| \textrm{d}V,
 \end{align}
 \f]
 i.e. the determinant of the Jacobian provides the scaling value between infinitesimal element volumes in two configurations. Note that for lower dimensions above equation also holds. Finally, we have everything necessary to calculate the integral on the finite element mesh:
@@ -426,7 +427,7 @@ Function Example::runProblem called by the main program has the following code:
 Note that every function starts and ends with error handling
 \code
 MoFEMFunctionBegin;
-\\ function body
+// function body
 MoFEMFunctionReturn(0);
 \endcode
 This enables stacking functions calls in case of problems. We use function stacks to see which functions, and on which lines, have been called prior to the error.
@@ -523,7 +524,7 @@ flow of data between operators through `Example::CommonData` structure.
 
 On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to calculate values of density at integration points and store them in Example::CommonData::rhoAtIntegrationPts, which is a vector with a size equal to the number of integration points on the element. Then operators Example::OpZero, Example::OpFirst, and Example::OpSecond are used to evaluate moments, assembling their values to Example::CommonData::petscVec. Once all elements are iterated, vector Example::CommonData::petscVec results are printed at the end of the program. 
 
-To compute moments of inertia in MoFEM, you can use the `PipelineManager` interface, which provides pipelines where the discussed above operators can be pushed. More precisely, `PipelineManager` has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_8 "Figure 8", red box on the left. Operators are pushed to the pipeline by executing the following code:
+To compute moments of inertia in MoFEM, you can use the MoFEM::PipelineManager interface, which provides pipelines where the discussed above operators can be pushed. More precisely, MoFEM::PipelineManager has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_8 "Figure 8", red box on the left. Operators are pushed to the pipeline by executing the following code:
 
 \snippet users_modules/basic_finite_elements/lessons/lesson1_moment_of_inertia.cpp Push operators to pipeline
 
@@ -543,24 +544,24 @@ Once the problem is set up and user operators are pushed to an appropriate pipel
 
 \snippet users_modules/basic_finite_elements/lessons/lesson1_moment_of_inertia.cpp Integrate
 
-in particular, by `PipelineManager::loopFiniteElements`. This is where all computations are happening, while the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed before the loop over all elements is performed, and finally PETSCc functions are called to appropriately finalise assembly of an MPI Vector.
+in particular, by MoFEM::PipelineManager::loopFiniteElements. This is where all computations are happening, while the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed before the loop over all elements is performed, and finally PETSCc functions are called to appropriately finalise assembly of an MPI Vector.
 
 Operator Example::OpSecond is defined as follows:
 
 \snippet users_modules/basic_finite_elements/lessons/lesson1_moment_of_inertia.cpp Operator
 
-Operators are derived classes, where essential part is an overloaded function Example::OpSecond::doWork, which is called by `PipelineManager::loopFiniteElements` on each finite element:
+Operators are derived classes, where essential part is an overloaded function Example::OpSecond::doWork, which is called by MoFEM::PipelineManager::loopFiniteElements on each finite element:
 
 \snippet users_modules/basic_finite_elements/lessons/lesson1_moment_of_inertia.cpp SecondOp
 
-We will discuss this operator since it is the most complex one among all three operators. We will dissect this code to understand it better.  We start by getting a number of integration points, which depends on the previously set integration rule. In the following lines, three tensors are declared: two rank zero (scalar) tensors are set to integration weights and density values, respectively, and a tensor of rank one (vector) is set to coordinates of integration points. Note that these three tensors initially point to corresponding values at the first integration point, however, subsequently they will iterate through all the integration points of the element using the following code:
+We will discuss this operator since it is the most complex one among all three operators. We will dissect this code to understand it better. We start by getting a number of integration points, which depends on the previously set integration rule. In the following lines, three tensors are declared: two rank zero (scalar) tensors are set to integration weights and density values, respectively, and a tensor of rank one (vector) is set to coordinates of integration points. Note that we use here FTensor library, providing special tools to simplify data storage and operations with tensors, you can find more details <a href="http://mofem.eng.gla.ac.uk/mofem/html/group__ftensor.html">here</a>. In particular, three tensors declared above initially point to the respective values at the first integration point, however, subsequently they will iterate through all the integration points of the element using the following code:
 \code
 ++t_w;
 ++t_rho;
 ++t_x;
 \endcode
 
-Next, we create an array to store local values of the second moment of inertia. The second order of inertia is a symmetric tensor of rank two, which in three dimensions has six independent components. The array is continuous in the memory, it takes the shape of the rank two tensor when the following code is run:
+Next, we create an array to store local values of the second moment of inertia. The second moment of inertia is a symmetric tensor of rank two, which in three dimensions has six independent components. The array is continuous in the memory, it takes the shape of the rank two tensor when the following code is run:
 \code
 FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 0>, 3> t_I(
   &element_local_value[0], &element_local_value[1], &element_local_value[2],
@@ -572,7 +573,7 @@ With all above at hand finally the loop over all integration points is performed
 \code
 t_I(i, j) += (t_w * t_rho * volume) * (t_x(i) ^ t_x(j));
 \endcode
-iteration over all 6 components of the symmetric second order tensor is performed using the special indices `i` and `j` defined before integration points loop as:
+iteration over all 6 components of the symmetric second order tensor is performed using the special FTensor indices `i` and `j` defined before integration points loop as:
 \code
 FTensor::Index<'i', 3> i;
 FTensor::Index<'j', 3> j;
@@ -650,6 +651,6 @@ launch (in VS Code) configuration for LLDB and example from this lesson
 
 \section basci_lesson1_code Code
 
-The full source code is available here \ref basic/lesson1_moment_of_inertia.cpp .
+The full source code is available here \ref lesson1_moment_of_inertia.cpp .
 
 */
