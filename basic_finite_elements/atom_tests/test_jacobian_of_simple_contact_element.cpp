@@ -280,7 +280,8 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+                                       "LAGMULT",
+                                       "MESH_NODE_POSITIONS", contact_prisms);
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
