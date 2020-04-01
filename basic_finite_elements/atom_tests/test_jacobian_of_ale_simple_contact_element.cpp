@@ -339,24 +339,6 @@ int main(int argc, char *argv[]) {
                                             "MESH_NODE_POSITIONS", "LAGMULT",
                                             contact_prisms);
 
-    CHKERR m_field.add_finite_element("DUMMY_CONTACT_ELEM", MF_ZERO);
-    CHKERR m_field.modify_finite_element_add_field_col("DUMMY_CONTACT_ELEM",
-                                                       "SPATIAL_POSITION");
-
-    CHKERR m_field.modify_finite_element_add_field_row("DUMMY_CONTACT_ELEM", "SPATIAL_POSITION");
-    
-    CHKERR m_field.modify_finite_element_add_field_data("DUMMY_CONTACT_ELEM",
-                                                       "SPATIAL_POSITION");
-    
-    CHKERR m_field.add_ents_to_finite_element_by_type(contact_prisms, MBPRISM,
-                                                     "DUMMY_CONTACT_ELEM");
-    
-    contact_problem->addContactElement("DUMMY_CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms, is_lag);
-
-    // CHKERR m_field.modify_finite_element_adjacency_table(
-    //     "DUMMY_CONTACT_ELEM", MBPRISM, add_adjacencies_for_nitsche);
-
     // build field
     CHKERR m_field.build_fields();
 
@@ -446,8 +428,6 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
-    // DUMMY_CONTACT_ELEM
-    CHKERR DMMoFEMAddElement(dm, "DUMMY_CONTACT_ELEM");
     CHKERR DMMoFEMAddElement(dm, "MATERIAL");
     CHKERR DMSetUp(dm);
 
@@ -468,10 +448,22 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    // CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
-    //                                                         "SPATIAL_POSITION");
-    // CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
-    //     set_coord, "MESH_NODE_POSITIONS");
+    auto set_pressure = [&](VectorAdaptor &&field_data, double *x, double *y,
+                            double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 1.0;
+      PetscRandomGetValueReal(rctx, &value);
+      field_data[0] = value * scale;
+      MoFEMFunctionReturn(0);
+    };
+
+    /*CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
+                                                            "SPATIAL_POSITION");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+        set_coord, "MESH_NODE_POSITIONS");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure,
+                                                            "LAGMULT");*/
 
     PetscRandomDestroy(&rctx);
 
@@ -709,15 +701,15 @@ int main(int argc, char *argv[]) {
         common_data_simple_contact =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
-  
-      contact_problem->setContactOperatorsRhsALE(
-          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
-      contact_problem->setContactOperatorsLhsALE(
-          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
-  
+    contact_problem->setContactOperatorsRhsALEMaterial(
+        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
+
+    contact_problem->setContactOperatorsLhsALE(
+        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
+
     CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
                                   fe_rhs_simple_contact.get(), PETSC_NULL,
                                   PETSC_NULL);

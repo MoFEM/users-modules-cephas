@@ -1921,18 +1921,16 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::iNtegrate(
   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
   auto normal_at_gp =
       get_tensor_vec(*(commonDataSimpleContact->normalVectorMasterPtr), 0);
+
+  auto t_w = getFTensor0IntegrationWeightMaster();
+  double &area_master = commonDataSimpleContact->areaMaster;
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-    // auto normal_at_gp =
-    //     get_tensor_vec(commonDataSimpleContact->normalVectorMasterPtr[gg],
-    //     0);
-
-    double val_s = getGaussPtsMaster()(2, gg) * 0.5;
-
+    const double val_m = area_master * t_w;
     FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
 
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
 
-      const double s = val_s * t_base_master * lagrange_slave;
+      const double s = val_m * t_base_master * lagrange_slave;
 
       auto t_assemble_s = get_tensor_vec(vecF, 3 * bbc);
 
@@ -1942,6 +1940,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::iNtegrate(
     }
     ++t_F;
     ++lagrange_slave;
+    ++t_w;
   } // for gauss points
 
   MoFEMFunctionReturn(0);
@@ -2018,22 +2017,20 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::iNtegrate(
   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
   auto normal_at_gp =
       get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr), 0);
+  auto t_w = getFTensor0IntegrationWeightSlave();
+  double &area_slave = commonDataSimpleContact->areaSlave;
   for (int gg = 0; gg != nbIntegrationPts; ++gg) {
-    // auto normal_at_gp =
-    //     get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr[gg], 0);
-
-    double val_s = getGaussPtsSlave()(2, gg) * 0.5;
+    double val_s = t_w * area_slave;
     FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
-
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
       const double s = val_s * t_base_master * lagrange_slave;
       auto t_assemble_s = get_tensor_vec(vecF, 3 * bbc);
-
       t_assemble_s(i) -= s * t_F(j, i) * normal_at_gp(j);
       ++t_base_master;
     }
     ++t_F;
     ++lagrange_slave;
+    ++t_w;
   } // for gauss points
 
   MoFEMFunctionReturn(0);
@@ -2664,25 +2661,29 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
       new OpGetNormalMasterALE("MESH_NODE_POSITIONS",
                                common_data_simple_contact));
 
-  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new
-  // OpGetTangentSlave(
-  //     mesh_node_field_name, common_data_simple_contact));
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpGetPositionAtGaussPtsMaster(field_name,
+                                        common_data_simple_contact));
 
-  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new
-  // OpGetNormalSlaveALE(
-  //     mesh_node_field_name, common_data_simple_contact));
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
 
-  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new
-  // OpGetTangentMaster(
-  //     mesh_node_field_name, common_data_simple_contact));
-
-  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
-  //     new OpGetNormalMasterALE("MESH_NODE_POSITIONS"mesh_node_field_name,
-  //                              common_data_simple_contact));
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpGetGapSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
+
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpCalContactTractionOnSlave(field_name, common_data_simple_contact));
+  
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpCalContactTractionOnMaster(field_name, common_data_simple_contact));
+
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpCalIntCompFunSlave(lagrang_field_name, common_data_simple_contact,
+                               cnValue));
 
   // this is the right order
   fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(

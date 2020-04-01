@@ -358,7 +358,8 @@ struct SimpleContactProblem {
                        bool newton_cotes = false)
       : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes) {}
 
-  /// \brief Computes normal to slave face that is common to all gauss points
+  /// \brief Computes, for reference configuration, normal to slave face that is
+  /// common to all gauss points
   struct OpGetNormalSlave : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
@@ -367,10 +368,40 @@ struct SimpleContactProblem {
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
-
+    /**
+     * @brief Evaluates unit normal vector to the slave surface vector based on
+     * reference base coordinates
+     *
+     * Computes normal vector based on reference base coordinates based on mesh
+     * (moab vertices) coordinates:
+     *
+     * \f[
+     * {\mathbf N}^{(1)}({\mathbf\chi}(\ksi, \eta)) =
+     * (\frac{\partial\mathbf{X}(\ksi, \eta)}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}}
+     * {\partial\eta}\right)
+     * \f]
+     * where \f${\mathbf\chi}(\ksi, \eta)\f$ is the vector of reference
+     * coordinates at the gauss point on slave surface with parent coordinates
+     * \f$\ksi\f$ and \f$\eta\f$ evaluated according to
+     *
+     * \f[
+     * {\mathbf\chi}(\ksi, \eta) =
+     * \sum\limits^{3}_{i = 1}
+     * N_i(\ksi, \eta){\widebar{\mathbf\chi}}_i
+     * \f]
+     *
+     * where \f$ N_i \f$ is the shape function corresponding to the \f$
+     * i-{\rm{th}}\f$ degree of freedom in the reference configuration
+     * \f${\widebar{\mathbf\chi}}_i\f$ corresponding to the 3 nodes of the
+     * triangular slave face.
+     *
+     */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  /// \brief Computes, for reference configuration, normal to master face that is
+  /// common to all gauss points
   struct OpGetNormalMaster : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
@@ -379,7 +410,36 @@ struct SimpleContactProblem {
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
-
+    
+    /**
+     * @brief Evaluates unit normal vector to the master surface vector based on
+     * reference base coordinates
+     *
+     * Computes normal vector based on reference base coordinates based on mesh
+     * (moab vertices) coordinates:
+     *
+     * \f[
+     * {\mathbf N}^{(2)}({\mathbf\chi}(\ksi, \eta)) =
+     * (\frac{\partial\mathbf{X}(\ksi, \eta)}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}}
+     * {\partial\eta}\right)
+     * \f]
+     * where \f${\mathbf\chi}(\ksi, \eta)\f$ is the vector of reference
+     * coordinates at the gauss point on master surface with parent coordinates
+     * \f$\ksi\f$ and \f$\eta\f$ evaluated according to
+     *
+     * \f[
+     * {\mathbf\chi}(\ksi, \eta) =
+     * \sum\limits^{3}_{i = 1}
+     * N_i(\ksi, \eta){\widebar{\mathbf\chi}}_i
+     * \f]
+     *
+     * where \f$ N_i \f$ is the shape function corresponding to the \f$
+     * i-{\rm{th}}\f$ degree of freedom in the reference configuration
+     * \f${\widebar{\mathbf\chi}}_i\f$ corresponding to the 3 nodes of the
+     * triangular master face.
+     *
+     */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
@@ -1319,12 +1379,13 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
-  
+
   /**
-  *@brief RHS - operator for the pressure element(material configuration) *
-                    *Integrates pressure in the material configuration. **/
-    struct OpCalMatForcesALEMaster :
-      public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+   * @brief RHS - operator for the contact element (material configuration) 
+   * Integrates contact traction in the material configuration on master surface.
+   **/
+  struct OpCalMatForcesALEMaster
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     VectorInt rowIndices;
 
@@ -1333,7 +1394,47 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     VectorDouble vecF;
-   
+
+    /**
+     * @brief Integrate contact traction in the material configuration.
+     *
+     * Virtual work of the contact traction corresponding to a test function
+     * of the material configuration \f$(\delta{\mathbf{X}}^{(2)})\f$:
+     *
+     * \f[
+     * \delta W^\text{material}_p({\mathbf{x}}^{(2)}, {\mathbf{X}}^{(2)},
+     * \delta{\mathbf{X}}^{(2)}) =
+     * -\int\limits_\mathcal{T} \lambda({\mathbf{X}^{(1)}(\ksi, \eta)})
+     * \left\{\mathbf{F}^{\intercal}\cdot \mathbf{N}(\mathbf{X}) \right\} \cdot
+     * \delta{\mathbf{X}}^{(2)}\, \textrm{d}\mathcal{T} =
+     * -\int\limits_{\mathcal{T}_{\xi}}
+     * \lambda({{\mathbf{X}}^{(1)}(\ksi,
+     * \eta))\left\{\mathbf{F}^{\intercal}\cdot
+     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}} {\partial\eta}\right) \right\} \cdot \delta\mathbf{X}\,
+     * \textrm{d}\xi\textrm{d}\eta
+     *  \f]
+     *
+     * where \f$\lambda({\mathbf{X}}(\ksi, \eta))\f$  and
+     * \f$\mathbf{N}^{(2)}({\mathbf{X}}(\ksi, \eta))\f$ are Lagrange multiplier
+     * and the normal to the master face in the material configuration,
+     * respectively, evaluated at the gauss point location \f$
+     * {\mathbf{X}}(\ksi, \eta)\f$, where \f$\xi, \eta\f$ are coordinates in the
+     * parent space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the
+     * deformation gradient:
+     *
+     * \f[
+     * \mathbf{F} =
+     * \mathbf{h}({\mathbf{x}}^{(2)})\,\mathbf{H}({\mathbf{X}}^{(2)})^{-1} =
+     * \frac{\partial{\mathbf{x}}^{(2)}}{\partial{\mathbf{\chi}}^{(2)}}
+     * \frac{\partial}\mathbf{\chi}}^{(2)}}{\partial{\mathbf{X}}^{(2)}}
+     * \f]
+     *
+     * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
+     * spatial and material maps, respectively, and \f${\mathbf{\chi}}^{(2)}\f$
+     * are the reference coordinates.
+     *
+     */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
     MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data);
@@ -1349,6 +1450,10 @@ struct SimpleContactProblem {
           commonDataSimpleContact(common_data_contact) {}
   };
 
+  /**
+   * @brief RHS - operator for the contact element (material configuration)
+   * Integrates contact traction in the material configuration on slave surface.
+   **/
   struct OpCalMatForcesALESlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -1359,6 +1464,47 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     VectorDouble vecF;
+
+    /**
+     * @brief Integrate contact traction in the material configuration on slave surface.
+     *
+     * Virtual work of the contact traction corresponding to a test function
+     * of the material configuration \f$(\delta{\mathbf{X}}^{(1)})\f$:
+     *
+     * \f[
+     * \delta W^\text{material}_p({\mathbf{x}}^{(1)}, {\mathbf{X}}^{(1)},
+     * \delta{\mathbf{X}}^{(1)}) =
+     * -\int\limits_\mathcal{T} \lambda({\mathbf{X}^{(1)}(\ksi, \eta)})
+     * \left\{\mathbf{F}^{\intercal}\cdot \mathbf{N}(\mathbf{X}) \right\} \cdot
+     * \delta{\mathbf{X}}^{(1)}\, \textrm{d}\mathcal{T} =
+     * -\int\limits_{\mathcal{T}_{\xi}}
+     * \lambda({{\mathbf{X}}^{(1)}(\ksi,
+     * \eta))\left\{\mathbf{F}^{\intercal}\cdot
+     * \left(\frac{\partial\mathbf{X}}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}} {\partial\eta}\right) \right\} \cdot \delta\mathbf{X}\,
+     * \textrm{d}\xi\textrm{d}\eta
+     *  \f]
+     *
+     * where \f$\lambda({\mathbf{X}}(\ksi, \eta))\f$  and
+     * \f$\mathbf{N}^{(1)}({\mathbf{X}}(\ksi, \eta))\f$ are Lagrange multiplier
+     * and the normal to the master face in the material configuration,
+     * respectively, evaluated at the gauss point location \f$
+     * {\mathbf{X}}(\ksi, \eta)\f$, where \f$\xi, \eta\f$ are coordinates in the
+     * parent space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the
+     * deformation gradient:
+     *
+     * \f[
+     * \mathbf{F} =
+     * \mathbf{h}({\mathbf{x}}^{(1)})\,\mathbf{H}({\mathbf{X}}^{(1)})^{-1} =
+     * \frac{\partial{\mathbf{x}}^{(1)}}{\partial{\mathbf{\chi}}^{(1)}}
+     * \frac{\partial}\mathbf{\chi}}^{(1)}}{\partial{\mathbf{X}}^{(1)}}
+     * \f]
+     *
+     * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
+     * spatial and material maps, respectively, and \f${\mathbf{\chi}}^{(1)}\f$
+     * are the reference coordinates.
+     *
+     */
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -1398,6 +1544,8 @@ struct SimpleContactProblem {
                           DataForcesAndSourcesCore::EntData &col_data);
   };
 
+  /// \brief Computes, for material configuration, normal to slave face that
+  /// is common to all gauss points
   struct OpGetNormalSlaveALE
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -1410,10 +1558,42 @@ struct SimpleContactProblem {
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
+
+    /**
+     * @brief Evaluates unit normal vector to the slave surface vector based on
+     * material base coordinates
+     *
+     * Computes normal vector based on material base coordinates based on mesh
+     * (moab vertices) coordinates:
+     *
+     * \f[
+     * {\mathbf N}^{(1)}({\mathbf X}(\ksi, \eta)) =
+     * (\frac{\partial\mathbf{X}(\ksi, \eta)}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}}
+     * {\partial\eta}\right)
+     * \f]
+     * where \f${\mathbf X}(\ksi, \eta)\f$ is the vector of material
+     * coordinates at the gauss point on slave surface with parent coordinates
+     * \f$\ksi\f$ and \f$\eta\f$ evaluated according to
+     *
+     * \f[
+     * {\mathbf X}(\ksi, \eta) =
+     * \sum\limits^{3}_{i = 1}
+     * N_i(\ksi, \eta){\widebar{\mathbf X}}_i
+     * \f]
+     *
+     * where \f$ N_i \f$ is the shape function corresponding to the \f$
+     * i-{\rm{th}}\f$ degree of freedom in the material configuration
+     * \f${\widebar{\mathbf X}}_i\f$ corresponding to the 3 nodes of the
+     * triangular slave face.
+     *
+     */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  /// \brief Computes, for material configuration, normal to master face that
+  /// is common to all gauss points
   struct OpGetNormalMasterALE
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
@@ -1426,6 +1606,36 @@ struct SimpleContactProblem {
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
+
+    /**
+     * @brief Evaluates unit normal vector to the master surface vector based on
+     * material base coordinates
+     *
+     * Computes normal vector based on material base coordinates based on mesh
+     * (moab vertices) coordinates:
+     *
+     * \f[
+     * {\mathbf N}^{(2)}({\mathbf X}(\ksi, \eta)) =
+     * (\frac{\partial\mathbf{X}(\ksi, \eta)}{\partial\xi}\times\frac{\partial
+     * \mathbf{X}}
+     * {\partial\eta}\right)
+     * \f]
+     * where \f${\mathbf X}(\ksi, \eta)\f$ is the vector of material
+     * coordinates at the gauss point on master surface with parent coordinates
+     * \f$\ksi\f$ and \f$\eta\f$ evaluated according to
+     *
+     * \f[
+     * {\mathbf X}(\ksi, \eta) =
+     * \sum\limits^{3}_{i = 1}
+     * N_i(\ksi, \eta){\widebar{\mathbf X}}_i
+     * \f]
+     *
+     * where \f$ N_i \f$ is the shape function corresponding to the \f$
+     * i-{\rm{th}}\f$ degree of freedom in the material configuration
+     * \f${\widebar{\mathbf X}}_i\f$ corresponding to the 3 nodes of the
+     * triangular master face.
+     *
+     */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
