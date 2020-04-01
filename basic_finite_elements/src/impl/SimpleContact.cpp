@@ -1967,8 +1967,9 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::aSsemble(
       }
     }
   }
-
-  CHKERR VecSetValues(getSNESf(), row_indices, &vecF[0], ADD_VALUES);
+  CHKERR VecSetValues(getSNESf(), nbRows, row_indices, &*vecF.data().begin(),
+                      ADD_VALUES);
+  // CHKERR VecSetValues(getSNESf(), row_indices, &vecF[0], ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -2058,7 +2059,10 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::aSsemble(
     }
   }
 
-  CHKERR VecSetValues(getSNESf(), row_indices, &vecF[0], ADD_VALUES);
+  CHKERR VecSetValues(getSNESf(), nbRows, row_indices, &*vecF.data().begin(),
+                      ADD_VALUES);
+
+  // CHKERR VecSetValues(getSNESf(), row_indices, &vecF[0], ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }

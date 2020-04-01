@@ -298,14 +298,14 @@ int main(int argc, char *argv[]) {
     
 
     // Add these prisim (between master and slave tris) to the mofem database
-    // EntityHandle meshset_slave_master_prisms;
-    // CHKERR moab.create_meshset(MESHSET_SET, meshset_slave_master_prisms);
+    EntityHandle meshset_slave_master_prisms;
+    CHKERR moab.create_meshset(MESHSET_SET, meshset_slave_master_prisms);
 
-    // CHKERR
-    // moab.add_entities(meshset_slave_master_prisms, contact_prisms);
+    CHKERR
+    moab.add_entities(meshset_slave_master_prisms, contact_prisms);
 
-    // CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
-    //     meshset_slave_master_prisms, 3, bit_levels[0]);
+    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        meshset_slave_master_prisms, 3, bit_levels[0]);
 
     // CHKERR moab.write_mesh("slave_master_prisms.vtk",
     //                        &meshset_slave_master_prisms, 1);
@@ -326,6 +326,9 @@ int main(int argc, char *argv[]) {
     CHKERR moab.get_adjacencies(master_tris, 0, false, nodes,
                                 moab::Interface::UNION);
 
+    // CHKERR moab.get_adjacencies(all_tets, 0, false, nodes,
+    //                             moab::Interface::UNION);
+    cerr << "nodes  " <<nodes <<"\n";
     nodes.pop_front();
     nodes.pop_back();
 
@@ -689,6 +692,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix_MoFEM(dm, &A);
     CHKERR MatZeroEntries(A);
 
+    
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
         fe_rhs_simple_contact =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -701,6 +705,8 @@ int main(int argc, char *argv[]) {
         common_data_simple_contact =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
+
+    common_data_simple_contact->forcesOnlyOnEntitiesRow = nodes;
 
     contact_problem->setContactOperatorsRhsALEMaterial(
         fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
