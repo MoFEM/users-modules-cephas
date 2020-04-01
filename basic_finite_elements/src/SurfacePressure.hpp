@@ -90,8 +90,7 @@ struct NeumannForcesSurface {
   MyTriangleFE feMatLhs;
   MyTriangleFE &getLoopFeMatLhs() { return feMatLhs; }
 
-  NeumannForcesSurface(MoFEM::Interface &m_field,
-                       boost::shared_ptr<DofEntity> arc_length_dof = nullptr)
+  NeumannForcesSurface(MoFEM::Interface &m_field)
       : mField(m_field), fe(m_field), feLhs(m_field), feMatRhs(m_field),
         feMatLhs(m_field) {}
 
@@ -224,10 +223,7 @@ struct NeumannForcesSurface {
     // Pointer to arc length method DOF, used to scale pressure in LHS
     boost::shared_ptr<DofEntity> arcLengthDof;
 
-    DataAtIntegrationPts() {
-      faceRowData = nullptr;
-      arcLengthDof = nullptr;
-    }
+    DataAtIntegrationPts() : faceRowData(nullptr), arcLengthDof(nullptr) {}
 
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
