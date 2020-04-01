@@ -385,12 +385,12 @@ struct NeumannForcesSurface {
      *
      * \f[
      * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
-     * \frac{\partial\mathbf{x}}{\partial\mathbf{\chi}}
-     * \frac{\partial\mathbf{\chi}}{\partial\mathbf{X}}
+     * \frac{\partial\mathbf{x}}{\partial\boldsymbol{\chi}}
+     * \frac{\partial\boldsymbol{\chi}}{\partial\mathbf{X}}
      * \f]
      *
      * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
-     * spatial and material maps, respectively, and \f$\mathbf{\chi}\f$ are
+     * spatial and material maps, respectively, and \f$\boldsymbol{\chi}\f$ are
      * the reference coordinates.
      *
      */
@@ -637,7 +637,7 @@ struct NeumannForcesSurface {
      * \delta\mathbf{x})
      * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}} p
      * \left\{\left[
-     * \frac{\partial\Delta\mathbf{x}}{\partial\mathbf{\chi}}\,\mathbf{H}^{-1}
+     * \frac{\partial\Delta\mathbf{x}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
      * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
      * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
      * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
@@ -678,7 +678,7 @@ struct NeumannForcesSurface {
      * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}} p
      * \left\{\left[
      * \mathbf{h}\,\mathbf{H}^{-1}\,\frac{\partial\Delta\mathbf{X}}
-     * {\partial\mathbf{\chi}}\,\mathbf{H}^{-1}
+     * {\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
      * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
      * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
      * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
