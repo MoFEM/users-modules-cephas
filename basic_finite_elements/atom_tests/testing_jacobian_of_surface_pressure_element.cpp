@@ -49,9 +49,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
     CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-order_spat", &order_x,
-                               &flg);
+                              &flg);
     CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-order_mat", &order_X,
-                               &flg);
+                              &flg);
 
     CHKERR DMRegister_MoFEM("DMMOFEM");
 
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
 
     auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
-                           double *z) {
+                         double *z) {
       MoFEMFunctionBegin;
       double value;
       double scale = 0.5;
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
       field_data[1] = (*y) + (value - 0.5) * scale;
       PetscRandomGetValue(rctx, &value);
       field_data[2] = (*z) + (value - 0.5) * scale;
-       MoFEMFunctionReturn(0);
+      MoFEMFunctionReturn(0);
     };
 
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NeumannForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeMatLhs()));
 
-    fe_rhs_ptr->meshPositionsFieldName = "X"; 
+    fe_rhs_ptr->meshPositionsFieldName = "X";
     fe_lhs_ptr->meshPositionsFieldName = "X";
     fe_mat_rhs_ptr->meshPositionsFieldName = "X";
     fe_mat_lhs_ptr->meshPositionsFieldName = "X";
@@ -129,14 +129,14 @@ int main(int argc, char *argv[]) {
                                             bit->getMeshsetId(), true, true);
         CHKERR surfacePressure->addPressureAle(
             "x", "X", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), surfacePressure, true, true);
+            bit->getMeshsetId(), true, true);
       }
     }
 
     CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
                                   nullptr, nullptr);
     CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
-                                  nullptr, nullptr); 
+                                  nullptr, nullptr);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
                                   nullptr, nullptr);
@@ -157,13 +157,13 @@ int main(int argc, char *argv[]) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
           "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
-          //"-pc_type none";
+      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
                                "-snes_rtol 0 "
                                "-snes_max_it 1 ";
-                               //"-pc_type none";
+      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 

@@ -90,13 +90,10 @@ struct NeumannForcesSurface {
   MyTriangleFE feMatLhs;
   MyTriangleFE &getLoopFeMatLhs() { return feMatLhs; }
 
-  // Pointer to arc length method DOF, used to scale pressure in LHS
-  boost::shared_ptr<DofEntity> arcLengthDof;
-
   NeumannForcesSurface(MoFEM::Interface &m_field,
                        boost::shared_ptr<DofEntity> arc_length_dof = nullptr)
       : mField(m_field), fe(m_field), feLhs(m_field), feMatRhs(m_field),
-        feMatLhs(m_field), arcLengthDof(arc_length_dof) {}
+        feMatLhs(m_field) {}
 
   struct bCForce {
     ForceCubitBcData data;
@@ -224,7 +221,13 @@ struct NeumannForcesSurface {
 
     EntData *faceRowData;
 
-    DataAtIntegrationPts() { faceRowData = nullptr; }
+    // Pointer to arc length method DOF, used to scale pressure in LHS
+    boost::shared_ptr<DofEntity> arcLengthDof;
+
+    DataAtIntegrationPts() {
+      faceRowData = nullptr;
+      arcLengthDof = nullptr;
+    }
 
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
@@ -259,7 +262,6 @@ struct NeumannForcesSurface {
     boost::shared_ptr<DataAtIntegrationPts> dataAtIntegrationPts;
     Mat Aij;
     bCPressure &dAta;
-    boost::shared_ptr<NeumannForcesSurface> surfacePressure;
     bool hoGeometry;
 
     MatrixDouble NN;
@@ -306,13 +308,11 @@ struct NeumannForcesSurface {
     OpNeumannPressureLhs_dx_dX(
         const string field_name_1, const string field_name_2,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Mat aij,
-        bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
-        bool ho_geometry = false)
+        bCPressure &data, bool ho_geometry = false)
         : UserDataOperator(field_name_1, field_name_2,
                            UserDataOperator::OPROWCOL),
           dataAtIntegrationPts(data_at_pts), Aij(aij), dAta(data),
-          surfacePressure(surface_pressure), hoGeometry(ho_geometry) {
+          hoGeometry(ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -437,7 +437,6 @@ struct NeumannForcesSurface {
     std::string sideFeName;
     Mat Aij;
     bCPressure &dAta;
-    boost::shared_ptr<NeumannForcesSurface> surfacePressure;
     bool hoGeometry;
 
     MatrixDouble NN;
@@ -473,13 +472,11 @@ struct NeumannForcesSurface {
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
         std::string &side_fe_name, Mat aij, bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
         bool ho_geometry = false)
         : UserDataOperator(field_name_1, field_name_2,
                            UserDataOperator::OPROWCOL),
           dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
-          Aij(aij), dAta(data), surfacePressure(surface_pressure),
-          hoGeometry(ho_geometry) {
+          Aij(aij), dAta(data), hoGeometry(ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     }
   };
@@ -533,11 +530,10 @@ struct NeumannForcesSurface {
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
         std::string &side_fe_name, Mat aij, bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
         bool ho_geometry = false)
         : OpNeumannPressureMaterialLhs(field_name_1, field_name_2, data_at_pts,
                                        side_fe, side_fe_name, aij, data,
-                                       surface_pressure, ho_geometry) {
+                                       ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -565,11 +561,10 @@ struct NeumannForcesSurface {
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
         std::string &side_fe_name, Mat aij, bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
         bool ho_geometry = false)
         : OpNeumannPressureMaterialLhs(field_name_1, field_name_2, data_at_pts,
                                        side_fe, side_fe_name, aij, data,
-                                       surface_pressure, ho_geometry) {
+                                       ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -586,7 +581,6 @@ struct NeumannForcesSurface {
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
     Mat Aij;
     bCPressure &dAta;
-    boost::shared_ptr<NeumannForcesSurface> surfacePressure;
     bool hoGeometry;
 
     VectorInt rowIndices;
@@ -614,13 +608,11 @@ struct NeumannForcesSurface {
     OpNeumannPressureMaterialVolOnSideLhs(
         const string field_name_1, const string field_name_2,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Mat aij,
-        bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
-        bool ho_geometry = false)
+        bCPressure &data, bool ho_geometry = false)
         : VolOnSideUserDataOperator(field_name_1, field_name_2,
                                     UserDataOperator::OPROWCOL),
           dataAtPts(data_at_pts), Aij(aij), dAta(data),
-          surfacePressure(surface_pressure), hoGeometry(ho_geometry) {
+          hoGeometry(ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     }
   };
@@ -657,12 +649,9 @@ struct NeumannForcesSurface {
     OpNeumannPressureMaterialVolOnSideLhs_dX_dx(
         const string field_name_1, const string field_name_2,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Mat aij,
-        bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
-        bool ho_geometry = false)
-        : OpNeumannPressureMaterialVolOnSideLhs(field_name_1, field_name_2,
-                                                data_at_pts, aij, data,
-                                                surface_pressure, ho_geometry) {
+        bCPressure &data, bool ho_geometry = false)
+        : OpNeumannPressureMaterialVolOnSideLhs(
+              field_name_1, field_name_2, data_at_pts, aij, data, ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -700,12 +689,9 @@ struct NeumannForcesSurface {
     OpNeumannPressureMaterialVolOnSideLhs_dX_dX(
         const string field_name_1, const string field_name_2,
         boost::shared_ptr<DataAtIntegrationPts> data_at_pts, Mat aij,
-        bCPressure &data,
-        boost::shared_ptr<NeumannForcesSurface> surface_pressure,
-        bool ho_geometry = false)
-        : OpNeumannPressureMaterialVolOnSideLhs(field_name_1, field_name_2,
-                                                data_at_pts, aij, data,
-                                                surface_pressure, ho_geometry) {
+        bCPressure &data, bool ho_geometry = false)
+        : OpNeumannPressureMaterialVolOnSideLhs(
+              field_name_1, field_name_2, data_at_pts, aij, data, ho_geometry) {
       sYmm = false; // This will make sure to loop over all entities
     };
   };
@@ -772,7 +758,6 @@ struct NeumannForcesSurface {
   addPressureAle(const std::string field_name_1, const std::string field_name_2,
                  boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
                  std::string side_fe_name, Vec F, Mat aij, int ms_id,
-                 boost::shared_ptr<NeumannForcesSurface> surface_pressure,
                  bool ho_geometry = false, bool block_set = false);
 
   /**
