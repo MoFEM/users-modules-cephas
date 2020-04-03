@@ -26,6 +26,8 @@ extern "C" {
 }
 
 constexpr double SimpleContactProblem::TOL;
+constexpr int SimpleContactProblem::LAGRANGE_RANK;
+constexpr int SimpleContactProblem::POSITION_RANK;
 
 MoFEMErrorCode
 SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
@@ -376,7 +378,6 @@ SimpleContactProblem::ConvectSlaveContactElement::setGaussPts(int order) {
   CHKERR convectPtr->convectSlaveIntegrationPts<false>();
   MoFEMFunctionReturn(0);
 }
-
 MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
                                                               EntityType type,
                                                               EntData &data) {
@@ -766,7 +767,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
     vecF.clear();
 
     const double area_m =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+        commonDataSimpleContact->areaSlave;
 
     auto get_tensor_vec = [](VectorDouble &n, const int r) {
       return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
@@ -1808,7 +1809,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBTRI)
@@ -1821,7 +1822,7 @@ MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSide::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalculateDeformation::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+    int side, EntityType type, EntData &row_data) {
 
   MoFEMFunctionBegin;
   FTensor::Index<'i', 3> i;
@@ -1845,12 +1846,11 @@ MoFEMErrorCode SimpleContactProblem::OpCalculateDeformation::doWork(
   auto t_detH = getFTensor0FromVec(*commonDataSimpleContact->detHVec);
   auto t_invH = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->invHMat);
   auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
-
+ 
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
     CHKERR determinantTensor3by3(t_H, t_detH);
     CHKERR invertTensor3by3(t_H, t_detH, t_invH);
     t_F(i, j) = t_h(i, k) * t_invH(k, j);
-
     ++t_h;
     ++t_H;
     ++t_detH;
@@ -1862,7 +1862,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalculateDeformation::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSide::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBTRI)
@@ -1875,7 +1875,7 @@ MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSide::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+    int side, EntityType type, EntData &row_data) {
 
   MoFEMFunctionBegin;
 
@@ -1901,7 +1901,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::iNtegrate(
-    DataForcesAndSourcesCore::EntData &data) {
+    EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getIndices().size() == 0)
@@ -1947,14 +1947,15 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::iNtegrate(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::aSsemble(
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntData &row_data) {
   MoFEMFunctionBegin;
 
   // get pointer to first global index on row
   const int *row_indices = &*row_data.getIndices().data().begin();
-
   auto &data = *commonDataSimpleContact;
-  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+  if (data.forcesOnlyOnEntitiesRow.empty())
+      MoFEMFunctionReturnHot(0);
+
     rowIndices.resize(nbRows, false);
     noalias(rowIndices) = row_data.getIndices();
     row_indices = &rowIndices[0];
@@ -1966,16 +1967,17 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::aSsemble(
         rowIndices[ii] = -1;
       }
     }
-  }
+   
+
   CHKERR VecSetValues(getSNESf(), nbRows, row_indices, &*vecF.data().begin(),
                       ADD_VALUES);
   // CHKERR VecSetValues(getSNESf(), row_indices, &vecF[0], ADD_VALUES);
 
   MoFEMFunctionReturn(0);
-}
+  }
 
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &row_data) {
+    int side, EntityType type, EntData &row_data) {
 
   MoFEMFunctionBegin;
 
@@ -2001,7 +2003,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::iNtegrate(
-    DataForcesAndSourcesCore::EntData &data) {
+    EntData &data) {
   MoFEMFunctionBegin;
 
   int nb_base_fun_col = nbRows / 3;
@@ -2038,14 +2040,15 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::iNtegrate(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::aSsemble(
-    DataForcesAndSourcesCore::EntData &row_data) {
+    EntData &row_data) {
   MoFEMFunctionBegin;
 
   // get pointer to first global index on row
   const int *row_indices = &*row_data.getIndices().data().begin();
-
   auto &data = *commonDataSimpleContact;
-  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+  if (data.forcesOnlyOnEntitiesRow.empty())
+    MoFEMFunctionReturnHot(0);
+
     rowIndices.resize(nbRows, false);
     noalias(rowIndices) = row_data.getIndices();
     row_indices = &rowIndices[0];
@@ -2057,8 +2060,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::aSsemble(
         rowIndices[ii] = -1;
       }
     }
-  }
-
+  
   CHKERR VecSetValues(getSNESf(), nbRows, row_indices, &*vecF.data().begin(),
                       ADD_VALUES);
 
@@ -2067,74 +2069,8 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALESlave::aSsemble(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixMasterSlaveALE::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
-  MoFEMFunctionBegin;
-
-  // Both sides are needed since both sides contribute their shape
-  // function to the stiffness matrix
-  const int nb_row = row_data.getIndices().size();
-  if (!nb_row)
-    MoFEMFunctionReturnHot(0);
-  const int nb_col = col_data.getIndices().size();
-  if (!nb_col)
-    MoFEMFunctionReturnHot(0);
-  const int nb_gauss_pts = row_data.getN().size1();
-
-  int nb_base_fun_row = row_data.getFieldData().size() / 3;
-  int nb_base_fun_col = col_data.getFieldData().size();
-
-  auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-    return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                         &m(r + 2, c + 0));
-  };
-
-  auto get_tensor_vec = [](VectorDouble &n) {
-    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
-  };
-
-  FTensor::Index<'i', 3> i;
-
-  matLhs.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-  matLhs.clear();
-
-  auto normal_at_gp =
-      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    double val_m = getGaussPtsMaster()(2, gg);
-    // auto normal_at_gp =
-    //     get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr[gg]);
-
-    FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
-
-    for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-
-      FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
-
-      for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-        const double m = val_m * t_base_lambda * t_base_master;
-
-        auto t_assemble_m = get_tensor_from_mat(matLhs, 3 * bbr, bbc);
-
-        t_assemble_m(i) -= m * normal_at_gp(i) * 0.5;
-
-        ++t_base_master; // update rows
-      }
-      ++t_base_lambda; // update cols slave
-    }
-  }
-
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
-                      ADD_VALUES);
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode SimpleContactProblem::OpGetNormalSlaveALE::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -2192,7 +2128,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlaveALE::doWork(
 }
 
 MoFEMErrorCode SimpleContactProblem::OpGetNormalMasterALE::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+    int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
   if (data.getFieldData().size() == 0)
@@ -2251,10 +2187,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalMasterALE::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixSlaveSlave_dX::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+SimpleContactProblem::OpContactConstraintMatrixSlaveSlave_dX::iNtegrate(
+    EntData &row_data,
+    EntData &col_data) {
   MoFEMFunctionBegin;
 
   // Both sides are needed since both sides contribute their shape
@@ -2334,19 +2269,15 @@ SimpleContactProblem::OpContactConstraintMatrixSlaveSlave_dX::doWork(
     ++lagrange_slave;
     ++t_w;
   }
-
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
-                      ADD_VALUES);
-
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixSlaveSlaveALE::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+SimpleContactProblem::OpContactConstraintMatrixMasterSlave_dX::iNtegrate(
+    EntData &row_data,
+    EntData &col_data) {
   MoFEMFunctionBegin;
+
 
   // Both sides are needed since both sides contribute their shape
   // function to the stiffness matrix
@@ -2359,64 +2290,90 @@ SimpleContactProblem::OpContactConstraintMatrixSlaveSlaveALE::doWork(
   const int nb_gauss_pts = row_data.getN().size1();
 
   int nb_base_fun_row = row_data.getFieldData().size() / 3;
-  int nb_base_fun_col = col_data.getFieldData().size();
+  int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
   auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
-    return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
-                                         &m(r + 2, c + 0));
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
   };
 
   auto get_tensor_vec = [](VectorDouble &n) {
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
   };
 
+  auto get_tensor_vec_3 = [&](VectorDouble3 &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
   FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
 
-  auto normal_at_gp =
-      get_tensor_vec(*commonDataSimpleContact->normalVectorSlavePtr);
+  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
+                         FTensor::Tensor1<double *, 3> t_1,
+                         FTensor::Tensor1<double *, 3> t_2) {
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Tensor2<double, 3, 3> t_n;
+    t_n(i, j) = 0;
+    t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+    t_n(i, j) -= FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+    return t_n;
+  };
 
-  matLhs.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
-  matLhs.clear();
-  auto t_w = getFTensor0IntegrationWeightSlave();
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
+  const double area_s = commonDataSimpleContact->areaSlave;
+
+  const double area_m = commonDataSimpleContact->areaMaster;
+
+  auto t_1 = get_tensor_vec(*commonDataSimpleContact->tangentOneVectorSlavePtr);
+  auto t_2 = get_tensor_vec(*commonDataSimpleContact->tangentTwoVectorSlavePtr);
+
+  auto t_const_unit_slave =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+
+  auto t_w = getFTensor0IntegrationWeightMaster();
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    FTensor::Tensor0<double *> t_base_lambda(&col_data.getN()(gg, 0));
-
+    auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
+    
+    const double mult_s = 0.5 * t_w * lagrange_slave * area_m / area_s;
+    
     for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
 
-      FTensor::Tensor0<double *> t_base_slave(&row_data.getN()(gg, 0));
+      FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
 
       for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-        const double s = t_w * t_base_lambda * t_base_slave;
+        const double s = mult_s * t_base_master;
 
-        auto t_assemble_s = get_tensor_from_mat(matLhs, 3 * bbr, bbc);
+        auto t_d_n = make_vec_der(t_N, t_1, t_2);
 
-        t_assemble_s(i) += s * normal_at_gp(i) * 0.5;
+        auto t_assemble_s = get_tensor_from_mat(matLhs, 3 * bbr, 3 * bbc);
 
-        ++t_base_slave; // update rows
+        t_assemble_s(i, j) -=
+            s * (-t_const_unit_slave(i) * t_d_n(k, j) * t_const_unit_slave(k) +
+                 t_d_n(i, j));
+
+        ++t_base_master; // update rows
       }
-      ++t_base_lambda; // update cols slave
+      ++t_N;
     }
+    ++lagrange_slave;
     ++t_w;
   }
-
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
-                      ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixMasterSlave_dX::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    DataForcesAndSourcesCore::EntData &row_data,
-    DataForcesAndSourcesCore::EntData &col_data) {
+SimpleContactProblem::OpContactConstraintMatrixMasterMaster_dX::iNtegrate(
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
-
-  // derrivatives only for vertices in cols
-  if (col_type != MBVERTEX)
-    MoFEMFunctionReturnHot(0);
 
   // Both sides are needed since both sides contribute their shape
   // function to the stiffness matrix
@@ -2474,22 +2431,29 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlave_dX::doWork(
 
   auto t_w = getFTensor0IntegrationWeightMaster();
 
+  auto t_const_unit_master =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorMasterPtr));
+
+  auto t_const_unit_slave =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
     auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
 
     for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
-
+      const double mult_m = 0.5 * t_w * lagrange_slave;
       FTensor::Tensor0<double *> t_base_master(&row_data.getN()(gg, 0));
 
       for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
-        const double s = t_w * lagrange_slave * t_base_master;
+        const double s = mult_m * t_base_master;
 
         auto t_d_n = make_vec_der(t_N, t_1, t_2);
 
         auto t_assemble_s = get_tensor_from_mat(matLhs, 3 * bbr, 3 * bbc);
 
-        t_assemble_s(i, j) -= 0.5 * s * t_d_n(i, j);
+        t_assemble_s(i, j) -= s * t_d_n(k, j) * t_const_unit_master(k) *
+                              t_const_unit_slave(i);
 
         ++t_base_master; // update rows
       }
@@ -2498,18 +2462,17 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlave_dX::doWork(
     ++lagrange_slave;
     ++t_w;
   }
-
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
-                      ADD_VALUES);
+  
+  // CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
+  //                     ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
 
+
 MoFEMErrorCode
 SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
-    doWork(int row_side, int col_side, EntityType row_type, EntityType col_type,
-           DataForcesAndSourcesCore::EntData &row_data,
-           DataForcesAndSourcesCore::EntData &col_data) {
+    iNtegrate(EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   const int nb_row = row_data.getIndices().size();
@@ -2566,14 +2529,14 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
       *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
   auto x_s = getFTensor1FromMat<3>(
       *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
-  auto lagrange_slave =
+  auto t_lagrange_slave =
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
 
   // auto lambda_gap_diff_prod =
   //     getFTensor0FromVec(*commonDataSimpleContact->lambdaGapDiffProductPtr);
 
-  // auto length_normal =
-  //     getFTensor0FromVec(*commonDataSimpleContact->normalSlaveLengthALEPtr);
+  const double length_normal =
+      commonDataSimpleContact->areaSlave;
 
   auto normal_at_gp =
       get_tensor_vec(*commonDataSimpleContact->normalVectorSlavePtr);
@@ -2581,9 +2544,10 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
   auto t_w = getFTensor0IntegrationWeightSlave();
   auto t_1 = get_tensor_vec(*commonDataSimpleContact->tangentOneVectorSlavePtr);
   auto t_2 = get_tensor_vec(*commonDataSimpleContact->tangentTwoVectorSlavePtr);
-
+  auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-    double val_s = t_w * 0.5;
+    double val_s =
+        t_w  * 0.5;
     auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
 
     for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
@@ -2596,32 +2560,505 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
 
         auto assemble_mat = get_vec_from_mat(matLhs, bbr, 3 * bbc);
 
-        // assemble_mat(j) -= t_d_n(i, j) * (x_s(i) - x_m(i)) * cN *
-        //                    (1. + lambda_gap_diff_prod) * s;
+        assemble_mat(j) -=
+            0.5 * t_d_n(i, j) * (x_s(i) - x_m(i)) * s * cN *
+            (1 + SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp));
+       
+            // assemble_mat(j) +=
+            //     t_lagrange_slave * t_d_n(i, j) * normal_at_gp(i) * s *
+            //     (1 - SimpleContactProblem::Sign(t_lagrange_slave - cN *
+            //     t_gap_gp)) / length_normal;
 
-        // assemble_mat(j) += lagrange_slave * t_d_n(i, j) * normal_at_gp(i) *
-        //                    (1. - lambda_gap_diff_prod) * s / (length_normal);
+            assemble_mat(j) += 0.5 *  t_d_n(i, j) * normal_at_gp(i) * s *
+                               (t_lagrange_slave - cN * t_gap_gp -
+                                std::abs(t_lagrange_slave + cN * t_gap_gp));
+            // assemble_mat(j) -= t_d_n(i, j) * (x_s(i) - x_m(i)) * cN *
+            //                    (1. + lambda_gap_diff_prod) * s;
 
-        // assemble_mat(j) += lagrange_slave * t_d_n(i, j) * normal_at_gp(i) *
-        //                    (1. - lambda_gap_diff_prod) * s / (length_normal);
+            // assemble_mat(j) += lagrange_slave * t_d_n(i, j) *
+            // normal_at_gp(i) *
+            //                    (1. - lambda_gap_diff_prod) * s /
+            //                    (length_normal);
 
-        ++t_base_lambda; // update rows
+            // assemble_mat(j) += lagrange_slave * t_d_n(i, j) *
+            // normal_at_gp(i) *
+            //                    (1. - lambda_gap_diff_prod) * s /
+            //                    (length_normal);
+
+            ++t_base_lambda; // update rows
       }
       ++t_N;
     }
 
     ++x_m;
     ++x_s;
-    ++lagrange_slave;
+    ++t_lagrange_slave;
     // ++lambda_gap_diff_prod;
     
     // ++length_normal;
+    ++t_gap_gp;
+    ++t_w;
+  }
+  // CHKERR MatSetValues(getSNESB(), row_data, col_data,
+  // &*matLhs.data().begin(),
+  //                     ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpContactMaterialLhs::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+  if (col_type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+  row_nb_dofs = row_data.getIndices().size();
+  if (!row_nb_dofs)
+    MoFEMFunctionReturnHot(0);
+  col_nb_dofs = col_data.getIndices().size();
+  if (!col_nb_dofs)
+    MoFEMFunctionReturnHot(0);
+  nb_gauss_pts = row_data.getN().size1();
+
+  nb_base_fun_row = row_data.getFieldData().size() / rankRow;
+  nb_base_fun_col = col_data.getFieldData().size() / rankCol;
+
+  matLhs.resize(rankRow * nb_base_fun_row, rankCol * nb_base_fun_col, false);
+  matLhs.clear();
+
+  // diagonal_block = (row_type == col_type) && (row_side == col_side);
+
+  // if (col_type == MBVERTEX) {
+  //   dataAtPts->faceRowData = &row_data;
+  //   CHKERR loopSideVolumes(sideFeName, *sideFe);
+  // }
+
+  // integrate local matrix for entity block
+  CHKERR iNtegrate(row_data, col_data);
+
+  // assemble local matrix
+  CHKERR aSsemble(row_data, col_data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpContactMaterialLhs::aSsemble(
+    EntData &row_data,
+    EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+  // get pointer to first global index on column
+  const int *col_indices = &*col_data.getIndices().data().begin();
+
+  auto &data = *commonDataSimpleContact;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(row_nb_dofs, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
+  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+    colIndices.resize(col_nb_dofs, false);
+    noalias(colIndices) = col_data.getIndices();
+    col_indices = &colIndices[0];
+    VectorDofs &dofs = col_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesCol.end()) {
+        colIndices[ii] = -1;
+      }
+    }
+  }
+
+  // assemble local matrix
+  CHKERR MatSetValues(getSNESB(), row_nb_dofs, row_indices, col_nb_dofs,
+                      col_indices, &*matLhs.data().begin(), ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpContactMaterialVolOnMasterSideLhs_dX_dx::iNtegrate(
+    EntData &row_data,
+    EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  auto t_w = getFTensor0IntegrationWeight();
+
+  auto t_inv_H = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->invHMat);
+
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  auto normal_at_gp =
+      get_tensor_vec(*commonDataSimpleContact->normalVectorMasterPtr);
+
+  const double area_m = commonDataSimpleContact->areaMaster;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    double a = - t_w * lagrange_slave * area_m;
+
+    auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+    int bbc = 0;
+    for (; bbc != nb_base_fun_col; ++bbc) {
+
+      FTensor::Tensor0<double *> t_row_base(&row_data.getN()(gg, 0));
+
+      int bbr = 0;
+      for (; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_assemble = get_tensor2(matLhs, 3 * bbr, 3 * bbc);
+        // TODO: handle hoGeometry
+
+        t_assemble(i, j) += a * t_row_base * t_inv_H(k, i) *
+                            t_col_diff_base(k) * normal_at_gp(j);
+
+        ++t_row_base;
+      }
+      ++t_col_diff_base;
+    }
+    ++t_w;
+    ++t_inv_H;
+    ++lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpContactMaterialVolOnMasterSideLhs_dX_dX::iNtegrate(
+    EntData &row_data,
+    EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
+
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  auto t_w = getFTensor0IntegrationWeight();
+
+  auto t_h = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->hMat);
+  auto t_inv_H = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->invHMat);
+
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  auto normal_at_gp =
+      get_tensor_vec(*commonDataSimpleContact->normalVectorMasterPtr);
+
+  const double area_m = commonDataSimpleContact->areaMaster;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    const double a = -t_w * lagrange_slave * area_m;
+    auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+    int bbc = 0;
+    for (; bbc != nb_base_fun_col; ++bbc) {
+
+      FTensor::Tensor0<double *> t_row_base(&row_data.getN()(gg, 0));
+
+      int bbr = 0;
+      for (; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_assemble = get_tensor2(matLhs, 3 * bbr, 3 * bbc);
+       
+        t_assemble(i, j) -= a * t_row_base * t_inv_H(l, j) *
+                            t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
+                            normal_at_gp(k);
+
+        ++t_row_base;
+      }
+      ++t_col_diff_base;
+    }
+    ++t_w;
+    ++t_h;
+    ++t_inv_H;
+    ++lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+
+MoFEMErrorCode
+SimpleContactProblem::OpContactMaterialMasterOnFaceLhs_dX_dX::iNtegrate(
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  auto make_vec_der = [](FTensor::Tensor1<double *, 2> t_N,
+                         FTensor::Tensor1<double *, 3> t_1,
+                         FTensor::Tensor1<double *, 3> t_2) {
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Tensor2<double, 3, 3> t_n;
+    t_n(i, j) = 0;
+    t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+    t_n(i, j) -= FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+    return t_n;
+  };
+
+  // commonDataSimpleContact->faceRowData = nullptr;
+
+  auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
+
+  auto t_w = getFTensor0IntegrationWeightMaster();
+  auto lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+  auto t_1 = get_tensor_vec(*commonDataSimpleContact->tangentOneVectorMasterPtr);
+  auto t_2 = get_tensor_vec(*commonDataSimpleContact->tangentTwoVectorMasterPtr);
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     
+    auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
+    const double val = 0.5 * t_w * lagrange_slave;
+   
+    int bbc = 0;
+    for (; bbc != nb_base_fun_col; ++bbc) {
+
+      FTensor::Tensor0<double *> t_base(&row_data.getN()(gg, 0));
+
+      int bbr = 0;
+      for (; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_assemble = get_tensor2(matLhs, 3 * bbr, 3 * bbc);
+        // TODO: handle hoGeometry
+        auto t_d_n = make_vec_der(t_N, t_1, t_2);
+        t_assemble(i, k) -= val * t_base * t_F(j, i) * t_d_n(j, k);
+
+        ++t_base;
+      }
+      ++t_N;
+    }
+    ++t_F;
+    ++t_w;
+    ++lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpContactMaterialMasterSlaveLhs_dX_dLagmult::iNtegrate(
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor1<double *, 3>(&m(r + 0, c + 0), &m(r + 1, c + 0),
+                                         &m(r + 2, c + 0));
+  };
+
+  auto t_F = getFTensor2FromMat<3, 3>(*commonDataSimpleContact->FMat);
+
+  auto t_w = getFTensor0IntegrationWeightMaster();
+
+  auto normal_master_at_gp =
+      get_tensor_vec(*commonDataSimpleContact->normalVectorMasterPtr);
+
+  const double area_m = commonDataSimpleContact->areaMaster;
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    FTensor::Tensor0<double *> t_col_base(&col_data.getN()(gg, 0));
+
+    const double val = t_w * area_m;
+
+    int bbc = 0;
+    for (; bbc != nb_base_fun_col; bbc++) {
+
+      FTensor::Tensor0<double *> t_row_base(&row_data.getN()(gg, 0));
+
+      int bbr = 0;
+      for (; bbr != nb_base_fun_row; bbr++) {
+
+        auto t_assemble = get_tensor_from_mat(matLhs, 3 * bbr, bbc);
+
+        t_assemble(i) -=
+            val * t_row_base * t_F(j, i) * normal_master_at_gp(j) * t_col_base;
+
+        ++t_row_base;
+      }
+      ++t_col_base;
+    }
+    ++t_F;
     ++t_w;
   }
 
-  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*matLhs.data().begin(),
-                      ADD_VALUES);
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+  if (col_type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+  row_nb_dofs = row_data.getIndices().size();
+  if (!row_nb_dofs)
+    MoFEMFunctionReturnHot(0);
+  col_nb_dofs = col_data.getIndices().size();
+  if (!col_nb_dofs)
+    MoFEMFunctionReturnHot(0);
+  nb_gauss_pts = row_data.getN().size1();
+
+  nb_base_fun_row = row_data.getFieldData().size() / 3;
+  nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+  matLhs.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+  matLhs.clear();
+  
+//  diagonal_block = (row_type == col_type) && (row_side == col_side);
+
+  // if (col_type == MBVERTEX) {
+  //   dataAtPts->faceRowData = &row_data;
+  //   CHKERR loopSideVolumes(sideFeName, *sideFe);
+  // }
+
+  // integrate local matrix for entity block
+  CHKERR iNtegrate(row_data, col_data);
+
+  // assemble local matrix
+  CHKERR aSsemble(row_data, col_data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::aSsemble(
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+  // get pointer to first global index on column
+  const int *col_indices = &*col_data.getIndices().data().begin();
+
+  auto &data = *commonDataSimpleContact;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(row_nb_dofs, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
+  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+    colIndices.resize(col_nb_dofs, false);
+    noalias(colIndices) = col_data.getIndices();
+    col_indices = &colIndices[0];
+    VectorDofs &dofs = col_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); dit++, ii++) {
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesCol.end()) {
+        colIndices[ii] = -1;
+      }
+    }
+  }
+
+  // assemble local matrix
+  CHKERR MatSetValues(getSNESB(), row_nb_dofs, row_indices, col_nb_dofs,
+                      col_indices, &*matLhs.data().begin(), ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSideLhs::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    EntData &row_data,
+    EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  if (row_type != MBTRI || col_type != MBTRI)
+    MoFEMFunctionReturnHot(0);
+
+  // const int row_nb_dofs = row_data.getIndices().size();
+  // if (!row_nb_dofs)
+  //   MoFEMFunctionReturnHot(0);
+  // const int col_nb_dofs = col_data.getIndices().size();
+  // if (!col_nb_dofs)
+  //   MoFEMFunctionReturnHot(0);
+
+  // commonDataSimpleContact->faceRowData = &row_data;
+  const EntityHandle tri_master = getSideEntity(3, MBTRI);
+  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
 
   MoFEMFunctionReturn(0);
 }
@@ -2679,15 +3116,16 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
 
-  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+  /*fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalContactTractionOnSlave(field_name, common_data_simple_contact));
+  
   
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalContactTractionOnMaster(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalIntCompFunSlave(lagrang_field_name, common_data_simple_contact,
-                               cnValue));
+                               cnValue));*/
 
   // this is the right order
   fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(
@@ -2695,6 +3133,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new OpLoopMasterForSide(
       mesh_node_field_name, fe_mat_side_rhs_master, side_fe_name));
+
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalMatForcesALEMaster(mesh_node_field_name,
@@ -2719,301 +3158,377 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
     const string lagrang_field_name, const string side_fe_name) {
   MoFEMFunctionBegin;
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   OpGetTangentSlave(
-  //       mesh_node_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(new
+    OpGetNormalSlaveALE(
+        mesh_node_field_name, common_data_simple_contact));
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   OpGetNormalSlaveALE(
-  //       mesh_node_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetNormalMasterALE(mesh_node_field_name,
+                                 common_data_simple_contact));
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   OpGetTangentMaster(
-  //       mesh_node_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsMaster(field_name,
+                                          common_data_simple_contact));
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   OpGetNormalMasterALE("MESH_NODE_POSITIONS"
-  //       mesh_node_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetPositionAtGaussPtsSlave(field_name,
+                                         common_data_simple_contact));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetPositionAtGaussPtsMaster(field_name,
-                                        common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetGapSlave(field_name, common_data_simple_contact));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+                                       common_data_simple_contact));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetGapSlave(field_name, common_data_simple_contact));
+    /*fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpCalContactTractionOverLambdaMasterSlave(
+            field_name, lagrang_field_name, common_data_simple_contact));
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpGetGapSlaveALE(field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpCalContactTractionOverLambdaSlaveSlave(
+            field_name, lagrang_field_name, common_data_simple_contact));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
-                                     common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpContactConstraintMatrixSlaveSlave_dX(
+            field_name, mesh_node_field_name, common_data_simple_contact,
+            POSITION_RANK, POSITION_RANK));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixMasterSlaveALE(
-          field_name, lagrang_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpContactConstraintMatrixMasterSlave_dX(
+            field_name, mesh_node_field_name, common_data_simple_contact,
+            POSITION_RANK, POSITION_RANK));
 
-  // needed
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixSlaveSlaveALE(field_name, lagrang_field_name,
-                                                 common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpContactConstraintMatrixMasterMaster_dX(
+            field_name, mesh_node_field_name, common_data_simple_contact,
+            POSITION_RANK, POSITION_RANK));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixSlaveSlave_dX(
-          field_name, mesh_node_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpCalDerIntCompFunOverLambdaSlaveSlave(
+            lagrang_field_name, common_data_simple_contact, cnValue));
 
-  fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixMasterSlave_dX(
-          field_name, mesh_node_field_name, common_data_simple_contact));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpCalDerIntCompFunOverSpatPosSlaveMaster(
+            field_name, lagrang_field_name, common_data_simple_contact,
+            cnValue));
 
-  // check what new is done
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   OpCalTildeCFunSlave(
-  //       field_name, common_data_simple_contact, rValue, cnValue));
-
-  // fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-  //     new OpDerivativeBarTildeCFunOLambdaSlaveSlaveALE(
-  //         lagrang_field_name, common_data_simple_contact));
-
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE(
-  //           field_name, lagrang_field_name, cnValue,
-  //           common_data_simple_contact, aij));
-
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE(
-  //           field_name, lagrang_field_name, cnValue,
-  //           common_data_simple_contact, aij));
-
-  // these two should be done as the previous one (be carefull about the
-  // normal....)
-  // CAREFUL!!!!!
-
-  //   // fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //   //     new OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE_dX(
-  //   //         mesh_node_field_name, lagrang_field_name, cnValue,
-  //   //         common_data_simple_contact, aij));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpCalDerIntCompFunOverSpatPosSlaveSlave(
+            field_name, lagrang_field_name, common_data_simple_contact,
+            cnValue));
 
     fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
         new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
-            mesh_node_field_name, lagrang_field_name, cnValue,
+            lagrang_field_name, mesh_node_field_name, cnValue,
+            common_data_simple_contact, LAGRANGE_RANK, POSITION_RANK));*/
+
+    // =========  3 rows
+    // now ====== F^T
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+        feMatSideLhs_dx =
+            boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+                mField);
+
+    feMatSideLhs_dx->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            mesh_node_field_name, common_data_simple_contact->HMat));
+
+    feMatSideLhs_dx->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            field_name, common_data_simple_contact->hMat));
+
+    //   // Master derivative over spatial
+    feMatSideLhs_dx->getOpPtrVector().push_back(new
+    OpCalculateDeformation(
+        mesh_node_field_name, common_data_simple_contact, false));
+
+    feMatSideLhs_dx->getOpPtrVector().push_back(
+        new OpContactMaterialVolOnMasterSideLhs_dX_dX(
+            mesh_node_field_name, mesh_node_field_name,
             common_data_simple_contact));
 
-  //   // Side volume element computes linearisation with spatial
-  //   coordinates
-  //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-  //       feMatSideLhs_dx =
-  //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-  //               mField);
-  //   // Side volume element computes linearisation with material
-  //   coordinates
-  //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-  //       feMatSideLhs_dX =
-  //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-  //               mField);
+    feMatSideLhs_dx->getOpPtrVector().push_back(
+        new OpContactMaterialVolOnMasterSideLhs_dX_dx(
+            mesh_node_field_name, field_name, common_data_simple_contact));
 
-  //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-  //       feMatSideLhs_dLambda =
-  //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-  //               mField);
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(new
+         OpLoopMasterForSideLhs(
+             mesh_node_field_name, common_data_simple_contact,
+      feMatSideLhs_dx, side_fe_name));
 
-  //   feMatSideLhs_dx->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           mesh_node_field_name, common_data_simple_contact->HMat));
-  //   feMatSideLhs_dx->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           field_name, common_data_simple_contact->hMat));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpContactMaterialMasterOnFaceLhs_dX_dX(
+            mesh_node_field_name, mesh_node_field_name,
+            common_data_simple_contact, POSITION_RANK, POSITION_RANK));
 
-  //   // Master derivative over spatial
-  //   feMatSideLhs_dx->getOpPtrVector().push_back(new
-  //   OpCalculateDeformation(
-  //       mesh_node_field_name, common_data_simple_contact, false));
-  //   feMatSideLhs_dx->getOpPtrVector().push_back(
-  //       new OpContactMaterialVolOnMasterSideLhs_dX_dx(
-  //           mesh_node_field_name, field_name, common_data_simple_contact,
-  //           aij, false));
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpContactMaterialMasterSlaveLhs_dX_dLagmult(
+            mesh_node_field_name, lagrang_field_name,
+            common_data_simple_contact, POSITION_RANK, LAGRANGE_RANK));
 
-  //   //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   //   OpLoopMasterForSideLhs(
-  //   //       mesh_node_field_name, common_data_simple_contact,
-  //   feMatSideLhs_dx,
-  //   //       side_fe_name));
+    /// I change it to feMatSideLhs_dx
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpContactMaterialMasterLhs_dX_dx(
-  //           mesh_node_field_name, field_name, common_data_simple_contact,
-  //           feMatSideLhs_dx, side_fe_name, aij, false));
+    
+    //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
+    //       new OpCalculateVectorFieldGradient<3, 3>(
+    //           mesh_node_field_name, common_data_simple_contact->HMat));
+    //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
+    //       new OpCalculateVectorFieldGradient<3, 3>(
+    //           field_name, common_data_simple_contact->hMat));
 
-  //   // Master derivative over mesh_nodes
-  //   feMatSideLhs_dX->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           mesh_node_field_name, common_data_simple_contact->HMat));
+    //   // Master derivative over spatial
+    //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
+    //       new OpCalculateDeformation(mesh_node_field_name,
+    //                                  common_data_simple_contact, false));
 
-  //   feMatSideLhs_dX->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           field_name, common_data_simple_contact->hMat));
+    //   // error 1
+    //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
+    //       new OpContactMaterialVolOnSlaveSideLhs_dX_dx(
+    //           mesh_node_field_name, field_name,
+    //           common_data_simple_contact, aij, false));
 
-  //   feMatSideLhs_dX->getOpPtrVector().push_back(new
-  //   OpCalculateDeformation(
-  //       mesh_node_field_name, common_data_simple_contact, false));
+    // needed
+    /*fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpContactConstraintMatrixSlaveSlaveALE(field_name,
+    lagrang_field_name, common_data_simple_contact));*/
 
-  //   feMatSideLhs_dX->getOpPtrVector().push_back(
-  //       new OpContactMaterialVolOnMasterSideLhs_dX_dX(
-  //           mesh_node_field_name, mesh_node_field_name,
-  //           common_data_simple_contact, aij, false));
+    // check what new is done
 
-  //   // fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //   //     new OpLoopMasterForSideLhs(mesh_node_field_name,
-  //   //                                common_data_simple_contact,
-  //   //                                feMatSideLhs_dX, side_fe_name));
+    // these two should be done as the previous one (be carefull about
+    // the normal....) CAREFUL!!!!!
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpContactMaterialMasterLhs_dX_dX(
-  //           mesh_node_field_name, mesh_node_field_name,
-  //           common_data_simple_contact, feMatSideLhs_dX, side_fe_name,
-  //           aij, false));
+    //   // fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //   //     new
+    //   OpDerivativeBarTildeCFunODisplacementsSlaveMasterALE_dX(
+    //   //         mesh_node_field_name, lagrang_field_name,
+    //   cnValue,
+    //   //         common_data_simple_contact, aij));
 
-  //   // feMatSideLhs_dLambda->getOpPtrVector().push_back(
-  //   //     new OpContactMaterialVolOnMasterSideLhs_dX_dLagmult(
-  //   //         mesh_node_field_name, lagrang_field_name,
-  //   //         common_data_simple_contact, aij, false));
+    //   // Side volume element computes linearisation with
+    //   spatial coordinates
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpContactMaterialMasterSlaveLhs_dX_dLagmult(
-  //           mesh_node_field_name, lagrang_field_name,
-  //           common_data_simple_contact, feMatSideLhs_dLambda,
-  //           side_fe_name, aij, false));
+    //   // Side volume element computes linearisation with
+    //   material coordinates
+    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+    //       feMatSideLhs_dX =
+    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+    //               mField);
 
-  //   // Slave ALE!
+    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+    //       feMatSideLhs_dLambda =
+    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+    //               mField);
 
-  //   // Side volume element computes linearisation with spatial
-  //   coordinates
-  //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-  //       feMatSideLhs_Slave_dx =
-  //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-  //               mField);
-  //   // Side volume element computes linearisation with material
-  //   coordinates
-  //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-  //       feMatSideLhs_Slave_dX =
-  //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-  //               mField);
+    ///
+    //   feMatSideLhs_dX->getOpPtrVector().push_back(
+    //       new
+    //       OpContactMaterialVolOnMasterSideLhs_dX_dX(
+    //           mesh_node_field_name,
+    //           mesh_node_field_name,
+    //           common_data_simple_contact, aij,
+    //           false));
 
-  //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
-  //       feMatSideLhs_Slave_dLambda =
-  //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
-  //               mField);
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpContactMaterialMasterLhs_dX_dx(
+    //           mesh_node_field_name, field_name,
+    //           common_data_simple_contact,
+    //           feMatSideLhs_dx, side_fe_name, aij,
+    //           false));
 
-  //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           mesh_node_field_name, common_data_simple_contact->HMat));
-  //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           field_name, common_data_simple_contact->hMat));
+    //   // Master derivative over mesh_nodes
+    //   feMatSideLhs_dX->getOpPtrVector().push_back(
+    //       new
+    //       OpCalculateVectorFieldGradient<3,
+    //       3>(
+    //           mesh_node_field_name,
+    //           common_data_simple_contact->HMat));
 
-  //   // Master derivative over spatial
-  //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
-  //       new OpCalculateDeformation(mesh_node_field_name,
-  //                                  common_data_simple_contact, false));
+    //   feMatSideLhs_dX->getOpPtrVector().push_back(
+    //       new
+    //       OpCalculateVectorFieldGradient<3,
+    //       3>(
+    //           field_name,
+    //           common_data_simple_contact->hMat));
 
-  //   // error 1
-  //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
-  //       new OpContactMaterialVolOnSlaveSideLhs_dX_dx(
-  //           mesh_node_field_name, field_name, common_data_simple_contact,
-  //           aij, false));
+    //   feMatSideLhs_dX->getOpPtrVector().push_back(new
+    //   OpCalculateDeformation(
+    //       mesh_node_field_name,
+    //       common_data_simple_contact,
+    //       false));
 
-  //   //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
-  //   //   OpLoopMasterForSideLhs(
-  //   //       mesh_node_field_name, common_data_simple_contact,
-  //   //       feMatSideLhs_Slave_dx, side_fe_name));
+    //   //
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //   //     new
+    //   OpLoopMasterForSideLhs(mesh_node_field_name,
+    //   //
+    //   common_data_simple_contact,
+    //   // feMatSideLhs_dX,
+    //   side_fe_name));
 
-  //   // Not error?!
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpContactMaterialSlaveLhs_dX_dx(
-  //           mesh_node_field_name, field_name, common_data_simple_contact,
-  //           feMatSideLhs_Slave_dx, side_fe_name, aij, false));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new
+    //       OpContactMaterialMasterLhs_dX_dX(
+    //           mesh_node_field_name,
+    //           mesh_node_field_name,
+    //           common_data_simple_contact,
+    //           feMatSideLhs_dX,
+    //           side_fe_name,
+    //           aij, false));
 
-  //   // Slave derivative over mesh_nodes
-  //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           mesh_node_field_name, common_data_simple_contact->HMat));
+    //   //
+    //   feMatSideLhs_dLambda->getOpPtrVector().push_back(
+    //   //     new
+    //   OpContactMaterialVolOnMasterSideLhs_dX_dLagmult(
+    //   //
+    //   mesh_node_field_name,
+    //   lagrang_field_name,
+    //   //
+    //   common_data_simple_contact,
+    //   aij, false));
 
-  //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldGradient<3, 3>(
-  //           field_name, common_data_simple_contact->hMat));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new
+    //       OpContactMaterialMasterSlaveLhs_dX_dLagmult(
+    //           mesh_node_field_name,
+    //           lagrang_field_name,
+    //           common_data_simple_contact,
+    //           feMatSideLhs_dLambda,
+    //           side_fe_name,
+    //           aij,
+    //           false));
 
-  //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
-  //       new OpCalculateDeformation(mesh_node_field_name,
-  //                                  common_data_simple_contact, false));
+    //   // Slave
+    //   ALE!
 
-  //   // Error2!!!
-  //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
-  //       new OpContactMaterialVolOnSlaveSideLhs_dX_dX(
-  //           mesh_node_field_name, mesh_node_field_name,
-  //           common_data_simple_contact, aij, false));
+    //   // Side
+    //   volume
+    //   element
+    //   computes
+    //   linearisation
+    //   with
+    //   spatial
+    //   coordinates
+    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+    //       feMatSideLhs_Slave_dx
+    //       =
+    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+    //               mField);
+    //   // Side
+    //   volume
+    //   element
+    //   computes
+    //   linearisation
+    //   with
+    //   material
+    //   coordinates
+    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+    //       feMatSideLhs_Slave_dX
+    //       =
+    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+    //               mField);
 
-  //   // fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //   //     new OpLoopSlaveForSideLhs(mesh_node_field_name,
-  //   //                                common_data_simple_contact,
-  //   //                                feMatSideLhs_Slave_dX,
-  //   side_fe_name));
+    //   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnVolumeSide>
+    //       feMatSideLhs_Slave_dLambda =
+    //           boost::make_shared<VolumeElementForcesAndSourcesCoreOnVolumeSide>(
+    //               mField);
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpContactMaterialSlaveLhs_dX_dX(
-  //           mesh_node_field_name, mesh_node_field_name,
-  //           common_data_simple_contact, feMatSideLhs_Slave_dX,
-  //           side_fe_name, aij, false));
+    //   //
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(new
+    //   //
+    //   OpLoopMasterForSideLhs(
+    //   //
+    //   mesh_node_field_name,
+    //   common_data_simple_contact,
+    //   //
+    //   feMatSideLhs_Slave_dx,
+    //   side_fe_name));
 
-  //   fe_lhs_simple_contact->getOpPtrVector().push_back(
-  //       new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
-  //           mesh_node_field_name, lagrang_field_name,
-  //           common_data_simple_contact, feMatSideLhs_Slave_dLambda,
-  //           side_fe_name, aij, false));
+    //   // Not error?!
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpContactMaterialSlaveLhs_dX_dx(
+    //           mesh_node_field_name, field_name, common_data_simple_contact,
+    //           feMatSideLhs_Slave_dx, side_fe_name, aij, false));
 
-  //   // End
+    //   // Slave derivative over mesh_nodes
+    //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
+    //       new OpCalculateVectorFieldGradient<3, 3>(
+    //           mesh_node_field_name, common_data_simple_contact->HMat));
 
-  //   // feMatSideLhs_Slave_dLambda->getOpPtrVector().push_back(
-  //   //     new OpContactMaterialVolOnSlaveSideLhs_dX_dLagmult(
-  //   //         mesh_node_field_name, lagrang_field_name,
-  //   //         commonDataSimpleContact, aij, false));
+    //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
+    //       new OpCalculateVectorFieldGradient<3, 3>(
+    //           field_name, common_data_simple_contact->hMat));
 
-  //   // todo !!!
-  //   // feLhsSimpleContact->getOpPtrVector().push_back(
-  //   //     new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
-  //   //         mesh_node_field_name, lagrang_field_name,
-  //   //         commonDataSimpleContact, feMatSideLhs_Slave_dLambda,
-  //   //         side_fe_name, aij, false));
+    //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
+    //       new OpCalculateDeformation(mesh_node_field_name,
+    //                                  common_data_simple_contact, false));
 
-  //   // feLhsSimpleContact->getOpPtrVector().push_back(
-  //   //     new OpContactMaterialMasterSlaveLhs_dX_dX(
-  //   //         mesh_node_field_name, mesh_node_field_name,
-  //   //         commonDataSimpleContact, feMatSideLhs_Slave_dLambda,
-  //   //         side_fe_name, aij, false));
+    //   // Error2!!!
+    //   feMatSideLhs_Slave_dX->getOpPtrVector().push_back(
+    //       new OpContactMaterialVolOnSlaveSideLhs_dX_dX(
+    //           mesh_node_field_name, mesh_node_field_name,
+    //           common_data_simple_contact, aij, false));
 
-  //   // Slave
-  //   //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(new
-  //   //   OpCalculateDeformation(
-  //   //       mesh_node_field_name, commonDataSimpleContact, false));
-  //   //   //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
-  //   //   //       new OpContactMaterialVolOnSlaveSideLhs_dX_dx(
-  //   //   //           mesh_node_field_name, field_name,
-  //   //   commonDataSimpleContact,
-  //   //   //           aij, mapPressure[ms_id], surface_pressure, false));
-  //   //   feLhsSimpleContact->getOpPtrVector().push_back(new
-  //   //   OpLoopSlaveForSideLhs(
-  //   //       mesh_node_field_name, commonDataSimpleContact,
-  //   //       feMatSideLhs_Slave_dx, side_fe_name));
+    //   // fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //   //     new OpLoopSlaveForSideLhs(mesh_node_field_name,
+    //   //                                common_data_simple_contact,
+    //   //                                feMatSideLhs_Slave_dX,
+    //   side_fe_name));
 
-  //   //   //   feMatLhs.getOpPtrVector().push_back(
-  //   //   //       new OpContactMaterialMasterLhs_dX_dx(
-  //   //   //           mesh_node_field_name, field_name,
-  //   //   commonDataSimpleContact,
-  //   //   //           feMatSideLhs_Slave_dx, side_fe_name, aij,
-  //   //   mapPressure[ms_id],
-  //   //   //           surface_pressure, false));
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpContactMaterialSlaveLhs_dX_dX(
+    //           mesh_node_field_name, mesh_node_field_name,
+    //           common_data_simple_contact, feMatSideLhs_Slave_dX,
+    //           side_fe_name, aij, false));
 
-  MoFEMFunctionReturn(0);
+    //   fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //       new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
+    //           mesh_node_field_name, lagrang_field_name,
+    //           common_data_simple_contact, feMatSideLhs_Slave_dLambda,
+    //           side_fe_name, aij, false));
+
+    //   // End
+
+    //   // feMatSideLhs_Slave_dLambda->getOpPtrVector().push_back(
+    //   //     new OpContactMaterialVolOnSlaveSideLhs_dX_dLagmult(
+    //   //         mesh_node_field_name, lagrang_field_name,
+    //   //         commonDataSimpleContact, aij, false));
+
+    //   // todo !!!
+    //   // feLhsSimpleContact->getOpPtrVector().push_back(
+    //   //     new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
+    //   //         mesh_node_field_name, lagrang_field_name,
+    //   //         commonDataSimpleContact, feMatSideLhs_Slave_dLambda,
+    //   //         side_fe_name, aij, false));
+
+    //   // feLhsSimpleContact->getOpPtrVector().push_back(
+    //   //     new OpContactMaterialMasterSlaveLhs_dX_dX(
+    //   //         mesh_node_field_name, mesh_node_field_name,
+    //   //         commonDataSimpleContact, feMatSideLhs_Slave_dLambda,
+    //   //         side_fe_name, aij, false));
+
+    //   // Slave
+    //   //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(new
+    //   //   OpCalculateDeformation(
+    //   //       mesh_node_field_name, commonDataSimpleContact, false));
+    //   //   //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
+    //   //   //       new OpContactMaterialVolOnSlaveSideLhs_dX_dx(
+    //   //   //           mesh_node_field_name, field_name,
+    //   //   commonDataSimpleContact,
+    //   //   //           aij, mapPressure[ms_id], surface_pressure, false));
+    //   //   feLhsSimpleContact->getOpPtrVector().push_back(new
+    //   //   OpLoopSlaveForSideLhs(
+    //   //       mesh_node_field_name, commonDataSimpleContact,
+    //   //       feMatSideLhs_Slave_dx, side_fe_name));
+
+    //   //   //   feMatLhs.getOpPtrVector().push_back(
+    //   //   //       new OpContactMaterialMasterLhs_dX_dx(
+    //   //   //           mesh_node_field_name, field_name,
+    //   //   commonDataSimpleContact,
+    //   //   //           feMatSideLhs_Slave_dx, side_fe_name, aij,
+    //   //   mapPressure[ms_id],
+    //   //   //           surface_pressure, false));
+
+    MoFEMFunctionReturn(0);
 }

@@ -325,12 +325,16 @@ int main(int argc, char *argv[]) {
     Range nodes;
     CHKERR moab.get_adjacencies(master_tris, 0, false, nodes,
                                 moab::Interface::UNION);
-
     // CHKERR moab.get_adjacencies(all_tets, 0, false, nodes,
     //                             moab::Interface::UNION);
-    cerr << "nodes  " <<nodes <<"\n";
-    nodes.pop_front();
-    nodes.pop_back();
+    // cerr << "nodes  " <<nodes <<"\n";
+    // nodes.pop_front();
+    // nodes.pop_back();
+    Range slave_nodes;
+    // CHKERR moab.get_adjacencies(slave_tris, 0, false, slave_nodes,
+    //                             moab::Interface::UNION);
+
+    // nodes.merge(slave_nodes);
 
     boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
     boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
@@ -705,7 +709,7 @@ int main(int argc, char *argv[]) {
         common_data_simple_contact =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
-
+    common_data_simple_contact->forcesOnlyOnEntitiesRow.clear();
     common_data_simple_contact->forcesOnlyOnEntitiesRow = nodes;
 
     contact_problem->setContactOperatorsRhsALEMaterial(
