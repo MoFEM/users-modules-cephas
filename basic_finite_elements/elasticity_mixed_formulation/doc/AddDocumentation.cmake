@@ -14,6 +14,5 @@
 # copy dox/figures to html directory created by doxygen
 add_custom_target(elasticity_mixed_formulation
   ${CMAKE_COMMAND} -E copy_directory
-  ${PROJECT_SOURCE_DIR}/users_modules/basic_finite_elements/elasticity_mixed_formulation/doc/figures ${PROJECT_BINARY_DIR}/html
-)
+  ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
 add_dependencies(doc elasticity_mixed_formulation)

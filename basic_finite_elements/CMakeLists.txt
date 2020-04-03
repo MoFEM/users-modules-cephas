@@ -21,7 +21,7 @@ set(BFE_DIRS
   cohesive_interface
   magnetostatic
   poisson
-  basic
+  lessons
   hello_world
   hierarchical_approximation
   reaction_diffusion_equation

@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
                                  "-snes_rtol 1e-8 \n"
                                  "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
-                                 "-my_r_value 1. \n"
                                  "-my_cn_value 1. \n"
                                  "-my_is_newton_cotes 0 \n"
                                  "-my_is_test 0 \n";
@@ -70,6 +69,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool is_test = PETSC_FALSE;
+    PetscBool convect_pts = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -88,9 +88,6 @@ int main(int argc, char *argv[]) {
                             "process keeps only part of the mes",
                             "", PETSC_FALSE, &is_partitioned, PETSC_NULL);
 
-    CHKERR PetscOptionsReal("-my_r_value", "default regularisation r value", "",
-                            1., &r_value, PETSC_NULL);
-
     CHKERR PetscOptionsReal("-my_cn_value", "default regularisation cn value",
                             "", 1., &cn_value, PETSC_NULL);
 
@@ -99,6 +96,8 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_is_test", "set if run as test", "",
                             PETSC_FALSE, &is_test, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
+                            PETSC_FALSE, &convect_pts, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -228,13 +227,6 @@ int main(int argc, char *argv[]) {
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
 
-    // cout << "contact_prisms: " << contact_prisms.size() << endl;
-    // contact_prisms.print();
-    // cout << "master_tris: " << master_tris.size() << endl;
-    // master_tris.print();
-    // cout << "slave_tris: " << slave_tris.size() << endl;
-    // slave_tris.print();
-
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
@@ -286,9 +278,87 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
-    boost::shared_ptr<SimpleContactProblem> contact_problem;
-    contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, r_value, cn_value, is_newton_cotes));
+    if (true) {
+      CHKERR m_field.add_finite_element("CONTACT_VTK");
+      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+                                                         "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+                                                         "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+                                                          "SPATIAL_POSITION");
+
+      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+                                                         "LAGMULT");
+      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+                                                         "LAGMULT");
+      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+                                                          "LAGMULT");
+      CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
+                                                        "CONTACT_VTK");
+    }
+
+    auto make_contact_element = [&]() {
+      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+          m_field);
+    };
+
+    auto make_convective_master_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectMasterContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
+    auto make_convective_slave_element = [&]() {
+      return boost::make_shared<
+          SimpleContactProblem::ConvectSlaveContactElement>(
+          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    };
+
+    auto make_contact_common_data = [&]() {
+      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+          m_field);
+    };
+
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_traction_rhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_traction_lhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
+    auto get_master_contact_lhs = [&](auto contact_problem, auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
+    auto contact_problem = boost::make_shared<SimpleContactProblem>(
+        m_field, cn_value, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
@@ -331,6 +401,9 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
+    if (true) {
+      CHKERR DMMoFEMAddElement(dm, "CONTACT_VTK");
+    }
 
     CHKERR DMSetUp(dm);
 
@@ -361,33 +434,6 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
 
-    elastic.getLoopFeRhs().snes_f = F;
-
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_rhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_lhs_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_post_proc_simple_contact =
-            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-                m_field);
-
-    boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
-        common_data_simple_contact =
-            boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
-                m_field);
-
-    contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT");
-    contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                            common_data_simple_contact,
-                                            "SPATIAL_POSITION", "LAGMULT", Aij);
-
     // Assemble pressure and traction forces
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     CHKERR MetaNeumannForces::setMomentumFluxOperators(
@@ -415,11 +461,28 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM", fe_rhs_simple_contact,
-                                  PETSC_NULL, PETSC_NULL);
+    if (convect_pts == PETSC_TRUE) {
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_convective_master_element),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem,
+                                  make_convective_slave_element),
+          PETSC_NULL, PETSC_NULL);
+    } else {
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
+          PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element),
+          PETSC_NULL, PETSC_NULL);
+    }
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
@@ -430,8 +493,27 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
                                   fe_null);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM", fe_lhs_simple_contact,
-                                  NULL, NULL);
+    if (convect_pts == PETSC_TRUE) {
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_contact_lhs(contact_problem,
+                                 make_convective_master_element),
+          NULL, NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem,
+                                  make_convective_slave_element),
+          NULL, NULL);
+    } else {
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_contact_lhs(contact_problem, make_contact_element), NULL,
+          NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem, make_contact_element), NULL,
+          NULL);
+    }
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
@@ -518,6 +600,16 @@ int main(int argc, char *argv[]) {
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
 
+    auto common_data_simple_contact = make_contact_common_data();
+
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_post_proc_simple_contact;
+    if (convect_pts == PETSC_TRUE) {
+      fe_post_proc_simple_contact = make_convective_master_element();
+    } else {
+      fe_post_proc_simple_contact = make_contact_element();
+    }
+
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
         "SPATIAL_POSITION", "LAGMULT", mb_post);
@@ -552,6 +644,32 @@ int main(int argc, char *argv[]) {
                        out_file_name.c_str());
     CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                               "PARALLEL=WRITE_PART");
+
+    if (true) {
+
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+          new PostProcFaceOnRefinedMesh(m_field));
+
+      CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+
+      auto common_post_proc_data_simple_contact = make_contact_common_data();
+
+      CHKERR contact_problem->setPostProcContactOperators(
+          post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+          common_post_proc_data_simple_contact);
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
+      std::ostringstream stm;
+      std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
+      stm << "file_name_for_lagrange"
+          << ".h5m";
+
+      out_file_name = stm.str();
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                         out_file_name.c_str());
+      CHKERR post_proc_contact_ptr->postProcMesh.write_file(
+          out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+    }
 
     EntityHandle out_meshset_slave_tris;
     EntityHandle out_meshset_master_tris;
