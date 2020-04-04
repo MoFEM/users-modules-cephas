@@ -269,7 +269,7 @@ int main(int argc, char *argv[]) {
     feRhs->getRuleHook = NavierStokesElement::VolRule();
 
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
-        boost::make_shared<NavierStokesElement::CommonData>();
+        boost::make_shared<NavierStokesElement::CommonData>(m_field);
     // CHKERR commonData.getParameters();
 
     // std::map<int, NavierStokesElement::BlockData> setOfBlocksData;

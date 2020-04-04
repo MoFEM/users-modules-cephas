@@ -79,12 +79,13 @@ struct NavierStokesElement {
     VectorDouble3 pressureDragForce;
     VectorDouble3 viscousDragForce;
     VectorDouble3 totalDragForce;
-    VectorDouble3 volumeFlux;
+
+    SmartPetscObj<Vec> volumeFluxVec;
 
     std::map<int, BlockData> setOfBlocksData;
     std::map<int, BlockData> setOfFacesData;
 
-    CommonData() {
+    CommonData(MoFEM::Interface &m_field) {
 
       gradVelPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       velPtr = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
@@ -97,12 +98,19 @@ struct NavierStokesElement {
       pressureDragForce = VectorDouble3(3);
       viscousDragForce = VectorDouble3(3);
       totalDragForce = VectorDouble3(3);
-      volumeFlux = VectorDouble3(3);
+
+      int volume_flux_vec_size;
+      if (!m_field.get_comm_rank())
+        volume_flux_vec_size = 3;
+      else
+        volume_flux_vec_size = 0;
+
+      volumeFluxVec =
+          createSmartVectorMPI(m_field.get_comm(), volume_flux_vec_size, 3);
 
       pressureDragForce.clear();
       viscousDragForce.clear();
       totalDragForce.clear();
-      volumeFlux.clear();
     }
 
     MoFEMErrorCode getParameters() {
@@ -364,21 +372,21 @@ struct NavierStokesElement {
     int nbIntegrationPts;
 
     OpCalcVolumeFlux(const string field_name,
-                  boost::shared_ptr<CommonData> common_data,
-                  BlockData &block_data)
+                     boost::shared_ptr<CommonData> common_data,
+                     BlockData &block_data)
         : UserDataOperator(field_name, UserDataOperator::OPROW),
           commonData(common_data), blockData(block_data){};
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
-  struct OpCalcDragForce: public FaceUserDataOperator {
+  struct OpCalcDragForce : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
     BlockData &blockData;
 
     OpCalcDragForce(boost::shared_ptr<CommonData> &common_data,
-                            BlockData &block_data)
+                    BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               "P", UserDataOperator::OPROW),
           commonData(common_data), blockData(block_data) {
@@ -426,11 +434,10 @@ struct NavierStokesElement {
     std::vector<EntityHandle> &mapGaussPts;
     BlockData &blockData;
 
-    OpPostProcDrag(
-        moab::Interface &post_proc_mesh,
-        std::vector<EntityHandle> &map_gauss_pts, 
-        boost::shared_ptr<CommonData> &common_data,
-        BlockData &block_data)
+    OpPostProcDrag(moab::Interface &post_proc_mesh,
+                   std::vector<EntityHandle> &map_gauss_pts,
+                   boost::shared_ptr<CommonData> &common_data,
+                   BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               "U", UserDataOperator::OPROW),
           commonData(common_data), postProcMesh(post_proc_mesh),

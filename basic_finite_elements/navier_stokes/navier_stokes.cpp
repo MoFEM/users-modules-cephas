@@ -340,8 +340,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_ents_to_finite_element_by_dim(0, 3, "NAVIER_STOKES");
     }
 
-    boost::shared_ptr<NavierStokesElement::CommonData> commonData =
-        boost::make_shared<NavierStokesElement::CommonData>();
+    boost::shared_ptr<NavierStokesElement::CommonData> common_data =
+        boost::make_shared<NavierStokesElement::CommonData>(m_field);
 
     double rho, mu, Re;
 
@@ -349,7 +349,7 @@ int main(int argc, char *argv[]) {
       if (bit->getName().compare(0, 9, "MAT_FLUID") == 0) {
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_dimension(
-            bit->getMeshset(), 3, commonData->setOfBlocksData[id].eNts, true);
+            bit->getMeshset(), 3, common_data->setOfBlocksData[id].eNts, true);
 
         std::vector<double> attributes;
         bit->getAttributes(attributes);
@@ -358,12 +358,12 @@ int main(int argc, char *argv[]) {
                    "should be at least 2 attributes but is %d",
                    attributes.size());
         }
-        commonData->setOfBlocksData[id].iD = id;
-        commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
-        commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+        common_data->setOfBlocksData[id].iD = id;
+        common_data->setOfBlocksData[id].fluidViscosity = attributes[0];
+        common_data->setOfBlocksData[id].fluidDensity = attributes[1];
 
-        mu = commonData->setOfBlocksData[id].fluidViscosity;
-        rho = commonData->setOfBlocksData[id].fluidDensity;
+        mu = common_data->setOfBlocksData[id].fluidViscosity;
+        rho = common_data->setOfBlocksData[id].fluidDensity;
       }
     }
 
@@ -373,23 +373,23 @@ int main(int argc, char *argv[]) {
         Range tets, tet;
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
-            bit->getMeshset(), MBTRI, commonData->setOfFacesData[id].eNts,
+            bit->getMeshset(), MBTRI, common_data->setOfFacesData[id].eNts,
             true);
-        solid_faces.merge(commonData->setOfFacesData[id].eNts);
-        CHKERR moab.get_adjacencies(commonData->setOfFacesData[id].eNts, 3,
+        solid_faces.merge(common_data->setOfFacesData[id].eNts);
+        CHKERR moab.get_adjacencies(common_data->setOfFacesData[id].eNts, 3,
                                     true, tets, moab::Interface::UNION);
         tet = Range(tets.front(), tets.front());
-        for (auto &bit : commonData->setOfBlocksData) {
+        for (auto &bit : common_data->setOfBlocksData) {
           if (bit.second.eNts.contains(tet)) {
-            commonData->setOfFacesData[id].fluidViscosity =
+            common_data->setOfFacesData[id].fluidViscosity =
                 bit.second.fluidViscosity;
-            commonData->setOfFacesData[id].fluidDensity =
+            common_data->setOfFacesData[id].fluidDensity =
                 bit.second.fluidDensity;
-            commonData->setOfFacesData[id].iD = id;
+            common_data->setOfFacesData[id].iD = id;
             break;
           }
         }
-        if (commonData->setOfFacesData[id].fluidViscosity < 0) {
+        if (common_data->setOfFacesData[id].fluidViscosity < 0) {
           SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                   "Cannot find a fluid block adjacent to a given solid face");
         }
@@ -493,42 +493,38 @@ int main(int argc, char *argv[]) {
     if (!solid_faces.empty()) {
       NavierStokesElement::setCalcDragOperators(drag_fe_ptr, side_drag_fe_ptr,
                                                 "NAVIER_STOKES", "VELOCITY",
-                                                "PRESSURE", commonData);
+                                                "PRESSURE", common_data);
     }
 
     if (mesh_has_tets) {
       if (stokes_flow) {
         CHKERR NavierStokesElement::setStokesOperators(
-            fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", commonData);
+            fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", common_data);
       } else {
         CHKERR NavierStokesElement::setNavierStokesOperators(
-            fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", commonData);
+            fe_rhs_ptr, fe_lhs_ptr, "VELOCITY", "PRESSURE", common_data);
       }
       CHKERR NavierStokesElement::setCalcVolumeFluxOperators(
-          fe_flux_ptr, "VELOCITY", commonData);
+          fe_flux_ptr, "VELOCITY", common_data);
     }
     if (mesh_has_prisms) {
       if (stokes_flow) {
         CHKERR NavierStokesElement::setStokesOperators(
             prism_fe_rhs_ptr, prism_fe_lhs_ptr, "VELOCITY", "PRESSURE",
-            commonData, MBPRISM);
+            common_data, MBPRISM);
       } else {
         CHKERR NavierStokesElement::setNavierStokesOperators(
             prism_fe_rhs_ptr, prism_fe_lhs_ptr, "VELOCITY", "PRESSURE",
-            commonData, MBPRISM);
+            common_data, MBPRISM);
       }
       CHKERR NavierStokesElement::setCalcVolumeFluxOperators(
-          prism_fe_flux_ptr, "VELOCITY", commonData, MBPRISM);
+          prism_fe_flux_ptr, "VELOCITY", common_data, MBPRISM);
     }
 
-    Mat Aij;      // Stiffness matrix
-    Vec D, D0, F; //, D0; // Vector of DOFs and the RHS
-
-    CHKERR DMCreateGlobalVector(dm, &D);
-    CHKERR VecDuplicate(D, &D0);
-    CHKERR VecDuplicate(D, &F);
-    CHKERR DMCreateMatrix(dm, &Aij);
-    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+    auto D = smartCreateDMVector(dm);
+    auto D0 = smartVectorDuplicate(D);
+    auto F = smartVectorDuplicate(D);
+    auto Aij = smartCreateDMMatrix(dm);
 
     CHKERR VecZeroEntries(F);
     CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
@@ -547,6 +543,7 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateBegin(D0, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D0, INSERT_VALUES, SCATTER_FORWARD);
 
+    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(Aij);
 
     // CHKERR VecView(D, PETSC_VIEWER_STDOUT_WORLD);
@@ -625,26 +622,26 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetFromOptions(snes);
     }
 
-    Vec G;
-    CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
-    VectorDouble3 vecGlobal = VectorDouble3(3);
+    // Vec G;
+    // CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
+    // VectorDouble3 vecGlobal = VectorDouble3(3);
 
-    auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
-      MoFEMFunctionBegin;
+    // auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
+    //   MoFEMFunctionBegin;
 
-      CHKERR VecZeroEntries(G);
-      CHKERR VecAssemblyBegin(G);
-      CHKERR VecAssemblyEnd(G);
+    //   CHKERR VecZeroEntries(G);
+    //   CHKERR VecAssemblyBegin(G);
+    //   CHKERR VecAssemblyEnd(G);
 
-      int ind[3] = {0, 1, 2};
-      CHKERR VecSetValues(G, 3, ind, loc.data().begin(), ADD_VALUES);
-      CHKERR VecAssemblyBegin(G);
-      CHKERR VecAssemblyEnd(G);
+    //   int ind[3] = {0, 1, 2};
+    //   CHKERR VecSetValues(G, 3, ind, loc.data().begin(), ADD_VALUES);
+    //   CHKERR VecAssemblyBegin(G);
+    //   CHKERR VecAssemblyEnd(G);
 
-      CHKERR VecGetValues(G, 3, ind, res.data().begin());
+    //   CHKERR VecGetValues(G, 3, ind, res.data().begin());
 
-      MoFEMFunctionReturn(0);
-    };
+    //   MoFEMFunctionReturn(0);
+    // };
 
     SNESConvergedReason snes_reason;
     int number_of_diverges = 0;
@@ -666,15 +663,15 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_ptr->addFieldValuesGradientPostProc("VELOCITY");
 
       // loop over blocks
-      for (auto &sit : commonData->setOfBlocksData) {
+      for (auto &sit : common_data->setOfBlocksData) {
 
         post_proc_ptr->getOpPtrVector().push_back(
             new OpCalculateVectorFieldGradient<3, 3>("VELOCITY",
-                                                     commonData->gradVelPtr));
+                                                     common_data->gradVelPtr));
         // post_proc_ptr->getOpPtrVector().push_back(
         //     new NavierStokesElement::OpPostProcVorticity(
         //         post_proc_ptr->postProcMesh, post_proc_ptr->mapGaussPts,
-        //         commonData, sit.second));
+        //         common_data, sit.second));
       }
     }
 
@@ -705,15 +702,10 @@ int main(int argc, char *argv[]) {
 
       CHKERR NavierStokesElement::setPostProcDragOperators(
           post_proc_drag_ptr, side_drag_fe_ptr, "NAVIER_STOKES", "VELOCITY",
-          "PRESSURE", commonData);
+          "PRESSURE", common_data);
     }
 
     double frac = 0;
-    // if (flg_load_file == PETSC_TRUE)
-    //   NavierStokesElement::LoadScale::lambda = lambda0;
-    // else
-    //   NavierStokesElement::LoadScale::lambda = 0;
-
     int ss = 0;
     if (is_restart) {
       string str(mesh_file_name);
@@ -754,13 +746,13 @@ int main(int argc, char *argv[]) {
 
       if (stokes_flow) {
         re_number = 0.0;
-        for (auto &bit : commonData->setOfBlocksData) {
+        for (auto &bit : common_data->setOfBlocksData) {
           bit.second.inertiaCoef = 0.0;
           bit.second.viscousCoef = 1.0;
         }
       } else {
         re_number = rho / mu * velocity_scale * length_scale * lambda;
-        for (auto &bit : commonData->setOfBlocksData) {
+        for (auto &bit : common_data->setOfBlocksData) {
           bit.second.inertiaCoef = re_number;
           bit.second.viscousCoef = 1.0;
         }
@@ -841,13 +833,23 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES",
                                         prism_post_proc_ptr);
 
-        commonData->volumeFlux.clear();
+        CHKERR VecZeroEntries(common_data->volumeFluxVec);
+
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", fe_flux_ptr);
         CHKERR DMoFEMLoopFiniteElements(dm, "NAVIER_STOKES", prism_fe_flux_ptr);
 
-        compute_global_vec(commonData->volumeFlux, vecGlobal);
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Volumetric flux: (%g, %g, %g)\n",
-                           vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+        CHKERR VecAssemblyBegin(common_data->volumeFluxVec);
+        CHKERR VecAssemblyEnd(common_data->volumeFluxVec);
+
+        const double *array;
+        CHKERR VecGetArrayRead(common_data->volumeFluxVec, &array);
+
+        if (!m_field.get_comm_rank()) {
+          CHKERR PetscPrintf(PETSC_COMM_SELF, "Volumetric flux: (%g, %g, %g)\n",
+                             array[0], array[1], array[2]);
+        }
+
+        CHKERR VecRestoreArrayRead(common_data->volumeFluxVec, &array);
 
         string out_file_name;
 
@@ -881,22 +883,24 @@ int main(int argc, char *argv[]) {
           CHKERR post_proc_drag_ptr->postProcMesh.write_file(
               out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
 
-          commonData->pressureDragForce.clear();
-          commonData->viscousDragForce.clear();
-          commonData->totalDragForce.clear();
+          common_data->pressureDragForce.clear();
+          common_data->viscousDragForce.clear();
+          common_data->totalDragForce.clear();
           CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", drag_fe_ptr);
 
-          compute_global_vec(commonData->pressureDragForce, vecGlobal);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g, %g)\n",
-                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+          // compute_global_vec(common_data->pressureDragForce, vecGlobal);
+          // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g,
+          // %g)\n",
+          //                    vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
-          compute_global_vec(commonData->viscousDragForce, vecGlobal);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g, %g)\n",
-                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+          // compute_global_vec(common_data->viscousDragForce, vecGlobal);
+          // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g,
+          // %g)\n",
+          //                    vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
-          compute_global_vec(commonData->totalDragForce, vecGlobal);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
-                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+          // compute_global_vec(common_data->totalDragForce, vecGlobal);
+          // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
+          //                    vecGlobal[0], vecGlobal[1], vecGlobal[2]);
         }
       }
 
@@ -917,13 +921,7 @@ int main(int argc, char *argv[]) {
     }
 
     CHKERR SNESDestroy(&snes);
-    CHKERR MatDestroy(&Aij);
-    CHKERR VecDestroy(&D);
-    CHKERR VecDestroy(&D0);
-    CHKERR VecDestroy(&F);
     CHKERR DMDestroy(&dm);
-
-    CHKERR VecDestroy(&G);
   }
   CATCH_ERRORS;
 

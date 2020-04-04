@@ -745,28 +745,37 @@ MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(int side,
     MoFEMFunctionReturnHot(0);
   }
 
-  const int nb_gauss_pts = commonData->velPtr->size2();
+  const int nb_gauss_pts = getGaussPts().size2();
 
   auto t_u = getFTensor1FromMat<3>(*commonData->velPtr);
+  auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
+  //const double vol = getVolume(); ///< Get Volume of element
   
   FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
+
+  FTensor::Tensor1<double, 3> t_flux;
+  t_flux(i) = 0.0; // Zero entries
 
   // loop over all integration points
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-    double w = getVolume() * getGaussPts()(3, gg);
-
+    double vol = getVolume();
     if (getHoGaussPtsDetJac().size() > 0) {
-      w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
+      vol *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    for (int dd = 0; dd != 3; dd++) {
-      commonData->volumeFlux[dd] += w * t_u(dd);
-    } 
+    t_flux(i) += t_w * vol * t_u(i);
 
+    ++t_w;
     ++t_u;
   }
+
+  // Set array of indices
+  constexpr std::array<int, 3> indices = {0, 1, 2};
+
+  // Assemble volumetric flux
+  CHKERR VecSetValues(commonData->volumeFluxVec, 3, indices.data(), &t_flux(0),
+                      ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
