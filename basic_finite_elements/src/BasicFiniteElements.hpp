@@ -67,6 +67,7 @@ extern "C" {
 #include <SpringElement.hpp>
 #include <NavierStokesElement.hpp>
 #include <SimpleContact.hpp>
+#include <ThinFluidFlow.hpp>
 #include <SimpleRodElement.hpp>
 
 using namespace BasicFiniteElements;

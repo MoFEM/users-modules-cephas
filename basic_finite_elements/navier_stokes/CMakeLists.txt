@@ -21,6 +21,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 bfe_build_and_install(navier_stokes
   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes.cpp
 )
+
+bfe_build_and_install(reynolds
+  ${CMAKE_CURRENT_SOURCE_DIR}/reynolds.cpp
+)
+
 # bfe_build_and_install(navier_stokes_prisms
 #   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes_prisms.cpp
 # )
