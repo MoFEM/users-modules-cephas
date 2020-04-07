@@ -44,6 +44,8 @@ int main(int argc, char *argv[]) {
     PetscBool flg_mesh_file = PETSC_TRUE;
     char mesh_file_name[255];
 
+    PetscBool fluid_surface = PETSC_FALSE;
+
     int nb_layers = 1; // default number of prism layers
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "ADD_PRISMS_LAYER", "none");
@@ -51,8 +53,11 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_mesh_file);
 
-    CHKERR PetscOptionsInt("-nb_layers", "number oflayers", "", nb_layers,
+    CHKERR PetscOptionsInt("-my_nb_layers", "number oflayers", "", nb_layers,
                            &nb_layers, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_fluid_surface", "", "", PETSC_FALSE,
+                            &fluid_surface, PETSC_NULL);
 
     int ierr = PetscOptionsEnd();
     CHKERRG(ierr);
@@ -83,41 +88,44 @@ int main(int argc, char *argv[]) {
     const int ID_FLUID_BLOCK = 2000;
     const int ID_INLET_PRESS = 2001;
     const int ID_OUTLET_PRESS = 2002;
-    const int ID_SYMMETRY_DISP = 2003;
-    const int ID_INLET_DISP = 2004;
-    const int ID_OUTLET_DISP = 2005;
-    const int ID_FIXED_DISP = 2006;
+    const int ID_SYMMETRY_VEL = 2003;
+    const int ID_INLET_VEL = 2004;
+    const int ID_OUTLET_VEL = 2005;
+    const int ID_FIXED_VEL = 2006;
 
-    // const int ID_FAR_FIELD_DISP = 2007;
+    const int ID_FLUID_SURFACE = 2010;
+
+    // const int ID_FAR_FIELD_VEL = 2007;
 
     PrismsFromSurfaceInterface *prisms_from_surface_interface;
     CHKERR m_field.getInterface(prisms_from_surface_interface);
-
+ 
     MeshsetsManager *mmanager_ptr;
-    Range tris;
+    Range bot_tris;
     CHKERR m_field.query_interface(mmanager_ptr);
 
-    CHKERR mmanager_ptr->getEntitiesByDimension(ID_SOLID_SURFACE, SIDESET, 2,
-                                                tris, true);
+    CHKERR mmanager_ptr->getEntitiesByDimension(ID_SOLID_SURFACE, BLOCKSET, 2,
+                                                bot_tris, true);
 
-    cout << "Solid surface: " << tris.size() << " face(s)" << endl;
-    // tris.print();
+    cout << "Solid surface: " << bot_tris.size() << " face(s)" << endl;
+    // bot_tris.print();
 
-    // Range nodes;
-    // CHKERR moab.get_connectivity(tris, nodes);
-    // double coords[3], director[3];
-    // double B = 0.05;
-    // double L = 1.0;
-    // for (Range::iterator nit = nodes.begin(); nit != nodes.end(); nit++) {
-    //   CHKERR moab.get_coords(&*nit, 1, coords);
-    //   director[0] = 0.0;
-    //   director[1] = 0.0;
-    //   director[2] = -B * (1. - cos(2 * M_PI * coords[0] / L) *
-    //                                cos(2 * M_PI * coords[1] / L));
-    //   // director[2] = - 0.01; //-B * (1 - coords[0])
-    //   cblas_daxpy(3, 1, director, 1, coords, 1);
-    //   CHKERR moab.set_coords(&*nit, 1, coords);
-    // }
+    Range nodes;
+    CHKERR moab.get_connectivity(bot_tris, nodes);
+    double coords[3], director[3];
+    double B = 0.1;
+    double L = 1.0;
+    for (Range::iterator nit = nodes.begin(); nit != nodes.end(); nit++) {
+      CHKERR moab.get_coords(&*nit, 1, coords);
+      director[0] = 0.0;
+      director[1] = 0.0;
+      // director[2] = -B * (1. - cos(2 * M_PI * coords[0] / L) *
+      //                              cos(2 * M_PI * coords[1] / L));
+     //  director[2] = -B - B * (1. - cos(2 * M_PI * coords[0] / L));                             
+      director[2] = -B * coords[0];
+      cblas_daxpy(3, 1, director, 1, coords, 1);
+      CHKERR moab.set_coords(&*nit, 1, coords);
+    }
 
     auto set_thickness = [&](const Range &prisms, int nb_layers) {
       MoFEMFunctionBegin;
@@ -149,7 +157,7 @@ int main(int argc, char *argv[]) {
     };
 
     Range prisms, new_layer, prev_layer;
-    CHKERR prisms_from_surface_interface->createPrisms(tris, new_layer);
+    CHKERR prisms_from_surface_interface->createPrisms(bot_tris, new_layer);
     prisms.merge(new_layer);
     // prisms_from_surface_interface->createdVertices.clear();
     CHKERR set_thickness(new_layer, nb_layers);
@@ -176,7 +184,7 @@ int main(int argc, char *argv[]) {
     CHKERR prisms_from_surface_interface->seedPrismsEntities(prisms,
                                                              bit_level0);
 
-    //cout << "FLUID: " << prisms.size() << " prism(s)" << endl;
+    // cout << "FLUID: " << prisms.size() << " prism(s)" << endl;
     // prisms.print();
 
     auto add_quads_set = [&](const int old_set_id, const int new_set_id,
@@ -186,14 +194,14 @@ int main(int argc, char *argv[]) {
       cout << new_set_name << endl;
 
       Range edges, quads, quads_layer;
-      CHKERR mmanager_ptr->getEntitiesByDimension(old_set_id, SIDESET, 1, edges,
-                                                  true);
+      CHKERR mmanager_ptr->getEntitiesByDimension(old_set_id, BLOCKSET, 1,
+                                                  edges, true);
       CHKERR moab.get_adjacencies(edges, 2, true, quads,
                                   moab::Interface::UNION);
 
       quads = quads.subset_by_type(MBQUAD);
-      //cout << "first layer faces: " << quads.size() << endl;
-      //quads.print();
+      // cout << "first layer faces: " << quads.size() << endl;
+      // quads.print();
 
       quads_layer = quads;
       for (int i = 1; i < nb_layers; i++) {
@@ -206,16 +214,16 @@ int main(int argc, char *argv[]) {
                                     moab::Interface::UNION);
         adj_quads = adj_quads.subset_by_type(MBQUAD);
         adj_quads = subtract(adj_quads, quads);
-        //cout << "adj quads: " << adj_quads.size() << endl;
-        //adj_quads.print();
+        // cout << "adj quads: " << adj_quads.size() << endl;
+        // adj_quads.print();
 
         CHKERR moab.get_adjacencies(quads_layer, 3, true, prisms_layer,
                                     moab::Interface::UNION);
         CHKERR moab.get_adjacencies(prisms_layer, 2, true, tris_layer,
                                     moab::Interface::UNION);
         tris_layer = tris_layer.subset_by_type(MBTRI);
-        //cout << "prism layer tris: " << tris_layer.size() << endl;
-        //tris_layer.print();
+        // cout << "prism layer bot_tris: " << tris_layer.size() << endl;
+        // tris_layer.print();
 
         CHKERR moab.get_adjacencies(tris_layer, 3, true, prisms_next_layer,
                                     moab::Interface::UNION);
@@ -229,8 +237,8 @@ int main(int argc, char *argv[]) {
 
         quads_layer = intersect(quads_layer, adj_quads);
 
-        //cout << "quads layer: " << quads_layer.size() << endl;
-        //quads_layer.print();
+        // cout << "quads layer: " << quads_layer.size() << endl;
+        // quads_layer.print();
 
         Range nodes;
         CHKERR moab.get_connectivity(quads_layer, nodes);
@@ -245,8 +253,8 @@ int main(int argc, char *argv[]) {
         quads.merge(quads_layer);
       }
 
-      //cout << new_set_name << ": " << quads.size() << " face(s)" << endl;
-      //quads.print();
+      // cout << new_set_name << ": " << quads.size() << " face(s)" << endl;
+      // quads.print();
 
       CHKERR mmanager_ptr->addMeshset(BLOCKSET, new_set_id, new_set_name);
       CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, new_set_id, quads);
@@ -277,7 +285,7 @@ int main(int argc, char *argv[]) {
       CHKERR skinner.find_skin(0, prisms, 2, faces);
       faces = faces.subset_by_type(MBTRI);
 
-      faces = subtract(faces, tris);
+      faces = subtract(faces, bot_tris);
 
       cout << new_set_name << ": " << faces.size() << " faces(s)" << endl;
       // faces.print();
@@ -288,27 +296,55 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    add_quads_set(ID_INLET_EDGE, ID_INLET_PRESS, "INLET_PRESS");
-    add_quads_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "OUTLET_PRESS");
+    auto add_edges_set = [&](const int old_set_id, const int new_set_id,
+                             const std::string new_set_name) {
+      MoFEMFunctionBegin;
 
-    add_quads_set(ID_SYMMETRY_EDGE, ID_SYMMETRY_DISP, "SYMMETRY_DISP");
-    add_quads_set(ID_INLET_EDGE, ID_INLET_DISP, "INLET_DISP");
-    add_quads_set(ID_OUTLET_EDGE, ID_OUTLET_DISP, "OUTLET_DISP");
+      Range edges, quads, new_edges;
+      CHKERR mmanager_ptr->getEntitiesByDimension(old_set_id, BLOCKSET, 1,
+                                                  edges, true);
+      CHKERR moab.get_adjacencies(edges, 2, true, quads,
+                                  moab::Interface::UNION);
 
-    add_skin_tris_set(ID_FIXED_DISP, "FIXED_DISP");
+      quads = quads.subset_by_type(MBQUAD);
+      Range quads_edges;
+      CHKERR moab.get_adjacencies(quads, 1, true, quads_edges,
+                                  moab::Interface::UNION);
 
-    // add_top_tris_set(ID_FAR_FIELD_DISP, "FAR_FIELD_DISP");
+      Range top_tris;
+      CHKERR skinner.find_skin(0, prisms, 2, top_tris);
+      top_tris = top_tris.subset_by_type(MBTRI);
+      top_tris = subtract(top_tris, bot_tris);
+      Range top_tris_edges;
+      CHKERR moab.get_adjacencies(top_tris, 1, true, top_tris_edges,
+                                  moab::Interface::UNION);
 
-    // CHKERR mmanager_ptr->addMeshset(BLOCKSET, ID_FIXED_DISP,
-    // "FIXED_DISP"); CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET,
-    // ID_FIXED_DISP, tris); cout << "FIXED_DISP"
-    //      << ": " << tris.size() << " faces(s)" << endl;
-    // tris.print();
+      new_edges = intersect(quads_edges, top_tris_edges);
+
+      CHKERR mmanager_ptr->addMeshset(BLOCKSET, new_set_id, new_set_name);
+      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, new_set_id,
+                                                new_edges);
+
+      MoFEMFunctionReturn(0);
+    };
+
+    if (fluid_surface) {
+      CHKERR add_top_tris_set(ID_FLUID_SURFACE, "FLUID_SURFACE");
+      CHKERR add_edges_set(ID_INLET_EDGE, ID_INLET_PRESS, "INLET_PRESS");
+      CHKERR add_edges_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "OUTLET_PRESS");
+    } 
+    else {
+      CHKERR add_quads_set(ID_INLET_EDGE, ID_INLET_PRESS, "INLET_PRESS");
+      CHKERR add_quads_set(ID_OUTLET_EDGE, ID_OUTLET_PRESS, "OUTLET_PRESS");
+
+      CHKERR add_quads_set(ID_SYMMETRY_EDGE, ID_SYMMETRY_VEL, "SYMMETRY_VEL");
+      CHKERR add_quads_set(ID_INLET_EDGE, ID_INLET_VEL, "INLET_VEL");
+      CHKERR add_quads_set(ID_OUTLET_EDGE, ID_OUTLET_VEL, "OUTLET_VEL");
+
+      CHKERR add_skin_tris_set(ID_FIXED_VEL, "FIXED_VEL");
+    }
 
     CHKERR mmanager_ptr->setMeshsetFromFile("bc.cfg");
-
-    // CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-    // meshset); CHKERR moab.add_entities(meshset, prisms);
 
     CHKERR mmanager_ptr->printDisplacementSet();
     CHKERR mmanager_ptr->printMaterialsSet();
@@ -327,7 +363,7 @@ int main(int argc, char *argv[]) {
     CHKERR moab.write_file("prisms_layer_skin.vtk", "VTK", "",
                            &out_meshset_skin, 1);
 
-    CHKERR moab.delete_entities(&out_meshset_skin, 1);                       
+    CHKERR moab.delete_entities(&out_meshset_skin, 1);
   }
   CATCH_ERRORS;
 

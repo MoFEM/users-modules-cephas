@@ -114,30 +114,32 @@ int main(int argc, char *argv[]) {
     // print block sets with materials
     CHKERR mmanager_ptr->printMaterialsSet();
 
-
-
     Range slave_tris, tris;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit)) {
-      if (cit->getName().compare(0, 8, "REYNOLDS") == 0) {
+      if (cit->getName().compare(0, 10, "FLUID_SURF") == 0) {
         tris.clear();
         CHKERR mmanager_ptr->getEntitiesByDimension(cit->getMeshsetId(),
-                                                     BLOCKSET, 2, tris, true);
+                                                    BLOCKSET, 2, tris, true);
         slave_tris.merge(tris);
       }
-    }
+    } 
+ 
+    slave_tris.print();
 
-    BitRefLevel bit0 = BitRefLevel().set(0);
+    BitRefLevel bit_level0 = BitRefLevel().set(0);
 
     Range flow_prisms;
     EntityHandle meshset_prisms;
     CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
-        bit0, BitRefLevel().set(), MBPRISM, meshset_prisms);
+        bit_level0, BitRefLevel().set(), MBPRISM, meshset_prisms);
     CHKERR moab.get_entities_by_handle(meshset_prisms, flow_prisms);
     CHKERR moab.delete_entities(&meshset_prisms, 1);
 
-    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(0, 3,
-                                                                      bit0);
+    flow_prisms.print();
+
+    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        0, 3, bit_level0);
 
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3, MB_TAG_SPARSE, MF_ZERO);
@@ -165,6 +167,16 @@ int main(int argc, char *argv[]) {
       Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
     }
+
+    auto set_pressure = [&](VectorAdaptor &&field_data, double *x, double *y,
+                            double *z) {
+      MoFEMFunctionBegin;
+      field_data[0] = 2.0 * (*x) - 3.0 * (*y);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure,
+                                                            "PRESSURE");
 
     auto make_element = [&]() {
       return boost::make_shared<ThinFluidFlowProblem::ThinFluidFlowElement>(
@@ -199,18 +211,35 @@ int main(int argc, char *argv[]) {
     thin_fluid_flow_problem->addThinFluidFlowElement(
         "THIN_FLUID_FLOW_ELEM", "MESH_NODE_POSITIONS", "PRESSURE", flow_prisms);
 
+    CHKERR m_field.add_finite_element("THIN_FLUID_FLOW_VTK");
+    CHKERR m_field.modify_finite_element_add_field_row("THIN_FLUID_FLOW_VTK",
+                                                       "PRESSURE");
+    CHKERR m_field.modify_finite_element_add_field_col("THIN_FLUID_FLOW_VTK",
+                                                       "PRESSURE");
+    CHKERR m_field.modify_finite_element_add_field_data("THIN_FLUID_FLOW_VTK",
+                                                        "PRESSURE");
+
+    CHKERR m_field.modify_finite_element_add_field_row("THIN_FLUID_FLOW_VTK",
+                                                       "MESH_NODE_POSITIONS");
+    CHKERR m_field.modify_finite_element_add_field_col("THIN_FLUID_FLOW_VTK",
+                                                       "MESH_NODE_POSITIONS");
+    CHKERR m_field.modify_finite_element_add_field_data("THIN_FLUID_FLOW_VTK",
+                                                        "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
+                                                      "THIN_FLUID_FLOW_VTK");
+
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
 
     // build adjacencies
-    CHKERR m_field.build_adjacencies(bit0);
+    CHKERR m_field.build_adjacencies(bit_level0);
 
     // define problems
     CHKERR m_field.add_problem("THIN_FLUID_FLOW_PROB");
 
     // set refinement level for problem
     CHKERR m_field.modify_problem_ref_level_add_bit("THIN_FLUID_FLOW_PROB",
-                                                    bit0);
+                                                    bit_level0);
 
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
@@ -222,11 +251,12 @@ int main(int argc, char *argv[]) {
     CHKERR DMSetType(dm, dm_name);
 
     // set dm datastruture which created mofem datastructures
-    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "THIN_FLUID_FLOW_PROB", bit0);
+    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "THIN_FLUID_FLOW_PROB", bit_level0);
     CHKERR DMSetFromOptions(dm);
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "THIN_FLUID_FLOW_ELEM");
+    CHKERR DMMoFEMAddElement(dm, "THIN_FLUID_FLOW_VTK");
 
     CHKERR DMSetUp(dm);
 
@@ -272,29 +302,29 @@ int main(int argc, char *argv[]) {
     //                               dirichlet_bc_ptr.get());
 
     boost::shared_ptr<FEMethod> fe_null;
-    // CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
+    // CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null,
+    // dirichlet_bc_ptr,
     //                               fe_null);
 
+    // CHKERR DMMoFEMSNESSetJacobian(
+    //     dm, "THIN_FLUID_FLOW_ELEM",
+    //     get_master_contact_lhs(thin_fluid_flow_problem, make_element), NULL,
+    //     NULL);
 
-      // CHKERR DMMoFEMSNESSetJacobian(
-      //     dm, "THIN_FLUID_FLOW_ELEM",
-      //     get_master_contact_lhs(thin_fluid_flow_problem, make_element), NULL,
-      //     NULL);
-  
     // CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
     //                               dirichlet_bc_ptr);
 
-    if (is_test == PETSC_TRUE) {
-      char testing_options[] = "-ksp_type fgmres "
-                               "-pc_type lu "
-                               "-pc_factor_mat_solver_package mumps "
-                               "-snes_type newtonls "
-                               "-snes_linesearch_type basic "
-                               "-snes_max_it 10 "
-                               "-snes_atol 1e-8 "
-                               "-snes_rtol 1e-8 ";
-      CHKERR PetscOptionsInsertString(NULL, testing_options);
-    }
+    // if (is_test == PETSC_TRUE) {
+    //   char testing_options[] = "-ksp_type fgmres "
+    //                            "-pc_type lu "
+    //                            "-pc_factor_mat_solver_package mumps "
+    //                            "-snes_type newtonls "
+    //                            "-snes_linesearch_type basic "
+    //                            "-snes_max_it 10 "
+    //                            "-snes_atol 1e-8 "
+    //                            "-snes_rtol 1e-8 ";
+    //   CHKERR PetscOptionsInsertString(NULL, testing_options);
+    // }
 
     auto snes = MoFEM::createSNES(m_field.get_comm());
     CHKERR SNESSetDM(snes, dm);
@@ -316,7 +346,6 @@ int main(int argc, char *argv[]) {
     // CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     // CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
 
-
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
     CHKERR SNESGetConvergedReason(snes, &snes_reason);
@@ -331,13 +360,40 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
+    {
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_ptr(
+          new PostProcFaceOnRefinedMesh(m_field));
+
+      CHKERR post_proc_ptr->generateReferenceElementMesh();
+
+      auto common_post_proc_data = make_common_data();
+
+      CHKERR thin_fluid_flow_problem->setPostProcOperators(
+          post_proc_ptr, "SPATIAL_POSITION", "PRESSURE",
+          common_post_proc_data);
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "THIN_FLUID_FLOW_VTK", post_proc_ptr);
+      std::ostringstream stm;
+      std::string file_name_for_pressure = "out_pressure";
+      string out_file_name;
+      stm << file_name_for_pressure
+          << ".h5m";
+
+      out_file_name = stm.str();
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                         out_file_name.c_str());
+      CHKERR post_proc_ptr->postProcMesh.write_file(
+          out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+    }
+
     // PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
     // CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
 
     // elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
     // elastic.getLoopFeEnergy().eNergy = 0;
     // PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
-    // CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
+    // CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC",
+    // &elastic.getLoopFeEnergy());
     // // Print elastic energy
     // PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
     //             elastic.getLoopFeEnergy().eNergy);
@@ -368,8 +424,8 @@ int main(int argc, char *argv[]) {
     // }
 
     // thin_fluid_flow_problem->setContactOperatorsForPostProc(
-    //     fe_post_proc_thin_fluid_flow, common_data, m_field, "SPATIAL_POSITION",
-    //     "PRESSURE", mb_post);
+    //     fe_post_proc_thin_fluid_flow, common_data, m_field,
+    //     "SPATIAL_POSITION", "PRESSURE", mb_post);
 
     // mb_post.delete_mesh();
 
@@ -416,10 +472,10 @@ int main(int argc, char *argv[]) {
     //       post_proc_contact_ptr, "SPATIAL_POSITION", "PRESSURE",
     //       common_post_proc_data_thin_fluid_flow);
 
-    //   CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
-    //   std::ostringstream stm;
-    //   std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
-    //   stm << "file_name_for_lagrange"
+    //   CHKERR DMoFEMLoopFiniteElements(dm, "THIN_FLUID_FLOW_VTK",
+    //   post_proc_contact_ptr); std::ostringstream stm; std::string
+    //   file_name_for_lagrange = "out_lagrange_for_vtk_"; stm <<
+    //   "file_name_for_lagrange"
     //       << ".h5m";
 
     //   out_file_name = stm.str();

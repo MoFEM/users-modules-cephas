@@ -27,8 +27,7 @@
 struct ThinFluidFlowProblem {
 
   using ContactElement = ContactPrismElementForcesAndSourcesCore;
-  using ContactOp =
-      ContactPrismElementForcesAndSourcesCore::UserDataOperator;
+  using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
   using EntData = DataForcesAndSourcesCore::EntData;
   using FaceUserDataOperator =
       FaceElementForcesAndSourcesCore::UserDataOperator;
@@ -47,7 +46,7 @@ struct ThinFluidFlowProblem {
     ThinFluidFlowElement(MoFEM::Interface &m_field)
         : ContactElement(m_field), mField(m_field) {}
 
-    int getRule(int order) { return 2 * (order - 1) + 3; }
+    int getRule(int order) { return 0; }
   };
 
   /**
@@ -81,14 +80,13 @@ struct ThinFluidFlowProblem {
                                                         pressure_field_name);
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         pressure_field_name);
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         pressure_field_name);
 
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         spatial_field_name);
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         spatial_field_name);
-
-      CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                         pressure_field_name);
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          spatial_field_name);
 
@@ -102,8 +100,7 @@ struct ThinFluidFlowProblem {
     MoFEMFunctionReturn(0);
   }
 
-  struct CommonData
-      : public boost::enable_shared_from_this<CommonData> {
+  struct CommonData : public boost::enable_shared_from_this<CommonData> {
 
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
@@ -113,6 +110,8 @@ struct ThinFluidFlowProblem {
 
     boost::shared_ptr<VectorDouble> normalVectorSlavePtr;
 
+    boost::shared_ptr<MatrixDouble> pressureGradAtGaussPtsPtr;
+
     double areaSlave;
     double areaMaster;
 
@@ -120,6 +119,7 @@ struct ThinFluidFlowProblem {
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
       pressureAtGaussPtsPtr = boost::make_shared<VectorDouble>();
+      pressureGradAtGaussPtsPtr = boost::make_shared<MatrixDouble>();
       gapPtr = boost::make_shared<VectorDouble>();
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
     }
@@ -147,29 +147,78 @@ struct ThinFluidFlowProblem {
    * @return                            Error code
    *
    */
-  MoFEMErrorCode setThinFluidFlowOperatorsRhs(
-      boost::shared_ptr<ThinFluidFlowElement> fe_rhs,
-      boost::shared_ptr<CommonData> common_data,
-      string spatial_field_name, string pressure_field_name);
+
+  MoFEMErrorCode
+  setThinFluidFlowOperatorsRhs(boost::shared_ptr<ThinFluidFlowElement> fe_rhs,
+                               boost::shared_ptr<CommonData> common_data,
+                               string spatial_field_name,
+                               string pressure_field_name);
+
+  MoFEMErrorCode setPostProcOperators(
+      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_ptr,
+      const std::string spatial_field_name,
+      const std::string pressure_field_name,
+      boost::shared_ptr<CommonData> common_data);
+
+  struct OpCalPressurePostProc : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonData> commonData;
+
+    OpCalPressurePostProc(
+        const string pressure_field_name,
+        boost::shared_ptr<CommonData> &common_data)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              pressure_field_name, UserDataOperator::OPROW),
+          commonData(common_data){};
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpPostProcContinuous : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonData> commonData;
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    string pressureFieldName;
+    string spatialFieldName;
+
+    OpPostProcContinuous(
+        const string pressure_field_name, const string spatial_field_name,
+        moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts,
+        boost::shared_ptr<CommonData> &common_data)
+        : FaceElementForcesAndSourcesCore::UserDataOperator(
+              pressure_field_name, UserDataOperator::OPROW),
+          pressureFieldName(pressure_field_name), spatialFieldName(spatial_field_name),
+          commonData(common_data),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {
+      doVertices = true;
+      doEdges = false;
+      doQuads = false;
+      doTris = false;
+      doTets = false;
+      doPrisms = false;
+    };
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
 
   struct OpGetNormalSlave : public ContactOp {
 
     boost::shared_ptr<CommonData> commonData;
-    OpGetNormalSlave(
-        const string field_name,
-        boost::shared_ptr<CommonData> &common_data)
+    OpGetNormalSlave(const string field_name,
+                     boost::shared_ptr<CommonData> &common_data)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
           commonData(common_data) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };    
+  };
 
   struct OpGetPositionAtGaussPtsSlave : public ContactOp {
 
     boost::shared_ptr<CommonData> commonData;
-    OpGetPositionAtGaussPtsSlave(
-        const string field_name,
-        boost::shared_ptr<CommonData> &common_data)
+    OpGetPositionAtGaussPtsSlave(const string field_name,
+                                 boost::shared_ptr<CommonData> &common_data)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
           commonData(common_data) {}
 
@@ -179,9 +228,8 @@ struct ThinFluidFlowProblem {
   struct OpGetPositionAtGaussPtsMaster : public ContactOp {
 
     boost::shared_ptr<CommonData> commonData;
-    OpGetPositionAtGaussPtsMaster(
-        const string field_name,
-        boost::shared_ptr<CommonData> &common_data)
+    OpGetPositionAtGaussPtsMaster(const string field_name,
+                                  boost::shared_ptr<CommonData> &common_data)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
           commonData(common_data) {}
 
@@ -192,9 +240,8 @@ struct ThinFluidFlowProblem {
 
     boost::shared_ptr<CommonData> commonData;
 
-    OpGetGapSlave(
-        const string field_name, // ign: does it matter??
-        boost::shared_ptr<CommonData> &common_data)
+    OpGetGapSlave(const string field_name, // ign: does it matter??
+                  boost::shared_ptr<CommonData> &common_data)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonData(common_data) {}
 
@@ -220,16 +267,69 @@ struct ThinFluidFlowProblem {
   struct OpGetPressureAtGaussPtsSlave : public ContactOp {
 
     boost::shared_ptr<CommonData> commonData;
-    OpGetPressureAtGaussPtsSlave(
-        const string lagrang_field_name,
-        boost::shared_ptr<CommonData> &common_data)
-        : ContactOp(lagrang_field_name, UserDataOperator::OPROW,
+    OpGetPressureAtGaussPtsSlave(const string pressure_field_name,
+                                 boost::shared_ptr<CommonData> &common_data)
+        : ContactOp(pressure_field_name, UserDataOperator::OPROW,
                     ContactOp::FACESLAVE),
           commonData(common_data) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  struct OpGetPressureGradAtGaussPtsSlave : public ContactOp {
+
+    boost::shared_ptr<CommonData> commonData;
+    OpGetPressureGradAtGaussPtsSlave(const string pressure_field_name,
+                                     boost::shared_ptr<CommonData> &common_data)
+        : ContactOp(pressure_field_name, UserDataOperator::OPROW,
+                    ContactOp::FACESLAVE),
+          commonData(common_data) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief RHS-operator for the simple contact element
+   *
+   * Integrates Lagrange multipliers virtual work on
+   * slave surface and assembles components to the RHS global vector.
+   *
+   */
+  // struct OpRhs : public ContactOp {
+
+  //   OpRhs(const string field_name, boost::shared_ptr<CommonData>
+  //   &common_data)
+  //       : ContactOp(field_name, UserDataOperator::OPROW,
+  //       ContactOp::FACESLAVE),
+  //         commonData(common_data) {}
+
+  //   /**
+  //    * @brief Integrates Lagrange multipliers virtual work on
+  //    * slave surface and assembles components to the RHS global vector.
+  //    *
+  //    * Integrates Lagrange multipliers virtual work \f$ \delta
+  //    * W_{\text c}\f$ on slave surface and assembles components to the RHS
+  //    * global vector
+  //    *
+  //    * \f[
+  //    * {\delta
+  //    * W^{(1)}_{\text c}(\lambda,
+  //    * \delta \mathbf{x}^{(1)}}) \,\,  = -
+  //    * \int_{{\gamma}^{(1)}_{\text c}} \lambda
+  //    * \delta{\mathbf{x}^{(1)}}
+  //    * \,\,{ {\text d} {\gamma}}
+  //    * \f]
+  //    * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+  //    * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
+  //    * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
+  //    * points at slave triangles.
+  //    */
+  //   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  // private:
+  //   boost::shared_ptr<CommonData> commonData;
+  //   VectorDouble vecF;
+  // };
 };
 
 #endif //__THIN_FLUID_FLOW__
