@@ -236,16 +236,35 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
   };
 
+  auto add_boundary_ops_rhs = [&](auto &pipeline) {
+    MoFEMFunctionBeginHot;
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, 5, "FORCE") == 0) {
+        Range my_edges;
+        std::vector<double> force_vec;
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   my_edges, true);
+        it->getAttributes(force_vec);
+        pipeline.push_back(new OpEdgeForceRhs("U", my_edges, force_vec));
+      }
+    }
+
+    MoFEMFunctionReturnHot(0);
+  };
+
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
+  add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
 
   MoFEMFunctionReturn(0);
 }
