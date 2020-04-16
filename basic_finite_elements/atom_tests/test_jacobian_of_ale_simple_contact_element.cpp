@@ -331,10 +331,10 @@ int main(int argc, char *argv[]) {
     // nodes.pop_front();
     // nodes.pop_back();
     Range slave_nodes;
-    // CHKERR moab.get_adjacencies(slave_tris, 0, false, slave_nodes,
-    //                             moab::Interface::UNION);
+    CHKERR moab.get_adjacencies(slave_tris, 0, false, slave_nodes,
+                                moab::Interface::UNION);
 
-    // nodes.merge(slave_nodes);
+    nodes.merge(slave_nodes);
 
     boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
     boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
