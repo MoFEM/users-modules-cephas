@@ -217,6 +217,55 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
+  /**
+   * @brief Function that adds a new finite element for contact post-processing
+   * 
+   * @param  element_name          String for the element name
+   * @param  field_name            String of field name for spatial position
+   * @param  lagrang_field_name    String of field name for Lagrange multipliers
+   * @param  range_slave_tris      Range for slave triangles of contact elements
+   * @return                       Error code
+   *
+   */
+  MoFEMErrorCode addPostProcContactElement(const string element_name,
+                                   const string field_name,
+                                   const string lagrang_field_name,
+                                   Range &slave_tris) {
+    MoFEMFunctionBegin;
+
+    CHKERR mField.add_finite_element(element_name, MF_ZERO);
+
+    if (slave_tris.size() > 0) {
+
+      // C row as Lagrange_mul and col as SPATIAL_POSITION
+        CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                          lagrang_field_name);
+
+      CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                        field_name);
+
+      // CT col as Lagrange_mul and row as SPATIAL_POSITION
+        CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                          lagrang_field_name);
+
+      CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                        field_name);
+
+      // data
+        CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                           lagrang_field_name);
+
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         field_name);
+
+      // Adding range_slave_master_prisms to Element element_name
+      CHKERR mField.add_ents_to_finite_element_by_type(
+          slave_tris, MBTRI, element_name);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
   struct CommonDataSimpleContact
       : public boost::enable_shared_from_this<CommonDataSimpleContact> {
 
