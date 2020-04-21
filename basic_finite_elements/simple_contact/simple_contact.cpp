@@ -278,25 +278,6 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
-    if (true) {
-      CHKERR m_field.add_finite_element("CONTACT_VTK");
-      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
-                                                         "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
-                                                         "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
-                                                          "SPATIAL_POSITION");
-
-      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
-                                                         "LAGMULT");
-      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
-                                                         "LAGMULT");
-      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
-                                                          "LAGMULT");
-      CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
-                                                        "CONTACT_VTK");
-    }
-
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
@@ -364,6 +345,9 @@ int main(int argc, char *argv[]) {
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", "MESH_NODE_POSITIONS",
                                        contact_prisms);
+                                       
+    contact_problem->addPostProcContactElement(
+        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT", slave_tris);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
@@ -402,9 +386,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
-    if (true) {
-      CHKERR DMMoFEMAddElement(dm, "CONTACT_VTK");
-    }
+    CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
 
     CHKERR DMSetUp(dm);
 
@@ -586,16 +568,17 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
                 elastic.getLoopFeEnergy().eNergy);
 
-    string out_file_name;
-    std::ostringstream stm;
-    stm << "out"
-        << ".h5m";
-    out_file_name = stm.str();
-    CHKERR
-    PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
-
-    CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                             "PARALLEL=WRITE_PART");
+    {
+      string out_file_name;
+      std::ostringstream stm;
+      stm << "out"
+          << ".h5m";
+      out_file_name = stm.str();
+      CHKERR
+      PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
+      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                               "PARALLEL=WRITE_PART");
+    }
 
     // moab_instance
     moab::Core mb_post;                   // create database
@@ -635,36 +618,37 @@ int main(int argc, char *argv[]) {
                                       fe_post_proc_simple_contact);
     }
 
-    std::ostringstream ostrm;
+    {
+      string out_file_name;
+      std::ostringstream strm;
+      strm << "out_contact_integ_pts"
+           << ".h5m";
+      out_file_name = strm.str();
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                         out_file_name.c_str());
+      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                                "PARALLEL=WRITE_PART");
+    }
 
-    ostrm << "out_contact"
-          << ".h5m";
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+        new PostProcFaceOnRefinedMesh(m_field));
 
-    out_file_name = ostrm.str();
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                       out_file_name.c_str());
-    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                              "PARALLEL=WRITE_PART");
+    CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
 
-    if (true) {
+    auto common_post_proc_data_simple_contact = make_contact_common_data();
 
-      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
-          new PostProcFaceOnRefinedMesh(m_field));
+    CHKERR contact_problem->setPostProcContactOperators(
+        post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+        common_post_proc_data_simple_contact);
 
-      CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
+                                    post_proc_contact_ptr);
 
-      auto common_post_proc_data_simple_contact = make_contact_common_data();
-
-      CHKERR contact_problem->setPostProcContactOperators(
-          post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-          common_post_proc_data_simple_contact);
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
+    {
+      string out_file_name;
       std::ostringstream stm;
-      std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
-      stm << "file_name_for_lagrange"
+      stm << "out_contact_pressure"
           << ".h5m";
-
       out_file_name = stm.str();
       CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
                          out_file_name.c_str());
@@ -672,22 +656,6 @@ int main(int argc, char *argv[]) {
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
 
-    EntityHandle out_meshset_slave_tris;
-    EntityHandle out_meshset_master_tris;
-
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
-
-    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
-
-    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                           &out_meshset_slave_tris, 1);
-    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                           &out_meshset_master_tris, 1);
-
-    CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
-    CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
   }
   CATCH_ERRORS;
 
