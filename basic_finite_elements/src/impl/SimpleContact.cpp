@@ -470,8 +470,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
   int nb_base_fun_col = data.getFieldData().size() / 3;
 
   FTensor::Index<'i', 3> i;
-  // cerr << " ASDASDSADSADSAD " << nb_gauss_pts << "\n";
-
+  
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
 
