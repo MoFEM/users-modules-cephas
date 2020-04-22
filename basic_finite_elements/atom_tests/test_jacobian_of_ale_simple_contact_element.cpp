@@ -342,17 +342,21 @@ int main(int argc, char *argv[]) {
 
     Range slave_tets;
 
-      contact_problem->addContactElementALE("CONTACT_ELEM", "SPATIAL_POSITION",
+      contact_problem->addContactElementALE("ALE_CONTACT_ELEM", "SPATIAL_POSITION",
                                             "MESH_NODE_POSITIONS", "LAGMULT",
                                             contact_prisms);
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT",
+                                         "MESH_NODE_POSITIONS",
+                                         contact_prisms);
 
-    // build field
-    CHKERR m_field.build_fields();
+      // build field
+      CHKERR m_field.build_fields();
 
-    // Projection on "x" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
-      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
+      // Projection on "x" field
+      {
+        Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
+        CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
     }
     // MESH_NODE_POSITIONS
     {
@@ -435,6 +439,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
+    CHKERR DMMoFEMAddElement(dm, "ALE_CONTACT_ELEM");
     CHKERR DMMoFEMAddElement(dm, "MATERIAL");
     CHKERR DMSetUp(dm);
 
@@ -696,36 +701,101 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreateMatrix_MoFEM(dm, &A);
     CHKERR MatZeroEntries(A);
 
-    
+    auto make_contact_element = [&]() {
+      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+          m_field);
+    };
+
+    auto make_contact_common_data = [&]() {
+      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
+          m_field);
+    };
+
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_contact_lhs = [&](auto contact_problem, auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                              common_data_simple_contact,
+                                              "SPATIAL_POSITION", "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
+    auto get_master_traction_rhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_rhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_rhs_simple_contact;
+    };
+
+    auto get_master_traction_lhs = [&](auto contact_problem,
+                                       auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setMasterForceOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT");
+      return fe_lhs_simple_contact;
+    };
+
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_rhs_simple_contact =
+        fe_rhs_simple_contact_ale =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
     boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_lhs_simple_contact =
+        fe_lhs_simple_contact_ale =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
     boost::shared_ptr<SimpleContactProblem::CommonDataSimpleContact>
-        common_data_simple_contact =
+        common_data_simple_contact_ale =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
-    common_data_simple_contact->forcesOnlyOnEntitiesRow.clear();
-    common_data_simple_contact->forcesOnlyOnEntitiesRow = nodes;
+                
+    common_data_simple_contact_ale->forcesOnlyOnEntitiesRow.clear();
+    common_data_simple_contact_ale->forcesOnlyOnEntitiesRow = nodes;
 
     contact_problem->setContactOperatorsRhsALEMaterial(
-        fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        fe_rhs_simple_contact_ale, common_data_simple_contact_ale, "SPATIAL_POSITION",
         "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
     contact_problem->setContactOperatorsLhsALE(
-        fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+        fe_lhs_simple_contact_ale, common_data_simple_contact_ale, "SPATIAL_POSITION",
         "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
-    CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
-                                  fe_rhs_simple_contact.get(), PETSC_NULL,
+    CHKERR DMMoFEMSNESSetFunction(dm, "ALE_CONTACT_ELEM",
+                                  fe_rhs_simple_contact_ale.get(), PETSC_NULL,
                                   PETSC_NULL);
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-                                  fe_lhs_simple_contact.get(), NULL, NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "ALE_CONTACT_ELEM",
+                                  fe_lhs_simple_contact_ale.get(), NULL, NULL);
+
+    // CHKERR DMMoFEMSNESSetFunction(
+    //     dm, "CONTACT_ELEM",
+    //     get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
+    //     PETSC_NULL);
+    // CHKERR DMMoFEMSNESSetFunction(
+    //     dm, "CONTACT_ELEM",
+    //     get_master_traction_rhs(contact_problem, make_contact_element),
+    //     PETSC_NULL, PETSC_NULL);
+    // CHKERR DMMoFEMSNESSetJacobian(
+    //     dm, "CONTACT_ELEM",
+    //     get_master_contact_lhs(contact_problem, make_contact_element), NULL,
+    //     NULL);
+    // CHKERR DMMoFEMSNESSetJacobian(
+    //     dm, "CONTACT_ELEM",
+    //     get_master_traction_lhs(contact_problem, make_contact_element), NULL,
+    //     NULL);
 
     SNES snes;
     CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);

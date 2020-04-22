@@ -3295,19 +3295,18 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
 
-  /*fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalContactTractionOnSlave(field_name, common_data_simple_contact));
-  
   
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalContactTractionOnMaster(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalIntCompFunSlave(lagrang_field_name, common_data_simple_contact,
-                               cnValue));*/
+                               cnValue));
 
   // this is the right order
-  fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(
+  /*fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(
       mesh_node_field_name, common_data_simple_contact, false));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new OpLoopMasterForSide(
@@ -3326,7 +3325,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalMatForcesALESlave(mesh_node_field_name,
-                                 common_data_simple_contact));
+                                 common_data_simple_contact));*/
   MoFEMFunctionReturn(0);
 }
 
@@ -3360,7 +3359,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
         new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                        common_data_simple_contact));
 
-    /*fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
         new OpCalContactTractionOverLambdaMasterSlave(
             field_name, lagrang_field_name, common_data_simple_contact));
 
@@ -3397,10 +3396,10 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
             field_name, lagrang_field_name, common_data_simple_contact,
             cnValue));
 
-    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+    /*fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
         new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
             lagrang_field_name, mesh_node_field_name, cnValue,
-            common_data_simple_contact, LAGRANGE_RANK, POSITION_RANK));*/
+            common_data_simple_contact, LAGRANGE_RANK, POSITION_RANK));
 
     // =========  3 rows
     // now ====== F^T
@@ -3490,7 +3489,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
     fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
         new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
             mesh_node_field_name, lagrang_field_name,
-            common_data_simple_contact, POSITION_RANK, LAGRANGE_RANK));
+            common_data_simple_contact, POSITION_RANK, LAGRANGE_RANK));*/
 
     //   feMatSideLhs_Slave_dx->getOpPtrVector().push_back(
     //       new OpCalculateVectorFieldGradient<3, 3>(
