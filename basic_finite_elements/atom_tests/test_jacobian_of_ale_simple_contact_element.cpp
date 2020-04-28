@@ -325,6 +325,7 @@ int main(int argc, char *argv[]) {
     Range nodes;
     CHKERR moab.get_adjacencies(master_tris, 0, false, nodes,
                                 moab::Interface::UNION);
+
     // CHKERR moab.get_adjacencies(all_tets, 0, false, nodes,
     //                             moab::Interface::UNION);
     // cerr << "nodes  " <<nodes <<"\n";
@@ -460,6 +461,23 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
+    PetscRandom rctx2;
+    PetscRandomCreate(PETSC_COMM_WORLD, &rctx2);
+
+    auto set_coord_material = [&](VectorAdaptor &&field_data, double *x, double *y,
+                         double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 0.5;
+      PetscRandomGetValue(rctx2, &value);
+      field_data[0] = (*x) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx2, &value);
+      field_data[1] = (*y) + (value - 0.5) * scale;
+      PetscRandomGetValue(rctx2, &value);
+      field_data[2] = (*z) + (value - 0.5) * scale;
+      MoFEMFunctionReturn(0);
+    };
+
     auto set_pressure = [&](VectorAdaptor &&field_data, double *x, double *y,
                             double *z) {
       MoFEMFunctionBegin;
@@ -470,20 +488,25 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    /*CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
                                                             "SPATIAL_POSITION");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
-        set_coord, "MESH_NODE_POSITIONS");
+        set_coord_material, "MESH_NODE_POSITIONS");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure,
-                                                            "LAGMULT");*/
+                                                            "LAGMULT");
 
     PetscRandomDestroy(&rctx);
 
     {
       Range range_vertices;
       CHKERR m_field.get_moab().get_adjacencies(
-          slave_tets, 0, false, range_vertices, moab::Interface::UNION);
+          slave_tris, 3, false, slave_tets, moab::Interface::UNION);
+      Range ale_tets = slave_tets.subset_by_type(MBTET);
 
+      CHKERR m_field.get_moab().get_adjacencies(
+          ale_tets, 0, false, range_vertices, moab::Interface::UNION);
+      nodes.merge(range_vertices);
+      
       for (Range::iterator it_vertices = range_vertices.begin();
            it_vertices != range_vertices.end(); it_vertices++) {
 
@@ -513,15 +536,15 @@ int main(int argc, char *argv[]) {
             //      << "\n";
             printf("Before x: %e\n", dof.getFieldData());
 
-            switch (test_case_x) {
+            // switch (test_case_x) {
 
-            case 1:
-              dof.getFieldData() = coords[2] - 8.;
-              break;
-            case 2:
-              dof.getFieldData() = coords[2] + 1.;
-              break;
-            }
+            // case 1:
+            //   dof.getFieldData() = coords[2] - 8.;
+            //   break;
+            // case 2:
+            //   dof.getFieldData() = coords[2] + 1.;
+            //   break;
+            // }
             printf("Slave After x : %e test case %d\n", dof.getFieldData(),
                    test_case_x);
           }
@@ -555,7 +578,7 @@ int main(int argc, char *argv[]) {
           if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
             printf("Before x: %e\n", dof.getFieldData());
 
-            switch (test_case_x) {
+            // switch (test_case_x) {
 
             // case 1:
             //   dof.getFieldData() = coords[2] - 8.;
@@ -563,7 +586,7 @@ int main(int argc, char *argv[]) {
             // case 2:
             //   dof.getFieldData() = coords[2] + 1.;
             //   break;
-            }
+            // }
             printf("Master  After x : %e test case %d\n", dof.getFieldData(),
                    test_case_x);
           }
@@ -597,15 +620,15 @@ int main(int argc, char *argv[]) {
           if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
             printf("Before Slave X: %e\n", dof.getFieldData());
 
-            switch (test_case_X) {
+            // switch (test_case_X) {
 
-            case 1:
-              dof.getFieldData() = coords[2] - 8.;
-              break;
-            case 2:
-              dof.getFieldData() = coords[2] + 1.;
-              break;
-            }
+            // case 1:
+            //   dof.getFieldData() = coords[2] - 8.;
+            //   break;
+            // case 2:
+            //   dof.getFieldData() = coords[2] + 1.;
+            //   break;
+            // }
             printf("After Slave X : %e test case %d\n", dof.getFieldData(),
                    test_case_X);
           }
@@ -639,15 +662,15 @@ int main(int argc, char *argv[]) {
           if (dof_rank == 2 /*&& fabs(coords[2]) <= 1e-6*/) {
             printf("Before Master X: %e\n", dof.getFieldData());
 
-            switch (test_case_X) {
+            // switch (test_case_X) {
 
-            case 1:
-              dof.getFieldData() = coords[2] - 8.;
-              break;
-            case 2:
-              dof.getFieldData() = coords[2] + 1.;
-              break;
-            }
+            // case 1:
+            //   dof.getFieldData() = coords[2] - 8.;
+            //   break;
+            // case 2:
+            //   dof.getFieldData() = coords[2] + 1.;
+            //   break;
+            // }
             printf("After Master X : %e test case %d\n", dof.getFieldData(),
                    test_case_X);
           }
@@ -677,15 +700,15 @@ int main(int argc, char *argv[]) {
 
           printf("Before Lambda: %e\n", dof.getFieldData());
 
-          switch (test_case_lambda) {
+          // switch (test_case_lambda) {
 
-          case 1:
-            dof.getFieldData() = -2.5;
-            break;
-          case 2:
-            dof.getFieldData() = +2.5;
-            break;
-          }
+          // case 1:
+          //   dof.getFieldData() = -2.5;
+          //   break;
+          // case 2:
+          //   dof.getFieldData() = +2.5;
+          //   break;
+          // }
 
           printf("After  Lambda: %e\n", dof.getFieldData());
         }
@@ -761,7 +784,11 @@ int main(int argc, char *argv[]) {
         common_data_simple_contact_ale =
             boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
                 m_field);
-                
+    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+        fe_lhs_simple_contact_ale_material =
+            boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+                m_field);
+
     common_data_simple_contact_ale->forcesOnlyOnEntitiesRow.clear();
     common_data_simple_contact_ale->forcesOnlyOnEntitiesRow = nodes;
 
@@ -771,7 +798,11 @@ int main(int argc, char *argv[]) {
 
     contact_problem->setContactOperatorsLhsALE(
         fe_lhs_simple_contact_ale, common_data_simple_contact_ale, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
+        "MESH_NODE_POSITIONS", "LAGMULT");
+
+    contact_problem->setContactOperatorsLhsALEMaterial(
+        fe_lhs_simple_contact_ale_material, common_data_simple_contact_ale,
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
 
     CHKERR DMMoFEMSNESSetFunction(dm, "ALE_CONTACT_ELEM",
                                   fe_rhs_simple_contact_ale.get(), PETSC_NULL,
@@ -780,22 +811,26 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetJacobian(dm, "ALE_CONTACT_ELEM",
                                   fe_lhs_simple_contact_ale.get(), NULL, NULL);
 
-    // CHKERR DMMoFEMSNESSetFunction(
-    //     dm, "CONTACT_ELEM",
-    //     get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
-    //     PETSC_NULL);
-    // CHKERR DMMoFEMSNESSetFunction(
-    //     dm, "CONTACT_ELEM",
-    //     get_master_traction_rhs(contact_problem, make_contact_element),
-    //     PETSC_NULL, PETSC_NULL);
-    // CHKERR DMMoFEMSNESSetJacobian(
-    //     dm, "CONTACT_ELEM",
-    //     get_master_contact_lhs(contact_problem, make_contact_element), NULL,
-    //     NULL);
-    // CHKERR DMMoFEMSNESSetJacobian(
-    //     dm, "CONTACT_ELEM",
-    //     get_master_traction_lhs(contact_problem, make_contact_element), NULL,
-    //     NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "ALE_CONTACT_ELEM",
+                                  fe_lhs_simple_contact_ale_material.get(),
+                                  NULL, NULL);
+
+    CHKERR DMMoFEMSNESSetFunction(
+        dm, "CONTACT_ELEM",
+        get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
+        PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(
+        dm, "CONTACT_ELEM",
+        get_master_traction_rhs(contact_problem, make_contact_element),
+        PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(
+        dm, "CONTACT_ELEM",
+        get_master_contact_lhs(contact_problem, make_contact_element), NULL,
+        NULL);
+    CHKERR DMMoFEMSNESSetJacobian(
+        dm, "CONTACT_ELEM",
+        get_master_traction_lhs(contact_problem, make_contact_element), NULL,
+        NULL);
 
     SNES snes;
     CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
