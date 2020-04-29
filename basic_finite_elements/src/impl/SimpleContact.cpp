@@ -1080,13 +1080,13 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     auto t_w = getFTensor0IntegrationWeightMaster();
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    for (int gg = 0; gg != nb_gauss_pts; gg++) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cN, t_gap_gp, t_lagrange_slave) *
                            t_w * area_master;
 
       auto t_base_lambda = row_data.getFTensor0N(gg, 0);
-      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+      for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
 
         auto t_base_master = col_data.getFTensor0N(gg, 0);
         FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat{
@@ -1972,7 +1972,6 @@ MoFEMErrorCode SimpleContactProblem::OpCalMatForcesALEMaster::aSsemble(
     if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
         data.forcesOnlyOnEntitiesRow.end()) {
       rowIndices[ii] = -1;
-      // cerr << "\n####~~~~~~####\n";
     }
     }
    
@@ -2785,7 +2784,6 @@ SimpleContactProblem::OpContactALELhs::aSsemble(EntData &row_data,
   // assemble local matrix
   CHKERR MatSetValues(getSNESB(), row_nb_dofs, row_indices, col_nb_dofs,
                       col_indices, &*matLhs.data().begin(), ADD_VALUES);
-  // cerr << "matLhs ~~   "<<matLhs << "\n ";
       MoFEMFunctionReturn(0);
 }
 
