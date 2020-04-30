@@ -1079,7 +1079,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
-    auto t_w = getFTensor0IntegrationWeightMaster();
+    auto t_w = getFTensor0IntegrationWeightSlave();
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cN, t_gap_gp, t_lagrange_slave) *
