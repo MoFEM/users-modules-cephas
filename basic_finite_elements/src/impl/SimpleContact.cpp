@@ -833,8 +833,8 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
     const double val_s =
         t_w * area_s *
         SimpleContactProblem::ConstrainFunction(cN, t_gap_gp, t_lagrange_slave);
-    // cerr << "SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)    "
-    //      << SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)<< "\n";
+    cerr << "SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)    "
+         << SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)<< "\n";
     auto t_base_lambda = data.getFTensor0N(gg, 0);
     for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
       vecR[bbr] += val_s * t_base_lambda;
@@ -1083,7 +1083,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     for (int gg = 0; gg != nb_gauss_pts; gg++) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cN, t_gap_gp, t_lagrange_slave) *
-                           t_w * area_master;
+                           t_w * area_slave;
 
       auto t_base_lambda = row_data.getFTensor0N(gg, 0);
       for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
@@ -2570,12 +2570,11 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
 
         auto assemble_mat = get_vec_from_mat(matLhs, bbr, 3 * bbc);
 
-        assemble_mat(j) -=
-            0.25 *
+        assemble_mat(j) -= 0.5 *
             (t_d_n(i, j) -
              normal_at_gp(i)  * t_d_n(k, j) * normal_at_gp(k)) *
             (x_s(i) - x_m(i)) * s * cN *
-            (1 + SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp))/length_normal;
+            (1 + SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp));
        // assemble_mat(j) +=
         //     t_lagrange_slave * t_d_n(i, j) * normal_at_gp(i) * s *
         //     (1 - SimpleContactProblem::Sign(t_lagrange_slave - cN *
