@@ -833,8 +833,8 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
     const double val_s =
         t_w * area_s *
         SimpleContactProblem::ConstrainFunction(cN, t_gap_gp, t_lagrange_slave);
-    cerr << "SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)    "
-         << SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)<< "\n";
+    // cerr << "SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)    "
+    //      << SimpleContactProblem::Sign(t_lagrange_slave - cN * t_gap_gp)<< "\n";
     auto t_base_lambda = data.getFTensor0N(gg, 0);
     for (int bbr = 0; bbr != nb_base_fun_col; bbr++) {
       vecR[bbr] += val_s * t_base_lambda;
