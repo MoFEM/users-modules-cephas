@@ -709,19 +709,13 @@ int main(int argc, char *argv[]) {
 
     // Assemble Aij and F. Define Dirichlet bc element, which stets constrains
     // to MatrixDouble and the right hand side vector.
-    boost::shared_ptr<FEMethod> dirichlet_bc_ptr;
 
-    // if normally defined boundary conditions are not found, try to use
-    // DISPLACEMENT blockset. To implementations available here, depending how
-    // BC is defined on mesh file.
-    if (!flag_cubit_disp) {
-      dirichlet_bc_ptr =
-          boost::shared_ptr<FEMethod>(new DirichletSetFieldFromBlockWithFlags(
-              m_field, "DISPLACEMENT", "DISPLACEMENT", Aij, D0, F));
-    } else {
-      dirichlet_bc_ptr = boost::shared_ptr<FEMethod>(
-          new DirichletDisplacementBc(m_field, "DISPLACEMENT", Aij, D0, F));
-    }
+    // if normally defined boundary conditions are not found,
+    // DirichletDisplacementBc will try to use DISPLACEMENT blockset. Two
+    // implementations are available, depending how BC is defined on mesh file.
+    auto dirichlet_bc_ptr = boost::make_shared<DirichletDisplacementBc>(
+        m_field, "DISPLACEMENT", Aij, D0, F);
+
     // That sets Dirichlet bc objects that problem is linear, i.e. no newton
     // (SNES) solver is run for this problem.
     dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
