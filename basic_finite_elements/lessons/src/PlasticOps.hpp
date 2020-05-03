@@ -307,7 +307,7 @@ s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
  */
 inline double
 platsic_surface(FTensor::Tensor2_symmetric<double, 3> &&t_stress_deviator) {
-  return std::sqrt(t_stress_deviator(I, J) * t_stress_deviator(I, J));
+  return std::sqrt(1.5 * t_stress_deviator(I, J) * t_stress_deviator(I, J));
 };
 
 inline auto plastic_flow(double f,
@@ -316,7 +316,7 @@ inline auto plastic_flow(double f,
   FTensor::Tensor2_symmetric<double, 2> t_diff_f;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_f(k, l) =
-        (1. / f) * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
+        (1.5 / f) * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
   else
     t_diff_f(k, l) = 0;
   return t_diff_f;
@@ -329,8 +329,8 @@ diff_plastic_flow_dstress(double f, FTensor::Tensor2_symmetric<T, 2> &t_flow,
   FTensor::Ddg<double, 2, 2> t_diff_flow;
   if (std::abs(f) > std::numeric_limits<double>::epsilon())
     t_diff_flow(i, j, k, l) =
-        (1. / f) * (t_diff_deviator(M, N, i, j) * t_diff_deviator(M, N, k, l) -
-                    t_flow(i, j) * t_flow(k, l));
+        (1.5 / f) * (t_diff_deviator(M, N, i, j) * t_diff_deviator(M, N, k, l) -
+                     2. / 3. * t_flow(i, j) * t_flow(k, l));
   else
     t_diff_flow(i, j, k, l) = 0;
 
