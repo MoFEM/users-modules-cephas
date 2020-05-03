@@ -1155,7 +1155,12 @@ int main(int argc, char *argv[]) {
                   "atom test diverged!");
         break;
       case 2:
-        if (fabs(*eng_ptr - 5.6475e-03) > 1e-3)
+        if (fabs(*eng_ptr - 5.6475e-03) > 1e-4)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+        break;
+      case 3:
+        if (fabs(*eng_ptr - 7.4679e-03) > 1e-4)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;

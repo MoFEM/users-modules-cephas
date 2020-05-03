@@ -115,12 +115,9 @@ inline auto get_rotation_from_vector(FTensor1 &t_omega) {
   t_R(i, j) = t_kd(i, j);
 
   const double angle = sqrt(t_omega(i) * t_omega(i));
-
-  constexpr double tol = 1e-18;
-  if (std::abs(angle) < tol) {
+  if (std::abs(angle) <  1e-18)  
     return t_R;
-  }
-
+  
   FTensor::Tensor2<double, 3, 3> t_Omega;
   t_Omega(i, j) = FTensor::levi_civita<double>(i, j, k) * t_omega(k);
   const double a = sin(angle) / angle;
@@ -140,9 +137,6 @@ inline auto get_displacement(double *coords, FTensor1 t_centr,
 
   FTensor1 t_omega;
   FTensor1 t_coords(coords[0], coords[1], coords[2]);
-  // auto t_normal = to_tensor(normal);
-  // auto t_coords = to_tensor(coords);
-  // auto t_centr = to_tensor(centr);
   const double a = sqrt(t_normal(i) * t_normal(i));
   t_omega(i) = t_normal(i) * (theta / a);
   auto t_R = get_rotation_from_vector(t_omega);
@@ -150,7 +144,7 @@ inline auto get_displacement(double *coords, FTensor1 t_centr,
   t_delta(i) = t_centr(i) - t_coords(i);
   FTensor1 t_disp;
   t_disp(i) = t_delta(i) - t_R(i, j) * t_delta(j);
-  // return t_disp;
+
   VectorDouble disp_vec(3);
   for (int dd : {0, 1, 2})
     disp_vec(dd) = t_disp(dd);
@@ -177,9 +171,10 @@ MoFEMErrorCode DirichletDisplacementBc::getRotationBcFromBlock(
         bc_data.back().bc_flags[ii] = 1;
         bc_data.back().t_centr(ii) = mydata[ii + 1];
         bc_data.back().t_normal(ii) = mydata[ii + 4];
+
       }
+      bc_data.back().scaled_values[0] = mydata[0];
       bc_data.back().is_rotation = true;
-      bc_data.back().theta = mydata[0];
     }
   }
 
@@ -198,6 +193,8 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
 
       CHKERR MethodForForceScaling::applyScale(this, methodsOp,
                                                bc_it.scaled_values);
+
+      bc_it.theta = bc_it.scaled_values[0]; // for rotation only
       auto apply_rotation = [&](auto &dof) {
         MoFEMFunctionBeginHot;
         if (bc_it.is_rotation) {
