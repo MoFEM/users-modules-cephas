@@ -410,9 +410,6 @@ struct SimpleContactProblem {
                        bool newton_cotes = false)
       : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes) {}
 
-
-
-
   struct OpContactMaterialLhs
       : public ContactOp {
 
@@ -436,15 +433,10 @@ struct SimpleContactProblem {
     int rankRow;
     int rankCol;
     
-
     MoFEMErrorCode doWork(int row_side, int col_side,
                                   EntityType row_type, EntityType col_type,
                                   EntData &row_data, EntData &col_data);
-    //                               {
-    //   MoFEMFunctionBegin;
-    //   MoFEMFunctionReturn(0);
-    // }
-
+    
     virtual MoFEMErrorCode
     iNtegrate(EntData &row_data,
               EntData &col_data) {
@@ -494,10 +486,6 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
                           EntData &col_data);
-    //                               {
-    //   MoFEMFunctionBegin;
-    //   MoFEMFunctionReturn(0);
-    // }
 
     virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
       MoFEMFunctionBegin;
@@ -1698,29 +1686,6 @@ struct SimpleContactProblem {
                   FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
   };
-
-  // struct OpContactConstraintMatrixMasterSlaveALE
-  //     : public ContactOp {
-
-  //   boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-  //   OpContactConstraintMatrixMasterSlaveALE(
-  //       const string field_name, const string lagrang_field_name,
-  //       boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-  //       : ContactOp(
-  //             field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
-  //             ContactOp::
-  //                 FACEMASTERSLAVE),
-  //         commonDataSimpleContact(common_data_contact) {
-  //     sYmm = false; // This will make sure to loop over all intities (e.g.
-  //                   // for order=2 it will make doWork to loop 16 time)
-  //   }
-  //   MatrixDouble matLhs;
-
-  //   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-  //                         EntityType col_type,
-  //                         EntData &row_data,
-  //                         EntData &col_data);
-  // };
 
   /// \brief Computes, for material configuration, normal to slave face that
   /// is common to all gauss points

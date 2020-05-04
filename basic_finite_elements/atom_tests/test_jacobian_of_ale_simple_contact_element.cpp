@@ -468,7 +468,7 @@ int main(int argc, char *argv[]) {
                          double *z) {
       MoFEMFunctionBegin;
       double value;
-      double scale = 0.5;
+      double scale = 0.75;
       PetscRandomGetValue(rctx2, &value);
       field_data[0] = (*x) + (value - 0.5) * scale;
       PetscRandomGetValue(rctx2, &value);
@@ -496,6 +496,7 @@ int main(int argc, char *argv[]) {
                                                             "LAGMULT");
 
     PetscRandomDestroy(&rctx);
+    PetscRandomDestroy(&rctx2);
 
     {
       Range range_vertices;
@@ -788,7 +789,7 @@ int main(int argc, char *argv[]) {
         fe_lhs_simple_contact_ale_material =
             boost::make_shared<SimpleContactProblem::SimpleContactElement>(
                 m_field);
-
+    CHKERR moab.get_connectivity(all_tets, nodes, false);
     common_data_simple_contact_ale->forcesOnlyOnEntitiesRow.clear();
     common_data_simple_contact_ale->forcesOnlyOnEntitiesRow = nodes;
 
