@@ -454,6 +454,14 @@ add_test(
   -my_convect 1
 )
 
+add_test(
+  test_jacobian_of_simple_contact_element_ale
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 4 -my_order_lambda 3 
+  -test_ale 1
+)
+
 bfe_add_executable(test_jacobian_of_ale_simple_contact_element
 ${CMAKE_CURRENT_SOURCE_DIR}/test_jacobian_of_ale_simple_contact_element.cpp
 )
