@@ -1812,20 +1812,6 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpLoopMasterForSide::doWork(int side, EntityType type,
-                                                  EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (type != MBTRI)
-    MoFEMFunctionReturnHot(0);
-
-  const EntityHandle tri_master = getSideEntity(3, MBTRI);
-  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode
 SimpleContactProblem::OpCalculateDeformation::doWork(int side, EntityType type,
                                                      EntData &row_data) {
 
@@ -1866,7 +1852,7 @@ SimpleContactProblem::OpCalculateDeformation::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSide::doWork(int side,
+MoFEMErrorCode SimpleContactProblem::OpLoopForSideRhs::doWork(int side,
                                                                 EntityType type,
                                                                 EntData &data) {
   MoFEMFunctionBegin;
@@ -1874,8 +1860,15 @@ MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSide::doWork(int side,
   if (type != MBTRI)
     MoFEMFunctionReturnHot(0);
 
-  const EntityHandle tri_slave = getSideEntity(4, type);
-  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_slave);
+  int side_number;
+  if (faceType == ContactOp::FACEMASTER)
+    side_number = 3;
+  else
+    side_number = 4;
+
+  const EntityHandle tri = getSideEntity(side_number, type);
+
+  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri);
 
   MoFEMFunctionReturn(0);
 }
@@ -1960,6 +1953,7 @@ MoFEMErrorCode
 SimpleContactProblem::OpCalMatForcesALEMaster::aSsemble(EntData &row_data) {
   MoFEMFunctionBegin;
 
+  
   // get pointer to first global index on row
   const int *row_indices = &*row_data.getIndices().data().begin();
   auto &data = *commonDataSimpleContact;
@@ -2575,8 +2569,8 @@ MoFEMErrorCode SimpleContactProblem::OpContactMaterialLhs::doWork(
     EntData &row_data, EntData &col_data) {
 
   MoFEMFunctionBegin;
-  // if (col_type != MBVERTEX)
-  //   MoFEMFunctionReturnHot(0);
+  if (row_type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
   row_nb_dofs = row_data.getIndices().size();
   if (!row_nb_dofs)
     MoFEMFunctionReturnHot(0);
@@ -2649,6 +2643,9 @@ SimpleContactProblem::OpContactMaterialLhs::aSsemble(EntData &row_data,
   const int *col_indices = &*col_data.getIndices().data().begin();
 
   auto &data = *commonDataSimpleContact;
+  if (data.forcesOnlyOnEntitiesRow.empty())
+    MoFEMFunctionReturnHot(0);
+
   if (!data.forcesOnlyOnEntitiesRow.empty()) {
     rowIndices.resize(row_nb_dofs, false);
     noalias(rowIndices) = row_data.getIndices();
@@ -3094,7 +3091,7 @@ SimpleContactProblem::OpContactMaterialSlaveSlaveLhs_dX_dLagmult::iNtegrate(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSideLhs::doWork(
+MoFEMErrorCode SimpleContactProblem::OpLoopForSideLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -3103,8 +3100,15 @@ MoFEMErrorCode SimpleContactProblem::OpLoopSlaveForSideLhs::doWork(
   if (row_type != MBTRI || col_type != MBTRI)
     MoFEMFunctionReturnHot(0);
 
-  const EntityHandle tri_slave = getSideEntity(4, MBTRI);
-  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_slave);
+  int side_number;
+  if (isMaster == true)
+    side_number = 3;
+  else
+    side_number = 4;
+
+  const EntityHandle tri = getSideEntity(side_number, row_type);
+
+  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri);
 
   MoFEMFunctionReturn(0);
 }
@@ -3209,20 +3213,6 @@ MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::aSsemble(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpLoopMasterForSideLhs::doWork(
-    int row_side, int col_side, EntityType row_type, EntityType col_type,
-    EntData &row_data, EntData &col_data) {
-  MoFEMFunctionBegin;
-
-  if (row_type != MBTRI || col_type != MBTRI)
-    MoFEMFunctionReturnHot(0);
-
-  const EntityHandle tri_master = getSideEntity(3, MBTRI);
-  CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri_master);
-
-  MoFEMFunctionReturn(0);
-}
-
 // setup operators for calculation of active set
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact_ale,
@@ -3278,8 +3268,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
   fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(
       mesh_node_field_name, common_data_simple_contact, false));
 
-  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new OpLoopMasterForSide(
-      mesh_node_field_name, fe_mat_side_rhs_master, side_fe_name));
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpLoopForSideRhs(mesh_node_field_name, fe_mat_side_rhs_master,
+                           side_fe_name, ContactOp::FACEMASTER));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalMatForcesALEMaster(mesh_node_field_name,
@@ -3288,8 +3279,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
   fe_mat_side_rhs_slave->getOpPtrVector().push_back(new OpCalculateDeformation(
       mesh_node_field_name, common_data_simple_contact, false));
 
-  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(new OpLoopSlaveForSide(
-      mesh_node_field_name, fe_mat_side_rhs_slave, side_fe_name));
+  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+      new OpLoopForSideRhs(mesh_node_field_name, fe_mat_side_rhs_slave,
+                           side_fe_name, ContactOp::FACESLAVE));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpCalMatForcesALESlave(mesh_node_field_name,
@@ -3341,9 +3333,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
           mesh_node_field_name, field_name, common_data_simple_contact, true));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpLoopMasterForSideLhs(mesh_node_field_name,
-                                 common_data_simple_contact, feMatSideLhs_dx,
-                                 side_fe_name));
+      new OpLoopForSideLhs(mesh_node_field_name, common_data_simple_contact,
+                           feMatSideLhs_dx, side_fe_name, true));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialMasterOnFaceLhs_dX_dX(
@@ -3380,9 +3371,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
           mesh_node_field_name, field_name, common_data_simple_contact, false));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpLoopSlaveForSideLhs(mesh_node_field_name,
-                                common_data_simple_contact,
-                                feMatSideLhsSlave_dx, side_fe_name));
+      new OpLoopForSideLhs(mesh_node_field_name, common_data_simple_contact,
+                           feMatSideLhsSlave_dx, side_fe_name, false));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialSlaveOnFaceLhs_dX_dX(

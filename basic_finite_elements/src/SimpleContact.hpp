@@ -447,7 +447,7 @@ struct SimpleContactProblem {
 
     OpContactMaterialLhs(
         const string field_name_1, const string field_name_2,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const ContactOp::FaceType face_type, const int rank_row,
         const int rank_col,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
@@ -570,7 +570,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetNormalSlave(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
     /**
@@ -613,7 +613,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetNormalMaster(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -661,7 +661,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetPositionAtGaussPtsMaster(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -679,7 +679,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetPositionAtGaussPtsSlave(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -698,7 +698,7 @@ struct SimpleContactProblem {
 
     OpGetGapSlave(
         const string field_name, // ign: does it matter??
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -732,7 +732,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetLagMulAtGaussPtsSlave(
         const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(lagrang_field_name, UserDataOperator::OPROW,
                     ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
@@ -752,7 +752,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpPrintLagMulAtGaussPtsSlave(
         const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(lagrang_field_name, UserDataOperator::OPROW,
                     ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
@@ -772,7 +772,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpLagGapProdGaussPtsSlave(
         const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(lagrang_field_name, UserDataOperator::OPROW,
                     ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
@@ -791,7 +791,7 @@ struct SimpleContactProblem {
 
     OpCalContactTractionOnMaster(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -834,7 +834,7 @@ struct SimpleContactProblem {
 
     OpCalContactTractionOnSlave(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -878,7 +878,7 @@ struct SimpleContactProblem {
 
     OpCalIntCompFunSlave(
         const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
         : ContactOp(lagrang_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
@@ -931,7 +931,7 @@ struct SimpleContactProblem {
 
     OpCalContactTractionOverLambdaMasterSlave(
         const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACEMASTERSLAVE),
           commonDataSimpleContact(common_data_contact) {
@@ -986,7 +986,7 @@ struct SimpleContactProblem {
 
     OpCalContactTractionOverLambdaSlaveSlave(
         const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         Mat aij = PETSC_NULL)
         : ContactOp(field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
@@ -1041,7 +1041,7 @@ struct SimpleContactProblem {
 
     OpCalDerIntCompFunOverLambdaSlaveSlave(
         const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
         : ContactOp(lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
@@ -1103,7 +1103,7 @@ struct SimpleContactProblem {
 
     OpCalDerIntCompFunOverSpatPosSlaveMaster(
         const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVEMASTER),
@@ -1167,7 +1167,7 @@ struct SimpleContactProblem {
 
     OpCalDerIntCompFunOverSpatPosSlaveSlave(
         const string field_name, const string lagrang_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
@@ -1233,7 +1233,7 @@ struct SimpleContactProblem {
     bool lagFieldSet;
 
     OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
-                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                   boost::shared_ptr<CommonDataSimpleContact> common_data,
                    moab::Interface &moab_out, bool lagrange_field = true)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
@@ -1251,7 +1251,7 @@ struct SimpleContactProblem {
     // stream<tee_device<std::ostream, std::ofstream>> &mySplit;
 
     OpMakeTestTextFile(MoFEM::Interface &m_field, string field_name,
-                       boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                       boost::shared_ptr<CommonDataSimpleContact> common_data,
                        std::ofstream &_my_split, bool lagrange_field = true)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
@@ -1289,7 +1289,7 @@ struct SimpleContactProblem {
         const string lag_mult_name, const string field_name,
         moab::Interface &post_proc_mesh,
         std::vector<EntityHandle> &map_gauss_pts,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               lag_mult_name, UserDataOperator::OPROW),
           lagMultName(lag_mult_name), fieldName(field_name),
@@ -1414,8 +1414,8 @@ struct SimpleContactProblem {
 
     OpLhsConvectIntegrationPtsContactTraction(
         const string row_field_name, const string col_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        ContactOp::FaceType face_type,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        const ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
         : ContactOp(row_field_name, col_field_name, UserDataOperator::OPROWCOL,
                     face_type),
@@ -1441,7 +1441,7 @@ struct SimpleContactProblem {
 
     OpCalculateGradPositionXi(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -1459,7 +1459,7 @@ struct SimpleContactProblem {
 
     OpCalculateGradLambdaXi(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -1478,8 +1478,8 @@ struct SimpleContactProblem {
 
     OpLhsConvectIntegrationPtsConstrainMasterGap(
         const string lagrange_field_name, const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        const double cn, ContactOp::FaceType face_type,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        const double cn, const ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
         : ContactOp(lagrange_field_name, field_name, UserDataOperator::OPROWCOL,
                     face_type),
@@ -1497,31 +1497,6 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     const double cN;
     boost::shared_ptr<MatrixDouble> diffConvect;
-  };
-
-  /**
-   * @brief Trigers operators for side volume
-   * element on master side
-   *
-   * Operator that trigers the pipeline to loop over the side volume element
-   * operators that is adjacent to the master side.
-   *
-   */
-  struct OpLoopMasterForSide : public ContactOp {
-
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-        sideFe;
-    std::string sideFeName;
-
-    OpLoopMasterForSide(
-        const string field_name,
-        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-            side_fe,
-        const std::string &side_fe_name)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
-          sideFe(side_fe), sideFeName(side_fe_name) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
   /**
@@ -1556,89 +1531,92 @@ struct SimpleContactProblem {
 
   /**
    * @brief Trigers operators for side volume
-   * element on slave side
-   *
-   * Operator that trigers the pipeline to loop over the side volume element
-   * operators that is adjacent to the slave side.
-   *
+   * element on slave side for evaluation of the RHS contact
+   * traction in the material configuration on either slave or master surface
    */
-  struct OpLoopSlaveForSide : public ContactOp {
+  struct OpLoopForSideRhs : public ContactOp {
 
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
         sideFe;
     std::string sideFeName;
+    const ContactOp::FaceType faceType;
+    /**
+     * @brief Operator that trigers the pipeline to loop over the side volume
+     *element  operators that is adjacent to the slave side.
+     **/
 
-    OpLoopSlaveForSide(
+    OpLoopForSideRhs(
         const string field_name,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
             side_fe,
-        const std::string &side_fe_name)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
-          sideFe(side_fe), sideFeName(side_fe_name) {}
+        const std::string &side_fe_name, const ContactOp::FaceType face_type)
+        : ContactOp(field_name, UserDataOperator::OPCOL, face_type),
+          sideFe(side_fe), sideFeName(side_fe_name), faceType(face_type) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
+ };
 
-  /**
-   * @brief RHS - operator for the contact element (material configuration)
-   * Integrates contact traction in the material configuration on master
-   *surface.
-   **/
-  struct OpCalMatForcesALEMaster : public ContactOp {
+ /**
+  * @brief RHS - operator for the contact element (material configuration)
+  * Integrates contact traction in the material configuration on master
+  * surface.
+  **/
+    struct OpCalMatForcesALEMaster : public ContactOp {
 
-    VectorInt rowIndices;
+      VectorInt rowIndices;
 
-    int nbRows;           ///< number of dofs on rows
-    int nbIntegrationPts; ///< number of integration points
+      int nbRows;           ///< number of dofs on rows
+      int nbIntegrationPts; ///< number of integration points
 
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    VectorDouble vecF;
+      boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+      VectorDouble vecF;
 
-    /**
-     * @brief Integrate pressure in the material configuration.
-     *
-     * Virtual work of the contact traction corresponding to a test function
-     * of the material configuration \f$(\delta{\mathbf{X}}^{(2)})\f$:
-     *
-     * \f[
-     * \delta W^\text{material}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{X}) =
-     * -\int\limits_\mathcal{T} \lambda \left\{\mathbf{F}^{\intercal}\cdot
-     * \mathbf{N}({\mathbf{X}}^{(2)}) \right\} \cdot \delta\mathbf{X}\,
-     * \textrm{d}\mathcal{T} =
-     * -\int\limits_{\mathcal{T}_{\xi}} \lambda
-     * \left\{\mathbf{F}^{\intercal}\cdot
-     * \left(\frac{\partial\mathbf{X}^{(2)}}(\xi,
-     * \eta){\partial\xi}\times\frac{\partial {\mathbf{X}}^{(2)}}
-     * {\partial\eta}\right) \right\} \cdot \delta{\mathbf{X}}^{(2)}\,
-     * \textrm{d}\xi\textrm{d}\eta \f]
-     *
-     * where \f$ \lambda \f$ is contact traction on master surface,
-     * \f${\mathbf{N}}({\mathbf{X}}^{(2)})\f$ is a normal to the face in the
-     * material configuration, \f$\xi, \eta\f$ are coordinates in the parent
-     * space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the deformation
-     * gradient:
-     *
-     * \f[
-     * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
-     * \frac{\partial\mathbf{x}}{\partial\boldsymbol{\chi}}
-     * \frac{\partial\boldsymbol{\chi}}{\partial\mathbf{X}}
-     * \f]
-     *
-     * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
-     * spatial and material maps, respectively, and \f$\boldsymbol{\chi}\f$ are
-     * the reference coordinates.
-     *
-     */
+      /**
+       * @brief Integrate pressure in the material configuration.
+       *
+       * Virtual work of the contact traction corresponding to a test function
+       * of the material configuration \f$(\delta{\mathbf{X}}^{(2)})\f$:
+       *
+       * \f[
+       * \delta W^\text{material}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{X}) =
+       * -\int\limits_\mathcal{T} \lambda \left\{\mathbf{F}^{\intercal}\cdot
+       * \mathbf{N}({\mathbf{X}}^{(2)}) \right\} \cdot \delta\mathbf{X}\,
+       * \textrm{d}\mathcal{T} =
+       * -\int\limits_{\mathcal{T}_{\xi}} \lambda
+       * \left\{\mathbf{F}^{\intercal}\cdot
+       * \left(\frac{\partial\mathbf{X}^{(2)}}(\xi,
+       * \eta){\partial\xi}\times\frac{\partial {\mathbf{X}}^{(2)}}
+       * {\partial\eta}\right) \right\} \cdot \delta{\mathbf{X}}^{(2)}\,
+       * \textrm{d}\xi\textrm{d}\eta \f]
+       *
+       * where \f$ \lambda \f$ is contact traction on master surface,
+       * \f${\mathbf{N}}({\mathbf{X}}^{(2)})\f$ is a normal to the face in the
+       * material configuration, \f$\xi, \eta\f$ are coordinates in the parent
+       * space \f$(\mathcal{T}_\xi)\f$ and \f$\mathbf{F}\f$ is the deformation
+       * gradient:
+       *
+       * \f[
+       * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
+       * \frac{\partial\mathbf{x}}{\partial\boldsymbol{\chi}}
+       * \frac{\partial\boldsymbol{\chi}}{\partial\mathbf{X}}
+       * \f]
+       *
+       * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
+       * spatial and material maps, respectively, and \f$\boldsymbol{\chi}\f$
+       * are the reference coordinates.
+       *
+       */
 
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-    MoFEMErrorCode iNtegrate(EntData &row_data);
-    MoFEMErrorCode aSsemble(EntData &row_data);
+      MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      MoFEMErrorCode iNtegrate(EntData &row_data);
+      MoFEMErrorCode aSsemble(EntData &row_data);
 
-    OpCalMatForcesALEMaster(
-        const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
-          commonDataSimpleContact(common_data_contact) {}
+      OpCalMatForcesALEMaster(
+          const string field_name,
+          boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+          : ContactOp(field_name, UserDataOperator::OPROW,
+                      ContactOp::FACEMASTER),
+            commonDataSimpleContact(common_data_contact) {}
   };
 
   /**
@@ -1655,14 +1633,44 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     VectorDouble vecF;
 
+    /**
+     * @brief Evaluates integral of contact traction in the material
+     * configuration on slave surface
+     *
+     *
+     * \f[
+     * \displaystyle\int_{{\gamma}^{(1)}_{\rm c}} {\mathbf N}({
+     * {\mathbf X}^{(1)}})  {\lambda } \left(
+     * {\mathbf{F}^{(1)}} \right)^{\rm T} \delta {X^{(1)}}  {\rm
+     * d}{\gamma}^{(1)} \f]
+     *
+     * where \f$\lambda\f$ is the lagrange multiplier field value at the gauss
+     * point that is equal to contact pressure, \f${\mathbf N}({
+     * {\mathbf X}^{(1)}}\f$ is the unit normal to the slave face
+     * in the material configuration, \f$\gamma\f$ is contact area and
+     * \f$\mathbf{F}^{(1)}\f$ is the deformation
+     * gradient on the slave side defined as:
+     *
+     * \f[
+     * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
+     * \frac{\partial\mathbf{x}}{\partial\boldsymbol{\chi}}
+     * \frac{\partial\boldsymbol{\chi}}{\partial\mathbf{X}}
+     * \f]
+     *
+     * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of
+     * the spatial and material maps, respectively, and \f$\boldsymbol{\chi}\f$
+     * are the reference coordinates.
+     *
+     */
+
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
     MoFEMErrorCode iNtegrate(EntData &row_data);
     MoFEMErrorCode aSsemble(EntData &row_data);
 
     OpCalMatForcesALESlave(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
   };
 
@@ -1673,7 +1681,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetNormalSlaveALE(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -1717,7 +1725,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetNormalMasterALE(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
           commonDataSimpleContact(common_data_contact) {}
 
@@ -1759,7 +1767,7 @@ struct SimpleContactProblem {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
     OpContactMaterialMasterOnFaceLhs_dX_dX(
         const string mesh_nodes_field_row, const string mesh_nodes_field_col,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const int row_rank, const int col_rank)
         : OpContactMaterialLhs(mesh_nodes_field_row, mesh_nodes_field_col,
                                common_data_contact, ContactOp::FACEMASTERMASTER,
@@ -1774,7 +1782,7 @@ struct SimpleContactProblem {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
     OpContactMaterialSlaveOnFaceLhs_dX_dX(
         const string mesh_nodes_field_row, const string mesh_nodes_field_col,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const int row_rank, const int col_rank)
         : OpContactMaterialLhs(mesh_nodes_field_row, mesh_nodes_field_col,
                                common_data_contact, ContactOp::FACESLAVESLAVE,
@@ -1790,7 +1798,7 @@ struct SimpleContactProblem {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
     OpContactMaterialMasterSlaveLhs_dX_dLagmult(
         const string mesh_nodes_field_row, const string mesh_nodes_field_col,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const int row_rank, const int col_rank)
         : OpContactMaterialLhs(mesh_nodes_field_row, mesh_nodes_field_col,
                                common_data_contact, ContactOp::FACEMASTERSLAVE,
@@ -1806,7 +1814,7 @@ struct SimpleContactProblem {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
     OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
         const string mesh_nodes_field_row, const string mesh_nodes_field_col,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const int row_rank, const int col_rank)
         : OpContactMaterialLhs(mesh_nodes_field_row, mesh_nodes_field_col,
                                common_data_contact, ContactOp::FACESLAVESLAVE,
@@ -1911,48 +1919,27 @@ struct SimpleContactProblem {
     };
   };
 
-  struct OpLoopMasterForSideLhs : public ContactOp {
-
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-        sideFe;
-    std::string sideFeName;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpLoopMasterForSideLhs(
-        const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-            side_fe,
-        const std::string &side_fe_name)
-        : ContactOp(field_name, UserDataOperator::OPROWCOL,
-                    ContactOp::FACEMASTERMASTER),
-          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
-          sideFeName(side_fe_name) {}
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
-
-  struct OpLoopSlaveForSideLhs
+  struct OpLoopForSideLhs
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
         sideFe;
     std::string sideFeName;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpLoopSlaveForSideLhs(
+    const bool isMaster;
+
+    OpLoopForSideLhs(
         const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
             side_fe,
-        const std::string &side_fe_name)
+        const std::string &side_fe_name, const bool is_master)
         : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPROWCOL,
               ContactPrismElementForcesAndSourcesCore::UserDataOperator::
                   FACESLAVESLAVE),
           commonDataSimpleContact(common_data_contact), sideFe(side_fe),
-          sideFeName(side_fe_name) {}
+          sideFeName(side_fe_name), isMaster(is_master) {}
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type,
