@@ -1336,7 +1336,7 @@ MoFEMErrorCode SimpleContactProblem::OpPostProcContactContinuous::doWork(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name) {
+    string field_name, string lagrange_field_name) {
   MoFEMFunctionBegin;
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
@@ -1353,21 +1353,21 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
       new OpGetGapSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpCalContactTractionOnSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpCalIntCompFunSlave(
-      lagrang_field_name, common_data_simple_contact, cnValue));
+      lagrange_field_name, common_data_simple_contact, cnValue));
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name) {
+    string field_name, string lagrange_field_name) {
   MoFEMFunctionBegin;
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
@@ -1377,7 +1377,7 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
       new OpGetNormalMaster(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
@@ -1389,7 +1389,7 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name) {
+    string field_name, string lagrange_field_name) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
@@ -1409,31 +1409,33 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
       new OpGetGapSlave(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalContactTractionOverLambdaSlaveSlave(
-          field_name, lagrang_field_name, common_data_simple_contact));
+          field_name, lagrange_field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalDerIntCompFunOverLambdaSlaveSlave(
-          lagrang_field_name, common_data_simple_contact, cnValue));
+          lagrange_field_name, common_data_simple_contact, cnValue));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalDerIntCompFunOverSpatPosSlaveMaster(
-          field_name, lagrang_field_name, common_data_simple_contact, cnValue));
+          field_name, lagrange_field_name, common_data_simple_contact,
+          cnValue));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalDerIntCompFunOverSpatPosSlaveSlave(
-          field_name, lagrang_field_name, common_data_simple_contact, cnValue));
+          field_name, lagrange_field_name, common_data_simple_contact,
+          cnValue));
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name) {
+    string field_name, string lagrange_field_name) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
@@ -1443,12 +1445,12 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
       new OpGetNormalMaster(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalContactTractionOverLambdaMasterSlave(
-          field_name, lagrang_field_name, common_data_simple_contact));
+          field_name, lagrange_field_name, common_data_simple_contact));
 
   MoFEMFunctionReturn(0);
 }
@@ -1456,24 +1458,24 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name) {
+    string field_name, string lagrange_field_name) {
   MoFEMFunctionBegin;
   CHKERR setContactOperatorsLhs(
       boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),
-      common_data_simple_contact, field_name, lagrang_field_name);
+      common_data_simple_contact, field_name, lagrange_field_name);
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalculateGradPositionXi(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsConstrainMasterGap(
-          lagrang_field_name, field_name, common_data_simple_contact, cnValue,
+          lagrange_field_name, field_name, common_data_simple_contact, cnValue,
           ContactOp::FACESLAVESLAVE,
           fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialSlave()));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsConstrainMasterGap(
-          lagrang_field_name, field_name, common_data_simple_contact, cnValue,
+          lagrange_field_name, field_name, common_data_simple_contact, cnValue,
           ContactOp::FACESLAVEMASTER,
           fe_lhs_simple_contact->getConvectPtr()->getDiffKsiSpatialMaster()));
 
@@ -1483,15 +1485,15 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrang_field_name) {
+    string field_name, string lagrange_field_name) {
   MoFEMFunctionBegin;
 
   CHKERR setMasterForceOperatorsLhs(
       boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),
-      common_data_simple_contact, field_name, lagrang_field_name);
+      common_data_simple_contact, field_name, lagrange_field_name);
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(new OpCalculateGradLambdaXi(
-      lagrang_field_name, common_data_simple_contact));
+      lagrange_field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpLhsConvectIntegrationPtsContactTraction(
@@ -1510,7 +1512,7 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    MoFEM::Interface &m_field, string field_name, string lagrang_field_name,
+    MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
     moab::Interface &moab_out, bool lagrange_field) {
   MoFEMFunctionBegin;
 
@@ -1536,11 +1538,11 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
         new OpGetGapSlave(field_name, common_data_simple_contact));
 
     fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+        new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                        common_data_simple_contact));
 
     fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpLagGapProdGaussPtsSlave(lagrang_field_name,
+        new OpLagGapProdGaussPtsSlave(lagrange_field_name,
                                       common_data_simple_contact));
 
     fe_post_proc_simple_contact->getOpPtrVector().push_back(
@@ -1552,17 +1554,17 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
 
 MoFEMErrorCode SimpleContactProblem::setPostProcContactOperators(
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
-    const std::string field_name, const std::string lagrang_field_name,
+    const std::string field_name, const std::string lagrange_field_name,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact) {
   MoFEMFunctionBegin;
 
   post_proc_contact_ptr->getOpPtrVector().push_back(
-      new OpCalLagrangeMultPostProc(lagrang_field_name,
+      new OpCalLagrangeMultPostProc(lagrange_field_name,
                                     common_data_simple_contact));
 
   post_proc_contact_ptr->getOpPtrVector().push_back(
       new OpPostProcContactContinuous(
-          lagrang_field_name, field_name, post_proc_contact_ptr->postProcMesh,
+          lagrange_field_name, field_name, post_proc_contact_ptr->postProcMesh,
           post_proc_contact_ptr->mapGaussPts, common_data_simple_contact));
 
   MoFEMFunctionReturn(0);
