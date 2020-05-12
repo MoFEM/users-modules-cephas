@@ -30,6 +30,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 bfe_build_and_install(simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
 
+bfe_build_and_install(rough_contact
+    ${CMAKE_CURRENT_SOURCE_DIR}/rough_contact.cpp)
+
+bfe_build_and_install(wavy_surf
+    ${CMAKE_CURRENT_SOURCE_DIR}/wavy_surf.cpp)
+
 bfe_copy_and_install("README" "${permissions_default}")
 
 file(
