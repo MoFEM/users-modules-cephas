@@ -1,7 +1,7 @@
 /** \file rough_contact.cpp
  * \example rough_contact.cpp
  *
- * Implementation of simple contact (matching meshes) 
+ * Implementation of simple contact (matching meshes)
  * between a solid with a rough surface and a rigid flat
  *
  **/
@@ -27,6 +27,8 @@ using namespace std;
 using namespace MoFEM;
 
 static char help[] = "\n";
+double SimpleContactProblem::LoadScale::lAmbda = 1;
+
 int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
@@ -67,6 +69,7 @@ int main(int argc, char *argv[]) {
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
+    PetscInt nb_sub_steps = 1; // default number of steps
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool is_test = PETSC_FALSE;
@@ -83,6 +86,9 @@ int main(int argc, char *argv[]) {
         "-my_order_lambda",
         "default approximation order of Lagrange multipliers", "", 1,
         &order_lambda, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-my_step_num", "number of steps", "", nb_sub_steps,
+                           &nb_sub_steps, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -180,14 +186,14 @@ int main(int argc, char *argv[]) {
     CHKERR prisms_from_surface_interface->createPrisms(master_tris, swap_nodes,
                                                        contact_prisms);
     CHKERR set_prism_layer_thickness(contact_prisms, 1);
-                                                       
+
     BitRefLevel bit_level0;
-    bit_level0.set(0);                                               
+    bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
     CHKERR prisms_from_surface_interface->seedPrismsEntities(contact_prisms,
-                                                             bit_level0);                                                   
-    
+                                                             bit_level0);
+
     Range faces;
     CHKERR moab.get_adjacencies(contact_prisms, 2, true, faces,
                                 moab::Interface::UNION);
@@ -203,8 +209,8 @@ int main(int argc, char *argv[]) {
     CHKERR mmanager_ptr->printMaterialsSet();
     CHKERR mmanager_ptr->printPressureSet();
 
-    EntityHandle rootset = moab.get_root_set();         
-    CHKERR moab.write_file("tets_and_prisms.vtk", "VTK", "", &rootset, 1);                                                
+    EntityHandle rootset = moab.get_root_set();
+    CHKERR moab.write_file("tets_and_prisms.vtk", "VTK", "", &rootset, 1);
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -216,8 +222,7 @@ int main(int argc, char *argv[]) {
                              MB_TAG_SPARSE, MF_ZERO);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
-    // CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI, "MESH_NODE_POSITIONS");
-    
+  
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
@@ -225,7 +230,8 @@ int main(int argc, char *argv[]) {
 
     // Declare problem add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
-    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "SPATIAL_POSITION");
+    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+                                             "SPATIAL_POSITION");
     CHKERR m_field.set_field_order(0, MBTET, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
@@ -327,7 +333,8 @@ int main(int argc, char *argv[]) {
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
     contact_problem->addPostProcContactElement(
-        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT", slave_tris);
+        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
+        "MESH_NODE_POSITIONS", slave_tris);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
@@ -404,6 +411,7 @@ int main(int argc, char *argv[]) {
     boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
     for (; mit != neumann_forces.end(); mit++) {
+      mit->second->methodsOp.push_back(new SimpleContactProblem::LoadScale());
       CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
                                     &mit->second->getLoopFe(), NULL, NULL);
     }
@@ -522,119 +530,132 @@ int main(int argc, char *argv[]) {
           sit->second, post_proc.commonData));
     }
 
-    CHKERR SNESSolve(snes, PETSC_NULL, D);
-
-    CHKERR SNESGetConvergedReason(snes, &snes_reason);
-
-    int its;
-    CHKERR SNESGetIterationNumber(snes, &its);
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
-                       its);
-
-    // save on mesh
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
-
-    elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
-    elastic.getLoopFeEnergy().eNergy = 0;
-    PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
-    // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
-                elastic.getLoopFeEnergy().eNergy);
-
-    {
-      string out_file_name;
-      std::ostringstream stm;
-      stm << "out"
-          << ".h5m";
-      out_file_name = stm.str();
-      CHKERR
-      PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
-      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                               "PARALLEL=WRITE_PART");
-    }
-
-    // moab_instance
-    moab::Core mb_post;                   // create database
-    moab::Interface &moab_proc = mb_post; // create interface to database
-
-    auto common_data_simple_contact = make_contact_common_data();
-
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_post_proc_simple_contact;
-    if (convect_pts == PETSC_TRUE) {
-      fe_post_proc_simple_contact = make_convective_master_element();
-    } else {
-      fe_post_proc_simple_contact = make_contact_element();
-    }
-
-    contact_problem->setContactOperatorsForPostProc(
-        fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post);
-
-    mb_post.delete_mesh();
-
-    if (is_test == PETSC_TRUE) {
-      std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new SimpleContactProblem::OpMakeTestTextFile(
-              m_field, "SPATIAL_POSITION", common_data_simple_contact, ofs));
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
-
-      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
-      ofs.flush();
-      ofs.close();
-    } else {
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
-    }
-
-    {
-      string out_file_name;
-      std::ostringstream strm;
-      strm << "out_contact_integ_pts"
-           << ".h5m";
-      out_file_name = strm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                         out_file_name.c_str());
-      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                                "PARALLEL=WRITE_PART");
-    }
-
     boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
         new PostProcFaceOnRefinedMesh(m_field));
 
     CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("LAGMULT");
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
-    auto common_post_proc_data_simple_contact = make_contact_common_data();
+    for (int ss = 0; ss != nb_sub_steps; ++ss) {
 
-    CHKERR contact_problem->setPostProcContactOperators(
-        post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-        common_post_proc_data_simple_contact);
+      SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nLoad scale: %6.4e\n",
+                         SimpleContactProblem::LoadScale::lAmbda);
 
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
-                                    post_proc_contact_ptr);
+      CHKERR SNESSolve(snes, PETSC_NULL, D);
 
-    {
-      string out_file_name;
-      std::ostringstream stm;
-      stm << "out_contact_pressure"
-          << ".h5m";
-      out_file_name = stm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                         out_file_name.c_str());
-      CHKERR post_proc_contact_ptr->postProcMesh.write_file(
-          out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR SNESGetConvergedReason(snes, &snes_reason);
+
+      int its;
+      CHKERR SNESGetIterationNumber(snes, &its);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD,
+                         "number of Newton iterations = %D\n", its);
+
+      // save on mesh
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+      PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+
+      elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
+      elastic.getLoopFeEnergy().eNergy = 0;
+      PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC",
+                                      &elastic.getLoopFeEnergy());
+      // Print elastic energy
+      PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
+                  elastic.getLoopFeEnergy().eNergy);
+
+      {
+        string out_file_name;
+        std::ostringstream stm;
+        stm << "out_" << ss << ".h5m";
+        out_file_name = stm.str();
+        CHKERR
+        PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
+        CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                                 "PARALLEL=WRITE_PART");
+      }
+
+      // moab_instance
+      moab::Core mb_post;                   // create database
+      moab::Interface &moab_proc = mb_post; // create interface to database
+
+      auto common_data_simple_contact = make_contact_common_data();
+
+      boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+          fe_post_proc_simple_contact;
+      if (convect_pts == PETSC_TRUE) {
+        fe_post_proc_simple_contact = make_convective_master_element();
+      } else {
+        fe_post_proc_simple_contact = make_contact_element();
+      }
+
+      contact_problem->setContactOperatorsForPostProc(
+          fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+          "SPATIAL_POSITION", "LAGMULT", mb_post);
+
+      mb_post.delete_mesh();
+
+      if (is_test == PETSC_TRUE) {
+        std::ofstream ofs(
+            (std ::string("test_simple_contact") + ".txt").c_str());
+
+        fe_post_proc_simple_contact->getOpPtrVector().push_back(
+            new SimpleContactProblem::OpMakeTestTextFile(
+                m_field, "SPATIAL_POSITION", common_data_simple_contact, ofs));
+
+        CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                        fe_post_proc_simple_contact);
+
+        ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
+        ofs.flush();
+        ofs.close();
+      } else {
+        CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                        fe_post_proc_simple_contact);
+      }
+
+      {
+        string out_file_name;
+        std::ostringstream strm;
+        strm << "out_contact_integ_pts_" << ss << ".h5m";
+        out_file_name = strm.str();
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                           out_file_name.c_str());
+        CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                                  "PARALLEL=WRITE_PART");
+      }
+
+      // boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+      //     new PostProcFaceOnRefinedMesh(m_field));
+
+      // CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+
+      // auto common_post_proc_data_simple_contact = make_contact_common_data();
+
+      // CHKERR contact_problem->setPostProcContactOperators(
+      //     post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+      //     common_post_proc_data_simple_contact);
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
+                                      post_proc_contact_ptr);
+
+      {
+        string out_file_name;
+        std::ostringstream stm;
+        stm << "out_contact_" << ss << ".h5m";
+        out_file_name = stm.str();
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                           out_file_name.c_str());
+        CHKERR post_proc_contact_ptr->postProcMesh.write_file(
+            out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+      }
     }
-
   }
   CATCH_ERRORS;
 
