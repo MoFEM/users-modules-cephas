@@ -345,7 +345,8 @@ int main(int argc, char *argv[]) {
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
     contact_problem->addPostProcContactElement(
-        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT", slave_tris);
+        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
+        "MESH_NODE_POSITIONS", slave_tris);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
