@@ -405,11 +405,14 @@ struct SimpleContactProblem {
 
   double cnValue;
   bool newtonCotes;
+  boost::shared_ptr<double> cnValuePtr;
   MoFEM::Interface &mField;
 
-  SimpleContactProblem(MoFEM::Interface &m_field, double &cn_value,
+  SimpleContactProblem(MoFEM::Interface &m_field,
+                       boost::shared_ptr<double> cn_value,
                        bool newton_cotes = false)
-      : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes) {}
+      : mField(m_field), cnValuePtr(cn_value), newtonCotes(newton_cotes) {
+    }
 
   struct OpContactMaterialLhs : public ContactOp {
 
@@ -879,10 +882,10 @@ struct SimpleContactProblem {
     OpCalIntCompFunSlave(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const double cn)
+        boost::shared_ptr<double> cn)
         : ContactOp(lagrang_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), cN(cn) {}
+          commonDataSimpleContact(common_data_contact), cNPtr(cn) {}
 
     /**
      * @brief Integrates the complementarity function at slave
@@ -915,7 +918,7 @@ struct SimpleContactProblem {
 
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    const double cN;
+    boost::shared_ptr<double> cNPtr;
     VectorDouble vecR;
   };
 
@@ -1042,10 +1045,10 @@ struct SimpleContactProblem {
     OpCalDerIntCompFunOverLambdaSlaveSlave(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const double cn)
+        boost::shared_ptr<double> cn)
         : ContactOp(lagrang_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
-          commonDataSimpleContact(common_data_contact), cN(cn) {
+          commonDataSimpleContact(common_data_contact), cNPtr(cn) {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
@@ -1086,7 +1089,7 @@ struct SimpleContactProblem {
 
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    const double cN;
+    boost::shared_ptr<double> cNPtr;
     MatrixDouble NN;
   };
 
@@ -1104,10 +1107,21 @@ struct SimpleContactProblem {
     OpCalDerIntCompFunOverSpatPosSlaveMaster(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const double cn)
+        boost::shared_ptr<double> cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVEMASTER),
-          commonDataSimpleContact(common_data_contact), cN(cn) {
+          commonDataSimpleContact(common_data_contact), cNPtr(cn) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    OpCalDerIntCompFunOverSpatPosSlaveMaster(
+        const string field_name, const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        double *cn_ptr)
+        : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+                    ContactOp::FACESLAVEMASTER),
+          commonDataSimpleContact(common_data_contact), cNPtr(cn_ptr) {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
@@ -1150,7 +1164,7 @@ struct SimpleContactProblem {
 
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    double cN;
+    boost::shared_ptr<double> cNPtr;
     MatrixDouble NN;
   };
 
@@ -1168,10 +1182,10 @@ struct SimpleContactProblem {
     OpCalDerIntCompFunOverSpatPosSlaveSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const double cn)
+        boost::shared_ptr<double> cn)
         : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
-          cN(cn), commonDataSimpleContact(common_data_contact) {
+          cNPtr(cn), commonDataSimpleContact(common_data_contact) {
       sYmm = false; // This will make sure to loop over all entities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
@@ -1214,7 +1228,7 @@ struct SimpleContactProblem {
 
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    const double cN;
+    boost::shared_ptr<double> cNPtr;
     MatrixDouble NN;
   };
 
@@ -1479,11 +1493,11 @@ struct SimpleContactProblem {
     OpLhsConvectIntegrationPtsConstrainMasterGap(
         const string lagrange_field_name, const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const double cn, const ContactOp::FaceType face_type,
+        boost::shared_ptr<double> cn, const ContactOp::FaceType face_type,
         boost::shared_ptr<MatrixDouble> diff_convect)
         : ContactOp(lagrange_field_name, field_name, UserDataOperator::OPROWCOL,
                     face_type),
-          commonDataSimpleContact(common_data_contact), cN(cn),
+          commonDataSimpleContact(common_data_contact), cNPtr(cn),
           diffConvect(diff_convect) {
       sYmm = false;
     }
@@ -1495,7 +1509,7 @@ struct SimpleContactProblem {
   private:
     MatrixDouble matLhs;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    const double cN;
+    boost::shared_ptr<double> cNPtr;
     boost::shared_ptr<MatrixDouble> diffConvect;
   };
 
@@ -1871,19 +1885,19 @@ struct SimpleContactProblem {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
     OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
         const string lagrang_field_name, const string mesh_nodes_field,
-        const double cn,
+        boost::shared_ptr<double> cn,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         int row_rank, const int col_rank)
         : OpContactALELhs(lagrang_field_name, mesh_nodes_field,
                           common_data_contact, ContactOp::FACESLAVESLAVE,
                           row_rank, col_rank),
-          cN(cn) {
+          cNPtr(cn) {
       sYmm = false; // This will make sure to loop over all intities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
     }
 
   private:
-    const double cN;
+    boost::shared_ptr<double> cNPtr;
   };
 
   struct OpContactMaterialVolOnSideLhs_dX_dx

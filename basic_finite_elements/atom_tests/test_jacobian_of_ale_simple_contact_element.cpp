@@ -318,9 +318,11 @@ int main(int argc, char *argv[]) {
     CHKERR DMCreate(PETSC_COMM_WORLD, &dm);
     CHKERR DMSetType(dm, dm_name);
 
+    auto cn_value_ptr = boost::make_shared<double>(cn_value);
+
     boost::shared_ptr<SimpleContactProblem> contact_problem;
     contact_problem = boost::shared_ptr<SimpleContactProblem>(
-        new SimpleContactProblem(m_field, cn_value, is_newton_cotes));
+        new SimpleContactProblem(m_field, cn_value_ptr, is_newton_cotes));
 
     Range nodes;
     CHKERR moab.get_adjacencies(master_tris, 0, false, nodes,

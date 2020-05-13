@@ -262,8 +262,9 @@ int main(int argc, char *argv[]) {
       PetscRandomDestroy(&rctx);
       PetscRandomDestroy(&rctx2);
 
+      auto cn_value_ptr = boost::make_shared<double>(cn_value);
       auto contact_problem = boost::make_shared<SimpleContactProblem>(
-          m_field, cn_value, is_newton_cotes);
+          m_field, cn_value_ptr, is_newton_cotes);
 
       auto make_contact_element = [&]() {
         return boost::make_shared<SimpleContactProblem::SimpleContactElement>(

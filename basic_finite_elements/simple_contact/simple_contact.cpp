@@ -277,8 +277,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-
+    
     auto make_contact_element = [&]() {
+      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -338,8 +339,9 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
+    auto cn_value_ptr = boost::make_shared<double>(cn_value);
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+        m_field, cn_value_ptr, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
@@ -655,7 +657,6 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
-
   }
   CATCH_ERRORS;
 
