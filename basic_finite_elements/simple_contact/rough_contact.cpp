@@ -127,6 +127,7 @@ int main(int argc, char *argv[]) {
       CHKERR moab.load_file(mesh_file_name, 0, option);
     }
 
+
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -143,18 +144,18 @@ int main(int argc, char *argv[]) {
 
     auto set_prism_layer_thickness = [&](const Range &prisms, int nb_layers) {
       MoFEMFunctionBegin;
-      Range nodes_f4;
-      int ff = 4;
+      Range nodes;
+      int ff = 3;
       for (Range::iterator pit = prisms.begin(); pit != prisms.end(); pit++) {
         EntityHandle face;
         CHKERR moab.side_element(*pit, 2, ff, face);
         const EntityHandle *conn;
         int number_nodes = 0;
         CHKERR moab.get_connectivity(face, conn, number_nodes, false);
-        nodes_f4.insert(&conn[0], &conn[number_nodes]);
+        nodes.insert(&conn[0], &conn[number_nodes]);
       }
       double coords[3], director[3];
-      for (Range::iterator nit = nodes_f4.begin(); nit != nodes_f4.end();
+      for (Range::iterator nit = nodes.begin(); nit != nodes.end();
            nit++) {
         CHKERR moab.get_coords(&*nit, 1, coords);
         if (coords[2] > 0.0) {
@@ -178,13 +179,14 @@ int main(int argc, char *argv[]) {
                            bit->getName().c_str(), bit->getMeshsetId());
         Range tris;
         CHKERR moab.get_entities_by_dimension(bit->getMeshset(), 2, tris, true);
-        master_tris.merge(tris);
+        slave_tris.merge(tris);
       }
     }
 
-    bool swap_nodes = true;
-    CHKERR prisms_from_surface_interface->createPrisms(master_tris, swap_nodes,
-                                                       contact_prisms);
+
+    CHKERR prisms_from_surface_interface->createPrisms(
+        slave_tris, PrismsFromSurfaceInterface::SWAP_TOP_AND_BOT_TRI,
+        contact_prisms);
     CHKERR set_prism_layer_thickness(contact_prisms, 1);
 
     BitRefLevel bit_level0;
@@ -198,10 +200,10 @@ int main(int argc, char *argv[]) {
     CHKERR moab.get_adjacencies(contact_prisms, 2, true, faces,
                                 moab::Interface::UNION);
     faces = faces.subset_by_type(MBTRI);
-    slave_tris = subtract(faces, master_tris);
+    master_tris = subtract(faces, slave_tris);
 
     CHKERR mmanager_ptr->addMeshset(BLOCKSET, 10, "RIGID_FLAT");
-    CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 10, slave_tris);
+    CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 10, master_tris);
 
     CHKERR mmanager_ptr->setMeshsetFromFile("bc.cfg");
 
@@ -222,7 +224,8 @@ int main(int argc, char *argv[]) {
                              MB_TAG_SPARSE, MF_ZERO);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
-  
+    CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
+                                             "MESH_NODE_POSITIONS");
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
@@ -230,7 +233,7 @@ int main(int argc, char *argv[]) {
 
     // Declare problem add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
-    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+    CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
                                              "SPATIAL_POSITION");
     CHKERR m_field.set_field_order(0, MBTET, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
