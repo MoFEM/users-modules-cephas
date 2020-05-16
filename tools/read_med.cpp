@@ -66,13 +66,13 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface(meshsets_interface_ptr);
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
 
-    std::cout << "Print all meshsets (old and added from meshsets "
-                 "configurational file\n"
-              << std::endl;
+    MOFEM_LOG_CHANNEL("WORLD");
+    MOFEM_LOG("WORLD", sev::inform)
+        << "Print all meshsets (old and added from meshsets "
+           "configurational file";
     for (auto cit = meshsets_interface_ptr->getBegin();
-         cit != meshsets_interface_ptr->getEnd(); cit++) {
-      std::cout << *cit << endl;
-    }
+         cit != meshsets_interface_ptr->getEnd(); cit++)
+      MOFEM_LOG("WORLD", sev::inform) << *cit;
 
     CHKERR moab.write_file(mesh_out_file);
   }
