@@ -67,12 +67,12 @@ int main(int argc, char *argv[]) {
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
 
     MOFEM_LOG_CHANNEL("WORLD");
-    MOFEM_LOG("WORLD", sev::inform)
+    MOFEM_LOG("WORLD", Sev::inform)
         << "Print all meshsets (old and added from meshsets "
            "configurational file";
     for (auto cit = meshsets_interface_ptr->getBegin();
          cit != meshsets_interface_ptr->getEnd(); cit++)
-      MOFEM_LOG("WORLD", sev::inform) << *cit;
+      MOFEM_LOG("WORLD", Sev::inform) << *cit;
 
     CHKERR moab.write_file(mesh_out_file);
   }
