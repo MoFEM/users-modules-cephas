@@ -569,10 +569,10 @@ int main(int argc, char *argv[]) {
         switch (test_case_x) {
 
         case 1:
-          dof.getFieldData() = coords[2] - 8.;
+          // dof.getFieldData() = coords[2] - 8.;
           break;
         case 2:
-          dof.getFieldData() = coords[2] + 1.;
+          // dof.getFieldData() = coords[2] + 1.;
           break;
         }
         printf("Master  After x : %e test case %d\n", dof.getFieldData(),
