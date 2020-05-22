@@ -150,8 +150,7 @@ int main(int argc, char *argv[]) {
 
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
-          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-                                     ref_level_meshset);
+          CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
           CHKERR m_field.getInterface<BitRefManager>()
               ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
                                              BitRefLevel().set(), MBTET,
