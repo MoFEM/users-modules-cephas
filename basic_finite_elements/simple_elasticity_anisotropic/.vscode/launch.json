@@ -1,0 +1,28 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "build_basic_finite_elements",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/liyang/mofem_install/users_modules_debug/basic_finite_elements/simple_elasticity_anisotropic/simple_elasticity_anisotropic",
+            "args": ["-file_name", "wellbore.cub", "-order", "3"],   //simple_elasticity.h5m   wellbore
+            "stopAtEntry": false,
+            "cwd": "/home/liyang/mofem_install/users_modules_debug/basic_finite_elements/simple_elasticity_anisotropic/",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build_basic_finite_elements",
+        }
+    ]
+}
