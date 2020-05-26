@@ -107,12 +107,17 @@ protected:
     CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
     
+    Tag th_cylindricalStress;
+    CHKERR postProcMesh.tag_get_handle("C_STRESS", 9, MB_TYPE_DOUBLE, th_cylindricalStress,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+    
     FTensor::Tensor2<double, 3, 3> tStress;
     FTensor::Tensor2<double, 3, 3> tStrain;
     MatrixDouble Stress;
 
     int nb_gauss_pts = data.getN().size1();
-    if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) {
+    MatrixDouble coordsGaussPts = getCoordsAtGaussPts();
+    if ((mapGaussPts.size() != nb_gauss_pts) || (coordsGaussPts.size1() != nb_gauss_pts)) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
     }
     for (int gg = 0; gg < nb_gauss_pts; ++gg) {
@@ -140,6 +145,58 @@ protected:
       }
 
       CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1, &Stress(0,0));
+
+
+      // cylindrical coordinate
+      double xCoord = coordsGaussPts(gg, 0);
+      double yCoord = coordsGaussPts(gg, 1);
+      double zCoord = coordsGaussPts(gg, 2);
+
+      double radius = sqrt(xCoord * xCoord + yCoord * yCoord);
+      double valueSin = yCoord / radius;
+      double valueCos = xCoord / radius;
+
+      Eigen::MatrixXd beta(3,3), betaTranspose(3,3), tmpStress(3,3);
+
+      for (int ii = 0; ii < 3; ++ ii) {
+        for (int jj = 0; jj < 3; ++ jj) {
+
+          tmpStress(ii,jj) = Stress(ii,jj);
+
+        }
+      }
+
+      beta(0, 0) = beta(1, 1) = valueCos;
+      beta(0, 1) = valueSin;
+      beta(1, 0) = -valueSin;
+      beta(2, 2) = 1.0;
+
+      betaTranspose = beta.transpose();
+
+      tmpStress = beta * tmpStress * betaTranspose;
+
+      MatrixDouble cylindricalStress;
+      cylindricalStress.resize(3,3);
+
+      for (int ii = 0; ii < 3; ++ ii) {
+        for (int jj = 0; jj < 3; ++ jj) {
+
+          cylindricalStress(ii,jj) = tmpStress(ii,jj);
+
+        }
+      }
+
+      CHKERR postProcMesh.tag_set_data(th_cylindricalStress, &mapGaussPts[gg], 1, &cylindricalStress(0,0));
+
+
+
+      
+
+      
+
+
+
+
 
     }
 
