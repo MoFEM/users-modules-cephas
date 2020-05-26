@@ -20,6 +20,7 @@
 
 #include <BasicFiniteElements.hpp>
 #include "./TransverseIsotropicElasticityTensor.h"
+#include "./PostProcHookStressAnisotropic.hpp"
 
 using namespace boost::numeric;
 using namespace MoFEM;
@@ -545,10 +546,6 @@ int main(int argc, char *argv[]) {
     Range fix_faces_x, fix_faces_y, fix_faces_z, pressure_faces;
 
     enum MyBcTypes {
-      // FIX_BRICK_FACES      = 1,
-      // FIX_NODES            = 2,
-      // BRICK_PRESSURE_FACES = 3,
-      // FIX_FACES_Y_DIR      = 4
       FIX_FACES_X_DIR = 1,
       FIX_FACES_Y_DIR = 2,
       FIX_FACES_Z_DIR = 3,
@@ -608,8 +605,8 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE,
-                                            3);
+    CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
+
     CHKERR simple_interface->setFieldOrder("U", order);
 
     CHKERR simple_interface->defineFiniteElements();
@@ -741,6 +738,8 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.addFieldValuesPostProc("U");
 
     CHKERR post_proc.addFieldValuesGradientPostProc("U");
+
+    post_proc.getOpPtrVector().push_back(new PostProcHookStressAnisotropic(m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "U", post_proc.commonData, t_elastic, t_sigma0));
 
     CHKERR DMoFEMLoopFiniteElements(
         dm, simple_interface->getDomainFEName().c_str(), &post_proc);
