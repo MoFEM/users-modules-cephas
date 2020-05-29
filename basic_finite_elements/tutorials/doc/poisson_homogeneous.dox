@@ -1,14 +1,37 @@
 /*! \page basic_tutorials_poisson_homogeneous Poisson's equation (homogeneous boundary condition)
 
-\note This tutorial depends on How to create a mesh in Gmsh
+\tableofcontents
+
+\note Prerequisite of this tutorial is \ref basic_tutorials_mesh_generation_2d
+and \ref basic_tutorials_mesh_generation_3d (for the 3D extension
+implementation) 
 
 \section basic_tutorials_poisson_homogeneous_introduction Introduction
+
+\subsection basic_tutorials_poisson_homogeneous_ilo Intended learning outcome
+
+After this tutorial, you will learn:
+
+- general structure of a program developed using MoFEM
+- idea of Simple Interface in MoFEM and how to use it
+- idea of Boundary element in MoFEM and how to use it
+- process of creating User Data Operators (UDOs) and how to \b push them to the main program
+- a way to handle homogeneous boundary condition in MoFEM
+- utilisation of tools to read outputs (MOAB) and visualise them (Paraview)
+
+\subsection basic_tutorials_poisson_homogeneous_the_problem The problem
+
+In this first example, we will solve a simple Poisson' equation in 2D with
+homogeneous boundary condition (zero boundary values) and non-zero body force 
+
+\subsection basic_tutorials_poisson_homogeneous_discretisation Discretisation
+
 
 \section basic_tutorials_poisson_homogeneous_implementation Implementation
 
 The immediate question you may have regarding the implementation is how to
-implement the matrices \b K and \b \M as well as vectors \b f and \b g. This is
-done through the implementation of the so-called User Data Operators (UDOs)
+implement the matrices \b K and \b M as well as vectors \b f and \b g. This is
+done through the implementation of the so-called User Data Operators
 which is normally called Operators (for short) by MoFEM developers. As a common
 practice, typically all the implementation of UDOs for a specific is put in a
 <tt> *.hpp </tt> file. This file will be included in another <tt>*.cpp</tt> file
@@ -18,23 +41,23 @@ the implementation of UDOs and classes/functions are presented below
 \subsection basic_tutorials_poisson_homogeneous_udo User Data Operators
 
 As described in the previous, solving the Poisson problem with homogeneous would
-require the computation and assembling of two matrices \b K and \b \M and two
+require the computation and assembling of two matrices \b K and \b M and two
 vectors \b f and \b g. These essential processes of computation and assembling
 will be handled by four different UDOs which seperately deal with the four
 matrices and vectors. They are
 
--# OpDomainLhs is responsible to calculate and assemble the left-hand-side
-matrix \b K of domain elements
--# OpDomainRhs is responsible to calculate and assemble the right-hand-side
-vector \b f of domain element
--# OpBoundaryLhs is responsible to calculate and assemble the left-hand-side
-matrix \b M of boundary element
--# OpBoundaryRhs is responsible to calculate and assemble the right-hand-side
-vector \b g of boundary element
+-# Poisson2DNonhomogeneousOperators::OpDomainLhs is responsible to calculate and
+assemble the left-hand-side matrix \b K of domain element
+-# Poisson2DNonhomogeneousOperators::OpDomainRhs is responsible to calculate and
+assemble the right-hand-side vector \b f of domain element
+-# Poisson2DNonhomogeneousOperators::OpBoundaryLhs is responsible to calculate
+and assemble the left-hand-side matrix \b M of boundary element
+-# Poisson2DNonhomogeneousOperators::OpBoundaryRhs is responsible to calculate
+and assemble the right-hand-side vector \b g of boundary element
 
 That was for the implementation of UDOs that are responsible for the calculation
 and assembling of the matrices and vectors. Next part we will look at the
-classes and functions and see how the developed UDOs are /b pushed to the main
+classes and functions and see how the developed UDOs are \b pushed to the main
 program.
 
 \subsection basic_tutorials_poisson_homogeneous_main_class The Poisson2DHomogeneous class
@@ -87,8 +110,6 @@ Now you can just focus on the part that actually run the analysis
 
 \subsection basic_tutorials_poisson_homogeneous_output Output
 
-\subsection basic_tutorials_poisson_homogeneous_visualisation Visualisation
-
 \subsection basic_tutorials_poisson_homogeneous_discussion Discussion
 
 \subsection basic_tutorials_poisson_homogeneous_possible_extension Possible extension
@@ -98,11 +119,11 @@ Now you can just focus on the part that actually run the analysis
 The plain program for both the implementation of the UDOs (\c *.hpp) and the
 main program (\c *.cpp) are as follows
 
-Implementation of User Data Operators
+\subsection Implementation of User Data Operators
 
 \include poisson_2d_homogeneous.hpp
 
-and the main program
+\subsection Implementation of the main program
 
 \include poisson_2d_homogeneous.cpp
 
