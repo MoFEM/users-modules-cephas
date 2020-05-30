@@ -22,7 +22,8 @@ After this tutorial, you will learn:
 \subsection basic_tutorials_poisson_homogeneous_the_problem The problem
 
 In this first example, we will solve a simple Poisson' equation in 2D with
-homogeneous boundary condition (zero boundary values) and non-zero body force 
+homogeneous boundary condition (zero boundary values) as follows
+
 
 \subsection basic_tutorials_poisson_homogeneous_discretisation Discretisation
 
