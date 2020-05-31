@@ -307,8 +307,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
   };
 
   if (mapZeroRows.empty() || !methodsOp.empty()) {
-    const DofEntity_multiIndex *dofs_ptr;
-    CHKERR mField.get_dofs(&dofs_ptr);
+    auto dofs_ptr = mField.get_dofs();
     // VectorDouble scaled_values(3);
     // sets kinetic boundary conditions by blockset.
     bool flag_cubit_disp = false;
@@ -338,8 +337,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
       }
     }
 
-    const FieldEntity_multiIndex *field_ents;
-    CHKERR mField.get_field_ents(&field_ents);
+    auto *field_ents = mField.get_field_ents();
     auto &field_entities_by_name_and_ent =
         field_ents->get<Composite_Name_And_Ent_mi_tag>();
     VectorDouble3 coords(3);
