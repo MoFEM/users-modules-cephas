@@ -127,7 +127,6 @@ int main(int argc, char *argv[]) {
       CHKERR moab.load_file(mesh_file_name, 0, option);
     }
 
-
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -142,10 +141,10 @@ int main(int argc, char *argv[]) {
     PrismsFromSurfaceInterface *prisms_from_surface_interface;
     CHKERR m_field.getInterface(prisms_from_surface_interface);
 
-    auto set_prism_layer_thickness = [&](const Range &prisms, int nb_layers) {
+    auto set_prism_layer_thickness = [&](const Range &prisms, int ff,
+                                         int nb_layers) {
       MoFEMFunctionBegin;
       Range nodes;
-      int ff = 3;
       for (Range::iterator pit = prisms.begin(); pit != prisms.end(); pit++) {
         EntityHandle face;
         CHKERR moab.side_element(*pit, 2, ff, face);
@@ -155,8 +154,7 @@ int main(int argc, char *argv[]) {
         nodes.insert(&conn[0], &conn[number_nodes]);
       }
       double coords[3], director[3];
-      for (Range::iterator nit = nodes.begin(); nit != nodes.end();
-           nit++) {
+      for (Range::iterator nit = nodes.begin(); nit != nodes.end(); nit++) {
         CHKERR moab.get_coords(&*nit, 1, coords);
         if (coords[2] > 0.0) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -171,7 +169,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    Range contact_prisms, master_tris, slave_tris;
+    Range contact_prisms, master_tris, slave_tris, bot_tris, top_tris;
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 11, "INT_CONTACT") == 0) {
@@ -179,15 +177,14 @@ int main(int argc, char *argv[]) {
                            bit->getName().c_str(), bit->getMeshsetId());
         Range tris;
         CHKERR moab.get_entities_by_dimension(bit->getMeshset(), 2, tris, true);
-        slave_tris.merge(tris);
+        bot_tris.merge(tris);
       }
     }
 
-
     CHKERR prisms_from_surface_interface->createPrisms(
-        slave_tris, PrismsFromSurfaceInterface::SWAP_TOP_AND_BOT_TRI,
+        bot_tris, PrismsFromSurfaceInterface::SWAP_TRI_NODE_ORDER,
         contact_prisms);
-    CHKERR set_prism_layer_thickness(contact_prisms, 1);
+    CHKERR set_prism_layer_thickness(contact_prisms, 4, 1);
 
     BitRefLevel bit_level0;
     bit_level0.set(0);
@@ -200,10 +197,12 @@ int main(int argc, char *argv[]) {
     CHKERR moab.get_adjacencies(contact_prisms, 2, true, faces,
                                 moab::Interface::UNION);
     faces = faces.subset_by_type(MBTRI);
-    master_tris = subtract(faces, slave_tris);
+    top_tris = subtract(faces, bot_tris);
+
+    slave_tris = top_tris;
 
     CHKERR mmanager_ptr->addMeshset(BLOCKSET, 10, "RIGID_FLAT");
-    CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 10, master_tris);
+    CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 10, top_tris);
 
     CHKERR mmanager_ptr->setMeshsetFromFile("bc.cfg");
 
@@ -224,7 +223,7 @@ int main(int argc, char *argv[]) {
                              MB_TAG_SPARSE, MF_ZERO);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
-    CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
+    CHKERR m_field.add_ents_to_field_by_type(top_tris, MBTRI,
                                              "MESH_NODE_POSITIONS");
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
@@ -233,7 +232,7 @@ int main(int argc, char *argv[]) {
 
     // Declare problem add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
-    CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
+    CHKERR m_field.add_ents_to_field_by_type(top_tris, MBTRI,
                                              "SPATIAL_POSITION");
     CHKERR m_field.set_field_order(0, MBTET, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
@@ -291,9 +290,12 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element,
+                               auto contact_state_ptr) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
+      contact_state_ptr->contactStateVec =
+          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
                                               common_data_simple_contact,
                                               "SPATIAL_POSITION", "LAGMULT");
@@ -398,6 +400,9 @@ int main(int argc, char *argv[]) {
     CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
     CHKERR MatZeroEntries(Aij);
 
+    boost::shared_ptr<SimpleContactProblem::PrintContactState>
+        contact_state_ptr(new SimpleContactProblem::PrintContactState(m_field));
+
     // Dirichlet BC
     boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
         boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
@@ -410,7 +415,6 @@ int main(int argc, char *argv[]) {
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     CHKERR MetaNeumannForces::setMomentumFluxOperators(
         m_field, neumann_forces, NULL, "SPATIAL_POSITION");
-
     boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
     for (; mit != neumann_forces.end(); mit++) {
@@ -436,10 +440,14 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                   dirichlet_bc_ptr.get(), NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
+                                  contact_state_ptr.get(), NULL);
+
     if (convect_pts == PETSC_TRUE) {
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_convective_master_element),
+          get_contact_rhs(contact_problem, make_convective_master_element,
+                          contact_state_ptr),
           PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
@@ -447,10 +455,11 @@ int main(int argc, char *argv[]) {
                                   make_convective_slave_element),
           PETSC_NULL, PETSC_NULL);
     } else {
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
-          PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                    get_contact_rhs(contact_problem,
+                                                    make_contact_element,
+                                                    contact_state_ptr),
+                                    PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
           get_master_traction_rhs(contact_problem, make_contact_element),
@@ -462,6 +471,9 @@ int main(int argc, char *argv[]) {
                                   PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                   dirichlet_bc_ptr.get());
+
+    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
+                                  contact_state_ptr.get());
 
     boost::shared_ptr<FEMethod> fe_null;
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
@@ -553,8 +565,8 @@ int main(int argc, char *argv[]) {
 
       int its;
       CHKERR SNESGetIterationNumber(snes, &its);
-      CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                         "number of Newton iterations = %D\n", its);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n",
+                         its);
 
       // save on mesh
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -604,6 +616,8 @@ int main(int argc, char *argv[]) {
 
       mb_post.delete_mesh();
 
+      CHKERR VecZeroEntries(common_data_simple_contact->contactAreaVec);
+
       if (is_test == PETSC_TRUE) {
         std::ofstream ofs(
             (std ::string("test_simple_contact") + ".txt").c_str());
@@ -622,6 +636,19 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                         fe_post_proc_simple_contact);
       }
+
+      CHKERR VecAssemblyBegin(common_data_simple_contact->contactAreaVec);
+      CHKERR VecAssemblyEnd(common_data_simple_contact->contactAreaVec);
+
+      const double *array;
+      CHKERR VecGetArrayRead(common_data_simple_contact->contactAreaVec,
+                             &array);
+      if (m_field.get_comm_rank() == 0) {
+        PetscPrintf(PETSC_COMM_SELF, "Active area: %6.4e out of %6.4e\n",
+                    array[1], array[0]);
+      }
+      CHKERR VecRestoreArrayRead(common_data_simple_contact->contactAreaVec,
+                                 &array);
 
       {
         string out_file_name;

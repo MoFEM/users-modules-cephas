@@ -45,6 +45,8 @@ struct SimpleContactProblem {
 
   static inline double Sign(double x);
 
+  static inline bool State(const double cn, const double g, const double l);
+
   static inline double ConstrainFunction(const double cn, const double g,
                                          const double l);
 
@@ -272,7 +274,7 @@ struct SimpleContactProblem {
                                                          spatial_field_name);
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                         mesh_pos_field_name);                                                   
+                                                         mesh_pos_field_name);
 
       // Adding range_slave_master_prisms to Element element_name
       CHKERR mField.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
@@ -281,6 +283,39 @@ struct SimpleContactProblem {
 
     MoFEMFunctionReturn(0);
   }
+
+  struct PrintContactState : public MoFEM::FEMethod {
+
+    SmartPetscObj<Vec> contactStateVec;
+
+    PrintContactState(MoFEM::Interface &m_field)
+        : MoFEM::FEMethod(), mField(m_field) {}
+
+    MoFEMErrorCode preProcess() {
+      MoFEMFunctionBegin;
+      CHKERR VecZeroEntries(contactStateVec);
+      MoFEMFunctionReturn(0);
+    }
+    MoFEMErrorCode postProcess() {
+      MoFEMFunctionBegin;
+
+      CHKERR VecAssemblyBegin(contactStateVec);
+      CHKERR VecAssemblyEnd(contactStateVec);
+
+      const double *array;
+      CHKERR VecGetArrayRead(contactStateVec, &array);
+      if (mField.get_comm_rank() == 0) {
+        PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
+                    (int)array[1], (int)array[0]);
+      }
+      CHKERR VecRestoreArrayRead(contactStateVec, &array);
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    MoFEM::Interface &mField;
+  };
 
   struct CommonDataSimpleContact
       : public boost::enable_shared_from_this<CommonDataSimpleContact> {
@@ -300,6 +335,11 @@ struct SimpleContactProblem {
     double areaSlave;
     double areaMaster;
 
+    enum VecElements { TOTAL = 0, ACTIVE, LAST_ELEMENT };
+
+    SmartPetscObj<Vec> gaussPtsStateVec;
+    SmartPetscObj<Vec> contactAreaVec;
+
     CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
@@ -311,6 +351,14 @@ struct SimpleContactProblem {
       lagGapProdPtr = boost::make_shared<VectorDouble>();
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+
+      int local_size = (mField.get_comm_rank() == 0)
+                           ? CommonDataSimpleContact::LAST_ELEMENT
+                           : 0;
+      gaussPtsStateVec = createSmartVectorMPI(
+          mField.get_comm(), local_size, CommonDataSimpleContact::LAST_ELEMENT);
+      contactAreaVec = createSmartVectorMPI(
+          mField.get_comm(), local_size, CommonDataSimpleContact::LAST_ELEMENT);
     }
 
   private:
@@ -1199,6 +1247,42 @@ struct SimpleContactProblem {
     const double cN;
     boost::shared_ptr<MatrixDouble> diffConvect;
   };
+
+  struct OpGetGaussPtsState : public ContactOp {
+
+    OpGetGaussPtsState(
+        const string lagrange_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        const double cn)
+        : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
+                    ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact), cN(cn) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    VectorDouble vecR;
+  };
+
+  struct OpGetContactArea : public ContactOp {
+
+    OpGetContactArea(
+        const string lagrange_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        const double cn)
+        : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
+                    ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact), cN(cn) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    VectorDouble vecR;
+  };
 };
 
 double SimpleContactProblem::Sign(double x) {
@@ -1209,6 +1293,11 @@ double SimpleContactProblem::Sign(double x) {
   else
     return -1;
 };
+
+bool SimpleContactProblem::State(const double cn, const double g,
+                                 const double l) {
+  return ((cn * g) <= l);
+}
 
 double SimpleContactProblem::ConstrainFunction(const double cn, const double g,
                                                const double l) {
