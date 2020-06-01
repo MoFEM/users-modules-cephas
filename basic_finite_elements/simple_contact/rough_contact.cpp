@@ -644,7 +644,7 @@ int main(int argc, char *argv[]) {
       CHKERR VecGetArrayRead(common_data_simple_contact->contactAreaVec,
                              &array);
       if (m_field.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF, "Active area: %6.4e out of %6.4e\n",
+        PetscPrintf(PETSC_COMM_SELF, "Active area: %8.8f out of %8.8f\n",
                     array[1], array[0]);
       }
       CHKERR VecRestoreArrayRead(common_data_simple_contact->contactAreaVec,
