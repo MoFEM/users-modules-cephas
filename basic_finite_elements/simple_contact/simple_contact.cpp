@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool is_test = PETSC_FALSE;
     PetscBool convect_pts = PETSC_FALSE;
+    PetscBool out_integ_pts = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -97,6 +98,9 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &is_test, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_out_integ_pts",
+                            "output data at contact integration points", "",
+                            PETSC_FALSE, &out_integ_pts, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -643,7 +647,7 @@ int main(int argc, char *argv[]) {
                   data[0], data[1]);
     }
 
-    {
+    if (out_integ_pts) {
       string out_file_name;
       std::ostringstream strm;
       strm << "out_contact_integ_pts"
