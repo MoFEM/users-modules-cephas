@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
                                  "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_is_test 0 \n";
+                                 "-my_test_num 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
-    PetscBool is_test = PETSC_FALSE;
+    PetscInt test_num = 0;
     PetscBool convect_pts = PETSC_FALSE;
     PetscBool out_integ_pts = PETSC_FALSE;
 
@@ -94,8 +94,8 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if Newton-Cotes quadrature rules are used", "",
                             PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_is_test", "set if run as test", "",
-                            PETSC_FALSE, &is_test, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_test_num", "test number", "", 0, &test_num,
+                           PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_out_integ_pts",
@@ -505,7 +505,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
 
-    if (is_test == PETSC_TRUE) {
+    if (test_num) {
       char testing_options[] = "-ksp_type fgmres "
                                "-pc_type lu "
                                "-pc_factor_mat_solver_type mumps "
@@ -567,7 +567,7 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
     // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
+    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %16.9f\n",
                 elastic.getLoopFeEnergy().eNergy);
 
     {
@@ -605,23 +605,10 @@ int main(int argc, char *argv[]) {
     CHKERR VecZeroEntries(common_data_simple_contact->gaussPtsStateVec);
     CHKERR VecZeroEntries(common_data_simple_contact->contactAreaVec);
 
-    if (is_test == PETSC_TRUE) {
-      std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
 
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new SimpleContactProblem::OpMakeTestTextFile(
-              m_field, "SPATIAL_POSITION", common_data_simple_contact, ofs));
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
-
-      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
-      ofs.flush();
-      ofs.close();
-    } else {
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
-    }
+    std::array<double, 2> data;
 
     auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
       MoFEMFunctionBegin;
@@ -635,16 +622,86 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    std::array<double, 2> data;
-    CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec, data);
-    if (m_field.get_comm_rank() == 0) {
-      PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
-                  (int)data[0], (int)data[1]);
-    }
-    CHKERR get_contact_data(common_data_simple_contact->contactAreaVec, data);
-    if (m_field.get_comm_rank() == 0) {
-      PetscPrintf(PETSC_COMM_SELF, "Active contact area: %8.8f out of %8.8f\n",
-                  data[0], data[1]);
+    if (test_num) {
+      double expected_energy, expected_area;
+      int expected_nb_gauss_pts;
+      constexpr double eps = 1e-8;
+      switch (test_num) {
+      case 1: // 8cube_contact
+        expected_energy = 3.0e-04;
+        expected_area = 3.0;
+        expected_nb_gauss_pts = 576;
+        break;
+      case 2: // 4seasons_contact
+        expected_energy = 1.2e-01;
+        expected_area = 106.799036701;
+        expected_nb_gauss_pts = 672;
+        break;
+      case 3: // Tinterface_contact
+        expected_energy = 3.0e-04;
+        expected_area = 1.75;
+        expected_nb_gauss_pts = 336;
+        break;
+      case 4: // punch_top_and_mid
+        expected_energy = 3.125e-04;
+        expected_area = 0.25;
+        expected_nb_gauss_pts = 84;
+        break;
+      case 5: // punch_top_only
+        expected_energy = 0.000096432;
+        expected_area = 0.25;
+        expected_nb_gauss_pts = 336;
+        break;
+      case 6: // plane_axi_contact
+        expected_energy = 0.000438889;
+        expected_area = 0.784409608;
+        expected_nb_gauss_pts = 300;
+        break;
+      case 7: // arc_3surf_contact
+        expected_energy = 0.002573411;
+        expected_area = 2.831455633;
+        expected_nb_gauss_pts = 228;
+        break;
+      case 8: // smiling_face_contact
+        expected_energy = 0.000732540;
+        expected_area = 2.276618410;
+        expected_nb_gauss_pts = 112;
+        break;
+      default:
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Unknown test number %d", test_num);
+      }
+      if (std::abs(elastic.getLoopFeEnergy().eNergy - expected_energy) > eps) {
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong energy %6.4e != %6.4e", expected_energy,
+                 elastic.getLoopFeEnergy().eNergy);
+      }
+      CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
+                              data);
+      if ((int)data[0] != expected_nb_gauss_pts) {
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong number of active gauss pts %d != %d",
+                 expected_nb_gauss_pts, (int)data[0]);
+      }
+      CHKERR get_contact_data(common_data_simple_contact->contactAreaVec, data);
+      if (std::abs(data[0] - expected_area) > eps) {
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong active contact area %6.4e != %6.4e", expected_area,
+                 data[0]);
+      }
+    } else {
+      CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
+                              data);
+      if (m_field.get_comm_rank() == 0) {
+        PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
+                    (int)data[0], (int)data[1]);
+      }
+      CHKERR get_contact_data(common_data_simple_contact->contactAreaVec, data);
+      if (m_field.get_comm_rank() == 0) {
+        PetscPrintf(PETSC_COMM_SELF,
+                    "Active contact area: %16.9f out of %16.9f\n", data[0],
+                    data[1]);
+      }
     }
 
     if (out_integ_pts) {
