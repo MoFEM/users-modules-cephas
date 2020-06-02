@@ -607,65 +607,6 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpCalLagrangeMultPostProc::doWork(
-    int side, EntityType type, EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (data.getFieldData().size() == 0)
-    MoFEMFunctionReturnHot(0);
-
-  const int nb_gauss_pts = data.getN().size1();
-
-  if (type == MBVERTEX) {
-    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
-    commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->clear();
-  }
-
-  int nb_base_fun_row = data.getFieldData().size();
-
-  auto t_lagrange_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
-
-    FTensor::Tensor0<double *> t_field_data_slave(&data.getFieldData()[0]);
-    for (int bb = 0; bb != nb_base_fun_row; bb++) {
-      t_lagrange_slave += t_base_lambda * t_field_data_slave;
-      ++t_base_lambda;
-      ++t_field_data_slave;
-    }
-    ++t_lagrange_slave;
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SimpleContactProblem::OpPrintLagMulAtGaussPtsSlave::doWork(
-    int side, EntityType type, EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (type != MBVERTEX)
-    MoFEMFunctionReturnHot(0);
-
-  const int nb_gauss_pts = data.getN().size1();
-
-  auto t_lagrange_slave =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-  auto t_gap_ptr = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-  cout << "-----------------------------" << endl;
-
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    cout << "gp: " << gg << " | gap: " << t_gap_ptr
-         << " | lm: " << t_lagrange_slave
-         << " | gap * lm = " << t_gap_ptr * t_lagrange_slave << endl;
-    ++t_lagrange_slave;
-    ++t_gap_ptr;
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode SimpleContactProblem::OpLagGapProdGaussPtsSlave::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -1302,37 +1243,6 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpPostProcContactContinuous::doWork(
-    int side, EntityType type, EntData &data) {
-  MoFEMFunctionBegin;
-
-  if (type != MBVERTEX)
-    PetscFunctionReturn(0);
-
-  double def_VAL[9];
-  bzero(def_VAL, 9 * sizeof(double));
-
-  Tag th_lag_mult;
-
-  CHKERR postProcMesh.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
-                                     th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
-                                     def_VAL);
-
-  auto t_lagrange =
-      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-
-  const int nb_gauss_pts =
-      commonDataSimpleContact->lagMultAtGaussPtsPtr->size();
-
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
-    CHKERR postProcMesh.tag_set_data(th_lag_mult, &mapGaussPts[gg], 1,
-                                     &t_lagrange);
-    ++t_lagrange;
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
@@ -1519,60 +1429,40 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     moab::Interface &moab_out, bool lagrange_field) {
   MoFEMFunctionBegin;
 
-  map<int, SimpleContactPrismsData>::iterator sit =
-      setOfSimpleContactPrism.begin();
-  for (; sit != setOfSimpleContactPrism.end(); sit++) {
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetNormalMaster(field_name, common_data_simple_contact));
 
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetNormalMaster(field_name, common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetNormalSlave(field_name, common_data_simple_contact));
 
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetNormalSlave(field_name, common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetPositionAtGaussPtsMaster(field_name,
+                                        common_data_simple_contact));
 
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetPositionAtGaussPtsMaster(field_name,
-                                          common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
 
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetPositionAtGaussPtsSlave(field_name,
-                                         common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetGapSlave(field_name, common_data_simple_contact));
 
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetGapSlave(field_name, common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
+                                     common_data_simple_contact));
 
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
-                                       common_data_simple_contact));
-
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpLagGapProdGaussPtsSlave(lagrange_field_name,
-                                      common_data_simple_contact));
-
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
-                           moab_out, lagrange_field));
-
-    fe_post_proc_simple_contact->getOpPtrVector().push_back(
-        new OpGetContactArea(lagrange_field_name, common_data_simple_contact,
-                             cnValue));
-  }
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode SimpleContactProblem::setPostProcContactOperators(
-    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
-    const std::string field_name, const std::string lagrange_field_name,
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact) {
-  MoFEMFunctionBegin;
-
-  post_proc_contact_ptr->getOpPtrVector().push_back(
-      new OpCalLagrangeMultPostProc(lagrange_field_name,
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpLagGapProdGaussPtsSlave(lagrange_field_name,
                                     common_data_simple_contact));
 
-  post_proc_contact_ptr->getOpPtrVector().push_back(
-      new OpPostProcContactContinuous(
-          lagrange_field_name, field_name, post_proc_contact_ptr->postProcMesh,
-          post_proc_contact_ptr->mapGaussPts, common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
+                         moab_out, lagrange_field));
+
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetGaussPtsState(lagrange_field_name, common_data_simple_contact,
+                             cnValue));
+
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(new OpGetContactArea(
+      lagrange_field_name, common_data_simple_contact, cnValue));
 
   MoFEMFunctionReturn(0);
 }
@@ -1844,8 +1734,8 @@ MoFEMErrorCode SimpleContactProblem::OpGetGaussPtsState::doWork(int side,
     ++t_gap_gp;
   } // for gauss points
 
-  constexpr std::array<int, 2> indices = {CommonDataSimpleContact::TOTAL,
-                                          CommonDataSimpleContact::ACTIVE};
+  constexpr std::array<int, 2> indices = {CommonDataSimpleContact::ACTIVE,
+                                          CommonDataSimpleContact::TOTAL};
   CHKERR VecSetValues(commonDataSimpleContact->gaussPtsStateVec, 2,
                       indices.data(), &vecR[0], ADD_VALUES);
 
@@ -1886,8 +1776,10 @@ MoFEMErrorCode SimpleContactProblem::OpGetContactArea::doWork(int side,
     ++t_w;
   } // for gauss points
 
-  constexpr std::array<int, 2> indices = {CommonDataSimpleContact::TOTAL,
-                                          CommonDataSimpleContact::ACTIVE};
+  constexpr std::array<int, 2> indices = {
+      CommonDataSimpleContact::ACTIVE,
+      CommonDataSimpleContact::TOTAL,
+  };
   CHKERR VecSetValues(commonDataSimpleContact->contactAreaVec, 2,
                       indices.data(), &vecR[0], ADD_VALUES);
 

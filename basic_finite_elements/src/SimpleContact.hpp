@@ -276,7 +276,7 @@ struct SimpleContactProblem {
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          mesh_pos_field_name);
 
-      // Adding range_slave_master_prisms to Element element_name
+      // Adding slave_tris to Element element_name
       CHKERR mField.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
                                                        element_name);
     }
@@ -335,7 +335,7 @@ struct SimpleContactProblem {
     double areaSlave;
     double areaMaster;
 
-    enum VecElements { TOTAL = 0, ACTIVE, LAST_ELEMENT };
+    enum VecElements { ACTIVE = 0, TOTAL, LAST_ELEMENT };
 
     SmartPetscObj<Vec> gaussPtsStateVec;
     SmartPetscObj<Vec> contactAreaVec;
@@ -479,26 +479,6 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetLagMulAtGaussPtsSlave(
-        const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
-        : ContactOp(lagrange_field_name, UserDataOperator::OPROW,
-                    ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact) {}
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
-
-  /**
-   * @brief Operator for the simple contact element
-   *
-   * Prints Lagrange multipliers and gaps evaluated at the gauss points on the
-   * slave triangle.
-   *
-   */
-  struct OpPrintLagMulAtGaussPtsSlave : public ContactOp {
-
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpPrintLagMulAtGaussPtsSlave(
         const string lagrange_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(lagrange_field_name, UserDataOperator::OPROW,
@@ -1011,49 +991,6 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
-  struct OpCalLagrangeMultPostProc : public FaceUserDataOperator {
-
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-
-    OpCalLagrangeMultPostProc(
-        const string lag_mult_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
-        : FaceElementForcesAndSourcesCore::UserDataOperator(
-              lag_mult_name, UserDataOperator::OPROW),
-          commonDataSimpleContact(common_data_simple_contact){};
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
-
-  struct OpPostProcContactContinuous : public FaceUserDataOperator {
-
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    moab::Interface &postProcMesh;
-    std::vector<EntityHandle> &mapGaussPts;
-    string lagMultName;
-    string fieldName;
-
-    OpPostProcContactContinuous(
-        const string lag_mult_name, const string field_name,
-        moab::Interface &post_proc_mesh,
-        std::vector<EntityHandle> &map_gauss_pts,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_simple_contact)
-        : FaceElementForcesAndSourcesCore::UserDataOperator(
-              lag_mult_name, UserDataOperator::OPROW),
-          lagMultName(lag_mult_name), fieldName(field_name),
-          commonDataSimpleContact(common_data_simple_contact),
-          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {
-      doVertices = true;
-      doEdges = false;
-      doQuads = false;
-      doTris = false;
-      doTets = false;
-      doPrisms = false;
-    };
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
-
   /**
    * @brief Function for the simple contact element that sets the user data
    * RHS-operators
@@ -1093,12 +1030,6 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name);
-
-  // add description
-  MoFEMErrorCode setPostProcContactOperators(
-      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr,
-      const std::string field_name, const std::string lagrange_field_name,
-      boost::shared_ptr<CommonDataSimpleContact> common_data);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs

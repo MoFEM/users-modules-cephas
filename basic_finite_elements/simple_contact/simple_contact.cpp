@@ -30,16 +30,15 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
                                  "-snes_max_it 10 \n"
                                  "-snes_atol 1e-8 \n"
                                  "-snes_rtol 1e-8 \n"
-                                 "-my_order 1 \n"
+                                 "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_is_newton_cotes 0 \n"
                                  "-my_is_test 0 \n";
 
   string param_file = "param_file.petsc";
@@ -505,7 +504,7 @@ int main(int argc, char *argv[]) {
     if (is_test == PETSC_TRUE) {
       char testing_options[] = "-ksp_type fgmres "
                                "-pc_type lu "
-                               "-pc_factor_mat_solver_package mumps "
+                               "-pc_factor_mat_solver_type mumps "
                                "-snes_type newtonls "
                                "-snes_linesearch_type basic "
                                "-snes_max_it 10 "
@@ -574,7 +573,7 @@ int main(int argc, char *argv[]) {
           << ".h5m";
       out_file_name = stm.str();
       CHKERR
-      PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
+      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
       CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
                                                "PARALLEL=WRITE_PART");
     }
@@ -599,6 +598,9 @@ int main(int argc, char *argv[]) {
 
     mb_post.delete_mesh();
 
+    CHKERR VecZeroEntries(common_data_simple_contact->gaussPtsStateVec);
+    CHKERR VecZeroEntries(common_data_simple_contact->contactAreaVec);
+
     if (is_test == PETSC_TRUE) {
       std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
 
@@ -617,13 +619,37 @@ int main(int argc, char *argv[]) {
                                       fe_post_proc_simple_contact);
     }
 
+    auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
+      MoFEMFunctionBegin;
+      CHKERR VecAssemblyBegin(vec);
+      CHKERR VecAssemblyEnd(vec);
+      const double *array;
+      CHKERR VecGetArrayRead(vec, &array);
+      for (int i : {0, 1})
+        data[i] = array[i];
+      CHKERR VecRestoreArrayRead(vec, &array);
+      MoFEMFunctionReturn(0);
+    };
+
+    std::array<double, 2> data;
+    CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec, data);
+    if (m_field.get_comm_rank() == 0) {
+      PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
+                  (int)data[0], (int)data[1]);
+    }
+    CHKERR get_contact_data(common_data_simple_contact->contactAreaVec, data);
+    if (m_field.get_comm_rank() == 0) {
+      PetscPrintf(PETSC_COMM_SELF, "Active contact area: %8.8f out of %8.8f\n",
+                  data[0], data[1]);
+    }
+
     {
       string out_file_name;
       std::ostringstream strm;
       strm << "out_contact_integ_pts"
            << ".h5m";
       out_file_name = strm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
                          out_file_name.c_str());
       CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                                 "PARALLEL=WRITE_PART");
@@ -633,12 +659,9 @@ int main(int argc, char *argv[]) {
         new PostProcFaceOnRefinedMesh(m_field));
 
     CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
-
-    auto common_post_proc_data_simple_contact = make_contact_common_data();
-
-    CHKERR contact_problem->setPostProcContactOperators(
-        post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-        common_post_proc_data_simple_contact);
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("LAGMULT");
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
                                     post_proc_contact_ptr);
@@ -646,15 +669,14 @@ int main(int argc, char *argv[]) {
     {
       string out_file_name;
       std::ostringstream stm;
-      stm << "out_contact_pressure"
+      stm << "out_contact"
           << ".h5m";
       out_file_name = stm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
                          out_file_name.c_str());
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
-
   }
   CATCH_ERRORS;
 
