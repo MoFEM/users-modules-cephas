@@ -663,9 +663,9 @@ int main(int argc, char *argv[]) {
         expected_nb_gauss_pts = 228;
         break;
       case 8: // smiling_face_contact
-        expected_energy = 0.000732540;
-        expected_area = 2.276618410;
-        expected_nb_gauss_pts = 112;
+        expected_energy = 0.000733553;
+        expected_area = 3.0;
+        expected_nb_gauss_pts = 144;
         break;
       default:
         SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
