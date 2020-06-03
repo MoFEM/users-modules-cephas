@@ -50,6 +50,19 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  enum contact_tests {
+    EIGHT_CUBE = 1,
+    FOUR_SEASONS = 2,
+    T_INTERFACE = 3,
+    PUNCH_TOP_AND_MID = 4,
+    PUNCH_TOP_ONLY = 5,
+    PLANE_AXI = 6,
+    ARC_THREE_SURF = 7,
+    SMILING_FACE = 8,
+    SMILING_FACE_CONVECT = 9,
+    LAST_TEST
+  };
+
   // Initialize MoFEM
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
@@ -627,42 +640,42 @@ int main(int argc, char *argv[]) {
       int expected_nb_gauss_pts;
       constexpr double eps = 1e-8;
       switch (test_num) {
-      case 1: // 8cube_contact
+      case EIGHT_CUBE: 
         expected_energy = 3.0e-04;
         expected_area = 3.0;
         expected_nb_gauss_pts = 576;
         break;
-      case 2: // 4seasons_contact
+      case FOUR_SEASONS: 
         expected_energy = 1.2e-01;
         expected_area = 106.799036701;
         expected_nb_gauss_pts = 672;
         break;
-      case 3: // Tinterface_contact
+      case T_INTERFACE: 
         expected_energy = 3.0e-04;
         expected_area = 1.75;
         expected_nb_gauss_pts = 336;
         break;
-      case 4: // punch_top_and_mid
+      case PUNCH_TOP_AND_MID: 
         expected_energy = 3.125e-04;
         expected_area = 0.25;
         expected_nb_gauss_pts = 84;
         break;
-      case 5: // punch_top_only
+      case PUNCH_TOP_ONLY: 
         expected_energy = 0.000096432;
         expected_area = 0.25;
         expected_nb_gauss_pts = 336;
         break;
-      case 6: // plane_axi_contact
+      case PLANE_AXI: 
         expected_energy = 0.000438889;
         expected_area = 0.784409608;
         expected_nb_gauss_pts = 300;
         break;
-      case 7: // arc_3surf_contact
+      case ARC_THREE_SURF: 
         expected_energy = 0.002573411;
         expected_area = 2.831455633;
         expected_nb_gauss_pts = 228;
         break;
-      case 8: // smiling_face_contact
+      case SMILING_FACE: 
         expected_energy = 0.000733553;
         expected_area = 3.0;
         expected_nb_gauss_pts = 144;
