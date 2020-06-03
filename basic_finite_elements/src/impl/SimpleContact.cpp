@@ -827,7 +827,7 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
   auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
   auto t_w = getFTensor0IntegrationWeightSlave();
-  double cn_value = *cNPtr.get();
+  const double cn_value = *cNPtr.get();
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     const double val_s = t_w * area_s *
                          SimpleContactProblem::ConstrainFunction(
@@ -1001,7 +1001,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverLambdaSlaveSlave::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
     auto t_w = getFTensor0IntegrationWeightSlave();
-    double cn_value = *cNPtr.get();
+    const double cn_value = *cNPtr.get();
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_s = SimpleContactProblem::ConstrainFunction_dl(
@@ -1079,7 +1079,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveMaster::doWork(
     auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     auto t_w = getFTensor0IntegrationWeightSlave();
-    double cn_value = *cNPtr.get();
+    const double cn_value = *cNPtr.get();
    
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
@@ -1151,7 +1151,7 @@ SimpleContactProblem::OpCalDerIntCompFunOverSpatPosSlaveSlave::doWork(
         get_tensor_from_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
     auto t_w = getFTensor0IntegrationWeightSlave();
-    double cn_value = *cNPtr.get();
+    const double cn_value = *cNPtr.get();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_m = SimpleContactProblem::ConstrainFunction_dg(
                                cn_value, t_gap_gp, t_lagrange_slave) *
@@ -1768,7 +1768,7 @@ SimpleContactProblem::OpLhsConvectIntegrationPtsConstrainMasterGap::doWork(
     auto t_grad = getFTensor2FromMat<3, 2>(xi_grad_mat);
 
     auto t_w = getFTensor0IntegrationWeightSlave();
-    double cn_value = *cNPtr.get();
+    const double cn_value = *cNPtr.get();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       const double val_m = SimpleContactProblem::ConstrainFunction(
                                cn_value, t_gap_gp, t_lagrange_slave) *
@@ -2531,7 +2531,7 @@ SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
   auto t_1 = get_tensor_vec(*commonDataSimpleContact->tangentOneVectorSlavePtr);
   auto t_2 = get_tensor_vec(*commonDataSimpleContact->tangentTwoVectorSlavePtr);
   auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
-  double cn_value = *cNPtr.get();
+  const double cn_value = *cNPtr.get();
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     double val_s = t_w * 0.5;
     auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
