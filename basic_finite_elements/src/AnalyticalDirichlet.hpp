@@ -105,7 +105,7 @@ struct AnalyticalDirichletBC {
         if (nb_row == 0)
           MoFEMFunctionReturnHot(0);
 
-        const auto &dof_ptr = data.getFieldDofs()[0].lock().get();
+        const auto &dof_ptr = data.getFieldDofs()[0];
         unsigned int rank = dof_ptr->getNbOfCoeffs();
 
         NTf.resize(nb_row / rank);

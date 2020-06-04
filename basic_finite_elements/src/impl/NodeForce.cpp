@@ -45,7 +45,7 @@ NodalForce::OpNodalForce::doWork(int side, EntityType type,
   if (dAta.nOdes.find(ent) == dAta.nOdes.end())
     MoFEMFunctionReturnHot(0);
 
-  const auto dof_ptr = data.getFieldDofs()[0].lock().get();
+  const auto &dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   if (data.getIndices().size() != (unsigned int)rank) {

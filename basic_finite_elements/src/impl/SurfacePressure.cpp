@@ -52,7 +52,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForce::doWork(
   if (dAta.tRis.find(ent) == dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  int rank = data.getFieldDofs()[0].lock()->getNbOfCoeffs();
+  int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
   int nb_row_dofs = data.getIndices().size() / rank;
 
   Nf.resize(data.getIndices().size(), false);
@@ -125,7 +125,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
   if (tRis.find(ent) == tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const int rank = data.getFieldDofs()[0].lock()->getNbOfCoeffs();
+  const int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
   const int nb_row_dofs = data.getIndices().size() / rank;
 
   nF.resize(data.getIndices().size(), false);
@@ -204,7 +204,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressure::doWork(
   if (dAta.tRis.find(fe_ent) == dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  int rank = data.getFieldDofs()[0].lock()->getNbOfCoeffs();
+  int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
   int nb_row_dofs = data.getIndices().size() / rank;
 
   Nf.resize(data.getIndices().size(), false);
@@ -509,7 +509,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialRhs_dX::aSsemble(
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-      if (data.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
           data.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }
@@ -675,7 +675,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialLhs::aSsemble(
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-      if (data.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
           data.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }
@@ -689,7 +689,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureMaterialLhs::aSsemble(
     VectorDofs &dofs = col_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-      if (data.forcesOnlyOnEntitiesCol.find((*dit).lock()->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
           data.forcesOnlyOnEntitiesCol.end()) {
         colIndices[ii] = -1;
       }
@@ -843,7 +843,7 @@ NeumannForcesSurface::OpNeumannPressureMaterialVolOnSideLhs::aSsemble(
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-      if (data.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
           data.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }
@@ -857,7 +857,7 @@ NeumannForcesSurface::OpNeumannPressureMaterialVolOnSideLhs::aSsemble(
     VectorDofs &dofs = col_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
-      if (data.forcesOnlyOnEntitiesCol.find((*dit).lock()->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
           data.forcesOnlyOnEntitiesCol.end()) {
         colIndices[ii] = -1;
       }
@@ -959,7 +959,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannFlux::doWork(
     MoFEMFunctionReturnHot(0);
   }
 
-  int rank = data.getFieldDofs()[0].lock()->getNbOfCoeffs();
+  int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
   int nb_row_dofs = data.getIndices().size() / rank;
 
   Nf.resize(data.getIndices().size(), false);

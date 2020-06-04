@@ -69,7 +69,7 @@ struct PostProcStress
       MoFEMFunctionReturnHot(0);
     }
 
-    const auto dof_ptr = data.getFieldDofs()[0].lock().get();
+    const auto &dof_ptr = data.getFieldDofs()[0];
 
     int id = dAta.iD;
 

@@ -588,8 +588,7 @@ private:
   MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &data) {
     MoFEMFunctionBegin;
     // set error on mesh
-    data.getFieldDofs()[0].lock()->getFieldData() =
-        sqrt(data.getFieldData()[0]);
+    data.getFieldDofs()[0]->getFieldData() = sqrt(data.getFieldData()[0]);
     // assemble vector to global error
     CHKERR VecSetValue(globalError, 0, data.getFieldData()[0], ADD_VALUES);
     MoFEMFunctionReturn(0);

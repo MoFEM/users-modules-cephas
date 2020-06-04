@@ -61,7 +61,7 @@ struct BodyForceConstantField {
           blockTets.end())
         MoFEMFunctionReturnHot(0);
 
-      const auto dof_ptr = data.getFieldDofs()[0].lock().get();
+      const auto &dof_ptr = data.getFieldDofs()[0];
       int rank = dof_ptr->getNbOfCoeffs();
       int nb_row_dofs = data.getIndices().size() / rank;
 

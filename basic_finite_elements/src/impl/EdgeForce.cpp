@@ -43,7 +43,7 @@ EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
   }
 
   // Get pointer to DOF and its rank
-  const auto dof_ptr = data.getFieldDofs()[0].lock().get();
+  const auto &dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_dofs = data.getIndices().size();

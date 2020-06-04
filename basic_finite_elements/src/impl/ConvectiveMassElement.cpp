@@ -641,7 +641,7 @@ MoFEMErrorCode ConvectiveMassElement::OpMassLhs_dM_dv::doWork(
       VectorDofs &dofs = row_data.getFieldDofs();
       VectorDofs::iterator dit = dofs.begin();
       for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-        if (forcesOnlyOnEntities.find((*dit).lock()->getEnt()) ==
+        if (forcesOnlyOnEntities.find((*dit)->getEnt()) ==
             forcesOnlyOnEntities.end()) {
           indices[ii] = -1;
         }
@@ -1536,7 +1536,7 @@ ConvectiveMassElement::OpEshelbyDynamicMaterialMomentumRhs::doWork(
       VectorDofs &dofs = row_data.getFieldDofs();
       VectorDofs::iterator dit = dofs.begin();
       for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-        if (forcesOnlyOnEntities.find((*dit).lock()->getEnt()) ==
+        if (forcesOnlyOnEntities.find((*dit)->getEnt()) ==
             forcesOnlyOnEntities.end()) {
           // std::cerr << **dit << std::endl;
           indices[ii] = -1;

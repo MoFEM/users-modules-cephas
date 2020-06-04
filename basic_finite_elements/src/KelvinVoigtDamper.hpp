@@ -300,7 +300,7 @@ struct KelvinVoigtDamper {
       if (nb_dofs == 0) {
         MoFEMFunctionReturnHot(0);
       }
-      int rank = data.getFieldDofs()[0].lock()->getNbOfCoeffs();
+      int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
       int nb_gauss_pts = data.getN().size1();
 
       // Initialize

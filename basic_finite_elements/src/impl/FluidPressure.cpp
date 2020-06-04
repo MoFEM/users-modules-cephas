@@ -30,7 +30,7 @@ MoFEMErrorCode FluidPressure::OpCalculatePressure::doWork(
   if (dAta.tRis.find(ent) == dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const auto dof_ptr = data.getFieldDofs()[0].lock().get();
+  const auto &dof_ptr = data.getFieldDofs()[0];
   const int rank = dof_ptr->getNbOfCoeffs();
   const int nb_row_dofs = data.getIndices().size() / rank;
 

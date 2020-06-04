@@ -110,7 +110,7 @@ struct ThermalStressElement {
           dAta.tEts.end())
         MoFEMFunctionReturnHot(0);
 
-      const auto dof_ptr = data.getFieldDofs()[0].lock().get();
+      const auto &dof_ptr = data.getFieldDofs()[0];
       int rank = dof_ptr->getNbOfCoeffs();
       if (rank != 3) {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
