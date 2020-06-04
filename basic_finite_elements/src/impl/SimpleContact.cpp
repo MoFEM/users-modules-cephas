@@ -48,7 +48,7 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
       gaussPtsSlave(2, gg) = w_array[gg];
     }
   } else {
-    CHKERR ContactEle::setDefaultGaussPts(2);
+    CHKERR ContactEle::setDefaultGaussPts(2 * order);
   }
   MoFEMFunctionReturn(0);
 }

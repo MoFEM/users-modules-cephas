@@ -697,6 +697,11 @@ int main(int argc, char *argv[]) {
         expected_contact_area = 3.0;
         expected_nb_gauss_pts = 144;
         break;
+      case SMILING_FACE_CONVECT:
+        expected_energy = 0.000733621;
+        expected_contact_area = 3.0;
+        expected_nb_gauss_pts = 144;
+        break;
       default:
         SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                  "Unknown test number %d", test_num);
