@@ -16,9 +16,9 @@ FTensor::Index<'i', 2> i;
 
 const double body_source = 5.;
 
-struct OpAssembleLhs : public OpFaceEle {
+struct OpDomainLhs : public OpFaceEle {
 public:
-  OpAssembleLhs(std::string row_field_name, std::string col_field_name)
+  OpDomainLhs(std::string row_field_name, std::string col_field_name)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
     sYmm = true;
   }
@@ -88,9 +88,9 @@ private:
   MatrixDouble locLhs, transLocLhs;
 };
 
-struct OpAssembleRhs : public OpFaceEle {
+struct OpDomainRhs : public OpFaceEle {
 public:
-  OpAssembleRhs(std::string field_name)
+  OpDomainRhs(std::string field_name)
       : OpFaceEle(field_name, OpFaceEle::OPROW) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
