@@ -223,7 +223,7 @@ ThermalElement::OpHeatFlux::doWork(int side, EntityType type,
       dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const auto &dof_ptr = data.getFieldDofs()[0];
+  const auto dof_ptr = data.getFieldDofs()[0].lock().get();
   int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_dofs = data.getIndices().size() / rank;
@@ -314,7 +314,7 @@ MoFEMErrorCode ThermalElement::OpRadiationRhs::doWork(
       dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const auto &dof_ptr = data.getFieldDofs()[0];
+  const auto dof_ptr = data.getFieldDofs()[0].lock().get();
   int rank = dof_ptr->getNbOfCoeffs();
   int nb_row_dofs = data.getIndices().size() / rank;
 
@@ -364,7 +364,7 @@ MoFEMErrorCode ThermalElement::OpConvectionRhs::doWork(
       dAta.tRis.end())
     MoFEMFunctionReturnHot(0);
 
-  const auto &dof_ptr = data.getFieldDofs()[0];
+  const auto dof_ptr = data.getFieldDofs()[0].lock().get();
   int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_row_dofs = data.getIndices().size() / rank;

@@ -126,7 +126,7 @@ MoFEMErrorCode NonlinearElasticElement::OpGetDataAtGaussPts::doWork(
     MoFEMFunctionReturnHot(0);
   }
   const int nb_gauss_pts = data.getN().size1();
-  const int rank = data.getFieldDofs()[0]->getNbOfCoeffs();
+  const int rank = data.getFieldDofs()[0].lock()->getNbOfCoeffs();
 
   // initialize
   if (type == zeroAtType) {
@@ -628,7 +628,7 @@ MoFEMErrorCode NonlinearElasticElement::OpRhsPiolaKirchhoff::aSemble(
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (dAta.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+      if (dAta.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
           dAta.forcesOnlyOnEntitiesRow.end()) {
         iNdices[ii] = -1;
       }
@@ -874,7 +874,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (dAta.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+      if (dAta.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
           dAta.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }
@@ -888,7 +888,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
     VectorDofs &dofs = col_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (dAta.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+      if (dAta.forcesOnlyOnEntitiesCol.find((*dit).lock()->getEnt()) ==
           dAta.forcesOnlyOnEntitiesCol.end()) {
         colIndices[ii] = -1;
       }
@@ -911,7 +911,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
       VectorDofs &dofs = row_data.getFieldDofs();
       VectorDofs::iterator dit = dofs.begin();
       for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-        if (dAta.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+        if (dAta.forcesOnlyOnEntitiesCol.find((*dit).lock()->getEnt()) ==
             dAta.forcesOnlyOnEntitiesCol.end()) {
           rowIndices[ii] = -1;
         }
@@ -925,7 +925,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dx::aSemble(
       VectorDofs &dofs = col_data.getFieldDofs();
       VectorDofs::iterator dit = dofs.begin();
       for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-        if (dAta.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+        if (dAta.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
             dAta.forcesOnlyOnEntitiesRow.end()) {
           colIndices[ii] = -1;
         }
@@ -1036,7 +1036,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dX::aSemble(
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (dAta.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+      if (dAta.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
           dAta.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }
@@ -1051,7 +1051,7 @@ MoFEMErrorCode NonlinearElasticElement::OpLhsPiolaKirchhoff_dX::aSemble(
     VectorDofs &dofs = col_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (dAta.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+      if (dAta.forcesOnlyOnEntitiesCol.find((*dit).lock()->getEnt()) ==
           dAta.forcesOnlyOnEntitiesCol.end()) {
         colIndices[ii] = -1;
       }

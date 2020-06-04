@@ -74,7 +74,7 @@ struct FieldApproximationH1 {
       if (col_data.getIndices().size() == 0)
         MoFEMFunctionReturnHot(0);
 
-      const auto &dof_ptr = row_data.getFieldDofs()[0];
+      const auto dof_ptr = row_data.getFieldDofs()[0].lock().get();
       int rank = dof_ptr->getNbOfCoeffs();
 
       int nb_row_dofs = row_data.getIndices().size() / rank;
@@ -183,7 +183,7 @@ struct FieldApproximationH1 {
 
       // PetscAttachDebugger();
 
-      const auto &dof_ptr = data.getFieldDofs()[0];
+      const auto dof_ptr = data.getFieldDofs()[0].lock().get();
       unsigned int rank = dof_ptr->getNbOfCoeffs();
 
       int nb_row_dofs = data.getIndices().size() / rank;
@@ -295,7 +295,7 @@ struct FieldApproximationH1 {
       if (col_data.getIndices().size() == 0)
         MoFEMFunctionReturnHot(0);
 
-      const auto &dof_ptr = row_data.getFieldDofs()[0];
+      const auto dof_ptr = row_data.getFieldDofs()[0].lock().get();
       int rank = dof_ptr->getNbOfCoeffs();
       int nb_row_dofs = row_data.getIndices().size() / rank;
       int nb_col_dofs = col_data.getIndices().size() / rank;
@@ -389,7 +389,7 @@ struct FieldApproximationH1 {
       if (data.getIndices().size() == 0)
         MoFEMFunctionReturnHot(0);
 
-      const auto &dof_ptr = data.getFieldDofs()[0];
+      const auto dof_ptr = data.getFieldDofs()[0].lock().get();
       unsigned int rank = dof_ptr->getNbOfCoeffs();
 
       int nb_row_dofs = data.getIndices().size() / rank;

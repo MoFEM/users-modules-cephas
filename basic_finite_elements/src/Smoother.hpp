@@ -200,7 +200,7 @@ struct Smoother {
         VectorDofs &dofs = row_data.getFieldDofs();
         VectorDofs::iterator dit = dofs.begin();
         for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-          if (dAta.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) !=
+          if (dAta.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) !=
               dAta.forcesOnlyOnEntitiesRow.end()) {
             iNdices[ii] = -1;
           } else {
@@ -265,7 +265,7 @@ struct Smoother {
         VectorDofs &dofs = row_data.getFieldDofs();
         VectorDofs::iterator dit = dofs.begin();
         for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-          if (dAta.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) !=
+          if (dAta.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) !=
               dAta.forcesOnlyOnEntitiesRow.end()) {
             rowIndices[ii] = -1;
           } else {

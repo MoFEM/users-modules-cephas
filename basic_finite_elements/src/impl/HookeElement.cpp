@@ -297,7 +297,7 @@ MoFEMErrorCode HookeElement::OpAssemble::aSsemble(EntData &row_data,
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
           data.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }
@@ -311,7 +311,7 @@ MoFEMErrorCode HookeElement::OpAssemble::aSsemble(EntData &row_data,
     VectorDofs &dofs = col_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesCol.find((*dit).lock()->getEnt()) ==
           data.forcesOnlyOnEntitiesCol.end()) {
         colIndices[ii] = -1;
       }
@@ -349,7 +349,7 @@ MoFEMErrorCode HookeElement::OpAssemble::aSsemble(EntData &row_data) {
     VectorDofs &dofs = row_data.getFieldDofs();
     VectorDofs::iterator dit = dofs.begin();
     for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+      if (data.forcesOnlyOnEntitiesRow.find((*dit).lock()->getEnt()) ==
           data.forcesOnlyOnEntitiesRow.end()) {
         rowIndices[ii] = -1;
       }

@@ -72,7 +72,7 @@ MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
   if (col_data.getIndices().size() == 0)
     MoFEMFunctionReturnHot(0);
 
-  const auto &dof_ptr = row_data.getFieldDofs()[0];
+  const auto dof_ptr = row_data.getFieldDofs()[0].lock().get();
   const int rank = dof_ptr->getNbOfCoeffs();
 
   int nb_row_dofs = row_data.getIndices().size() / rank;
