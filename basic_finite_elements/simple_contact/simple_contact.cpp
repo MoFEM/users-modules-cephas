@@ -580,7 +580,7 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
     // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %16.9f\n",
+    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
                 elastic.getLoopFeEnergy().eNergy);
 
     {
@@ -648,7 +648,7 @@ int main(int argc, char *argv[]) {
                   (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
 
       PetscPrintf(PETSC_COMM_SELF,
-                  "Active contact area: %16.9f out of %16.9f\n",
+                  "Active contact area: %6.4e out of %6.4e\n",
                   contact_area[0], contact_area[1]);
     }
 
