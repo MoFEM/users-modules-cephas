@@ -42,143 +42,98 @@ add_test(
   test_simple_contact_8cube
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 1
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/8cube_contact.cub 
   -my_order 2
   -my_cn_value 1e3
-)
-add_test(
-  test_simple_contact_8cube_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_8cube.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_4seasons
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 2
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/4seasons_contact.cub
   -my_order 2
   -my_cn_value 1e3
   -snes_monitor
-)
-add_test(
-  test_simple_contact_4seasons_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_4seasons.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_Tinterface
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 3
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/Tinterface_contact.cub
   -my_order 2
   -my_cn_value 1e3
   -snes_monitor
-)
-add_test(
-  test_simple_contact_Tinterface_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_Tinterface.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_punch_top_and_mid
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 4
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_and_mid.cub
   -my_order 2
   -my_cn_value 1e3
   -snes_monitor
-)
-add_test(
-  test_simple_contact_punch_top_and_mid_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_punch_top_and_mid.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_punch_top_only
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 5
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_only.cub
   -my_order 2
   -my_cn_value 1e3
   -snes_monitor
-)
-add_test(
-  test_simple_contact_punch_top_only_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_punch_top_only.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_plane_axisymmetric
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 6
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/plane_axi_contact.cub
   -my_order 2
   -my_cn_value 1e3
   -snes_monitor
-)
-add_test(
-  test_simple_contact_plane_axisymmetric_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_plane_axi.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_arc_3surfaces
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 7
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/arc_3surf_contact.cub
   -my_order 2
   -my_cn_value 1e3
   -snes_monitor
-)
-add_test(
-  test_simple_contact_arc_3surfaces_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_arc_3surf.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_smiling_face
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 8
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
   -my_order 2
   -my_cn_value 1e-1
   -snes_monitor
-)
-add_test(
-  test_simple_contact_smiling_face_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_smiling_face.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
 add_test(
   test_simple_contact_smiling_face_convective
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_is_test
+  -my_test_num 9
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
   -my_order 2
   -my_cn_value 1e-1
   -my_convect 1
   -snes_monitor
-)
-add_test(
-  test_simple_contact_smiling_face_convective_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/test_simple_contact_smiling_face_convective.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/test_simple_contact.txt
 )
 
