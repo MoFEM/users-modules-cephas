@@ -30,17 +30,16 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
                                  "-snes_max_it 10 \n"
                                  "-snes_atol 1e-8 \n"
                                  "-snes_rtol 1e-8 \n"
-                                 "-my_order 1 \n"
+                                 "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_is_newton_cotes 0 \n"
-                                 "-my_is_test 0 \n";
+                                 "-my_test_num 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -50,6 +49,19 @@ int main(int argc, char *argv[]) {
       file.close();
     }
   }
+
+  enum contact_tests {
+    EIGHT_CUBE = 1,
+    FOUR_SEASONS = 2,
+    T_INTERFACE = 3,
+    PUNCH_TOP_AND_MID = 4,
+    PUNCH_TOP_ONLY = 5,
+    PLANE_AXI = 6,
+    ARC_THREE_SURF = 7,
+    SMILING_FACE = 8,
+    SMILING_FACE_CONVECT = 9,
+    LAST_TEST
+  };
 
   // Initialize MoFEM
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
@@ -68,8 +80,9 @@ int main(int argc, char *argv[]) {
     PetscReal cn_value = -1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
-    PetscBool is_test = PETSC_FALSE;
+    PetscInt test_num = 0;
     PetscBool convect_pts = PETSC_FALSE;
+    PetscBool out_integ_pts = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -94,10 +107,13 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_is_newton_cotes",
                             "set if Newton-Cotes quadrature rules are used", "",
                             PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_is_test", "set if run as test", "",
-                            PETSC_FALSE, &is_test, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_test_num", "test number", "", 0, &test_num,
+                           PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_out_integ_pts",
+                            "output data at contact integration points", "",
+                            PETSC_FALSE, &out_integ_pts, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -278,25 +294,6 @@ int main(int argc, char *argv[]) {
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
 
-    if (true) {
-      CHKERR m_field.add_finite_element("CONTACT_VTK");
-      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
-                                                         "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
-                                                         "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
-                                                          "SPATIAL_POSITION");
-
-      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
-                                                         "LAGMULT");
-      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
-                                                         "LAGMULT");
-      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
-                                                          "LAGMULT");
-      CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
-                                                        "CONTACT_VTK");
-    }
-
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
@@ -363,6 +360,9 @@ int main(int argc, char *argv[]) {
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
+    contact_problem->addPostProcContactElement(
+        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
+        "MESH_NODE_POSITIONS", slave_tris);
 
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
@@ -401,9 +401,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "ELASTIC");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
-    if (true) {
-      CHKERR DMMoFEMAddElement(dm, "CONTACT_VTK");
-    }
+    CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
 
     CHKERR DMSetUp(dm);
 
@@ -520,10 +518,10 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
 
-    if (is_test == PETSC_TRUE) {
+    if (test_num) {
       char testing_options[] = "-ksp_type fgmres "
                                "-pc_type lu "
-                               "-pc_factor_mat_solver_package mumps "
+                               "-pc_factor_mat_solver_type mumps "
                                "-snes_type newtonls "
                                "-snes_linesearch_type basic "
                                "-snes_max_it 10 "
@@ -582,19 +580,20 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
     // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
+    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %16.9f\n",
                 elastic.getLoopFeEnergy().eNergy);
 
-    string out_file_name;
-    std::ostringstream stm;
-    stm << "out"
-        << ".h5m";
-    out_file_name = stm.str();
-    CHKERR
-    PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
-
-    CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                             "PARALLEL=WRITE_PART");
+    {
+      string out_file_name;
+      std::ostringstream stm;
+      stm << "out"
+          << ".h5m";
+      out_file_name = stm.str();
+      CHKERR
+      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
+      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                               "PARALLEL=WRITE_PART");
+    }
 
     // moab_instance
     moab::Core mb_post;                   // create database
@@ -616,77 +615,150 @@ int main(int argc, char *argv[]) {
 
     mb_post.delete_mesh();
 
-    if (is_test == PETSC_TRUE) {
-      std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
+    CHKERR VecZeroEntries(common_data_simple_contact->gaussPtsStateVec);
+    CHKERR VecZeroEntries(common_data_simple_contact->contactAreaVec);
 
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new SimpleContactProblem::OpMakeTestTextFile(
-              m_field, "SPATIAL_POSITION", common_data_simple_contact, ofs));
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                    fe_post_proc_simple_contact);
 
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
+    std::array<double, 2> nb_gauss_pts;
+    std::array<double, 2> contact_area;
 
-      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
-      ofs.flush();
-      ofs.close();
-    } else {
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
+    auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
+      MoFEMFunctionBegin;
+      CHKERR VecAssemblyBegin(vec);
+      CHKERR VecAssemblyEnd(vec);
+      const double *array;
+      CHKERR VecGetArrayRead(vec, &array);
+      if (m_field.get_comm_rank() == 0) {
+        for (int i : {0, 1})
+          data[i] = array[i];
+      }
+      CHKERR VecRestoreArrayRead(vec, &array);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
+                            nb_gauss_pts);
+    CHKERR get_contact_data(common_data_simple_contact->contactAreaVec,
+                            contact_area);
+
+    if (m_field.get_comm_rank() == 0) {
+      PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
+                  (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
+
+      PetscPrintf(PETSC_COMM_SELF,
+                  "Active contact area: %16.9f out of %16.9f\n",
+                  contact_area[0], contact_area[1]);
     }
 
-    std::ostringstream ostrm;
+    if (test_num) {
+      double expected_energy, expected_contact_area;
+      int expected_nb_gauss_pts;
+      constexpr double eps = 1e-8;
+      switch (test_num) {
+      case EIGHT_CUBE:
+        expected_energy = 3.0e-04;
+        expected_contact_area = 3.0;
+        expected_nb_gauss_pts = 576;
+        break;
+      case FOUR_SEASONS:
+        expected_energy = 1.2e-01;
+        expected_contact_area = 106.799036701;
+        expected_nb_gauss_pts = 672;
+        break;
+      case T_INTERFACE:
+        expected_energy = 3.0e-04;
+        expected_contact_area = 1.75;
+        expected_nb_gauss_pts = 336;
+        break;
+      case PUNCH_TOP_AND_MID:
+        expected_energy = 3.125e-04;
+        expected_contact_area = 0.25;
+        expected_nb_gauss_pts = 84;
+        break;
+      case PUNCH_TOP_ONLY:
+        expected_energy = 0.000096432;
+        expected_contact_area = 0.25;
+        expected_nb_gauss_pts = 336;
+        break;
+      case PLANE_AXI:
+        expected_energy = 0.000438889;
+        expected_contact_area = 0.784409608;
+        expected_nb_gauss_pts = 300;
+        break;
+      case ARC_THREE_SURF:
+        expected_energy = 0.002573411;
+        expected_contact_area = 2.831455633;
+        expected_nb_gauss_pts = 228;
+        break;
+      case SMILING_FACE:
+        expected_energy = 0.000733553;
+        expected_contact_area = 3.0;
+        expected_nb_gauss_pts = 144;
+        break;
+      case SMILING_FACE_CONVECT:
+        expected_energy = 0.000733621;
+        expected_contact_area = 3.0;
+        expected_nb_gauss_pts = 144;
+        break;
+      default:
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Unknown test number %d", test_num);
+      }
+      if (std::abs(elastic.getLoopFeEnergy().eNergy - expected_energy) > eps) {
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Wrong energy %6.4e != %6.4e", expected_energy,
+                 elastic.getLoopFeEnergy().eNergy);
+      }
+      if (m_field.get_comm_rank() == 0) {
+        if ((int)nb_gauss_pts[0] != expected_nb_gauss_pts) {
+          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                   "Wrong number of active gauss pts %d != %d",
+                   expected_nb_gauss_pts, (int)nb_gauss_pts[0]);
+        }
+        if (std::abs(contact_area[0] - expected_contact_area) > eps) {
+          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                   "Wrong active contact area %6.4e != %6.4e",
+                   expected_contact_area, contact_area[0]);
+        }
+      }
+    }
 
-    ostrm << "out_contact"
-          << ".h5m";
+    if (out_integ_pts) {
+      string out_file_name;
+      std::ostringstream strm;
+      strm << "out_contact_integ_pts"
+           << ".h5m";
+      out_file_name = strm.str();
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                         out_file_name.c_str());
+      CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                                "PARALLEL=WRITE_PART");
+    }
 
-    out_file_name = ostrm.str();
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                       out_file_name.c_str());
-    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                              "PARALLEL=WRITE_PART");
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+        new PostProcFaceOnRefinedMesh(m_field));
 
-    if (true) {
+    CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("LAGMULT");
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
+    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
-      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
-          new PostProcFaceOnRefinedMesh(m_field));
+    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
+                                    post_proc_contact_ptr);
 
-      CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
-
-      auto common_post_proc_data_simple_contact = make_contact_common_data();
-
-      CHKERR contact_problem->setPostProcContactOperators(
-          post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-          common_post_proc_data_simple_contact);
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
+    {
+      string out_file_name;
       std::ostringstream stm;
-      std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
-      stm << "file_name_for_lagrange"
+      stm << "out_contact"
           << ".h5m";
-
       out_file_name = stm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
                          out_file_name.c_str());
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
-
-    EntityHandle out_meshset_slave_tris;
-    EntityHandle out_meshset_master_tris;
-
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
-
-    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
-
-    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                           &out_meshset_slave_tris, 1);
-    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                           &out_meshset_master_tris, 1);
-
-    CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
-    CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
   }
   CATCH_ERRORS;
 
