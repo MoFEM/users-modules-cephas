@@ -621,7 +621,8 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
 
-    std::array<double, 2> data;
+    std::array<double, 2> nb_gauss_pts;
+    std::array<double, 2> contact_area;
 
     auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
       MoFEMFunctionBegin;
@@ -629,55 +630,71 @@ int main(int argc, char *argv[]) {
       CHKERR VecAssemblyEnd(vec);
       const double *array;
       CHKERR VecGetArrayRead(vec, &array);
-      for (int i : {0, 1})
-        data[i] = array[i];
+      if (m_field.get_comm_rank() == 0) {
+        for (int i : {0, 1})
+          data[i] = array[i];
+      }
       CHKERR VecRestoreArrayRead(vec, &array);
       MoFEMFunctionReturn(0);
     };
 
+    CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
+                            nb_gauss_pts);
+    CHKERR get_contact_data(common_data_simple_contact->contactAreaVec,
+                            contact_area);
+
+    if (m_field.get_comm_rank() == 0) {
+      PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
+                  (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
+
+      PetscPrintf(PETSC_COMM_SELF,
+                  "Active contact area: %16.9f out of %16.9f\n",
+                  contact_area[0], contact_area[1]);
+    }
+
     if (test_num) {
-      double expected_energy, expected_area;
+      double expected_energy, expected_contact_area;
       int expected_nb_gauss_pts;
       constexpr double eps = 1e-8;
       switch (test_num) {
-      case EIGHT_CUBE: 
+      case EIGHT_CUBE:
         expected_energy = 3.0e-04;
-        expected_area = 3.0;
+        expected_contact_area = 3.0;
         expected_nb_gauss_pts = 576;
         break;
-      case FOUR_SEASONS: 
+      case FOUR_SEASONS:
         expected_energy = 1.2e-01;
-        expected_area = 106.799036701;
+        expected_contact_area = 106.799036701;
         expected_nb_gauss_pts = 672;
         break;
-      case T_INTERFACE: 
+      case T_INTERFACE:
         expected_energy = 3.0e-04;
-        expected_area = 1.75;
+        expected_contact_area = 1.75;
         expected_nb_gauss_pts = 336;
         break;
-      case PUNCH_TOP_AND_MID: 
+      case PUNCH_TOP_AND_MID:
         expected_energy = 3.125e-04;
-        expected_area = 0.25;
+        expected_contact_area = 0.25;
         expected_nb_gauss_pts = 84;
         break;
-      case PUNCH_TOP_ONLY: 
+      case PUNCH_TOP_ONLY:
         expected_energy = 0.000096432;
-        expected_area = 0.25;
+        expected_contact_area = 0.25;
         expected_nb_gauss_pts = 336;
         break;
-      case PLANE_AXI: 
+      case PLANE_AXI:
         expected_energy = 0.000438889;
-        expected_area = 0.784409608;
+        expected_contact_area = 0.784409608;
         expected_nb_gauss_pts = 300;
         break;
-      case ARC_THREE_SURF: 
+      case ARC_THREE_SURF:
         expected_energy = 0.002573411;
-        expected_area = 2.831455633;
+        expected_contact_area = 2.831455633;
         expected_nb_gauss_pts = 228;
         break;
-      case SMILING_FACE: 
+      case SMILING_FACE:
         expected_energy = 0.000733553;
-        expected_area = 3.0;
+        expected_contact_area = 3.0;
         expected_nb_gauss_pts = 144;
         break;
       default:
@@ -689,31 +706,17 @@ int main(int argc, char *argv[]) {
                  "Wrong energy %6.4e != %6.4e", expected_energy,
                  elastic.getLoopFeEnergy().eNergy);
       }
-      CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
-                              data);
-      if ((int)data[0] != expected_nb_gauss_pts) {
-        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                 "Wrong number of active gauss pts %d != %d",
-                 expected_nb_gauss_pts, (int)data[0]);
-      }
-      CHKERR get_contact_data(common_data_simple_contact->contactAreaVec, data);
-      if (std::abs(data[0] - expected_area) > eps) {
-        SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                 "Wrong active contact area %6.4e != %6.4e", expected_area,
-                 data[0]);
-      }
-    } else {
-      CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
-                              data);
       if (m_field.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
-                    (int)data[0], (int)data[1]);
-      }
-      CHKERR get_contact_data(common_data_simple_contact->contactAreaVec, data);
-      if (m_field.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF,
-                    "Active contact area: %16.9f out of %16.9f\n", data[0],
-                    data[1]);
+        if ((int)nb_gauss_pts[0] != expected_nb_gauss_pts) {
+          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                   "Wrong number of active gauss pts %d != %d",
+                   expected_nb_gauss_pts, (int)nb_gauss_pts[0]);
+        }
+        if (std::abs(contact_area[0] - expected_contact_area) > eps) {
+          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                   "Wrong active contact area %6.4e != %6.4e",
+                   expected_contact_area, contact_area[0]);
+        }
       }
     }
 
