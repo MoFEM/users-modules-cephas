@@ -1,9 +1,13 @@
-Poisson's equation (homogeneous boundary condition){#basic_tutorials_poisson_homogeneous}
+SCL-1: Poisson's equation (homogeneous boundary condition){#basic_tutorials_poisson_homogeneous}
 ==========================================================
 
-\note Prerequisite of this tutorial is \ref basic_tutorials_mesh_generation_2d
+\note Prerequisite of this tutorial include \ref basic_tutorials_mesh_generation_2d
 and \ref basic_tutorials_mesh_generation_3d (for the 3D extension
 implementation) 
+
+\note After finishing this tutorial, if you would like to replicate the program
+and practice yourself in an existing module or in your own module, you may wish
+to have a look at \ref how_to_add_new_module_and_program 
 
 [TOC]
 
@@ -18,7 +22,7 @@ After this tutorial, you will learn:
 - idea of Boundary element in MoFEM and how to use it
 - process of implementing User Data Operators (UDOs) and how to  **push** them to the main program
 - a way to handle homogeneous boundary condition in MoFEM
-- utilisation of tools to read outputs (MOAB) and visualise them (Paraview)
+- utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 
 ## The problem {#basic_tutorials_poisson_homogeneous_the_problem}
 
@@ -139,14 +143,11 @@ Now you can just focus on the part that actually run the analysis
 The plain program for both the implementation of the UDOs (\c *.hpp) and the
 main program (\c *.cpp) are as follows
 
-## Implementation of User Data Operators {#basic_tutorials_poisson_homogeneous_plain_program_udo}
+## Implementation of User Data Operators (*.hpp){#basic_tutorials_poisson_homogeneous_plain_program_udo}
 
 \include poisson_2d_homogeneous.hpp
 
-## Implementation of the main program {#basic_tutorials_poisson_homogeneous_plain_program_main}
+## Implementation of the main program (*.cpp) {#basic_tutorials_poisson_homogeneous_plain_program_main}
 
 \include poisson_2d_homogeneous.cpp
 
-
-
-*/
