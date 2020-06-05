@@ -59,20 +59,6 @@ Poisson2DHomogeneous::Poisson2DHomogeneous(moab::Core &mb_instance,
   pipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
 }
 
-MoFEMErrorCode Poisson2DHomogeneous::runAnalysis() {
-  MoFEMFunctionBegin;
-
-  readMesh();
-  setupProblem();
-  setIntegrationRules();
-  boundaryCondition();
-  assembleSystem();
-  solveSystem();
-  outputResults();
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
   MoFEMFunctionBegin;
 
@@ -207,6 +193,20 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
       ->writeFile("out_result.h5m");
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode Poisson2DHomogeneous::runAnalysis() {
+  MoFEMFunctionBegin;
+
+  readMesh();
+  setupProblem();
+  setIntegrationRules();
+  boundaryCondition();
+  assembleSystem();
+  solveSystem();
+  outputResults();
 
   MoFEMFunctionReturn(0);
 }
