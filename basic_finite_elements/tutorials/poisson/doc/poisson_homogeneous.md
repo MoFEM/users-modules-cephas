@@ -1,4 +1,4 @@
-SCL-1: Poisson's equation (homogeneous boundary condition){#basic_tutorials_poisson_homogeneous}
+SCL-1: Poisson's equation (homogeneous BC){#basic_tutorials_poisson_homogeneous}
 ==========================================================
 
 \note Prerequisite of this tutorial include \ref basic_tutorials_mesh_generation_2d
@@ -7,13 +7,13 @@ implementation)
 
 \note After finishing this tutorial, if you would like to replicate the program
 and practice yourself in an existing module or in your own module, you may wish
-to have a look at \ref how_to_add_new_module_and_program 
+to have a look at \ref how_to_add_new_module_and_program and \ref how_to_compile_program.
 
 [TOC]
 
 # Introduction {#basic_tutorials_poisson_homogeneous_introduction}
 
-## Intended learning outcome {#basic_tutorials_poisson_homogeneous_ilo}
+## Intended learning outcome
 
 After this tutorial, you will learn:
 
@@ -24,7 +24,7 @@ After this tutorial, you will learn:
 - a way to handle homogeneous boundary condition in MoFEM
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 
-## The problem {#basic_tutorials_poisson_homogeneous_the_problem}
+## The problem
 
 In this first tutorial that actually solves something meaningful using MoFEM, we
 will solve a simple Poisson's equation in 2D with homogeneous boundary condition
@@ -40,7 +40,7 @@ Find \f$ u \in \bf{R} \f$ such that
 
 
 
-## Discretisation {#basic_tutorials_poisson_homogeneous_discretisation}
+## Discretisation
 
 
 # Implementation {#basic_tutorials_poisson_homogeneous_implementation}
@@ -56,7 +56,7 @@ problem is put in a `*.hpp` file. This file will be included in the main `*.cpp`
 file which contains all the necessary classes and functions. Detailed
 explanation of the implementation of UDOs as well as classes/functions is presented below
 
-## User Data Operators {#basic_tutorials_poisson_homogeneous_udo}
+## User Data Operators
 
 As described in the previous, solving the Poisson problem with homogeneous would
 require the computation and assembling of the matrix **K** and
@@ -74,15 +74,42 @@ and assembling of the matrices and vectors. Next part we will look at the
 classes and functions and see how the developed UDOs are \b pushed to the main
 program.
 
-## The Poisson2DHomogeneous class {#basic_tutorials_poisson_homogeneous_main_class}
+## The Poisson2DHomogeneous class
 
 
 Also talk about the naming convention: camelBack and give reference to page for
 naming convention in MoFEM.
 
- basic_tutorials_poisson_homogeneous_the_main_function The main() function
+### Poisson2DHomogeneous::Poisson2DHomogeneous()
 
-Although, in the implementation, the \c main() function is located at the end of
+This is the constructor
+
+
+
+  
+### Poisson2DHomogeneous::readMesh()
+This is the first member function
+  
+
+### Poisson2DHomogeneous::setupProblem()
+
+The next member function deals with the setting up of the problem
+
+### Poisson2DHomogeneous::setIntegrationRules()
+
+### Poisson2DHomogeneous::boundaryCondition()
+
+### Poisson2DHomogeneous::assembleSystem()
+
+### Poisson2DHomogeneous::solveSystem()
+
+### Poisson2DHomogeneous::outputResults()
+
+### Poisson2DHomogeneous::runAnalysis()
+
+## The main function
+
+Although, in the implementation, the `main` function is located at the end of
 the source code, we deliberately describe it here first in order to give you a
 big picture and a linear thinking about the program.
 
@@ -100,39 +127,25 @@ Now you can just focus on the part that actually run the analysis
     CHKERR poisson_problem.runAnalysis();
 \endcode
 
-## The class functions {#basic_tutorials_poisson_homogeneous_the_class_functions}
-
-
-### Poisson2DHomogeneous::runAnalysis() {#basic_tutorials_poisson_homogeneous_run_analysis}
-  
-
-### Poisson2DHomogeneous::readMesh() {#basic_tutorials_poisson_homogeneous_read_mesh}
-  
-
-### Poisson2DHomogeneous::setupProblem() {#basic_tutorials_poisson_homogeneous_setup_problem}
-
-### Poisson2DHomogeneous::setIntegrationRules() {#basic_tutorials_poisson_homogeneous_set_integration_rules}
-
-### Poisson2DHomogeneous::boundaryCondition() {#basic_tutorials_poisson_homogeneous_boundary_condition}
-
-### Poisson2DHomogeneous::assembleSystem() {#basic_tutorials_poisson_homogeneous_assemble_system}
-
-### Poisson2DHomogeneous::solveSystem() {#basic_tutorials_poisson_homogeneous_solve_system}
-
-### Poisson2DHomogeneous::outputResults() {#basic_tutorials_poisson_homogeneous_output_results}
-
 
 # Results {#basic_tutorials_poisson_homogeneous_results}
 
+Body force is set to be \f$ f=5.0 \f$ 
+
+## Run the program
+
+## Output
 
 
-## Run the program {#sub_sbasic_tutorials_poisson_homogeneous_run_the_programection}
+Visualisation in Paraview
 
-## Output {#basic_tutorials_poisson_homogeneous_output}
+\anchor figure_poisson_homogeneous
+\image html poisson_homogeneous.png "Figure 1: Poisson homogeneous visualisation." width = 900px
 
-## Discussion {#basic_tutorials_poisson_homogeneous_discussion}
 
-## Possible extension {#basic_tutorials_poisson_homogeneous_possible_extension}
+## Discussion
+
+## Possible extension
 
 
 

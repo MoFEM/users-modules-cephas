@@ -10,10 +10,10 @@ Library and the Default User Module as follows
 
 - Core Library
   - Source code: *$HOME/mofem_install/mofem-cephas/*
-  - Binary files (build directory): *$HOME/mofem_install/lib_release*
+  - Binary files (build directory): *$HOME/mofem_install/lib_release/*
 - Default User Module
-  - Source code: *$HOME/mofem_install/mofem-cephas/mofem/users_modules*
-  - Binary files (build directory): *$HOME/mofem_install/um/build_release*
+  - Source code: *$HOME/mofem_install/mofem-cephas/mofem/users_modules/*
+  - Binary files (build directory): *$HOME/mofem_install/um/build_release/*
 
 # How to add a new module
 
@@ -58,3 +58,6 @@ service such as [Bitbucket](https://confluence.atlassian.com/bitbucketserver/imp
 Example would be copy and paste program for Poisson's equation with homogeneous
 boundary condition. Then build and test run it.
 
+Once you add source code of the new program to the Default User Module or a new
+module created by yourself, you may need to compile the codes before being able
+to run the program. Here is the instruction \ref how_to_compile_program.
