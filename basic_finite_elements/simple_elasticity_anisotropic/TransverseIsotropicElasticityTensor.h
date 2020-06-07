@@ -1,7 +1,7 @@
-// #include <cmath>
-// #include <vector>
-// #include <Eigen/Dense>
-// #include <FTensor.hpp>
+ #include <cmath>
+ #include <vector>
+ #include <eigen3/Eigen/Dense>
+ #include <FTensor.hpp>
 
 class TransverseIsotropicElasticityTensor{
 
