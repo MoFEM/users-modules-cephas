@@ -33,5 +33,5 @@ block 4 surface 10
 refine surface 10 size 0.1 bias 1.25
 
 #compress ids all
-#save as "./wellbore.cub" overwrite
-save as "./refinedWellbore.cub" overwrite
+save as "./wellbore.cub" overwrite
+#save as "./refinedWellbore.cub" overwrite
