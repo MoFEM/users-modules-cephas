@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
                                  "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
+                                 "-my_hdiv_trace 0 \n"
                                  "-my_is_newton_cotes 0 \n"
                                  "-my_is_test 0 \n";
 
@@ -60,7 +61,7 @@ int main(int argc, char *argv[]) {
 
   try {
     PetscBool flg_file;
-
+    //TODO: [CM-1] improve
     char mesh_file_name[255];
     PetscInt order = 1;
     PetscInt order_lambda = 1;
@@ -70,6 +71,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool is_test = PETSC_FALSE;
     PetscBool convect_pts = PETSC_FALSE;
+    PetscBool is_hdiv_trace = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -98,6 +100,11 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &is_test, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_hdiv_trace",
+                            "set if mesh is partitioned (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_FALSE, &is_hdiv_trace, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -233,8 +240,13 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3, MB_TAG_SPARSE, MF_ZERO);
 
-    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
-                             MB_TAG_SPARSE, MF_ZERO);
+    if (!is_hdiv_trace) {
+      CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+                               MB_TAG_SPARSE, MF_ZERO);
+    } else {
+      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3,
+                               MB_TAG_SPARSE, MF_ZERO);
+    }
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
@@ -249,445 +261,602 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-    CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-    CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+    if (!is_hdiv_trace) {
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+    } else {
+      Range slave_tets;
+      CHKERR moab.get_adjacencies(slave_tris, 3, false, slave_tets,
+                                  moab::Interface::UNION);
 
-    // build field
-    CHKERR m_field.build_fields();
+      slave_tets = slave_tets.subset_by_type(MBTET);
 
-    // Projection on "x" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
-      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
-    }
-    // Projection on "X" field
-    {
-      Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
-      CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
-    }
+      Range full_slave_tets_tris;
+      CHKERR moab.get_adjacencies(slave_tets, 2, false, full_slave_tets_tris,
+                                  moab::Interface::UNION);
 
-    // Add elastic element
-    boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
-    boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
-    NonlinearElasticElement elastic(m_field, 2);
-    CHKERR elastic.setBlocks(hooke_double_ptr, hooke_adouble_ptr);
-    CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
+      CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
+      CHKERR m_field.set_field_order(slave_tets, "LAGMULT", 0);
+      Range tris_not_needed;
+      CHKERR moab.get_adjacencies(slave_tets, 2, false, tris_not_needed,
+                                  moab::Interface::UNION);
+      CHKERR m_field.add_ents_to_field_by_type(tris_not_needed, MBTRI,
+                                               "LAGMULT");
+      tris_not_needed = subtract(tris_not_needed, slave_tris);
+      CHKERR m_field.set_field_order(tris_not_needed, "LAGMULT", 0);
+      cerr << "SIZE!!     " << tris_not_needed.size() << "\n";
+      CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
 
-    CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
-                                false, false);
+      Range slave_edges, master_edges;
 
-    if (true) {
-      CHKERR m_field.add_finite_element("CONTACT_VTK");
-      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+      CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
+                                  moab::Interface::UNION);
+      CHKERR moab.get_adjacencies(master_tris, 1, false, master_edges,
+                                  moab::Interface::UNION);
+
+      // CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION",
+      //                                order+2);
+
+      // CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order + 2);
+
+      // CHKERR m_field.set_field_order(slave_edges, "SPATIAL_POSITION",
+      //                                order + 2);
+
+      // CHKERR m_field.set_field_order(master_edges, "SPATIAL_POSITION",
+      //                                order + 2);
+
+      CHKERR m_field.add_finite_element("HDIVMATERIAL", MF_ZERO);
+
+      CHKERR m_field.modify_finite_element_add_field_row("HDIVMATERIAL",
                                                          "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+      CHKERR m_field.modify_finite_element_add_field_col("HDIVMATERIAL",
                                                          "SPATIAL_POSITION");
-      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+      CHKERR m_field.modify_finite_element_add_field_data("HDIVMATERIAL",
                                                           "SPATIAL_POSITION");
 
-      CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+      CHKERR m_field.modify_finite_element_add_field_data(
+          "HDIVMATERIAL", "MESH_NODE_POSITIONS");
+
+      CHKERR m_field.modify_finite_element_add_field_row("HDIVMATERIAL",
                                                          "LAGMULT");
-      CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+      CHKERR m_field.modify_finite_element_add_field_col("HDIVMATERIAL",
                                                          "LAGMULT");
-      CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+      CHKERR m_field.modify_finite_element_add_field_data("HDIVMATERIAL",
                                                           "LAGMULT");
-      CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
-                                                        "CONTACT_VTK");
+
+      CHKERR m_field.add_ents_to_finite_element_by_type(slave_tets, MBTET,
+                                                        "HDIVMATERIAL");
+      CHKERR m_field.build_finite_elements("HDIVMATERIAL", &slave_tets);
     }
 
-    auto make_contact_element = [&]() {
-      return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
-          m_field);
-    };
+      // build field
+      CHKERR m_field.build_fields();
 
-    auto make_convective_master_element = [&]() {
-      return boost::make_shared<
-          SimpleContactProblem::ConvectMasterContactElement>(
-          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
-    };
+      // Projection on "x" field
+      {
+        Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
+        CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
+      }
+      // Projection on "X" field
+      {
+        Projection10NodeCoordsOnField ent_method(m_field,
+                                                 "MESH_NODE_POSITIONS");
+        CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
+      }
 
-    auto make_convective_slave_element = [&]() {
-      return boost::make_shared<
-          SimpleContactProblem::ConvectSlaveContactElement>(
-          m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
-    };
+      // Add elastic element
+      boost::shared_ptr<Hooke<adouble>> hooke_adouble_ptr(new Hooke<adouble>());
+      boost::shared_ptr<Hooke<double>> hooke_double_ptr(new Hooke<double>());
+      NonlinearElasticElement elastic(m_field, 2);
+      CHKERR elastic.setBlocks(hooke_double_ptr, hooke_adouble_ptr);
+      CHKERR elastic.addElement("ELASTIC", "SPATIAL_POSITION");
 
-    auto make_contact_common_data = [&]() {
-      return boost::make_shared<SimpleContactProblem::CommonDataSimpleContact>(
-          m_field);
-    };
+      CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+                                  false, false);
 
-    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
-      auto fe_rhs_simple_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
-      return fe_rhs_simple_contact;
-    };
+      if (true) {
+        CHKERR m_field.add_finite_element("CONTACT_VTK");
+        CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+                                                           "SPATIAL_POSITION");
+        CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+                                                           "SPATIAL_POSITION");
+        CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+                                                            "SPATIAL_POSITION");
 
-    auto get_master_traction_rhs = [&](auto contact_problem,
-                                       auto make_element) {
-      auto fe_rhs_simple_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setMasterForceOperatorsRhs(
-          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
-      return fe_rhs_simple_contact;
-    };
+        CHKERR m_field.modify_finite_element_add_field_row("CONTACT_VTK",
+                                                           "LAGMULT");
+        CHKERR m_field.modify_finite_element_add_field_col("CONTACT_VTK",
+                                                           "LAGMULT");
+        CHKERR m_field.modify_finite_element_add_field_data("CONTACT_VTK",
+                                                            "LAGMULT");
+        CHKERR m_field.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
+                                                          "CONTACT_VTK");
+      }
 
-    auto get_master_traction_lhs = [&](auto contact_problem,
-                                       auto make_element) {
-      auto fe_lhs_simple_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setMasterForceOperatorsLhs(
-          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
-      return fe_lhs_simple_contact;
-    };
+      auto make_contact_element = [&]() {
+        return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
+            m_field);
+      };
 
-    auto get_master_contact_lhs = [&](auto contact_problem, auto make_element) {
-      auto fe_lhs_simple_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
-      return fe_lhs_simple_contact;
-    };
+      auto make_convective_master_element = [&]() {
+        return boost::make_shared<
+            SimpleContactProblem::ConvectMasterContactElement>(
+            m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+      };
 
-    auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+      auto make_convective_slave_element = [&]() {
+        return boost::make_shared<
+            SimpleContactProblem::ConvectSlaveContactElement>(
+            m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+      };
 
-    // add fields to the global matrix by adding the element
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+      auto make_volume_hdiv_element = [&]() {
+        return boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
+      };
 
-    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
+      auto make_contact_common_data = [&]() {
+        return boost::make_shared<
+            SimpleContactProblem::CommonDataSimpleContact>(m_field);
+      };
 
-    // Add spring boundary condition applied on surfaces.
-    CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
-                                           "MESH_NODE_POSITIONS");
+      auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+        auto fe_rhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
+                                                common_data_simple_contact,
+                                                "SPATIAL_POSITION", "LAGMULT");
+        return fe_rhs_simple_contact;
+      };
 
-    // build finite elemnts
-    CHKERR m_field.build_finite_elements();
+      auto get_master_traction_rhs = [&](auto contact_problem,
+                                         auto make_element) {
+        auto fe_rhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setMasterForceOperatorsRhs(
+            fe_rhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "LAGMULT");
+        return fe_rhs_simple_contact;
+      };
 
-    // build adjacencies
-    CHKERR m_field.build_adjacencies(bit_levels.back());
+      auto get_hdiv_surface_rhs = [&](auto contact_problem,
+                                         auto make_element) {
+        auto fe_rhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setContactOperatorsRhsOperatorsHdiv3DSurface(
+            fe_rhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "LAGMULT");
+        return fe_rhs_simple_contact;
+      };
 
-    // define problems
-    CHKERR m_field.add_problem("CONTACT_PROB");
+      auto get_hdiv_volume_rhs = [&](auto contact_problem, auto make_element) {
+        auto fe_rhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setContactOperatorsRhsOperatorsHdiv3DVolume(
+            fe_rhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "LAGMULT");
+        return fe_rhs_simple_contact;
+      };
 
-    // set refinement level for problem
-    CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
-                                                    bit_levels.back());
+      auto get_master_traction_lhs = [&](auto contact_problem,
+                                         auto make_element) {
+        auto fe_lhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setMasterForceOperatorsLhs(
+            fe_lhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "LAGMULT");
+        return fe_lhs_simple_contact;
+      };
 
-    DMType dm_name = "DMMOFEM";
-    CHKERR DMRegister_MoFEM(dm_name);
+      auto get_master_contact_lhs = [&](auto contact_problem,
+                                        auto make_element) {
+        auto fe_lhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
+                                                common_data_simple_contact,
+                                                "SPATIAL_POSITION", "LAGMULT");
+        return fe_lhs_simple_contact;
+      };
 
-    SmartPetscObj<DM> dm;
-    dm = createSmartDM(m_field.get_comm(), dm_name);
+      auto get_hdiv_surface_contact_lhs = [&](auto contact_problem,
+                                              auto make_element) {
+        auto fe_lhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setContactOperatorsLhsOperatorsHdiv3DSurface(
+            fe_lhs_simple_contact,
+            common_data_simple_contact, "SPATIAL_POSITION", "LAGMULT");
+        return fe_lhs_simple_contact;
+      };
 
-    // create dm instance
-    CHKERR DMSetType(dm, dm_name);
+      auto get_hdiv_volume_contact_lhs = [&](auto contact_problem,
+                                             auto make_element) {
+        auto fe_lhs_simple_contact = make_element();
+        auto common_data_simple_contact = make_contact_common_data();
+        contact_problem->setContactOperatorsLhsOperatorsHdiv3DVolume(
+            fe_lhs_simple_contact, common_data_simple_contact,
+            "SPATIAL_POSITION", "LAGMULT");
+        return fe_lhs_simple_contact;
+      };
 
-    // set dm datastruture which created mofem datastructures
-    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels.back());
-    CHKERR DMSetFromOptions(dm);
-    CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
-    // add elements to dm
-    CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
-    CHKERR DMMoFEMAddElement(dm, "ELASTIC");
-    CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
-    CHKERR DMMoFEMAddElement(dm, "SPRING");
-    if (true) {
-      CHKERR DMMoFEMAddElement(dm, "CONTACT_VTK");
-    }
+      auto contact_problem = boost::make_shared<SimpleContactProblem>(
+          m_field, cn_value, is_newton_cotes);
 
-    CHKERR DMSetUp(dm);
+      // add fields to the global matrix by adding the element
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms);
 
-    // Vector of DOFs and the RHS
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
+      CHKERR MetaNeumannForces::addNeumannBCElements(m_field,
+                                                     "SPATIAL_POSITION");
 
-    // Stiffness matrix
-    auto Aij = smartCreateDMMatrix(dm);
+      // Add spring boundary condition applied on surfaces.
+      CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
+                                             "MESH_NODE_POSITIONS");
 
-    CHKERR VecZeroEntries(D);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      // build finite elemnts
+      CHKERR m_field.build_finite_elements();
 
-    CHKERR VecZeroEntries(F);
-    CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+      // build adjacencies
+      CHKERR m_field.build_adjacencies(bit_levels.back());
 
-    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
-    CHKERR MatZeroEntries(Aij);
+      // define problems
+      CHKERR m_field.add_problem("CONTACT_PROB");
 
-    // Dirichlet BC
-    boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
-        boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
-            m_field, "SPATIAL_POSITION", Aij, D, F));
+      // set refinement level for problem
+      CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
+                                                      bit_levels.back());
 
-    dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
-    dirichlet_bc_ptr->snes_x = D;
+      DMType dm_name = "DMMOFEM";
+      CHKERR DMRegister_MoFEM(dm_name);
 
-    // Assemble pressure and traction forces
-    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(
-        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
+      SmartPetscObj<DM> dm;
+      dm = createSmartDM(m_field.get_comm(), dm_name);
 
-    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
-        neumann_forces.begin();
-    for (; mit != neumann_forces.end(); mit++) {
-      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
-                                    &mit->second->getLoopFe(), NULL, NULL);
-    }
+      // create dm instance
+      CHKERR DMSetType(dm, dm_name);
 
-    // Implementation of spring element
-    // Create new instances of face elements for springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
-        new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
-        new FaceElementForcesAndSourcesCore(m_field));
+      // set dm datastruture which created mofem datastructures
+      CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB",
+                                bit_levels.back());
+      CHKERR DMSetFromOptions(dm);
+      CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
+      // add elements to dm
+      CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
+      CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+      CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
+      CHKERR DMMoFEMAddElement(dm, "SPRING");
 
-    CHKERR MetaSpringBC::setSpringOperators(
-        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS");
+      if (is_hdiv_trace) {
+        CHKERR DMMoFEMAddElement(dm, "HDIVMATERIAL");
+      }
 
-    CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
-                                  dirichlet_bc_ptr.get(), NULL);
-    if (convect_pts == PETSC_TRUE) {
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_convective_master_element),
-          PETSC_NULL, PETSC_NULL);
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_master_traction_rhs(contact_problem,
-                                  make_convective_slave_element),
-          PETSC_NULL, PETSC_NULL);
-    } else {
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
-          PETSC_NULL);
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_master_traction_rhs(contact_problem, make_contact_element),
-          PETSC_NULL, PETSC_NULL);
-    }
-    CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
-                                  PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
-                                  PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
-                                  dirichlet_bc_ptr.get());
+      if (true) {
+        CHKERR DMMoFEMAddElement(dm, "CONTACT_VTK");
+      }
 
-    boost::shared_ptr<FEMethod> fe_null;
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
-                                  fe_null);
-    if (convect_pts == PETSC_TRUE) {
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_master_contact_lhs(contact_problem,
-                                 make_convective_master_element),
-          NULL, NULL);
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_master_traction_lhs(contact_problem,
-                                  make_convective_slave_element),
-          NULL, NULL);
-    } else {
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_master_contact_lhs(contact_problem, make_contact_element), NULL,
-          NULL);
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_master_traction_lhs(contact_problem, make_contact_element), NULL,
-          NULL);
-    }
-    CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
-                                  NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
-                                  dirichlet_bc_ptr);
+      CHKERR DMSetUp(dm);
 
-    if (is_test == PETSC_TRUE) {
-      char testing_options[] = "-ksp_type fgmres "
-                               "-pc_type lu "
-                               "-pc_factor_mat_solver_package mumps "
-                               "-snes_type newtonls "
-                               "-snes_linesearch_type basic "
-                               "-snes_max_it 10 "
-                               "-snes_atol 1e-8 "
-                               "-snes_rtol 1e-8 ";
-      CHKERR PetscOptionsInsertString(NULL, testing_options);
-    }
+      // Vector of DOFs and the RHS
+      auto D = smartCreateDMVector(dm);
+      auto F = smartVectorDuplicate(D);
 
-    auto snes = MoFEM::createSNES(m_field.get_comm());
-    CHKERR SNESSetDM(snes, dm);
-    SNESConvergedReason snes_reason;
-    SnesCtx *snes_ctx;
-    // create snes nonlinear solver
-    {
+      // Stiffness matrix
+      auto Aij = smartCreateDMMatrix(dm);
+
+      CHKERR VecZeroEntries(D);
+      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+      CHKERR VecZeroEntries(F);
+      CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+
+      CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+      CHKERR MatZeroEntries(Aij);
+
+      // Dirichlet BC
+      boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
+          boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
+              m_field, "SPATIAL_POSITION", Aij, D, F));
+
+      dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
+      dirichlet_bc_ptr->snes_x = D;
+
+      // Assemble pressure and traction forces
+      boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+      CHKERR MetaNeumannForces::setMomentumFluxOperators(
+          m_field, neumann_forces, NULL, "SPATIAL_POSITION");
+
+      boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+          neumann_forces.begin();
+      for (; mit != neumann_forces.end(); mit++) {
+        CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
+                                      &mit->second->getLoopFe(), NULL, NULL);
+      }
+
+      // Implementation of spring element
+      // Create new instances of face elements for springs
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+          new FaceElementForcesAndSourcesCore(m_field));
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+          new FaceElementForcesAndSourcesCore(m_field));
+
+      CHKERR MetaSpringBC::setSpringOperators(
+          m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
+          "MESH_NODE_POSITIONS");
+
+      CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+      CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
+                                    dirichlet_bc_ptr.get(), NULL);
+      if (convect_pts == PETSC_TRUE) {
+        CHKERR DMMoFEMSNESSetFunction(
+            dm, "CONTACT_ELEM",
+            get_contact_rhs(contact_problem, make_convective_master_element),
+            PETSC_NULL, PETSC_NULL);
+        CHKERR DMMoFEMSNESSetFunction(
+            dm, "CONTACT_ELEM",
+            get_master_traction_rhs(contact_problem,
+                                    make_convective_slave_element),
+            PETSC_NULL, PETSC_NULL);
+      } else {
+        if (!is_hdiv_trace) {
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_contact_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_master_traction_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+        }else {
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_hdiv_surface_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "HDIVMATERIAL",
+              get_hdiv_volume_rhs(contact_problem, make_volume_hdiv_element),
+              PETSC_NULL, PETSC_NULL);
+        }
+        }
+      CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
+                                    PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                    PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
+                                    dirichlet_bc_ptr.get());
+
+      boost::shared_ptr<FEMethod> fe_null;
+      CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null,
+                                    dirichlet_bc_ptr, fe_null);
+      if (convect_pts == PETSC_TRUE) {
+        CHKERR DMMoFEMSNESSetJacobian(
+            dm, "CONTACT_ELEM",
+            get_master_contact_lhs(contact_problem,
+                                   make_convective_master_element),
+            NULL, NULL);
+        CHKERR DMMoFEMSNESSetJacobian(
+            dm, "CONTACT_ELEM",
+            get_master_traction_lhs(contact_problem,
+                                    make_convective_slave_element),
+            NULL, NULL);
+      } else {
+        if (!is_hdiv_trace) {
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_master_contact_lhs(contact_problem, make_contact_element),
+              NULL, NULL);
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_master_traction_lhs(contact_problem, make_contact_element),
+              NULL, NULL);
+        } else {
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_hdiv_surface_contact_lhs(contact_problem,
+                                           make_contact_element),
+              NULL, NULL);
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "HDIVMATERIAL",
+              get_hdiv_volume_contact_lhs(contact_problem,
+                                          make_volume_hdiv_element),
+              NULL, NULL);
+        }
+        }
+      CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
+                                    NULL, NULL);
+      CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL,
+                                    NULL);
+      CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
+                                    dirichlet_bc_ptr);
+
+      if (is_test == PETSC_TRUE) {
+        char testing_options[] = "-ksp_type fgmres "
+                                 "-pc_type lu "
+                                 "-pc_factor_mat_solver_package mumps "
+                                 "-snes_type newtonls "
+                                 "-snes_linesearch_type basic "
+                                 "-snes_max_it 10 "
+                                 "-snes_atol 1e-8 "
+                                 "-snes_rtol 1e-8 ";
+        CHKERR PetscOptionsInsertString(NULL, testing_options);
+      }
+
+      auto snes = MoFEM::createSNES(m_field.get_comm());
       CHKERR SNESSetDM(snes, dm);
-      CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
-      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
-      CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
-      CHKERR SNESSetFromOptions(snes);
-    }
+      SNESConvergedReason snes_reason;
+      SnesCtx *snes_ctx;
+      // create snes nonlinear solver
+      {
+        CHKERR SNESSetDM(snes, dm);
+        CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
+        CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
+        CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
+        CHKERR SNESSetFromOptions(snes);
+      }
 
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
-    // Add operators to the elements, starting with some generic
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("SPATIAL_POSITION");
-    CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-    CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
+      PostProcVolumeOnRefinedMesh post_proc(m_field);
+      // Add operators to the elements, starting with some generic
+      CHKERR post_proc.generateReferenceElementMesh();
+      CHKERR post_proc.addFieldValuesPostProc("SPATIAL_POSITION");
+      CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+      CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
 
-    std::map<int, NonlinearElasticElement::BlockData>::iterator sit =
-        elastic.setOfBlocks.begin();
-    for (; sit != elastic.setOfBlocks.end(); sit++) {
-      post_proc.getOpPtrVector().push_back(new PostProcStress(
-          post_proc.postProcMesh, post_proc.mapGaussPts, "SPATIAL_POSITION",
-          sit->second, post_proc.commonData));
-    }
+      std::map<int, NonlinearElasticElement::BlockData>::iterator sit =
+          elastic.setOfBlocks.begin();
+      for (; sit != elastic.setOfBlocks.end(); sit++) {
+        post_proc.getOpPtrVector().push_back(new PostProcStress(
+            post_proc.postProcMesh, post_proc.mapGaussPts, "SPATIAL_POSITION",
+            sit->second, post_proc.commonData));
+      }
 
-    CHKERR SNESSolve(snes, PETSC_NULL, D);
+      CHKERR SNESSolve(snes, PETSC_NULL, D);
 
-    CHKERR SNESGetConvergedReason(snes, &snes_reason);
+      CHKERR SNESGetConvergedReason(snes, &snes_reason);
 
-    int its;
-    CHKERR SNESGetIterationNumber(snes, &its);
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
-                       its);
+      int its;
+      CHKERR SNESGetIterationNumber(snes, &its);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD,
+                         "number of Newton iterations = %D\n\n", its);
 
-    // save on mesh
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+      // save on mesh
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
 
-    elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
-    elastic.getLoopFeEnergy().eNergy = 0;
-    PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
-    // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
-                elastic.getLoopFeEnergy().eNergy);
+      elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
+      elastic.getLoopFeEnergy().eNergy = 0;
+      PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC",
+                                      &elastic.getLoopFeEnergy());
+      // Print elastic energy
+      PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n",
+                  elastic.getLoopFeEnergy().eNergy);
 
-    string out_file_name;
-    std::ostringstream stm;
-    stm << "out"
-        << ".h5m";
-    out_file_name = stm.str();
-    CHKERR
-    PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
-
-    CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                             "PARALLEL=WRITE_PART");
-
-    // moab_instance
-    moab::Core mb_post;                   // create database
-    moab::Interface &moab_proc = mb_post; // create interface to database
-
-    auto common_data_simple_contact = make_contact_common_data();
-
-    boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
-        fe_post_proc_simple_contact;
-    if (convect_pts == PETSC_TRUE) {
-      fe_post_proc_simple_contact = make_convective_master_element();
-    } else {
-      fe_post_proc_simple_contact = make_contact_element();
-    }
-
-    contact_problem->setContactOperatorsForPostProc(
-        fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post);
-
-    mb_post.delete_mesh();
-
-    if (is_test == PETSC_TRUE) {
-      std::ofstream ofs((std ::string("test_simple_contact") + ".txt").c_str());
-
-      fe_post_proc_simple_contact->getOpPtrVector().push_back(
-          new SimpleContactProblem::OpMakeTestTextFile(
-              m_field, "SPATIAL_POSITION", common_data_simple_contact, ofs));
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
-
-      ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
-      ofs.flush();
-      ofs.close();
-    } else {
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                      fe_post_proc_simple_contact);
-    }
-
-    std::ostringstream ostrm;
-
-    ostrm << "out_contact"
-          << ".h5m";
-
-    out_file_name = ostrm.str();
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                       out_file_name.c_str());
-    CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                              "PARALLEL=WRITE_PART");
-
-    if (true) {
-
-      boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
-          new PostProcFaceOnRefinedMesh(m_field));
-
-      CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
-
-      auto common_post_proc_data_simple_contact = make_contact_common_data();
-
-      CHKERR contact_problem->setPostProcContactOperators(
-          post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-          common_post_proc_data_simple_contact);
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK", post_proc_contact_ptr);
+      string out_file_name;
       std::ostringstream stm;
-      std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
-      stm << "file_name_for_lagrange"
+      stm << "out"
           << ".h5m";
-
       out_file_name = stm.str();
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                         out_file_name.c_str());
-      CHKERR post_proc_contact_ptr->postProcMesh.write_file(
-          out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
-    }
+      CHKERR
+      PetscPrintf(PETSC_COMM_WORLD, "out file %s\n", out_file_name.c_str());
 
-    EntityHandle out_meshset_slave_tris;
-    EntityHandle out_meshset_master_tris;
+      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                               "PARALLEL=WRITE_PART");
 
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
-    CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+      // moab_instance
+      moab::Core mb_post;                   // create database
+      moab::Interface &moab_proc = mb_post; // create interface to database
 
-    CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
-    CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+      auto common_data_simple_contact = make_contact_common_data();
 
-    CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
-                           &out_meshset_slave_tris, 1);
-    CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
-                           &out_meshset_master_tris, 1);
+      boost::shared_ptr<SimpleContactProblem::SimpleContactElement>
+          fe_post_proc_simple_contact;
+      if (convect_pts == PETSC_TRUE) {
+        fe_post_proc_simple_contact = make_convective_master_element();
+      } else {
+        fe_post_proc_simple_contact = make_contact_element();
+      }
+      if (!is_hdiv_trace) {
+        contact_problem->setContactOperatorsForPostProc(
+            fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+            "SPATIAL_POSITION", "LAGMULT", mb_post);
+      } else {
+        contact_problem->setContactOperatorsForPostProcHdiv(
+            fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+            "SPATIAL_POSITION", "LAGMULT", mb_post);
+      }
 
-    CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
-    CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
-  }
+        mb_post.delete_mesh();
+
+        if (is_test == PETSC_TRUE) {
+          std::ofstream ofs(
+              (std ::string("test_simple_contact") + ".txt").c_str());
+
+          fe_post_proc_simple_contact->getOpPtrVector().push_back(
+              new SimpleContactProblem::OpMakeTestTextFile(
+                  m_field, "SPATIAL_POSITION", common_data_simple_contact,
+                  ofs));
+
+          CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                          fe_post_proc_simple_contact);
+
+          ofs << "Elastic energy: " << elastic.getLoopFeEnergy().eNergy << endl;
+          ofs.flush();
+          ofs.close();
+        } else {
+          CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                          fe_post_proc_simple_contact);
+        }
+
+        std::ostringstream ostrm;
+
+        ostrm << "out_contact"
+              << ".h5m";
+
+        out_file_name = ostrm.str();
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                           out_file_name.c_str());
+        CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
+                                  "PARALLEL=WRITE_PART");
+
+        if (true) {
+
+          boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+              new PostProcFaceOnRefinedMesh(m_field));
+
+          CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+
+          auto common_post_proc_data_simple_contact =
+              make_contact_common_data();
+          if (!is_hdiv_trace) {
+            CHKERR contact_problem->setPostProcContactOperators(
+                post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+                common_post_proc_data_simple_contact);
+          } else {
+            CHKERR contact_problem->setPostProcContactOperatorsHdiv(
+                post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+                common_post_proc_data_simple_contact);
+          }
+
+            CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK",
+                                            post_proc_contact_ptr);
+            std::ostringstream stm;
+            std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
+            stm << "file_name_for_lagrange"
+                << ".h5m";
+
+            out_file_name = stm.str();
+            CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                               out_file_name.c_str());
+            CHKERR post_proc_contact_ptr->postProcMesh.write_file(
+                out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+          }
+
+        EntityHandle out_meshset_slave_tris;
+        EntityHandle out_meshset_master_tris;
+
+        CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
+        CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+
+        CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
+        CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+
+        CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
+                               &out_meshset_slave_tris, 1);
+        CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
+                               &out_meshset_master_tris, 1);
+
+        CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
+        CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
+      }
   CATCH_ERRORS;
 
   // finish work cleaning memory, getting statistics, etc
