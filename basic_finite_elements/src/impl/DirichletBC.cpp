@@ -230,12 +230,15 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
           } else {
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              dof->getFieldData() = 0;
             }
             if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              dof->getFieldData() = 0;
             }
             if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              dof->getFieldData() = 0;
             }
           }
           MoFEMFunctionReturnHot(0);
@@ -415,13 +418,16 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
             }
           } else {
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
-              mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+              mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              dof->getFieldData() = 0;
             }
             if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
-              mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+              mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              dof->getFieldData() = 0;
             }
             if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
-              mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
+              mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+              dof->getFieldData() = 0;
             }
           }
 
