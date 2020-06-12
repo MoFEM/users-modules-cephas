@@ -1,4 +1,4 @@
-/*! \page basic_tutorials_poisson_homogeneous Poisson's equation (homogeneous BC)
+/*! \page basic_tutorials_poisson_homogeneous SCL-1: Poisson's equation (homogeneous BC)
 
 \note Prerequisite of this tutorial include \ref basic_tutorials_mesh_generation_2d
 and \ref basic_tutorials_mesh_generation_3d (for the 3D extension
@@ -19,7 +19,7 @@ how_to_compile_program.
 - idea of Domain element in MoFEM and how to use it
 - process of implementing User Data Operators (UDOs) to calculate and assemble
   stiffness matrix and force vector
-- how to **push** UDOs to the main program
+- how to **push** UDOs to the *pipeline*
 - a way to handle homogeneous boundary condition in MoFEM
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 
@@ -119,8 +119,11 @@ such that
 \f[
 {\bf KU} = {\bf F}  
 \f]
-where the components of the stiffness matrix (left hand side) \f$ {\bf K} \f$
-and the force vector (right hand side) \f$ {\bf F} \f$ are
+where \f$ {\bf K} \f$ and \f$ {\bf F} \f$ are the global stiffness matrix (left
+hand side) and global force vector (right hand side) calculated over the whole
+domain, respectively. \f$ {\bf K} \f$ and \f$ {\bf F} \f$ are obtained by
+assembling from all elements (entity) in the domain, and the compoments
+of element stiffness matrix and element force vector are calculated as
 \f[
   \begin{align}
     K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla  \phi_j, \\
@@ -128,11 +131,12 @@ and the force vector (right hand side) \f$ {\bf F} \f$ are
   \end{align}
 \f]
 
-We almost there, but still, you may ask how computers can handle the integral
-terms. Of course, we will not ask computers to calculate the integrals directly,
-instead it is done using *quadrature* which is commonly used in finite element
-method. In order word, the integrals are replaced by the sum of a set of points
-on each element along with their weights. 
+We almost place where we can start the implementation, but still, you may ask
+how computers can handle the integral terms. Of course, we will not ask
+computers to calculate the integrals directly, instead it is done using
+*quadrature* which is commonly used in finite element method. In order word, the
+integrals are replaced by the sum of a set of points on each element along with
+their weights.
 
 
 
