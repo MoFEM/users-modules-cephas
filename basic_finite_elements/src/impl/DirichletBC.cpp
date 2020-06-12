@@ -214,14 +214,19 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
           if (dof->getEntType() == MBVERTEX) {
             CHKERR apply_rotation(dof);
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
+              // set boundary values to field data
               mapZeroRows[dof->getPetscGlobalDofIdx()] = bc_it.scaled_values[0];
+              dof->getFieldData() = mapZeroRows[dof->getPetscGlobalDofIdx()];
             }
             if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = bc_it.scaled_values[1];
+              dof->getFieldData() = mapZeroRows[dof->getPetscGlobalDofIdx()];
             }
             if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = bc_it.scaled_values[2];
+              dof->getFieldData() = mapZeroRows[dof->getPetscGlobalDofIdx()];
             }
+
           } else {
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
@@ -238,6 +243,7 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
 
         CHKERR set_numered_dofs_on_ents(problemPtr, fieldName,
                                         bc_it.bc_ents[dim], for_each_dof);
+
       }
     }
     dofsIndices.resize(mapZeroRows.size());
@@ -394,16 +400,19 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] =
                   coords[0] + bc_it.scaled_values[0];
+              // set boundary values to field data
+              dof->getFieldData() = mapZeroRows[dof->getPetscGlobalDofIdx()];
             }
             if (dof->getDofCoeffIdx() == 1 && bc_it.bc_flags[1]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] =
                   coords[1] + bc_it.scaled_values[1];
+              dof->getFieldData() = mapZeroRows[dof->getPetscGlobalDofIdx()];
             }
             if (dof->getDofCoeffIdx() == 2 && bc_it.bc_flags[2]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] =
                   coords[2] + bc_it.scaled_values[2];
+              dof->getFieldData() = mapZeroRows[dof->getPetscGlobalDofIdx()];
             }
-
           } else {
             if (dof->getDofCoeffIdx() == 0 && bc_it.bc_flags[0]) {
               mapZeroRows[dof->getPetscGlobalDofIdx()] = dof->getFieldData();
@@ -421,18 +430,6 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 
         CHKERR set_numered_dofs_on_ents(problemPtr, fieldName,
                                         bc_it.bc_ents[dim], for_each_dof);
-
-        // set boundary values to field data
-        auto fix_field_dof = [&](auto &dof) {
-          MoFEMFunctionBeginHot;
-          mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          MoFEMFunctionReturnHot(0);
-        };
-
-        for (auto &fix_field : fixFields) {
-          CHKERR set_numered_dofs_on_ents(problemPtr, fix_field,
-                                          bc_it.bc_ents[dim], fix_field_dof);
-        }
 
       }
     }

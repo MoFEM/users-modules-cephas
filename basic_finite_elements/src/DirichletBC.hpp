@@ -137,7 +137,6 @@ struct DirichletSpatialPositionsBc : public DirichletDisplacementBc {
 
   std::string materialPositions; ///< name of the field with reference material
                                  ///< positions
-  std::vector<std::string> fixFields; ///<
 
   VectorDouble cOords;
   MoFEMErrorCode iNitalize();
