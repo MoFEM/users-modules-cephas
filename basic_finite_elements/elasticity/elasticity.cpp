@@ -519,7 +519,7 @@ int main(int argc, char *argv[]) {
           };
 
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAnalyticalInternalStain<0>(
+          new HookeElement::OpAnalyticalInternalStain_dx<0>(
               "DISPLACEMENT", data_at_pts, thermal_strain));
     }
 

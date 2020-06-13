@@ -577,7 +577,7 @@ struct HookeElement {
   };
 
   template<int S>
-  struct OpAnalyticalInternalStain : public OpAssemble {
+  struct OpAnalyticalInternalStain_dx : public OpAssemble {
 
     typedef boost::function<
 
@@ -590,7 +590,31 @@ struct HookeElement {
         >
         StrainFunctions;
 
-    OpAnalyticalInternalStain(
+    OpAnalyticalInternalStain_dx(
+        const std::string row_field,
+        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        StrainFunctions strain_fun);
+
+
+  protected:
+    MoFEMErrorCode iNtegrate(EntData &row_data);
+    StrainFunctions strainFun;
+  };
+
+  template <int S> struct OpAnalyticalInternalStain_dx : public OpAssemble {
+
+    typedef boost::function<
+
+        FTensor::Tensor2_symmetric<double, 3>(
+
+            FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords
+
+            )
+
+        >
+        StrainFunctions;
+
+    OpAnalyticalInternalStain_dx(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         StrainFunctions strain_fun);
@@ -1459,7 +1483,7 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalStain<S>::OpAnalyticalInternalStain(
+HookeElement::OpAnalyticalInternalStain_dx<S>::OpAnalyticalInternalStain_dx(
     const std::string row_field,
     boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
     StrainFunctions strain_fun)
@@ -1468,7 +1492,7 @@ HookeElement::OpAnalyticalInternalStain<S>::OpAnalyticalInternalStain(
 
 template <int S>
 MoFEMErrorCode
-HookeElement::OpAnalyticalInternalStain<S>::iNtegrate(EntData &row_data) {
+HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
