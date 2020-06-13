@@ -437,6 +437,16 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
         CHKERR set_numered_dofs_on_ents(problemPtr, fieldName,
                                         bc_it.bc_ents[dim], for_each_dof);
 
+        auto fix_field_dof = [&](auto &dof) {
+          MoFEMFunctionBeginHot;
+          mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+          MoFEMFunctionReturnHot(0);
+        };
+
+        for (auto &fix_field : fixFields) {
+          CHKERR set_numered_dofs_on_ents(problemPtr, fix_field,
+                                          bc_it.bc_ents[dim], fix_field_dof);
+        }
       }
     }
 
