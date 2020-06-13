@@ -288,7 +288,7 @@ struct HookeElement {
       FTensor::Index<'l', 3> l;
 
       double density = massData.rho0;
-   
+
       // get integration weights
       auto t_w = getFTensor0IntegrationWeight();
 
@@ -576,8 +576,7 @@ struct HookeElement {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
-  template<int S>
-  struct OpAnalyticalInternalStain_dx : public OpAssemble {
+  template <int S> struct OpAnalyticalInternalStain_dx : public OpAssemble {
 
     typedef boost::function<
 
@@ -595,13 +594,12 @@ struct HookeElement {
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         StrainFunctions strain_fun);
 
-
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
     StrainFunctions strainFun;
   };
 
-   template <int S> struct OpAnalyticalInternalStain_dX : public OpAssemble {
+  template <int S> struct OpAnalyticalInternalAleStain_dX : public OpAssemble {
 
     typedef boost::function<
 
@@ -614,16 +612,15 @@ struct HookeElement {
         >
         StrainFunctions;
 
-    OpAnalyticalInternalStain_dX(
+    OpAnalyticalInternalAleStain_dX(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         StrainFunctions strain_fun);
 
-
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
     StrainFunctions strainFun;
-  }; 
+  };
 
   template <class ELEMENT>
   struct OpPostProcHookeElement : public ELEMENT::UserDataOperator {
@@ -1513,8 +1510,8 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
       return getFTensor1CoordsAtGaussPts();
   };
   auto t_coords = get_coords();
- 
-   // get element volume
+
+  // get element volume
   double vol = getVolume();
   auto t_w = getFTensor0IntegrationWeight();
 
@@ -1533,7 +1530,7 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
     auto t_fun_strain = strainFun(t_coords);
-    FTensor::Tensor2_symmetric<double,3> t_stress;
+    FTensor::Tensor2_symmetric<double, 3> t_stress;
     t_stress(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
 
     // calculate scalar weight times element volume
@@ -1565,16 +1562,17 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalStain_dX<S>::OpAnalyticalInternalStain_dX(
-    const std::string row_field,
-    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-    StrainFunctions strain_fun)
+HookeElement::OpAnalyticalInternalAleStain_dX<
+    S>::OpAnalyticalInternalAleStain_dX(const std::string row_field,
+                                        boost::shared_ptr<DataAtIntegrationPts>
+                                            &data_at_pts,
+                                        StrainFunctions strain_fun)
     : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
       strainFun(strain_fun) {}
 
 template <int S>
 MoFEMErrorCode
-HookeElement::OpAnalyticalInternalStain_dX<S>::iNtegrate(EntData &row_data) {
+HookeElement::OpAnalyticalInternalAleStain_dX<S>::iNtegrate(EntData &row_data) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
@@ -1595,8 +1593,8 @@ HookeElement::OpAnalyticalInternalStain_dX<S>::iNtegrate(EntData &row_data) {
       return getFTensor1CoordsAtGaussPts();
   };
   auto t_coords = get_coords();
- 
-   // get element volume
+
+  // get element volume
   double vol = getVolume();
   auto t_w = getFTensor0IntegrationWeight();
 
@@ -1608,6 +1606,8 @@ HookeElement::OpAnalyticalInternalStain_dX<S>::iNtegrate(EntData &row_data) {
   FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
       MAT_TO_DDG(dataAtPts->stiffnessMat));
   auto t_F = getFTensor2FromMat<3, 3>(*(dataAtPts->FMat));
+  auto &det_H = *dataAtPts->detHVec;
+  auto t_invH = getFTensor2FromMat<3, 3>(*dataAtPts->invHMat);
 
   // get derivatives of base functions on rows
   auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
@@ -1616,9 +1616,9 @@ HookeElement::OpAnalyticalInternalStain_dX<S>::iNtegrate(EntData &row_data) {
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
     auto t_fun_strain = strainFun(t_coords);
-    FTensor::Tensor2_symmetric<double,3> t_stress;
+    FTensor::Tensor2_symmetric<double, 3> t_stress;
     t_stress(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
-    FTensor::Tensor2_symmetric<double,3> t_eshelby_stress;
+    FTensor::Tensor2_symmetric<double, 3> t_eshelby_stress;
     t_eshelby_stress(i, j) = -t_F(k, i) * t_stress(k, j);
 
     // calculate scalar weight times element volume
@@ -1633,7 +1633,9 @@ HookeElement::OpAnalyticalInternalStain_dX<S>::iNtegrate(EntData &row_data) {
 
     int rr = 0;
     for (; rr != nbRows / 3; ++rr) {
-      t_nf(i) += a * t_row_diff_base(j) * t_eshelby_stress(i, j);
+      FTensor::Tensor1<double, 3> t_row_diff_base_pulled;
+      t_row_diff_base_pulled(i) = t_row_diff_base(j) * t_invH(j, i);
+      t_nf(i) += a * t_row_diff_base_pulled(j) * t_eshelby_stress(i, j);
       ++t_row_diff_base;
       ++t_nf;
     }
@@ -1644,6 +1646,7 @@ HookeElement::OpAnalyticalInternalStain_dX<S>::iNtegrate(EntData &row_data) {
     ++t_w;
     ++t_coords;
     ++t_F;
+    ++t_H;
     ++t_D;
   }
 
