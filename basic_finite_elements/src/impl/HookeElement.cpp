@@ -595,15 +595,15 @@ MoFEMErrorCode HookeElement::setOperators(
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,
     boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
     const std::string x_field, const std::string X_field, const bool ale,
-    const bool field_disp, const EntityType type) {
+    const bool field_disp, const EntityType type, boost::shared_ptr<DataAtIntegrationPts> data_at_pts) {
   MoFEMFunctionBegin;
 
   if (!block_sets_ptr)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "Pointer to block of sets is null");
 
-  boost::shared_ptr<DataAtIntegrationPts> data_at_pts(
-      new DataAtIntegrationPts());
+  if(!data_at_pts)
+    data_at_pts = boost::make_shared<DataAtIntegrationPts>();
 
   if (fe_lhs_ptr) {
     if (ale == PETSC_FALSE) {
@@ -806,10 +806,10 @@ MoFEMErrorCode HookeElement::calculateEnergy(
   CHKERR VecGhostUpdateEnd(*v_energy_ptr, INSERT_VALUES, SCATTER_FORWARD);
 
   fe_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
-  PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
+  // PetscPrintf(PETSC_COMM_WORLD, "Calculate elastic energy  ...");
   CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_ptr);
   CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_ptr);
-  PetscPrintf(PETSC_COMM_WORLD, " done\n");
+  // PetscPrintf(PETSC_COMM_WORLD, " done\n");
 
   CHKERR VecAssemblyBegin(*v_energy_ptr);
   CHKERR VecAssemblyEnd(*v_energy_ptr);
