@@ -510,11 +510,11 @@ int main(int argc, char *argv[]) {
       auto thermal_strain =
           [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
             FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
-            constexpr double alpha = 1e-3;
+            constexpr double alpha = 1;
             FTensor::Index<'i', 3> i;
             FTensor::Index<'k', 3> j;
             constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-            t_thermal_strain(i, j) = t_coords(2);
+            t_thermal_strain(i, j) = alpha * t_coords(2) * t_kd(i, j);
             return t_thermal_strain;
           };
 
@@ -1173,7 +1173,7 @@ int main(int argc, char *argv[]) {
                   "atom test diverged!");
         break;
       case 3:
-        if (fabs(*eng_ptr - 4.4992e+00) > 1e-3)
+        if (fabs(*eng_ptr - 2.4992e+00) > 1e-3)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
