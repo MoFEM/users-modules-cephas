@@ -1109,7 +1109,7 @@ int main(int argc, char *argv[]) {
       }
       if (!edges_in_simple_rod.empty())
         CHKERR post_proc_edge.writeFile("out_edge.h5m");
-      MOFEM_LOG("ELASTIC", Sev::inform) << " done";
+      MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     }
 
     if (is_calculating_frequency == PETSC_TRUE) {
