@@ -1,19 +1,25 @@
+// Define name if it has not been defined yet
 #ifndef __POISSON2DHOMOGENEOUS_HPP__
 #define __POISSON2DHOMOGENEOUS_HPP__
 
+// Include standard library and Header file for basic finite elements
+// implementation
 #include <stdlib.h>
 #include <BasicFiniteElements.hpp>
 
+// Use of alias for some specific functions
+// We are solving Poisson's equation in 2D so Face element is used
 using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
-
 using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-
 using EntData = DataForcesAndSourcesCore::EntData;
 
+// Namespace that contains necessary UDOs, will be included in the main program
 namespace Poisson2DHomogeneousOperators {
 
+// Declare FTensor index for 2D problem
 FTensor::Index<'i', 2> i;
 
+// For simplicity, source term f will be constant throughout the domain
 const double body_source = 5.;
 
 struct OpDomainLhsMatrixK : public OpFaceEle {
