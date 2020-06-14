@@ -122,7 +122,7 @@ such that
 where \f$ {\bf K} \f$ and \f$ {\bf F} \f$ are the global stiffness matrix (left
 hand side) and global force vector (right hand side) calculated over the whole
 domain, respectively. \f$ {\bf K} \f$ and \f$ {\bf F} \f$ are obtained by
-assembling from all elements (entity) in the domain, and the compoments
+assembling from all elements (entity) in the domain, and the components
 of element stiffness matrix and element force vector are calculated as
 \f[
   \begin{align}
@@ -133,10 +133,45 @@ of element stiffness matrix and element force vector are calculated as
 
 We almost place where we can start the implementation, but still, you may ask
 how computers can handle the integral terms. Of course, we will not ask
-computers to calculate the integrals directly, instead it is done using
-*quadrature* which is commonly used in finite element method. In order word, the
-integrals are replaced by the sum of a set of points on each element along with
-their weights.
+computers to calculate the integrals directly in an infinite sense, instead it
+is done using *quadrature* which is in a finite sense and commonly used in
+finite element method. In order word, the integrals are approximated by the sum
+of a set of points on each element along with their weights as follows
+\f[
+  \begin{align}
+    K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \approx \sum_q \nabla \phi_i \left( {\bf x}_q \right) \cdot \nabla \phi_j \left( {\bf x}_q \right) w_q, \\ 
+    F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right) f \left( {\bf x}_q \right) w_q
+  \end{align}
+\f]
+where \f$ {\bf x}_q \f$ and \f$ w_q \f$ are location and weight of the
+quadrature point. These equations can be interpreted as follows
+
+The approximated value of the component at row \f$ i \f$ and column \f$ j \f$ of
+the element stiffness matrix \f$ K \f$ of element \f$ e \f$ is calculated by
+taking the summation over all quadrature points of the multiplication of 
+- the first derivative of the \f$ i^{\rm th} \f$ approximation function \f$ \phi
+  \f$ evaluated at quadrature point \f$ q \f$, 
+- the first derivative of the \f$ j^{\rm th} \f$ approximation function \f$ \phi
+  \f$ evaluated at the same quadrature point \f$ q \f$, and 
+- the weight of that quadrature point \f$ q \f$.
+
+Likewise, the approximated value of the component at row \f$ i \f$ of the
+element force vector \f$ F \f$ of element \f$ e \f$ is calculated by taking the
+summation over all quadrature points of the multiplication of
+- the \f$ i^{\rm th} \f$ approximation function \f$ \phi \f$ evaluated at
+  quadrature point \f$ q \f$,
+- the body force evaluated at the same quadrature point \f$ q \f$, and
+- the weight of that quadrature point \f$ q \f$.
+
+More details on this matter can be found here \ref lesson1.
+
+To this end, we have established a linear system of the primary variable \f$
+{\bf U} \f$ through \f$ {\bf K} \f$ and \f$ {\bf F} \f$. In MoFEM, we will use
+an iterative solver
+([KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html))
+to solve for \f$ {\bf U} \f$ and apply steps to postprocess the solution and
+visualise it.
+
 
 
 
