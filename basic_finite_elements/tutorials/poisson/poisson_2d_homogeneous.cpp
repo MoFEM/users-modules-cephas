@@ -130,12 +130,13 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
     pipelineLhs->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
 
     pipelineLhs->getOpPtrVector().push_back(
-        new OpDomainLhs(domainField, domainField));
+        new OpDomainLhsMatrixK(domainField, domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
-    pipelineRhs->getOpPtrVector().push_back(new OpDomainRhs(domainField));
+    pipelineRhs->getOpPtrVector().push_back(
+        new OpDomainRhsVectorF(domainField));
   }
 
   // get Discrete Manager (SmartPetscObj)
