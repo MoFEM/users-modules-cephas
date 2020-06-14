@@ -130,9 +130,13 @@ of element stiffness matrix and element force vector are calculated as
     F_i^e &= \int_{\Omega^e} \phi_i f
   \end{align}
 \f]
+One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric
+  which means later in the implementation we can save computer memory by
+  assembling and storing data of just a half of the matrix.
 
-We almost place where we can start the implementation, but still, you may ask
-how computers can handle the integral terms. Of course, we will not ask
+
+We are almost at the place where we can start the implementation, but still, you
+may ask how computers can handle the integral terms. Of course, we will not ask
 computers to calculate the integrals directly in an infinite sense, instead it
 is done using *quadrature* which is in a finite sense and commonly used in
 finite element method. In order word, the integrals are approximated by the sum
@@ -173,39 +177,238 @@ to solve for \f$ {\bf U} \f$ and apply steps to postprocess the solution and
 visualise it.
 
 
-
-
 \section basic_tutorials_poisson_homogeneous_implementation Implementation 
 
-The immediate question you may have regarding the implementation is how to
-implement the matrix **K** and vector **f**. This is
+An immediate question you may have regarding the implementation is how to
+implement the matrix \f$ {\bf K} \f$ and vector \f$ {\bf F} \f$. This is
 done through the implementation of the so-called **User Data Operators**. UDOs
 are the essential part of MoFEM and they are present in all finite element
-problems implemented using MoFEM. UDO is normally called Operator (for short) by MoFEM developers.
+problems implemented in MoFEM. UDO is normally called Operator (for short) by
+MoFEM developers. Once UDOs are implemented, they will be *pushed* to the working **pipeline**.
+
+Here we have introduced _two important concepts_ in MoFEM
+- **UDOs** are responsible for calculation of certain things, e.g. stiffness
+  matrix, force vector, inverse of Jacobian, field values, field gradients, etc., and 
+- **Pipeline** is where you *pushed* UDOs to in a certain order, e.g. UDOs for
+  calculating field values and field gradients (nonlinear problem) are pushed
+  before UDOs calculating stiffness matrix and force vector. After being pushed
+  to the Pipeline, those UDOs will be executed sequentially.
 
 As a common practice, typically all the implementation of UDOs for a specific
 problem is put in a `*.hpp` file. This file will be included in the main `*.cpp`
 file which contains all the necessary classes and functions. Detailed
-explanation of the implementation of UDOs as well as classes/functions is
-presented below
+explanation of the implementation of UDOs, how you pushed UDOs to Pipeline as
+well as developement of classes/functions are presented below
 
 \subsection basic_tutorials_poisson_homogeneous_udo User Data Operators 
 
 As described in the previous, solving the Poisson problem with homogeneous would
-require the computation and assembling of the matrix **K** and
-vector **f**. These essential processes of computation and assembling
-will be handled by four different UDOs which separately deal with the four
-matrices and vectors. They are
+require the computation and assembling of the matrix \f$ {\bf K} \f$ and
+vector \f$ {\bf F} \f$. These essential processes of computation and assembling
+will be handled by two different UDOs which separately deal with the matrix and
+vector. They are
 
-1. Poisson2DHomogeneousOperators::OpDomainLhs is responsible to calculate and
-   assemble the left-hand-side matrix **K** of domain element  
-2. Poisson2DHomogeneousOperators::OpDomainRhs is responsible to calculate and
-   assemble the right-hand-side vector **f** of domain element 
+1. Poisson2DHomogeneousOperators::OpDomainLhsMatrixK is responsible for the
+   calculation and assemble of the left-hand-side matrix \f$ {\bf K} \f$
+   
+2. Poisson2DHomogeneousOperators::OpDomainRhsVectorF is responsible for the
+   calculation and assemble of the right-hand-side vector \f$ {\bf F} \f$
+
+Before going into details of the implementation of the two UDOs in
+poisson_2d_homogeneous.hpp, let's have a look at the first few lines of code of
+the file that includes some libaries for finite element implementation, some
+aliases, and declaration/initialisation as commented below.
+
+\code
+// Define name if it has not been defined yet
+#ifndef __POISSON2DHOMOGENEOUS_HPP__
+#define __POISSON2DHOMOGENEOUS_HPP__
+
+// Include standard library and Header file for basic finite elements
+// implementation
+#include <stdlib.h>
+#include <BasicFiniteElements.hpp>
+
+// Use of alias for some specific functions
+// We are solving Poisson's equation in 2D so Face element is used
+using FaceEle = MoFEM::FaceElementForcesAndSourcesCore;
+using OpFaceEle = MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
+using EntData = DataForcesAndSourcesCore::EntData;
+
+// Namespace that contains necessary UDOs, will be included in the main program
+namespace Poisson2DHomogeneousOperators {
+
+// Declare FTensor index for 2D problem
+FTensor::Index<'i', 2> i;
+
+// For simplicity, source term f will be constant throughout the domain
+const double body_source = 5.;
+
+
+// Implementation of the UDOs below this point
+
+}
+
+\endcode
+
+
+\subsubsection OpDomainLhsMatrixK
+Now, we will talk about the implementation of the first UDO
+Poisson2DHomogeneousOperators::OpDomainLhsMatrixK which is responsible for the
+calculation and assemble of the left-hand-side matrix \f$ {\bf K} \f$
+
+First, let's look at the structure of the UDO to calculate matrix \f$
+{\bf K} \f$, also the general structure of all of the UDO implemented in MoFEM
+
+\code 
+struct OpDomainLhsMatrixK : public OpFaceEle {
+public:
+  OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
+    sYmm = true;
+  }
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+  
+  // Implementation of doWork() below this point
+
+  }
+
+private:
+  MatrixDouble locLhs, transLocLhs;
+};
+\endcode
+
+We have the class OpDomainLhsMatrixK that is inherited from `OpFaceEle` which is
+the alias of the base class
+MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator.
+This newly created class has public objects OpDomainLhsMatrixK() and doWork()
+which can be accessed from outside of the class, and private objects `locLhs`
+and `transLocLhs` of type MatrixDouble which can be accessed only from inside of
+the class for calculation and assemble of local stiffness matrix. This follows
+the concept of [data
+encapsulation](https://en.wikipedia.org/wiki/Encapsulation_(computer_programming))
+to hide values and objects inside the class as much as possible. We will discuss
+a little more details of those public and private objects in the followings
+
+- `OpDomainLhsMatrixK()`
+\code 
+  OpDomainLhsMatrixK(std::string row_field_name, std::string col_field_name)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
+    sYmm = true;
+  }
+\endcode
+  This public member function has two input arguments which are the
+  row_field_name and col_field_name carrying the names of the field for row and
+  column, respectively. In general, these two field names can be different. In
+  this particular case of Poisson's problem with homogeneous boundary condition,
+  we will see later, they take the same field name of "U" for both row and
+  column. The boolean `sYmm = true` is set since we know matrix \f$ K \f$ is
+  symmetric and we can just assembling and storing data of half of the matrix.
+
+- `doWork()`
+\code
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+  
+  // Implementation of doWork() below this point
+
+  }
+\endcode
+  This public member function is the core part of the UDO implementation. It
+  decides how to calculate the local matrix components and how to assemble them
+  to the global matrix. All of the mathematical derivations that we did in the
+  previous section of this tutorial will be implemented in this function. More
+  discussion on this essential function will be given later.
+
+- `locLhs`: This private member object which has type MatrixDouble is used to
+  store the results of the calculation of components of element stiffness
+  matrix. This object is used only in function doWork() above which is a member
+  of the current class. That is why it is declared as a private object meaning
+  it can be accessed only inside of the class.
+  
+- `transLocLhs`: This private member object which also has type MatrixDouble is
+  used to assemble the transpose of `locLhs`. This object is used only in
+  function doWork() so it is also declared as a private object of the class.
+
+Now we take a closer look on the details of the implementation of the member
+function `doWork()` which is the core part of the UDO implementation. Full codes
+for this function as follows
+\code 
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_col_dofs = col_data.getIndices().size();
+
+    if (nb_row_dofs && nb_col_dofs) {
+
+      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+      locLhs.clear();
+
+      // get element area
+      const double area = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get derivatives of base functions on row
+      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+        const double a = t_w * area;
+
+        for (int rr = 0; rr != nb_row_dofs; ++rr) {
+          // get derivatives of base functions on column
+          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+
+          for (int cc = 0; cc != nb_col_dofs; cc++) {
+            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
+
+            // move to the derivatives of the next base functions on column
+            ++t_col_diff_base;
+          }
+
+          // move to the derivatives of the next base functions on row
+          ++t_row_diff_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+      }
+
+      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
+                          ADD_VALUES);
+      if (row_side != col_side || row_type != col_type) {
+        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+        noalias(transLocLhs) = trans(locLhs);
+        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+                            ADD_VALUES);
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+\endcode
+
+\subsubsection OpDomainRhsVectorF
+And next, we will talk about the implementation of the second UDO
+Poisson2DHomogeneousOperators::OpDomainRhsVectorF which is responsible for the
+calculation and assemble of the right-hand-side vector \f$ {\bf F} \f$
 
 That was for the implementation of UDOs that are responsible for the calculation
 and assembling of the matrices and vectors. Next part we will look at the
-class and functions and see how the implemented UDOs are **pushed** to the main
-program.
+class and functions and see how the implemented UDOs are **pushed** to the
+Pipeline in the main program.
 
 Having the matrix K and vector f implemented, you now may ask the question of
 how to feed it the main program. This is done through the process called *push
