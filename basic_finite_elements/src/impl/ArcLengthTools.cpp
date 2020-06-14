@@ -34,7 +34,7 @@ using namespace MoFEM;
 MoFEMErrorCode ArcLengthCtx::setS(double s) {
   ArcFunctionBegin;
   this->s = s;
-  MOFEM_LOG_C("WORLD", Sev::infrom, "\tSet s = %6.4e", this->s);
+  MOFEM_LOG_C("WORLD", Sev::inform, "\tSet s = %6.4e", this->s);
   MoFEMFunctionReturn(0);
 }
 
