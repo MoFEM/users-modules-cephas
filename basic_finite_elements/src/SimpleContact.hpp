@@ -320,6 +320,7 @@ struct SimpleContactProblem {
   struct CommonDataSimpleContact
       : public boost::enable_shared_from_this<CommonDataSimpleContact> {
 
+    boost::shared_ptr<VectorDouble> augmentedLambdasPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsMasterPtr;
     boost::shared_ptr<MatrixDouble> positionAtGaussPtsSlavePtr;
     boost::shared_ptr<MatrixDouble> gradKsiPositionAtGaussPtsPtr;
@@ -341,6 +342,7 @@ struct SimpleContactProblem {
     SmartPetscObj<Vec> contactAreaVec;
 
     CommonDataSimpleContact(MoFEM::Interface &m_field) : mField(m_field) {
+      augmentedLambdasPtr = boost::make_shared<VectorDouble>();
       positionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
       positionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
       gradKsiPositionAtGaussPtsPtr = boost::make_shared<MatrixDouble>();
@@ -489,6 +491,31 @@ struct SimpleContactProblem {
   };
 
   /**
+   * @brief Operator for the simple contact element for Augmented Lagrange
+   * Multipliers method
+   *
+   * Calculates Augmented Lagrange Multipliers at the gauss points on the slave
+   * triangle.
+   *
+   */
+  struct OpGetAugmentedLambdaSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpGetAugmentedLambdaSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        const double cn)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact), cN(cn) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+  };
+
+  /**
    * @brief Operator for the simple contact element
    *
    * Calculates the product of Lagrange multipliers with gaps evaluated at the
@@ -597,6 +624,114 @@ struct SimpleContactProblem {
   /**
    * @brief RHS-operator for the simple contact element
    *
+   * Integrates Augmented Lagrange multipliers virtual work on
+   * master surfaceand assemble components to RHS global vector.
+   *
+   */
+  struct OpCalAugmentedTractionRhsMaster
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpCalAugmentedTractionRhsMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+    /**
+     * @brief Integrates Lagrange multipliers virtual work on
+     * slave surface and assembles components to the RHS global vector.
+     *
+     * Integrates Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ on slave surface and assembles components to the RHS
+     * global vector
+     *
+     * \f[
+     * {\delta
+     * W^{(2)}_{\text c}(\lambda,
+     * \delta \mathbf{x}^{(2)}}) \,\,  =
+     *  \left\{ \begin{array}{ll}
+     * \int_{{\gamma}^{(2)}_{\text c}} (\lambda + c_{\textrm n} g_{\textrm{n}})
+     * \delta{\mathbf{x}^{(2)}}
+     * \,\,{ {\text d} {\gamma}} & \lambda + c_{\text n} g_{\textrm{n}}\leq 0 \\
+     * 0 &  \lambda + c_{\text n} g_{\textrm{n}} > 0 \\
+     * \end{array}
+     * \right.
+     * \f]
+     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier, \f$
+     * c_{\textrm n}\f$ is the regularisation parameter of stress dimensions,
+     * \f$ g_{\textrm{n}}\f$ is the value of gap at the associated gauss point,
+     * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
+     * points at slave triangles.
+     */
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    VectorDouble vecF;
+  };
+
+  /**
+   * @brief RHS-operator for the simple contact element
+   *
+   * Integrates Augmented Lagrange multipliers virtual work on
+   * slave surface and assembles components to the RHS global vector.
+   *
+   */
+  struct OpCalAugmentedTractionRhsSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpCalAugmentedTractionRhsSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    /**
+     * @brief Integrates Lagrange multipliers virtual work on
+     * slave surface and assembles components to the RHS global vector.
+     *
+     * Integrates Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ on slave surface and assembles components to the RHS
+     * global vector
+     *
+     * \f[
+     * {\delta
+     * W^{(1)}_{\text c}(\lambda,
+     * \delta \mathbf{x}^{(1)}}) \,\,  =
+     * - \left\{ \begin{array}{ll}
+     * \int_{{\gamma}^{(1)}_{\text c}} (\lambda + c_{\textrm n} g_{\textrm{n}})
+     * \delta{\mathbf{x}^{(1)}}
+     * \,\,{ {\text d} {\gamma}} & \lambda + c_{\text n} g_{\textrm{n}}\leq 0 \\
+     * 0 &  \lambda + c_{\text n} g_{\textrm{n}} > 0 \\
+     * \end{array}
+     * \right.
+     * \f]
+     *
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier, \f$
+     * c_{\textrm n}\f$ is the regularisation parameter of stress dimensions,
+     * \f$ g_{\textrm{n}}\f$ is the value of gap at the associated gauss point,
+     * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
+     * points at slave triangles.
+     */
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    VectorDouble vecF;
+  };
+
+  /**
+   * @brief RHS-operator for the simple contact element
+   *
    * Integrates complementarity function that fulfills KKT
    * conditions over slave contact area and assembles components of the RHS
    * vector.
@@ -641,6 +776,70 @@ struct SimpleContactProblem {
      */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    VectorDouble vecR;
+  };
+
+  /**
+   * @brief RHS-operator for the simple contact element for Augmented Lagrange
+   * multipliers method
+   *
+   * Integrates rhs conditions for ALM that fulfills KKT
+   * conditions over slave contact area and assembles components of the RHS
+   * vector.
+   *
+   */
+  struct OpAugmentedOnLambdaSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpAugmentedOnLambdaSlave(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        const double cn)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              lagrang_field_name, UserDataOperator::OPCOL,
+              ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact), cN(cn) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+    /**
+     * @brief Integrates KKT conditions for Augmented Lagrange multipliers
+     formulation at slave
+     * face gauss points and assembles components to the RHS global vector.
+     *
+     * Integrates the Augmented Lagrange multipliers formulation to fulfil KKT
+     * conditions in the integral sense and assembles components to the RHS
+     * global vector
+     *
+     * \f[
+     * {\overline C(\lambda, \mathbf{x}^{(i)},
+     * \delta \lambda)} =
+     * \left\{ \begin{array}{ll}
+     * \int_{{\gamma}^{(1)}_{\text c}} g_{\textrm{n}} \delta{{\lambda}}
+     * \,\,{ {\text d} {\gamma}} & \lambda + c_{\text n} g_{\textrm{n}}\leq 0 \\
+      \int_{{\gamma}^{(1)}_{\text
+     * c}} -\dfrac{1}{c_{\text n}} \lambda \delta{{\lambda}}
+     * \,\,{ {\text d} {\gamma}} &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
+     * \end{array}
+     * \right.
+     * \f]
+     *
+     *
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
+     * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
+     * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
+     * parameter and affects convergence, \f$r\f$ is regularisation parameter
+     * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$) is the default
+     * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
+     * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
+     * \mathbf{x}^{(2)}  \right) \f]
+     */
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     const double cN;
@@ -714,8 +913,7 @@ struct SimpleContactProblem {
 
     OpCalContactTractionOverLambdaSlaveSlave(
         const string field_name, const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        Mat aij = PETSC_NULL)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, lagrange_field_name, UserDataOperator::OPROWCOL,
                     ContactOp::FACESLAVESLAVE),
           commonDataSimpleContact(common_data_contact) {
@@ -946,6 +1144,240 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
+  struct OpCalContactAugmentedLambdaOverLambdaMasterSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpCalContactAugmentedLambdaOverLambdaMasterSlave(
+        const string field_name, const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact)
+        : ContactOp(field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
+                    ContactOp::FACEMASTERSLAVE),
+          commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all intities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    MatrixDouble NN;
+  };
+
+  struct OpCalContactAugmentedLambdaOverLambdaSlaveSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpCalContactAugmentedLambdaOverLambdaSlaveSlave(
+        const string field_name, const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact)
+        : ContactOp(field_name, lagrang_field_name, UserDataOperator::OPROWCOL,
+                    ContactOp::FACESLAVESLAVE),
+          commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all intities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    MatrixDouble NN;
+  };
+
+  struct OpContactSimplePenaltyMasterMaster
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpContactSimplePenaltyMasterMaster(
+        const string field_name, const string field_name_2,
+        const double cn_value,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, field_name_2, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTERMASTER),
+          cN(cn_value),
+          commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all intities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
+  struct OpContactSimplePenaltyMasterSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpContactSimplePenaltyMasterSlave(
+        const string field_name, const string field_name_2,
+        const double cn_value,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, field_name_2, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACEMASTERSLAVE),
+          cN(cn_value),
+          commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all intities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
+  struct OpContactSimplePenaltySlaveSlave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpContactSimplePenaltySlaveSlave(
+        const string field_name, const string field_name_2,
+        const double cn_value,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, field_name_2, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVESLAVE),
+          cN(cn_value),
+          commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all intities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
+  struct OpContactSimplePenaltySlaveMaster
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+    OpContactSimplePenaltySlaveMaster(
+        const string field_name, const string field_name_2,
+        const double cn_value,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              field_name, field_name_2, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVEMASTER),
+          cN(cn_value),
+          commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all intities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
+  struct OpAugmentedOnLambdaSlaveOverLambda : public ContactOp {
+
+    OpAugmentedOnLambdaSlaveOverLambda(
+        const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact,
+        const double cn)
+        : ContactOp(lagrang_field_name, UserDataOperator::OPROWCOL,
+                    ContactOp::FACESLAVESLAVE),
+          commonDataSimpleContact(common_data_contact), cN(cn) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
+  struct OpAugmentedOnLambdaSlaveOverMaster : public ContactOp {
+
+    OpAugmentedOnLambdaSlaveOverMaster(
+        const string field_name, const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact,
+        const double cn)
+        : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+                    ContactOp::FACESLAVEMASTER),
+          commonDataSimpleContact(common_data_contact), cN(cn) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
+  struct OpAugmentedOnLambdaSlaveOverSlave : public ContactOp {
+
+    OpAugmentedOnLambdaSlaveOverSlave(
+        const string field_name, const string lagrang_field_name,
+        boost::shared_ptr<CommonDataSimpleContact>
+            common_data_contact,
+        const double cn)
+        : ContactOp(lagrang_field_name, field_name, UserDataOperator::OPROWCOL,
+                    ContactOp::FACESLAVESLAVE),
+          cN(cn), commonDataSimpleContact(common_data_contact) {
+      sYmm = false; // This will make sure to loop over all entities (e.g.
+                    // for order=2 it will make doWork to loop 16 time)
+    }
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type, EntData &row_data,
+                          EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    const double cN;
+    MatrixDouble NN;
+  };
+
   /**
    * @brief Operator for the simple contact element
    *
@@ -1002,7 +1434,6 @@ struct SimpleContactProblem {
    * positions
    * @param  lagrange_field_name         String of field name for Lagrange
    * multipliers
-   * @param  f_                         Right hand side vector
    * @return                            Error code
    *
    */
@@ -1022,7 +1453,6 @@ struct SimpleContactProblem {
    * positions
    * @param  lagrange_field_name         String of field name for Lagrange
    * multipliers
-   * @param  aij                        Left hand side matrix
    * @return                            Error code
    *
    */
@@ -1030,6 +1460,44 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name);
+
+  /**
+   * @brief Function for the simple contact element for Augmented Lagrange
+   * Multipliers (ALM) method that sets the user data RHS-operators
+   *
+   * @param  fe_rhs_simple_contact      Pointer to the FE instance for RHS
+   * @param  common_data_simple_contact Pointer to the common data for simple
+   * contact element
+   * @param  field_name                 String of field name for spatial
+   * positions
+   * @param  lagrange_field_name         String of field name for Lagrange
+   * multipliers
+   * @return                            Error code
+   *
+   */
+  MoFEMErrorCode setContactAugmentedOperatorsRhs(
+      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
+
+  /**
+   * @brief Function for the simple contact element for Augmented Lagrange
+   * Multipliers (ALM) method that sets the user data LHS-operators
+   *
+   * @param  fe_lhs_simple_contact      Pointer to the FE instance for LHS
+   * @param  common_data_simple_contact Pointer to the common data for simple
+   * contact element
+   * @param  field_name                 String of field name for spatial
+   * positions
+   * @param  lagrange_field_name         String of field name for Lagrange
+   * multipliers
+   * @return                            Error code
+   *
+   */
+  MoFEMErrorCode setContactAugmentedOperatorsLhs(
+      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs
