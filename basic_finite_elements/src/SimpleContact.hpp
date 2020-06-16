@@ -1146,10 +1146,10 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
-  struct OpCalContactAugmentedLambdaOverLambdaMasterSlave
+  struct OpCalContactAugmentedTractionOverLambdaMasterSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpCalContactAugmentedLambdaOverLambdaMasterSlave(
+    OpCalContactAugmentedTractionOverLambdaMasterSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact)
@@ -1169,10 +1169,10 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
-  struct OpCalContactAugmentedLambdaOverLambdaSlaveSlave
+  struct OpCalContactAugmentedTractionOverLambdaSlaveSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpCalContactAugmentedLambdaOverLambdaSlaveSlave(
+    OpCalContactAugmentedTractionOverLambdaSlaveSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact)
@@ -1192,10 +1192,10 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
-  struct OpContactSimplePenaltyMasterMaster
+  struct OpCalContactAugmentedTractionOverSpatialMasterMaster
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpContactSimplePenaltyMasterMaster(
+    OpCalContactAugmentedTractionOverSpatialMasterMaster(
         const string field_name, const string field_name_2,
         const double cn_value,
         boost::shared_ptr<CommonDataSimpleContact>
@@ -1221,10 +1221,10 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
-  struct OpContactSimplePenaltyMasterSlave
+  struct OpCalContactAugmentedTractionOverSpatialMasterSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpContactSimplePenaltyMasterSlave(
+    OpCalContactAugmentedTractionOverSpatialMasterSlave(
         const string field_name, const string field_name_2,
         const double cn_value,
         boost::shared_ptr<CommonDataSimpleContact>
@@ -1250,10 +1250,10 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
-  struct OpContactSimplePenaltySlaveSlave
+  struct OpCalContactAugmentedTractionOverSpatialSlaveSlave
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpContactSimplePenaltySlaveSlave(
+    OpCalContactAugmentedTractionOverSpatialSlaveSlave(
         const string field_name, const string field_name_2,
         const double cn_value,
         boost::shared_ptr<CommonDataSimpleContact>
@@ -1279,10 +1279,10 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
-  struct OpContactSimplePenaltySlaveMaster
+  struct OpCalContactAugmentedTractionOverSpatialSlaveMaster
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpContactSimplePenaltySlaveMaster(
+    OpCalContactAugmentedTractionOverSpatialSlaveMaster(
         const string field_name, const string field_name_2,
         const double cn_value,
         boost::shared_ptr<CommonDataSimpleContact>

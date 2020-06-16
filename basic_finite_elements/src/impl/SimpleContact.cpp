@@ -647,7 +647,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetAugmentedLambdaSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpCalContactAugmentedLambdaOverLambdaMasterSlave::
+SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaMasterSlave::
     doWork(int row_side, int col_side, EntityType row_type, EntityType col_type,
            EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -722,7 +722,7 @@ SimpleContactProblem::OpCalContactAugmentedLambdaOverLambdaMasterSlave::
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpCalContactAugmentedLambdaOverLambdaSlaveSlave::doWork(
+SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -1012,7 +1012,7 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactSimplePenaltyMasterMaster::doWork(
+SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterMaster::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -1096,7 +1096,7 @@ SimpleContactProblem::OpContactSimplePenaltyMasterMaster::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactSimplePenaltyMasterSlave::doWork(
+SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -1179,7 +1179,7 @@ SimpleContactProblem::OpContactSimplePenaltyMasterSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpContactSimplePenaltySlaveSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialSlaveSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -1263,7 +1263,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactSimplePenaltySlaveSlave::doWork(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactSimplePenaltySlaveMaster::doWork(
+SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialSlaveMaster::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     DataForcesAndSourcesCore::EntData &row_data,
     DataForcesAndSourcesCore::EntData &col_data) {
@@ -2281,19 +2281,19 @@ MoFEMErrorCode SimpleContactProblem::setContactAugmentedOperatorsLhs(
           field_name, lagrang_field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpContactSimplePenaltyMasterMaster(field_name, field_name, cnValue,
+      new OpCalContactAugmentedTractionOverSpatialMasterMaster(field_name, field_name, cnValue,
                                              common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpContactSimplePenaltyMasterSlave(field_name, field_name, cnValue,
+      new OpCalContactAugmentedTractionOverSpatialMasterSlave(field_name, field_name, cnValue,
                                             common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpContactSimplePenaltySlaveSlave(field_name, field_name, cnValue,
+      new OpCalContactAugmentedTractionOverSpatialSlaveSlave(field_name, field_name, cnValue,
                                            common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpContactSimplePenaltySlaveMaster(field_name, field_name, cnValue,
+      new OpCalContactAugmentedTractionOverSpatialSlaveMaster(field_name, field_name, cnValue,
                                             common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
