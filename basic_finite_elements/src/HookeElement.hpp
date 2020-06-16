@@ -605,7 +605,7 @@ struct HookeElement {
 
         FTensor::Tensor2_symmetric<double, 3>(
 
-            FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords
+            FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3> &t_coords
 
             )
 
@@ -615,11 +615,13 @@ struct HookeElement {
     OpAnalyticalInternalAleStain_dX(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun);
+        StrainFunctions strain_fun,
+        boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr);
 
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
     StrainFunctions strainFun;
+    boost::shared_ptr<MatrixDouble> matPosAtPtsPtr;
   };
 
   template <int S> struct OpAnalyticalInternalAleStain_dx : public OpAssemble {
@@ -628,7 +630,7 @@ struct HookeElement {
 
         FTensor::Tensor2_symmetric<double, 3>(
 
-            FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords
+            FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3> &t_coords
 
             )
 
@@ -638,11 +640,13 @@ struct HookeElement {
     OpAnalyticalInternalAleStain_dx(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun);
+        StrainFunctions strain_fun,
+        boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr);
 
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
     StrainFunctions strainFun;
+    boost::shared_ptr<MatrixDouble> matPosAtPtsPtr;
   };
 
   template <class ELEMENT>
@@ -1585,13 +1589,14 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalAleStain_dX<
-    S>::OpAnalyticalInternalAleStain_dX(const std::string row_field,
-                                        boost::shared_ptr<DataAtIntegrationPts>
-                                            &data_at_pts,
-                                        StrainFunctions strain_fun)
+HookeElement::OpAnalyticalInternalAleStain_dX<S>::
+    OpAnalyticalInternalAleStain_dX(
+        const std::string row_field,
+        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        StrainFunctions strain_fun,
+        boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr)
     : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
-      strainFun(strain_fun) {}
+      strainFun(strain_fun), matPosAtPtsPtr(mat_pos_at_pts_ptr) {}
 
 template <int S>
 MoFEMErrorCode
@@ -1609,12 +1614,7 @@ HookeElement::OpAnalyticalInternalAleStain_dX<S>::iNtegrate(EntData &row_data) {
 
   const int nb_integration_pts = getGaussPts().size2();
 
-  auto get_coords = [&]() {
-    if (getHoCoordsAtGaussPts().size1() == nb_integration_pts)
-      return getFTensor1HoCoordsAtGaussPts();
-    else
-      return getFTensor1CoordsAtGaussPts();
-  };
+  auto get_coords = [&]() { return getFTensor1FromMat<3>(*matPosAtPtsPtr); };
   auto t_coords = get_coords();
 
   // get element volume
@@ -1672,13 +1672,14 @@ HookeElement::OpAnalyticalInternalAleStain_dX<S>::iNtegrate(EntData &row_data) {
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalAleStain_dx<
-    S>::OpAnalyticalInternalAleStain_dx(const std::string row_field,
-                                        boost::shared_ptr<DataAtIntegrationPts>
-                                            &data_at_pts,
-                                        StrainFunctions strain_fun)
+HookeElement::OpAnalyticalInternalAleStain_dx<S>::
+    OpAnalyticalInternalAleStain_dx(
+        const std::string row_field,
+        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        StrainFunctions strain_fun,
+        boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr)
     : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
-      strainFun(strain_fun) {}
+      strainFun(strain_fun), matPosAtPtsPtr(mat_pos_at_pts_ptr) {}
 
 template <int S>
 MoFEMErrorCode
@@ -1696,12 +1697,7 @@ HookeElement::OpAnalyticalInternalAleStain_dx<S>::iNtegrate(EntData &row_data) {
 
   const int nb_integration_pts = getGaussPts().size2();
 
-  auto get_coords = [&]() {
-    if (getHoCoordsAtGaussPts().size1() == nb_integration_pts)
-      return getFTensor1HoCoordsAtGaussPts();
-    else
-      return getFTensor1CoordsAtGaussPts();
-  };
+  auto get_coords = [&]() { return getFTensor1FromMat<3>(*matPosAtPtsPtr); };
   auto t_coords = get_coords();
 
   // get element volume
