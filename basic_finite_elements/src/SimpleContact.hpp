@@ -59,6 +59,8 @@ struct SimpleContactProblem {
                                             const double l);
 
   static constexpr double TOL = 1e-8;
+  static constexpr double ALM_TOL = 1e-14;
+  
   struct SimpleContactPrismsData {
     Range pRisms; // All boundary surfaces
   };
@@ -793,10 +795,10 @@ struct SimpleContactProblem {
    * vector.
    *
    */
-  struct OpAugmentedOnLambdaSlave
+  struct OpGapConstraintOnLambda
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpAugmentedOnLambdaSlave(
+    OpGapConstraintOnLambda(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
@@ -1568,9 +1570,9 @@ struct SimpleContactProblem {
    * components to LHS global matrix.
    *
    */
-  struct OpAugmentedOnLambdaSlaveOverLambda : public ContactOp {
+  struct OpGapConstraintOverLambda : public ContactOp {
 
-    OpAugmentedOnLambdaSlaveOverLambda(
+    OpGapConstraintOverLambda(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1634,9 +1636,9 @@ struct SimpleContactProblem {
    * components to LHS global matrix.
    *
    */
-  struct OpAugmentedOnLambdaSlaveOverMaster : public ContactOp {
+  struct OpGapConstraintOverSpatialMaster : public ContactOp {
 
-    OpAugmentedOnLambdaSlaveOverMaster(
+    OpGapConstraintOverSpatialMaster(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1700,9 +1702,9 @@ struct SimpleContactProblem {
    * components to LHS global matrix.
    *
    */
-  struct OpAugmentedOnLambdaSlaveOverSlave : public ContactOp {
+  struct OpGapConstraintOverSpatialSlave : public ContactOp {
 
-    OpAugmentedOnLambdaSlaveOverSlave(
+    OpGapConstraintOverSpatialSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1728,7 +1730,7 @@ struct SimpleContactProblem {
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(1)},
      * \delta \lambda)}[\Delta \lambda] =
      *  \left\{ \begin{array}{ll}
-     * * \int_{{\gamma}^{(1)}_{\text c}}  c_{\text n} \Delta \mathbf{x}^{(1)}
+     * * \int_{{\gamma}^{(1)}_{\text c}} c_{\text n} \Delta \mathbf{x}^{(1)}
      * \delta{\lambda}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text
@@ -2084,7 +2086,7 @@ bool SimpleContactProblem::State(const double cn, const double g,
 
 bool SimpleContactProblem::StateALM(const double cn, const double g,
                                  const double l) {
-  return ((l + cn * g) <= 0.);
+  return ((l + cn * g) < 0. || std::abs(l + cn * g) < ALM_TOL);
 }
 
 double SimpleContactProblem::ConstrainFunction(const double cn, const double g,

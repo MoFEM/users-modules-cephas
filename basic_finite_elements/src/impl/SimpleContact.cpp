@@ -690,7 +690,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaMasterSlave::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -765,7 +765,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaSlaveSlave::doWork(
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -781,6 +781,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaSlaveSlave::doWork(
         for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
           const double n = m * t_base_lambda;
           t_assemble_m(i) -= n * const_unit_n(i);
+          
           ++t_assemble_m;
           ++t_base_lambda; // update cols slave
         }
@@ -796,8 +797,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaSlaveSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-SimpleContactProblem::OpAugmentedOnLambdaSlaveOverLambda::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverLambda::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -859,8 +859,7 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverLambda::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-SimpleContactProblem::OpAugmentedOnLambdaSlaveOverMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverSpatialMaster::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -901,7 +900,7 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverMaster::doWork(
     auto t_w = getFTensor0IntegrationWeightSlave();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -938,8 +937,7 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-SimpleContactProblem::OpAugmentedOnLambdaSlaveOverSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverSpatialSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -974,7 +972,7 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverSlave::doWork(
     auto t_w = getFTensor0IntegrationWeightSlave();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -1060,7 +1058,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterMaster::doWo
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -1144,7 +1142,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterSlave::doWor
   
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -1227,7 +1225,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialSla
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -1311,7 +1309,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialSlaveMaster::doWor
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -1530,7 +1528,7 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpAugmentedOnLambdaSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintOnLambda::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
@@ -1557,7 +1555,7 @@ MoFEMErrorCode SimpleContactProblem::OpAugmentedOnLambdaSlave::doWork(
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
     double branch_gg;
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       branch_gg = -t_lagrange_slave / cN;
     } else {
       branch_gg = t_gap_gp;
@@ -1680,7 +1678,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsSlave::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) >ALM_TOL ) {
         ++t_aug_lambda_ptr;
         ++t_w;
         continue;
@@ -1744,7 +1742,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsMaster::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_aug_lambda_ptr;
         ++t_w;
         continue;
@@ -2218,7 +2216,10 @@ MoFEMErrorCode SimpleContactProblem::setContactAugmentedOperatorsRhs(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
 
-  // augmented bit
+  fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetGaussPtsState(
+      lagrang_field_name, common_data_simple_contact, cnValue, true));
+
+  // augmented
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetAugmentedLambdaSlave(field_name, common_data_simple_contact,
@@ -2232,9 +2233,8 @@ MoFEMErrorCode SimpleContactProblem::setContactAugmentedOperatorsRhs(
       new OpCalAugmentedTractionRhsMaster(field_name,
                                           common_data_simple_contact));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpAugmentedOnLambdaSlave(lagrang_field_name,
-                                   common_data_simple_contact, cnValue));
+  fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGapConstraintOnLambda(
+      lagrang_field_name, common_data_simple_contact, cnValue));
 
   MoFEMFunctionReturn(0);
 }
@@ -2297,16 +2297,16 @@ MoFEMErrorCode SimpleContactProblem::setContactAugmentedOperatorsLhs(
                                             common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpAugmentedOnLambdaSlaveOverLambda(
+      new OpGapConstraintOverLambda(
           lagrang_field_name, common_data_simple_contact, cnValue));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpAugmentedOnLambdaSlaveOverMaster(field_name, lagrang_field_name,
+      new OpGapConstraintOverSpatialMaster(field_name, lagrang_field_name,
                                              common_data_simple_contact,
                                              cnValue));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpAugmentedOnLambdaSlaveOverSlave(field_name, lagrang_field_name,
+      new OpGapConstraintOverSpatialSlave(field_name, lagrang_field_name,
                                             common_data_simple_contact,
                                             cnValue));
 
@@ -2763,13 +2763,13 @@ MoFEMErrorCode SimpleContactProblem::OpGetGaussPtsState::doWork(int side,
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     vecR[CommonDataSimpleContact::TOTAL] += 1;
-    if (SimpleContactProblem::State(cN, t_gap_gp, t_lagrange_slave) &&
-        !almFlag) {
+    if (!almFlag &&
+        SimpleContactProblem::State(cN, t_gap_gp, t_lagrange_slave)) {
       vecR[CommonDataSimpleContact::ACTIVE] += 1;
     }
 
-    if (SimpleContactProblem::StateALM(cN, t_gap_gp, t_lagrange_slave) &&
-        almFlag) {
+    if (almFlag &&
+        SimpleContactProblem::StateALM(cN, t_gap_gp, t_lagrange_slave)) {
       vecR[CommonDataSimpleContact::ACTIVE] += 1;
     }
 

@@ -39,7 +39,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n";
+                                 "-my_test_num 0 \n" 
+                                 "-my_alm_flag 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
