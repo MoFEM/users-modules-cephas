@@ -137,3 +137,97 @@ add_test(
   -snes_monitor
 )
 
+add_test(
+  test_simple_contact_8cube_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 1
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/8cube_contact.cub 
+  -my_order 2
+  -my_cn_value 1e3
+  -my_alm_flag 1
+)
+
+add_test(
+  test_simple_contact_4seasons_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 2
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/4seasons_contact.cub
+  -my_order 2
+  -my_cn_value 1e3
+  -my_alm_flag 1
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_Tinterface_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 3
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/Tinterface_contact.cub
+  -my_order 2
+  -my_cn_value 1e3
+  -my_alm_flag 1
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_punch_top_and_mid_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 4
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_and_mid.cub
+  -my_order 2
+  -my_cn_value 1e3
+  -my_alm_flag 1
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_punch_top_only_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 5
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_only.cub
+  -my_order 2
+  -my_cn_value 1e3
+  -my_alm_flag 1
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_plane_axisymmetric_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 6
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/plane_axi_contact.cub
+  -my_order 2
+  -my_cn_value 1e3
+  -my_alm_flag 1
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_arc_3surfaces_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 7
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/arc_3surf_contact.cub
+  -my_order 2
+  -my_cn_value 1e-3
+  -my_alm_flag 1
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_smiling_face_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
+  -my_test_num 8
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
+  -my_order 2
+  -my_cn_value 1e-1
+  -my_alm_flag 1
+  -snes_monitor
+)

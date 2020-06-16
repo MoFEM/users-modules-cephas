@@ -47,6 +47,8 @@ struct SimpleContactProblem {
 
   static inline bool State(const double cn, const double g, const double l);
 
+  static inline bool StateALM(const double cn, const double g, const double l);
+
   static inline double ConstrainFunction(const double cn, const double g,
                                          const double l);
 
@@ -1549,7 +1551,8 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
-      moab::Interface &moab_out, bool lagrange_field = true);
+      moab::Interface &moab_out, bool alm_flag = false,
+      bool lagrange_field = true);
 
   /**
    * @brief Calculate tangent operator for contact force for change of
@@ -1652,16 +1655,18 @@ struct SimpleContactProblem {
     OpGetGaussPtsState(
         const string lagrange_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        const double cn)
+        const double cn, const bool alm_flag = false)
         : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), cN(cn) {}
+          commonDataSimpleContact(common_data_contact), cN(cn),
+          almFlag(alm_flag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     const double cN;
+    const bool almFlag;
     VectorDouble vecR;
   };
 
@@ -1670,16 +1675,18 @@ struct SimpleContactProblem {
     OpGetContactArea(
         const string lagrange_field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        const double cn)
+        const double cn, const bool alm_flag = false)
         : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), cN(cn) {}
+          commonDataSimpleContact(common_data_contact), cN(cn),
+          almFlag(alm_flag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
   private:
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     const double cN;
+    const bool almFlag;
     VectorDouble vecR;
   };
 };
@@ -1696,6 +1703,11 @@ double SimpleContactProblem::Sign(double x) {
 bool SimpleContactProblem::State(const double cn, const double g,
                                  const double l) {
   return ((cn * g) <= l);
+}
+
+bool SimpleContactProblem::StateALM(const double cn, const double g,
+                                 const double l) {
+  return ((l + cn * g) <= 0.);
 }
 
 double SimpleContactProblem::ConstrainFunction(const double cn, const double g,

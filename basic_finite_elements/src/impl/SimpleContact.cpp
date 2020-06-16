@@ -815,7 +815,6 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverLambda::doWork(
 
     auto t_lagrange_slave =
         getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-    //   auto t_gap_gp = getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
     auto t_w = getFTensor0IntegrationWeightSlave();
 
     auto t_aug_lambda_ptr =
@@ -850,7 +849,6 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverLambda::doWork(
       }
 
       ++t_lagrange_slave;
-      // ++t_gap_gp;
       ++t_w;
       ++t_aug_lambda_ptr;
     }
@@ -897,14 +895,8 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverMaster::doWork(
     auto t_const_unit_master = get_tensor_from_vec(
         *(commonDataSimpleContact->normalVectorMasterPtr));
 
-    //   auto t_lagrange_slave =
-    //       getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
-
     auto t_aug_lambda_ptr =
         getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
-
-    //   auto t_gap_gp =
-    //   getFTensor0FromVec(*commonDataSimpleContact->gapPtr);
 
     auto t_w = getFTensor0IntegrationWeightSlave();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -912,7 +904,6 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverMaster::doWork(
       if (t_aug_lambda_ptr > 0) {
         ++t_w;
         ++t_aug_lambda_ptr;
-        //   ++t_lagrange_slave;
         continue;
       }
 
@@ -936,8 +927,6 @@ SimpleContactProblem::OpAugmentedOnLambdaSlaveOverMaster::doWork(
         ++t_base_lambda; // update cols master
       }
 
-      // ++t_gap_gp;
-      // ++t_lagrange_slave;
       ++t_aug_lambda_ptr;
       ++t_w;
     }
@@ -2284,11 +2273,11 @@ MoFEMErrorCode SimpleContactProblem::setContactAugmentedOperatorsLhs(
                                     cnValue));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpCalContactAugmentedLambdaOverLambdaMasterSlave(
+      new OpCalContactAugmentedTractionOverLambdaMasterSlave(
           field_name, lagrang_field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
-      new OpCalContactAugmentedLambdaOverLambdaSlaveSlave(
+      new OpCalContactAugmentedTractionOverLambdaSlaveSlave(
           field_name, lagrang_field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
@@ -2473,7 +2462,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
-    moab::Interface &moab_out, bool lagrange_field) {
+    moab::Interface &moab_out, bool alm_flag,
+    bool lagrange_field) {
   MoFEMFunctionBegin;
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
@@ -2506,10 +2496,10 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpGetGaussPtsState(lagrange_field_name, common_data_simple_contact,
-                             cnValue));
+                             cnValue, alm_flag));
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(new OpGetContactArea(
-      lagrange_field_name, common_data_simple_contact, cnValue));
+      lagrange_field_name, common_data_simple_contact, cnValue, alm_flag));
 
   MoFEMFunctionReturn(0);
 }
@@ -2773,7 +2763,13 @@ MoFEMErrorCode SimpleContactProblem::OpGetGaussPtsState::doWork(int side,
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     vecR[CommonDataSimpleContact::TOTAL] += 1;
-    if (SimpleContactProblem::State(cN, t_gap_gp, t_lagrange_slave)) {
+    if (SimpleContactProblem::State(cN, t_gap_gp, t_lagrange_slave) &&
+        !almFlag) {
+      vecR[CommonDataSimpleContact::ACTIVE] += 1;
+    }
+
+    if (SimpleContactProblem::StateALM(cN, t_gap_gp, t_lagrange_slave) &&
+        almFlag) {
       vecR[CommonDataSimpleContact::ACTIVE] += 1;
     }
 
@@ -2814,7 +2810,12 @@ MoFEMErrorCode SimpleContactProblem::OpGetContactArea::doWork(int side,
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
     const double val_s = t_w * area_s;
     vecR[CommonDataSimpleContact::TOTAL] += val_s;
-    if (SimpleContactProblem::State(cN, t_gap_gp, t_lagrange_slave)) {
+    if (SimpleContactProblem::State(cN, t_gap_gp, t_lagrange_slave) &&
+        !almFlag) {
+      vecR[CommonDataSimpleContact::ACTIVE] += val_s;
+    }
+    if (SimpleContactProblem::StateALM(cN, t_gap_gp, t_lagrange_slave) &&
+        almFlag) {
       vecR[CommonDataSimpleContact::ACTIVE] += val_s;
     }
 

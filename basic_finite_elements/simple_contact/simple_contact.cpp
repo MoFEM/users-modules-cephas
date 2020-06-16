@@ -648,7 +648,7 @@ int main(int argc, char *argv[]) {
 
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post);
+        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
 
     mb_post.delete_mesh();
 
