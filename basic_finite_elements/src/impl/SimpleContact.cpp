@@ -1425,7 +1425,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnMaster::doWork(
       ++t_w;
     } // for gauss points
 
-    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+    CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
@@ -1479,7 +1479,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactTractionOnSlave::doWork(
       ++t_w;
     } // for gauss points
 
-    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+    CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
@@ -1700,7 +1700,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsSlave::doWork(
       ++t_w;
     } // for gauss points
 
-    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+    CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
@@ -1764,7 +1764,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsMaster::doWork(
       ++t_w;
     } // for gauss points
 
-    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+    CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
