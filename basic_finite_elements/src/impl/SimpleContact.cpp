@@ -446,6 +446,54 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalMaster::doWork(int side,
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpGetOrthonormalTangents::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+  // FTensor::Index<'j', 3> j;
+  // FTensor::Index<'k', 3> k;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  commonDataSimpleContact->tangentOneVectorSlavePtr->resize(3, false);
+  commonDataSimpleContact->tangentOneVectorSlavePtr->clear();
+
+  commonDataSimpleContact->tangentTwoVectorSlavePtr->resize(3, false);
+  commonDataSimpleContact->tangentTwoVectorSlavePtr->clear();
+
+  const double *tangent_one_slave_ptr = &getTangentSlaveOne()[0];
+  const double *tangent_two_slave_ptr = &getTangentSlaveTwo()[0];
+
+  auto t_tangent_1 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorSlavePtr));
+
+  auto t_tangent_2 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr));
+
+  for (int ii = 0; ii != 3; ++ii) {
+    t_tangent_1(ii) = tangent_one_slave_ptr[ii];
+    t_tangent_2(ii) = tangent_two_slave_ptr[ii];
+  }
+
+  const double l_tan_1 = sqrt(t_tangent_1(i) * t_tangent_1(i));
+
+  const double l_tan_2 = sqrt(t_tangent_2(i) * t_tangent_2(i));
+
+  t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
+  t_tangent_2(i) = t_tangent_2(i) / l_tan_2;
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -530,6 +578,92 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode
+SimpleContactProblem::OpGetPreviousPositionAtGaussPtsSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->prevPositionAtGaussPtsSlavePtr.get()->resize(
+        3, nb_gauss_pts, false);
+    commonDataSimpleContact->prevPositionAtGaussPtsSlavePtr.get()->clear();
+  }
+
+  auto t_prev_position_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->prevPositionAtGaussPtsSlavePtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3); // in-between
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_prev_position_slave(i) += t_base_slave * t_field_data_slave(i);
+
+      ++t_base_slave;
+      ++t_field_data_slave;
+    }
+    ++t_prev_position_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpGetPreviousPositionAtGaussPtsMaster::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->prevPositionAtGaussPtsMasterPtr.get()->resize(
+        3, nb_gauss_pts, false);
+
+    commonDataSimpleContact->prevPositionAtGaussPtsMasterPtr.get()->clear();
+  }
+
+  auto t_prev_position_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->prevPositionAtGaussPtsMasterPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_master(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_prev_position_master(i) += t_base_master * t_field_data_master(i);
+
+      ++t_base_master;
+      ++t_field_data_master;
+    }
+    ++t_prev_position_master;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(int side,
                                                            EntityType type,
                                                            EntData &data) {
@@ -573,6 +707,70 @@ MoFEMErrorCode SimpleContactProblem::OpGetGapSlave::doWork(int side,
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpGetTangentGapVelocitySlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->tangentGapPtr.get()->resize(2, nb_gauss_pts,
+                                                         false);
+  commonDataSimpleContact->tangentGapPtr.get()->clear();
+
+  FTensor::Index<'i', 3> i;
+
+  auto t_position_master_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
+
+  auto t_position_slave_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+
+  auto t_prev_position_master_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->prevPositionAtGaussPtsMasterPtr);
+
+  auto t_prev_position_slave_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->prevPositionAtGaussPtsSlavePtr);
+
+  auto t_tangent_gap_ptr =
+      getFTensor1FromMat<2>(*commonDataSimpleContact->tangentGapPtr);
+
+  auto t_tangent_1_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorSlavePtr));
+
+  auto t_tangent_2_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr));
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    t_tangent_gap_ptr(0) +=
+        t_tangent_1_at_gp(i) *
+        (t_position_slave_gp(i) - t_position_master_gp(i) -
+         (t_prev_position_slave_gp(i) - t_prev_position_master_gp(i)));
+
+    t_tangent_gap_ptr(1) +=
+        t_tangent_2_at_gp(i) *
+        (t_position_slave_gp(i) - t_position_master_gp(i) -
+         -(t_prev_position_slave_gp(i) - t_prev_position_master_gp(i)));
+
+    ++t_position_slave_gp;
+    ++t_position_master_gp;
+    ++t_prev_position_slave_gp;
+    ++t_prev_position_master_gp;
+    ++t_tangent_gap_ptr;
+  } // for gauss points
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -602,6 +800,49 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       ++t_field_data_slave;
     }
     ++t_lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpGetTangentLagrange::doWork(int side, EntityType type,
+                                                   EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->tangentLambdasPtr.get()->resize(2, nb_gauss_pts,
+                                                               false);
+
+    commonDataSimpleContact->tangentLambdasPtr.get()->clear();
+  }
+
+  auto t_tangent_lagrange =
+      getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 2;
+
+  FTensor::Index<'i', 2> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_lag_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 2> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1], 2);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_tangent_lagrange(i) += t_base_lag_slave * t_field_data_slave(i);
+
+      ++t_base_lag_slave;
+      ++t_field_data_slave;
+    }
+    ++t_tangent_lagrange;
   }
 
   MoFEMFunctionReturn(0);
@@ -642,6 +883,56 @@ MoFEMErrorCode SimpleContactProblem::OpGetAugmentedLambdaSlave::doWork(
     ++t_lagrange_slave;
     ++t_gap_ptr;
   } // for gauss points
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetTangentAugmentedLambdaSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->tangentAugmentedLambdasPtr.get()->resize(
+      2, nb_gauss_pts, false);
+
+  commonDataSimpleContact->tangentAugmentedLambdasPtr.get()->clear();
+  commonDataSimpleContact->normAugTangentLambdasPtr.get()->resize(
+      nb_gauss_pts);
+  commonDataSimpleContact->normAugTangentLambdasPtr.get()->clear();
+
+  auto t_tangent_augmented_lagrange = getFTensor1FromMat<2>(
+      *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+  auto t_tangent_lagrange =
+      getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+  auto t_tangent_gap_ptr =
+      getFTensor1FromMat<2>(*commonDataSimpleContact->tangentGapPtr);
+
+  auto t_norm_tan_aug_lambda_ptr =
+      getFTensor0FromVec(*commonDataSimpleContact->normAugTangentLambdasPtr);
+
+  FTensor::Index<'i', 2> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    t_tangent_augmented_lagrange(i) +=
+        t_tangent_lagrange(i) + cNtAngentPtr * t_tangent_gap_ptr(i);
+
+    t_norm_tan_aug_lambda_ptr =
+        sqrt(t_tangent_augmented_lagrange(i) * t_tangent_augmented_lagrange(i));
+    ++t_tangent_lagrange;
+    ++t_tangent_augmented_lagrange;
+    ++t_tangent_gap_ptr;
+    ++t_norm_tan_aug_lambda_ptr;
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -1000,6 +1291,576 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverSpatialSlave::doWork(
 
       ++t_aug_lambda_ptr;
       ++t_w;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+                        ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // Both sides are needed since both sides contribute their shape
+  // function to the stiffness matrix
+  const int nb_row = row_data.getIndices().size();
+  if (!nb_row)
+    MoFEMFunctionReturnHot(0);
+  const int nb_col = col_data.getIndices().size();
+  if (!nb_col)
+    MoFEMFunctionReturnHot(0);
+  const int nb_gauss_pts = row_data.getN().size1();
+
+  int nb_base_fun_row = row_data.getFieldData().size() / 3;
+  int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+  auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+  NN.clear();
+
+  auto t_w = getFTensor0IntegrationWeightSlave();
+
+  const double area_master = commonDataSimpleContact->areaSlave;
+
+  auto normal =
+      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+  auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+      *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+  auto t_norm_tang_aug_lambda_ptr =
+      getFTensor0FromVec(*commonDataSimpleContact->normAugTangentLambdasPtr);
+
+  auto t_aug_lambda_ptr =
+      getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+  auto t_tangent_lambda =
+      getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+  auto t_tangent_1_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorSlavePtr));
+
+  auto t_tangent_2_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr));
+
+  // const double cNTangentPtr = *cNTangentPtr.get();
+  // const double cNNormalPtr = *cNNormalPtr.get();
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    if (t_aug_lambda_ptr > 0) {
+      ++t_norm_tang_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_aug_lambda_ptr;
+      ++t_w;
+      // cerr << "no friction\n";
+      continue;
+    }
+
+    bool stick = true;
+    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      stick = false;
+
+    const double val_m = t_w * area_master;
+
+    FTensor::Tensor0<double *> t_base_master_col(&col_data.getN()(gg, 0));
+
+    for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+
+      FTensor::Tensor0<double *> t_base_master_row(&row_data.getN()(gg, 0));
+      const double m = val_m * t_base_master_col;
+
+      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
+
+        if (stick) {
+          t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_1_at_gp(i) *
+                                t_tangent_1_at_gp(j) * t_base_master_row;
+          t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
+                                t_tangent_2_at_gp(j) * t_base_master_row;
+
+        } else {
+
+          // normal gap
+
+          t_assemble_s(i, j) += muTan * m * cNNormalPtr *
+                                t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_1_at_gp(i) * normal(j) *
+                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+
+          t_assemble_s(i, j) += muTan * m * cNNormalPtr *
+                                t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_2_at_gp(i) * normal(j) *
+                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+
+          // tangent gap aug lambda
+
+          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_1_at_gp(i) *
+                                t_tangent_1_at_gp(j) * t_base_master_row /
+                                t_norm_tang_aug_lambda_ptr;
+
+          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_2_at_gp(i) *
+                                t_tangent_2_at_gp(j) * t_base_master_row /
+                                t_norm_tang_aug_lambda_ptr;
+
+          const double pow_3 = t_norm_tang_aug_lambda_ptr *
+                               t_norm_tang_aug_lambda_ptr *
+                               t_norm_tang_aug_lambda_ptr;
+
+          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+                                t_base_master_row / pow_3;
+
+          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
+                                t_base_master_row / pow_3;
+
+          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+                                t_base_master_row / pow_3;
+
+          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+                                t_base_master_row / pow_3;
+        }
+
+        ++t_base_master_row; // update rows
+      }
+      ++t_base_master_col; // update cols slave
+    }
+    ++t_w;
+    ++t_norm_tang_aug_lambda_ptr;
+    ++t_tangent_aug_lambda_ptr;
+    ++t_aug_lambda_ptr;
+  }
+
+  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+                      ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // Both sides are needed since both sides contribute their shape
+  // function to the stiffness matrix
+  const int nb_row = row_data.getIndices().size();
+  if (!nb_row)
+    MoFEMFunctionReturnHot(0);
+  const int nb_col = col_data.getIndices().size();
+  if (!nb_col)
+    MoFEMFunctionReturnHot(0);
+  const int nb_gauss_pts = row_data.getN().size1();
+
+  int nb_base_fun_row = row_data.getFieldData().size() / 3;
+  int nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+  auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+  NN.clear();
+
+  auto t_w = getFTensor0IntegrationWeightSlave();
+
+  const double area_master = commonDataSimpleContact->areaSlave;
+
+  auto normal =
+      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
+
+  auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+      *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+  auto t_norm_tang_aug_lambda_ptr =
+      getFTensor0FromVec(*commonDataSimpleContact->normAugTangentLambdasPtr);
+
+  auto t_aug_lambda_ptr =
+      getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+  auto t_tangent_lambda =
+      getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+  auto t_tangent_1_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorSlavePtr));
+
+  auto t_tangent_2_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr));
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    if (t_aug_lambda_ptr > 0) {
+      ++t_norm_tang_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_aug_lambda_ptr;
+      ++t_w;
+      continue;
+    }
+
+    bool stick = true;
+    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      stick = false;
+
+    const double val_m = t_w * area_master;
+
+    FTensor::Tensor0<double *> t_base_slave_col(&col_data.getN()(gg, 0));
+
+    for (int bbc = 0; bbc != nb_base_fun_col; bbc++) {
+
+      FTensor::Tensor0<double *> t_base_master_row(&row_data.getN()(gg, 0));
+      const double m = val_m * t_base_slave_col;
+
+      for (int bbr = 0; bbr != nb_base_fun_row; bbr++) {
+
+        auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
+
+        if (stick) {
+          t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i) *
+                                t_tangent_1_at_gp(j) * t_base_master_row;
+          t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
+                                t_tangent_2_at_gp(j) * t_base_master_row;
+
+        } else {
+
+          // normal gap
+
+          t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
+                                t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_1_at_gp(i) * normal(j) *
+                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+
+          t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
+                                t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_2_at_gp(i) * normal(j) *
+                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+
+          // tangent gap aug lambda
+
+          // t_assemble_s(i, j) -= muTan  * cNTangentPtr *
+          //                       m * t_tangent_1_at_gp(i) *
+          //                       t_tangent_1_at_gp(j) * t_base_master_row;
+          // t_assemble_s(i, j) -= muTan  * cNTangentPtr *
+          //                       m * t_tangent_2_at_gp(i) *
+          //                       t_tangent_2_at_gp(j) * t_base_master_row;
+
+          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_1_at_gp(i) *
+                                t_tangent_1_at_gp(j) * t_base_master_row /
+                                t_norm_tang_aug_lambda_ptr;
+          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_2_at_gp(i) *
+                                t_tangent_2_at_gp(j) * t_base_master_row /
+                                t_norm_tang_aug_lambda_ptr;
+
+          const double pow_3 = t_norm_tang_aug_lambda_ptr *
+                               t_norm_tang_aug_lambda_ptr *
+                               t_norm_tang_aug_lambda_ptr;
+
+          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+                                t_base_master_row / pow_3;
+
+          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
+                                t_base_master_row / pow_3;
+
+          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+                                t_base_master_row / pow_3;
+
+          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+                                m * t_tangent_aug_lambda_ptr(1) *
+                                t_tangent_aug_lambda_ptr(0) *
+                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+                                t_base_master_row / pow_3;
+        }
+
+        ++t_base_master_row; // update rows
+      }
+      ++t_base_slave_col; // update cols slave
+    }
+    ++t_w;
+    ++t_norm_tang_aug_lambda_ptr;
+    ++t_tangent_aug_lambda_ptr;
+    ++t_aug_lambda_ptr;
+  }
+
+  CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+                      ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
+    doWork(int row_side, int col_side, EntityType row_type, EntityType col_type,
+           EntData &row_data, EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // Both sides are needed since both sides contribute their shape
+  // function to the stiffness matrix
+  const int nb_row = row_data.getIndices().size();
+  const int nb_col = col_data.getIndices().size();
+
+  if (nb_row && nb_col) {
+    const int nb_gauss_pts = row_data.getN().size1();
+
+    int nb_base_fun_row = row_data.getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size();
+
+    const double area_master =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c), &m(r + 1, c),
+                                           &m(r + 2, c));
+    };
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    NN.resize(3 * nb_base_fun_row, nb_base_fun_col, false);
+    NN.clear();
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+        *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+    auto t_norm_tang_aug_lambda_ptr = getFTensor0FromVec(
+        *commonDataSimpleContact->normAugTangentLambdasPtr);
+
+    auto t_aug_lambda_ptr =
+        getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+    auto t_tangent_lambda =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+    auto t_tangent_1_at_gp =
+        get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorSlavePtr));
+
+    auto t_tangent_2_at_gp =
+        get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr));
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      if (t_aug_lambda_ptr > 0 ||
+          t_norm_tang_aug_lambda_ptr <= -muTan * t_aug_lambda_ptr) {
+        ++t_norm_tang_aug_lambda_ptr;
+        ++t_tangent_aug_lambda_ptr;
+        ++t_aug_lambda_ptr;
+        ++t_w;
+        continue;
+      }
+
+      double val_m = t_w * area_master;
+      auto t_base_master = row_data.getFTensor0N(gg, 0);
+
+      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+        auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 0);
+        auto t_base_lambda = col_data.getFTensor0N(gg, 0);
+        const double m = val_m * t_base_master;
+        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+          const double n = m * t_base_lambda;
+
+          t_assemble_m(i) += muTan * n * t_tangent_aug_lambda_ptr(0) *
+                             t_tangent_1_at_gp(i) / t_norm_tang_aug_lambda_ptr;
+
+          t_assemble_m(i) += muTan * n * t_tangent_aug_lambda_ptr(1) *
+                             t_tangent_2_at_gp(i) / t_norm_tang_aug_lambda_ptr;
+          ++t_assemble_m;
+          ++t_base_lambda; // update cols slave
+        }
+        ++t_base_master; // update rows master
+      }
+      ++t_w;
+      ++t_norm_tang_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_aug_lambda_ptr;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
+                        ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::
+    OpCalContactAugmentedTangentLambdaOverLambdaTanMasterSlave::doWork(
+        int row_side, int col_side, EntityType row_type, EntityType col_type,
+        EntData &row_data, EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  // Both sides are needed since both sides contribute their shape
+  // function to the stiffness matrix
+  const int nb_row = row_data.getIndices().size();
+  const int nb_col = col_data.getIndices().size();
+
+  if (nb_row && nb_col) {
+    const int nb_gauss_pts = row_data.getN().size1();
+
+    int nb_base_fun_row = row_data.getFieldData().size() / 3;
+    int nb_base_fun_col = col_data.getFieldData().size() / 2;
+
+    const double area_master =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(&m(r + 0, c), &m(r + 1, c),
+                                           &m(r + 2, c));
+    };
+
+    auto get_tensor_vec = [](VectorDouble &n) {
+      return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    NN.resize(3 * nb_base_fun_row, 2 * nb_base_fun_col, false);
+    NN.clear();
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+        *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+    auto t_norm_tang_aug_lambda_ptr = getFTensor0FromVec(
+        *commonDataSimpleContact->normAugTangentLambdasPtr);
+
+    auto t_aug_lambda_ptr =
+        getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+    auto t_tangent_lambda =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+    auto t_tangent_1_at_gp =
+        get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorSlavePtr));
+
+    auto t_tangent_2_at_gp =
+        get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr));
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      if (t_aug_lambda_ptr > 0) {
+        ++t_norm_tang_aug_lambda_ptr;
+        ++t_tangent_aug_lambda_ptr;
+        ++t_aug_lambda_ptr;
+        ++t_w;
+        continue;
+      }
+
+      bool stick = true;
+      if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+        stick = false;
+
+      double val_m = t_w * area_master;
+      auto t_base_master = row_data.getFTensor0N(gg, 0);
+
+      for (int bbr = 0; bbr != nb_base_fun_row; ++bbr) {
+        auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 0);
+        auto t_base_lambda = col_data.getFTensor0N(gg, 0);
+        const double m = val_m * t_base_master;
+        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+          const double n = m * t_base_lambda;
+
+          if (stick) {
+            t_assemble_m(i) -= n * t_tangent_1_at_gp(i);
+            ++t_assemble_m;
+            t_assemble_m(i) -= n * t_tangent_2_at_gp(i);
+
+          } else {
+            const double pow_3 = t_norm_tang_aug_lambda_ptr *
+                                 t_norm_tang_aug_lambda_ptr *
+                                 t_norm_tang_aug_lambda_ptr;
+
+            t_assemble_m(i) += n * muTan * t_aug_lambda_ptr *
+                               t_tangent_1_at_gp(i) /
+                               t_norm_tang_aug_lambda_ptr;
+
+            t_assemble_m(i) -=
+                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
+                t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(0) / pow_3;
+
+            t_assemble_m(i) -=
+                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
+                t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(1) / pow_3;
+            ++t_assemble_m;
+            t_assemble_m(i) += n * muTan * t_aug_lambda_ptr *
+                               t_tangent_2_at_gp(i) /
+                               t_norm_tang_aug_lambda_ptr;
+
+            t_assemble_m(i) -=
+                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
+                t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) / pow_3;
+
+            t_assemble_m(i) -=
+                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
+                t_tangent_aug_lambda_ptr(0) * t_tangent_1_at_gp(i) / pow_3;
+          }
+
+          ++t_assemble_m;
+          ++t_base_lambda; // update cols slave
+        }
+        ++t_base_master; // update rows master
+      }
+      ++t_w;
+      ++t_norm_tang_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_aug_lambda_ptr;
     }
 
     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*NN.data().begin(),
@@ -1765,6 +2626,391 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsMaster::doWork(
     } // for gauss points
 
     CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getIndices().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+
+    const int nb_gauss_pts = data.getN().size1();
+    const int nb_base_fun_col = data.getFieldData().size() / 3;
+
+    vecF.resize(nb_dofs,
+                false); // the last false in ublas
+                        // resize will destroy (not
+                        // preserved) the old
+                        // values
+    vecF.clear();
+
+    const double area_m =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    auto t_aug_lambda_ptr =
+        getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+    auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+        *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+    auto t_tangent_gap =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentGapPtr);
+
+    auto t_norm_aug_lambda_ptr = getFTensor0FromVec(
+        *commonDataSimpleContact->normAugTangentLambdasPtr);
+
+    auto t_tangent_lambda =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+    auto t_tangent_1_at_gp = get_tensor_vec(
+        *(commonDataSimpleContact->tangentOneVectorSlavePtr), 0);
+
+    auto t_tangent_2_at_gp = get_tensor_vec(
+        *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      if (t_aug_lambda_ptr > 0) {
+        ++t_aug_lambda_ptr;
+        ++t_tangent_aug_lambda_ptr;
+        ++t_tangent_gap;
+        ++t_norm_aug_lambda_ptr;
+        ++t_tangent_lambda;
+        ++t_w;
+        continue;
+      }
+
+      bool stick = true;
+      if (t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+        stick = false;
+
+      const double val_m = t_w * area_m;
+
+      FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+        auto t_assemble_m = get_tensor_vec(vecF, 3 * bbc);
+
+        if (stick) { // stick
+          // cerr << "stick\n";
+          t_assemble_m(i) -= val_m * t_tangent_1_at_gp(i) *
+                             t_tangent_aug_lambda_ptr(0) * t_base_master;
+
+          t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
+                             t_tangent_aug_lambda_ptr(1) * t_base_master;
+        } else { // slip
+          // cerr << "slip\n";
+
+          // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
+          //                     muTan *
+          //                    t_base_master/ t_norm_aug_lambda_ptr;
+
+          // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
+          //                     muTan *
+          //                    t_base_master/ t_norm_aug_lambda_ptr;
+
+          t_assemble_m(i) +=
+              val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
+              muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
+
+          t_assemble_m(i) +=
+              val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
+              muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
+        }
+
+        ++t_base_master;
+      }
+
+      ++t_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_tangent_gap;
+      ++t_norm_aug_lambda_ptr;
+      ++t_tangent_lambda;
+      ++t_w;
+    } // for gauss points
+
+    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getIndices().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+
+    const int nb_gauss_pts = data.getN().size1();
+    const int nb_base_fun_col = data.getFieldData().size() / 3;
+
+    vecF.resize(nb_dofs,
+                false); // the last false in ublas
+                        // resize will destroy (not
+                        // preserved) the old
+                        // values
+    vecF.clear();
+
+    const double area_m =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    FTensor::Index<'i', 3> i;
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    auto t_aug_lambda_ptr =
+        getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+    auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+        *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+    auto t_tangent_gap =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentGapPtr);
+
+    auto t_norm_aug_lambda_ptr = getFTensor0FromVec(
+        *commonDataSimpleContact->normAugTangentLambdasPtr);
+
+    auto t_tangent_lambda =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+    auto t_tangent_1_at_gp = get_tensor_vec(
+        *(commonDataSimpleContact->tangentOneVectorSlavePtr), 0);
+
+    auto t_tangent_2_at_gp = get_tensor_vec(
+        *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      if (t_aug_lambda_ptr > 0) {
+        ++t_aug_lambda_ptr;
+        ++t_tangent_aug_lambda_ptr;
+        ++t_tangent_gap;
+        ++t_norm_aug_lambda_ptr;
+        ++t_tangent_lambda;
+        ++t_w;
+        continue;
+      }
+
+      bool stick = true;
+      if (t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+        stick = false;
+
+      const double val_m = t_w * area_m;
+
+      FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+        auto t_assemble_m = get_tensor_vec(vecF, 3 * bbc);
+
+        if (stick) { // stick
+          // cerr << "stick\n";
+          t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
+                             t_tangent_aug_lambda_ptr(0) * t_base_slave;
+
+          t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
+                             t_tangent_aug_lambda_ptr(1) * t_base_slave;
+        } else { // slip
+          // cerr << "slip\n";
+
+          // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
+          //                     muTan *
+          //                    t_base_slave/ t_norm_aug_lambda_ptr;
+
+          // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
+          //                     muTan *
+          //                    t_base_slave/ t_norm_aug_lambda_ptr;
+
+          t_assemble_m(i) -=
+              val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
+              muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
+
+          t_assemble_m(i) -=
+              val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
+              muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
+        }
+
+        ++t_base_slave;
+      }
+
+      ++t_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_tangent_gap;
+      ++t_norm_aug_lambda_ptr;
+      ++t_tangent_lambda;
+      ++t_w;
+    } // for gauss points
+
+    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getIndices().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+
+    const int nb_gauss_pts = data.getN().size1();
+    const int nb_base_fun_col = data.getFieldData().size() / 2;
+
+    vecF.resize(nb_dofs,
+                false); // the last false in ublas
+                        // resize will destroy (not
+                        // preserved) the old
+                        // values
+    vecF.clear();
+
+    const double area_m =
+        commonDataSimpleContact->areaSlave; // same area in master and slave
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    auto get_tensor_vec_2 = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 2>(&n(r + 0), &n(r + 1));
+    };
+
+    FTensor::Index<'i', 2> i;
+
+    auto t_w = getFTensor0IntegrationWeightSlave();
+
+    auto t_aug_lambda_ptr =
+        getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
+
+    auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<2>(
+        *commonDataSimpleContact->tangentAugmentedLambdasPtr);
+
+    auto t_tangent_gap =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentGapPtr);
+
+    auto t_norm_aug_lambda_ptr = getFTensor0FromVec(
+        *commonDataSimpleContact->normAugTangentLambdasPtr);
+
+    auto t_tangent_lambda =
+        getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
+
+    auto t_tangent_1_at_gp = get_tensor_vec(
+        *(commonDataSimpleContact->tangentOneVectorSlavePtr), 0);
+
+    auto t_tangent_2_at_gp = get_tensor_vec(
+        *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
+
+    
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      bool stick = true;
+      if (t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+        stick = false;
+
+      // cerr << "t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr "
+      //      << t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr
+      //      << "   t_aug_lambda_ptr " << t_aug_lambda_ptr << "\n";
+      const double val_m = t_w * area_m;
+
+      FTensor::Tensor0<double *> t_base_slave_lambda(&data.getN()(gg, 0));
+
+      for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+
+        auto t_assemble_m = get_tensor_vec_2(vecF, 2 * bbc);
+        // cerr << "t_aug_lambda_ptr   " << t_aug_lambda_ptr << "\n";
+        if (t_aug_lambda_ptr > 0) {
+
+          t_assemble_m(i) -= val_m * t_tangent_lambda(i) * t_base_slave_lambda /
+                             cNTangentPtr;
+
+          // t_assemble_m(1) -= val_m *
+          //                    t_tangent_lambda(1) * t_base_slave_lambda /
+          //                    cNTangentPtr;
+        } else {
+          if (stick) { // stick
+            // cerr << "stick\n";
+            // cerr << "t_tangent_gap  " << t_tangent_gap << "\n";
+            t_assemble_m(i) += val_m * t_tangent_gap(i) * t_base_slave_lambda;
+
+            // t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
+            //                    t_tangent_aug_lambda_ptr(1) *
+            //                    t_base_slave_lambda;
+          } else { // slip
+
+            // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
+            //                     muTan *
+            //                    t_base_slave_lambda/ t_norm_aug_lambda_ptr;
+
+            // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
+            //                     muTan *
+            //                    t_base_slave_lambda/ t_norm_aug_lambda_ptr;
+            ///======
+            t_assemble_m(i) -= val_m *
+                               (t_tangent_lambda(i) +
+                                t_tangent_aug_lambda_ptr(i) * muTan *
+                                    t_aug_lambda_ptr / t_norm_aug_lambda_ptr) *
+                               t_base_slave_lambda / cNTangentPtr;
+
+            // t_assemble_m(1) -=
+            //     val_m *
+            //     (t_tangent_lambda(1) + t_tangent_aug_lambda_ptr(1) * muTan *
+            //                                t_aug_lambda_ptr /
+            //                                t_norm_aug_lambda_ptr) *
+            //     t_base_slave_lambda / cNTangentPtr;
+            ///======
+            // t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
+            //                    t_tangent_lambda(1) * t_base_slave_lambda /
+            //                    cNTangentPtr;
+
+            // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
+            //                    t_tangent_aug_lambda_ptr(0) * muTan *
+            //                    t_aug_lambda_ptr * t_base_slave_lambda /
+            //                    t_norm_aug_lambda_ptr;
+
+            // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
+            //                    t_tangent_aug_lambda_ptr(1) * muTan *
+            //                    t_aug_lambda_ptr * t_base_slave_lambda /
+            //                    t_norm_aug_lambda_ptr;
+          }
+        }
+
+        ++t_base_slave_lambda;
+      }
+
+      ++t_aug_lambda_ptr;
+      ++t_tangent_aug_lambda_ptr;
+      ++t_tangent_gap;
+      ++t_norm_aug_lambda_ptr;
+      ++t_tangent_lambda;
+      ++t_w;
+    } // for gauss points
+
+    CHKERR VecSetValues(getSNESf(), data, &vecF[0], ADD_VALUES);
   }
   MoFEMFunctionReturn(0);
 }
