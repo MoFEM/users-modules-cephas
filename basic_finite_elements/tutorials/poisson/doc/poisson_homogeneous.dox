@@ -6,13 +6,6 @@ implementation)
 
 <br>
 
-\note After finishing this tutorial, if you would like to replicate the program
-and practice yourself in an existing module or in your own module, you may wish
-to have a look at \ref how_to_add_new_module_and_program and \ref
-how_to_compile_program.
-
-<br>
-
 \note Intended learning outcome:
 - general structure of a program developed using MoFEM
 - idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
@@ -22,6 +15,13 @@ how_to_compile_program.
 - how to **push** UDOs to the *pipeline*
 - a way to handle homogeneous boundary condition in MoFEM
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
+
+<br>
+
+\note After finishing this tutorial, if you would like to replicate the program
+and practice yourself in an existing module or in your own module, you may wish
+to have a look at \ref how_to_add_new_module_and_program and \ref
+how_to_compile_program.
 
 \tableofcontents
 
@@ -252,9 +252,14 @@ const double body_source = 5.;
 \endcode
 
 
+Now, we will look in details how the two main operators
+Poisson2DHomogeneousOperators::OpDomainLhsMatrixK and
+Poisson2DHomogeneousOperators::OpDomainRhsVectorF are implemented.
+
+
 \subsubsection OpDomainLhsMatrixK
-Now, we will talk about the implementation of the first UDO
-Poisson2DHomogeneousOperators::OpDomainLhsMatrixK which is responsible for the
+The first UDO
+Poisson2DHomogeneousOperators::OpDomainLhsMatrixK is responsible for the
 calculation and assemble of the left-hand-side matrix \f$ {\bf K} \f$
 
 First, let's look at the structure of the UDO to calculate matrix \f$
@@ -281,17 +286,17 @@ private:
 };
 \endcode
 
-We have the class OpDomainLhsMatrixK that is inherited from `OpFaceEle` which is
-the alias of the base class
+We have the class `OpDomainLhsMatrixK` that is inherited from `OpFaceEle` which
+is the alias of the base class
 MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator.
-This newly created class has public objects OpDomainLhsMatrixK() and doWork()
-which can be accessed from outside of the class, and private objects `locLhs`
-and `transLocLhs` of type MatrixDouble which can be accessed only from inside of
-the class for calculation and assemble of local stiffness matrix. This follows
-the concept of [data
+This newly created class has two public objects `OpDomainLhsMatrixK()` and
+`doWork()` which can be accessed from outside of the class, and two private
+objects `locLhs` and `transLocLhs` of type `MatrixDouble` which can be accessed
+only from inside of the class for calculation and assemble of local stiffness
+matrix. This follows the concept of [data
 encapsulation](https://en.wikipedia.org/wiki/Encapsulation_(computer_programming))
 to hide values and objects inside the class as much as possible. We will discuss
-a little more details of those public and private objects in the followings
+a little more details of those four objects of the class in the followings
 
 - `OpDomainLhsMatrixK()`
 \code 
@@ -305,8 +310,9 @@ a little more details of those public and private objects in the followings
   column, respectively. In general, these two field names can be different. In
   this particular case of Poisson's problem with homogeneous boundary condition,
   we will see later, they take the same field name of "U" for both row and
-  column. The boolean `sYmm = true` is set since we know matrix \f$ K \f$ is
-  symmetric and we can just assembling and storing data of half of the matrix.
+  column. OpFaceEle::OPROWCOL because we assemble stiffness matrix that has data
+  on both row and column. The boolean `sYmm = true` is set since we know matrix
+  \f$ K \f$ is symmetric and we can just assembling and storing data of half of the matrix.
 
 - `doWork()`
 \code
@@ -322,21 +328,23 @@ a little more details of those public and private objects in the followings
   decides how to calculate the local matrix components and how to assemble them
   to the global matrix. All of the mathematical derivations that we did in the
   previous section of this tutorial will be implemented in this function. More
-  discussion on this essential function will be given later.
+  discussion on this essential function will be given right below.
 
-- `locLhs`: This private member object which has type MatrixDouble is used to
+- `locLhs` <br>
+  This private member object of type MatrixDouble is used to
   store the results of the calculation of components of element stiffness
-  matrix. This object is used only in function doWork() above which is a member
-  of the current class. That is why it is declared as a private object meaning
-  it can be accessed only inside of the class.
+  matrix. This object is used only in function `doWork()` above which is a
+  member of the current class. That is why it is declared as a private object
+  meaning it can be accessed only inside of the class.
   
-- `transLocLhs`: This private member object which also has type MatrixDouble is
+- `transLocLhs` <br>
+  This private member object also of type MatrixDouble is
   used to assemble the transpose of `locLhs`. This object is used only in
-  function doWork() so it is also declared as a private object of the class.
+  function `doWork()` so it is also declared as a private object of the class `OpDomainLhsMatrixK`.
 
 Now we take a closer look on the details of the implementation of the member
-function `doWork()` which is the core part of the UDO implementation. Full codes
-for this function as follows
+function `doWork()` which is the most essential part of the UDO implementation.
+Full codes for this function as follows
 \code 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
@@ -399,6 +407,106 @@ for this function as follows
     MoFEMFunctionReturn(0);
   }
 \endcode
+
+First, let's talk about the structure of this function, 
+\code 
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    // Core implementation goes here
+
+    MoFEMFunctionReturn(0);
+  }
+\endcode
+
+You will first notice that all functions written in MoFEM will include error
+handling as we can see here with keywords: `MoFEMErrorCode`,
+`MoFEMFunctionBegin;`, and `MoFEMFunctionReturn(0);`
+
+Regarding arguments of this `doWork()` function, it has six arguments and all of
+them are input arguments. The values of these input arguments are provided by
+MoFEM based on the type of the elements we are solving (edge, face, volume). In
+this particular case, as we solve 2D Poisson problem using triangular mesh, we
+use MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator (alias
+`OpFaceEle`) as seen previously at the first lines of code for the struct
+`OpDomainLhsMatrixK`. And the data structure of the entities (elements) are
+provided accordingly thanks to DataForcesAndSourcesCore::EntData (alias
+`EntData`).
+
+The arguments are divided in three groups
+- `row_side` and `col_side` takes integer values of {0, 1, 2}
+- `row_type` and `col_type` takes value of {MBVERTEX, MBEDGE, MBTRI} (see more [Hierarchical basis
+  functions](http://mofem.eng.gla.ac.uk/mofem/html/hierarchical_approximation_1.html))
+- `&row_data` and `&col_data` are two important pointers that have information
+  of the DOFs, and basis function values, field values, field gradients at
+  integration (Gauss) points.
+
+Moving into the main implementation of `doWork()` function, we will see
+information about the number of DOFs on row and column are extracted from the
+database
+\code
+const int nb_row_dofs = row_data.getIndices().size();
+const int nb_col_dofs = col_data.getIndices().size();
+\endcode
+
+Then there is an `if statement` to make sure that data for row and column are
+both valid.
+\code
+if (nb_row_dofs && nb_col_dofs) {
+
+  // Main implementation goes here
+
+}
+\endcode
+
+Once the program is confident that the data for row and column are all valid,
+it starts to initialise the local stiffness (LHS) matrix whose components will
+be calculated and assembled to the global matrix.
+\code
+locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+locLhs.clear();
+\endcode
+
+Then you will get the area which is needed later when you integrate the function
+to calculate the stiffness matrix.
+\code
+// get element area
+const double area = getMeasure();
+\endcode
+It is worth noting that `getMeasure()` is a generic function and the value you
+get depends on which entity type you are working with. For example, in this UDO,
+you are working with face entities (triangles), `getMeasure()` gives you face
+area. If you are dealing with edge (for boundary element) or volume entities
+(for volume domain), you would get edge length or element volume, respectively.
+
+Next, you get the number of integration points and their weights
+\code
+// get number of integration points
+const int nb_integration_points = getGaussPts().size2();
+// get integration weights
+auto t_w = getFTensor0IntegrationWeight();
+\endcode
+
+
+In the traditional finite element implementation, you will probably have, at the
+same place of the code, the structure of the main nested loop like this
+
+- Loop over all elements
+  - Loop over all integration points
+    - Calculation of the local stiffness matrix components and fill them to the
+      global matrix
+
+However, finite element implementation in MoFEM is slightly different as you may
+have already noticed. MoFEM still have the nested loops; however, in the
+implementation of UDO, you have only one loop over the integration point
+inside which you calculate the local stiffness matrix components and assemble
+them to the global matrix. The loop over the elements (or `entities` in the
+context of [Hierarchical basis
+functions](http://mofem.eng.gla.ac.uk/mofem/html/hierarchical_approximation_1.html)
+used in MoFEM) is done in the main program, outside of the UDO. Details of how
+this loop is triggered is presented in \ref basic_tutorials_poisson_homogeneous_solve.
 
 \subsubsection OpDomainRhsVectorF
 And next, we will talk about the implementation of the second UDO
