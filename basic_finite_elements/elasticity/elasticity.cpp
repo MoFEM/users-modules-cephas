@@ -695,19 +695,12 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR MatZeroEntries(Aij);
 
-    // This controls how kinematic constrains are set, by blockset or nodeset.
-    // Cubit sets kinetic boundary conditions by blockset.
-    bool flag_cubit_disp = false;
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, NODESET | DISPLACEMENTSET, it)) {
-      flag_cubit_disp = true;
-    }
 
     // Below particular implementations of finite elements are used to assemble
     // problem matrixes and vectors.  Implementation of element does not change
     // how element is declared.
 
-    // Assemble Aij and F. Define Dirichlet bc element, which stets constrains
+    // Assemble Aij and F. Define Dirichlet bc element, which sets constrains
     // to MatrixDouble and the right hand side vector.
 
     // if normally defined boundary conditions are not found,
