@@ -589,7 +589,7 @@ This function requires the inputs of `getKSPB()`, `row_data`, `col_data`, the
 memory address where the first components of the local stiffness matrix
 `&locLhs(0, 0)` is stored, and a flag to add value `ADD_VALUES`. Here
 `getKSPB()` is the method to set the value of LHS matrix that will be solved by
-the iterative solver namely KSP in PETSc.
+the iterative solver namely [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) in PETSc.
 
 And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we tranpose
 everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
@@ -678,26 +678,67 @@ counterpart. The code for this function is as follows
 
       // Ignoring DOFs on boundary (index -1)
       CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-      CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
+      CHKERR VecSetValues(getKSPf(), data, &locRhs(0), ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
   }
 \endcode
+Apart from the input arguments of this function is slight different from the UDO
+for stiffness matrix, in this UDO for force vector, we use get the base function
+value to calculate the components of local vector reflecting what is presented
+in Eq. (4) and only need to loop over row DOFs as follows
+\code
+    // get base function
+    auto t_base = data.getFTensor0N();
+\endcode
+and later using the constant body source (force) that predefined at the
+beginning of the `*.hpp` to calculate the local vector
+\code
+        for (int rr = 0; rr != nb_dofs; rr++) {
+          locRhs[rr] += t_base * body_source * a;
 
-That was for the implementation of UDOs that are responsible for the calculation
-and assembling of the matrices and vectors. Next part we will look at the
-class and functions and see how the implemented UDOs are **pushed** to the
-Pipeline in the main program.
+          // move to the next base function
+          ++t_base;
+        }
+\endcode
 
-Having the matrix K and vector f implemented, you now may ask the question of
-how to feed it the main program. This is done through the process called *push
-operator* that you will find out in more details in later in this tutorials,
-\ref basic_tutorials_poisson_homogeneous_assemble
+Similar to the implemenation of matrix UDO, the final part of the code
+involves filling/assembling the calculated values from local force vector to the
+global one. This procedure for force vector is slightly different from the
+matrix. It is done in two steps. First, we need to tell the program to ignore
+the assembling of DOFs associated with boundary entities (marked as -1, \ref
+show where and how to mark those DOFs) and assemble only DOFs associated with
+the domain entities.
+\code
+CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+\endcode
+And then assemble the local force vector to the global one using
+\code
+CHKERR VecSetValues(getKSPf(), data, &locRhs(0), ADD_VALUES);
+\endcode
+This is very similar to the previous case for matrix, but now `getKSPf()` is
+used to set the value of the RHS vector later solved by [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) iterative solver in PETSc.
+
+
+That is all for the implementation of UDOs that are responsible for the
+calculation and assembling of the LHS matrix \f$ {\bf K} \f$ and RHS vector \f$
+{\bf F} \f$. Having the essential components implemented, you now may ask how
+those UDOs is called in the main program. This is done through the process
+called *push operator* to the **Pipeline** and you will find out in more details later in this tutorials,
+\ref basic_tutorials_poisson_homogeneous_assemble.
+
+Next part, we will look in details how the main program including class and
+functions is implemented.
+
+
 
 \subsection basic_tutorials_poisson_homogeneous_class The Poisson2DHomogeneous class
 
-This part is about the class Poisson2DHomogeneous
+This main class Poisson2DHomogeneous contains functions and each of which is
+responsible for a certain task of a finite element program.
+
+The public part of the class include a constructor and a function 
 
 Also talk about the naming convention: camelBack and give reference to page for
 naming convention in MoFEM.
