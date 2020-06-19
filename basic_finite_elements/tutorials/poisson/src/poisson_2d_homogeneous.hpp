@@ -138,7 +138,7 @@ public:
 
       // Ignoring DOFs on boundary (index -1)
       CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-      CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
+      CHKERR VecSetValues(getKSPf(), data, &locRhs(0), ADD_VALUES);
     }
 
     MoFEMFunctionReturn(0);
