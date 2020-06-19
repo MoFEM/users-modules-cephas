@@ -738,30 +738,147 @@ functions is implemented.
 This main class Poisson2DHomogeneous contains functions and each of which is
 responsible for a certain task of a finite element program.
 
-The public part of the class include a constructor and a function 
+The public part of the class include a constructor and function \ref
+basic_tutorials_poisson_homogeneous_run_analysis that calls other functions to
+perform finite element analysis.
+\code
+public:
+  Poisson2DHomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
+  // Declaration of the main function to run analysis
+  MoFEMErrorCode runAnalysis();
+\endcode
+Then there are private functions doing certain tasks and can be recognised by
+their names
+\code
+private:
+  // Declaration of other main functions called in runAnalysis()
+  MoFEMErrorCode readMesh();
+  MoFEMErrorCode setupProblem();
+  MoFEMErrorCode setIntegrationRules();
+  MoFEMErrorCode boundaryCondition();
+  MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode solveSystem();
+  MoFEMErrorCode outputResults();
+\endcode
+It is followed by the declaration of member variables that will be used in one
+or some of the member functions declared above
+\code
+  // MoFEM interfaces
+  MoFEM::Interface &mField;
+  moab::Interface &mOab;
+  Simple *simpleInterface;
 
-Also talk about the naming convention: camelBack and give reference to page for
-naming convention in MoFEM.
+  // mpi parallel communicator
+  MPI_Comm mpiComm;
+  // Number of processors
+  const int mpiRank;
+
+  // Discrete Manager and linear KSP solver using SmartPetscObj
+  SmartPetscObj<DM> dM;
+  SmartPetscObj<KSP> kspSolver;
+
+  // Field name and approximation order
+  std::string domainField;
+  int oRder;
+  MatrixDouble invJac;
+
+  // MoFEM working Pipelines for LHS and RHS
+  boost::shared_ptr<FaceEle> pipelineLhs;
+  boost::shared_ptr<FaceEle> pipelineRhs;
+
+  // Object needed for postprocessing
+  boost::shared_ptr<FaceEle> postProc;
+\endcode
+
+\note For writting program in MoFEM, we follow some coding practices for code
+style and naming convention described at \ref coding_practice
+
 
 
 \subsubsection basic_tutorials_poisson_homogeneous_constructor Poisson2DHomogeneous()
 
-This part is about the constructor Poisson2DHomogeneous::Poisson2DHomogeneous()
+Now is the constructor
+\code
+Poisson2DHomogeneous::Poisson2DHomogeneous(moab::Core &mb_instance,
+                                           MoFEM::Core &core)
+    : domainField("U"), mOab(mb_instance), mField(core),
+      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
+  pipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
+  pipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
+}
+\endcode
+The constructor specifies
+- `domainField("U")`: The domain field name as U (the field that we need to
+  solve for solution)
+- `mOab(mb_instance)`: The MOAB instance that helps MoFEM to manage element data
+  and topology
+- `mField(core)`: The MoFEM instance that is the backbone of the program
+- `mpiComm(mField.get_comm())` and `mpiRank(mField.get_comm_rank())`: These are
+  required for parallel computation
+
+In the constructor, we also initialise two **Pipelines** `pipelineLhs` and
+`pipelineRhs` to which two implemented UDOs for matrix \f$ {\bf K} \f$ and
+vector \f$ {\bf F} \f$ will be pushed, respectively, as mentioned in the
+previous section \ref basic_tutorials_poisson_homogeneous_udo.
 
 
   
 \subsubsection basic_tutorials_poisson_homogeneous_readmesh readMesh()
 
-This part is about the function Poisson2DHomogeneous::readMesh()
+Now the first function that actually do some finite element task is the function
+responsible for reading input mesh
+\code
+MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
+  MoFEMFunctionBegin;
 
-This is the first member function
-  
+  CHKERR mField.getInterface(simpleInterface);
+  CHKERR simpleInterface->getOptions();
+  CHKERR simpleInterface->loadFile();
+
+  MoFEMFunctionReturn(0);
+}
+\endcode
+Apart from the codes for error handling, the main three lines of code
+is a standard way to read a input mesh using Simple interface. Inteface in MoFEM
+is a set of rules through which program developers use to setup a problem.
+Simple interface provides simplest but also less flexible way to setup a
+problem. More on the intefaces can be found at \ref
+basic_lessons1_interfaces. Implementation of more advanced interfaces will be presented in later tutorials.
 
 \subsubsection basic_tutorials_poisson_homogeneous_setupproblem setupProblem()
+Next is the function that is responsible for setting up the finite element
+problem 
+\code 
+MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
+  MoFEMFunctionBegin;
 
-This part is about the function Poisson2DHomogeneous::setupProblem()
+  CHKERR simpleInterface->addDomainField(domainField, H1,
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
 
-The next member function deals with the setting up of the problem
+  int oRder = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
+  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
+
+  CHKERR simpleInterface->setUp();
+
+  MoFEMFunctionReturn(0);
+}
+\endcode
+This function has
+- `simpleInterface->addDomainField`: Add the field through the `simpleInterface`. This requires 
+  - Field name (`domainField`), 
+  - Approximation space (`H1`) - function space can also be `HCURL`,
+    `HDIV`, `L2` depending on physical properties of the field you are approximating, see more at [FieldSpace](http://mofem.eng.gla.ac.uk/mofem/html/definitions_8h.html#a5ed4cb303bab8cd0673ae12e5bc73c12)
+  - Approximation bases (`AINSWORTH_BERNSTEIN_BEZIER_BASE`) - base can also be
+    `AINSWORTH_LEGENDRE_BASE`, `AINSWORTH_LOBATTO_BASE`, `DEMKOWICZ_JACOBI_BASE
+    `, see more at
+    [FieldApproximationBase](http://mofem.eng.gla.ac.uk/mofem/html/definitions_8h.html#a2ed4ed94b56d2843840bb7c55adcf0c5),
+    and
+  - Rank (`1`) as current problem is scalar-field problem. Rank will be `3` for
+    vector-field problem.
+- `simpleInterface->setFieldOrder`: Set the polynomial order of the approximation of the field
+- `simpleInterface->setUp()`: Finally, do the setup of the problem.
+
 
 \subsubsection basic_tutorials_poisson_homogeneous_intergration setIntegrationRules() 
 
