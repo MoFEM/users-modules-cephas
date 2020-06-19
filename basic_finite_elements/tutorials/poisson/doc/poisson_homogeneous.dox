@@ -143,7 +143,9 @@ finite element method. In order word, the integrals are approximated by the sum
 of a set of points on each element along with their weights as follows
 \f[
   \begin{align}
-    K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \approx \sum_q \nabla \phi_i \left( {\bf x}_q \right) \cdot \nabla \phi_j \left( {\bf x}_q \right) w_q, \\ 
+K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \approx \sum_q
+\nabla \phi_i \left( {\bf x}_q \right) \cdot \nabla \phi_j \left( {\bf x}_q
+\right) w_q \label{eqn_stiffness}, \\ 
     F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right) f \left( {\bf x}_q \right) w_q
   \end{align}
 \f]
@@ -481,17 +483,79 @@ you are working with face entities (triangles), `getMeasure()` gives you face
 area. If you are dealing with edge (for boundary element) or volume entities
 (for volume domain), you would get edge length or element volume, respectively.
 
-Next, you get the number of integration points and their weights
+Next, as required for the calculation of stiffness matrix in Eq. (3), we need
+the number of integration points (\f$ q \f$) and their weights ((\f$ w_q \f$)) which can be done as follows
 \code
 // get number of integration points
 const int nb_integration_points = getGaussPts().size2();
 // get integration weights
 auto t_w = getFTensor0IntegrationWeight();
 \endcode
+Here `getFTensor0IntegrationWeight()` is a function of
+MoFEM::ForcesAndSourcesCore::UserDataOperator and it returns a zeroth-order
+FTensor object ([Tensor template
+library](http://mofem.eng.gla.ac.uk/mofem/html/group__ftensor.html)) that stores
+value of integration weight. We prefer to use FTensor anywhere we can because it
+is compact and highly efficient. In MoFEM implementation, FTensor object is
+normally named with the prefix `t_`.
 
+Once the number of Gauss points and their weights are determined, the remaining
+component to calculate stiffness matrix would include the gradients of the basis
+function evaluated at the integration (Gauss) point, \f$ \nabla \phi_i, \nabla
+\phi_j \f$ ,for row and column, respectively, and the loop over all the Gauss
+points. They are done in the following part of the code
+\code
+      // get derivatives of base functions on row
+      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
 
-In the traditional finite element implementation, you will probably have, at the
-same place of the code, the structure of the main nested loop like this
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+        const double a = t_w * area;
+
+        for (int rr = 0; rr != nb_row_dofs; ++rr) {
+          // get derivatives of base functions on column
+          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+
+          for (int cc = 0; cc != nb_col_dofs; cc++) {
+            locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
+
+            // move to the derivatives of the next base functions on column
+            ++t_col_diff_base;
+          }
+
+          // move to the derivatives of the next base functions on row
+          ++t_row_diff_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+      }
+\endcode
+Here you can see inside the loop over the integration points, we have two other
+nested loops that loop over the row (\f$i\f$) and column (\f$j\f$) DOFs of the matrix which ultimately calculated similar to the way
+they are presented in Eq. (3)
+\code
+locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
+\endcode
+where `a` is the intemediate variable of type `double` and calculated earlier as
+\code
+const double a = t_w * area;
+\endcode
+where `area` can be considered as the determinant of the Jacobian of the
+transformation from the physical (global) coordinate system to the reference
+(local) coordinate system. See more about the integration and Jacobian at \ref
+lesson1.
+
+It should be noticed that at the end of each loop over the row and column
+DOFs, `t_row_diff_base` and `t_col_diff_base` which have the values of the
+gradients of the basis function are moved/shifted to the next chunk of the
+memory which stores values of another set of gradients of basis function
+associated with DOFs. The same technique is applied to move `t_w` to the weight
+of the next Gauss point in the memory.
+
+\b Note: You might have also recognised that in the traditional finite element
+implementation, you will probably have, at the same place of the code, the
+structure of the main nested loop like this
 
 - Loop over all elements
   - Loop over all integration points
@@ -500,18 +564,126 @@ same place of the code, the structure of the main nested loop like this
 
 However, finite element implementation in MoFEM is slightly different as you may
 have already noticed. MoFEM still have the nested loops; however, in the
-implementation of UDO, you have only one loop over the integration point
+implementation of UDO, you have only one loop over the integration points
 inside which you calculate the local stiffness matrix components and assemble
 them to the global matrix. The loop over the elements (or `entities` in the
 context of [Hierarchical basis
 functions](http://mofem.eng.gla.ac.uk/mofem/html/hierarchical_approximation_1.html)
 used in MoFEM) is done in the main program, outside of the UDO. Details of how
-this loop is triggered is presented in \ref basic_tutorials_poisson_homogeneous_solve.
+this loop is triggered is presented in \ref
+basic_tutorials_poisson_homogeneous_solve.
+
+That was the description for the part of the code responsible for the
+calculation of the components of the element stiffness matrix. Now we will talk
+about the last part of the current UDO which is about the assembling/filling
+from local (element) stiffness matrix to global stiffness matrix handled by
+PETSc thay is done by the following lines of code
+\code
+      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
+                          ADD_VALUES);
+\endcode
+This process of assembling matrix is done using the function `MatSetValues()`
+which set the values for the global matrix and later will be solved using PETSc.
+This function requires the inputs of `getKSPB()`, `row_data`, `col_data`, the
+memory address where the first components of the local stiffness matrix
+`&locLhs(0, 0)` is stored, and a flag to add value `ADD_VALUES`. Here
+`getKSPB()` is the method to set the value of LHS matrix that will be solved by
+the iterative solver namely KSP in PETSc.
+
+And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we tranpose
+everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
+\code
+      if (row_side != col_side || row_type != col_type) {
+        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+        noalias(transLocLhs) = trans(locLhs);
+        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+                            ADD_VALUES);
+      }
+\endcode
 
 \subsubsection OpDomainRhsVectorF
-And next, we will talk about the implementation of the second UDO
+In this part, we will talk about the implementation of the second UDO
 Poisson2DHomogeneousOperators::OpDomainRhsVectorF which is responsible for the
-calculation and assemble of the right-hand-side vector \f$ {\bf F} \f$
+calculation and assemble of the right-hand-side force vector \f$ {\bf F} \f$
+
+Similar to what implemented for the \f$ {\bf K} \f$ matrix we discussed above,
+the implementation of the UDO for the \f$ {\bf F} \f$ vector has very similar
+structure with slightly different functions
+\code
+struct OpDomainRhsVectorF : public OpFaceEle {
+public:
+  OpDomainRhsVectorF(std::string field_name)
+      : OpFaceEle(field_name, OpFaceEle::OPROW) {}
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+
+  // Implementation of doWork() below this point
+
+  }
+
+private:
+  VectorDouble locRhs;
+};
+\endcode
+We have the public objects of `OpDomainRhsVectorF()` and `doWork()` and private
+object of `locRhs`. Here the name of the main function is changed to
+`OpDomainRhsVectorF` to reflect what it does. Additionally, as we are
+calculating and assembling vector instead of matrix, we need only one input of
+`field_name` and we tell MoFEM that we are doing the operation of row for the
+vector by specifying `OpFaceEle::OPROW`. Similarly for function `doWork()`, it
+requires all three groups of the input but only one for each group instead of
+two as we had for the stiffness matrix.
+
+The implementation of this essential function of `doWork()` for force vector
+calculation and assembling also has very similar structure to its matrix UDO
+counterpart. The code for this function is as follows
+\code
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    const int nb_dofs = data.getIndices().size();
+
+    if (nb_dofs) {
+      locRhs.resize(nb_dofs, false);
+      locRhs.clear();
+
+      // get element area
+      const double area = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+
+      // get base function
+      auto t_base = data.getFTensor0N();
+
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+        const double a = t_w * area;
+
+        for (int rr = 0; rr != nb_dofs; rr++) {
+          locRhs[rr] += t_base * body_source * a;
+
+          // move to the next base function
+          ++t_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+      }
+
+      // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
+
+      // Ignoring DOFs on boundary (index -1)
+      CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
+      CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+\endcode
 
 That was for the implementation of UDOs that are responsible for the calculation
 and assembling of the matrices and vectors. Next part we will look at the
