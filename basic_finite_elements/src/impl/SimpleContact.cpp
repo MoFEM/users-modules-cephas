@@ -3885,6 +3885,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
 
           t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
                              t_tangent_aug_lambda_ptr(1) * t_base_master;
+                             
         } else { // slip
           // cerr << "slip\n";
 

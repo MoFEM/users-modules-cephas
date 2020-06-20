@@ -86,6 +86,11 @@ int main(int argc, char *argv[]) {
     PetscBool out_integ_pts = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
 
+    PetscBool is_friction = PETSC_FALSE;
+    PetscReal cn_tangent_value = 1.;
+    PetscReal mu_tangent = 0.1;
+    PetscInt order_tangent_lambda = 1;
+
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
@@ -118,6 +123,22 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &out_integ_pts, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag", "set to convect integration pts",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
+
+    CHKERR PetscOptionsReal("-my_cn_tangent_value",
+                            "default regularisation cn value", "", 1.,
+                            &cn_tangent_value, PETSC_NULL);
+
+    CHKERR PetscOptionsReal("-my_mu_tangent", "default regularisation cn value",
+                            "", 1., &mu_tangent, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_is_friction",
+                            "set if mesh is friction (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_FALSE, &is_friction, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-my_order_tangent_lambda",
+                           "approximation order of Lagrange multipliers", "", 1,
+                           &order_tangent_lambda, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -274,6 +295,32 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
+    if (is_friction) {
+
+      CHKERR m_field.add_field("PREVIOUS_CONV_SPAT_POS", H1,
+                               AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
+                               MF_ZERO);
+
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET,
+                                               "PREVIOUS_CONV_SPAT_POS");
+
+      CHKERR m_field.set_field_order(0, MBTET, "PREVIOUS_CONV_SPAT_POS", order);
+      CHKERR m_field.set_field_order(0, MBTRI, "PREVIOUS_CONV_SPAT_POS", order);
+      CHKERR m_field.set_field_order(0, MBEDGE, "PREVIOUS_CONV_SPAT_POS",
+                                     order);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "PREVIOUS_CONV_SPAT_POS", 1);
+
+      CHKERR m_field.add_field("TANGENT_LAGMULT", H1, AINSWORTH_LEGENDRE_BASE,
+                               2, MB_TAG_SPARSE, MF_ZERO);
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+                                               "TANGENT_LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "TANGENT_LAGMULT",
+                                     order_tangent_lambda);
+      CHKERR m_field.set_field_order(0, MBEDGE, "TANGENT_LAGMULT",
+                                     order_tangent_lambda);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "TANGENT_LAGMULT", 1);
+    }
+
     // build field
     CHKERR m_field.build_fields();
 
@@ -286,6 +333,12 @@ int main(int argc, char *argv[]) {
     {
       Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
+    }
+
+    if (is_friction) {
+      Projection10NodeCoordsOnField ent_method(m_field,
+                                               "PREVIOUS_CONV_SPAT_POS");
+      CHKERR m_field.loop_dofs("PREVIOUS_CONV_SPAT_POS", ent_method);
     }
 
     // Add elastic element
@@ -377,178 +430,239 @@ int main(int argc, char *argv[]) {
       return fe_lhs_extended_contact;
     };
 
-    auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+    auto get_tangent_augmented_rhs = [&](auto contact_problem,
+                                         auto make_element) {
+      auto fe_rhs_extended_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactFrictionAugmentedOperatorsRhs(
+          fe_rhs_extended_contact, common_data_simple_contact,
+          "SPATIAL_POSITION", "LAGMULT", "TANGENT_LAGMULT",
+          "PREVIOUS_CONV_SPAT_POS");
+      return fe_rhs_extended_contact;
+    };
 
-    // add fields to the global matrix by adding the element
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
-    contact_problem->addPostProcContactElement(
-        "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
-        "MESH_NODE_POSITIONS", slave_tris);
+    auto get_augmented_friction_lhs = [&](auto contact_problem,
+                                          auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactFrictionAugmentedOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT", "TANGENT_LAGMULT", "PREVIOUS_CONV_SPAT_POS");
+      return fe_lhs_simple_contact;
+    };
 
-    CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
+    auto get_contact_problem = [&]() {
+      if (!is_friction) {
+        auto d_contact_problem = boost::make_shared<SimpleContactProblem>(
+            m_field, cn_value, is_newton_cotes);
+        return d_contact_problem;
+      } else {
+        auto d_contact_problem = boost::make_shared<SimpleContactProblem>(
+            m_field, cn_value, cn_tangent_value, mu_tangent, is_newton_cotes);
+        return d_contact_problem;
+      }
+    };
 
-    // Add spring boundary condition applied on surfaces.
-    CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
-                                           "MESH_NODE_POSITIONS");
+    auto contact_problem = get_contact_problem();
 
-    // build finite elemnts
-    CHKERR m_field.build_finite_elements();
+    if (is_friction) {
+      contact_problem->addContactFrictionElement(
+          "CONTACT_ELEM", "SPATIAL_POSITION", "LAGMULT",
+          "PREVIOUS_CONV_SPAT_POS", "TANGENT_LAGMULT", contact_prisms);
+      contact_problem->addPostProcContactFrictionElement(
+          "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT", "TANGENT_LAGMULT",
+          "MESH_NODE_POSITIONS", slave_tris);
 
-    // build adjacencies
-    CHKERR m_field.build_adjacencies(bit_levels.back());
-
-    // define problems
-    CHKERR m_field.add_problem("CONTACT_PROB");
-
-    // set refinement level for problem
-    CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
-                                                    bit_levels.back());
-
-    DMType dm_name = "DMMOFEM";
-    CHKERR DMRegister_MoFEM(dm_name);
-
-    SmartPetscObj<DM> dm;
-    dm = createSmartDM(m_field.get_comm(), dm_name);
-
-    // create dm instance
-    CHKERR DMSetType(dm, dm_name);
-
-    // set dm datastruture which created mofem datastructures
-    CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels.back());
-    CHKERR DMSetFromOptions(dm);
-    CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
-    // add elements to dm
-    CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
-    CHKERR DMMoFEMAddElement(dm, "ELASTIC");
-    CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
-    CHKERR DMMoFEMAddElement(dm, "SPRING");
-    CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
-
-    CHKERR DMSetUp(dm);
-
-    // Vector of DOFs and the RHS
-    auto D = smartCreateDMVector(dm);
-    auto F = smartVectorDuplicate(D);
-
-    // Stiffness matrix
-    auto Aij = smartCreateDMMatrix(dm);
-
-    CHKERR VecZeroEntries(D);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-
-    CHKERR VecZeroEntries(F);
-    CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-
-    CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
-    CHKERR MatZeroEntries(Aij);
-
-    // Dirichlet BC
-    boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
-        boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
-            m_field, "SPATIAL_POSITION", Aij, D, F));
-
-    dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
-    dirichlet_bc_ptr->snes_x = D;
-
-    // Assemble pressure and traction forces
-    boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
-    CHKERR MetaNeumannForces::setMomentumFluxOperators(
-        m_field, neumann_forces, NULL, "SPATIAL_POSITION");
-
-    boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
-        neumann_forces.begin();
-    for (; mit != neumann_forces.end(); mit++) {
-      CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
-                                    &mit->second->getLoopFe(), NULL, NULL);
+    } else {
+      // add fields to the global matrix by adding the element
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms);
+      contact_problem->addPostProcContactElement(
+          "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
+          "MESH_NODE_POSITIONS", slave_tris);
     }
 
-    // Implementation of spring element
-    // Create new instances of face elements for springs
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
-        new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
-        new FaceElementForcesAndSourcesCore(m_field));
+      CHKERR MetaNeumannForces::addNeumannBCElements(m_field,
+                                                     "SPATIAL_POSITION");
 
-    CHKERR MetaSpringBC::setSpringOperators(
-        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS");
+      // Add spring boundary condition applied on surfaces.
+      CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
+                                             "MESH_NODE_POSITIONS");
 
-    CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
-                                  dirichlet_bc_ptr.get(), NULL);
-    if (convect_pts == PETSC_TRUE) {
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_contact_rhs(contact_problem, make_convective_master_element),
-          PETSC_NULL, PETSC_NULL);
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_master_traction_rhs(contact_problem,
-                                  make_convective_slave_element),
-          PETSC_NULL, PETSC_NULL);
-    } else {
-      if (alm_flag) {
+      // build finite elemnts
+      CHKERR m_field.build_finite_elements();
+
+      // build adjacencies
+      CHKERR m_field.build_adjacencies(bit_levels.back());
+
+      // define problems
+      CHKERR m_field.add_problem("CONTACT_PROB");
+
+      // set refinement level for problem
+      CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
+                                                      bit_levels.back());
+
+      DMType dm_name = "DMMOFEM";
+      CHKERR DMRegister_MoFEM(dm_name);
+
+      SmartPetscObj<DM> dm;
+      dm = createSmartDM(m_field.get_comm(), dm_name);
+
+      // create dm instance
+      CHKERR DMSetType(dm, dm_name);
+
+      // set dm datastruture which created mofem datastructures
+      CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB",
+                                bit_levels.back());
+      CHKERR DMSetFromOptions(dm);
+      CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
+      // add elements to dm
+      CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
+      CHKERR DMMoFEMAddElement(dm, "ELASTIC");
+      CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
+      CHKERR DMMoFEMAddElement(dm, "SPRING");
+      CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
+
+      CHKERR DMSetUp(dm);
+
+      // Vector of DOFs and the RHS
+      auto D = smartCreateDMVector(dm);
+      auto F = smartVectorDuplicate(D);
+
+      // Stiffness matrix
+      auto Aij = smartCreateDMMatrix(dm);
+
+      CHKERR VecZeroEntries(D);
+      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+      CHKERR VecZeroEntries(F);
+      CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+
+      CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+      CHKERR MatZeroEntries(Aij);
+
+      // Dirichlet BC
+      boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
+          boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
+              m_field, "SPATIAL_POSITION", Aij, D, F));
+
+      dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
+      dirichlet_bc_ptr->snes_x = D;
+
+      // Assemble pressure and traction forces
+      boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
+      CHKERR MetaNeumannForces::setMomentumFluxOperators(
+          m_field, neumann_forces, NULL, "SPATIAL_POSITION");
+
+      boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+          neumann_forces.begin();
+      for (; mit != neumann_forces.end(); mit++) {
+        CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
+                                      &mit->second->getLoopFe(), NULL, NULL);
+      }
+
+      // Implementation of spring element
+      // Create new instances of face elements for springs
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+          new FaceElementForcesAndSourcesCore(m_field));
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+          new FaceElementForcesAndSourcesCore(m_field));
+
+      CHKERR MetaSpringBC::setSpringOperators(
+          m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
+          "MESH_NODE_POSITIONS");
+
+      CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+      CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
+                                    dirichlet_bc_ptr.get(), NULL);
+      if (convect_pts == PETSC_TRUE) {
         CHKERR DMMoFEMSNESSetFunction(
             dm, "CONTACT_ELEM",
-            get_augmented_rhs(contact_problem, make_contact_element),
+            get_contact_rhs(contact_problem, make_convective_master_element),
+            PETSC_NULL, PETSC_NULL);
+        CHKERR DMMoFEMSNESSetFunction(
+            dm, "CONTACT_ELEM",
+            get_master_traction_rhs(contact_problem,
+                                    make_convective_slave_element),
             PETSC_NULL, PETSC_NULL);
       } else {
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
-            PETSC_NULL);
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_master_traction_rhs(contact_problem, make_contact_element),
-            PETSC_NULL, PETSC_NULL);
+        if (alm_flag) {
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_augmented_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+
+          if (is_friction)
+            CHKERR DMMoFEMSNESSetFunction(
+                dm, "CONTACT_ELEM",
+                get_tangent_augmented_rhs(contact_problem,
+                                          make_contact_element),
+                PETSC_NULL, PETSC_NULL);
+
+        } else {
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_contact_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_master_traction_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+        }
       }
-    }
 
-    CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
-                                  PETSC_NULL, PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
-                                  PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
-                                  dirichlet_bc_ptr.get());
+      CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
+                                    PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                    PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
+                                    dirichlet_bc_ptr.get());
 
-    boost::shared_ptr<FEMethod> fe_null;
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, dirichlet_bc_ptr,
-                                  fe_null);
-    if (convect_pts == PETSC_TRUE) {
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_master_contact_lhs(contact_problem,
-                                 make_convective_master_element),
-          NULL, NULL);
-      CHKERR DMMoFEMSNESSetJacobian(
-          dm, "CONTACT_ELEM",
-          get_master_traction_lhs(contact_problem,
-                                  make_convective_slave_element),
-          NULL, NULL);
-    } else {
-      if (alm_flag) {
+      boost::shared_ptr<FEMethod> fe_null;
+      CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null,
+                                    dirichlet_bc_ptr, fe_null);
+      if (convect_pts == PETSC_TRUE) {
         CHKERR DMMoFEMSNESSetJacobian(
             dm, "CONTACT_ELEM",
-            get_augmented_contact_lhs(contact_problem, make_contact_element),
+            get_master_contact_lhs(contact_problem,
+                                   make_convective_master_element),
+            NULL, NULL);
+        CHKERR DMMoFEMSNESSetJacobian(
+            dm, "CONTACT_ELEM",
+            get_master_traction_lhs(contact_problem,
+                                    make_convective_slave_element),
             NULL, NULL);
       } else {
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_master_contact_lhs(contact_problem, make_contact_element), NULL,
-            NULL);
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_master_traction_lhs(contact_problem, make_contact_element),
-            NULL, NULL);
-      }
+        if (alm_flag) {
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_augmented_contact_lhs(contact_problem, make_contact_element),
+              NULL, NULL);
+          if (is_friction) {
+
+            cerr << "\n\nget_augmented_friction_lhs\n\n";
+            CHKERR
+            DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
+                                   get_augmented_friction_lhs(
+                                       contact_problem, make_contact_element),
+                                   NULL, NULL);
+          }
+        } else {
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_master_contact_lhs(contact_problem, make_contact_element),
+              NULL, NULL);
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_master_traction_lhs(contact_problem, make_contact_element),
+              NULL, NULL);
+        }
       }
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
@@ -649,7 +763,7 @@ int main(int argc, char *argv[]) {
 
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
+        "SPATIAL_POSITION", "LAGMULT", mb_post, true, alm_flag, is_friction);
 
     mb_post.delete_mesh();
 
@@ -783,6 +897,9 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
+    if (is_friction)
+      CHKERR post_proc_contact_ptr->addFieldValuesPostProc("TANGENT_LAGMULT");
+
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
                                     post_proc_contact_ptr);
 
@@ -797,7 +914,7 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
-  }
+    }
   CATCH_ERRORS;
 
   // finish work cleaning memory, getting statistics, etc
