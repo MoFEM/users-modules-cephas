@@ -72,14 +72,19 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, 1,
               "*** ERROR partitioning number not given (-nparts)");
 
-    int nb_ents;
-    CHKERR moab.get_number_entities_by_dimension(0, 3, nb_ents);
-    if (nb_ents == 0) {
-      dim = 2;
-      CHKERR moab.get_number_entities_by_dimension(0, 2, nb_ents);
-      if (nb_ents == 0)
-        dim = 1;
+    auto get_nb_ents_by_dim = [&](const int dim) {
+      int nb;
+      CHKERR moab.get_number_entities_by_dimension(0, dim, nb);
+      return nb;
+    };
+    for (; dim >= 0; dim--) {
+      if (get_nb_ents_by_dim(dim))
+        break;
     }
+
+    if (!dim)
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+              "Dimension of entities to partion not found");
 
     CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
     adj_dim = dim - 1;
