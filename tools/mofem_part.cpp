@@ -29,11 +29,18 @@ int main(int argc, char *argv[]) {
 
   try {
 
+    moab::Core mb_instance;
+    moab::Interface &moab = mb_instance;
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    if (pcomm == NULL)
+      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
+
     // global variables
     char mesh_file_name[255];
     char mesh_out_file[255] = "out.h5m";
     PetscBool flg_file = PETSC_FALSE;
     PetscBool flg_n_part = PETSC_FALSE;
+    PetscBool flg_part = PETSC_FALSE;
     PetscInt n_partas = 1;
     PetscBool create_lower_dim_ents = PETSC_TRUE;
     PetscInt dim = 3;
@@ -50,7 +57,15 @@ int main(int argc, char *argv[]) {
                               "out.h5m", mesh_out_file, 255, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_nparts", "number of parts", "", n_partas,
                            &n_partas, &flg_n_part);
-    CHKERR PetscOptionsInt("-dim", "adjacency dim", "", dim, &dim, PETSC_NULL);
+    CHKERR PetscOptionsInt("-nparts", "number of parts", "", n_partas,
+                           &n_partas, &flg_part);
+    Range tets;
+    CHKERR moab.get_entities_by_dimension(0, 3, tets);
+    if (tets.empty()) {
+      dim = 2;
+    }
+
+    CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
     adj_dim = dim - 1;
     CHKERR PetscOptionsInt("-adj_dim", "adjacency dim", "", adj_dim, &adj_dim,
                            PETSC_NULL);
@@ -60,12 +75,6 @@ int main(int argc, char *argv[]) {
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
-
-    moab::Core mb_instance;
-    moab::Interface &moab = mb_instance;
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     const char *option;
     option = "";
@@ -79,7 +88,7 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    if (flg_n_part != PETSC_TRUE) {
+    if (!flg_n_part && !flg_part) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR partitioning number not given");
     }
 
