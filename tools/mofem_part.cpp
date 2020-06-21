@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
 
     if (!dim)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-              "Dimension of entities to partion not found");
+              "Dimension of entities to partition not found");
 
     CHKERR PetscOptionsInt("-dim", "entities dim", "", dim, &dim, PETSC_NULL);
     adj_dim = dim - 1;
