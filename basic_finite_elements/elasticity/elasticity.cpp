@@ -95,6 +95,10 @@ struct VolRule {
   int operator()(int, int, int order) const { return 2 * (order - 1); }
 };
 
+struct VolRuleSaveStress {
+  int operator()(int, int, int) const { return 0; }
+};
+
 struct PrismFE : public FatPrismElementForcesAndSourcesCore {
 
   using FatPrismElementForcesAndSourcesCore::
@@ -510,11 +514,32 @@ int main(int argc, char *argv[]) {
       auto thermal_strain =
           [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
             FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
-            constexpr double alpha = 1;
+            // constexpr double alpha = 1;
+            // FTensor::Index<'i', 3> i;
+            // FTensor::Index<'j', 3> j;
+            // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+            // t_thermal_strain(i, j) = alpha * t_coords(2) * t_kd(i, j);
+
+            constexpr double alpha = 1.e-5; 
             FTensor::Index<'i', 3> i;
-            FTensor::Index<'k', 3> j;
+            FTensor::Index<'j', 3> j;
             constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-            t_thermal_strain(i, j) = alpha * t_coords(2) * t_kd(i, j);
+            // FIXME put here formula from test
+            double temp = 250.;
+            double z = t_coords(2);
+            if ((-10. < z && z < -1.) || std::abs(z + 1.) < 1e-15) {
+              temp = 10. / 3. * (35. - 4. * z);
+            }
+            if ((-1. < z && z < 2.) || std::abs(z - 2.) < 1e-15) {
+              temp = 10. / 3. * (34. - 5. * z);
+            }
+            if (2. < z && z < 10.) {
+              temp = 5. / 4. * (30. + 17. * z);
+            }
+            //temp = 10. * fabs(z);
+            //cout << z << " " << temp << endl;
+            t_thermal_strain(i, j) = alpha * (250. - temp) * t_kd(i, j);
+
             return t_thermal_strain;
           };
 
@@ -909,6 +934,13 @@ int main(int argc, char *argv[]) {
     // Set up solver
     CHKERR KSPSetUp(solver);
 
+    boost::shared_ptr<ForcesAndSourcesCore> fe_save_stress_ptr(
+        new VolumeElementForcesAndSourcesCore(m_field));
+    fe_save_stress_ptr->getRuleHook = VolRuleSaveStress();
+    CHKERR HookeElement::setSaveStressOperators(
+        fe_save_stress_ptr, block_sets_ptr, moab, "DISPLACEMENT",
+        "MESH_NODE_POSITIONS", false, true, MBTET, data_at_pts);
+
     // Set up post-processor. It is some generic implementation of finite
     // element.
     PostProcVolumeOnRefinedMesh post_proc(m_field);
@@ -1122,6 +1154,13 @@ int main(int argc, char *argv[]) {
       }
       if (!edges_in_simple_rod.empty())
         CHKERR post_proc_edge.writeFile("out_edge.h5m");
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_save_stress_ptr);
+
+      EntityHandle rootset = moab.get_root_set();
+      CHKERR moab.write_file("out_stress.h5m", "MOAB", "", &rootset, 1);
+      //CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name);
+
       MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     }
 

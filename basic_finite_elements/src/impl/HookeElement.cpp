@@ -590,6 +590,132 @@ MoFEMErrorCode HookeElement::addElasticElement(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode HookeElement::setSaveStressOperators(
+    boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,
+    boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
+    moab::Interface &save_stress_mesh, const std::string x_field,
+    const std::string X_field, const bool ale, const bool field_disp,
+    const EntityType type,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts) {
+  MoFEMFunctionBegin;
+
+  if (!block_sets_ptr)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Pointer to block of sets is null");
+
+  if (!fe_rhs_ptr)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "Pointer to finite element is null");
+
+  if (ale == PETSC_TRUE)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "ALE case is not implemented");
+
+  if (type == MBPRISM)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "MBPRISM case is not implemented");
+
+  fe_rhs_ptr->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<3, 3>(x_field, data_at_pts->hMat));
+  fe_rhs_ptr->getOpPtrVector().push_back(new OpCalculateHomogeneousStiffness<0>(
+      x_field, x_field, block_sets_ptr, data_at_pts));
+  if (field_disp) {
+    fe_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateStrain<true>(x_field, x_field, data_at_pts));
+  } else {
+    fe_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateStrain<false>(x_field, x_field, data_at_pts));
+  }
+  fe_rhs_ptr->getOpPtrVector().push_back(
+      new OpCalculateStress<0>(x_field, x_field, data_at_pts));
+
+  fe_rhs_ptr->getOpPtrVector().push_back(
+      new OpSaveStress(x_field, data_at_pts, save_stress_mesh));
+
+  MoFEMFunctionReturn(0);
+}
+
+HookeElement::OpSaveStress::OpSaveStress(
+    const string row_field, boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+    moab::Interface &save_stress_mesh, bool is_ale)
+    : VolUserDataOperator(row_field, UserDataOperator::OPROW),
+      dataAtPts(data_at_pts), saveStressMesh(save_stress_mesh), isALE(is_ale) {}
+
+MoFEMErrorCode
+HookeElement::OpSaveStress::doWork(int side, EntityType type,
+                                   DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX) {
+    MoFEMFunctionReturnHot(0);
+  }
+
+  const int nb_integration_pts = getGaussPts().size2();
+
+  auto t_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->cauchyStressMat));
+
+  double stress_vec[] = {t_stress(0,0), t_stress(1,1), t_stress(2,2), t_stress(0,1), t_stress(0,2), t_stress(1,2), 0, 0, 0 };
+
+  Tag th;
+  std::array<double, 9> def;
+  def.fill(0);
+  CHKERR saveStressMesh.tag_get_handle("MED_STRESS_SSLV116", 9, MB_TYPE_DOUBLE, th,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, def.data());
+
+  auto fe_ent = getFEEntityHandle();
+  CHKERR saveStressMesh.tag_set_data(th, &fe_ent, 1, stress_vec);  
+
+  auto get_coords = [&]() {
+    if (getHoCoordsAtGaussPts().size1() == nb_integration_pts)
+      return getFTensor1HoCoordsAtGaussPts();
+    else
+      return getFTensor1CoordsAtGaussPts();
+  };
+  auto t_coords = get_coords();     
+
+  FTensor::Tensor2_symmetric<double, 3> t_strain;
+  // constexpr double alpha = 1;
+  // FTensor::Index<'i', 3> i;
+  // FTensor::Index<'k', 3> j;
+  // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+  // t_thermal_strain(i, j) = alpha * t_coords(2) * t_kd(i, j);
+
+  constexpr double alpha = 1.e-5; 
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'k', 3> j;
+  constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+  // FIXME put here formula from test
+  double temp = 250.;
+  double z = t_coords(2);
+  if ((-10. < z && z < -1.) || std::abs(z + 1.) < 1e-15) {
+    temp = 10. / 3. * (35. - 4. * z);
+  }
+  if ((-1. < z && z < 2.) || std::abs(z - 2.) < 1e-15) {
+    temp = 10. / 3. * (34. - 5. * z);
+  }
+  if (2. < z && z < 10.) {
+    temp = 5. / 4. * (30. + 17. * z);
+  }
+  //temp = 10. * fabs(z);
+  //cout << z << " " << temp << endl;
+  t_strain(i, j) = alpha * (250. - temp) * t_kd(i, j);
+
+  double strain_vec[] = {t_strain(0,0), t_strain(1,1), t_strain(2,2), t_strain(0,1), t_strain(0,2), t_strain(1,2), 0, 0, 0 };
+
+
+  Tag th2;
+  std::array<double, 9> def2;
+  def2.fill(0);
+  CHKERR saveStressMesh.tag_get_handle("THERMAL_STRAIN", 9, MB_TYPE_DOUBLE, th2,
+                                  MB_TAG_CREAT | MB_TAG_SPARSE, def2.data());
+
+  CHKERR saveStressMesh.tag_set_data(th2, &fe_ent, 1, strain_vec);  
+
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode HookeElement::setOperators(
     boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr,
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,

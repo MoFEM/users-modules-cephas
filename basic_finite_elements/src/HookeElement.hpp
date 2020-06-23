@@ -649,6 +649,22 @@ struct HookeElement {
     boost::shared_ptr<MatrixDouble> matPosAtPtsPtr;
   };
 
+  struct OpSaveStress : public VolUserDataOperator {
+    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
+    // map<int, BlockData>
+    //     &blockSetsPtr; // FIXME: (works only with the first block)
+    moab::Interface &saveStressMesh;
+    bool isALE;
+
+    OpSaveStress(const string row_field,
+                           boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+                           moab::Interface &save_stress_mesh,
+                           bool is_ale = false);
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+  };
+
   template <class ELEMENT>
   struct OpPostProcHookeElement : public ELEMENT::UserDataOperator {
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -687,6 +703,14 @@ struct HookeElement {
                const bool ale, const bool field_disp,
                const EntityType type = MBTET,
                boost::shared_ptr<DataAtIntegrationPts> data_at_pts = nullptr);
+
+  static MoFEMErrorCode setSaveStressOperators(
+      boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,
+      boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
+      moab::Interface &save_stress_mesh, const std::string x_field,
+      const std::string X_field, const bool ale, const bool field_disp,
+      const EntityType type = MBTET,
+      boost::shared_ptr<DataAtIntegrationPts> data_at_pts = nullptr);
 
   static MoFEMErrorCode
   calculateEnergy(DM dm, boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
