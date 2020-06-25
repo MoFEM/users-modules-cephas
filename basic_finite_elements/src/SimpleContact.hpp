@@ -249,8 +249,8 @@ struct SimpleContactProblem {
 
     CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                       lagrang_field_name);
-    CHKERR mField.modify_finite_element_add_field_row(
-        element_name, tangent_lagrang_field_name);
+    // CHKERR mField.modify_finite_element_add_field_row(
+    //     element_name, tangent_lagrang_field_name);
 
     CHKERR mField.modify_finite_element_add_field_col(element_name, field_name);
 
@@ -258,16 +258,16 @@ struct SimpleContactProblem {
 
     CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                       lagrang_field_name);
-    CHKERR mField.modify_finite_element_add_field_col(
-        element_name, tangent_lagrang_field_name);
+    // CHKERR mField.modify_finite_element_add_field_col(
+    //     element_name, tangent_lagrang_field_name);
     CHKERR mField.modify_finite_element_add_field_row(element_name, field_name);
 
     // data
 
     CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                        lagrang_field_name);
-    CHKERR mField.modify_finite_element_add_field_data(
-        element_name, tangent_lagrang_field_name);
+    // CHKERR mField.modify_finite_element_add_field_data(
+    //     element_name, tangent_lagrang_field_name);
     //}
 
     CHKERR mField.modify_finite_element_add_field_data(element_name,
@@ -454,6 +454,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<VectorDouble> tangentTwoVectorSlavePtr;
     boost::shared_ptr<MatrixDouble>  tangentLambdasPtr;
     boost::shared_ptr<MatrixDouble>  tangentAugmentedLambdasPtr;
+    boost::shared_ptr<MatrixDouble> allLambdasPtr;
 
     boost::shared_ptr<VectorDouble> lagMultAtGaussPtsPtr;
     boost::shared_ptr<VectorDouble> gapPtr;
@@ -493,6 +494,7 @@ struct SimpleContactProblem {
       normAugTangentLambdasPtr = boost::make_shared<VectorDouble>();
 
       tangentLambdasPtr = boost::make_shared<MatrixDouble>();
+      allLambdasPtr = boost::make_shared<MatrixDouble>();
       tangentAugmentedLambdasPtr = boost::make_shared<MatrixDouble>();
 
       int local_size = (mField.get_comm_rank() == 0)

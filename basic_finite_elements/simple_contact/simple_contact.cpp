@@ -274,7 +274,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3, MB_TAG_SPARSE, MF_ZERO);
 
-    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
@@ -310,15 +310,15 @@ int main(int argc, char *argv[]) {
                                      order);
       CHKERR m_field.set_field_order(0, MBVERTEX, "PREVIOUS_CONV_SPAT_POS", 1);
 
-      CHKERR m_field.add_field("TANGENT_LAGMULT", H1, AINSWORTH_LEGENDRE_BASE,
-                               2, MB_TAG_SPARSE, MF_ZERO);
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
-                                               "TANGENT_LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "TANGENT_LAGMULT",
-                                     order_tangent_lambda);
-      CHKERR m_field.set_field_order(0, MBEDGE, "TANGENT_LAGMULT",
-                                     order_tangent_lambda);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "TANGENT_LAGMULT", 1);
+      // CHKERR m_field.add_field("TANGENT_LAGMULT", H1, AINSWORTH_LEGENDRE_BASE,
+      //                          2, MB_TAG_SPARSE, MF_ZERO);
+      // CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+      //                                          "TANGENT_LAGMULT");
+      // CHKERR m_field.set_field_order(0, MBTRI, "TANGENT_LAGMULT",
+      //                                order_tangent_lambda);
+      // CHKERR m_field.set_field_order(0, MBEDGE, "TANGENT_LAGMULT",
+      //                                order_tangent_lambda);
+      // CHKERR m_field.set_field_order(0, MBVERTEX, "TANGENT_LAGMULT", 1);
     }
 
     // build field
@@ -411,9 +411,31 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
-    auto get_augmented_rhs = [&](auto contact_problem, auto make_element) {
+    // auto get_augmented_rhs = [&](auto contact_problem, auto make_element) {
+    //   auto fe_rhs_extended_contact = make_element();
+    //   auto common_data_simple_contact = make_contact_common_data();
+    //   contact_problem->setContactAugmentedOperatorsRhs(
+    //       fe_rhs_extended_contact, common_data_simple_contact,
+    //       "SPATIAL_POSITION", "LAGMULT");
+    //   return fe_rhs_extended_contact;
+    // };
+
+    // auto get_augmented_contact_lhs = [&](auto contact_problem,
+    //                                      auto make_element) {
+    //   auto fe_lhs_extended_contact = make_element();
+    //   auto common_data_simple_contact = make_contact_common_data();
+    //   contact_problem->setContactAugmentedOperatorsLhs(
+    //       fe_lhs_extended_contact, common_data_simple_contact,
+    //       "SPATIAL_POSITION", "LAGMULT");
+    //   return fe_lhs_extended_contact;
+    // };
+
+    auto get_augmented_rhs = [&](auto contact_problem, auto make_element,
+                                 auto contact_state_ptr) {
       auto fe_rhs_extended_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
+      contact_state_ptr->contactStateVec =
+          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setContactAugmentedOperatorsRhs(
           fe_rhs_extended_contact, common_data_simple_contact,
           "SPATIAL_POSITION", "LAGMULT");
@@ -469,17 +491,17 @@ int main(int argc, char *argv[]) {
       contact_problem->addContactFrictionElement(
           "CONTACT_ELEM", "SPATIAL_POSITION", "LAGMULT",
           "PREVIOUS_CONV_SPAT_POS", "TANGENT_LAGMULT", contact_prisms);
-      contact_problem->addPostProcContactFrictionElement(
-          "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT", "TANGENT_LAGMULT",
-          "MESH_NODE_POSITIONS", slave_tris);
+      // contact_problem->addPostProcContactFrictionElement(
+      //     "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT", "TANGENT_LAGMULT",
+      //     "MESH_NODE_POSITIONS", slave_tris);
 
     } else {
       // add fields to the global matrix by adding the element
       contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                          "LAGMULT", contact_prisms);
-      contact_problem->addPostProcContactElement(
-          "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
-          "MESH_NODE_POSITIONS", slave_tris);
+    //   contact_problem->addPostProcContactElement(
+    //       "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
+    //       "MESH_NODE_POSITIONS", slave_tris);
     }
 
       CHKERR MetaNeumannForces::addNeumannBCElements(m_field,
@@ -521,7 +543,7 @@ int main(int argc, char *argv[]) {
       CHKERR DMMoFEMAddElement(dm, "ELASTIC");
       CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
       CHKERR DMMoFEMAddElement(dm, "SPRING");
-      CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
+      // CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
 
       CHKERR DMSetUp(dm);
 
@@ -543,6 +565,10 @@ int main(int argc, char *argv[]) {
 
       CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
       CHKERR MatZeroEntries(Aij);
+
+      boost::shared_ptr<SimpleContactProblem::PrintContactState>
+          contact_state_ptr(
+              new SimpleContactProblem::PrintContactState(m_field));
 
       // Dirichlet BC
       boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
@@ -581,6 +607,9 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
       CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
                                     dirichlet_bc_ptr.get(), NULL);
+      CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL,
+                                    contact_state_ptr.get(), NULL);
+
       if (convect_pts == PETSC_TRUE) {
         CHKERR DMMoFEMSNESSetFunction(
             dm, "CONTACT_ELEM",
@@ -593,10 +622,11 @@ int main(int argc, char *argv[]) {
             PETSC_NULL, PETSC_NULL);
       } else {
         if (alm_flag) {
-          CHKERR DMMoFEMSNESSetFunction(
-              dm, "CONTACT_ELEM",
-              get_augmented_rhs(contact_problem, make_contact_element),
-              PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetFunction(dm, "CONTACT_ELEM",
+                                        get_augmented_rhs(contact_problem,
+                                                          make_contact_element,
+                                                          contact_state_ptr),
+                                        PETSC_NULL, PETSC_NULL);
 
           if (is_friction)
             CHKERR DMMoFEMSNESSetFunction(
@@ -623,6 +653,8 @@ int main(int argc, char *argv[]) {
                                     PETSC_NULL);
       CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
                                     dirichlet_bc_ptr.get());
+      CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
+                                    contact_state_ptr.get());
 
       boost::shared_ptr<FEMethod> fe_null;
       CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null,
@@ -897,8 +929,8 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
-    if (is_friction)
-      CHKERR post_proc_contact_ptr->addFieldValuesPostProc("TANGENT_LAGMULT");
+    // if (is_friction)
+    //   CHKERR post_proc_contact_ptr->addFieldValuesPostProc("TANGENT_LAGMULT");
 
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
                                     post_proc_contact_ptr);

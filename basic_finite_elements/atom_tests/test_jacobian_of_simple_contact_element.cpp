@@ -47,6 +47,11 @@ int main(int argc, char *argv[]) {
     PetscBool convect_pts = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
 
+    PetscBool is_friction = PETSC_FALSE;
+    PetscReal cn_tangent_value = 1.;
+    PetscReal mu_tangent = 0.1;
+    PetscInt order_tangent_lambda = 1;
+
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
@@ -73,6 +78,22 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag", "set to convect integration pts",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
+
+    CHKERR PetscOptionsReal("-my_cn_tangent_value",
+                            "default regularisation cn value", "", 1.,
+                            &cn_tangent_value, PETSC_NULL);
+
+    CHKERR PetscOptionsReal("-my_mu_tangent", "default regularisation cn value",
+                            "", 1., &mu_tangent, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_is_friction",
+                            "set if mesh is friction (this result that each "
+                            "process keeps only part of the mes",
+                            "", PETSC_FALSE, &is_friction, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-my_order_tangent_lambda",
+                           "approximation order of Lagrange multipliers", "", 1,
+                           &order_tangent_lambda, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -173,7 +194,19 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
-    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
+    CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+                                             "SPATIAL_POSITION");
+    CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
+
+    CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
+                                             "SPATIAL_POSITION");
+    CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
+    CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
+
+    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
     CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
@@ -181,8 +214,59 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+                             3, MB_TAG_SPARSE, MF_ZERO);
+
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+
+    if (is_friction) {
+
+      CHKERR m_field.add_field("PREVIOUS_CONV_SPAT_POS", H1,
+                               AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
+                               MF_ZERO);
+
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET,
+                                               "PREVIOUS_CONV_SPAT_POS");
+
+      CHKERR m_field.set_field_order(0, MBTET, "PREVIOUS_CONV_SPAT_POS", order);
+      CHKERR m_field.set_field_order(0, MBTRI, "PREVIOUS_CONV_SPAT_POS", order);
+      CHKERR m_field.set_field_order(0, MBEDGE, "PREVIOUS_CONV_SPAT_POS",
+                                     order);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "PREVIOUS_CONV_SPAT_POS", 1);
+
+      CHKERR m_field.add_field("TANGENT_LAGMULT", H1, AINSWORTH_LEGENDRE_BASE,
+                               2, MB_TAG_SPARSE, MF_ZERO);
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+                                               "TANGENT_LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "TANGENT_LAGMULT",
+                                     order_tangent_lambda);
+      CHKERR m_field.set_field_order(0, MBEDGE, "TANGENT_LAGMULT",
+                                     order_tangent_lambda);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "TANGENT_LAGMULT", 1);
+    }
+
     // build field
     CHKERR m_field.build_fields();
+
+    {
+      Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
+      CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
+    }
+
+    {
+      Projection10NodeCoordsOnField ent_method(m_field, "SPATIAL_POSITION");
+      CHKERR m_field.loop_dofs("SPATIAL_POSITION", ent_method);
+    }
+
+    if (is_friction) {
+      Projection10NodeCoordsOnField ent_method(m_field,
+                                               "PREVIOUS_CONV_SPAT_POS");
+      CHKERR m_field.loop_dofs("PREVIOUS_CONV_SPAT_POS", ent_method);
+    }
 
     PetscRandom rctx;
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
@@ -191,13 +275,13 @@ int main(int argc, char *argv[]) {
                          double *z) {
       MoFEMFunctionBegin;
       double value;
-      double scale = 0.5;
+      double scale = +0.;
       PetscRandomGetValue(rctx, &value);
-      field_data[0] = (*x) + (value - 0.5) * scale;
+      field_data[0] = (*x) + (value ) * scale;
       PetscRandomGetValue(rctx, &value);
-      field_data[1] = (*y) + (value - 0.5) * scale;
+      field_data[1] = (*y) + (value ) * scale;
       PetscRandomGetValue(rctx, &value);
-      field_data[2] = (*z) + (value - 0.5) * scale;
+      field_data[2] = (*z) + (value ) * scale;
       MoFEMFunctionReturn(0);
     };
 
@@ -205,21 +289,39 @@ int main(int argc, char *argv[]) {
                             double *z) {
       MoFEMFunctionBegin;
       double value;
-      double scale = 1.0;
+      double scale = +100.0;
       PetscRandomGetValueReal(rctx, &value);
       field_data[0] = value * scale;
       MoFEMFunctionReturn(0);
     };
 
+    auto set_friction = [&](VectorAdaptor &&field_data, double *x, double *y,
+                         double *z) {
+      MoFEMFunctionBegin;
+      double value;
+      double scale = 0.;
+      PetscRandomGetValue(rctx, &value);
+      field_data[0] = (*x) + value * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[1] = (*y) + value  * scale;
+      PetscRandomGetValue(rctx, &value);
+      field_data[2] = (*z) + value * scale;
+      MoFEMFunctionReturn(0);
+    };
+
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
                                                             "SPATIAL_POSITION");
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure,
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_friction,
                                                             "LAGMULT");
+
+    // if(is_friction)
+    //   CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_friction,
+    //                                                           "TANGENT_LAGMULT");
 
     PetscRandomDestroy(&rctx);
 
-    auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+    // auto contact_problem = boost::make_shared<SimpleContactProblem>(
+    //     m_field, cn_value, is_newton_cotes);
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -300,9 +402,54 @@ int main(int argc, char *argv[]) {
       return fe_lhs_extended_contact;
     };
 
+    auto get_tangent_augmented_rhs = [&](auto contact_problem,
+                                         auto make_element) {
+      auto fe_rhs_extended_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactFrictionAugmentedOperatorsRhs(
+          fe_rhs_extended_contact, common_data_simple_contact,
+          "SPATIAL_POSITION", "LAGMULT", "TANGENT_LAGMULT",
+          "PREVIOUS_CONV_SPAT_POS");
+      return fe_rhs_extended_contact;
+    };
+
+    auto get_augmented_friction_lhs = [&](auto contact_problem,
+                                          auto make_element) {
+      auto fe_lhs_simple_contact = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactFrictionAugmentedOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT", "TANGENT_LAGMULT", "PREVIOUS_CONV_SPAT_POS");
+      return fe_lhs_simple_contact;
+    };
+
+    auto get_contact_problem = [&]() {
+      if (!is_friction) {
+        auto d_contact_problem = boost::make_shared<SimpleContactProblem>(
+            m_field, cn_value, is_newton_cotes);
+        return d_contact_problem;
+      } else {
+        auto d_contact_problem = boost::make_shared<SimpleContactProblem>(
+            m_field, cn_value, cn_tangent_value, mu_tangent, is_newton_cotes);
+        return d_contact_problem;
+      }
+    };
+
+    auto contact_problem = get_contact_problem();
+
+    if (is_friction) {
+      contact_problem->addContactFrictionElement(
+          "CONTACT_ELEM", "SPATIAL_POSITION", "LAGMULT",
+          "PREVIOUS_CONV_SPAT_POS", "TANGENT_LAGMULT", contact_prisms);
+    } else {
+      // add fields to the global matrix by adding the element
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms);
+    }
+
     // add fields to the global matrix by adding the element
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+    // contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+    //                                    "LAGMULT", contact_prisms);
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
@@ -359,6 +506,7 @@ int main(int argc, char *argv[]) {
           dm, "CONTACT_ELEM",
           get_contact_rhs(contact_problem, make_convective_master_element),
           PETSC_NULL, PETSC_NULL);
+
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
           get_master_contact_lhs(contact_problem,
@@ -376,14 +524,26 @@ int main(int argc, char *argv[]) {
           NULL, NULL);
     } else {
       if (alm_flag) {
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_augmented_rhs(contact_problem, make_contact_element),
-            PETSC_NULL, PETSC_NULL);
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_augmented_contact_lhs(contact_problem, make_contact_element),
-            NULL, NULL);
+        // CHKERR DMMoFEMSNESSetFunction(
+        //     dm, "CONTACT_ELEM",
+        //     get_augmented_rhs(contact_problem, make_contact_element),
+        //     PETSC_NULL, PETSC_NULL);
+        // CHKERR DMMoFEMSNESSetJacobian(
+        //     dm, "CONTACT_ELEM",
+        //     get_augmented_contact_lhs(contact_problem, make_contact_element),
+        //     NULL, NULL);
+
+        if (is_friction){
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_tangent_augmented_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
+
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_augmented_friction_lhs(contact_problem, make_contact_element),
+              NULL, NULL);
+        }
       } else {
         CHKERR DMMoFEMSNESSetFunction(
             dm, "CONTACT_ELEM",
