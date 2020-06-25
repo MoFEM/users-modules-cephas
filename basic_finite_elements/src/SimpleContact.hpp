@@ -495,8 +495,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief Operator for the simple contact element for Augmented Lagrange
-   * Multipliers method
+   * @brief Operator for the simple contact element for Augmented Lagrangian
+   * Method
    *
    * Calculates Augmented Lagrange Multipliers at the gauss points on the slave
    * triangle.
@@ -543,7 +543,7 @@ struct SimpleContactProblem {
    * @brief RHS-operator for the simple contact element
    *
    * Integrates Lagrange multipliers virtual work on
-   * master surfaceand assemble components to RHS global vector.
+   * master surface and assemble components to RHS global vector.
    *
    */
   struct OpCalContactTractionOnMaster : public ContactOp {
@@ -629,7 +629,7 @@ struct SimpleContactProblem {
    * @brief RHS-operator for the simple contact element
    *
    * Integrates Augmented Lagrange multipliers virtual work on
-   * master surfaceand assemble components to RHS global vector.
+   * master surface and assemble components to RHS global vector.
    *
    */
   struct OpCalAugmentedTractionRhsMaster
@@ -787,8 +787,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief RHS-operator for the simple contact element for Augmented Lagrange
-   * multipliers method
+   * @brief RHS-operator for the simple contact element for Augmented Lagrangian
+   * Method
    *
    * Integrates rhs conditions for ALM that fulfills KKT
    * conditions over slave contact area and assembles components of the RHS
@@ -810,11 +810,11 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
     /**
-     * @brief Integrates KKT conditions for Augmented Lagrange multipliers
+     * @brief Integrates KKT conditions for Augmented Lagrangian
      formulation at slave
      * face gauss points and assembles components to the RHS global vector.
      *
-     * Integrates the Augmented Lagrange multipliers formulation to fulfil KKT
+     * Integrates the Augmented Lagrangian multipliers formulation to fulfil KKT
      * conditions in the integral sense and assembles components to the RHS
      * global vector
      *
@@ -1149,8 +1149,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented Lagrangian
+   * Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
@@ -1213,8 +1213,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented Lagrangian
+   * Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
@@ -1278,12 +1278,12 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial positions
-   * on master side and assembles components of the LHS matrix.
+   * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
+   * positions on master side and assembles components of the LHS matrix.
    *
    */
   struct OpCalContactAugmentedTractionOverSpatialMasterMaster
@@ -1349,8 +1349,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
@@ -1420,8 +1420,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
@@ -1491,8 +1491,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
@@ -1843,8 +1843,8 @@ struct SimpleContactProblem {
       string field_name, string lagrange_field_name);
 
   /**
-   * @brief Function for the simple contact element for Augmented Lagrange
-   * Multipliers (ALM) method that sets the user data RHS-operators
+   * @brief Function for the simple contact element for Augmented Lagrangian
+   * Method (ALM) that sets the user data RHS-operators
    *
    * @param  fe_rhs_simple_contact      Pointer to the FE instance for RHS
    * @param  common_data_simple_contact Pointer to the common data for simple
@@ -1863,7 +1863,7 @@ struct SimpleContactProblem {
 
   /**
    * @brief Function for the simple contact element for Augmented Lagrange
-   * Multipliers (ALM) method that sets the user data LHS-operators
+   * Multipliers (ALM) Method that sets the user data LHS-operators
    *
    * @param  fe_lhs_simple_contact      Pointer to the FE instance for LHS
    * @param  common_data_simple_contact Pointer to the common data for simple
