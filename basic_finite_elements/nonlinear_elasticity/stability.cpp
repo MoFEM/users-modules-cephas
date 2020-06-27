@@ -188,6 +188,7 @@ int main(int argc, char *argv[]) {
   }
 
   SlepcInitialize(&argc, &argv, param_file.c_str(), help);
+  MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
   try {
 
@@ -651,6 +652,7 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   SlepcFinalize();
+  MoFEM::Core::Finalize();
   // PetscFinalize();
 
   return 0;
