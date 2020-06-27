@@ -310,7 +310,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
       MoFEMFunctionReturn(0);
     };
 
-    MoFEM::Core m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
+    MoFEM::CoreTmp<-1> m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
     MoFEM::Interface &m_field_ref = m_core_ref;
 
     auto refine_ref_tetrahedron = [this, &m_field_ref, max_level]() {
