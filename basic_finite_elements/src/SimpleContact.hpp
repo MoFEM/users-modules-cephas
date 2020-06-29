@@ -495,8 +495,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief Operator for the simple contact element for Augmented Lagrange
-   * Multipliers method
+   * @brief Operator for the simple contact element for Augmented Lagrangian
+   * Method
    *
    * Calculates Augmented Lagrange Multipliers at the gauss points on the slave
    * triangle.
@@ -543,7 +543,7 @@ struct SimpleContactProblem {
    * @brief RHS-operator for the simple contact element
    *
    * Integrates Lagrange multipliers virtual work on
-   * master surfaceand assemble components to RHS global vector.
+   * master surface and assemble components to RHS global vector.
    *
    */
   struct OpCalContactTractionOnMaster : public ContactOp {
@@ -566,12 +566,12 @@ struct SimpleContactProblem {
      * {\delta
      * W^{(2)}_{\text c}(\lambda,
      * \delta \mathbf{x}^{(2)}}) \,\,  =
-     * \int_{{\gamma}^{(2)}_{\text c}} \lambda
+     * \int_{{\gamma}^{(1)}_{\text c}} \lambda
      * \delta{\mathbf{x}^{(2)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
-     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
      * points at master triangles.
      */
@@ -629,7 +629,7 @@ struct SimpleContactProblem {
    * @brief RHS-operator for the simple contact element
    *
    * Integrates Augmented Lagrange multipliers virtual work on
-   * master surfaceand assemble components to RHS global vector.
+   * master surface and assemble components to RHS global vector.
    *
    */
   struct OpCalAugmentedTractionRhsMaster
@@ -656,19 +656,19 @@ struct SimpleContactProblem {
      * W^{(2)}_{\text c}(\lambda,
      * \delta \mathbf{x}^{(2)}}) \,\,  =
      *  \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(2)}_{\text c}} (\lambda + c_{\textrm n} g_{\textrm{n}})
-     * \delta{\mathbf{x}^{(2)}}
+     * \int_{{\gamma}^{(1)}_{\text c}} (\lambda + c_{\textrm n} g_{\textrm{n}})
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \delta{\mathbf{x}^{(2)}}
      * \,\,{ {\text d} {\gamma}} & \lambda + c_{\text n} g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}} > 0 \\
      * \end{array}
      * \right.
      * \f]
-     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier, \f$
-     * c_{\textrm n}\f$ is the regularisation/augmetation parameter of stress dimensions,
-     * \f$ g_{\textrm{n}}\f$ is the value of gap at the associated gauss point,
-     * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
-     * points at slave triangles.
+     * c_{\textrm n}\f$ is the regularisation/augmetation parameter of stress
+     * dimensions, \f$ g_{\textrm{n}}\f$ is the value of gap at the associated
+     * gauss point, \f$\mathbf{x}^{(2)}\f$ are the coordinates of the
+     * overlapping gauss points at master triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -711,7 +711,7 @@ struct SimpleContactProblem {
      * \delta \mathbf{x}^{(1)}}) \,\,  =
      * - \left\{ \begin{array}{ll}
      * \int_{{\gamma}^{(1)}_{\text c}} (\lambda + c_{\textrm n} g_{\textrm{n}})
-     * \delta{\mathbf{x}^{(1)}}
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \delta{\mathbf{x}^{(1)}}
      * \,\,{ {\text d} {\gamma}} & \lambda + c_{\text n} g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}} > 0 \\
      * \end{array}
@@ -720,10 +720,10 @@ struct SimpleContactProblem {
      *
      * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier, \f$
-     * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress dimensions,
-     * \f$ g_{\textrm{n}}\f$ is the value of gap at the associated gauss point,
-     * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
-     * points at slave triangles.
+     * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress
+     * dimensions, \f$ g_{\textrm{n}}\f$ is the value of gap at the associated
+     * gauss point, \f$\mathbf{x}^{(1)}\f$ are the coordinates of the
+     * overlapping gauss points at master triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -787,18 +787,18 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief RHS-operator for the simple contact element for Augmented Lagrange
-   * multipliers method
+   * @brief RHS-operator for the simple contact element for Augmented Lagrangian
+   * Method
    *
    * Integrates rhs conditions for ALM that fulfills KKT
    * conditions over slave contact area and assembles components of the RHS
    * vector.
    *
    */
-  struct OpGapConstraintOnLambda
+  struct OpGapConstraintConditionALMRhs
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpGapConstraintOnLambda(
+    OpGapConstraintConditionALMRhs(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
@@ -810,11 +810,11 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
     /**
-     * @brief Integrates KKT conditions for Augmented Lagrange multipliers
+     * @brief Integrates KKT conditions for Augmented Lagrangian
      formulation at slave
      * face gauss points and assembles components to the RHS global vector.
      *
-     * Integrates the Augmented Lagrange multipliers formulation to fulfil KKT
+     * Integrates the Augmented Lagrangian multipliers formulation to fulfil KKT
      * conditions in the integral sense and assembles components to the RHS
      * global vector
      *
@@ -886,12 +886,12 @@ struct SimpleContactProblem {
      * W^{(2)}_{\text c}(\lambda,
      * \delta \mathbf{x}^{(2)}})[\Delta \lambda]
      *  \,\,  =
-     * \int_{{\gamma}^{(2)}_{\text c}} \Delta \lambda
+     * \int_{{\gamma}^{(1)}_{\text c}} \Delta \lambda
      * \delta{\mathbf{x}^{(2)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
-     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
      * points at master triangles.
      */
@@ -1054,7 +1054,7 @@ struct SimpleContactProblem {
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)},
-     * \delta \lambda)}[\Delta \mathbf{x}^{(2)}] = \int_{{\gamma}^{(2)}_{\text
+     * \delta \lambda)}[\Delta \mathbf{x}^{(2)}] = \int_{{\gamma}^{(1)}_{\text
      * c}} \Delta \mathbf{x}^{(2)} \cdot
      * \mathbf{n}(\mathbf{x}^{(1)}) c_{\text n}  \left( 1 + {\text {sign}}\left(
      * \lambda - c_{\text n} g_{\textrm{n}} \right)
@@ -1149,8 +1149,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented Lagrangian
+   * Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
@@ -1189,19 +1189,20 @@ struct SimpleContactProblem {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(2)}_{\text c}}  - \Delta \lambda
+     * \int_{{\gamma}^{(1)}_{\text c}}  - \Delta \lambda
      * \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
      * \right.
      * \f]
-     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
      * points at master triangles, \f$
-     * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress dimensions and
-     * \f$ g_{\textrm{n}}\f$ is the gap evaluated on the corresponding slave side.
+     * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress
+     * dimensions and \f$ g_{\textrm{n}}\f$ is the gap evaluated on the
+     * corresponding slave side.
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
@@ -1213,8 +1214,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented Lagrangian
+   * Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
@@ -1261,7 +1262,7 @@ struct SimpleContactProblem {
      * \right.
      * \f]
      * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
      * points at master triangles, \f$
      * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress dimensions and
@@ -1278,12 +1279,12 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial positions
-   * on master side and assembles components of the LHS matrix.
+   * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
+   * positions on master side and assembles components of the LHS matrix.
    *
    */
   struct OpCalContactAugmentedTractionOverSpatialMasterMaster
@@ -1322,15 +1323,15 @@ struct SimpleContactProblem {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(2)}_{\text c}}  c_{\textrm n}\Delta {\mathbf{x}^{(2)}}
+     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\textrm n}\Delta {\mathbf{x}^{(2)}}
      * \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
      * \right.
      * \f]
-     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
      * points at master triangles, \f$
      * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress
@@ -1349,8 +1350,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
@@ -1393,15 +1394,15 @@ struct SimpleContactProblem {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(2)}_{\text c}}  -c_{\textrm n}\Delta {\mathbf{x}^{(1)}}
+     * \int_{{\gamma}^{(1)}_{\text c}}  -c_{\textrm n}\Delta {\mathbf{x}^{(1)}}
      * \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
      * \right.
      * \f]
-     * where \f${\gamma}^{(2)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ and \f$\mathbf{x}^{(1)}\f$ are the coordinates of
      * the overlapping gauss points at master and slave triangles, respectively. 
      * Also, \f$ c_{\textrm n}\f$ is
@@ -1420,8 +1421,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
@@ -1491,8 +1492,8 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief LHS-operator for the simple contact element with Augmented Lagrange
-   * multipliers method
+   * @brief LHS-operator for the simple contact element with Augmented
+   * Lagrangian Method
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
@@ -1543,7 +1544,7 @@ struct SimpleContactProblem {
      * \right.
      * \f]
      * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
-     * of the master surface, \f$ \lambda\f$ is the Lagrange multiplier,
+     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ and \f$\mathbf{x}^{(1)}\f$ are the coordinates of
      * the overlapping gauss points at master and slave triangles, respectively.
      * Also, \f$ c_{\textrm n}\f$ is
@@ -1570,9 +1571,9 @@ struct SimpleContactProblem {
    * components to LHS global matrix.
    *
    */
-  struct OpGapConstraintOverLambda : public ContactOp {
+  struct OpGapConstraintConditionALMOverLambda : public ContactOp {
 
-    OpGapConstraintOverLambda(
+    OpGapConstraintConditionALMOverLambda(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1636,9 +1637,9 @@ struct SimpleContactProblem {
    * components to LHS global matrix.
    *
    */
-  struct OpGapConstraintOverSpatialMaster : public ContactOp {
+  struct OpGapConstraintConditionALMOverSpatialMaster : public ContactOp {
 
-    OpGapConstraintOverSpatialMaster(
+    OpGapConstraintConditionALMOverSpatialMaster(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1702,9 +1703,9 @@ struct SimpleContactProblem {
    * components to LHS global matrix.
    *
    */
-  struct OpGapConstraintOverSpatialSlave : public ContactOp {
+  struct OpGapConstraintConditionALMOverSpatialSlave : public ContactOp {
 
-    OpGapConstraintOverSpatialSlave(
+    OpGapConstraintConditionALMOverSpatialSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1805,26 +1806,30 @@ struct SimpleContactProblem {
   };
 
   /**
-   * @brief Function for the simple contact element that sets the user data
-   * RHS-operators
+   * @brief Function for the simple contact element for C function or ALM
+   * approach that sets the user data RHS-operators
    *
    * @param  fe_rhs_simple_contact      Pointer to the FE instance for RHS
    * @param  common_data_simple_contact Pointer to the common data for simple
    * contact element
    * @param  field_name                 String of field name for spatial
    * positions
-   * @param  lagrange_field_name         String of field name for Lagrange
+   * @param  lagrange_field_name        String of field name for Lagrange
    * multipliers
+   * @param  is_alm                     bool flag to determine choice of
+   * approach between ALM or C function to solve frictionless problem default is
+   * false
    * @return                            Error code
    *
    */
   MoFEMErrorCode setContactOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name);
+      string field_name, string lagrange_field_name, bool is_alm = false);
 
   /**
-   * @brief Function for the simple contact element that sets the user data
+   * @brief Function for the simple contact element for C function or ALM
+   * approach that sets the user data
    * LHS-operators
    *
    * @param  fe_lhs_simple_contact      Pointer to the FE instance for LHS
@@ -1834,51 +1839,16 @@ struct SimpleContactProblem {
    * positions
    * @param  lagrange_field_name         String of field name for Lagrange
    * multipliers
+   * @param  is_alm                     bool flag to determine choice of
+   * approach between ALM or C function to solve frictionless problem default is
+   * false
    * @return                            Error code
    *
    */
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name);
-
-  /**
-   * @brief Function for the simple contact element for Augmented Lagrange
-   * Multipliers (ALM) method that sets the user data RHS-operators
-   *
-   * @param  fe_rhs_simple_contact      Pointer to the FE instance for RHS
-   * @param  common_data_simple_contact Pointer to the common data for simple
-   * contact element
-   * @param  field_name                 String of field name for spatial
-   * positions
-   * @param  lagrange_field_name         String of field name for Lagrange
-   * multipliers
-   * @return                            Error code
-   *
-   */
-  MoFEMErrorCode setContactAugmentedOperatorsRhs(
-      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
-      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrang_field_name);
-
-  /**
-   * @brief Function for the simple contact element for Augmented Lagrange
-   * Multipliers (ALM) method that sets the user data LHS-operators
-   *
-   * @param  fe_lhs_simple_contact      Pointer to the FE instance for LHS
-   * @param  common_data_simple_contact Pointer to the common data for simple
-   * contact element
-   * @param  field_name                 String of field name for spatial
-   * positions
-   * @param  lagrange_field_name         String of field name for Lagrange
-   * multipliers
-   * @return                            Error code
-   *
-   */
-  MoFEMErrorCode setContactAugmentedOperatorsLhs(
-      boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
-      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrang_field_name);
+      string field_name, string lagrange_field_name, bool is_alm = false);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs
@@ -1890,22 +1860,22 @@ struct SimpleContactProblem {
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name);
+      string field_name, string lagrange_field_name, bool is_alm = false);
 
   MoFEMErrorCode setMasterForceOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name);
+      string field_name, string lagrange_field_name, bool is_alm = false);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name);
+      string field_name, string lagrange_field_name, bool is_alm = false);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name);
+      string field_name, string lagrange_field_name, bool is_alm = false);
 
   /**
    * @brief Function for the simple contact element that sets the user data

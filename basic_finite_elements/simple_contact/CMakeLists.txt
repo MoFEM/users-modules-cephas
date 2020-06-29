@@ -145,7 +145,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/8cube_contact.cub 
   -my_order 2
   -my_cn_value 1e3
-  -my_alm_flag 1
+  -alm_flag 1
 )
 
 add_test(
@@ -156,7 +156,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/4seasons_contact.cub
   -my_order 2
   -my_cn_value 1e3
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )
 
@@ -168,7 +168,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/Tinterface_contact.cub
   -my_order 2
   -my_cn_value 1e3
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )
 
@@ -180,7 +180,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_and_mid.cub
   -my_order 2
   -my_cn_value 1e3
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )
 
@@ -192,7 +192,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/punch_top_only.cub
   -my_order 2
   -my_cn_value 1e3
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )
 
@@ -204,7 +204,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/plane_axi_contact.cub
   -my_order 2
   -my_cn_value 1e3
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )
 
@@ -216,7 +216,7 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/arc_3surf_contact.cub
   -my_order 2
   -my_cn_value 1e-3
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )
 
@@ -228,6 +228,6 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/smiling_face_contact.cub
   -my_order 2
   -my_cn_value 1e-1
-  -my_alm_flag 1
+  -alm_flag 1
   -snes_monitor
 )

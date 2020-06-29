@@ -39,8 +39,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n"
-                                 "-my_alm_flag 0 \n";
+                                 "-my_test_num 0 \n" 
+                                 "-alm_flag 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_out_integ_pts",
                             "output data at contact integration points", "",
                             PETSC_FALSE, &out_integ_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_alm_flag", "set to convect integration pts",
+    CHKERR PetscOptionsBool("-alm_flag", "set to convect integration pts",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_wave_surf",
@@ -395,61 +395,44 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+    auto get_contact_rhs = [&](auto contact_problem,
+                               auto make_element, bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
+      contact_problem->setContactOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT", is_alm);
       return fe_rhs_simple_contact;
     };
 
     auto get_master_traction_rhs = [&](auto contact_problem,
-                                       auto make_element) {
+                                       auto make_element, bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
+          "LAGMULT", is_alm);
       return fe_rhs_simple_contact;
     };
 
-    auto get_master_traction_lhs = [&](auto contact_problem,
-                                       auto make_element) {
+    auto get_master_traction_lhs = [&](auto contact_problem, auto make_element,
+                                       bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
+          "LAGMULT", is_alm);
       return fe_lhs_simple_contact;
     };
 
-    auto get_master_contact_lhs = [&](auto contact_problem, auto make_element) {
+    auto get_master_contact_lhs = [&](auto contact_problem,
+                                      auto make_element, bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
+      contact_problem->setContactOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT", is_alm);
       return fe_lhs_simple_contact;
-    };
-
-    auto get_augmented_rhs = [&](auto contact_problem, auto make_element) {
-      auto fe_rhs_extended_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactAugmentedOperatorsRhs(
-          fe_rhs_extended_contact, common_data_simple_contact,
-          "SPATIAL_POSITION", "LAGMULT");
-      return fe_rhs_extended_contact;
-    };
-
-    auto get_augmented_contact_lhs = [&](auto contact_problem,
-                                         auto make_element) {
-      auto fe_lhs_extended_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactAugmentedOperatorsLhs(
-          fe_lhs_extended_contact, common_data_simple_contact,
-          "SPATIAL_POSITION", "LAGMULT");
-      return fe_lhs_extended_contact;
     };
 
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
@@ -570,28 +553,22 @@ int main(int argc, char *argv[]) {
                                   make_convective_slave_element),
           PETSC_NULL, PETSC_NULL);
     } else {
-      if (alm_flag) {
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_augmented_rhs(contact_problem, make_contact_element),
-            PETSC_NULL, PETSC_NULL);
-      } else {
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
-            PETSC_NULL);
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_master_traction_rhs(contact_problem, make_contact_element),
-            PETSC_NULL, PETSC_NULL);
-      }
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_contact_element, alm_flag),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element,
+                                  alm_flag),
+          PETSC_NULL, PETSC_NULL);
     }
 
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
                                   PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, NULL, NULL,
+    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, PETSC_NULL, PETSC_NULL,
                                   dirichlet_bc_ptr.get());
 
     boost::shared_ptr<FEMethod> fe_null;
@@ -602,32 +579,27 @@ int main(int argc, char *argv[]) {
           dm, "CONTACT_ELEM",
           get_master_contact_lhs(contact_problem,
                                  make_convective_master_element),
-          NULL, NULL);
+          PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
           get_master_traction_lhs(contact_problem,
                                   make_convective_slave_element),
-          NULL, NULL);
+          PETSC_NULL, PETSC_NULL);
     } else {
-      if (alm_flag) {
         CHKERR DMMoFEMSNESSetJacobian(
             dm, "CONTACT_ELEM",
-            get_augmented_contact_lhs(contact_problem, make_contact_element),
-            NULL, NULL);
-      } else {
+            get_master_contact_lhs(contact_problem, make_contact_element,
+                                   alm_flag),
+            PETSC_NULL, PETSC_NULL);
         CHKERR DMMoFEMSNESSetJacobian(
             dm, "CONTACT_ELEM",
-            get_master_contact_lhs(contact_problem, make_contact_element), NULL,
-            NULL);
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_master_traction_lhs(contact_problem, make_contact_element),
-            NULL, NULL);
+            get_master_traction_lhs(contact_problem, make_contact_element,
+                                    alm_flag),
+            PETSC_NULL, PETSC_NULL);
       }
-    }
-    CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
-                                  NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), PETSC_NULL,
+                                  PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
 
@@ -640,7 +612,7 @@ int main(int argc, char *argv[]) {
                                "-snes_max_it 10 "
                                "-snes_atol 1e-8 "
                                "-snes_rtol 1e-8 ";
-      CHKERR PetscOptionsInsertString(NULL, testing_options);
+      CHKERR PetscOptionsInsertString(PETSC_NULL, testing_options);
     }
 
     auto snes = MoFEM::createSNES(m_field.get_comm());
