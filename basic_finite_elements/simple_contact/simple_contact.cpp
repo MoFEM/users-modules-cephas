@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
                                  "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n" 
+                                 "-my_test_num 0 \n"
                                  "-my_alm_flag 0 \n";
 
   string param_file = "param_file.petsc";
@@ -61,6 +61,7 @@ int main(int argc, char *argv[]) {
     ARC_THREE_SURF = 7,
     SMILING_FACE = 8,
     SMILING_FACE_CONVECT = 9,
+    WAVE_2D = 10,
     LAST_TEST
   };
 
@@ -76,6 +77,7 @@ int main(int argc, char *argv[]) {
 
     char mesh_file_name[255];
     PetscInt order = 1;
+    PetscInt order_contact = 1;
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
@@ -85,18 +87,28 @@ int main(int argc, char *argv[]) {
     PetscBool convect_pts = PETSC_FALSE;
     PetscBool out_integ_pts = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
+    PetscBool wave_surf_flag = PETSC_FALSE;
+    PetscInt wave_dim = 2;
+    PetscInt wave_surf_block_id = 1;
+    PetscReal wave_length = 1.0;
+    PetscReal wave_ampl = 0.01;
+    PetscReal mesh_height = 1.0;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
 
-    CHKERR PetscOptionsInt("-my_order", "default approximation order", "", 1,
+    CHKERR PetscOptionsInt("-my_order",
+                           "approximation order of spatial positions", "", 1,
                            &order, PETSC_NULL);
     CHKERR PetscOptionsInt(
-        "-my_order_lambda",
-        "default approximation order of Lagrange multipliers", "", 1,
-        &order_lambda, PETSC_NULL);
+        "-my_order_contact",
+        "approximation order of spatial positions in contact interface", "", 1,
+        &order_contact, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_order_lambda",
+                           "approximation order of Lagrange multipliers", "", 1,
+                           &order_lambda, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
@@ -118,6 +130,21 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &out_integ_pts, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag", "set to convect integration pts",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_wave_surf",
+                            "if set true, make one of the surfaces wavy", "",
+                            PETSC_FALSE, &wave_surf_flag, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_wave_surf_block_id",
+                           "make wavy surface of the block with this id", "",
+                           wave_surf_block_id, &wave_surf_block_id, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_wave_dim", "dimension (2 or 3)", "", wave_dim,
+                           &wave_dim, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_wave_length", "profile wavelength", "",
+                            wave_length, &wave_length, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
+                            &wave_ampl, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh",
+                            "", mesh_height, &mesh_height, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -237,6 +264,49 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
+    auto make_wavy_surface = [&](int block_id, int dim, double lambda,
+                                 double delta, double height) {
+      MoFEMFunctionBegin;
+      Range all_tets, all_nodes;
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "MAT_ELASTIC") == 0) {
+          const int id = bit->getMeshsetId();
+          Range tets;
+          if (id == block_id) {
+            CHKERR m_field.get_moab().get_entities_by_dimension(
+                bit->getMeshset(), 3, tets, true);
+            all_tets.merge(tets);
+          }
+        }
+      }
+      CHKERR m_field.get_moab().get_connectivity(all_tets, all_nodes);
+      double coords[3];
+      for (Range::iterator nit = all_nodes.begin(); nit != all_nodes.end();
+           nit++) {
+        CHKERR moab.get_coords(&*nit, 1, coords);
+        double x = coords[0];
+        double y = coords[1];
+        double z = coords[2];
+        double coef = (height + z) / height;
+        switch (dim) {
+        case 2:
+          coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
+          break;
+        case 3:
+          coords[2] -=
+              coef * delta *
+              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda));
+          break;
+        default:
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                   "Wrong dimension = %d", dim);
+        }
+
+        CHKERR moab.set_coords(&*nit, 1, coords);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
     Range contact_prisms, master_tris, slave_tris;
     std::vector<BitRefLevel> bit_levels;
 
@@ -246,6 +316,11 @@ int main(int argc, char *argv[]) {
 
     CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
                                bit_levels);
+
+    if (wave_surf_flag) {
+      CHKERR make_wavy_surface(wave_surf_block_id, wave_dim, wave_length,
+                               wave_ampl, mesh_height);
+    }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
@@ -549,7 +624,7 @@ int main(int argc, char *argv[]) {
             get_master_traction_lhs(contact_problem, make_contact_element),
             NULL, NULL);
       }
-      }
+    }
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), NULL,
                                   NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, NULL, NULL);
@@ -618,7 +693,7 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
     // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %16.9f\n",
+    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %9.9f\n",
                 elastic.getLoopFeEnergy().eNergy);
 
     {
@@ -686,7 +761,7 @@ int main(int argc, char *argv[]) {
                   (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
 
       PetscPrintf(PETSC_COMM_SELF,
-                  "Active contact area: %16.9f out of %16.9f\n",
+                  "Active contact area: %9.9f out of %9.9f\n",
                   contact_area[0], contact_area[1]);
     }
 
