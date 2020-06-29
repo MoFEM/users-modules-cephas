@@ -320,61 +320,44 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
+    auto get_contact_rhs = [&](auto contact_problem,
+                               auto make_element, bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
+      contact_problem->setContactOperatorsRhs(
+          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT", is_alm);
       return fe_rhs_simple_contact;
     };
 
     auto get_master_traction_rhs = [&](auto contact_problem,
-                                       auto make_element) {
+                                       auto make_element, bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
+          "LAGMULT", is_alm);
       return fe_rhs_simple_contact;
     };
 
-    auto get_master_traction_lhs = [&](auto contact_problem,
-                                       auto make_element) {
+    auto get_master_traction_lhs = [&](auto contact_problem, auto make_element,
+                                       bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
+          "LAGMULT", is_alm);
       return fe_lhs_simple_contact;
     };
 
-    auto get_master_contact_lhs = [&](auto contact_problem, auto make_element) {
+    auto get_master_contact_lhs = [&](auto contact_problem,
+                                      auto make_element, bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-                                              common_data_simple_contact,
-                                              "SPATIAL_POSITION", "LAGMULT");
+      contact_problem->setContactOperatorsLhs(
+          fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+          "LAGMULT", is_alm);
       return fe_lhs_simple_contact;
-    };
-
-    auto get_augmented_rhs = [&](auto contact_problem, auto make_element) {
-      auto fe_rhs_extended_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactAugmentedOperatorsRhs(
-          fe_rhs_extended_contact, common_data_simple_contact,
-          "SPATIAL_POSITION", "LAGMULT");
-      return fe_rhs_extended_contact;
-    };
-
-    auto get_augmented_contact_lhs = [&](auto contact_problem,
-                                         auto make_element) {
-      auto fe_lhs_extended_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactAugmentedOperatorsLhs(
-          fe_lhs_extended_contact, common_data_simple_contact,
-          "SPATIAL_POSITION", "LAGMULT");
-      return fe_lhs_extended_contact;
     };
 
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
@@ -495,21 +478,15 @@ int main(int argc, char *argv[]) {
                                   make_convective_slave_element),
           PETSC_NULL, PETSC_NULL);
     } else {
-      if (alm_flag) {
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_augmented_rhs(contact_problem, make_contact_element),
-            PETSC_NULL, PETSC_NULL);
-      } else {
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_contact_rhs(contact_problem, make_contact_element), PETSC_NULL,
-            PETSC_NULL);
-        CHKERR DMMoFEMSNESSetFunction(
-            dm, "CONTACT_ELEM",
-            get_master_traction_rhs(contact_problem, make_contact_element),
-            PETSC_NULL, PETSC_NULL);
-      }
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_contact_rhs(contact_problem, make_contact_element, alm_flag),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element,
+                                  alm_flag),
+          PETSC_NULL, PETSC_NULL);
     }
 
     CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
@@ -534,21 +511,16 @@ int main(int argc, char *argv[]) {
                                   make_convective_slave_element),
           PETSC_NULL, PETSC_NULL);
     } else {
-      if (alm_flag) {
         CHKERR DMMoFEMSNESSetJacobian(
             dm, "CONTACT_ELEM",
-            get_augmented_contact_lhs(contact_problem, make_contact_element),
+            get_master_contact_lhs(contact_problem, make_contact_element,
+                                   alm_flag),
             PETSC_NULL, PETSC_NULL);
-      } else {
         CHKERR DMMoFEMSNESSetJacobian(
             dm, "CONTACT_ELEM",
-            get_master_contact_lhs(contact_problem, make_contact_element), PETSC_NULL,
-            PETSC_NULL);
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_master_traction_lhs(contact_problem, make_contact_element),
+            get_master_traction_lhs(contact_problem, make_contact_element,
+                                    alm_flag),
             PETSC_NULL, PETSC_NULL);
-      }
       }
     CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), PETSC_NULL,
                                   PETSC_NULL);
