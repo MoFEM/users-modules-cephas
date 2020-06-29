@@ -275,7 +275,7 @@ int main(int argc, char *argv[]) {
                          double *z) {
       MoFEMFunctionBegin;
       double value;
-      double scale = +0.;
+      double scale = 0.;
       PetscRandomGetValue(rctx, &value);
       field_data[0] = (*x) + (value ) * scale;
       PetscRandomGetValue(rctx, &value);
@@ -301,11 +301,11 @@ int main(int argc, char *argv[]) {
       double value;
       double scale = 0.;
       PetscRandomGetValue(rctx, &value);
-      field_data[0] = (*x) + value * scale;
+      field_data[0] =  value * scale;
       PetscRandomGetValue(rctx, &value);
-      field_data[1] = (*y) + value  * scale;
+      field_data[1] =  value  * scale;
       PetscRandomGetValue(rctx, &value);
-      field_data[2] = (*z) + value * scale;
+      field_data[2] = value * scale;
       MoFEMFunctionReturn(0);
     };
 
@@ -524,14 +524,14 @@ int main(int argc, char *argv[]) {
           NULL, NULL);
     } else {
       if (alm_flag) {
-        // CHKERR DMMoFEMSNESSetFunction(
-        //     dm, "CONTACT_ELEM",
-        //     get_augmented_rhs(contact_problem, make_contact_element),
-        //     PETSC_NULL, PETSC_NULL);
-        // CHKERR DMMoFEMSNESSetJacobian(
-        //     dm, "CONTACT_ELEM",
-        //     get_augmented_contact_lhs(contact_problem, make_contact_element),
-        //     NULL, NULL);
+        CHKERR DMMoFEMSNESSetFunction(
+            dm, "CONTACT_ELEM",
+            get_augmented_rhs(contact_problem, make_contact_element),
+            PETSC_NULL, PETSC_NULL);
+        CHKERR DMMoFEMSNESSetJacobian(
+            dm, "CONTACT_ELEM",
+            get_augmented_contact_lhs(contact_problem, make_contact_element),
+            NULL, NULL);
 
         if (is_friction){
           CHKERR DMMoFEMSNESSetFunction(

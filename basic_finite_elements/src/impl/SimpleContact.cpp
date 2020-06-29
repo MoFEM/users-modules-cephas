@@ -819,7 +819,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
         &data.getFieldData()[0], &data.getFieldData()[1],
         &data.getFieldData()[2], 3);
 
-    for (int bb = 0; bb != nb_base_fun_row; bb++) {
+    for (int bb = 0; bb != nb_base_fun_row; ++bb) {
       t_lagrange_slave_3(i) += t_base_lambda * t_field_data_slave(i);
       t_lagrange_slave += t_normal(i) * t_base_lambda * t_field_data_slave(i);
       ++t_base_lambda;
@@ -860,7 +860,7 @@ if (type != MBVERTEX)
   auto t_tangent_lagrange =
       getFTensor1FromMat<2>(*commonDataSimpleContact->tangentLambdasPtr);
 
-  int nb_base_fun_col = data.getFieldData().size() / 2;
+  int nb_base_fun_col = data.getFieldData().size() / 3;
 
   FTensor::Index<'i', 2> i;
 
@@ -1462,18 +1462,23 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
   // const double cNTangentPtr = *cNTangentPtr.get();
   // const double cNNormalPtr = *cNNormalPtr.get();
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
-
-    if (t_aug_lambda_ptr > 0) {
+    // cerr << " t_aug_lambda_ptr " << t_aug_lambda_ptr << "\n";
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
       ++t_w;
-      // cerr << "no friction\n";
+      // cerr << "no contact\n";
       continue;
     }
 
+    int stick_slip_check =
+        t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
+    // cerr << " stick_slip_check " << stick_slip_check << "\n";
+
     bool stick = true;
-    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+    if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -1490,19 +1495,15 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
         auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
         if (stick) {
+          // cerr << "stick \n";
+
           // cerr << "t_tangent_1_at_gp " << t_tangent_1_at_gp << "\n";
           // cerr << "t_tangent_2_at_gp " << t_tangent_2_at_gp << "\n";
           // cerr << "normal " << normal <<"\n";
           // cerr << "sad   " << m * cNTangentPtr * t_base_master_row << "\n";
-          // cerr << "stick \n";
           t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_1_at_gp(i) *
                                 t_tangent_1_at_gp(j) * t_base_master_row;
           t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
-                                t_tangent_2_at_gp(j) * t_base_master_row;
-
-          t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
-                                t_tangent_1_at_gp(j) * t_base_master_row;
-          t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_1_at_gp(i) *
                                 t_tangent_2_at_gp(j) * t_base_master_row;
 
           // t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
@@ -1513,6 +1514,7 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
         } else {
           // cerr << "stick \n";
           // normal gap
+          // cerr << "slip \n";
 
           t_assemble_s(i, j) += muTan * m * cNNormalPtr *
                                 t_tangent_aug_lambda_ptr(0) *
@@ -1524,15 +1526,15 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
                                 t_tangent_2_at_gp(i) * normal(j) *
                                 t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * normal(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * normal(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * normal(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * normal(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
           // tangent gap aug lambda
 
@@ -1546,13 +1548,13 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
                                 t_tangent_2_at_gp(j) * t_base_master_row /
                                 t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
           const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                t_norm_tang_aug_lambda_ptr *
@@ -1582,29 +1584,29 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
                                 t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
                                 t_base_master_row / pow_3;
           //
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_master_row / pow_3;
         }
 
         ++t_base_master_row; // update rows
@@ -1689,7 +1691,7 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
   // const double cNNormalPtr = *cNNormalPtr.get();
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -1697,8 +1699,11 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
       continue;
     }
 
+    int stick_slip_check =
+        t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
     bool stick = true;
-    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+    if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -1720,16 +1725,10 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
           t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
                                 t_tangent_2_at_gp(j) * t_base_master_row;
 
-          t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
-                                t_tangent_1_at_gp(j) * t_base_master_row;
-          t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i) *
-                                t_tangent_2_at_gp(j) * t_base_master_row;
-
           // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
           //                       t_tangent_1_at_gp(j) * t_base_master_row;
           // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i) *
           //                       t_tangent_2_at_gp(j) * t_base_master_row;
-
         } else {
 
           // normal gap
@@ -1744,24 +1743,17 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
                                 t_tangent_2_at_gp(i) * normal(j) *
                                 t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * normal(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * normal(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * normal(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * normal(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
           // tangent gap aug lambda
-
-          // t_assemble_s(i, j) -= muTan  * cNTangentPtr *
-          //                       m * t_tangent_1_at_gp(i) *
-          //                       t_tangent_1_at_gp(j) * t_base_master_row;
-          // t_assemble_s(i, j) -= muTan  * cNTangentPtr *
-          //                       m * t_tangent_2_at_gp(i) *
-          //                       t_tangent_2_at_gp(j) * t_base_master_row;
 
           t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
                                 m * t_tangent_1_at_gp(i) *
@@ -1772,12 +1764,12 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
                                 t_tangent_2_at_gp(j) * t_base_master_row /
                                 t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_master_row / t_norm_tang_aug_lambda_ptr;
 
           const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                t_norm_tang_aug_lambda_ptr *
@@ -1809,29 +1801,29 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
 
                                 //
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
-                                m * t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+          //                       m * t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
-                                m * t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+          //                       m * t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
-                                m * t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+          //                       m * t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
-                                m * t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_master_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr *
+          //                       m * t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_master_row / pow_3;
 
 
         }
@@ -1919,8 +1911,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 ||
-          t_norm_tang_aug_lambda_ptr <= -muTan * t_aug_lambda_ptr) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -1940,24 +1931,31 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
           auto t_assemble_s = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
           const double n = m * t_base_lambda;
 
-          t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_1_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+          double stick_slip_check =
+              t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+          bool stick = true;
+          if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
+            stick = false;
+          if (stick) {
+          } else {
+            t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(0) *
+                                  t_tangent_1_at_gp(i) * normal(j) /
+                                  t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_2_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+            t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(1) *
+                                  t_tangent_2_at_gp(i) * normal(j) /
+                                  t_norm_tang_aug_lambda_ptr;
+          }
+            // t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(0) *
+            //                       t_tangent_2_at_gp(i) * normal(j) /
+            //                       t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+            // t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(1) *
+            //                       t_tangent_1_at_gp(i) * normal(j) /
+            //                       t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * n * t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
-          // ++t_assemble_m;
-          ++t_base_lambda; // update cols slave
-        }
+            ++t_base_lambda; // update cols slave
+          }
         ++t_base_master; // update rows master
       }
       ++t_w;
@@ -2043,7 +2041,7 @@ MoFEMErrorCode SimpleContactProblem::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -2051,8 +2049,11 @@ MoFEMErrorCode SimpleContactProblem::
         continue;
       }
 
+      int stick_slip_check =
+          t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
       bool stick = true;
-      if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
         stick = false;
 
       double val_m = t_w * area_master;
@@ -2068,11 +2069,6 @@ MoFEMErrorCode SimpleContactProblem::
           if (stick) {
             // cerr << "stick\n";
             // cerr << "n   " << n << "\n";
-            // t_assemble_m(i) -= n * t_tangent_1_at_gp(i);
-            // t_assemble_m(i) -= n * t_tangent_2_at_gp(i);
-            // ++t_assemble_m;
-            // t_assemble_m(i) -= n * t_tangent_2_at_gp(i);
-            // t_assemble_m(i) -= n * t_tangent_1_at_gp(i);
 
             t_assemble_m(i, j) -=
                 n * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
@@ -2080,11 +2076,11 @@ MoFEMErrorCode SimpleContactProblem::
             t_assemble_m(i, j) -=
                 n * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
-            t_assemble_m(i, j) -=
-                n * t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j);
+            // t_assemble_m(i, j) -=
+            //     n * t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j);
 
-            t_assemble_m(i, j) -=
-                n * t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j);
+            // t_assemble_m(i, j) -=
+            //     n * t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j);
 
           } else {
 
@@ -2098,24 +2094,19 @@ MoFEMErrorCode SimpleContactProblem::
                                   / t_norm_tang_aug_lambda_ptr;
 
 
-t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) 
-                                  / t_norm_tang_aug_lambda_ptr;
-
-
-            // t_assemble_m(i) += n * muTan * t_aug_lambda_ptr *
-            //                    t_tangent_1_at_gp(i) /
-            //                    t_norm_tang_aug_lambda_ptr;
+            // t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) 
+            //                       / t_norm_tang_aug_lambda_ptr;
 
             t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
                                   t_tangent_aug_lambda_ptr(0) *
                                   t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
                                   t_tangent_aug_lambda_ptr(0) / pow_3;
 
-            t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_aug_lambda_ptr(0) *
-                                  t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                  t_tangent_aug_lambda_ptr(0) / pow_3;
+            // t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_aug_lambda_ptr(0) *
+            //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+            //                       t_tangent_aug_lambda_ptr(0) / pow_3;
 
             // t_assemble_m(i) -=
             //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
@@ -2126,10 +2117,10 @@ t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
                                   t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
                                   t_tangent_aug_lambda_ptr(1) / pow_3;
 
-            t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_aug_lambda_ptr(0) *
-                                  t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                                  t_tangent_aug_lambda_ptr(1) / pow_3;
+            // t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_aug_lambda_ptr(0) *
+            //                       t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+            //                       t_tangent_aug_lambda_ptr(1) / pow_3;
 
             // t_assemble_m(i) -=
             //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
@@ -2141,9 +2132,9 @@ t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
                                   t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) /
                                   t_norm_tang_aug_lambda_ptr;
 
-                                  t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) /
-                                  t_norm_tang_aug_lambda_ptr;
+                                  // t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
+                                  // t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) /
+                                  // t_norm_tang_aug_lambda_ptr;
 
             // t_assemble_m(i) += n * muTan * t_aug_lambda_ptr *
             //                    t_tangent_2_at_gp(i) /
@@ -2154,10 +2145,10 @@ t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
                 t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
                 t_tangent_2_at_gp(j) / pow_3;
 
-                t_assemble_m(i, j) -=
-                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-                t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-                t_tangent_2_at_gp(j) / pow_3;
+                // t_assemble_m(i, j) -=
+                // n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
+                // t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+                // t_tangent_2_at_gp(j) / pow_3;
 
             // t_assemble_m(i) -=
             //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
@@ -2168,10 +2159,10 @@ t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
                 t_tangent_aug_lambda_ptr(0) * t_tangent_1_at_gp(i) *
                 t_tangent_2_at_gp(j) / pow_3;
 
-                t_assemble_m(i, j) -=
-                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-                t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
-                t_tangent_2_at_gp(j) / pow_3;
+                // t_assemble_m(i, j) -=
+                // n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
+                // t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
+                // t_tangent_2_at_gp(j) / pow_3;
 
             // t_assemble_m(i) -=
             //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
@@ -2260,7 +2251,7 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -2269,8 +2260,11 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
       continue;
     }
 
+    int stick_slip_check =
+        t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
     bool stick = true;
-    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+    if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -2292,15 +2286,11 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
           t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
                                 t_tangent_2_at_gp(j) * t_base_slave_row;
 
-          t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
-                                t_tangent_1_at_gp(j) * t_base_slave_row;
-          t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_1_at_gp(i) *
-                                t_tangent_2_at_gp(j) * t_base_slave_row;
-
           // t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_2_at_gp(i) *
           //                       t_tangent_1_at_gp(j) * t_base_slave_row;
           // t_assemble_s(i, j) += m * cNTangentPtr * t_tangent_1_at_gp(i) *
           //                       t_tangent_2_at_gp(j) * t_base_slave_row;
+
 
         } else {
 
@@ -2316,15 +2306,15 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
                                 t_tangent_2_at_gp(i) * normal(j) *
                                 t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-                                t_assemble_s(i, j) += muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * normal(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * normal(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * normal(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * normal(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
           // tangent gap aug lambda
 
@@ -2338,13 +2328,13 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
                                 t_tangent_2_at_gp(j) * t_base_slave_row /
                                 t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
           const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                t_norm_tang_aug_lambda_ptr *
@@ -2374,29 +2364,29 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
                                 t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
                                 t_base_slave_row / pow_3;
                                 //
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
         }
 
         ++t_base_slave_row; // update rows
@@ -2478,7 +2468,7 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -2486,8 +2476,11 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
       continue;
     }
 
+    int stick_slip_check =
+        t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
     bool stick = true;
-    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+    if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -2509,11 +2502,6 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
           t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
                                 t_tangent_2_at_gp(j) * t_base_slave_row;
 
-          t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
-                                t_tangent_1_at_gp(j) * t_base_slave_row;
-          t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i) *
-                                t_tangent_2_at_gp(j) * t_base_slave_row;
-
           // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i) *
           //                       t_tangent_1_at_gp(j) * t_base_slave_row;
           // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i) *
@@ -2533,24 +2521,18 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
                                 t_tangent_2_at_gp(i) * normal(j) *
                                 t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * normal(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * normal(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * normal(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * m * cNNormalPtr *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * normal(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
           // tangent gap aug lambda
 
-          // t_assemble_s(i, j) -= muTan  * cNTangentPtr *
-          //                       m * t_tangent_1_at_gp(i) *
-          //                       t_tangent_1_at_gp(j) * t_base_slave_row;
-          // t_assemble_s(i, j) -= muTan  * cNTangentPtr *
-          //                       m * t_tangent_2_at_gp(i) *
-          //                       t_tangent_2_at_gp(j) * t_base_slave_row;
 
           t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr *
                                 m * t_tangent_1_at_gp(i) *
@@ -2561,12 +2543,12 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
                                 t_tangent_2_at_gp(j) * t_base_slave_row /
                                 t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
           const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                t_norm_tang_aug_lambda_ptr *
@@ -2598,29 +2580,29 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
 
                                 //
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
-                                t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                                t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * cNTangentPtr * m *
+          //                       t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+          //                       t_base_slave_row / pow_3;
         }
 
         ++t_base_slave_row; // update rows
@@ -2706,8 +2688,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaSlaveSlave::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 ||
-          t_norm_tang_aug_lambda_ptr <= -muTan * t_aug_lambda_ptr) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -2726,21 +2707,29 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaSlaveSlave::
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
           const double n = m * t_base_lambda;
 
-          t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_1_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+          int stick_slip_check =
+              t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
-          t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_2_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+          bool stick = true;
+          if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
+            stick = false;
+          if (stick) {
+          } else {
+            t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(0) *
+                                  t_tangent_1_at_gp(i) * normal(j) /
+                                  t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(0) *
-                                t_tangent_2_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+            t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(1) *
+                                  t_tangent_2_at_gp(i) * normal(j) /
+                                  t_norm_tang_aug_lambda_ptr;
+          }
+          // t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(0) *
+          //                       t_tangent_2_at_gp(i) * normal(j) /
+          //                       t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(1) *
-                                t_tangent_1_at_gp(i) * normal(j) /
-                                t_norm_tang_aug_lambda_ptr;
+          // t_assemble_m(i, j) -= muTan * n * t_tangent_aug_lambda_ptr(1) *
+          //                       t_tangent_1_at_gp(i) * normal(j) /
+          //                       t_norm_tang_aug_lambda_ptr;
           // ++t_assemble_m;
           ++t_base_lambda; // update cols slave
         }
@@ -2823,7 +2812,7 @@ MoFEMErrorCode SimpleContactProblem::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -2831,8 +2820,11 @@ MoFEMErrorCode SimpleContactProblem::
         continue;
       }
 
+      int stick_slip_check =
+          t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
       bool stick = true;
-      if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
         stick = false;
 
       double val_m = t_w * area_master;
@@ -2852,21 +2844,16 @@ MoFEMErrorCode SimpleContactProblem::
             // cerr << "t_norm_tang_aug_lambda_ptr " << t_norm_tang_aug_lambda_ptr
             //      << "\n";
             // cerr << "t_aug_lambda_ptr " << t_aug_lambda_ptr << "\n";
-            // t_assemble_m(i) += n * t_tangent_1_at_gp(i);
-            // t_assemble_m(i) += n * t_tangent_2_at_gp(i);
-            // ++t_assemble_m;
-            // t_assemble_m(i) += n * t_tangent_2_at_gp(i);
-            // t_assemble_m(i) += n * t_tangent_1_at_gp(i);
-
+            
             t_assemble_m(i, j) +=
                 n * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
             t_assemble_m(i, j) +=
                 n * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
-            t_assemble_m(i, j) +=
-                n * t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j);
-            t_assemble_m(i, j) +=
-                n * t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j);
+            // t_assemble_m(i, j) +=
+            //     n * t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j);
+            // t_assemble_m(i, j) +=
+            //     n * t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j);
 
           } else {
             // cerr << "1slip\n";
@@ -2874,18 +2861,6 @@ MoFEMErrorCode SimpleContactProblem::
             const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                  t_norm_tang_aug_lambda_ptr *
                                  t_norm_tang_aug_lambda_ptr;
-
-            // t_assemble_m(i) -= n * muTan * t_aug_lambda_ptr *
-            //                    t_tangent_1_at_gp(i) /
-            //                    t_norm_tang_aug_lambda_ptr;
-
-            // t_assemble_m(i) +=
-            //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-            //     t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(0) / pow_3;
-
-            // t_assemble_m(i) +=
-            //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-            //     t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(1) / pow_3;
 
             t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
                                   t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) /
@@ -2902,32 +2877,20 @@ MoFEMErrorCode SimpleContactProblem::
                                   t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
                                   t_tangent_aug_lambda_ptr(1) / pow_3;
                                   //
-            t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) /
-                                  t_norm_tang_aug_lambda_ptr;
+            // t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) /
+            //                       t_norm_tang_aug_lambda_ptr;
 
-            t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_aug_lambda_ptr(0) *
-                                  t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
-                                  t_tangent_aug_lambda_ptr(0) / pow_3;
+            // t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_aug_lambda_ptr(0) *
+            //                       t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) *
+            //                       t_tangent_aug_lambda_ptr(0) / pow_3;
 
-            t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_aug_lambda_ptr(0) *
-                                  t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                                  t_tangent_aug_lambda_ptr(1) / pow_3;
+            // t_assemble_m(i, j) += n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_aug_lambda_ptr(0) *
+            //                       t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
+            //                       t_tangent_aug_lambda_ptr(1) / pow_3;
 
-            // ++t_assemble_m;
-            // t_assemble_m(i) -= n * muTan * t_aug_lambda_ptr *
-            //                    t_tangent_2_at_gp(i) /
-            //                    t_norm_tang_aug_lambda_ptr;
-
-            // t_assemble_m(i) +=
-            //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-            //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) / pow_3;
-
-            // t_assemble_m(i) +=
-            //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-            //     t_tangent_aug_lambda_ptr(0) * t_tangent_1_at_gp(i) / pow_3;
 
             t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
                                   t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) /
@@ -2945,19 +2908,19 @@ MoFEMErrorCode SimpleContactProblem::
                 t_tangent_aug_lambda_ptr(0) * t_tangent_1_at_gp(i) *
                 t_tangent_2_at_gp(j) / pow_3;
                 //
-            t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
-                                  t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) /
-                                  t_norm_tang_aug_lambda_ptr;
+            // t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
+            //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) /
+            //                       t_norm_tang_aug_lambda_ptr;
 
-            t_assemble_m(i, j) +=
-                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-                t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-                t_tangent_2_at_gp(j) / pow_3;
+            // t_assemble_m(i, j) +=
+            //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
+            //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+            //     t_tangent_2_at_gp(j) / pow_3;
 
-            t_assemble_m(i, j) +=
-                n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-                t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
-                t_tangent_2_at_gp(j) / pow_3;
+            // t_assemble_m(i, j) +=
+            //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
+            //     t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
+            //     t_tangent_2_at_gp(j) / pow_3;
           }
 
           // ++t_assemble_m;
@@ -3053,7 +3016,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -3061,8 +3024,11 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
       continue;
     }
 
+    int stick_slip_check =
+        t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
     bool stick = true;
-    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+    if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -3082,152 +3048,21 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
         // auto t_assemble_s_2 = get_tensor_from_mat_1(NN, 2 * bbr + 1, 3 * bbc);
 
         if (stick) {
-          // t_assemble_s_1(j) += m * t_base_slave_row * t_tangent_1_at_gp(j);
-          // t_assemble_s_2(j) += m * t_base_slave_row * t_tangent_2_at_gp(j);
-
           t_assemble_s(i, j) += m * t_base_slave_row * t_tangent_1_at_gp(j) *
                                 t_tangent_1_at_gp(i);
           t_assemble_s(i, j) += m * t_base_slave_row * t_tangent_2_at_gp(j) *
                              t_tangent_2_at_gp(i);
 
-          t_assemble_s(i, j) += m * t_base_slave_row * t_tangent_1_at_gp(j) *
-                                t_tangent_2_at_gp(i);
-          t_assemble_s(i, j) += m * t_base_slave_row * t_tangent_2_at_gp(j) *
-                                t_tangent_1_at_gp(i);
-
-          // t_assemble_s_1(j) += m * t_base_slave_row * t_tangent_2_at_gp(j);
-          // t_assemble_s_2(j) += m * t_base_slave_row * t_tangent_1_at_gp(j);
-
-          // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i)
-          // *
-          //                       t_tangent_1_at_gp(j) * t_base_slave_row;
-          // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i)
-          // *
-          //                       t_tangent_2_at_gp(j) * t_base_slave_row;
+          // t_assemble_s(i, j) += m * t_base_slave_row * t_tangent_1_at_gp(j) *
+          //                       t_tangent_2_at_gp(i);
+          // t_assemble_s(i, j) += m * t_base_slave_row * t_tangent_2_at_gp(j) *
+          //                       t_tangent_1_at_gp(i);
 
         } else {
 
           // normal gap
 
-          // t_assemble_s(i, j) +=
-          //     muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_1_at_gp(i) * normal(j) * t_base_slave_row /
-          //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
-          //                       t_tangent_1_at_gp(j) * t_tangent_1_at_gp(i) *
-          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_2_at_gp(i) * normal(j) * t_base_slave_row /
-          //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
-          //                       t_tangent_2_at_gp(j) * t_tangent_1_at_gp(i) *
-          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
-
-          // // t_assemble_s_1(j) += muTan * m * cNNormalPtr *
-          // //                      t_tangent_aug_lambda_ptr(0) * normal(j) *
-          // //                      t_base_slave_row /
-          // //                      (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // // t_assemble_s_1(j) -= muTan * t_aug_lambda_ptr * m *
-          // //                      t_tangent_1_at_gp(j) * t_base_slave_row /
-          // //                      t_norm_tang_aug_lambda_ptr;
-
-          // const double pow_3 = t_norm_tang_aug_lambda_ptr *
-          //                      t_norm_tang_aug_lambda_ptr *
-          //                      t_norm_tang_aug_lambda_ptr;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_aug_lambda_ptr(0) * t_tangent_1_at_gp(j) *
-          //     t_tangent_1_at_gp(i) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(j) *
-          //     t_tangent_1_at_gp(i) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_aug_lambda_ptr(0) * t_tangent_1_at_gp(j) *
-          //     t_tangent_2_at_gp(i) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(j) *
-          //     t_tangent_2_at_gp(i) * t_base_slave_row / pow_3;
-
-          // // t_assemble_s_1(j) += muTan * t_aug_lambda_ptr * m *
-          // //                      t_tangent_aug_lambda_ptr(0) *
-          // //                      t_tangent_aug_lambda_ptr(0) *
-          // //                      t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
-
-          // // t_assemble_s_1(j) += muTan * t_aug_lambda_ptr * m *
-          // //                      t_tangent_aug_lambda_ptr(0) *
-          // //                      t_tangent_aug_lambda_ptr(1) *
-          // //                      t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) += muTan * m * cNNormalPtr * t_tangent_2_at_gp(i) *
-          //                       t_tangent_aug_lambda_ptr(1) * normal(j) *
-          //                       t_base_slave_row /
-          //                       (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
-          //                       t_tangent_2_at_gp(j) * t_tangent_2_at_gp(i) *
-          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
-
-          // t_assemble_s(i, j) += muTan * m * cNNormalPtr * t_tangent_1_at_gp(i) *
-          //                       t_tangent_aug_lambda_ptr(1) * normal(j) *
-          //                       t_base_slave_row /
-          //                       (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
-          //                       t_tangent_2_at_gp(j) * t_tangent_1_at_gp(i) *
-          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
-
-          // // t_assemble_s_2(j) += muTan * m * cNNormalPtr *
-          // //                      t_tangent_aug_lambda_ptr(1) * normal(j) *
-          // //                      t_base_slave_row /
-          // //                      (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // // t_assemble_s_2(j) -= muTan * t_aug_lambda_ptr * m *
-          // //                      t_tangent_2_at_gp(j) * t_base_slave_row /
-          // //                      t_norm_tang_aug_lambda_ptr;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
-          //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(j) *
-          //     t_tangent_2_at_gp(i) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(j) *
-          //     t_tangent_2_at_gp(i) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
-          //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(j) *
-          //     t_tangent_1_at_gp(i) * t_base_slave_row / pow_3;
-
-          // t_assemble_s(i, j) +=
-          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-          //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(j) *
-          //     t_tangent_1_at_gp(i) * t_base_slave_row / pow_3;
-
-          // // t_assemble_s_2(j) += muTan * t_aug_lambda_ptr * m *
-          // //                      t_tangent_aug_lambda_ptr(1) *
-          // //                      t_tangent_aug_lambda_ptr(1) *
-          // //                      t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
-
-          // // t_assemble_s_2(j) += muTan * t_aug_lambda_ptr * m *
-          // //                      t_tangent_aug_lambda_ptr(0) *
-          // //                      t_tangent_aug_lambda_ptr(1) *
-          // //                      t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
-
-//===========+++++++===========
+ 
           t_assemble_s(i, j) +=
               muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
               t_tangent_1_at_gp(i) * normal(j) * t_base_slave_row /
@@ -3237,23 +3072,14 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
                                 t_tangent_1_at_gp(j) * t_tangent_1_at_gp(i) *
                                 t_base_slave_row / (t_norm_tang_aug_lambda_ptr);
 
-          t_assemble_s(i, j) +=
-              muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_2_at_gp(i) * normal(j) * t_base_slave_row /
-              (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
+          // t_assemble_s(i, j) +=
+          //     muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_2_at_gp(i) * normal(j) * t_base_slave_row /
+          //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
-                                t_tangent_1_at_gp(j) * t_tangent_2_at_gp(i) *
-                                t_base_slave_row / (t_norm_tang_aug_lambda_ptr);
-
-          // t_assemble_s_1(j) -= muTan * m * cNNormalPtr *
-          //                      t_tangent_aug_lambda_ptr(0) * normal(j) *
-          //                      t_base_slave_row /
-          //                      (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s_1(j) += muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_1_at_gp(j) * t_base_slave_row /
-          //                      (t_norm_tang_aug_lambda_ptr);
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
+          //                       t_tangent_1_at_gp(j) * t_tangent_2_at_gp(i) *
+          //                       t_base_slave_row / (t_norm_tang_aug_lambda_ptr);
 
           const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                t_norm_tang_aug_lambda_ptr *
@@ -3269,27 +3095,17 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
               t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
               t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) +=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
-              t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) +=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
+          //     t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) +=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
-              t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) +=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
+          //     t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
-          // t_assemble_s_1(j) -= muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_1_at_gp(j) * t_base_slave_row /
-          //                      pow_3;
-
-          // t_assemble_s_1(j) -= muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_aug_lambda_ptr(1) *
-          //                      t_tangent_2_at_gp(j) * t_base_slave_row /
-          //                      pow_3;
+         
 
           t_assemble_s(i, j) +=
               muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(1) *
@@ -3300,23 +3116,14 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
                                 t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
                                 t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-          t_assemble_s(i, j) +=
-              muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(1) *
-              t_tangent_1_at_gp(i) * normal(j) * t_base_slave_row /
-              (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
+          // t_assemble_s(i, j) +=
+          //     muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(1) *
+          //     t_tangent_1_at_gp(i) * normal(j) * t_base_slave_row /
+          //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-          t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
-
-          // t_assemble_s_2(j) -= muTan * m * cNNormalPtr *
-          //                      t_tangent_aug_lambda_ptr(1) * normal(j) *
-          //                      t_base_slave_row /
-          //                      (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s_2(j) += muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_2_at_gp(j) * t_base_slave_row /
-          //                      t_norm_tang_aug_lambda_ptr;
+          // t_assemble_s(i, j) -= muTan * t_aug_lambda_ptr * m *
+          //                       t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+          //                       t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
           t_assemble_s(i, j) +=
               muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
@@ -3328,15 +3135,15 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
               t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
               t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) +=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
-              t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-              t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) +=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
+          //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+          //     t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) +=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-              t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) +=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+          //     t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
         }
 
         ++t_base_slave_row; // update rows
@@ -3429,7 +3236,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0) {
+    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -3437,8 +3244,11 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
       continue;
     }
 
+    int stick_slip_check =
+        t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
     bool stick = true;
-    if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+    if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -3459,28 +3269,15 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
 
         if (stick) {
 
-          // t_assemble_s_1(j) -= m * t_base_slave_row * t_tangent_1_at_gp(j);
-          // t_assemble_s_2(j) -= m * t_base_slave_row * t_tangent_2_at_gp(j);
-
           t_assemble_s(i, j) -= m * t_base_slave_row * t_tangent_1_at_gp(i) *
                                 t_tangent_1_at_gp(j);
           t_assemble_s(i, j) -= m * t_base_slave_row * t_tangent_2_at_gp(i) *
                                 t_tangent_2_at_gp(j);
 
-          t_assemble_s(i, j) -= m * t_base_slave_row * t_tangent_2_at_gp(i) *
-                                t_tangent_1_at_gp(j);
-          t_assemble_s(i, j) -= m * t_base_slave_row * t_tangent_1_at_gp(i) *
-                                t_tangent_2_at_gp(j);
-
-          // t_assemble_s_1(j) -= m * t_base_slave_row * t_tangent_2_at_gp(j);
-          // t_assemble_s_2(j) -= m * t_base_slave_row * t_tangent_1_at_gp(j);
-          
-          // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_1_at_gp(i)
-          // *
-          //                       t_tangent_1_at_gp(j) * t_base_slave_row;
-          // t_assemble_s(i, j) -= m * cNTangentPtr * t_tangent_2_at_gp(i)
-          // *
-          //                       t_tangent_2_at_gp(j) * t_base_slave_row;
+          // t_assemble_s(i, j) -= m * t_base_slave_row * t_tangent_2_at_gp(i) *
+          //                       t_tangent_1_at_gp(j);
+          // t_assemble_s(i, j) -= m * t_base_slave_row * t_tangent_1_at_gp(i) *
+          //                       t_tangent_2_at_gp(j);
 
         } else {
 
@@ -3494,23 +3291,16 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
                                   t_base_slave_row /
                                   (t_norm_tang_aug_lambda_ptr);
 
-          t_assemble_s(i, j) -=
-              muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_2_at_gp(i) * normal(j) * t_base_slave_row /
-              (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
+          // t_assemble_s(i, j) -=
+          //     muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_2_at_gp(i) * normal(j) * t_base_slave_row /
+          //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * m *
-                                t_tangent_1_at_gp(j) * t_tangent_2_at_gp(i) *
-                                t_base_slave_row / (t_norm_tang_aug_lambda_ptr);
+          // t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * m *
+          //                       t_tangent_1_at_gp(j) * t_tangent_2_at_gp(i) *
+          //                       t_base_slave_row / (t_norm_tang_aug_lambda_ptr);
 
-          // t_assemble_s_1(j) -= muTan * m * cNNormalPtr *
-          //                      t_tangent_aug_lambda_ptr(0) * normal(j) *
-          //                      t_base_slave_row /
-          //                      (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-          // t_assemble_s_1(j) += muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_1_at_gp(j) * t_base_slave_row /
-          //                      (t_norm_tang_aug_lambda_ptr);
 
           const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                t_norm_tang_aug_lambda_ptr *
@@ -3526,25 +3316,17 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
               t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
               t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
-              t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
+          //     t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
-              t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
+          //     t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
-          // t_assemble_s_1(j) -= muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
 
-          // t_assemble_s_1(j) -= muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_aug_lambda_ptr(1) *
-          //                      t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
           t_assemble_s(i, j) -=
               muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(1) *
@@ -3555,23 +3337,15 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
                                 t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
                                 t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-t_assemble_s(i, j) -=
-              muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(1) *
-              t_tangent_1_at_gp(i) * normal(j) * t_base_slave_row /
-              (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
+// t_assemble_s(i, j) -=
+//               muTan * m * cNNormalPtr * t_tangent_aug_lambda_ptr(1) *
+//               t_tangent_1_at_gp(i) * normal(j) * t_base_slave_row /
+//               (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-          t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * m *
-                                t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
-                                t_base_slave_row / t_norm_tang_aug_lambda_ptr;
+//           t_assemble_s(i, j) += muTan * t_aug_lambda_ptr * m *
+//                                 t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) *
+//                                 t_base_slave_row / t_norm_tang_aug_lambda_ptr;
 
-          // t_assemble_s_2(j) -= muTan * m * cNNormalPtr *
-          //                      t_tangent_aug_lambda_ptr(1) * normal(j) *
-          //                      t_base_slave_row /
-          //                      (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-          // t_assemble_s_2(j) += muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_2_at_gp(j) * t_base_slave_row /
-          //                      t_norm_tang_aug_lambda_ptr;
 
           t_assemble_s(i, j) -=
               muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
@@ -3583,25 +3357,15 @@ t_assemble_s(i, j) -=
               t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
               t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
-              t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-              t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(1) *
+          //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+          //     t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
 
-          t_assemble_s(i, j) -=
-              muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
-              t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-              t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
-
-          // t_assemble_s_2(j) -= muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_aug_lambda_ptr(1) *
-          //                      t_tangent_aug_lambda_ptr(1) *
-          //                      t_tangent_2_at_gp(j) * t_base_slave_row / pow_3;
-
-          // t_assemble_s_2(j) -= muTan * t_aug_lambda_ptr * m *
-          //                      t_tangent_aug_lambda_ptr(0) *
-          //                      t_tangent_aug_lambda_ptr(1) *
-          //                      t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
+          // t_assemble_s(i, j) -=
+          //     muTan * t_aug_lambda_ptr * m * t_tangent_aug_lambda_ptr(0) *
+          //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+          //     t_tangent_1_at_gp(j) * t_base_slave_row / pow_3;
 
           // ===========++++++++========
 
@@ -3698,13 +3462,16 @@ MoFEMErrorCode SimpleContactProblem::
           const double n = m * t_base_lambda;
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          if (t_aug_lambda_ptr > 0) {
+          if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
             // t_assemble_m(0, 0) -= n / cNTangentPtr;
             // //++t_assemble_m;
             // t_assemble_m(1, 1) -= n / cNTangentPtr;
           } else {
+            int stick_slip_check =
+                t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
             bool stick = true;
-            if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+            if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
               stick = false;
 
             if (stick) {
@@ -3721,13 +3488,13 @@ MoFEMErrorCode SimpleContactProblem::
                                     t_tangent_2_at_gp(i) * normal(j) /
                                     (cNTangentPtr * t_norm_tang_aug_lambda_ptr);
 
-              t_assemble_m(i, j) -= n * muTan * t_tangent_aug_lambda_ptr(0) *
-                                    t_tangent_2_at_gp(i) * normal(j) /
-                                    (cNTangentPtr * t_norm_tang_aug_lambda_ptr);
+              // t_assemble_m(i, j) -= n * muTan * t_tangent_aug_lambda_ptr(0) *
+              //                       t_tangent_2_at_gp(i) * normal(j) /
+              //                       (cNTangentPtr * t_norm_tang_aug_lambda_ptr);
 
-              t_assemble_m(i, j) -= n * muTan * t_tangent_aug_lambda_ptr(1) *
-                                    t_tangent_1_at_gp(i) * normal(j) /
-                                    (cNTangentPtr * t_norm_tang_aug_lambda_ptr);
+              // t_assemble_m(i, j) -= n * muTan * t_tangent_aug_lambda_ptr(1) *
+              //                       t_tangent_1_at_gp(i) * normal(j) /
+              //                       (cNTangentPtr * t_norm_tang_aug_lambda_ptr);
             }
           }
           ++t_base_lambda; // update cols slave
@@ -3825,21 +3592,24 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionLambdaTanSlaveSlave::
           const double n = m * t_base_lambda;
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          if (t_aug_lambda_ptr > 0) {
+          if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
             t_assemble_m(i, j) -=
                 n * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) / cNTangentPtr;
-            //++t_assemble_m;
+
             t_assemble_m(i, j) -=
                 n * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) / cNTangentPtr;
 
-            t_assemble_m(i, j) -=
-                n * t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) / cNTangentPtr;
-            //++t_assemble_m;
-            t_assemble_m(i, j) -=
-                n * t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) / cNTangentPtr;
+            // t_assemble_m(i, j) -=
+            //     n * t_tangent_2_at_gp(i) * t_tangent_1_at_gp(j) / cNTangentPtr;
+
+            // t_assemble_m(i, j) -=
+            //     n * t_tangent_1_at_gp(i) * t_tangent_2_at_gp(j) / cNTangentPtr;
           } else {
+            int stick_slip_check =
+                t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
             bool stick = true;
-            if (t_norm_tang_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+            if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
               stick = false;
 
             if (stick) {
@@ -3893,67 +3663,42 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionLambdaTanSlaveSlave::
                   t_tangent_1_at_gp(j) / (pow_3 * cNTangentPtr);
 
               //
-              t_assemble_m(i, j) -= n * t_tangent_2_at_gp(i) *
-                                    t_tangent_1_at_gp(j) / cNTangentPtr;
+              // t_assemble_m(i, j) -= n * t_tangent_2_at_gp(i) *
+              //                       t_tangent_1_at_gp(j) / cNTangentPtr;
 
-              t_assemble_m(i, j) -= n * t_tangent_1_at_gp(i) *
-                                    t_tangent_2_at_gp(j) / cNTangentPtr;
+              // t_assemble_m(i, j) -= n * t_tangent_1_at_gp(i) *
+              //                       t_tangent_2_at_gp(j) / cNTangentPtr;
 
-              t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
-                                    t_tangent_2_at_gp(i) *
-                                    t_tangent_1_at_gp(j) /
-                                    (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
+              // t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
+              //                       t_tangent_2_at_gp(i) *
+              //                       t_tangent_1_at_gp(j) /
+              //                       (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-              t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
-                                    t_tangent_1_at_gp(i) *
-                                    t_tangent_2_at_gp(j) /
-                                    (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
+              // t_assemble_m(i, j) -= n * muTan * t_aug_lambda_ptr *
+              //                       t_tangent_1_at_gp(i) *
+              //                       t_tangent_2_at_gp(j) /
+              //                       (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
 
-              t_assemble_m(i, j) +=
-                  n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-                  t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
-                  t_tangent_1_at_gp(j) / (pow_3 * cNTangentPtr);
-
-              t_assemble_m(i, j) +=
-                  n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-                  t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
-                  t_tangent_2_at_gp(j) / (pow_3 * cNTangentPtr);
-
-              t_assemble_m(i, j) +=
-                  n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-                  t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-                  t_tangent_2_at_gp(j) / (pow_3 * cNTangentPtr);
-
-              t_assemble_m(i, j) +=
-                  n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-                  t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
-                  t_tangent_1_at_gp(j) / (pow_3 * cNTangentPtr);
-
-              // t_assemble_m(0, 0) -= n / cNTangentPtr;
-              // t_assemble_m(0, 0) -=
-              //     n * muTan * t_aug_lambda_ptr /
-              //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-              // t_assemble_m(0, 0) +=
+              // t_assemble_m(i, j) +=
               //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-              //     t_tangent_aug_lambda_ptr(0) / (pow_3 * cNTangentPtr);
+              //     t_tangent_aug_lambda_ptr(0) * t_tangent_2_at_gp(i) *
+              //     t_tangent_1_at_gp(j) / (pow_3 * cNTangentPtr);
 
-              // t_assemble_m(0, 1) +=
+              // t_assemble_m(i, j) +=
               //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-              //     t_tangent_aug_lambda_ptr(1) / (pow_3 * cNTangentPtr);
+              //     t_tangent_aug_lambda_ptr(1) * t_tangent_2_at_gp(i) *
+              //     t_tangent_2_at_gp(j) / (pow_3 * cNTangentPtr);
 
-              // t_assemble_m(1, 1) -= n / cNTangentPtr;
-              // t_assemble_m(1, 1) -=
-              //     n * muTan * t_aug_lambda_ptr /
-              //     (t_norm_tang_aug_lambda_ptr * cNTangentPtr);
-
-              // t_assemble_m(1, 1) +=
+              // t_assemble_m(i, j) +=
               //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(1) *
-              //     t_tangent_aug_lambda_ptr(1) / (pow_3 * cNTangentPtr);
+              //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+              //     t_tangent_2_at_gp(j) / (pow_3 * cNTangentPtr);
 
-              // t_assemble_m(1, 0) +=
+              // t_assemble_m(i, j) +=
               //     n * muTan * t_aug_lambda_ptr * t_tangent_aug_lambda_ptr(0) *
-              //     t_tangent_aug_lambda_ptr(1) / (pow_3 * cNTangentPtr);
+              //     t_tangent_aug_lambda_ptr(1) * t_tangent_1_at_gp(i) *
+              //     t_tangent_1_at_gp(j) / (pow_3 * cNTangentPtr);
+
             }
           }
           ++t_base_lambda; // update cols slave
@@ -4022,6 +3767,8 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterMaster::doWo
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
     if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      cerr << "Pass Right\n";
+
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -4108,6 +3855,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterSlave::doWor
     if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
       ++t_w;
       ++t_aug_lambda_ptr;
+      cerr << "Pass Wrong\n";
       continue;
     }
 
@@ -4795,8 +4543,8 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
         *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0) {
-        // cerr << "NO CONTACT!\n";
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+        // cerr << " RHS NO CONTACT!\n";
         ++t_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_tangent_gap;
@@ -4806,8 +4554,10 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
         continue;
       }
 
+      int stick_slip_check = t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
       bool stick = true;
-      if (t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
         stick = false;
 
       // cerr << "t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr"
@@ -4823,30 +4573,17 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
         auto t_assemble_m = get_tensor_vec(vecF, 3 * bbc);
 
         if (stick) { // stick
-          // cerr << "stick\n";
+          // cerr << "RHS   stick\n";
           t_assemble_m(i) -= val_m * t_tangent_1_at_gp(i) *
-                             (t_tangent_aug_lambda_ptr(0) + t_tangent_aug_lambda_ptr(1)) * t_base_master;
+                             (t_tangent_aug_lambda_ptr(0) /*+ t_tangent_aug_lambda_ptr(1)*/) * t_base_master;
 
           t_assemble_m(i) -=
               val_m * t_tangent_2_at_gp(i) *
-              (t_tangent_aug_lambda_ptr(0) + t_tangent_aug_lambda_ptr(1)) *
+              (/*t_tangent_aug_lambda_ptr(0)*/ + t_tangent_aug_lambda_ptr(1)) *
               t_base_master;
 
-          // t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
-          //                    t_tangent_aug_lambda_ptr(0) * t_base_master;
-
-          // t_assemble_m(i) -= val_m * t_tangent_1_at_gp(i) *
-          //                    t_tangent_aug_lambda_ptr(1) * t_base_master;
         } else { // slip
-          // cerr << "slip\n";
-
-          // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
-          //                     muTan *
-          //                    t_base_master/ t_norm_aug_lambda_ptr;
-
-          // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
-          //                     muTan *
-          //                    t_base_master/ t_norm_aug_lambda_ptr;
+          // cerr << "RHS   slip\n";
 
           t_assemble_m(i) +=
               val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
@@ -4856,13 +4593,13 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
               val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
               muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
 
-          t_assemble_m(i) +=
-              val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
-              muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
+          // t_assemble_m(i) +=
+          //     val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
+          //     muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
 
-          t_assemble_m(i) +=
-              val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
-              muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
+          // t_assemble_m(i) +=
+          //     val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
+          //     muTan * t_aug_lambda_ptr * t_base_master / t_norm_aug_lambda_ptr;
         }
 
         ++t_base_master;
@@ -4935,7 +4672,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
         *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0) {
+      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
         ++t_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_tangent_gap;
@@ -4945,8 +4682,10 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
         continue;
       }
 
+      int stick_slip_check = t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
       bool stick = true;
-      if (t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
         stick = false;
 
       const double val_m = t_w * area_m;
@@ -4965,27 +4704,14 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
           t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
                              t_tangent_aug_lambda_ptr(1) * t_base_slave;
 
-          t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
-                             t_tangent_aug_lambda_ptr(0) * t_base_slave;
-
-          t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
-                             t_tangent_aug_lambda_ptr(1) * t_base_slave;
-
           // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
           //                    t_tangent_aug_lambda_ptr(0) * t_base_slave;
 
           // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
           //                    t_tangent_aug_lambda_ptr(1) * t_base_slave;
+
         } else { // slip
           // cerr << "slip\n";
-
-          // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
-          //                     muTan *
-          //                    t_base_slave/ t_norm_aug_lambda_ptr;
-
-          // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
-          //                     muTan *
-          //                    t_base_slave/ t_norm_aug_lambda_ptr;
 
           t_assemble_m(i) -=
               val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
@@ -4995,13 +4721,13 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
               val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
               muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
 
-          t_assemble_m(i) -=
-              val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
-              muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
+          // t_assemble_m(i) -=
+          //     val_m * t_tangent_2_at_gp(i) * t_tangent_aug_lambda_ptr(0) *
+          //     muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
 
-          t_assemble_m(i) -=
-              val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
-              muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
+          // t_assemble_m(i) -=
+          //     val_m * t_tangent_1_at_gp(i) * t_tangent_aug_lambda_ptr(1) *
+          //     muTan * t_aug_lambda_ptr * t_base_slave / t_norm_aug_lambda_ptr;
         }
 
         ++t_base_slave;
@@ -5081,8 +4807,10 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
+      int stick_slip_check = t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
+
       bool stick = true;
-      if (t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr)
+      if (stick_slip_check > 0 || std::fabs(stick_slip_check) > ALM_TOL)
         stick = false;
 
       // cerr << "t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr "
@@ -5096,7 +4824,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
 
         auto t_assemble_m = get_tensor_vec(vecF, 3 * bbc);
         // cerr << "t_aug_lambda_ptr   " << t_aug_lambda_ptr << "\n";
-        if (t_aug_lambda_ptr > 0) {
+        if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
           // cerr << "NO CONTACT " <<"\n";
           t_assemble_m(j) -= val_m * t_tangent_lambda(0) * t_tangent_1_at_gp(j) *
                              t_base_slave_lambda / cNTangentPtr;
@@ -5105,26 +4833,18 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
                              t_tangent_2_at_gp(j) * t_base_slave_lambda /
                              cNTangentPtr;
 
-          t_assemble_m(j) -= val_m * t_tangent_lambda(0) *
-                             t_tangent_2_at_gp(j) * t_base_slave_lambda /
-                             cNTangentPtr;
-
-          t_assemble_m(j) -= val_m * t_tangent_lambda(1) *
-                             t_tangent_1_at_gp(j) * t_base_slave_lambda /
-                             cNTangentPtr;
-
-          // t_assemble_m(1) -= val_m *
-          //                    t_tangent_lambda(1) * t_base_slave_lambda /
+          // t_assemble_m(j) -= val_m * t_tangent_lambda(0) *
+          //                    t_tangent_2_at_gp(j) * t_base_slave_lambda /
           //                    cNTangentPtr;
+
+          // t_assemble_m(j) -= val_m * t_tangent_lambda(1) *
+          //                    t_tangent_1_at_gp(j) * t_base_slave_lambda /
+          //                    cNTangentPtr;
+
         } else {
           if (stick) { // stick
             // cerr << "t_tangent_gap " << t_tangent_gap
-            //      << "\n"; 
-                 // cerr << "t_tangent_gap  " <<
-                          // t_tangent_gap << "\n";
-            // t_assemble_m(i) += val_m * (t_tangent_gap(0) +
-            //                    t_tangent_gap(1)) * t_base_slave_lambda;
-
+           
             t_assemble_m(j) += val_m *
                                t_tangent_gap(0) * t_tangent_1_at_gp(j) *
                                t_base_slave_lambda;
@@ -5132,26 +4852,15 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
             t_assemble_m(j) += val_m * t_tangent_gap(1) * t_tangent_2_at_gp(j) *
                                t_base_slave_lambda;
 
-            t_assemble_m(j) += val_m * t_tangent_gap(1) * t_tangent_1_at_gp(j) *
-                               t_base_slave_lambda;
-
-            t_assemble_m(j) += val_m * t_tangent_gap(0) * t_tangent_2_at_gp(j) *
-                               t_base_slave_lambda;
-
-            // t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
-            //                    t_tangent_aug_lambda_ptr(1) *
+            // t_assemble_m(j) += val_m * t_tangent_gap(1) * t_tangent_1_at_gp(j) *
             //                    t_base_slave_lambda;
+
+            // t_assemble_m(j) += val_m * t_tangent_gap(0) * t_tangent_2_at_gp(j) *
+            //                    t_base_slave_lambda;
+
           } else { // slip
 
-            // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
-            //                     muTan *
-            //                    t_base_slave_lambda/
-            //                    t_norm_aug_lambda_ptr;
-
-            // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
-            //                     muTan *
-            //                    t_base_slave_lambda/
-            //                    t_norm_aug_lambda_ptr;
+            
             ///======
 
             // cerr << "t_tangent_lambda " << t_tangent_lambda << "\n";
@@ -5169,40 +4878,20 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
                                            t_norm_aug_lambda_ptr) *
                 t_tangent_2_at_gp(j) * t_base_slave_lambda / cNTangentPtr;
 
-            t_assemble_m(j) -=
-                val_m *
-                (t_tangent_lambda(0) + t_tangent_aug_lambda_ptr(0) * muTan *
-                                           t_aug_lambda_ptr /
-                                           t_norm_aug_lambda_ptr) *
-                t_tangent_2_at_gp(j) * t_base_slave_lambda / cNTangentPtr;
+            // t_assemble_m(j) -=
+            //     val_m *
+            //     (t_tangent_lambda(0) + t_tangent_aug_lambda_ptr(0) * muTan *
+            //                                t_aug_lambda_ptr /
+            //                                t_norm_aug_lambda_ptr) *
+            //     t_tangent_2_at_gp(j) * t_base_slave_lambda / cNTangentPtr;
 
-            t_assemble_m(j) -=
-                val_m *
-                (t_tangent_lambda(1) + t_tangent_aug_lambda_ptr(1) * muTan *
-                                           t_aug_lambda_ptr /
-                                           t_norm_aug_lambda_ptr) *
-                t_tangent_1_at_gp(j) * t_base_slave_lambda / cNTangentPtr;
-
-            // t_assemble_m(1) -=
+            // t_assemble_m(j) -=
             //     val_m *
             //     (t_tangent_lambda(1) + t_tangent_aug_lambda_ptr(1) * muTan *
             //                                t_aug_lambda_ptr /
             //                                t_norm_aug_lambda_ptr) *
-            //     t_base_slave_lambda / cn_tangent_value;
-            ///======
-            // t_assemble_m(i) -= val_m * t_tangent_2_at_gp(i) *
-            //                    t_tangent_lambda(1) * t_base_slave_lambda /
-            //                    cn_tangent_value;
+            //     t_tangent_1_at_gp(j) * t_base_slave_lambda / cNTangentPtr;
 
-            // t_assemble_m(i) += val_m * t_tangent_1_at_gp(i) *
-            //                    t_tangent_aug_lambda_ptr(0) * muTan *
-            //                    t_aug_lambda_ptr * t_base_slave_lambda /
-            //                    t_norm_aug_lambda_ptr;
-
-            // t_assemble_m(i) += val_m * t_tangent_2_at_gp(i) *
-            //                    t_tangent_aug_lambda_ptr(1) * muTan *
-            //                    t_aug_lambda_ptr * t_base_slave_lambda /
-            //                    t_norm_aug_lambda_ptr;
           }
         }
 
