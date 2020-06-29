@@ -350,7 +350,7 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
-    auto get_master_contact_lhs = [&](auto contact_problem,
+    auto get_contact_lhs = [&](auto contact_problem,
                                       auto make_element, bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
@@ -502,7 +502,7 @@ int main(int argc, char *argv[]) {
     if (convect_pts == PETSC_TRUE) {
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
-          get_master_contact_lhs(contact_problem,
+          get_contact_lhs(contact_problem,
                                  make_convective_master_element),
           PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetJacobian(
@@ -513,7 +513,7 @@ int main(int argc, char *argv[]) {
     } else {
         CHKERR DMMoFEMSNESSetJacobian(
             dm, "CONTACT_ELEM",
-            get_master_contact_lhs(contact_problem, make_contact_element,
+            get_contact_lhs(contact_problem, make_contact_element,
                                    alm_flag),
             PETSC_NULL, PETSC_NULL);
         CHKERR DMMoFEMSNESSetJacobian(
