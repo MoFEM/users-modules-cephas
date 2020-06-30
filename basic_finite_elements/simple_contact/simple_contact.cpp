@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
                             wave_length, &wave_length, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
                             &wave_ampl, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh",
+    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh ",
                             "", mesh_height, &mesh_height, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
