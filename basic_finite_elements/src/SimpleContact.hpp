@@ -24,7 +24,7 @@
  * meshes \ingroup simple_contact_problem
  */
 
-struct SimpleContactProblem {
+struct SimpleContactProblem : public MoFEM::FEMethod {
 
   using ContactEle = ContactPrismElementForcesAndSourcesCore;
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
@@ -74,8 +74,37 @@ struct SimpleContactProblem {
 
     MoFEM::Interface &mField;
     bool newtonCotes;
+    SmartPetscObj<Vec> contactStateVec;
+
     SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false)
         : ContactEle(m_field), mField(m_field), newtonCotes(newton_cotes) {}
+
+    MoFEMErrorCode preProcess() {
+      MoFEMFunctionBegin;
+      if (snes_ctx == CTX_SNESSETFUNCTION)
+        CHKERR VecZeroEntries(contactStateVec);
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode postProcess() {
+      MoFEMFunctionBegin;
+
+      if (snes_ctx != CTX_SNESSETFUNCTION)
+        MoFEMFunctionReturnHot(0);
+
+      CHKERR VecAssemblyBegin(contactStateVec);
+      CHKERR VecAssemblyEnd(contactStateVec);
+
+      const double *array;
+      CHKERR VecGetArrayRead(contactStateVec, &array);
+      if (mField.get_comm_rank() == 0) {
+        PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
+                    (int)array[0], (int)array[1]);
+      }
+      CHKERR VecRestoreArrayRead(contactStateVec, &array);
+
+      MoFEMFunctionReturn(0);
+    }
 
     int getRule(int order) {
       if (newtonCotes)
@@ -374,7 +403,7 @@ struct SimpleContactProblem {
   double cnValue;
   bool newtonCotes;
   MoFEM::Interface &mField;
-
+ 
   SimpleContactProblem(MoFEM::Interface &m_field, double &cn_value,
                        bool newton_cotes = false)
       : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes) {}
