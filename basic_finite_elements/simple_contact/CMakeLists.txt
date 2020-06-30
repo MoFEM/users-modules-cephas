@@ -36,7 +36,7 @@ file(
   COPY examples DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 install(
-  DIRECTORY examples DESTINATION ${BFE_MOD_DIR})
+  DIRECTORY examples DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
   
 add_test(
   test_simple_contact_8cube
