@@ -39,8 +39,8 @@ int main(int argc, char *argv[]) {
                                  "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n" 
-                                 "-alm_flag 0 \n";
+                                 "-my_test_num 0 \n"
+                                 "-my_alm_flag 0 \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
         "approximation order of spatial positions in contact interface", "", 1,
         &order_contact, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_ho_levels_num", "number of higher order levels",
-                           "", 0, &nb_ho_levels, PETSC_NULL);    
+                           "", 0, &nb_ho_levels, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_order_lambda",
                            "approximation order of Lagrange multipliers", "", 1,
                            &order_lambda, PETSC_NULL);
@@ -131,8 +131,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_out_integ_pts",
                             "output data at contact integration points", "",
                             PETSC_FALSE, &out_integ_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-alm_flag", "set to convect integration pts",
-                            "", PETSC_FALSE, &alm_flag, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_alm_flag",
+                            "if set use ALM, if not use C-function", "",
+                            PETSC_FALSE, &alm_flag, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_wave_surf",
                             "if set true, make one of the surfaces wavy", "",
@@ -312,51 +313,33 @@ int main(int argc, char *argv[]) {
 
     auto set_contact_order = [&](Range &contact_prisms, int order_contact,
                                  int nb_ho_levels) {
-      MoFEMFunctionBegin;                             
-      Range ents_3d;
-      ents_3d.merge(contact_prisms);
-      for (int ll = 0; ll < nb_ho_levels; ll++) {
-        Range verts, tets;
-        CHKERR moab.get_connectivity(ents_3d, verts, true);
-        CHKERR moab.get_adjacencies(verts, 3, false, tets,
-                                    moab::Interface::UNION);                          
-        ents_3d.merge(tets);
-      }
+      MoFEMFunctionBegin;
+      Range contact_tris, contact_edges;
+      CHKERR moab.get_adjacencies(contact_prisms, 2, false, contact_tris,
+                                  moab::Interface::UNION);
+      contact_tris = contact_tris.subset_by_type(MBTRI);
+      CHKERR moab.get_adjacencies(contact_tris, 1, false, contact_edges,
+                                  moab::Interface::UNION);
       Range ho_ents;
-      for (Range::iterator it = ents_3d.begin(); it != ents_3d.end(); it++) {
-        for (auto d : {1, 2, 3}) {
-          Range ents;
-          CHKERR moab.get_adjacencies(&*it, 1, d, false, ents,
+      ho_ents.merge(contact_tris);
+      ho_ents.merge(contact_edges);
+      for (int ll = 0; ll < nb_ho_levels; ll++) {
+        Range ents, verts, tets;
+        CHKERR moab.get_connectivity(ho_ents, verts, true);
+        CHKERR moab.get_adjacencies(verts, 3, false, tets,
+                                    moab::Interface::UNION);
+        tets = tets.subset_by_type(MBTET);
+        for (auto d : {1, 2}) {
+          CHKERR moab.get_adjacencies(tets, d, false, ents,
                                       moab::Interface::UNION);
-          if (d == 2)
-            ents = ents.subset_by_type(MBTRI);
-          if (d == 3)
-            ents = ents.subset_by_type(MBTET);
-          ho_ents.merge(ents);
         }
+        ho_ents = unite(ho_ents, ents);
+        ho_ents = unite(ho_ents, tets);
       }
 
       CHKERR m_field.set_field_order(ho_ents, "SPATIAL_POSITION",
                                      order_contact);
 
-      cout << "Edges: " <<  ho_ents.subset_by_type(MBEDGE).size() << endl;                            
-      ho_ents.subset_by_type(MBEDGE).print();
-      cout << "Tris: " <<  ho_ents.subset_by_type(MBTRI).size() << endl;                            
-      ho_ents.subset_by_type(MBTRI).print();
-      cout << "Tets: " <<  ho_ents.subset_by_type(MBTET).size() << endl;                            
-      ho_ents.subset_by_type(MBTET).print();
-
-      CHKERR mmanager_ptr->addMeshset(BLOCKSET, 11);
-      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 11,
-                                                ho_ents.subset_by_type(MBEDGE));
-      CHKERR mmanager_ptr->addMeshset(BLOCKSET, 12);
-      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 12,
-                                                ho_ents.subset_by_type(MBTRI));                                          
-      CHKERR mmanager_ptr->addMeshset(BLOCKSET, 13);
-      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 13,
-                                                ho_ents.subset_by_type(MBTET));                                         
-      EntityHandle rootset = moab.get_root_set();
-      CHKERR moab.write_file("ho_levels.h5m", "MOAB", "", &rootset, 1);
       MoFEMFunctionReturn(0);
     };
 
@@ -452,8 +435,8 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto get_contact_rhs = [&](auto contact_problem,
-                               auto make_element, bool is_alm = false) {
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element,
+                               bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsRhs(
@@ -462,8 +445,8 @@ int main(int argc, char *argv[]) {
       return fe_rhs_simple_contact;
     };
 
-    auto get_master_traction_rhs = [&](auto contact_problem,
-                                       auto make_element, bool is_alm = false) {
+    auto get_master_traction_rhs = [&](auto contact_problem, auto make_element,
+                                       bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
@@ -482,8 +465,8 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
-    auto get_contact_lhs = [&](auto contact_problem,
-                                      auto make_element, bool is_alm = false) {
+    auto get_contact_lhs = [&](auto contact_problem, auto make_element,
+                               bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsLhs(
@@ -634,8 +617,7 @@ int main(int argc, char *argv[]) {
     if (convect_pts == PETSC_TRUE) {
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
-          get_contact_lhs(contact_problem,
-                                 make_convective_master_element),
+          get_contact_lhs(contact_problem, make_convective_master_element),
           PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
@@ -643,20 +625,20 @@ int main(int argc, char *argv[]) {
                                   make_convective_slave_element),
           PETSC_NULL, PETSC_NULL);
     } else {
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_contact_lhs(contact_problem, make_contact_element,
-                                   alm_flag),
-            PETSC_NULL, PETSC_NULL);
-        CHKERR DMMoFEMSNESSetJacobian(
-            dm, "CONTACT_ELEM",
-            get_master_traction_lhs(contact_problem, make_contact_element,
-                                    alm_flag),
-            PETSC_NULL, PETSC_NULL);
-      }
-    CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(), PETSC_NULL,
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_contact_lhs(contact_problem, make_contact_element, alm_flag),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "CONTACT_ELEM",
+          get_master_traction_lhs(contact_problem, make_contact_element,
+                                  alm_flag),
+          PETSC_NULL, PETSC_NULL);
+    }
+    CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
+                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL,
                                   PETSC_NULL);
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, fe_null, fe_null,
                                   dirichlet_bc_ptr);
 
@@ -789,8 +771,7 @@ int main(int argc, char *argv[]) {
       PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
                   (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
 
-      PetscPrintf(PETSC_COMM_SELF,
-                  "Active contact area: %9.9f out of %9.9f\n",
+      PetscPrintf(PETSC_COMM_SELF, "Active contact area: %9.9f out of %9.9f\n",
                   contact_area[0], contact_area[1]);
     }
 
@@ -843,6 +824,11 @@ int main(int argc, char *argv[]) {
         expected_energy = 0.000733621;
         expected_contact_area = 3.0;
         expected_nb_gauss_pts = 144;
+        break;
+      case WAVE_2D:
+        expected_energy = 0.008538894;
+        expected_contact_area = 0.125;
+        expected_nb_gauss_pts = 384;
         break;
       default:
         SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
