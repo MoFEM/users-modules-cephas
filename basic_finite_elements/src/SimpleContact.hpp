@@ -407,66 +407,66 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
           mField.get_comm(), local_size, CommonDataSimpleContact::LAST_ELEMENT);
     }
 
-    double contactClearance;
+    // double contactClearance;
 
-    std::map<int, BlockOptionDataSprings> mapSpring;
-    //   ~DataAtIntegrationPtsSprings() {}
-    DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
+    // std::map<int, BlockOptionDataSprings> mapSpring;
+    // //   ~DataAtIntegrationPtsSprings() {}
+    // DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
 
-      ierr = setBlocks();
-      CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    }
+    //   ierr = setBlocks();
+    //   CHKERRABORT(PETSC_COMM_WORLD, ierr);
+    // }
 
-    MoFEMErrorCode getParameters() {
-      MoFEMFunctionBegin; // They will be overwritten by BlockData
-      CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
+    // MoFEMErrorCode getParameters() {
+    //   MoFEMFunctionBegin; // They will be overwritten by BlockData
+    //   CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
 
-      ierr = PetscOptionsEnd();
-      CHKERRQ(ierr);
-      MoFEMFunctionReturn(0);
-    }
+    //   ierr = PetscOptionsEnd();
+    //   CHKERRQ(ierr);
+    //   MoFEMFunctionReturn(0);
+    // }
 
-    MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
-      MoFEMFunctionBegin;
+    // MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
+    //   MoFEMFunctionBegin;
 
-      springStiffnessNormal = data.springStiffnessNormal;
-      contactClearance = data.contactClearance;
+    //   springStiffnessNormal = data.springStiffnessNormal;
+    //   contactClearance = data.contactClearance;
 
-      MoFEMFunctionReturn(0);
-    }
+    //   MoFEMFunctionReturn(0);
+    // }
 
-    MoFEMErrorCode setBlocks() {
-      MoFEMFunctionBegin;
+    // MoFEMErrorCode setBlocks() {
+    //   MoFEMFunctionBegin;
 
-      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-        if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
+    //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+    //     if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
 
-          const int id = bit->getMeshsetId();
-          mapSpring[id].tRis.clear();
-          CHKERR mField.get_moab().get_entities_by_type(
-              bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+    //       const int id = bit->getMeshsetId();
+    //       mapSpring[id].tRis.clear();
+    //       CHKERR mField.get_moab().get_entities_by_type(
+    //           bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
 
-          std::vector<double> attributes;
-          bit->getAttributes(attributes);
-          if (attributes.size() < 2) {
-            SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                     "Springs should have 2 attributes but there is %d",
-                     attributes.size());
-          }
-          mapSpring[id].iD = id;
-          mapSpring[id].contactClearance = attributes[0];
+    //       std::vector<double> attributes;
+    //       bit->getAttributes(attributes);
+    //       if (attributes.size() < 2) {
+    //         SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+    //                  "Springs should have 2 attributes but there is %d",
+    //                  attributes.size());
+    //       }
+    //       mapSpring[id].iD = id;
+    //       mapSpring[id].contactClearance = attributes[0];
 
-          // Print spring blocks after being read
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
-                             attributes[0]);
-          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
-                             attributes[1]);
-        }
-      }
+    //       // Print spring blocks after being read
+    //       CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
+    //       CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
+    //                          attributes[0]);
+    //       CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
+    //                          attributes[1]);
+    //     }
+    //   }
 
-      MoFEMFunctionReturn(0);
-    }
+    //   MoFEMFunctionReturn(0);
+    // }
 
   private:
     MoFEM::Interface &mField;
@@ -824,7 +824,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress
      * dimensions, \f$ g_{\textrm{n}}\f$ is the value of gap at the associated
      * gauss point, \f$\mathbf{x}^{(1)}\f$ are the coordinates of the
-     * overlapping gauss points at master triangles.
+     * overlapping gauss points at slave triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -891,15 +891,15 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
    * @brief RHS-operator for the simple contact element for Augmented Lagrangian
    * Method
    *
-   * Integrates rhs conditions for ALM that fulfills KKT
+   * Integrates ALM constraints that fulfill KKT
    * conditions over slave contact area and assembles components of the RHS
    * vector.
    *
    */
-  struct OpGapConstraintConditionALMRhs
+  struct OpGapConstraintAugmentedRhs
       : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpGapConstraintConditionALMRhs(
+    OpGapConstraintAugmentedRhs(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn)
@@ -978,8 +978,8 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      * assembles components to LHS global matrix.
      *
      * Computes linearisation of integrated on slave side complementarity
-     * function and assembles Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ with respect to Lagrange multipliers side and assembles
+     * function and assembles derivative of Lagrange multipliers virtual work \f$ \delta
+     * W_{\text c}\f$ with respect to Lagrange multipliers and assembles
      * components to LHS global matrix
      *
      * \f[
@@ -1255,7 +1255,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-   * multipliers on master side and assembles components of the LHS matrix.
+   * multipliers on master side and assembles components of the LHS global matrix.
    *
    */
   struct OpCalContactAugmentedTractionOverLambdaMasterSlave
@@ -1273,15 +1273,13 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     }
 
     /**
-     * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-     * multipliers with respect to Lagrange multipliers on master side and
-     * assembles components to LHS global matrix.
+     * @brief  Integrates virtual work on master side
+     * , \f$ \delta W_{\text c}\f$, derivative with respect to Lagrange
+     * multipliers on slave side and 
+     * assembles its components to LHS global matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity
-     * function and assembles Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ with respect to Lagrange multipliers side and assembles
-     * components to LHS global matrix
+     * Computes linearisation of virtual work on master side integrated on the slave side
+     * and assembles the components of its derivative over Lagrange multipliers. 
      *
      * \f[
      * {\text D} {\delta
@@ -1290,8 +1288,9 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(1)}_{\text c}}  - \Delta \lambda
-     * \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \int_{{\gamma}^{(1)}_{\text c}} \Delta \lambda
+     * \mathbf{n}(\mathbf{x}^{(1)}) \cdot  \delta{\mathbf{x}^{(2)}}\,\,{ {\text d}
+     * {\gamma}} & \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
@@ -1320,7 +1319,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
    *
    * Integrates Lagrange multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-   * multipliers on master side and assembles components of the LHS matrix.
+   * multipliers on slave side and assembles components of the LHS matrix.
    *
    */
   struct OpCalContactAugmentedTractionOverLambdaSlaveSlave
@@ -1338,15 +1337,14 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     }
 
     /**
-     * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-     * multipliers with respect to Lagrange multipliers on slave side and
-     * assembles components to LHS global matrix.
+     * @brief  Integrates virtual work on slave side
+     * , \f$ \delta W_{\text c}\f$, derivative with respect to Lagrange
+     * multipliers on slave side and
+     * assembles its components to LHS global matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity
-     * function and assembles Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ with respect to Lagrange multipliers side and assembles
-     * components to LHS global matrix
+     * Computes linearisation of virtual work on slave side integrated on the
+     * slave side and assembles the components of its derivative over Lagrange
+     * multipliers.
      *
      * \f[
      * {\text D} {\delta
@@ -1355,7 +1353,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(1)}_{\text c}}  \Delta \lambda
+     * \int_{{\gamma}^{(1)}_{\text c}} - \Delta \lambda {\mathbf{n}}_{\rm c} \cdot
      * \delta{\mathbf{x}^{(1)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
@@ -1366,9 +1364,9 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
      * points at master triangles, \f$
-     * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress dimensions and
-     * \f$ g_{\textrm{n}}\f$ is the gap evaluated on the corresponding slave
-     * side.
+     * c_{\textrm n}\f$ is the regularisation/augmentation parameter of stress
+     * dimensions and \f$ g_{\textrm{n}}\f$ is the gap evaluated on the
+     * corresponding slave side.
      */
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                           EntityType col_type, EntData &row_data,
@@ -1407,10 +1405,9 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     }
 
     /**
-     * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-     * multipliers with respect to Lagrange multipliers on master side and
-     * assembles components to LHS global matrix.
+     * @brief Integrates virtual work on master side
+     * , \f$ \delta W_{\text c}\f$, derivative with respect to spatial positions
+     * of the master side and assembles its components to LHS global matrix.
      *
      * Computes linearisation of integrated on slave side complementarity
      * function and assembles Lagrange multipliers virtual work \f$ \delta
@@ -1424,8 +1421,10 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\textrm n}\Delta {\mathbf{x}^{(2)}}
-     * \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\textrm n}\Delta
+     * {\mathbf{x}^{(2)}} \cdot [{\mathbf{n}}_{\rm c} \otimes  {\mathbf{n}}_{\rm
+     * c}] \cdot \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda +
+     * c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
@@ -1478,15 +1477,14 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     }
 
     /**
-     * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-     * multipliers with respect to Lagrange multipliers on master side and
-     * assembles components to LHS global matrix.
+     * @brief  Integrates virtual work on master side
+     * , \f$ \delta W_{\text c}\f$ derivative with respect to spatial positions
+     * on slave side and
+     * assembles its components to LHS global matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity
-     * function and assembles Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ on master side with respect to spatial positions of the
-     * slave side and assembles components to LHS global matrix
+     * Computes linearisation of virtual work on master side integrated on the
+     * slave side and assembles the components of its derivative over spatial
+     * positions on slave side
      *
      * \f[
      * {\text D} {\delta
@@ -1495,8 +1493,10 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(1)}_{\text c}}  -c_{\textrm n}\Delta {\mathbf{x}^{(1)}}
-     * \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \int_{{\gamma}^{(1)}_{\text c}}  -c_{\textrm n}\Delta
+     * {\mathbf{x}^{(1)}} \cdot [{\mathbf{n}}_{\rm c} \otimes  {\mathbf{n}}_{\rm
+     * c}] \cdot \delta{\mathbf{x}^{(2)}}\,\,{ {\text d} {\gamma}} & \lambda +
+     * c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
@@ -1505,7 +1505,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
      * \f$\mathbf{x}^{(2)}\f$ and \f$\mathbf{x}^{(1)}\f$ are the coordinates of
-     * the overlapping gauss points at master and slave triangles, respectively. 
+     * the overlapping gauss points at master and slave triangles, respectively.
      * Also, \f$ c_{\textrm n}\f$ is
      * the regularisation/augmentation parameter of stress dimensions and \f$
      * g_{\textrm{n}}\f$ is the gap evaluated on the corresponding slave side.
@@ -1525,7 +1525,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
    * @brief LHS-operator for the simple contact element with Augmented
    * Lagrangian Method
    *
-   * Integrates Lagrange multipliers virtual
+   * Integrates Spatial position on slave side multipliers virtual
    * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
    * positions on master side and assembles components of the LHS matrix.
    *
@@ -1549,15 +1549,14 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     }
 
     /**
-     * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-     * multipliers with respect to Lagrange multipliers on master side and
-     * assembles components to LHS global matrix.
+     * @brief  Integrates virtual
+     * work on slave side, \f$ \delta W_{\text c}\f$, derivative with respect to
+     * slave spatial positions and assembles its components to LHS global
+     * matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity
-     * function and assembles Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ on slave side with respect to spatial positions of the
-     * slave side and assembles components to LHS global matrix
+     * Computes linearisation of virtual work on slave side integrated on the
+     * slave side and assembles the components of its derivative over Lagrange
+     * multipliers.
      *
      * \f[
      * {\text D} {\delta
@@ -1566,8 +1565,10 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\textrm n}\Delta {\mathbf{x}^{(1)}}
-     * \delta{\mathbf{x}^{(1)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\textrm n}\Delta
+     * {\mathbf{x}^{(1)}} \cdot [{\mathbf{n}}_{\rm c} \otimes  {\mathbf{n}}_{\rm
+     * c}] \cdot \delta{\mathbf{x}^{(1)}}\,\,{ {\text d} {\gamma}} & \lambda +
+     * c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
@@ -1596,9 +1597,9 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
    * @brief LHS-operator for the simple contact element with Augmented
    * Lagrangian Method
    *
-   * Integrates Lagrange multipliers virtual
-   * work, \f$ \delta W_{\text c}\f$ derivative with respect to spatial
-   * positions on master side and assembles components of the LHS matrix.
+   * Integrates virtual work of spatial position on slave side,
+   * \f$ \delta W_{\text c}\f$, derivative with respect to spatial
+   * positions on master side and assembles its components to the global LHS matrix.
    *
    */
   struct OpCalContactAugmentedTractionOverSpatialSlaveMaster
@@ -1620,25 +1621,26 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     }
 
     /**
-     * @brief  Integrates Lagrange multipliers virtual
-     * work, \f$ \delta W_{\text c}\f$ derivative with respect to Lagrange
-     * multipliers with respect to Lagrange multipliers on master side and
-     * assembles components to LHS global matrix.
+     * @brief Integrates virtual work on slave side,
+     * \f$ \delta W_{\text c}\f$, derivative with respect to spatial
+     * positions on master side and assembles its components to the global LHS
+     * matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity
-     * function and assembles Lagrange multipliers virtual work \f$ \delta
-     * W_{\text c}\f$ on slave side with respect to spatial positions of the
-     * master side and assembles components to LHS global matrix
+     * Computes linearisation of virtual work of spatial position on slave side
+     * , \f$ \delta W_{\text c}\f$, over master side spatial positions and
+     * assembles its components to LHS global matrix
      *
      * \f[
      * {\text D} {\delta
      * W^{(1)}_{\text c}(\lambda,
-     * \delta \mathbf{x}^{(2)}})[\Delta {\mathbf{x}^{(1)}}]
+     * \Delta \mathbf{x}^{(2)}})[\delta {\mathbf{x}^{(1)}}]
      *  \,\,
      *  =
      * \left\{ \begin{array}{ll}
-     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\textrm n}\Delta {\mathbf{x}^{(2)}}
-     * \delta{\mathbf{x}^{(1)}}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \int_{{\gamma}^{(1)}_{\text c}}  -c_{\textrm n}\Delta
+     * {\mathbf{x}^{(2)}}\cdot [{\mathbf{n}}_{\rm c} \otimes  {\mathbf{n}}_{\rm
+     * c}] \cdot \delta{\mathbf{x}^{(1)}}\,\,{ {\text d} {\gamma}} & \lambda +
+     * c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text n} g_{\textrm{n}}> 0 \\
      * \end{array}
@@ -1667,14 +1669,14 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
    * @brief LHS-operator for the simple contact element
    *
    * Integrates variation of the conditions that fulfil KKT conditions
-   * with respect to Lagrange multipliers to 
-   * in the integral sense on slave side and assembles
+   * with respect to Lagrange multipliers 
+   * on slave side and assembles
    * components to LHS global matrix.
    *
    */
-  struct OpGapConstraintConditionALMOverLambda : public ContactOp {
+  struct OpGapConstraintAugmentedOverLambda : public ContactOp {
 
-    OpGapConstraintConditionALMOverLambda(
+    OpGapConstraintAugmentedOverLambda(
         const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1693,7 +1695,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *
      * Integrates variation of the expresion that fulfils KKT conditions
      * with respect to Lagrange multipliers
-     * in the integral sense and assembles
+     * and assembles
      * components to LHS global matrix.
      *
      * \f[
@@ -1713,7 +1715,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
      * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
      * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
-     * parameter and affects convergence, and \f$ g_{\textrm{n}}\f$ 
+     * parameter and affects convergence, and \f$ g_{\textrm{n}}\f$
      * is the gap function evaluated at the
      * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
      * \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
@@ -1732,15 +1734,14 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates variation of the conditions that fulfil KKT conditions
-   * with respect to Spatial positions on the master side
-   * in the integral sense on slave side and assembles
-   * components to LHS global matrix.
+   * Integrates variation on the slave sid the conditions that fulfil KKT
+   * conditions with respect to Spatial positions on the master side and
+   * assembles components to LHS global matrix.
    *
    */
-  struct OpGapConstraintConditionALMOverSpatialMaster : public ContactOp {
+  struct OpGapConstraintAugmentedOverSpatialMaster : public ContactOp {
 
-    OpGapConstraintConditionALMOverSpatialMaster(
+    OpGapConstraintAugmentedOverSpatialMaster(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1764,10 +1765,11 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(1)},
-     * \delta \lambda)}[\Delta \lambda] =
-     *  \left\{ \begin{array}{ll}
-     * * \int_{{\gamma}^{(1)}_{\text c}}  -c_{\text n} \Delta \mathbf{x}^{(2)}
-     * \delta{\lambda}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \delta \lambda)}[\Delta \mathbf{x}^{(2)}] =
+     * \left\{ \begin{array}{ll}
+     * \int_{{\gamma}^{(1)}_{\text c}}  c_{\text n} \Delta \mathbf{x}^{(2)}
+     * \cdot {\mathbf{n}}_{\rm c} \delta{\lambda}\,\,{ {\text d} {\gamma}} &
+     * \lambda + c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text
      * n} g_{\textrm{n}}> 0 \\
@@ -1798,15 +1800,14 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
   /**
    * @brief LHS-operator for the simple contact element
    *
-   * Integrates variation of the conditions that fulfil KKT conditions
-   * with respect to Spatial positions on the slave side
-   * in the integral sense on slave side and assembles
-   * components to LHS global matrix.
+   * Integrates on the slave side variation of the conditions that fulfil KKT
+   * conditions with respect to Spatial positions on the slave side and
+   * assembles components to LHS global matrix.
    *
    */
-  struct OpGapConstraintConditionALMOverSpatialSlave : public ContactOp {
+  struct OpGapConstraintAugmentedOverSpatialSlave : public ContactOp {
 
-    OpGapConstraintConditionALMOverSpatialSlave(
+    OpGapConstraintAugmentedOverSpatialSlave(
         const string field_name, const string lagrang_field_name,
         boost::shared_ptr<CommonDataSimpleContact>
             common_data_contact,
@@ -1825,15 +1826,16 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
      *
      * Integrates variation of the expresion that fulfils KKT conditions
      * with respect to spatial positions
-     * in the integral sense and assembles
+     * on slave side
      * components to LHS global matrix.
      *
      * \f[
      * {\text D}{\overline C(\lambda, \mathbf{x}^{(1)},
-     * \delta \lambda)}[\Delta \lambda] =
-     *  \left\{ \begin{array}{ll}
-     * * \int_{{\gamma}^{(1)}_{\text c}} c_{\text n} \Delta \mathbf{x}^{(1)}
-     * \delta{\lambda}\,\,{ {\text d} {\gamma}} & \lambda + c_{\text n}
+     * \delta \lambda)}[\Delta  \mathbf{x}^{(1)}] =
+     * \left\{ \begin{array}{ll}
+     * \int_{{\gamma}^{(1)}_{\text c}} -c_{\text n} \Delta \mathbf{x}^{(1)} \cdot
+     * {\mathbf{n}}_{\rm c} \delta{\lambda}\,\,{ {\text d} {\gamma}} & \lambda +
+     * c_{\text n}
      * g_{\textrm{n}}\leq 0 \\
      * 0 &  \lambda + c_{\text
      * n} g_{\textrm{n}}> 0 \\
