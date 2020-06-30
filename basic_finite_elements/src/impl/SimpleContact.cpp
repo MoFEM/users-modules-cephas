@@ -797,7 +797,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaSlaveSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGapConstraintConditionALMOverLambda::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintAugmentedOverLambda::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -859,7 +859,7 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintConditionALMOverLambda::doWo
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGapConstraintConditionALMOverSpatialMaster::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintAugmentedOverSpatialMaster::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -937,7 +937,7 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintConditionALMOverSpatialMaste
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGapConstraintConditionALMOverSpatialSlave::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintAugmentedOverSpatialSlave::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
@@ -1528,7 +1528,7 @@ SimpleContactProblem::OpCalIntCompFunSlave::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpGapConstraintConditionALMRhs::doWork(
+MoFEMErrorCode SimpleContactProblem::OpGapConstraintAugmentedRhs::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
 
@@ -2198,7 +2198,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
                                             common_data_simple_contact));
 
     fe_rhs_simple_contact->getOpPtrVector().push_back(
-        new OpGapConstraintConditionALMRhs(lagrange_field_name,
+        new OpGapConstraintAugmentedRhs(lagrange_field_name,
                                     common_data_simple_contact, cnValue));
   }
 
@@ -2312,16 +2312,16 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
               field_name, field_name, cnValue, common_data_simple_contact));
 
       fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGapConstraintConditionALMOverLambda(lagrange_field_name,
+          new OpGapConstraintAugmentedOverLambda(lagrange_field_name,
                                         common_data_simple_contact, cnValue));
 
       fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGapConstraintConditionALMOverSpatialMaster(field_name, lagrange_field_name,
+          new OpGapConstraintAugmentedOverSpatialMaster(field_name, lagrange_field_name,
                                                common_data_simple_contact,
                                                cnValue));
 
       fe_lhs_simple_contact->getOpPtrVector().push_back(
-          new OpGapConstraintConditionALMOverSpatialSlave(field_name, lagrange_field_name,
+          new OpGapConstraintAugmentedOverSpatialSlave(field_name, lagrange_field_name,
                                               common_data_simple_contact,
                                               cnValue));
     }
