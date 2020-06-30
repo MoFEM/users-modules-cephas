@@ -39,10 +39,11 @@ int main(int argc, char *argv[]) {
                                  "-my_order 2 \n"
                                  "-my_order_lambda 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n" 
-                                 "-alm_flag 0 \n";
+                                 "-my_test_num 0 \n"
+                                 "-alm_flag 0 \n"
+                                 "-out_integ_pts 0 \n";
 
-  string param_file = "param_file.petsc";
+      string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
     std::ofstream file(param_file.c_str(), std::ios::ate);
     if (file.is_open()) {
@@ -113,10 +114,11 @@ int main(int argc, char *argv[]) {
                            PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_out_integ_pts",
+    CHKERR PetscOptionsBool("-out_integ_pts",
                             "output data at contact integration points", "",
                             PETSC_FALSE, &out_integ_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-alm_flag", "set to convect integration pts",
+    
+    CHKERR PetscOptionsBool("-alm_flag", "set determine choice of formulation used between ALM or C function",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
@@ -324,6 +326,7 @@ int main(int argc, char *argv[]) {
                                auto make_element, bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
+      if(out_integ_pts)
       fe_rhs_simple_contact->contactStateVec =
           common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setContactOperatorsRhs(
@@ -336,8 +339,6 @@ int main(int argc, char *argv[]) {
                                        auto make_element, bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      fe_rhs_simple_contact->contactStateVec =
-          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
