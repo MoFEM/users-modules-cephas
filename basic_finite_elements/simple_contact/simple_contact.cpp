@@ -78,6 +78,7 @@ int main(int argc, char *argv[]) {
     char mesh_file_name[255];
     PetscInt order = 1;
     PetscInt order_contact = 1;
+    PetscInt nb_ho_levels = 0;
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
@@ -106,6 +107,8 @@ int main(int argc, char *argv[]) {
         "-my_order_contact",
         "approximation order of spatial positions in contact interface", "", 1,
         &order_contact, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_ho_levels_num", "number of higher order levels",
+                           "", 0, &nb_ho_levels, PETSC_NULL);    
     CHKERR PetscOptionsInt("-my_order_lambda",
                            "approximation order of Lagrange multipliers", "", 1,
                            &order_lambda, PETSC_NULL);
@@ -307,6 +310,56 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
+    auto set_contact_order = [&](Range &contact_prisms, int order_contact,
+                                 int nb_ho_levels) {
+      MoFEMFunctionBegin;                             
+      Range ents_3d;
+      ents_3d.merge(contact_prisms);
+      for (int ll = 0; ll < nb_ho_levels; ll++) {
+        Range verts, tets;
+        CHKERR moab.get_connectivity(ents_3d, verts, true);
+        CHKERR moab.get_adjacencies(verts, 3, false, tets,
+                                    moab::Interface::UNION);                          
+        ents_3d.merge(tets);
+      }
+      Range ho_ents;
+      for (Range::iterator it = ents_3d.begin(); it != ents_3d.end(); it++) {
+        for (auto d : {1, 2, 3}) {
+          Range ents;
+          CHKERR moab.get_adjacencies(&*it, 1, d, false, ents,
+                                      moab::Interface::UNION);
+          if (d == 2)
+            ents = ents.subset_by_type(MBTRI);
+          if (d == 3)
+            ents = ents.subset_by_type(MBTET);
+          ho_ents.merge(ents);
+        }
+      }
+
+      CHKERR m_field.set_field_order(ho_ents, "SPATIAL_POSITION",
+                                     order_contact);
+
+      cout << "Edges: " <<  ho_ents.subset_by_type(MBEDGE).size() << endl;                            
+      ho_ents.subset_by_type(MBEDGE).print();
+      cout << "Tris: " <<  ho_ents.subset_by_type(MBTRI).size() << endl;                            
+      ho_ents.subset_by_type(MBTRI).print();
+      cout << "Tets: " <<  ho_ents.subset_by_type(MBTET).size() << endl;                            
+      ho_ents.subset_by_type(MBTET).print();
+
+      CHKERR mmanager_ptr->addMeshset(BLOCKSET, 11);
+      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 11,
+                                                ho_ents.subset_by_type(MBEDGE));
+      CHKERR mmanager_ptr->addMeshset(BLOCKSET, 12);
+      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 12,
+                                                ho_ents.subset_by_type(MBTRI));                                          
+      CHKERR mmanager_ptr->addMeshset(BLOCKSET, 13);
+      CHKERR mmanager_ptr->addEntitiesToMeshset(BLOCKSET, 13,
+                                                ho_ents.subset_by_type(MBTET));                                         
+      EntityHandle rootset = moab.get_root_set();
+      CHKERR moab.write_file("ho_levels.h5m", "MOAB", "", &rootset, 1);
+      MoFEMFunctionReturn(0);
+    };
+
     Range contact_prisms, master_tris, slave_tris;
     std::vector<BitRefLevel> bit_levels;
 
@@ -348,6 +401,10 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+
+    if (order_contact > order) {
+      CHKERR set_contact_order(contact_prisms, order_contact, nb_ho_levels);
+    }
 
     // build field
     CHKERR m_field.build_fields();
