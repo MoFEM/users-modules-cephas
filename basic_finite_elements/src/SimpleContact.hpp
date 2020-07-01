@@ -364,8 +364,8 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
 
-      ierr = setBlocks();
-      CHKERRABORT(PETSC_COMM_WORLD, ierr);
+      // ierr = setBlocks();
+      // CHKERRABORT(PETSC_COMM_WORLD, ierr);
 
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
