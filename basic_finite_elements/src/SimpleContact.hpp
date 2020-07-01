@@ -77,11 +77,11 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     SmartPetscObj<Vec> contactStateVec;
 
     SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false)
-        : ContactEle(m_field), mField(m_field), newtonCotes(newton_cotes) {}
+        : ContactEle(m_field), mField(m_field), newtonCotes(newton_cotes),
+          contactStateVec(0) {}
 
     MoFEMErrorCode preProcess() {
       MoFEMFunctionBegin;
-      PetscInt vec_size;
       if (snes_ctx == CTX_SNESSETFUNCTION && contactStateVec)
         CHKERR VecZeroEntries(contactStateVec);
       MoFEMFunctionReturn(0);
@@ -99,7 +99,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
       const double *array;
       CHKERR VecGetArrayRead(contactStateVec, &array);
       if (mField.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
+        PetscPrintf(PETSC_COMM_SELF, "  Active Gauss pts: %d out of %d\n",
                     (int)array[0], (int)array[1]);
       }
       CHKERR VecRestoreArrayRead(contactStateVec, &array);
@@ -317,40 +317,6 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
 
     MoFEMFunctionReturn(0);
   }
-
-  struct PrintContactState : public MoFEM::FEMethod {
-
-    SmartPetscObj<Vec> contactStateVec;
-
-    PrintContactState(MoFEM::Interface &m_field)
-        : MoFEM::FEMethod(), mField(m_field) {}
-
-    MoFEMErrorCode preProcess() {
-      MoFEMFunctionBegin;
-      CHKERR VecZeroEntries(contactStateVec);
-      MoFEMFunctionReturn(0);
-    }
-    MoFEMErrorCode postProcess() {
-      MoFEMFunctionBegin;
-
-      CHKERR VecAssemblyBegin(contactStateVec);
-      CHKERR VecAssemblyEnd(contactStateVec);
-
-      const double *array;
-      CHKERR VecGetArrayRead(contactStateVec, &array);
-      if (mField.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
-                    (int)array[0], (int)array[1]);
-      }
-      CHKERR VecRestoreArrayRead(contactStateVec, &array);
-
-      MoFEMFunctionReturn(0);
-    }
-
-  private:
-    MoFEM::Interface &mField;
-  };
-
   struct BlockOptionDataContact {
     int iD;
 

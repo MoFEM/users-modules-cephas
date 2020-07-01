@@ -88,6 +88,7 @@ int main(int argc, char *argv[]) {
     PetscInt test_num = 0;
     PetscBool convect_pts = PETSC_FALSE;
     PetscBool out_integ_pts = PETSC_FALSE;
+    PetscBool print_contact_state = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
     PetscBool wave_surf_flag = PETSC_FALSE;
     PetscInt wave_dim = 2;
@@ -132,6 +133,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_out_integ_pts",
                             "output data at contact integration points", "",
                             PETSC_FALSE, &out_integ_pts, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_print_contact_state",
+                            "output number of active gp at every iteration", "",
+                            PETSC_FALSE, &print_contact_state, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag",
                             "if set use ALM, if not use C-function", "",
                             PETSC_FALSE, &alm_flag, PETSC_NULL);
@@ -160,18 +164,14 @@ int main(int argc, char *argv[]) {
     }
 
     if (is_partitioned == PETSC_TRUE) {
-      // Read mesh to MOAB
-      const char *option;
-      option = "PARALLEL=BCAST_DELETE;"
-               "PARALLEL_RESOLVE_SHARED_ENTS;"
-               "PARTITION=PARALLEL_PARTITION;";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
-    } else {
-      const char *option;
-      option = "";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Partitioned mesh is not supported");
     }
 
+    const char *option;
+    option = "";
+    CHKERR moab.load_file(mesh_file_name, 0, option);
+    
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -440,9 +440,10 @@ int main(int argc, char *argv[]) {
                                bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      if(out_integ_pts)
-      fe_rhs_simple_contact->contactStateVec =
-          common_data_simple_contact->gaussPtsStateVec;
+      if (print_contact_state) {
+        fe_rhs_simple_contact->contactStateVec =
+            common_data_simple_contact->gaussPtsStateVec;
+      }
       contact_problem->setContactOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
@@ -463,8 +464,6 @@ int main(int argc, char *argv[]) {
                                        bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      fe_lhs_simple_contact->contactStateVec =
-          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
@@ -475,8 +474,6 @@ int main(int argc, char *argv[]) {
                                bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      fe_lhs_simple_contact->contactStateVec =
-          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setContactOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
