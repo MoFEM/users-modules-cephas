@@ -356,7 +356,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
 
     double contactClearance;
 
-    Range pRisms;
+    Range tRis;
 
     BlockOptionDataContact() : contactClearance(-1) {}
   };
@@ -398,6 +398,9 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
 
+      ierr = setBlocks();
+      CHKERRABORT(PETSC_COMM_WORLD, ierr);
+
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
                            : 0;
@@ -407,16 +410,10 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
           mField.get_comm(), local_size, CommonDataSimpleContact::LAST_ELEMENT);
     }
 
-    // double contactClearance;
+    double contactClearance;
 
-    // std::map<int, BlockOptionDataSprings> mapSpring;
-    // //   ~DataAtIntegrationPtsSprings() {}
-    // DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field) {
-
-    //   ierr = setBlocks();
-    //   CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    // }
-
+    std::map<int, BlockOptionDataContact> mapContactClearance;
+    
     // MoFEMErrorCode getParameters() {
     //   MoFEMFunctionBegin; // They will be overwritten by BlockData
     //   CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
@@ -426,47 +423,48 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     //   MoFEMFunctionReturn(0);
     // }
 
-    // MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
-    //   MoFEMFunctionBegin;
+    MoFEMErrorCode getBlockData(BlockOptionDataContact &data) {
+      MoFEMFunctionBegin;
 
-    //   springStiffnessNormal = data.springStiffnessNormal;
-    //   contactClearance = data.contactClearance;
+      contactClearance = data.contactClearance;
 
-    //   MoFEMFunctionReturn(0);
-    // }
+      MoFEMFunctionReturn(0);
+    }
 
-    // MoFEMErrorCode setBlocks() {
-    //   MoFEMFunctionBegin;
+    MoFEMErrorCode setBlocks() {
+      MoFEMFunctionBegin;
 
-    //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-    //     if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "INT_CONTACT") == 0) {
 
-    //       const int id = bit->getMeshsetId();
-    //       mapSpring[id].tRis.clear();
-    //       CHKERR mField.get_moab().get_entities_by_type(
-    //           bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+          const int id = bit->getMeshsetId();
+          mapContactClearance[id].tRis.clear();
+          CHKERR mField.get_moab().get_entities_by_type(
+              bit->getMeshset(), MBTRI, mapContactClearance[id].tRis, true);
 
-    //       std::vector<double> attributes;
-    //       bit->getAttributes(attributes);
-    //       if (attributes.size() < 2) {
-    //         SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-    //                  "Springs should have 2 attributes but there is %d",
-    //                  attributes.size());
-    //       }
-    //       mapSpring[id].iD = id;
-    //       mapSpring[id].contactClearance = attributes[0];
+          std::vector<double> attributes;
+          bit->getAttributes(attributes);
+          if (attributes.size() > 1) {
+            SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                     "Springs should either 0 or 1 attributes but there is %d",
+                     attributes.size());
+          }
+          mapContactClearance[id].iD = id;
 
-    //       // Print spring blocks after being read
-    //       CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
-    //       CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
-    //                          attributes[0]);
-    //       CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
-    //                          attributes[1]);
-    //     }
-    //   }
+          if (attributes.size() == 1)
+            mapContactClearance[id].contactClearance = attributes[0];
+          else
+            mapContactClearance[id].contactClearance = 0;
 
-    //   MoFEMFunctionReturn(0);
-    // }
+          // Print spring blocks after being read
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nContact block %d\n", id);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tClearance %3.4g\n",
+                             attributes[0]);
+        }
+      }
+
+      MoFEMFunctionReturn(0);
+    }
 
   private:
     MoFEM::Interface &mField;
@@ -550,10 +548,11 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
   struct OpGetGapSlave : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-
+    BlockOptionDataContact dAta;
     OpGetGapSlave(
         const string field_name, // ign: does it matter??
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        BlockOptionDataContact *data = NULL)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           commonDataSimpleContact(common_data_contact) {}
 

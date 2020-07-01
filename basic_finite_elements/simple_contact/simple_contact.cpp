@@ -463,8 +463,6 @@ int main(int argc, char *argv[]) {
                                        bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      fe_lhs_simple_contact->contactStateVec =
-          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
@@ -475,8 +473,6 @@ int main(int argc, char *argv[]) {
                                bool is_alm = false) {
       auto fe_lhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
-      fe_lhs_simple_contact->contactStateVec =
-          common_data_simple_contact->gaussPtsStateVec;
       contact_problem->setContactOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
