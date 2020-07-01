@@ -888,24 +888,23 @@ looks like this
 MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * p - 1; };
-  auto rule_rhs = [](int, int, int p) -> int { return p + 1; };
+  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  auto rule_rhs = [](int, int, int p) -> int { return p; };
   pipelineLhs->getRuleHook = rule_lhs;
   pipelineRhs->getRuleHook = rule_rhs;
 
   MoFEMFunctionReturn(0);
 }
 \endcode
-It is known that in order to yield exact values of an integral of polynomial
-function of order \f$p\f$, we need \f$p+1\f$ integration points. For
+Here \f$ p \f$ is the polynomial order of the approximation function. For
 the LHS matrix, we are calculating the integral of function \f$\nabla \phi_i
-\cdot \nabla \phi_j\f$ so if order \f$p\f$ is used for the polynomial
-approximation function \f$\phi\f$, the function of order \f$2p-2\f$ is to be
-integrated. Therefore, the number of Gauss points of \f$2p-1\f$ is sufficient to
-exactly calculate the LHS matrix. 
-Similarly, for the RHS vector, as we are calculating the integral of
-function \f$\phi_i f\f$ (where \f$ f \f$ is known), the number of Gauss
-points of \f$p+1\f$ is sufficient.
+\cdot \nabla \phi_j\f$ so the polynomial order of the integral is \f$ p - 1 \f$ 
+plus \f$ p - 1 \f$ resulting \f$ 2 * (p - 1)\f$  as we see in the 
+implementation of the integration rules for the LHS. Similarly, as we calculate 
+the integral of \f$ \phi_i\f$ for the RHS, we use \f$ p \f$ as the integration 
+rule of the RHS. Having the integration rules, MoFEM will automatically 
+determine the number of integration (Gauss) points that need to be used for 
+each entity (element).
 
 \subsubsection basic_tutorials_poisson_homogeneous_bc boundaryCondition() 
 
