@@ -201,8 +201,7 @@ int main(int argc, char *argv[]) {
 
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
-          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-                                     ref_level_meshset);
+          CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
           CHKERR m_field.getInterface<BitRefManager>()
               ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
                                              BitRefLevel().set(), MBTET,
@@ -482,7 +481,7 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", "MESH_NODE_POSITIONS",
+                                       "LAGMULT",
                                        contact_prisms);
                                        
     contact_problem->addPostProcContactElement(

@@ -447,6 +447,18 @@ struct SimpleContactProblem {
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
 
+      hMat = boost::make_shared<MatrixDouble>();
+      FMat = boost::make_shared<MatrixDouble>();
+      HMat = boost::make_shared<MatrixDouble>();
+      invHMat =
+          boost::make_shared<MatrixDouble>();
+      detHVec = boost::make_shared<VectorDouble>();
+
+      tangentOneVectorSlavePtr = boost::make_shared<VectorDouble>() ;
+      tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>() ;
+      tangentOneVectorMasterPtr = boost::make_shared<VectorDouble>() ;
+      tangentTwoVectorMasterPtr = boost::make_shared<VectorDouble>() ;
+
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
                            : 0;
@@ -469,7 +481,8 @@ struct SimpleContactProblem {
                        boost::shared_ptr<double> cn_value,
                        bool newton_cotes = false)
       : mField(m_field), cnValuePtr(cn_value), newtonCotes(newton_cotes) {
-    }
+    cnValue = *cnValuePtr.get();
+  }
 
   struct OpContactMaterialLhs : public ContactOp {
 
@@ -1402,7 +1415,7 @@ struct SimpleContactProblem {
   struct OpCalDerIntCompFunOverSpatPosSlaveSlave : public ContactOp {
 
     OpCalDerIntCompFunOverSpatPosSlaveSlave(
-        const string field_name, const string lagrange_field_name,
+        const string lagrange_field_name, const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         boost::shared_ptr<double> cn)
         : ContactOp(lagrange_field_name, field_name, UserDataOperator::OPROWCOL,

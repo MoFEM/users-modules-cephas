@@ -373,8 +373,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
     std::vector<DataFromBc> bcData;
     CHKERR getBcDataFromSetsAndBlocks(bcData);
 
-    const FieldEntity_multiIndex *field_ents;
-    CHKERR mField.get_field_ents(&field_ents);
+    auto *field_ents = mField.get_field_ents();
     auto &field_entities_by_name_and_ent =
         field_ents->get<Composite_Name_And_Ent_mi_tag>();
     VectorDouble3 coords(3);

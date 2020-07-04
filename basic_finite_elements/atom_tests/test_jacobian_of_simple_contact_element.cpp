@@ -45,11 +45,8 @@ int main(int argc, char *argv[]) {
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool test_jacobian = PETSC_FALSE;
     PetscBool convect_pts = PETSC_FALSE;
-<<<<<<< HEAD
     PetscBool test_ale = PETSC_FALSE;
-=======
     PetscBool alm_flag = PETSC_FALSE;
->>>>>>> develop
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -113,8 +110,7 @@ int main(int argc, char *argv[]) {
 
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
-          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-                                     ref_level_meshset);
+          CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
           CHKERR m_field.getInterface<BitRefManager>()
               ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
                                              BitRefLevel().set(), MBTET,
@@ -409,7 +405,7 @@ int main(int argc, char *argv[]) {
 
       // add fields to the global matrix by adding the element
       contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                         "LAGMULT", "MESH_NODE_POSITIONS",
+                                         "LAGMULT",
                                          contact_prisms);
       Range all_tets;
       if (test_ale == PETSC_TRUE) {
@@ -542,15 +538,15 @@ int main(int argc, char *argv[]) {
               dm, "CONTACT_ELEM",
               get_contact_rhs(contact_problem, make_contact_element, alm_flag),
               PETSC_NULL, PETSC_NULL);
-          CHKERR DMMoFEMSNESSetJacobian(
-              dm, "CONTACT_ELEM",
-              get_master_contact_lhs(contact_problem, make_contact_element,
-                                     alm_flag),
-              PETSC_NULL, PETSC_NULL);
           CHKERR DMMoFEMSNESSetFunction(
               dm, "CONTACT_ELEM",
               get_master_traction_rhs(contact_problem, make_contact_element,
                                       alm_flag),
+              PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_master_contact_lhs(contact_problem, make_contact_element,
+                                     alm_flag),
               PETSC_NULL, PETSC_NULL);
           CHKERR DMMoFEMSNESSetJacobian(
               dm, "CONTACT_ELEM",

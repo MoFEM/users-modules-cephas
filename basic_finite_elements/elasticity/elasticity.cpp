@@ -130,6 +130,11 @@ int main(int argc, char *argv[]) {
   }
 
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "ELASTIC"));
+  LogManager::setLog("ELASTIC");
+  MOFEM_LOG_TAG("ELASTIC", "elasticity")
 
   try {
 
@@ -406,7 +411,8 @@ int main(int argc, char *argv[]) {
                 continue;
               if (block_data[it->getMeshsetId()].oRder == order)
                 continue;
-              PetscPrintf(PETSC_COMM_WORLD, "Set block %d order to %d\n",
+              MOFEM_LOG_CHANNEL("ELASTIC");
+              MOFEM_LOG_C("ELASTIC", Sev::inform, "Set block %d order to %d",
                           it->getMeshsetId(),
                           block_data[it->getMeshsetId()].oRder);
               Range block_ents;
@@ -436,9 +442,8 @@ int main(int argc, char *argv[]) {
             for (std::vector<std::string>::iterator vit =
                      additional_parameters.begin();
                  vit != additional_parameters.end(); vit++) {
-              CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                                 "** WARNING Unrecognized option %s\n",
-                                 vit->c_str());
+              MOFEM_LOG_C("ELASTIC", Sev::warning, "Unrecognized option %s",
+                          vit->c_str());
             }
           }
 
@@ -452,11 +457,10 @@ int main(int argc, char *argv[]) {
               bd.E = block_data[id].yOung;
             if (block_data[id].pOisson >= -1)
               bd.PoissonRatio = block_data[id].pOisson;
-            CHKERR PetscPrintf(PETSC_COMM_WORLD, "Block %d\n", id);
-            CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tYoung modulus %3.4g\n",
-                               bd.E);
-            CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tPoisson ratio %3.4g\n",
-                               bd.PoissonRatio);
+            MOFEM_LOG_C("ELASTIC", Sev::inform, "Block %d", id);
+            MOFEM_LOG_C("ELASTIC", Sev::inform, "\tYoung modulus %3.4g", bd.E);
+            MOFEM_LOG_C("ELASTIC", Sev::inform, "\tPoisson ratio %3.4g",
+                        bd.PoissonRatio);
           }
 
           MoFEMFunctionReturn(0);
@@ -619,8 +623,8 @@ int main(int argc, char *argv[]) {
     if (m_field.check_field("TEMP")) {
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
         if (block_data[it->getMeshsetId()].initTemp != 0) {
-          PetscPrintf(PETSC_COMM_WORLD, "Set block %d temperature to %3.2g\n",
-                      it->getMeshsetId(),
+          MOFEM_LOG_C("ELASTIC", Sev::inform,
+                      "Set block %d temperature to %3.2g\n", it->getMeshsetId(),
                       block_data[it->getMeshsetId()].initTemp);
           Range block_ents;
           CHKERR moab.get_entities_by_handle(it->meshset, block_ents, true);
@@ -737,17 +741,17 @@ int main(int argc, char *argv[]) {
     // Calculate right hand side vector
     fe_rhs_ptr->snes_f = F;
     prism_fe_rhs_ptr->snes_f = F;
-    PetscPrintf(PETSC_COMM_WORLD, "Assemble external force vector  ...");
+    MOFEM_LOG("ELASTIC", Sev::inform) << "Assemble external force vector  ...";
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_rhs_ptr);
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_rhs_ptr);
-    PetscPrintf(PETSC_COMM_WORLD, " done\n");
+    MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     // Assemble matrix
     fe_lhs_ptr->snes_B = Aij;
     prism_fe_lhs_ptr->snes_B = Aij;
-    PetscPrintf(PETSC_COMM_WORLD, "Calculate stiffness matrix  ...");
+    MOFEM_LOG("ELASTIC", Sev::inform) << "Calculate stiffness matrix  ...";
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_lhs_ptr);
     CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", prism_fe_lhs_ptr);
-    PetscPrintf(PETSC_COMM_WORLD, " done\n");
+    MOFEM_LOG("ELASTIC", Sev::inform) << "done";
 
     // Assemble springs
     CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", fe_spring_lhs_ptr);
@@ -760,9 +764,9 @@ int main(int argc, char *argv[]) {
     if (is_calculating_frequency == PETSC_TRUE) {
       // Assemble mass matrix
       fe_mass_ptr->snes_B = Mij;
-      PetscPrintf(PETSC_COMM_WORLD, "Calculate mass matrix  ...");
+      MOFEM_LOG("ELASTIC", Sev::inform) << "Calculate mass matrix  ...";
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_mass_ptr);
-      PetscPrintf(PETSC_COMM_WORLD, " done\n");
+      MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     }
 
     // MatView(Aij, PETSC_VIEWER_STDOUT_SELF);
@@ -939,7 +943,7 @@ int main(int argc, char *argv[]) {
         // Loop over time steps
         for (_IT_SERIES_STEPS_BY_NAME_FOR_LOOP_(recorder_ptr, "THEMP_SERIES",
                                                 sit)) {
-          PetscPrintf(PETSC_COMM_WORLD, "Process step %d\n",
+          MOFEM_LOG_C("ELASTIC", Sev::inform, "Process step %d",
                       sit->get_step_number());
           // Load field data for this time step
           CHKERR recorder_ptr->load_series_data("THEMP_SERIES",
@@ -968,10 +972,10 @@ int main(int argc, char *argv[]) {
           PetscReal nrm_F;
           CHKERR VecNorm(F, NORM_2, &nrm_F);
 
-          PetscPrintf(PETSC_COMM_WORLD, "norm2 F = %6.4e\n", nrm_F);
+          MOFEM_LOG_C("ELASTIC", Sev::inform, "norm2 F = %6.4e", nrm_F);
           PetscReal nrm_F_thermal;
           CHKERR VecNorm(F_thermal, NORM_2, &nrm_F_thermal);
-          PetscPrintf(PETSC_COMM_WORLD, "norm2 F_thermal = %6.4e\n",
+          MOFEM_LOG_C("ELASTIC", Sev::inform, "norm2 F_thermal = %6.4e",
                       nrm_F_thermal);
 
           CHKERR VecScale(F_thermal, -1);
@@ -1025,11 +1029,11 @@ int main(int argc, char *argv[]) {
         PetscReal nrm_F;
         CHKERR VecNorm(F, NORM_2, &nrm_F);
 
-        PetscPrintf(PETSC_COMM_WORLD, "norm2 F = %6.4e\n", nrm_F);
+        MOFEM_LOG_C("ELASTIC", Sev::inform, "norm2 F = %6.4e", nrm_F);
         PetscReal nrm_F_thermal;
         CHKERR VecNorm(F_thermal, NORM_2, &nrm_F_thermal);
 
-        PetscPrintf(PETSC_COMM_WORLD, "norm2 F_thermal = %6.4e\n",
+        MOFEM_LOG_C("ELASTIC", Sev::inform, "norm2 F_thermal = %6.4e",
                     nrm_F_thermal);
 
         // Add thermal stress vector and other forces vector
@@ -1053,9 +1057,9 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
         CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
         // Save results to file
-        PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
+        MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
         CHKERR post_proc.writeFile("out.h5m");
-        PetscPrintf(PETSC_COMM_WORLD, " done\n");
+        MOFEM_LOG("ELASTIC", Sev::inform) << "done";
       }
 
       // Destroy vector, no needed any more
@@ -1083,7 +1087,7 @@ int main(int argc, char *argv[]) {
       // CHKERR DMoFEMLoopFiniteElements(dm, "SPRING", &post_proc);
       CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc_edge);
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
-      PetscPrintf(PETSC_COMM_WORLD, "Write output file ...");
+      MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
       if (mesh_has_tets) {
         CHKERR post_proc.writeFile("out.h5m");
       }
@@ -1092,7 +1096,7 @@ int main(int argc, char *argv[]) {
       }
       if (!edges_in_simple_rod.empty())
         CHKERR post_proc_edge.writeFile("out_edge.h5m");
-      PetscPrintf(PETSC_COMM_WORLD, " done\n");
+      MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     }
 
     if (is_calculating_frequency == PETSC_TRUE) {
@@ -1107,10 +1111,8 @@ int main(int argc, char *argv[]) {
       // Calculate model stiffness, k = v^T * K * v where v = u / norm(u)
       double u_norm;
       CHKERR VecNorm(D, NORM_2, &u_norm);
-
       // CHKERR VecScale(D,1./u_norm);     // v obtained
       CHKERR VecScale(D, 1. / 1.); // v obtained
-      // PetscPrintf(PETSC_COMM_WORLD, "u_norm  %6.4e\n", u_norm);
 
       Vec v1;
       VecDuplicate(D, &v1);
@@ -1118,13 +1120,11 @@ int main(int argc, char *argv[]) {
 
       double model_stiffness;
       CHKERR VecDot(v1, D, &model_stiffness);
-      // PetscPrintf(PETSC_COMM_WORLD, "Model stiffness  %6.4e\n",
-      //             model_stiffness);
 
       double frequency;
       double pi = 3.14159265359;
       frequency = sqrt(model_stiffness / model_mass) / (2 * pi);
-      PetscPrintf(PETSC_COMM_WORLD, "Frequency  %6.4e\n", frequency);
+      MOFEM_LOG_C("ELASTIC", Sev::inform, "Frequency  %6.4e", frequency);
     }
 
     // Calculate elastic energy
@@ -1139,7 +1139,7 @@ int main(int argc, char *argv[]) {
       // Print elastic energy
       const double *eng_ptr;
       CHKERR VecGetArrayRead(v_energy, &eng_ptr);
-      PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %6.4e\n", *eng_ptr);
+      MOFEM_LOG_C("ELASTIC", Sev::inform, "Elastic energy %6.4e", *eng_ptr);
 
       switch (test_nb) {
       case 1:

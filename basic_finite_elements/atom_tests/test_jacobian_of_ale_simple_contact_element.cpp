@@ -350,7 +350,6 @@ int main(int argc, char *argv[]) {
                                             contact_prisms);
       contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                          "LAGMULT",
-                                         "MESH_NODE_POSITIONS",
                                          contact_prisms);
 
       // build field
