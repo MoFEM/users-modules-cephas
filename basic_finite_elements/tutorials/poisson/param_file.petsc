@@ -12,10 +12,10 @@
 # --- Problem: poisson_2d_nonhomogeneous, poisson_2d_lagrange_multiplier
 
 ## Linear solver (non-fieldsplit)
--ksp_type fgmres 
--pc_type lu 
--pc_factor_mat_solver_type mumps
--ksp_monitor
+#-ksp_type fgmres 
+#-pc_type lu 
+#-pc_factor_mat_solver_type mumps
+#-ksp_monitor
 
 ## Fieldsplit (block) solver
 #-pc_type fieldsplit
