@@ -428,8 +428,8 @@ struct SimpleContactProblem {
       const double *array;
       CHKERR VecGetArrayRead(contactStateVec, &array);
       if (mField.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
-                    (int)array[0], (int)array[1]);
+        // PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
+        //             (int)array[0], (int)array[1]);
       }
       CHKERR VecRestoreArrayRead(contactStateVec, &array);
 

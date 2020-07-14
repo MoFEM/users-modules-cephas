@@ -726,7 +726,7 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
       CHKERR SNESSetFromOptions(snes);
     }
-
+    
     PostProcVolumeOnRefinedMesh post_proc(m_field);
     // Add operators to the elements, starting with some generic
     CHKERR post_proc.generateReferenceElementMesh();
@@ -741,7 +741,7 @@ int main(int argc, char *argv[]) {
           post_proc.postProcMesh, post_proc.mapGaussPts, "SPATIAL_POSITION",
           sit->second, post_proc.commonData));
     }
-
+    
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
     CHKERR SNESGetConvergedReason(snes, &snes_reason);

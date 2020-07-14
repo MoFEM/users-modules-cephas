@@ -825,6 +825,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       ++t_base_lambda;
       ++t_field_data_slave;
     }
+    cerr << "Normal"
+         << "     " << t_lagrange_slave << "\n";
+
     ++t_lagrange_slave_3;
     ++t_lagrange_slave;
   }
@@ -883,7 +886,7 @@ if (type != MBVERTEX)
     // for (int bb = 0; bb != nb_base_fun_col; ++bb) {
     t_tangent_lagrange(0) += t_tangent_1_at_gp(i) * t_lagrange_slave_3(i);
     t_tangent_lagrange(1) += t_tangent_2_at_gp(i) * t_lagrange_slave_3(i);
-
+    cerr << t_tangent_lagrange(0) << "     " << t_tangent_lagrange(1) << "\n";
     // ++t_base_lag_slave;
     // ++t_field_data_slave;
     // }
@@ -1035,7 +1038,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaMasterSlave::
     auto t_unit = get_tensor_vec(unit_vector);
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -1115,7 +1118,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverLambdaSlaveSlave::doWork(
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -1189,17 +1192,22 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverLambda::doWork(
         get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr <= 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_w;
         ++t_aug_lambda_ptr;
         ++t_lagrange_slave;
+        // cerr << "OK " << t_aug_lambda_ptr <<"\n";
         continue;
       }
 
       const double val_s = -t_w * area_slave / cN;
+      // cerr << "t_w  " << t_w << "\n";
 
-      FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_mat(
-          &*NN.data().begin());
+      // cerr << "area_slave  " << area_slave << "\n";
+
+      // cerr << "cN  " << cN << "\n";
+      // FTensor::Tensor0<FTensor::PackPtr<double *, 1>> t_mat(
+      //     &*NN.data().begin());
 
       auto t_base_lambda_row = row_data.getFTensor0N(gg, 0);
       for (int bbr = 0; bbr != nb_row; ++bbr) {
@@ -1277,7 +1285,7 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverSpatialMaster::doWork(
     auto t_w = getFTensor0IntegrationWeightSlave();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -1358,7 +1366,7 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintOverSpatialSlave::doWork(
     auto t_w = getFTensor0IntegrationWeightSlave();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_w;
         ++t_aug_lambda_ptr;
         continue;
@@ -1460,9 +1468,9 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
 
   // const double cNTangentPtr = *cNTangentPtr.get();
   // const double cNNormalPtr = *cNNormalPtr.get();
-  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     // cerr << " t_aug_lambda_ptr " << t_aug_lambda_ptr << "\n";
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -1477,7 +1485,7 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
     // cerr << " stick_slip_check " << stick_slip_check << "\n";
 
     bool stick = true;
-    if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+    if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -1690,7 +1698,7 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
   // const double cNNormalPtr = *cNNormalPtr.get();
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -1702,7 +1710,7 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
         t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
     bool stick = true;
-    if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+    if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -1910,7 +1918,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -1933,7 +1941,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
           double stick_slip_check =
               t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
           bool stick = true;
-          if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+          if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
             stick = false;
           if (stick) {
           } else {
@@ -2040,7 +2048,7 @@ MoFEMErrorCode SimpleContactProblem::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0 /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -2052,7 +2060,7 @@ MoFEMErrorCode SimpleContactProblem::
           t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
       bool stick = true;
-      if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+      if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
         stick = false;
 
       double val_m = t_w * area_master;
@@ -2250,7 +2258,7 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -2263,7 +2271,7 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveSlave::doWork(
         t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
     bool stick = true;
-    if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+    if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -2467,7 +2475,7 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -2479,7 +2487,7 @@ SimpleContactProblem::OpContactAugmentedFrictionSlaveMaster::doWork(
         t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
     bool stick = true;
-    if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+    if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -2687,7 +2695,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaSlaveSlave::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -2710,7 +2718,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaSlaveSlave::
               t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
           bool stick = true;
-          if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+          if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
             stick = false;
           if (stick) {
           } else {
@@ -2811,7 +2819,7 @@ MoFEMErrorCode SimpleContactProblem::
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -2823,7 +2831,7 @@ MoFEMErrorCode SimpleContactProblem::
           t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
       bool stick = true;
-      if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+      if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
         stick = false;
 
       double val_m = t_w * area_master;
@@ -3015,7 +3023,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -3027,7 +3035,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveSlave::
         t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
     bool stick = true;
-    if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+    if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -3235,7 +3243,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_norm_tang_aug_lambda_ptr;
       ++t_tangent_aug_lambda_ptr;
       ++t_aug_lambda_ptr;
@@ -3247,7 +3255,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionDispSlaveMaster::
         t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
     bool stick = true;
-    if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+    if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
       stick = false;
 
     const double val_m = t_w * area_master;
@@ -3461,7 +3469,7 @@ MoFEMErrorCode SimpleContactProblem::
           const double n = m * t_base_lambda;
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+          if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
             // t_assemble_m(0, 0) -= n / cNTangentPtr;
             // //++t_assemble_m;
             // t_assemble_m(1, 1) -= n / cNTangentPtr;
@@ -3470,7 +3478,7 @@ MoFEMErrorCode SimpleContactProblem::
                 t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
             bool stick = true;
-            if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+            if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
               stick = false;
 
             if (stick) {
@@ -3591,7 +3599,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionLambdaTanSlaveSlave::
           const double n = m * t_base_lambda;
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
-          if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+          if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
             t_assemble_m(i, j) -=
                 n * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) / cNTangentPtr;
 
@@ -3608,7 +3616,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContConditionLambdaTanSlaveSlave::
                 t_norm_tang_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
             bool stick = true;
-            if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+            if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
               stick = false;
 
             if (stick) {
@@ -3765,7 +3773,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterMaster::doWo
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       // cerr << "Pass Right\n";
 
       ++t_w;
@@ -3851,7 +3859,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialMasterSlave::doWor
   
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_w;
       ++t_aug_lambda_ptr;
       // cerr << "Pass Wrong\n";
@@ -3935,7 +3943,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialSla
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -4019,7 +4027,7 @@ SimpleContactProblem::OpCalContactAugmentedTractionOverSpatialSlaveMaster::doWor
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       ++t_w;
       ++t_aug_lambda_ptr;
       continue;
@@ -4273,7 +4281,7 @@ MoFEMErrorCode SimpleContactProblem::OpGapConstraintOnLambda::doWork(
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     double branch_gg;
-    if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+    if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
       branch_gg = -t_lagrange_slave / cN;
     } else {
       branch_gg = t_gap_gp;
@@ -4397,7 +4405,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsSlave::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_aug_lambda_ptr;
         ++t_w;
         continue;
@@ -4461,7 +4469,7 @@ MoFEMErrorCode SimpleContactProblem::OpCalAugmentedTractionRhsMaster::doWork(
         getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_aug_lambda_ptr;
         ++t_w;
         continue;
@@ -4542,7 +4550,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
         *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         // cerr << " RHS NO CONTACT!\n";
         ++t_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
@@ -4555,7 +4563,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
 
       double stick_slip_check = t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
       bool stick = true;
-      if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+      if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
         stick = false;
 
       // cerr << "t_norm_aug_lambda_ptr > -muTan * t_aug_lambda_ptr"
@@ -4680,7 +4688,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
         *(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+      if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
         ++t_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_tangent_gap;
@@ -4693,7 +4701,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsSlave::doWork(
       double stick_slip_check = t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
       bool stick = true;
-      if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+      if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
         stick = false;
 
       const double val_m = t_w * area_m;
@@ -4818,7 +4826,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
       double stick_slip_check = t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr;
 
       bool stick = true;
-      if (stick_slip_check > 0. && std::fabs(stick_slip_check) > ALM_TOL)
+      if (stick_slip_check > 0. /*&& std::fabs(stick_slip_check) > ALM_TOL*/)
         stick = false;
 
       // cerr << "t_norm_aug_lambda_ptr + muTan * t_aug_lambda_ptr "
@@ -4832,7 +4840,7 @@ SimpleContactProblem::OpCalAugmentedTangentialContCondition::doWork(
 
         auto t_assemble_m = get_tensor_vec(vecF, 3 * bbc);
         // cerr << "t_aug_lambda_ptr   " << t_aug_lambda_ptr << "\n";
-        if (t_aug_lambda_ptr > 0 && std::abs(t_aug_lambda_ptr) > ALM_TOL) {
+        if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
           // cerr << "NO CONTACT " <<"\n";
           t_assemble_m(j) -= val_m * t_tangent_lambda(0) * t_tangent_1_at_gp(j) *
                              t_base_slave_lambda / cNTangentPtr;
@@ -5388,8 +5396,8 @@ MoFEMErrorCode SimpleContactProblem::setContactAugmentedOperatorsRhs(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetGaussPtsState(
-      lagrang_field_name, common_data_simple_contact, cnValue, true));
+  // fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetGaussPtsState(
+  //     lagrang_field_name, common_data_simple_contact, cnValue, true));
 
   // augmented
 
