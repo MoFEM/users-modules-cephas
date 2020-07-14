@@ -1126,13 +1126,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (is_calculating_frequency == PETSC_TRUE) {
-      // Calculate model mass, m = u^T * M * u
+      // Calculate mode mass, m = u^T * M * u
       Vec u1;
       VecDuplicate(D, &u1);
       CHKERR MatMult(Mij, D, u1);
-      double model_mass;
-      CHKERR VecDot(u1, D, &model_mass);
-      MOFEM_LOG_C("ELASTIC", Sev::inform, "Model mass  %6.4e\n", model_mass);
+      double mode_mass;
+      CHKERR VecDot(u1, D, &mode_mass);
+      MOFEM_LOG_C("ELASTIC", Sev::inform, "Model mass  %6.4e\n", mode_mass);
 
       Vec v1;
       VecDuplicate(D, &v1);
