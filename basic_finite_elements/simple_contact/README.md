@@ -3,7 +3,7 @@ Contact interaction between elastic solids having matching meshes in the contact
 
 ## 1. Definition of the contact interface(s)
 
-Contacting solids should be merged (i.e. glued) along the apparent contact 
+Contacting solids should be merged (glued) along the apparent contact 
 interface(s) in the input mesh. Each contact interface should be introduced in
 the bulk of the mesh as a _BLOCKSET_ with a name starting with `INT_CONTACT`. An
 arbitrary number of contact interfaces may be defined, each including an 
@@ -13,7 +13,7 @@ arbitrary number of meshed surfaces:
 
 ----
 
-Below we consider several cases of definition of contact interfaces, outlining which ones are currently supported:  
+Below we consider several examples of contact interfaces arrangement, outlining which cases are currently supported, and which are not:
 
 1. Contact interface cutting through the whole body: **SUPPORTED**
 ![alt text](figures/contact_case_1.png "Case 1: Contact interface cutting through the whole body") *Case 1: Contact interface cutting through the whole body  (**SUPPORTED**)*
@@ -30,7 +30,7 @@ Below we consider several cases of definition of contact interfaces, outlining w
 
 ----
 
-4. Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined conditions are satisfied, with the distance threshold considered as 3  elements in the bulk mesh  
+4. Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined below conditions are satisfied, with the distance threshold considered as 3 elements in the bulk mesh  
 ![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (**SUPPORTED**)*
 
 
@@ -48,7 +48,7 @@ separately into two different contact interfaces. -->
 
 ## 2. Creation of the _MED_ mesh file in _Salome_ 
 
-***_NOTE:_*** In order to use the current contact algorithm the solids need to touch each other along the contact surface in the input mesh. Presented below is a rather general approach which permits to mesh the contacting solids separately, refine these meshes around the contact surface, and, finally, merge the meshes together.
+***_NOTE:_*** In order to use the matching meshes contact the solids need to touch each other along the contact surface in the input mesh. Presented below is a rather general approach which permits to mesh the contacting solids separately, refine these meshes around the contact surface, and, finally, merge the meshes together.
 
 ### Geometry:
 
@@ -58,12 +58,12 @@ separately into two different contact interfaces. -->
 - _Partition_ solids with the intersection (one by one)
 - Create all necessary groups for the partitioned solids:
     - Groups of volumes for solid blocks
-    - Groups of edges for fixed BCs
-    - Group of faces for load BCs
+    - Groups of faces for fixed BCs
+    - Group of faces for pressure BCs
     - Group of faces for springs 
     - Group of faces for the contact interface (same name per contact interface for both solids)
 
-***_NOTE:_*** See rules on definition of contact interfaces in the slides on theory. It is recommended to append the springs to the same surface where the load is applied.
+***_NOTE:_*** Springs can be used to eliminate the rigid body motion in a contact simulation  under the pressure control. 
 
 ### Mesh:
 
@@ -82,51 +82,61 @@ separately into two different contact interfaces. -->
 ## 3. Preparation of the config file
 
 - To see all block IDs in the _MED_ file:
-```
-read_med -med_file three_point_bending.med
+```bash
+$HOME/mofem_install/um/build_release/tools/read_med -med_file punch_test.med
 ```
 
-- Check _BLOCKSET_ for the contact interface in the config file `three_point_bending.cfg`
+- Check _BLOCKSET_ for the contact interface in the config file `punch_test.cfg`:
 ```bash
 # Contact interface
-[block_2]               # Block ID in MED file 
-id=2004                 # Block ID in the output *.h5m file
+[block_2]               # Block ID in the MED file 
+id=2003                 # Block ID in the output *.h5m file
 add=BLOCKSET            # Block type
 name=INT_CONTACT        # Block name (starts exactly like this)
 ```
-- Check _BLOCKSET_ for springs in the same config file
+
+- Check _BLOCKSETs_ for springs in the config file:
 ```bash
-# Springs on the loading frame and on the brick slice
-[block_8]               # Block ID in MED file 
+# Springs on the bottom of the target solid
+[block_5]               # Block ID in the MED file 
+id=2004                 # Block ID in the output *.h5m file
+add=BLOCKSET            # Block type
+name=SPRING_BC          # Block name (starts exactly like this)
+user1=0		            # Spring stiffness in normal direction 
+user2=1e-4		        # Spring stiffness in tangential directions 
+
+# Springs on the top of the impactor solid
+[block_6]               # Block ID in the MED file 
 id=2005                 # Block ID in the output *.h5m file
 add=BLOCKSET            # Block type
 name=SPRING_BC          # Block name (starts exactly like this)
-user1=0                 # Spring stiffness in normal direction [MPa]
-user2=1e-2              # Spring stiffness in tangential directions [MPa]
+user1=0		        # Spring stiffness in normal direction 
+user2=1e-4		        # Spring stiffness in tangential directions 
 ```
-***_NOTE:_*** For the considered example the normal stiffness can be set initially to `0` (will be verified below), while the tangential one can be set to `1e-6` of the the Young's modulus of the solid to which these springs are attached. The calibration of this parameter will be discussed below.
+***_NOTE:_*** For the considered example the normal stiffness can be set to `0`, while the tangential one can be set to `1e-4`. In general, the stiffness of the springs needs to be chosen as small as possible to avoid effect on the solution, while permitting to eliminate any rigid body motions.
 
 ## 4. Generation of the _h5m_ file
 
-- Generate `three_point_bending.h5m` file:
-```
-read_med -med_file three_point_bending.med \
--meshsets_config three_point_bending.cfg \
--output_file three_point_bending.h5m
+- Generate `punch_test.h5m` file:
+```bash
+$HOME/mofem_install/um/build_release/tools/read_med -med_file punch_test.med \
+-meshsets_config punch_test.cfg \
+-output_file punch_test.h5m
 ```
 
 - The correct definition of all blocks can be verified by generating `vtk` files for each one of them for visualisation in _Paraview_:
-```
-meshset_to_vtk -my_file three_point_bending.h5m
+```bash
+$HOME/mofem_install/um/build_release/tools/meshset_to_vtk -my_file punch_test.h5m
 ```
 
 ## 5. Preparation of the param file 
 
-Check following parameters in the param file `param_file.petsc`
+Check the essential contact parameters in the file `param_file.petsc`
 ```bash
 -my_order 2         
 -my_order_lambda 1          
--my_cn_value 1.e3                  
+-my_cn_value 1.e3       
+-my_r_value 1.0            
 ```
 
 ### Contact parameters:
@@ -135,26 +145,33 @@ Name | Description | Default value
 --- | --- | ---
 `my_order` | Approximation order of the field of spatial positions for the entire mesh | 1
 `my_order_lambda` | Approximation order of the field of contact Lagrange multipliers | 1
-`my_order_contact` | Approximation order of the field of spatial positions for the contact elements and a given number layers of tetrahedral elements adjacent to the contact interface | 1
-`my_ho_levels_num` | Number of layers of tetrahedral elements adjacent to the contact interface with higher order of the field of spatial positions (if `my_order_contact` is greater than `my_order`) | 1 
-`my_cn_value` | Augmentation parameter which affects the convergence and has minimal affect on the solution. Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10 | 1
+`my_order_contact` | Approximation order of the field of spatial positions for the contact elements and a given number of tetrahedral element layers adjacent to the contact interface | 1
+`my_ho_levels_num` | Number of tetrahedral element layers adjacent to the contact interface with higher order of the field of spatial positions (if `my_order_contact` is higher than `my_order`) | 1 
+`my_cn_value` | Augmentation parameter which affects the convergence and has minimal effect on the solution. Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10 | 1
 `my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | 1
+`my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | 1 
 `my_alm_flag` | Defines the choice of the algorithm: 0 (False) - Complementarity function approach, 1 (True) - Augmented Lagrangian method | 0  
 
 ## 6. Running the contact simulation
 
 ```bash
-mpirun -np 2 ./simple_contact -my_file examples/punch_top_only.cub \
--my_order 2 -my_cn_value 1e3
+mpirun -np 2 ./simple_contact -my_file punch_test.h5m
 ```
 
 ## 7. Postprocessing
 
-All the usual output files are created and can be postprocessed in the standard way. Furthermore, values of Lagrange multipliers (equivalent to contact pressure) and normal gap are output to files `out_contact_N.h5m`, where `N` is the number of the step. 
-
-- Convert output `h5m` files to `vtk`
+First, the output `h5m` files need to be converted to `vtk` format. Note that these files can be converted one by one using the `mbconvert` tool:
 ```bash
-convert.py -np 2 out_contact*
+mbconvert out.h5m out.vtk
+mbconvert out_contact.h5m out_contact.vtk
+mbconvert out_contact_integ_pts.h5m out_contact_integ_pts.vtk
 ```
-***_NOTE:_*** The values of Lagrange multipliers and normal gap are computed at Gauss points and visualisation requires using the _Point Gaussian_ representation or alternatively the _Glyph_ filter
+or all at once by using the multiprocessing script `convert.py`:
+```bash
+$HOME/mofem_install/um/build_release/tools/convert.py -np 2 out*
+```
+The obtained `vtk` files can be viewed in the `Paraview`, in particular:
+- File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute he displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
+- File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to contact pressure (tag `LAGMULT`)
+- File `out_contact_integ_pts.vtk` contains values of Lagrange mutipleirs (equivalent to the contact pressure) at gauss points of the contact interface. Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
 
