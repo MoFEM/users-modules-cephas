@@ -100,7 +100,7 @@ user2=1e-4		        # Spring stiffness in tangential directions
 id=2005                 # Block ID in the output *.h5m file
 add=BLOCKSET            # Block type
 name=SPRING_BC          # Block name (starts exactly like this)
-user1=0		        # Spring stiffness in normal direction 
+user1=0		            # Spring stiffness in normal direction 
 user2=1e-4		        # Spring stiffness in tangential directions 
 ```
 ***_NOTE:_*** For the considered example the normal stiffness can be set to `0`, while the tangential one can be set to `1e-4`. In general, the stiffness of the springs needs to be chosen as small as possible to avoid effect on the solution, while permitting to eliminate any rigid body motions.
@@ -163,7 +163,7 @@ or all at once by using the multiprocessing script `convert.py`:
 $HOME/mofem_install/um/build_release/tools/convert.py -np 2 out*
 ```
 The obtained `vtk` files can be viewed in the `Paraview`, in particular:
-- File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute he displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
+- File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute the displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
 - File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to contact pressure (tag `LAGMULT`)
-- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (equivalent to the contact pressure) at gauss points of the contact interface. Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
+- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (equivalent to the contact pressure) at gauss points of the contact interface (tag `LAGRANGE_MULTIPLIER`). Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
 
