@@ -1132,7 +1132,7 @@ int main(int argc, char *argv[]) {
       CHKERR MatMult(Mij, D, u1);
       double mode_mass;
       CHKERR VecDot(u1, D, &mode_mass);
-      MOFEM_LOG_C("ELASTIC", Sev::inform, "Model mass  %6.4e\n", mode_mass);
+      MOFEM_LOG_C("ELASTIC", Sev::inform, "Mode mass  %6.4e\n", mode_mass);
 
       Vec v1;
       VecDuplicate(D, &v1);
@@ -1140,6 +1140,8 @@ int main(int argc, char *argv[]) {
 
       double mode_stiffness;
       CHKERR VecDot(v1, D, &mode_stiffness);
+      MOFEM_LOG_C("ELASTIC", Sev::inform, "Mode stiffness  %6.4e\n",
+                  mode_stiffness);
 
       double frequency;
       double pi = 3.14159265359;
