@@ -162,9 +162,9 @@ or all at once by using the multiprocessing script `convert.py`:
 ```bash
 $HOME/mofem_install/um/build_release/tools/convert.py -np 2 out*
 ```
-The obtained `vtk` files can be viewed in the `Paraview`, in particular:
+The obtained `vtk` files can be viewed in *Paraview*, in particular:
 
 - File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute the displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
-- File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to contact pressure (tag `LAGMULT`)
-- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (equivalent to the contact pressure) at gauss points of the contact interface (tag `LAGRANGE_MULTIPLIER`). Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
+- File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to the contact pressure (tag `LAGMULT`)
+- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (equivalent to the contact pressure) at Gauss points of the contact interface (tag `LAGRANGE_MULTIPLIER`). Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
 
