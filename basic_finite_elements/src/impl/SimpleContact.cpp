@@ -494,6 +494,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetOrthonormalTangents::doWork(
   t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
 
   t_tangent_2(k) = FTensor::levi_civita(i, j, k) * t_normal(i) * t_tangent_1(j);
+  cerr << "t_normal   " << t_normal << "\n";
+  cerr << "t_tangent_1   " << t_tangent_1 << "\n";
+  cerr << "t_tangent_2   " << t_tangent_2 << "\n";
 
   // t_tangent_2(i) = t_tangent_2(i) / l_tan_2;
 
