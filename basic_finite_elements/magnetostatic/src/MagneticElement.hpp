@@ -353,15 +353,24 @@ struct MagneticElement {
     std::vector<int> dofs_bc_indices;
     const MoFEM::Problem *problem_ptr;
     ierr = DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
-    for (Range::iterator eit = blockData.essentialBc.begin();
-         eit != blockData.essentialBc.end(); eit++) {
-      for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-               problem_ptr, blockData.fieldName, *eit, mField.get_comm_rank(),
-               dof_ptr)) {
-        std::bitset<8> pstatus(dof_ptr->get()->getPStatus());
-        if (pstatus.test(0))
-          continue; // only local
-        dofs_bc_indices.push_back(dof_ptr->get()->getPetscGlobalDofIdx());
+    for (auto eit = blockData.essentialBc.pair_begin();
+         eit != blockData.essentialBc.pair_end(); eit++) {
+      const auto f = eit->first;
+      const auto s = eit->second;
+      auto &dofs = problem_ptr->numeredDofsRows;
+      auto dit =
+          dofs->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>().lower_bound(
+              boost::make_tuple(blockData.fieldName, f, 0));
+      auto hi_dit =
+          dofs->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>().lower_bound(
+              boost::make_tuple(blockData.fieldName, s, MAX_DOFS_ON_ENTITY));
+      for (; dit != hi_dit; ++dit) {
+        if (dit.getPart() == mField.get_comm_rank()) {
+          std::bitset<8> pstatus(dof_ptr->get()->getPStatus());
+          if (pstatus.test(0))
+            continue; // only local
+          dofs_bc_indices.push_back(dof_ptr->get()->getPetscGlobalDofIdx());
+        }
       }
     }
 
