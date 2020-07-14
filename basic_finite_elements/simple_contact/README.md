@@ -1,7 +1,7 @@
 ## Brief description 
 Contact interaction between elastic solids having matching meshes in the contact interface.
 
-## Definition of the contact interface(s)
+## 1. Definition of the contact interface(s)
 
 Contacting solids should be merged (i.e. glued) along the apparent contact 
 interface(s) in the input mesh. Each contact interface should be introduced in
@@ -15,22 +15,22 @@ arbitrary number of meshed surfaces:
 
 Below we consider several cases of definition of contact interfaces, outlining which ones are currently supported:  
 
-**1.** Contact interface cutting through the whole body: **SUPPORTED**
+1. Contact interface cutting through the whole body: **SUPPORTED**
 ![alt text](figures/contact_case_1.png "Case 1: Contact interface cutting through the whole body") *Case 1: Contact interface cutting through the whole body  (**SUPPORTED**)*
 
 ----
 
-**2.** Contact interface cutting through a part of the body: **NOT SUPPORTED**
+2. Contact interface cutting through a part of the body: **NOT SUPPORTED**
 ![alt text](figures/contact_case_2.png "Case 2: Contact interface cutting through a part of the body") *Case 2: Contact interface cutting through a part of the body (**NOT SUPPORTED**)*
 
 ----
 
-**3.** Contact interface cutting through a part of the body and meeting another contact interface cutting through the whole body: **SUPPORTED**
+3. Contact interface cutting through a part of the body and meeting another contact interface cutting through the whole body: **SUPPORTED**
 ![alt text](figures/contact_case_3.png "Case 3: Contact interface meeting another contact interface") *Case 3: Contact interface meeting another contact interface (**SUPPORTED**)*
 
 ----
 
-**4.** Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined conditions are satisfied, with the distance threshold considered as 3  elements in the bulk mesh  
+4. Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined conditions are satisfied, with the distance threshold considered as 3  elements in the bulk mesh  
 ![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (**SUPPORTED**)*
 
 
@@ -46,7 +46,7 @@ similar to a crack notch).
 surfaces is less than 3 elements in the bulk mesh, they must be included 
 separately into two different contact interfaces. -->
 
-## Creation of the _MED_ mesh file in _Salome_ 
+## 2. Creation of the _MED_ mesh file in _Salome_ 
 
 ***_NOTE:_*** In order to use the current contact algorithm the solids need to touch each other along the contact surface in the input mesh. Presented below is a rather general approach which permits to mesh the contacting solids separately, refine these meshes around the contact surface, and, finally, merge the meshes together.
 
@@ -79,7 +79,7 @@ separately into two different contact interfaces. -->
 - Build _Compound mesh_ of solids with node merging on
 - Export the Compound mesh to the _MED_ file
 
-## Preparation of the config file
+## 3. Preparation of the config file
 
 - To see all block IDs in the _MED_ file:
 ```
@@ -106,7 +106,7 @@ user2=1e-2              # Spring stiffness in tangential directions [MPa]
 ```
 ***_NOTE:_*** For the considered example the normal stiffness can be set initially to `0` (will be verified below), while the tangential one can be set to `1e-6` of the the Young's modulus of the solid to which these springs are attached. The calibration of this parameter will be discussed below.
 
-## Generation of the _h5m_ file
+## 4. Generation of the _h5m_ file
 
 - Generate `three_point_bending.h5m` file:
 ```
@@ -120,7 +120,7 @@ read_med -med_file three_point_bending.med \
 meshset_to_vtk -my_file three_point_bending.h5m
 ```
 
-## Preparation of the param file 
+## 5. Preparation of the param file 
 
 Check following parameters in the param file `param_file.petsc`
 ```bash
@@ -141,14 +141,14 @@ Name | Description | Default value
 `my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | 1
 `my_alm_flag` | Defines the choice of the algorithm: 0 (False) - Complementarity function approach, 1 (True) - Augmented Lagrangian method | 0  
 
-## Running the contact simulation
+## 6. Running the contact simulation
 
 ```bash
 mpirun -np 2 ./simple_contact -my_file examples/punch_top_only.cub \
 -my_order 2 -my_cn_value 1e3
 ```
 
-## Postprocessing
+## 7. Postprocessing
 
 All the usual output files are created and can be postprocessed in the standard way. Furthermore, values of Lagrange multipliers (equivalent to contact pressure) and normal gap are output to files `out_contact_N.h5m`, where `N` is the number of the step. 
 
