@@ -261,12 +261,14 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::solveSystem() {
     CHKERR KSPGetPC(kspSolver, &pc);
     PetscBool is_pcfs = PETSC_FALSE;
     PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+    cerr << "Running FIELDSPLIT 000..." << endl;
 
     // Set up FIELDSPLIT, only when user set -pc_type fieldsplit
     // Identify the index for boundary entities, remaining will be for domain
     // Then split the fields for boundary and domain for solving
     if (is_pcfs == PETSC_TRUE) {
       IS is_domain, is_boundary;
+      cerr << "Running FIELDSPLIT..." << endl;
       const MoFEM::Problem *problem_ptr;
       CHKERR DMMoFEMGetProblemPtr(dM, &problem_ptr);
       CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(

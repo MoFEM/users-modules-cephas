@@ -73,7 +73,10 @@ function(tutorials_copy_and_install extension file_permissions)
 endfunction()
 
 set(TUTORIALS_DIRS 
-  poisson
+  scl-1
+  scl-2
+  scl-3
+  scl-4
   # minimal_surface_equation
   # heat_equation
   # wave_equation

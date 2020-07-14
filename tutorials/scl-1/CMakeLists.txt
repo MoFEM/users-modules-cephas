@@ -38,16 +38,3 @@ tutorials_build_and_install(
   poisson_2d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_homogeneous.cpp)
 tutorials_build_and_install(
   poisson_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_3d_homogeneous.cpp)
-
-tutorials_build_and_install(
-  poisson_2d_nonhomogeneous
-  ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_nonhomogeneous.cpp)
-  
-tutorials_build_and_install(
-  poisson_2d_lagrange_multiplier ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_lagrange_multiplier.cpp)
-
-tutorials_build_and_install(
-  nonlinear_poisson_2d ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_poisson_2d.cpp)
-
-# tutorials_build_and_install(
-#   pseudo_nonlinear_poisson_2d ${CMAKE_CURRENT_SOURCE_DIR}/pseudo_nonlinear_poisson_2d.cpp)
