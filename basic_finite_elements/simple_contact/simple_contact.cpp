@@ -33,13 +33,18 @@ int main(int argc, char *argv[]) {
                                  "-pc_factor_mat_solver_type mumps \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
-                                 "-snes_max_it 10 \n"
+                                 "-snes_divergence_tolerance 0 \n"
+                                 "-snes_max_it 20 \n"
                                  "-snes_atol 1e-8 \n"
-                                 "-snes_rtol 1e-8 \n"
-                                 "-my_order 2 \n"
+                                 "-snes_rtol 1e-10 \n"
+                                 "-snes_monitor \n"
+                                 "-ksp_monitor \n"
+                                 "-snes_converged_reason \n"
+                                 "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
+                                 "-my_order_contact 2 \n"
+                                 "-my_ho_levels_num 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n"
                                  "-my_alm_flag 0 \n";
 
   string param_file = "param_file.petsc";
