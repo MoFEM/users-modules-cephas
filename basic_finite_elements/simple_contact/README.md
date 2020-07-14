@@ -15,22 +15,22 @@ arbitrary number of meshed surfaces:
 
 Below we consider several examples of contact interfaces arrangement, outlining which cases are currently supported, and which are not:
 
-1. Contact interface cutting through the whole body: **SUPPORTED**
+- Contact interface cutting through the whole body: **SUPPORTED**
 ![alt text](figures/contact_case_1.png "Case 1: Contact interface cutting through the whole body") *Case 1: Contact interface cutting through the whole body  (**SUPPORTED**)*
 
 ----
 
-2. Contact interface cutting through a part of the body: **NOT SUPPORTED**
+- Contact interface cutting through a part of the body: **NOT SUPPORTED**
 ![alt text](figures/contact_case_2.png "Case 2: Contact interface cutting through a part of the body") *Case 2: Contact interface cutting through a part of the body (**NOT SUPPORTED**)*
 
 ----
 
-3. Contact interface cutting through a part of the body and meeting another contact interface cutting through the whole body: **SUPPORTED**
+- Contact interface cutting through a part of the body and meeting another contact interface cutting through the whole body: **SUPPORTED**
 ![alt text](figures/contact_case_3.png "Case 3: Contact interface meeting another contact interface") *Case 3: Contact interface meeting another contact interface (**SUPPORTED**)*
 
 ----
 
-4. Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined below conditions are satisfied, with the distance threshold considered as 3 elements in the bulk mesh  
+- Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined below conditions are satisfied, with the distance threshold considered as 3 elements in the bulk mesh  
 ![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (**SUPPORTED**)*
 
 ## 2. Creation of the _MED_ mesh file in _Salome_ 
