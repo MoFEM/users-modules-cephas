@@ -1,0 +1,41 @@
+/*! \page basic_tutorials_poisson_nonhomogeneous SCL-2: Poisson's equation (non-homogeneous BC)
+
+\note Prerequisite of this tutorial is \ref basic_tutorials_poisson_homogeneous
+
+<br>
+
+\note Intended learning outcome:
+- general structure of a program developed using MoFEM
+- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
+- idea of Domain element in MoFEM and how to use it
+- process of implementing User Data Operators (UDOs) to calculate and assemble
+  stiffness matrix and force vector
+- how to **push** UDOs to the *pipeline*
+- a way to handle homogeneous boundary condition in MoFEM
+- utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
+
+
+\tableofcontents
+
+\section basic_tutorials_poisson_nonhomogeneous_introduction Introduction
+
+
+
+\section basic_tutorials_poisson_nonhomogeneous_plain_program Plain program 
+
+
+The plain program for both the implementation of the UDOs (\c *.hpp) and the
+main program (\c *.cpp) are as follows
+
+\subsection basic_tutorials_poisson_nonhomogeneous_impl_udo Implementation of User Data Operators (*.hpp)
+
+\include poisson_2d_nonhomogeneous.hpp
+
+\subsection basic_tutorials_poisson_nonhomogeneous_impl_main Implementation of the main program (*.cpp) 
+
+\include poisson_2d_nonhomogeneous.cpp
+
+
+
+
+*/

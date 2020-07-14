@@ -11,11 +11,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-set(BFE_DIRS_TUT 
-  poisson)
+# copy dox/figures to html directory created by doxygen
 
-foreach(LOOP_DIR ${BFE_DIRS_TUT})
-  set(BFE_MOD_DIR ${LOOP_DIR})
-  add_subdirectory(${LOOP_DIR})
-  bfe_install(${LOOP_DIR})
-endforeach(LOOP_DIR)
+# add_custom_target(mesh_generation
+#   ${CMAKE_COMMAND} -E copy_directory
+#   ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
+# add_dependencies(doc mesh_generation)

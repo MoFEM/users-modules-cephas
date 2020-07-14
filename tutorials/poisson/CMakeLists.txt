@@ -25,29 +25,29 @@ set(permissions_execute
   GROUP_EXECUTE)
 
 
-bfe_copy_and_install("*.msh" "${permissions_default}")
-bfe_copy_and_install("*.cfg" "${permissions_default}")
-# bfe_copy_and_install("*.jou" "${permissions_default}")
-bfe_copy_and_install("*.cub" "${permissions_default}")
-bfe_copy_and_install("*.h5m" "${permissions_default}")
-bfe_copy_and_install("*.petsc" "${permissions_default}")
-bfe_copy_and_install("*.sh" "${permissions_execute}")
-bfe_copy_and_install("*.geo" "${permissions_execute}")
+tutorials_copy_and_install("*.msh" "${permissions_default}")
+tutorials_copy_and_install("*.cfg" "${permissions_default}")
+# tutorials_copy_and_install("*.jou" "${permissions_default}")
+tutorials_copy_and_install("*.cub" "${permissions_default}")
+tutorials_copy_and_install("*.h5m" "${permissions_default}")
+tutorials_copy_and_install("*.petsc" "${permissions_default}")
+tutorials_copy_and_install("*.sh" "${permissions_execute}")
+tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
-bfe_build_and_install(
+tutorials_build_and_install(
   poisson_2d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_homogeneous.cpp)
-bfe_build_and_install(
+tutorials_build_and_install(
   poisson_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_3d_homogeneous.cpp)
 
-bfe_build_and_install(
+tutorials_build_and_install(
   poisson_2d_nonhomogeneous
   ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_nonhomogeneous.cpp)
   
-bfe_build_and_install(
+tutorials_build_and_install(
   poisson_2d_lagrange_multiplier ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_lagrange_multiplier.cpp)
 
-bfe_build_and_install(
+tutorials_build_and_install(
   nonlinear_poisson_2d ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_poisson_2d.cpp)
 
-# bfe_build_and_install(
+# tutorials_build_and_install(
 #   pseudo_nonlinear_poisson_2d ${CMAKE_CURRENT_SOURCE_DIR}/pseudo_nonlinear_poisson_2d.cpp)

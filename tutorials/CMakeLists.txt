@@ -1,3 +1,4 @@
+# MoFEM is free software: you can redistribute it and/or modify it under
 # the terms of the GNU Lesser General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or (at your
 # option) any later version.
@@ -10,28 +11,24 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-set(BFE_DIRS 
-  elasticity
-  simple_elasticity
-  elasticity_mixed_formulation
-  nonlinear_elasticity
-  mix_transport
-  thermal
-  cohesive_interface
-  magnetostatic
-  poisson
-  lessons
-  hello_world
-  hierarchical_approximation
-  reaction_diffusion_equation
-  simple_contact)
+set(TUTORIALS_INSTALL_DIR "tutorials") 
 
-function(bfe_install bfe_mod_dir)
+function(tutorials_add_executable target source)
+  if(MoFEM_PRECOMPILED_HEADRES)
+    set_source_files_properties(${source} PROPERTIES COMPILE_FLAGS "-include ${PERCOMPILED_HEADER}")
+  endif(MoFEM_PRECOMPILED_HEADRES)
+  add_executable(${target} ${source})
+  if(MoFEM_PRECOMPILED_HEADRES)
+    add_dependencies(${target} BasicFiniteElements.hpp.pch_copy)
+  endif(MoFEM_PRECOMPILED_HEADRES)
+endfunction(tutorials_add_executable)
+
+function(tutorials_install tutorials_mod_dir)
   install(
     DIRECTORY
-    ${PROJECT_SOURCE_DIR}/basic_finite_elements/${bfe_mod_dir} 
+    ${TUTORIALS_INSTALL_DIR} 
     DESTINATION
-    ${CMAKE_INSTALL_PREFIX}
+    ${CMAKE_INSTALL_PREFIX}/${TUTORIALS_MOD_DIR}
     FILES_MATCHING
     PATTERN "README"
     PATTERN "*.h5m"
@@ -43,10 +40,12 @@ function(bfe_install bfe_mod_dir)
     PATTERN "src" EXCLUDE
     PATTERN "doc" EXCLUDE
     PATTERN "atom_tests" EXCLUDE)
-endfunction(bfe_install)
+endfunction(tutorials_install)
 
-function(bfe_build_and_install target source)
-  bfe_add_executable(${target} ${source})
+
+
+function(tutorials_build_and_install target source)
+  tutorials_add_executable(${target} ${source})
   target_link_libraries(${target}
     users_modules
     mofem_finite_elements
@@ -57,10 +56,10 @@ function(bfe_build_and_install target source)
     mofem_third_party
     mofem_cblas
     ${MoFEM_PROJECT_LIBS})
-  install(TARGETS ${target} DESTINATION ${BFE_MOD_DIR})
-endfunction(bfe_build_and_install)
+  install(TARGETS ${target} DESTINATION ${TUTORIALS_INSTALL_DIR}/${TUTORIALS_MOD_DIR})
+endfunction(tutorials_build_and_install)
 
-function(bfe_copy_and_install extension file_permissions)
+function(tutorials_copy_and_install extension file_permissions)
   file(GLOB files ${CMAKE_CURRENT_SOURCE_DIR}/${extension})
   foreach(file ${files})
     file(
@@ -68,19 +67,20 @@ function(bfe_copy_and_install extension file_permissions)
       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
       FILE_PERMISSIONS ${file_permissions})     
     install(FILES ${file}
-      DESTINATION ${BFE_MOD_DIR}
+      DESTINATION ${TUTORIALS_INSTALL_DIR}/${TUTORIALS_MOD_DIR}
       PERMISSIONS ${file_permissions})
   endforeach(file)
 endfunction()
 
-if(MOFEM_UM_BUILD_TESTS)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/basic_finite_elements/atom_tests 
-  ${PROJECT_BINARY_DIR}/basic_finite_elements/atom_tests)
-endif(MOFEM_UM_BUILD_TESTS)
+set(TUTORIALS_DIRS 
+  poisson
+  # minimal_surface_equation
+  # heat_equation
+  # wave_equation
+)
 
-foreach(LOOP_DIR ${BFE_DIRS})
-  set(BFE_MOD_DIR ${LOOP_DIR})
+foreach(LOOP_DIR ${TUTORIALS_DIRS})
+  set(TUTORIALS_MOD_DIR ${LOOP_DIR})
   add_subdirectory(${LOOP_DIR})
-  bfe_install(${LOOP_DIR})
+  tutorials_install(${LOOP_DIR})
 endforeach(LOOP_DIR)
-
