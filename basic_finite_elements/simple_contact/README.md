@@ -33,19 +33,6 @@ Below we consider several examples of contact interfaces arrangement, outlining 
 4. Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined below conditions are satisfied, with the distance threshold considered as 3 elements in the bulk mesh  
 ![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (**SUPPORTED**)*
 
-
-<!-- The following rules for the definition of contact interfaces apply:
-1. External edge of a contact interface may belong to the skin of the solid 
-mesh (i.e. contact interface may cut through the whole solid).
-2. External edge of a contact interface may belong to the interior of the 
-solid mesh if and only if this edge also belongs to another contact interface,
-which cuts through the whole solid (i.e. contact interfaces may intersect inside 
-the mesh, but a contact interface cannot cut the solid mesh partially, e.g. 
-similar to a crack notch).
-3. If two surfaces do not have shared edges, but the distance between these 
-surfaces is less than 3 elements in the bulk mesh, they must be included 
-separately into two different contact interfaces. -->
-
 ## 2. Creation of the _MED_ mesh file in _Salome_ 
 
 ***_NOTE:_*** In order to use the matching meshes contact the solids need to touch each other along the contact surface in the input mesh. Presented below is a rather general approach which permits to mesh the contacting solids separately, refine these meshes around the contact surface, and, finally, merge the meshes together.
@@ -80,7 +67,10 @@ separately into two different contact interfaces. -->
 - Export the Compound mesh to the _MED_ file
 
 ## 3. Preparation of the config file
-
+- Change directory to the following:
+```bash
+cd $HOME/mofem_install/um/build_release/basic_finite_elements/simple_contact/examples/salome
+```
 - To see all block IDs in the _MED_ file:
 ```bash
 $HOME/mofem_install/um/build_release/tools/read_med -med_file punch_test.med
@@ -131,7 +121,7 @@ $HOME/mofem_install/um/build_release/tools/meshset_to_vtk -my_file punch_test.h5
 
 ## 5. Preparation of the param file 
 
-Check the essential contact parameters in the file `param_file.petsc`
+Check the essential contact parameters in the file `param_file.petsc`: 
 ```bash
 -my_order 2         
 -my_order_lambda 1          
@@ -143,19 +133,21 @@ Check the essential contact parameters in the file `param_file.petsc`
 
 Name | Description | Default value
 --- | --- | ---
-`my_order` | Approximation order of the field of spatial positions for the entire mesh | 1
-`my_order_lambda` | Approximation order of the field of contact Lagrange multipliers | 1
-`my_order_contact` | Approximation order of the field of spatial positions for the contact elements and a given number of tetrahedral element layers adjacent to the contact interface | 1
-`my_ho_levels_num` | Number of tetrahedral element layers adjacent to the contact interface with higher order of the field of spatial positions (if `my_order_contact` is higher than `my_order`) | 1 
-`my_cn_value` | Augmentation parameter which affects the convergence and has minimal effect on the solution. Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10 | 1
-`my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | 1
-`my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | 1 
-`my_alm_flag` | Defines the choice of the algorithm: 0 (False) - Complementarity function approach, 1 (True) - Augmented Lagrangian method | 0  
+`my_order` | Approximation order of the field of spatial positions for the entire mesh | `1`
+`my_order_lambda` | Approximation order of the field of contact Lagrange multipliers | `1`
+`my_order_contact` | Approximation order of the field of spatial positions for the contact elements and a given number of tetrahedral element layers adjacent to the contact interface | `1`
+`my_ho_levels_num` | Number of tetrahedral element layers adjacent to the contact interface with higher order of the field of spatial positions (if `my_order_contact` is higher than `my_order`) | `1` 
+`my_cn_value` | Augmentation parameter which affects the convergence and has minimal effect on the solution. Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10 | `1`
+`my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | `1`
+`my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | `1` 
+`my_alm_flag` | Defines the choice of the algorithm: `0` (False) - Complementarity function approach, `1` (True) - Augmented Lagrangian method | `0`  
+`my_out_integ_pts` | If set to `1` (True) the values of contact Lagrange multipliers are output at gauss points of the contact interface | `0`  
+
 
 ## 6. Running the contact simulation
 
 ```bash
-mpirun -np 2 ./simple_contact -my_file punch_test.h5m
+mpirun -np 2 $HOME/mofem_install/um/build_release/basic_finite_elements/simple_contact/simple_contact -my_file punch_test.h5m
 ```
 
 ## 7. Postprocessing
@@ -173,5 +165,5 @@ $HOME/mofem_install/um/build_release/tools/convert.py -np 2 out*
 The obtained `vtk` files can be viewed in the `Paraview`, in particular:
 - File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute he displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
 - File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to contact pressure (tag `LAGMULT`)
-- File `out_contact_integ_pts.vtk` contains values of Lagrange mutipleirs (equivalent to the contact pressure) at gauss points of the contact interface. Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
+- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (equivalent to the contact pressure) at gauss points of the contact interface. Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
 
