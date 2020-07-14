@@ -34,7 +34,7 @@ using namespace MoFEM;
 MoFEMErrorCode ArcLengthCtx::setS(double s) {
   ArcFunctionBegin;
   this->s = s;
-  MOFEM_LOG_C("WORLD", Sev::verbose, "\tSet s = %6.4e", this->s);
+  MOFEM_LOG_C("WORLD", Sev::inform, "\tSet s = %6.4e", this->s);
   MoFEMFunctionReturn(0);
 }
 
@@ -42,7 +42,7 @@ MoFEMErrorCode ArcLengthCtx::setAlphaBeta(double alpha, double beta) {
   ArcFunctionBegin;
   this->alpha = alpha;
   this->beta = beta;
-  MOFEM_LOG_C("WORLD", Sev::noisy, "\tSet alpha = %6.4e beta = %6.4e",
+  MOFEM_LOG_C("WORLD", Sev::inform, "\tSet alpha = %6.4e beta = %6.4e",
               this->alpha, this->beta);
   MoFEMFunctionReturn(0);
 }
@@ -491,9 +491,9 @@ MoFEMErrorCode AssembleFlambda::postProcess() {
     CHKERR VecNorm(snes_x, NORM_2, &snes_xnorm);
     CHKERR VecDot(arcPtr->F_lambda, arcPtr->F_lambda, &arcPtr->F_lambda2);
 
-    MOFEM_LOG_C("WORLD", Sev::verbose, "\tF_lambda2 = %6.4g lambda = %6.4g",
+    MOFEM_LOG_C("WORLD", Sev::inform, "\tF_lambda2 = %6.4g lambda = %6.4g",
                 arcPtr->F_lambda2, arcPtr->getFieldData());
-    MOFEM_LOG_C("WORLD", Sev::noisy,
+    MOFEM_LOG_C("WORLD", Sev::verbose,
                 "\tsnes_f norm = %6.4e snes_x norm = %6.4g", snes_fnorm,
                 snes_xnorm);
 
@@ -647,7 +647,7 @@ MoFEMErrorCode SimpleArcLengthControl::calculateDxAndDlambda(Vec x) {
   CHKERR VecNorm(arcPtr->x0, NORM_2, &x0_nrm);
   CHKERR VecDot(arcPtr->dx, arcPtr->dx, &arcPtr->dx2);
 
-  MOFEM_LOG_C("WORLD", Sev::noisy,
+  MOFEM_LOG_C("WORLD", Sev::verbose,
               "\tx norm = %6.4e x0 norm = %6.4e dx2 = %6.4e", x_nrm, x0_nrm,
               arcPtr->dx2);
   MoFEMFunctionReturn(0);
