@@ -12,7 +12,7 @@ implementation)
 - idea of Domain element in MoFEM and how to use it
 - process of implementing User Data Operators (UDOs) to calculate and assemble
   stiffness matrix and force vector
-- how to **push** UDOs to the *pipeline*
+- how to **push** the developed UDOs to the *Pipeline*
 - a way to handle homogeneous boundary condition in MoFEM
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 
@@ -1265,7 +1265,7 @@ will do the following steps
     \endcode
   - For developer version installation
     \code
-    cd mofem_install/um/build_release/basic_finite_elements/tutorials/poisson
+    cd mofem_install/um/build_release/tutorials/poisson
     \endcode
 
 - Second, check the parameters in the param_file.petsc. These are PETSc
