@@ -330,45 +330,6 @@ int main(int argc, char *argv[]) {
             return fe_lhs_simple_contact;
           };
 
-      // auto get_contact_rhs = [&](auto contact_problem, auto make_element) {
-      //   auto fe_rhs_simple_contact = make_element();
-      //   auto common_data_simple_contact = make_contact_common_data();
-      //   contact_problem->setContactOperatorsRhs(fe_rhs_simple_contact,
-      //                                           common_data_simple_contact,
-      //                                           "SPATIAL_POSITION", "LAGMULT");
-      //   return fe_rhs_simple_contact;
-      // };
-
-      // auto get_master_contact_lhs = [&](auto contact_problem,
-      //                                   auto make_element) {
-      //   auto fe_lhs_simple_contact = make_element();
-      //   auto common_data_simple_contact = make_contact_common_data();
-      //   contact_problem->setContactOperatorsLhs(fe_lhs_simple_contact,
-      //                                           common_data_simple_contact,
-      //                                           "SPATIAL_POSITION", "LAGMULT");
-      //   return fe_lhs_simple_contact;
-      // };
-
-      // auto get_master_traction_rhs = [&](auto contact_problem,
-      //                                    auto make_element) {
-      //   auto fe_rhs_simple_contact = make_element();
-      //   auto common_data_simple_contact = make_contact_common_data();
-      //   contact_problem->setMasterForceOperatorsRhs(
-      //       fe_rhs_simple_contact, common_data_simple_contact,
-      //       "SPATIAL_POSITION", "LAGMULT");
-      //   return fe_rhs_simple_contact;
-      // };
-
-      // auto get_master_traction_lhs = [&](auto contact_problem,
-      //                                    auto make_element) {
-      //   auto fe_lhs_simple_contact = make_element();
-      //   auto common_data_simple_contact = make_contact_common_data();
-      //   contact_problem->setMasterForceOperatorsLhs(
-      //       fe_lhs_simple_contact, common_data_simple_contact,
-      //       "SPATIAL_POSITION", "LAGMULT");
-      //   return fe_lhs_simple_contact;
-      // };
-
       auto get_contact_material_rhs = [&](auto contact_problem,
                                           auto make_element, Range &ale_nodes) {
         auto fe_rhs_simple_contact_ale_material = make_element();
@@ -455,7 +416,7 @@ int main(int argc, char *argv[]) {
 
       DMType dm_name = "DMMOFEM";
       CHKERR DMRegister_MoFEM(dm_name);
-///////////
+
       // create dm instance
       SmartPetscObj<DM> dm;
       dm = createSmartDM(m_field.get_comm(), dm_name);
@@ -517,23 +478,6 @@ int main(int argc, char *argv[]) {
                                       make_convective_slave_element),
               NULL, NULL);
         } else {
-          // CHKERR DMMoFEMSNESSetFunction(
-          //     dm, "CONTACT_ELEM",
-          //     get_contact_rhs(contact_problem, make_contact_element),
-          //     PETSC_NULL, PETSC_NULL);
-          // CHKERR DMMoFEMSNESSetJacobian(
-          //     dm, "CONTACT_ELEM",
-          //     get_master_contact_lhs(contact_problem, make_contact_element),
-          //     NULL, NULL);
-          // CHKERR DMMoFEMSNESSetFunction(
-          //     dm, "CONTACT_ELEM",
-          //     get_master_traction_rhs(contact_problem, make_contact_element),
-          //     PETSC_NULL, PETSC_NULL);
-          // CHKERR DMMoFEMSNESSetJacobian(
-          //     dm, "CONTACT_ELEM",
-          //     get_master_traction_lhs(contact_problem, make_contact_element),
-          //     NULL, NULL);
-
           CHKERR DMMoFEMSNESSetFunction(
               dm, "CONTACT_ELEM",
               get_contact_rhs(contact_problem, make_contact_element, alm_flag),
@@ -576,106 +520,7 @@ int main(int argc, char *argv[]) {
                                                   make_contact_element, nodes),
               NULL, NULL);
         }
-///////////
-    
 
-    // // add fields to the global matrix by adding the element
-    // contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-    //                                    "LAGMULT", contact_prisms);
-
-    // // build finite elemnts
-    // CHKERR m_field.build_finite_elements();
-
-    // // build adjacencies
-    // CHKERR m_field.build_adjacencies(bit_levels.back());
-
-    // // define problems
-    // CHKERR m_field.add_problem("CONTACT_PROB");
-
-    // // set refinement level for problem
-    // CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
-    //                                                 bit_levels.back());
-
-    // DMType dm_name = "DMMOFEM";
-    // CHKERR DMRegister_MoFEM(dm_name);
-
-    // // create dm instance
-    // SmartPetscObj<DM> dm;
-    // dm = createSmartDM(m_field.get_comm(), dm_name);
-    // CHKERR DMSetType(dm, dm_name);
-
-    // // set dm datastruture which created mofem datastructures
-    // CHKERR DMMoFEMCreateMoFEM(dm, &m_field, "CONTACT_PROB", bit_levels.back());
-    // CHKERR DMSetFromOptions(dm);
-    // CHKERR DMMoFEMSetIsPartitioned(dm, PETSC_FALSE);
-    // // add elements to dm
-    // CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
-
-    // CHKERR DMSetUp(dm);
-
-    // // Vector of DOFs and the RHS
-    // auto D = smartCreateDMVector(dm);
-    // auto F = smartVectorDuplicate(D);
-
-    // // Stiffness matrix
-    // auto A = smartCreateDMMatrix(dm);
-
-    // CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-
-    // CHKERR VecZeroEntries(F);
-    // CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
-    // CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
-
-    // CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
-    // CHKERR MatZeroEntries(A);
-
-    // auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
-
-    // if (convect_pts == PETSC_TRUE) {
-    //   CHKERR DMMoFEMSNESSetFunction(
-    //       dm, "CONTACT_ELEM",
-    //       get_contact_rhs(contact_problem, make_convective_master_element),
-    //       PETSC_NULL, PETSC_NULL);
-    //   CHKERR DMMoFEMSNESSetJacobian(
-    //       dm, "CONTACT_ELEM",
-    //       get_master_contact_lhs(contact_problem,
-    //                              make_convective_master_element),
-    //       PETSC_NULL, PETSC_NULL);
-    //   CHKERR DMMoFEMSNESSetFunction(
-    //       dm, "CONTACT_ELEM",
-    //       get_master_traction_rhs(contact_problem,
-    //                               make_convective_slave_element),
-    //       PETSC_NULL, PETSC_NULL);
-    //   CHKERR DMMoFEMSNESSetJacobian(
-    //       dm, "CONTACT_ELEM",
-    //       get_master_traction_lhs(contact_problem,
-    //                               make_convective_slave_element),
-    //       PETSC_NULL, PETSC_NULL);
-    // } else {
-
-    //   CHKERR DMMoFEMSNESSetFunction(
-    //       dm, "CONTACT_ELEM",
-    //       get_contact_rhs(contact_problem, make_contact_element, alm_flag),
-    //       PETSC_NULL, PETSC_NULL);
-    //   CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
-    //                                 get_master_contact_lhs(contact_problem,
-    //                                                        make_contact_element,
-    //                                                        alm_flag),
-    //                                 PETSC_NULL, PETSC_NULL);
-    //   CHKERR DMMoFEMSNESSetFunction(
-    //       dm, "CONTACT_ELEM",
-    //       get_master_traction_rhs(contact_problem, make_contact_element,
-    //                               alm_flag),
-    //       PETSC_NULL, PETSC_NULL);
-    //   CHKERR DMMoFEMSNESSetJacobian(
-    //       dm, "CONTACT_ELEM",
-    //       get_master_traction_lhs(contact_problem, make_contact_element,
-    //                               alm_flag),
-    //       PETSC_NULL, PETSC_NULL);
-    // }
-///////////////
         if (test_jacobian == PETSC_TRUE) {
           char testing_options[] =
               "-snes_test_jacobian -snes_test_jacobian_display "

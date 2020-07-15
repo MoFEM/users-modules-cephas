@@ -16,9 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-// #include <MoFEM.hpp>
 using namespace MoFEM;
-// #include <SimpleContact.hpp>
 using namespace boost::numeric;
 
 extern "C" {
@@ -2174,12 +2172,6 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalMasterALE(
       "MESH_NODE_POSITIONS", common_data_simple_contact));
 
-  // fe_rhs_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-  // fe_rhs_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalMaster(field_name, common_data_simple_contact));
-
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsMaster(field_name,
                                         common_data_simple_contact));
@@ -2233,12 +2225,6 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalMasterALE(
       "MESH_NODE_POSITIONS", common_data_simple_contact));
 
-  // fe_rhs_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-  // fe_rhs_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalMaster(field_name, common_data_simple_contact));
-
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
@@ -2284,12 +2270,6 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm) {
     MoFEMFunctionBegin;
-
-    // fe_lhs_simple_contact->getOpPtrVector().push_back(
-    //     new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-    // fe_lhs_simple_contact->getOpPtrVector().push_back(
-    //     new OpGetNormalMaster(field_name, common_data_simple_contact));
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpGetPositionAtGaussPtsMaster(field_name,
@@ -2369,12 +2349,6 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm) {
     MoFEMFunctionBegin;
-
-    // fe_lhs_simple_contact->getOpPtrVector().push_back(
-    //     new OpGetNormalSlave(field_name, common_data_simple_contact));
-
-    // fe_lhs_simple_contact->getOpPtrVector().push_back(
-    //     new OpGetNormalMaster(field_name, common_data_simple_contact));
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
         "MESH_NODE_POSITIONS", common_data_simple_contact));
@@ -2499,11 +2473,6 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpGetNormalSlaveALE("MESH_NODE_POSITIONS",
                               common_data_simple_contact));
-  // fe_post_proc_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalMaster(field_name, common_data_simple_contact));
-
-  // fe_post_proc_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalSlave(field_name, common_data_simple_contact));
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsMaster(field_name,
@@ -3566,8 +3535,6 @@ MoFEMErrorCode SimpleContactProblem::OpContactALELhs::doWork(
     EntData &row_data, EntData &col_data) {
 
   MoFEMFunctionBegin;
-  // if (col_type != MBVERTEX)
-  //   MoFEMFunctionReturnHot(0);
   row_nb_dofs = row_data.getIndices().size();
   if (!row_nb_dofs)
     MoFEMFunctionReturnHot(0);
@@ -3581,13 +3548,6 @@ MoFEMErrorCode SimpleContactProblem::OpContactALELhs::doWork(
 
   matLhs.resize(rankRow * nb_base_fun_row, rankCol * nb_base_fun_col, false);
   matLhs.clear();
-
-  // diagonal_block = (row_type == col_type) && (row_side == col_side);
-
-  // if (col_type == MBVERTEX) {
-  //   dataAtPts->faceRowData = &row_data;
-  //   CHKERR loopSideVolumes(sideFeName, *sideFe);
-  // }
 
   // integrate local matrix for entity block
   CHKERR iNtegrate(row_data, col_data);
@@ -3667,20 +3627,6 @@ SimpleContactProblem::OpContactMaterialLhs::aSsemble(EntData &row_data,
       }
     }
   }
-
-  // if (!data.forcesOnlyOnEntitiesCol.empty()) {
-  //   colIndices.resize(col_nb_dofs, false);
-  //   noalias(colIndices) = col_data.getIndices();
-  //   col_indices = &colIndices[0];
-  //   VectorDofs &dofs = col_data.getFieldDofs();
-  //   VectorDofs::iterator dit = dofs.begin();
-  //   for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-  //     if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
-  //         data.forcesOnlyOnEntitiesCol.end()) {
-  //       colIndices[ii] = -1;
-  //     }
-  //   }
-  // }
 
   // assemble local matrix
   CHKERR MatSetValues(getSNESB(), row_nb_dofs, row_indices, col_nb_dofs,
@@ -4142,14 +4088,6 @@ MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::doWork(
   matLhs.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
   matLhs.clear();
 
-  //  diagonal_block = (row_type == col_type) && (row_side == col_side);
-
-  // if (col_type == MBVERTEX) {
-  //   dataAtPts->faceRowData = &row_data;
-  //   CHKERR loopSideVolumes(sideFeName, *sideFe);
-  // }
-  // pass
-
   normalVector->resize(3, false);
   tangentOne->resize(3, false);
   tangentTwo->resize(3, false);
@@ -4199,20 +4137,6 @@ MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::aSsemble(
       }
     }
   }
-
-  // if (!data.forcesOnlyOnEntitiesCol.empty()) {
-  //   colIndices.resize(col_nb_dofs, false);
-  //   noalias(colIndices) = col_data.getIndices();
-  //   col_indices = &colIndices[0];
-  //   VectorDofs &dofs = col_data.getFieldDofs();
-  //   VectorDofs::iterator dit = dofs.begin();
-  //   for (int ii = 0; dit != dofs.end(); dit++, ii++) {
-  //     if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
-  //         data.forcesOnlyOnEntitiesCol.end()) {
-  //       colIndices[ii] = -1;
-  //     }
-  //   }
-  // }
 
   // assemble local matrix
   CHKERR MatSetValues(getSNESB(), row_nb_dofs, row_indices, col_nb_dofs,

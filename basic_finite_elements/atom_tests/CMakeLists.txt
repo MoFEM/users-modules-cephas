@@ -467,19 +467,3 @@ add_test(
   -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 4 -my_order_lambda 3 
   -test_ale 1
 )
-
-bfe_add_executable(test_jacobian_of_ale_simple_contact_element
-${CMAKE_CURRENT_SOURCE_DIR}/test_jacobian_of_ale_simple_contact_element.cpp
-)
-
-target_link_libraries(test_jacobian_of_ale_simple_contact_element
-users_modules
-mofem_finite_elements
-mofem_interfaces
-mofem_multi_indices
-mofem_petsc
-mofem_approx
-mofem_third_party
-mofem_cblas
-${MoFEM_PROJECT_LIBS}
-)
