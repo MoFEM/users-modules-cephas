@@ -74,8 +74,38 @@ struct SimpleContactProblem {
 
     MoFEM::Interface &mField;
     bool newtonCotes;
+    SmartPetscObj<Vec> contactStateVec;
+
     SimpleContactElement(MoFEM::Interface &m_field, bool newton_cotes = false)
-        : ContactEle(m_field), mField(m_field), newtonCotes(newton_cotes) {}
+        : ContactEle(m_field), mField(m_field), newtonCotes(newton_cotes),
+          contactStateVec(0) {}
+
+    MoFEMErrorCode preProcess() {
+      MoFEMFunctionBegin;
+      if (snes_ctx == CTX_SNESSETFUNCTION && contactStateVec)
+        CHKERR VecZeroEntries(contactStateVec);
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode postProcess() {
+      MoFEMFunctionBegin;
+
+      if (snes_ctx != CTX_SNESSETFUNCTION || !contactStateVec)
+        MoFEMFunctionReturnHot(0);
+
+      CHKERR VecAssemblyBegin(contactStateVec);
+      CHKERR VecAssemblyEnd(contactStateVec);
+      
+      const double *array;
+      CHKERR VecGetArrayRead(contactStateVec, &array);
+      if (mField.get_comm_rank() == 0) {
+        PetscPrintf(PETSC_COMM_SELF, "  Active Gauss pts: %d out of %d\n",
+                    (int)array[0], (int)array[1]);
+      }
+      CHKERR VecRestoreArrayRead(contactStateVec, &array);
+
+      MoFEMFunctionReturn(0);
+    }
 
     int getRule(int order) {
       if (newtonCotes)
@@ -288,39 +318,6 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
-  struct PrintContactState : public MoFEM::FEMethod {
-
-    SmartPetscObj<Vec> contactStateVec;
-
-    PrintContactState(MoFEM::Interface &m_field)
-        : MoFEM::FEMethod(), mField(m_field) {}
-
-    MoFEMErrorCode preProcess() {
-      MoFEMFunctionBegin;
-      CHKERR VecZeroEntries(contactStateVec);
-      MoFEMFunctionReturn(0);
-    }
-    MoFEMErrorCode postProcess() {
-      MoFEMFunctionBegin;
-
-      CHKERR VecAssemblyBegin(contactStateVec);
-      CHKERR VecAssemblyEnd(contactStateVec);
-
-      const double *array;
-      CHKERR VecGetArrayRead(contactStateVec, &array);
-      if (mField.get_comm_rank() == 0) {
-        PetscPrintf(PETSC_COMM_SELF, "Active Gauss pts: %d out of %d\n",
-                    (int)array[0], (int)array[1]);
-      }
-      CHKERR VecRestoreArrayRead(contactStateVec, &array);
-
-      MoFEMFunctionReturn(0);
-    }
-
-  private:
-    MoFEM::Interface &mField;
-  };
-
   struct CommonDataSimpleContact
       : public boost::enable_shared_from_this<CommonDataSimpleContact> {
 
@@ -366,7 +363,7 @@ struct SimpleContactProblem {
       contactAreaVec = createSmartVectorMPI(
           mField.get_comm(), local_size, CommonDataSimpleContact::LAST_ELEMENT);
     }
-
+    
   private:
     MoFEM::Interface &mField;
   };
@@ -374,7 +371,7 @@ struct SimpleContactProblem {
   double cnValue;
   bool newtonCotes;
   MoFEM::Interface &mField;
-
+ 
   SimpleContactProblem(MoFEM::Interface &m_field, double &cn_value,
                        bool newton_cotes = false)
       : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes) {}
@@ -449,7 +446,6 @@ struct SimpleContactProblem {
   struct OpGetGapSlave : public ContactOp {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-
     OpGetGapSlave(
         const string field_name, // ign: does it matter??
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
@@ -1792,8 +1788,7 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     bool lagFieldSet;
     std::ofstream &mySplit;
-    // stream<tee_device<std::ostream, std::ofstream>> &mySplit;
-
+    
     OpMakeTestTextFile(MoFEM::Interface &m_field, string field_name,
                        boost::shared_ptr<CommonDataSimpleContact> &common_data,
                        std::ofstream &_my_split, bool lagrange_field = true)
