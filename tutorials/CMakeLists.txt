@@ -78,8 +78,7 @@ set(TUTORIALS_DIRS
   scl-3
   scl-4
   scl-5
-  # minimal_surface_equation
-  # heat_equation
+  scl-6
   # wave_equation
 )
 
