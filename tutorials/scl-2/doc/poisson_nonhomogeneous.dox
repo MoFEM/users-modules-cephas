@@ -6,8 +6,8 @@
 
 \note Intended learning outcome:
 - idea of Boundary element in MoFEM and how to use it
-- handling of nonhomogeneous boundary condition using least square approximation in MoFEM
-- process of implementing additional User Data Operators (UDOs) to calculate and assemble nonhomogeneous boundary condition
+- handling of non-homogeneous boundary condition using least square approximation in MoFEM
+- process of implementing additional User Data Operators (UDOs) to calculate and assemble non-homogeneous boundary condition
 - practising on how to **push** the developed UDOs to the *Pipeline*
 
 
