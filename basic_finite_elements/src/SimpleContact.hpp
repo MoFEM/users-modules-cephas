@@ -364,9 +364,6 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
 
-      // ierr = setBlocks();
-      // CHKERRABORT(PETSC_COMM_WORLD, ierr);
-
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
                            : 0;
@@ -380,15 +377,6 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
 
     std::map<int, BlockOptionDataContact> mapContactClearance;
     
-    // MoFEMErrorCode getParameters() {
-    //   MoFEMFunctionBegin; // They will be overwritten by BlockData
-    //   CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
-
-    //   ierr = PetscOptionsEnd();
-    //   CHKERRQ(ierr);
-    //   MoFEMFunctionReturn(0);
-    // }
-
     MoFEMErrorCode getBlockData(BlockOptionDataContact &data) {
       MoFEMFunctionBegin;
 
@@ -1858,8 +1846,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     bool lagFieldSet;
     std::ofstream &mySplit;
-    // stream<tee_device<std::ostream, std::ofstream>> &mySplit;
-
+    
     OpMakeTestTextFile(MoFEM::Interface &m_field, string field_name,
                        boost::shared_ptr<CommonDataSimpleContact> &common_data,
                        std::ofstream &_my_split, bool lagrange_field = true)
