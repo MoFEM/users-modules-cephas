@@ -24,7 +24,7 @@
  * meshes \ingroup simple_contact_problem
  */
 
-struct SimpleContactProblem : public MoFEM::FEMethod {
+struct SimpleContactProblem {
 
   using ContactEle = ContactPrismElementForcesAndSourcesCore;
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
