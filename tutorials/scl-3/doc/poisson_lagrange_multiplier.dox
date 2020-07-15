@@ -7,14 +7,9 @@
 <br>
 
 \note Intended learning outcome:
-- general structure of a program developed using MoFEM
-- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
-- idea of Domain element in MoFEM and how to use it
-- process of implementing User Data Operators (UDOs) to calculate and assemble
-  stiffness matrix and force vector
-- how to **push** UDOs to the *pipeline*
-- a way to handle homogeneous boundary condition in MoFEM
-- utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
+- an alternative way to handle non-homogeneous boundary condition using an additional field of Lagrange multipliers
+- idea of PETSc [PCFIELDSPLIT](http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html) block solver and how to implement it
+- adding the additional field to the output file (postprocessing)
 
 
 \tableofcontents
