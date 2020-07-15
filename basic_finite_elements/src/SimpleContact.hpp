@@ -95,7 +95,7 @@ struct SimpleContactProblem : public MoFEM::FEMethod {
 
       CHKERR VecAssemblyBegin(contactStateVec);
       CHKERR VecAssemblyEnd(contactStateVec);
-
+      
       const double *array;
       CHKERR VecGetArrayRead(contactStateVec, &array);
       if (mField.get_comm_rank() == 0) {
