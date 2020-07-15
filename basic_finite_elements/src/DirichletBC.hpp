@@ -37,6 +37,32 @@
 
 using namespace boost::numeric;
 
+/** \brief Data from Cubit blocksets
+ * \ingroup Dirichlet_bc
+ */
+struct DataFromBc {
+  VectorDouble scaled_values;
+  VectorInt bc_flags; 
+  Range bc_ents[3];
+
+  //for rotation
+  bool is_rotation;
+  FTensor::Tensor1<double, 3> t_normal;
+  FTensor::Tensor1<double, 3> t_centr;
+  double theta;
+
+  DataFromBc()
+      : scaled_values(3), bc_flags(3), is_rotation(false) {
+  }
+
+  MoFEMErrorCode getBcData(DisplacementCubitBcData &mydata,
+                           const MoFEM::CubitMeshSets *it);
+  MoFEMErrorCode getBcData(std::vector<double> &mydata,
+                           const MoFEM::CubitMeshSets *it);
+  MoFEMErrorCode getEntitiesFromBc(MoFEM::Interface &mField,
+                                   const MoFEM::CubitMeshSets *it);
+};
+
 /** \brief Set Dirichlet boundary conditions on displacements
  * \ingroup Dirichlet_bc
  */
@@ -47,19 +73,43 @@ struct DirichletDisplacementBc : public MoFEM::FEMethod {
   double dIag;                 ///< diagonal value set on zeroed column and rows
 
   DirichletDisplacementBc(MoFEM::Interface &m_field,
-                          const std::string &field_name, Mat Aij, Vec X, Vec F);
+                          const std::string &field_name, Mat Aij, Vec X, Vec F,
+                          string blockset_name = "DISPLACEMENT");
   DirichletDisplacementBc(MoFEM::Interface &m_field,
-                          const std::string &field_name);
+                          const std::string &field_name,
+                          string blockset_name = "DISPLACEMENT");
 
   std::map<DofIdx, FieldData> mapZeroRows;
   std::vector<int> dofsIndices;
   std::vector<double> dofsValues;
   std::vector<double> dofsXValues;
+  const std::string blocksetName;
+
   virtual MoFEMErrorCode iNitalize();
 
   MoFEMErrorCode preProcess();
   MoFEMErrorCode postProcess();
-
+  /**
+   * @brief Get the Bc Data From Sets And Blocks object
+   *  Use DISPLACEMENT blockset name (default)
+   *  with 6 atributes:
+   *  1,2,3 are values of displacements x,y,z
+   *  4,5,6 are flags for x,y,z (0 or 1)
+   * @param bc_data 
+   * @return MoFEMErrorCode 
+   */
+  MoFEMErrorCode getBcDataFromSetsAndBlocks(std::vector<DataFromBc> &bc_data);
+  /**
+   * @brief Get the Rotation Bc From Block object
+   *  Use ROTATION blockset name
+   *  with 7 atributes:
+   *  1 - is the rotation angle
+   *  2,3,4 are x,y,z coords of the center of rotation
+   *  5,6,7 are x,y,z coords of the normal of rotation
+   * @param bc_data 
+   * @return MoFEMErrorCode 
+   */
+  MoFEMErrorCode getRotationBcFromBlock(std::vector<DataFromBc> &bc_data);
   boost::ptr_vector<MethodForForceScaling> methodsOp;
 };
 
@@ -75,20 +125,19 @@ struct DirichletSpatialPositionsBc : public DirichletDisplacementBc {
       MoFEM::Interface &m_field, const std::string &field_name, Mat aij, Vec x,
       Vec f, const std::string material_positions = "MESH_NODE_POSITIONS",
       const std::string blockset_name = "DISPLACEMENT")
-      : DirichletDisplacementBc(m_field, field_name, aij, x, f),
-        materialPositions(material_positions), blocksetName(blockset_name) {}
+      : DirichletDisplacementBc(m_field, field_name, aij, x, f, blockset_name),
+        materialPositions(material_positions) {}
 
   DirichletSpatialPositionsBc(
       MoFEM::Interface &m_field, const std::string &field_name,
       const std::string material_positions = "MESH_NODE_POSITIONS",
       const std::string blockset_name = "DISPLACEMENT")
-      : DirichletDisplacementBc(m_field, field_name),
-        materialPositions(material_positions), blocksetName(blockset_name) {}
+      : DirichletDisplacementBc(m_field, field_name, blockset_name),
+        materialPositions(material_positions) {}
 
   std::string materialPositions; ///< name of the field with reference material
                                  ///< positions
   std::vector<std::string> fixFields; ///<
-  const std::string blocksetName;
 
   VectorDouble cOords;
   MoFEMErrorCode iNitalize();
@@ -142,50 +191,6 @@ struct DirichletFixFieldAtEntitiesBc : public DirichletDisplacementBc {
 /// \deprecated use DirichletFixFieldAtEntitiesBc
 DEPRECATED typedef DirichletFixFieldAtEntitiesBc FixBcAtEntities;
 
-/** \brief Blockset boundary conditions
-  * \ingroup Dirichlet_bc
-  *
-  * Implementation of generalized Dirichlet Boundary Conditions from CUBIT
-Blockset
-  * (or not using CUBIT building boundary conditions, e.g. Temperature or
-Displacements etc).
-  * It can work for any Problem rank (1,2,3)
-  *
-  *    Usage in Cubit for displacement:
-       block 1 surface 12
-       block 1 name "DISPLACEMENT_1"
-       block 1 attribute count 3
-       block 1 attribute index 1 0       # value for x direction
-       block 1 attribute index 2 2       # value for y direction
-       block 1 attribute index 3 0       # value for z direction
-
-      With above command we set displacement of 2 on y-direction and constrain
-x,z direction (0 displacement)
-  *
-**/
-struct DirichletSetFieldFromBlock : public DirichletDisplacementBc {
-
-  const std::string blocksetName;
-  DirichletSetFieldFromBlock(MoFEM::Interface &m_field,
-                             const std::string &field_name,
-                             const std::string &blockset_name, Mat aij, Vec x,
-                             Vec f)
-      : DirichletDisplacementBc(m_field, field_name, aij, x, f),
-        blocksetName(blockset_name) {}
-
-  DirichletSetFieldFromBlock(MoFEM::Interface &m_field,
-                             const std::string &field_name,
-                             const std::string &blockset_name)
-      : DirichletDisplacementBc(m_field, field_name),
-        blocksetName(blockset_name) {}
-
-  MoFEMErrorCode iNitalize();
-};
-
-/// \deprecated use DirichletSetFieldFromBlock
-DEPRECATED typedef DirichletSetFieldFromBlock
-    DirichletBCFromBlockSetFEMethodPreAndPostProc;
-
 /**
  * \brief Add boundary conditions form block set having 6 attributes
  *
@@ -196,11 +201,13 @@ DEPRECATED typedef DirichletSetFieldFromBlock
      block 1 tri 28 32
      block 1 name "DISPLACEMENT_1"
      block 1 attribute count 6
-     block 1 attribute index 1 97    # any value (Cubit doesnt allow for blank
- attributes) block 1 attribute index 2 0 block 1 attribute index 3 0 block 1
- attribute index 4 0       # flag for x direction block 1 attribute index 5 1 #
- flag for y direction block 1 attribute index 6 1       # flag for z direction
-    This means that we set zero displacement on y and z direction and on x set
+     block 1 attribute index 1 97  # any value
+     block 1 attribute index 2 0
+     block 1 attribute index 3 0
+     block 1 attribute index 4 0  # flag for x dir
+     block 1 attribute index 5 1  # flag for y dir
+     block 1 attribute index 6 1  # flag for z dir
+ This means that we set zero displacement on y and z dir and on x set
  direction freely. (value 97 is irrelevant because flag for 1 value is 0
  (false)) It can be usefull if we want to set boundary conditions directly to
  triangles e.g, since standard boundary conditions in Cubit allow only using
@@ -209,27 +216,30 @@ DEPRECATED typedef DirichletSetFieldFromBlock
  */
 struct DirichletSetFieldFromBlockWithFlags : public DirichletDisplacementBc {
 
-  const std::string blocksetName;
   DirichletSetFieldFromBlockWithFlags(MoFEM::Interface &m_field,
                                       const std::string &field_name,
                                       const std::string &blockset_name, Mat aij,
                                       Vec x, Vec f)
-      : DirichletDisplacementBc(m_field, field_name, aij, x, f),
-        blocksetName(blockset_name) {}
+      : DirichletDisplacementBc(m_field, field_name, aij, x, f, blockset_name) {
+  }
 
   DirichletSetFieldFromBlockWithFlags(MoFEM::Interface &m_field,
                                       const std::string &field_name,
                                       const std::string &blockset_name)
-      : DirichletDisplacementBc(m_field, field_name),
-        blocksetName(blockset_name) {}
-
-  MoFEMErrorCode iNitalize();
+      : DirichletDisplacementBc(m_field, field_name, blockset_name) {}
 };
 
 /// \deprecated use DirichletSetFieldFromBlockWithFlags
 DEPRECATED typedef DirichletSetFieldFromBlockWithFlags
     DirichletBCFromBlockSetFEMethodPreAndPostProcWithFlags;
 
+/// \deprecated use DirichletSetFieldFromBlockWithFlags
+DEPRECATED typedef DirichletSetFieldFromBlockWithFlags
+    DirichletSetFieldFromBlock;
+
+/// \deprecated use DirichletSetFieldFromBlockWithFlags
+DEPRECATED typedef DirichletSetFieldFromBlockWithFlags
+    DirichletBCFromBlockSetFEMethodPreAndPostProc;
 /**
  * @brief calculate reactions from vector of internal forces on meshsets
  *

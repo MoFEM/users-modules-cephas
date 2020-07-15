@@ -401,4 +401,58 @@ MoFEMErrorCode OpPostProcElastic::doWork(int side, EntityType type,
 }
 //! [Postprocessing]
 
+
+struct OpEdgeForceRhs : BoundaryEleOp {
+
+  Range forceEdges;
+  VectorDouble forceVec;
+
+  OpEdgeForceRhs(const std::string field_name, const Range &force_edges, const VectorDouble &force_vec)
+      : BoundaryEleOp(field_name, OPROW),
+        forceEdges(force_edges), forceVec(force_vec) {}
+
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+
+    MoFEMFunctionBegin;
+    const int nb_dofs = data.getIndices().size();
+    if (nb_dofs == 0)
+      MoFEMFunctionReturnHot(0);
+    
+    EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
+    if (forceEdges.find(ent) == forceEdges.end()) {
+      MoFEMFunctionReturnHot(0);
+    }
+
+    std::array<double, MAX_DOFS_ON_ENTITY> nF;
+    std::fill(&nF[0], &nF[nb_dofs], 0);
+
+    FTensor::Tensor1<double, 2> t_force(forceVec(0),forceVec(1));
+    const int nb_gauss_pts = data.getN().size1();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_base = data.getFTensor0N();
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf(&nF[0], &nF[1]);
+      for (int bb = 0; bb != nb_dofs / 2; ++bb) {
+        t_nf(i) += (t_w * t_base * getMeasure()) * t_force(i);
+        ++t_nf;
+        ++t_base;
+      }
+      ++t_w;
+    }
+
+    if ((getDataCtx() & PetscData::CtxSetTime).any())
+      for (int dd = 0; dd != nb_dofs; ++dd)
+        nF[dd] *= getTStime();
+
+    CHKERR VecSetValues(getKSPf(), data, nF.data(), ADD_VALUES);
+
+    MoFEMFunctionReturn(0);
+  }
+};
+
+
 }; // namespace OpElasticTools
