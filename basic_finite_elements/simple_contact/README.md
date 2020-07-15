@@ -1,4 +1,3 @@
-### Table of contents
 [TOC]
 
 ## Brief description 
@@ -40,7 +39,7 @@ Below we consider several examples of contact interfaces arrangement, outlining 
 
 ***_NOTE:_*** In order to use the matching meshes contact the solids need to touch each other along the contact surface in the input mesh. Presented below is a rather general approach which permits to mesh the contacting solids separately, refine these meshes around the contact surface, and, finally, merge the meshes together.
 
-### Geometry:
+### Geometry
 
 - Create the contacting solids separately 
 - Use _Intersection_ to find common geometrical entities
@@ -55,7 +54,7 @@ Below we consider several examples of contact interfaces arrangement, outlining 
 
 ***_NOTE:_*** Springs can be used to eliminate the rigid body motion in a contact simulation  under the pressure control. 
 
-### Mesh:
+### Mesh
 
 - Mesh each solid separately
 - Create mesh groups from the geometry groups (for each solid separately)
@@ -134,7 +133,7 @@ Check the essential contact parameters in the file `param_file.petsc`:
 
 ***_NOTE:_*** `cn` is the contact augmentation parameter which affects the convergence and has minimal effect on the solution (in a reasonable range of values). Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10.
 
-### Contact parameters:
+### Contact parameters
 
 Name | Description | Default value
 --- | --- | ---
