@@ -79,7 +79,7 @@ set(TUTORIALS_DIRS
   scl-4
   scl-5
   scl-6
-  # wave_equation
+  scl-7
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
