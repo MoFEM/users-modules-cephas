@@ -12,10 +12,10 @@ public:
   NonlinearPoisson(moab::Core &mb_instance, MoFEM::Core &core);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runAnalysis();
+  MoFEMErrorCode runWholeProgram();
 
 private:
-  // Declaration of other main functions called in runAnalysis()
+  // Declaration of other main functions called in runWholeProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -97,7 +97,7 @@ NonlinearPoisson::NonlinearPoisson(moab::Core &mb_instance, MoFEM::Core &core)
                                                  &previousUpdate->fieldGrad);
 }
 
-MoFEMErrorCode NonlinearPoisson::runAnalysis() {
+MoFEMErrorCode NonlinearPoisson::runWholeProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -382,7 +382,7 @@ int main(int argc, char *argv[]) {
 
     // Run the main analysis
     NonlinearPoisson poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    CHKERR poisson_problem.runWholeProgram();
   }
   CATCH_ERRORS;
 

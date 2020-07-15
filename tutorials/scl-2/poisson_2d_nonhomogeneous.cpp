@@ -12,10 +12,10 @@ public:
   Poisson2DNonhomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runAnalysis();
+  MoFEMErrorCode runWholeProgram();
 
 private:
-  // Declaration of other main functions called in runAnalysis()
+  // Declaration of other main functions called in runWholeProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -82,7 +82,7 @@ Poisson2DNonhomogeneous::Poisson2DNonhomogeneous(moab::Core &mb_instance,
   boundaryPipelineRhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
 }
 
-MoFEMErrorCode Poisson2DNonhomogeneous::runAnalysis() {
+MoFEMErrorCode Poisson2DNonhomogeneous::runWholeProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
 
     // Run the main analysis
     Poisson2DNonhomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    CHKERR poisson_problem.runWholeProgram();
   }
   CATCH_ERRORS;
 

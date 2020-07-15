@@ -12,10 +12,10 @@ public:
   MinimalSurfaceEqn(moab::Core &mb_instance, MoFEM::Core &core);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runAnalysis();
+  MoFEMErrorCode runWholeProgram();
 
 private:
-  // Declaration of other main functions called in runAnalysis()
+  // Declaration of other main functions called in runWholeProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -97,7 +97,7 @@ MinimalSurfaceEqn::MinimalSurfaceEqn(moab::Core &mb_instance, MoFEM::Core &core)
                                                  &previousUpdate->fieldGrad);
 }
 
-MoFEMErrorCode MinimalSurfaceEqn::runAnalysis() {
+MoFEMErrorCode MinimalSurfaceEqn::runWholeProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -381,8 +381,8 @@ int main(int argc, char *argv[]) {
     // MoFEM::Interface &mField = core; // finite element interface
 
     // Run the main analysis
-    MinimalSurfaceEqn poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    MinimalSurfaceEqn minimal_surface_problem(mb_instance, core);
+    CHKERR minimal_surface_problem.runWholeProgram();
   }
   CATCH_ERRORS;
 

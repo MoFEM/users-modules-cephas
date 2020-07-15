@@ -42,10 +42,10 @@ public:
   HeatEquation(moab::Core &mb_instance, MoFEM::Core &core);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runAnalysis();
+  MoFEMErrorCode runWholeProgram();
 
 private:
-  // Declaration of other main functions called in runAnalysis()
+  // Declaration of other main functions called in runWholeProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -386,7 +386,7 @@ MoFEMErrorCode HeatEquation::outputResults() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::runAnalysis() {
+MoFEMErrorCode HeatEquation::runWholeProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -422,8 +422,8 @@ int main(int argc, char *argv[]) {
     // MoFEM::Interface &mField = core; // finite element interface
 
     // Run the main analysis
-    HeatEquation poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    HeatEquation heat_problem(mb_instance, core);
+    CHKERR heat_problem.runWholeProgram();
   }
   CATCH_ERRORS;
 

@@ -12,10 +12,10 @@ public:
   Poisson2DHomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runAnalysis();
+  MoFEMErrorCode runWholeProgram();
 
 private:
-  // Declaration of other main functions called in runAnalysis()
+  // Declaration of other main functions called in runWholeProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -198,7 +198,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Poisson2DHomogeneous::runAnalysis() {
+MoFEMErrorCode Poisson2DHomogeneous::runWholeProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -234,7 +234,7 @@ int main(int argc, char *argv[]) {
 
     // Run the main analysis
     Poisson2DHomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    CHKERR poisson_problem.runWholeProgram();
   }
   CATCH_ERRORS;
 

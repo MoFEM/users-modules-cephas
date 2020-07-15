@@ -745,13 +745,13 @@ perform finite element analysis.
 public:
   Poisson2DHomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runAnalysis();
+  MoFEMErrorCode runWholeProgram();
 \endcode
 Then there are private functions doing certain tasks and can be recognised by
 their names
 \code
 private:
-  // Declaration of other main functions called in runAnalysis()
+  // Declaration of other main functions called in runWholeProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -1179,14 +1179,14 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 }
 \endcode
 
-\subsubsection basic_tutorials_poisson_homogeneous_run_analysis runAnalysis() 
+\subsubsection basic_tutorials_poisson_homogeneous_run_analysis runWholeProgram() 
 
 Finally, having all the necessary tasks implemented in the corresponding
 functions, we can now put them together in the last function of the main class.
 This function is responsible for the calling sequence which is similar to most
 of other finite element programs
 \code
-MoFEMErrorCode Poisson2DHomogeneous::runAnalysis() {
+MoFEMErrorCode Poisson2DHomogeneous::runWholeProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -1228,7 +1228,7 @@ int main(int argc, char *argv[]) {
 
     // Run the main analysis
     Poisson2DHomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    CHKERR poisson_problem.runWholeProgram();
   }
   CATCH_ERRORS;
 
@@ -1242,11 +1242,11 @@ So you can see, at the beginning, it creates the Discrete Managers that enable
 information flows between MoFEM (finite element implementation), MOAB (element
 topology management), and PETSc (algebraic solvers). After that, it creates
 variable `poisson_problem` of type/class `Poisson2DHomogeneous` which is
-previously defined and then run the analysis by triggering the public function runAnalysis().
+previously defined and then run the analysis by triggering the public function runWholeProgram().
 \code
     // Run the main analysis
     Poisson2DHomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runAnalysis();
+    CHKERR poisson_problem.runWholeProgram();
 \endcode
 
 
