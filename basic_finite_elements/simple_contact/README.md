@@ -16,22 +16,22 @@ arbitrary number of meshed surfaces:
 Below we consider several examples of contact interfaces arrangement, outlining which cases are currently supported, and which are not:
 
 - Contact interface cutting through the whole body: **SUPPORTED**
-![alt text](figures/contact_case_1.png "Case 1: Contact interface cutting through the whole body") *Case 1: Contact interface cutting through the whole body  (**SUPPORTED**)*
+![alt text](figures/contact_case_1.png "Case 1: Contact interface cutting through the whole body") *Case 1: Contact interface cutting through the whole body  (SUPPORTED)*
 
 ----
 
 - Contact interface cutting through a part of the body: **NOT SUPPORTED**
-![alt text](figures/contact_case_2.png "Case 2: Contact interface cutting through a part of the body") *Case 2: Contact interface cutting through a part of the body (**NOT SUPPORTED**)*
+![alt text](figures/contact_case_2.png "Case 2: Contact interface cutting through a part of the body") *Case 2: Contact interface cutting through a part of the body (NOT SUPPORTED)*
 
 ----
 
 - Contact interface cutting through a part of the body and meeting another contact interface cutting through the whole body: **SUPPORTED**
-![alt text](figures/contact_case_3.png "Case 3: Contact interface meeting another contact interface") *Case 3: Contact interface meeting another contact interface (**SUPPORTED**)*
+![alt text](figures/contact_case_3.png "Case 3: Contact interface meeting another contact interface") *Case 3: Contact interface meeting another contact interface (SUPPORTED)*
 
 ----
 
 - Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined below conditions are satisfied, with the distance threshold considered as 3 elements in the bulk mesh  
-![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (**SUPPORTED**)*
+![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (SUPPORTED)*
 
 ## 2. Creation of the _MED_ mesh file in _Salome_ 
 
@@ -103,7 +103,7 @@ name=SPRING_BC          # Block name (starts exactly like this)
 user1=0		            # Spring stiffness in normal direction 
 user2=1e-4		        # Spring stiffness in tangential directions 
 ```
-***_NOTE:_*** For the considered example the normal stiffness can be set to `0`, while the tangential one can be set to `1e-4`. In general, the stiffness of the springs needs to be chosen as small as possible to avoid effect on the solution, while permitting to eliminate any rigid body motions.
+***_NOTE:_*** For the considered example the normal stiffness can be set to `0`, while the tangential one can be set to `1e-4` (for both blocks of springs). In general, the stiffness of the springs needs to be chosen as small as possible to avoid effect on the solution, while permitting to eliminate any rigid body motions.
 
 ## 4. Generation of the _h5m_ file
 
@@ -128,6 +128,8 @@ Check the essential contact parameters in the file `param_file.petsc`:
 -my_cn_value 1.e3       
 -my_r_value 1.0            
 ```
+
+***_NOTE:_*** `cn` is the contact augmentation parameter which affects the convergence and has minimal effect on the solution (in a reasonable range of values). Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10.
 
 ### Contact parameters:
 
