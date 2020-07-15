@@ -932,8 +932,8 @@ int main(int argc, char *argv[]) {
     // if (is_friction)
     //   CHKERR post_proc_contact_ptr->addFieldValuesPostProc("TANGENT_LAGMULT");
 
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
-                                    post_proc_contact_ptr);
+    // CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
+    //                                 post_proc_contact_ptr);
 
     {
       string out_file_name;

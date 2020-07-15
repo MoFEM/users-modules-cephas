@@ -494,9 +494,9 @@ MoFEMErrorCode SimpleContactProblem::OpGetOrthonormalTangents::doWork(
   t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
 
   t_tangent_2(k) = FTensor::levi_civita(i, j, k) * t_normal(i) * t_tangent_1(j);
-  cerr << "t_normal   " << t_normal << "\n";
-  cerr << "t_tangent_1   " << t_tangent_1 << "\n";
-  cerr << "t_tangent_2   " << t_tangent_2 << "\n";
+  // cerr << "t_normal   " << t_normal << "\n";
+  // cerr << "t_tangent_1   " << t_tangent_1 << "\n";
+  // cerr << "t_tangent_2   " << t_tangent_2 << "\n";
 
   // t_tangent_2(i) = t_tangent_2(i) / l_tan_2;
 
@@ -828,8 +828,8 @@ MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsSlave::doWork(
       ++t_base_lambda;
       ++t_field_data_slave;
     }
-    cerr << "Normal"
-         << "     " << t_lagrange_slave << "\n";
+    // cerr << "Normal"
+    //      << "     " << t_lagrange_slave << "\n";
 
     ++t_lagrange_slave_3;
     ++t_lagrange_slave;
@@ -889,7 +889,9 @@ if (type != MBVERTEX)
     // for (int bb = 0; bb != nb_base_fun_col; ++bb) {
     t_tangent_lagrange(0) += t_tangent_1_at_gp(i) * t_lagrange_slave_3(i);
     t_tangent_lagrange(1) += t_tangent_2_at_gp(i) * t_lagrange_slave_3(i);
-    cerr << t_tangent_lagrange(0) << "     " << t_tangent_lagrange(1) << "\n";
+    
+    // cerr << t_tangent_lagrange(0) << "     " << t_tangent_lagrange(1) << "\n";
+    
     // ++t_base_lag_slave;
     // ++t_field_data_slave;
     // }
@@ -5228,11 +5230,11 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
 
   FTensor::Index<'i', 2> i;
 
-  // Tag th_tan_lag;
-  // if (isTangLagrange)
-  //   CHKERR moabOut.tag_get_handle("TANGENT_LAGRANGE_MAG", 1, MB_TYPE_DOUBLE,
-  //                                 th_tan_lag, MB_TAG_CREAT | MB_TAG_SPARSE,
-  //                                 &def_vals);
+  Tag th_tan_lag;
+  if (isTangLagrange)
+    CHKERR moabOut.tag_get_handle("TANGENT_LAGRANGE_MAG", 1, MB_TYPE_DOUBLE,
+                                  th_tan_lag, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                  &def_vals);
 
   auto get_tag_pos = [&](const std::string name) {
     Tag th;
@@ -5274,10 +5276,10 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
                                 &t_lag_gap_prod_slave);
     CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &t_lagrange_slave);
   
-    // if (isTangLagrange){
-    // double mag_tan_lag = sqrt(t_tangent_lagrange(i) * t_tangent_lagrange(i));
-    // CHKERR moabOut.tag_set_data(th_tan_lag, &new_vertex, 1, &mag_tan_lag);
-    // }
+    if (isTangLagrange){
+    double mag_tan_lag = sqrt(t_tangent_lagrange(i) * t_tangent_lagrange(i));
+    CHKERR moabOut.tag_set_data(th_tan_lag, &new_vertex, 1, &mag_tan_lag);
+    }
    
     auto get_vec_ptr = [&](auto t) {
       for (int dd = 0; dd != 3; ++dd)
@@ -5868,10 +5870,13 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
       new OpLagGapProdGaussPtsSlave(lagrange_field_name,
                                     common_data_simple_contact));
 
-  // if(is_friction)
-    // fe_post_proc_simple_contact->getOpPtrVector().push_back(
-    //     new OpGetTangentLagrange("TANGENT_LAGMULT",
-    //                              common_data_simple_contact));
+  fe_post_proc_simple_contact->getOpPtrVector().push_back(
+      new OpGetOrthonormalTangents(field_name, common_data_simple_contact));
+
+  if(is_friction)
+    fe_post_proc_simple_contact->getOpPtrVector().push_back(
+        new OpGetTangentLagrange("LAGMULT",
+                                 common_data_simple_contact));
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
