@@ -1,4 +1,6 @@
-## Brief description 
+[TOC]
+
+## 0. Brief description 
 Contact interaction between elastic solids having matching meshes in the contact interface.
 
 ## 1. Definition of the contact interface(s)
