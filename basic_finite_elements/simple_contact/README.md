@@ -135,6 +135,7 @@ Check the essential contact parameters in the file `param_file.petsc`:
 
 ***_NOTE:_*** `cn` is the contact augmentation parameter which affects the convergence and has minimal effect on the solution (in a reasonable range of values). Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10.
 
+<a name="contact-parameters"></a>
 ### Contact parameters
 
 Name | Description | Default value
