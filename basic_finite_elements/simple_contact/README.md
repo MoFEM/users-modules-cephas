@@ -3,7 +3,7 @@
 ## Brief description 
 Contact interaction between elastic solids having matching meshes in the contact interface.
 
-***_Assumptions:_*** small rotations, small strains, small relative tangential displacements (moderate if `my_convect` option is switched on, see [Contact parameters](#contact-parameters) for more details).
+***_Assumptions:_*** small rotations, small strains, small relative tangential displacements (moderate if `my_convect` option is switched on, see [Contact parameters](#markdown-header-contact-parameters) for more details).
 
 ## 1. Definition of the contact interface(s)
 
@@ -135,7 +135,6 @@ Check the essential contact parameters in the file `param_file.petsc`:
 
 ***_NOTE:_*** `cn` is the contact augmentation parameter which affects the convergence and has minimal effect on the solution (in a reasonable range of values). Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10.
 
-<a name="contact-parameters"></a>
 ### Contact parameters
 
 Name | Description | Default value
