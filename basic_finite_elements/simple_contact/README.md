@@ -3,6 +3,8 @@
 ## Brief description 
 Contact interaction between elastic solids having matching meshes in the contact interface.
 
+***_Assumptions:_*** small rotations, small strains, small relative tangential displacements (moderate if `my_convect` option is switched on, see [Contact parameters](#contact-parameters) for more details).
+
 ## 1. Definition of the contact interface(s)
 
 Contacting solids should be merged (glued) along the apparent contact 
@@ -145,7 +147,8 @@ Name | Description | Default value
 `my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | `1`
 `my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | `1` 
 `my_alm_flag` | Defines the choice of the algorithm: `0` (False) - Complementarity function approach, `1` (True) - Augmented Lagrangian method | `0`  
-`my_out_integ_pts` | If set to `1` (True) the values of contact Lagrange multipliers are output at gauss points of the contact interface | `0`  
+`my_out_integ_pts` | If set to `1` (True), values of contact Lagrange multipliers are output at gauss points of the contact interface | `0`  
+`my_convect` | If set to `1` (True), moderate relative tangential displacements can be  taken into account | `0`  
 
 
 ## 6. Running the contact simulation
