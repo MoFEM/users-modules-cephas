@@ -1261,11 +1261,11 @@ will do the following steps
   installation, going to the directory would be something similar to this 
   - For user version installation
     \code
-    cd mofem_install/um_view/tutorials/poisson/
+    cd mofem_install/um_view/tutorials/scl-1/
     \endcode
   - For developer version installation
     \code
-    cd mofem_install/um/build_release/tutorials/poisson
+    cd mofem_install/um/build_release/tutorials/scl-1/
     \endcode
 
 - Second, check the parameters in the param_file.petsc. These are PETSc
@@ -1283,7 +1283,7 @@ will do the following steps
   the analysis
   \code
   mofem_part -my_file mesh2d.cub -output_file mesh2d.h5m -my_nparts $NPROCS -dim 2 -adj_dim 1
-  mpirun -np $NPROCS ./poisson_2d_homogeneous -file_name mesh2d.h5m -order $APPROX_ORDER -log_quiet
+  mpirun -np $NPROCS ./poisson_2d_homogeneous -file_name mesh2d.h5m -order $APPROX_ORDER
   \endcode
   where `$NPROCS` is the number of processors you would like to use to run the
   analysis and `$APPROX_ORDER` denotes the polynomial order of the approximation
