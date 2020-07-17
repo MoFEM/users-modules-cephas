@@ -101,5 +101,5 @@ add_test(Spring
     ${CMAKE_CURRENT_BINARY_DIR}/elasticity
     -my_file ${CMAKE_CURRENT_SOURCE_DIR}/free_beam.h5m 
     -my_order 4 -ksp_type cg -pc_type lu 
-    -ksp_monitor -is_atom_test 3
+    -ksp_monitor -is_atom_test 4
   )

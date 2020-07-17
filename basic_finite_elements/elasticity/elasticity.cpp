@@ -505,7 +505,7 @@ int main(int argc, char *argv[]) {
           "MESH_NODE_POSITIONS", false, true, MBPRISM, data_at_pts);
     }
 
-    if (test_nb == 3) {
+    if (test_nb == 4) {
 
       auto thermal_strain =
           [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
@@ -1166,7 +1166,7 @@ int main(int argc, char *argv[]) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
-      case 3:
+      case 4:
         if (fabs(*eng_ptr - 2.4992e+00) > 1e-3)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
