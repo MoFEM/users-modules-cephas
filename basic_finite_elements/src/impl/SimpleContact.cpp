@@ -4196,7 +4196,6 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
       new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
                                      common_data_simple_contact));
 
-  // this is the right order
   fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(
       mesh_node_field_name, common_data_simple_contact, false));
 
