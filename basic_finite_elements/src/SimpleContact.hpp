@@ -2365,7 +2365,7 @@ struct SimpleContactProblem {
    * element on slave side for evaluation of the RHS contact
    * traction in the material configuration on either slave or master surface
    */
-  struct OpLoopForSideRhs : public ContactOp {
+  struct OpLoopForSideOfContactPrism : public ContactOp {
 
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
         sideFe;
@@ -2376,7 +2376,7 @@ struct SimpleContactProblem {
      *element  operators that is adjacent to the slave side.
      **/
 
-    OpLoopForSideRhs(
+    OpLoopForSideOfContactPrism(
         const string field_name,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
             side_fe,
@@ -3078,37 +3078,6 @@ struct SimpleContactProblem {
                                             master_slave_name) {
           sYmm = false; // This will make sure to loop over all entities
         };
-      };
-
-      /// \brief Operator that allows for looping over operators belonging to
-      /// side volume element adjacent to the contact prism under consideration
-      struct OpLoopForSideLhs
-          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
-
-        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-            sideFe;
-        std::string sideFeName;
-        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-        const bool isMaster;
-
-        OpLoopForSideLhs(
-            const string field_name,
-            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-            boost::shared_ptr<
-                VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-                side_fe,
-            const std::string &side_fe_name, const bool is_master)
-            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-                  field_name, UserDataOperator::OPROWCOL,
-                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                      FACESLAVESLAVE),
-              commonDataSimpleContact(common_data_contact), sideFe(side_fe),
-              sideFeName(side_fe_name), isMaster(is_master) {}
-
-        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                              EntityType col_type,
-                              DataForcesAndSourcesCore::EntData &row_data,
-                              DataForcesAndSourcesCore::EntData &col_data);
       };
 
       /**
