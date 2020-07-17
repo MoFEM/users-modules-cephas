@@ -714,33 +714,20 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR MatZeroEntries(Aij);
 
-    // This controls how kinematic constrains are set, by blockset or nodeset.
-    // Cubit sets kinetic boundary conditions by blockset.
-    bool flag_cubit_disp = false;
-    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
-             m_field, NODESET | DISPLACEMENTSET, it)) {
-      flag_cubit_disp = true;
-    }
 
     // Below particular implementations of finite elements are used to assemble
     // problem matrixes and vectors.  Implementation of element does not change
     // how element is declared.
 
-    // Assemble Aij and F. Define Dirichlet bc element, which stets constrains
+    // Assemble Aij and F. Define Dirichlet bc element, which sets constrains
     // to MatrixDouble and the right hand side vector.
-    boost::shared_ptr<FEMethod> dirichlet_bc_ptr;
 
-    // if normally defined boundary conditions are not found, try to use
-    // DISPLACEMENT blockset. To implementations available here, depending how
-    // BC is defined on mesh file.
-    if (!flag_cubit_disp) {
-      dirichlet_bc_ptr =
-          boost::shared_ptr<FEMethod>(new DirichletSetFieldFromBlockWithFlags(
-              m_field, "DISPLACEMENT", "DISPLACEMENT", Aij, D0, F));
-    } else {
-      dirichlet_bc_ptr = boost::shared_ptr<FEMethod>(
-          new DirichletDisplacementBc(m_field, "DISPLACEMENT", Aij, D0, F));
-    }
+    // if normally defined boundary conditions are not found,
+    // DirichletDisplacementBc will try to use DISPLACEMENT blockset. Two
+    // implementations are available, depending how BC is defined on mesh file.
+    auto dirichlet_bc_ptr = boost::make_shared<DirichletDisplacementBc>(
+        m_field, "DISPLACEMENT", Aij, D0, F);
+
     // That sets Dirichlet bc objects that problem is linear, i.e. no newton
     // (SNES) solver is run for this problem.
     dirichlet_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
@@ -1170,7 +1157,12 @@ int main(int argc, char *argv[]) {
                   "atom test diverged!");
         break;
       case 2:
-        if (fabs(*eng_ptr - 5.6475e-03) > 1e-3)
+        if (fabs(*eng_ptr - 5.6475e-03) > 1e-4)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+        break;
+      case 3:
+        if (fabs(*eng_ptr - 7.4679e-03) > 1e-4)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;

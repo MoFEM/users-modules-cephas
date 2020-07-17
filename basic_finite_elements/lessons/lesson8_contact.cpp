@@ -96,7 +96,19 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
 
   auto skin_edges = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
+
+  // filter not owned entities, those are not on boundary
+  Range boundary_ents;
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  if (pcomm == NULL) {
+    pcomm = new ParallelComm(&mField.get_moab(), mField.get_comm());
+  }
+
+  CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                               PSTATUS_NOT, -1, &boundary_ents);
+
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
   // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
 
   CHKERR simple->setUp();
