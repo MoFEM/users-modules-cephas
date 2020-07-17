@@ -4263,9 +4263,13 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
       new OpContactMaterialVolOnSideLhs_dX_dx(
           mesh_node_field_name, field_name, common_data_simple_contact, true));
 
+  // fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+  //     new OpLoopForSideLhs(mesh_node_field_name, common_data_simple_contact,
+  //                          feMatSideLhs_dx, side_fe_name, true));
+
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpLoopForSideLhs(mesh_node_field_name, common_data_simple_contact,
-                           feMatSideLhs_dx, side_fe_name, true));
+      new OpLoopForSideRhs(mesh_node_field_name, feMatSideLhs_dx, side_fe_name,
+                           ContactOp::FACEMASTER));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialMasterOnFaceLhs_dX_dX(
@@ -4301,9 +4305,13 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
       new OpContactMaterialVolOnSideLhs_dX_dx(
           mesh_node_field_name, field_name, common_data_simple_contact, false));
 
+  // fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+  //     new OpLoopForSideLhs(mesh_node_field_name, common_data_simple_contact,
+  //                          feMatSideLhsSlave_dx, side_fe_name, false));
+
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpLoopForSideLhs(mesh_node_field_name, common_data_simple_contact,
-                           feMatSideLhsSlave_dx, side_fe_name, false));
+      new OpLoopForSideRhs(mesh_node_field_name, feMatSideLhs_dx, side_fe_name,
+                           ContactOp::FACESLAVE));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialSlaveOnFaceLhs_dX_dX(

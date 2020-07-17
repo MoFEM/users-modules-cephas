@@ -2767,10 +2767,6 @@ struct SimpleContactProblem {
      * work, \f$ \delta W_{\text c}\f$ derivative with respect to material
      * positions on slave side and assembles components to LHS global matrix.
      *
-     * Computes linearisation of integrated on slave side complementarity
-     * function and assembles derivative of Lagrange multipliers virtual work
-     * \f$ \delta W_{\text c}\f$ with respect to material positions on slave
-     * side and assembles components to LHS global matrix:
      *
      * \f[
      * \textrm{D} \delta W_{\rm{c}}({\mathbf{x}}^{(1)},
@@ -2801,8 +2797,61 @@ struct SimpleContactProblem {
     }
   };
 
+  /**
+   * @brief LHS-operator for the simple contact element
+   *
+   * Integrates Lagrange multipliers virtual
+   * work on master side, \f$ \delta W_{\text c}\f$ derivative with respect
+   * to material positions on slave side and assembles components of the RHS
+   * vector.
+   *
+   */
   struct OpContactConstraintMatrixMasterSlave_dX : public OpContactALELhs {
 
+    /**
+     * @brief  Integrates Lagrange multipliers virtual
+     * work on master side, \f$ \delta W_{\text c}\f$ derivative with
+     * respect to material positions on slave side and assembles components
+     * to LHS global matrix.
+     *
+     *
+     * \f[
+     * \textrm{D} \delta W_{\rm{c}}({\mathbf{x}}^{(2)},
+     * {\mathbf{X}}^{(2)}, \lambda, \delta{\mathbf{x}}^{(2)})
+     * [\Delta{\mathbf{X}}^{(1)}] = -\int\limits_{\mathcal{T}^{(2)}_{\xi}}
+     * \lambda \, \left[
+     * \frac{\partial{\mathbf N}^{(1)}(\xi, \eta)}{\partial {\mathbf{X}}^{(1)}}
+     * \frac{1}{||{{\mathbf N}^{(1)}(\xi,
+     * \eta)}||} -
+     * \frac{{\mathbf N}^{(1)}(\xi,
+     * \eta)}{{\left(||{{\mathbf N}^{(1)}(\xi,
+     * \eta)}|| \right)}^{3}}\frac{\partial{\mathbf N}^{(1)}(\xi,
+     * \eta)}{\partial {\mathbf{X}}^{(1)}} \cdot {{\mathbf N}^{(1)}(\xi,
+     * \eta)}
+     *
+     * \right] \cdot \delta{\mathbf{x}}^{(1)}
+     *
+     * {||{{\mathbf N}^{(2)}(\xi, \eta)}||}
+     * \textrm{d}\xi\textrm{d}\eta
+     * \f]
+     *
+     *
+     * Where
+     *
+     * \f[
+     * \frac{\partial{\mathbf N}^{(1)}(\xi, \eta)}{\partial {\mathbf{X}}^{(1)}}
+     * = \frac{\partial{\Delta\mathbf{X}}^{(1)}}
+     * {\partial\xi} \times \frac{\partial
+     *  {\mathbf{X}}^{(1)}}{\partial\eta}
+     * + \frac{\partial{\mathbf{X}}^{(1)}}
+     * {\partial\xi} \times \frac{\partial
+     *  {\Delta\mathbf{X}}^{(1)}}{\partial\eta}
+     * \f]
+     *
+     * Here superscript \f$(1)\f$ denotes slave
+     * side coordinates and surfaces, respectively. Moreover,
+     * \f$\lambda\f$ is the lagrange multiplier.
+     */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
     OpContactConstraintMatrixMasterSlave_dX(
         const string field_name, const string mesh_nodes_field,
@@ -2812,323 +2861,366 @@ struct SimpleContactProblem {
                           ContactOp::FACEMASTERSLAVE, row_rank, col_rank) {
       sYmm = false; // This will make sure to loop over all intities (e.g.
                     // for order=2 it will make doWork to loop 16 time)
-    }
-  };
-
-  struct OpContactConstraintMatrixMasterMaster_dX : public OpContactALELhs {
-
-      MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
-      OpContactConstraintMatrixMasterMaster_dX(
-          const string field_name, const string mesh_nodes_field,
-          boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-          const int row_rank, const int col_rank)
-          : OpContactALELhs(field_name, mesh_nodes_field, common_data_contact,
-                            ContactOp::FACEMASTERMASTER, row_rank, col_rank) {
-        sYmm = false; // This will make sure to loop over all intities (e.g.
-                      // for order=2 it will make doWork to loop 16 time)
       }
     };
 
-    /**
-     * @brief LHS-operator for the simple contact element
-     *
-     * Integrates the variation with respect to slave material
-     * positions of the complementarity function to fulfill KKT conditions in
-     * the integral sense and assembles
-     * components to LHS global matrix.
-     *
-     */
-    struct OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX
-        : public OpContactALELhs {
+      /**
+       * @brief LHS-operator for the simple contact element
+       *
+       * Integrates Lagrange multipliers virtual
+       * work on master side, \f$ \delta W_{\text c}\f$ derivative with respect
+       * to material positions on master side and assembles components of the RHS
+       * vector.
+       *
+       */
+      struct OpContactConstraintMatrixMasterMaster_dX : public OpContactALELhs {
+
+        /**
+         * @brief  Integrates Lagrange multipliers virtual
+         * work on master side, \f$ \delta W_{\text c}\f$ derivative with
+         * respect to material positions on master side and assembles components
+         * to LHS global matrix.
+         *
+         *
+         * \f[
+         * \textrm{D} \delta W_{\rm{c}}({\mathbf{x}}^{(2)},
+         * {\mathbf{X}}^{(2)}, \lambda, \delta{\mathbf{x}}^{(2)})
+         * [\Delta{\mathbf{X}}^{(2)}] = -\int\limits_{\mathcal{T}^{(2)}_{\xi}}
+         * \lambda \,
+         * \frac{{\mathbf N}^{(1)}(\xi, \eta)}{||{{\mathbf N}^{(1)}(\xi,
+         * \eta)}||} \left[ \frac{\partial{\mathbf{X}}^{(2)}}
+         * {\partial\xi} \cdot \left(\frac{\partial\Delta
+         *  {\mathbf{X}}^{(2)}}{\partial\eta}\times\delta{\mathbf{x}}^{(2)}\right)
+         * -\frac{\partial{\mathbf{X}}^{(2)}}
+         *  {\partial\eta} \cdot \left(\frac{\partial\Delta
+         * {\mathbf{X}}^{(2)}}{\partial\xi}\times
+         * \delta{\mathbf{x}}^{(2)}\right)\right] \cdot \frac{{\mathbf
+         * N}^{(2)}(\xi, \eta)}{||{{\mathbf N}^{(2)}(\xi, \eta)}||}
+         * \textrm{d}\xi\textrm{d}\eta
+         * \f]
+         *
+         *
+         *
+         * Here superscript \f$(1)\f$ denotes slave
+         * side coordinates and surfaces, respectively. Moreover,
+         * \f$\lambda\f$ is the lagrange multiplier.
+         */
+        MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+        OpContactConstraintMatrixMasterMaster_dX(
+            const string field_name, const string mesh_nodes_field,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const int row_rank, const int col_rank)
+            : OpContactALELhs(field_name, mesh_nodes_field, common_data_contact,
+                              ContactOp::FACEMASTERMASTER, row_rank, col_rank) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+      };
 
       /**
-       * @brief Integrates linearisation of the complementarity
-       * function at slave face gauss points and assembles
-       * components to LHS global matrix.
+       * @brief LHS-operator for the simple contact element
        *
-       * Integrates and assembles the variation with respect to slave spatial
+       * Integrates the variation with respect to slave material
        * positions of the complementarity function to fulfill KKT conditions in
        * the integral sense and assembles
        * components to LHS global matrix.
        *
-       * \f[
-       * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)}, \mathbf{X}^{(1)},
-       * \delta \lambda)}[\Delta \mathbf{X}^{(1)}] = \int_{{\gamma}^{(1)}_{\text
-       * c}} -\left[
-       * \frac{\partial{\mathbf{X}}^{(1)}}
-       * {\partial\xi} \cdot \left(\frac{\partial\Delta
-       *  {\mathbf{X}}^{(1)}}{\partial\eta}\times\left( {\mathbf{x}}^{(1)} -
-       * {\mathbf{x}}^{(2)}\right)\right)
-       * -\frac{\partial{\mathbf{X}}^{(1)}}
-       *  {\partial\eta} \cdot \left(\frac{\partial\Delta
-       * {\mathbf{X}}^{(1)}}{\partial\xi}\times
-       * \left( {\mathbf{x}}^{(1)} -
-       * {\mathbf{x}}^{(2)}\right)\right)\right] c_{\text n}  \left( 1 + {\text
-       * {sign}}\left( \lambda - c_{\text n} g_{\textrm{n}} \right)
-       * {\left| \lambda - c_{\text n}
-       * g_{\textrm{n}}\right|}^{r-1}\right) \delta{{\lambda}}
-       * \,\,{ {\text d} {\gamma}}
-       * \f]
-       * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
-       * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
-       * \f$\mathbf{x}^{(i)}\f$ are the coordinates of the overlapping gauss
-       * points at slave and master triangles for  \f$i = 1\f$ and \f$i = 2\f$,
-       * respectively. Furthermore, \f$ c_{\text n}\f$ works as an augmentation
-       * parameter and affects convergence, \f$r\f$ is regularisation parameter
-       * that can be chosen in \f$[1, 1.1]\f$ (\f$r = 1\f$ is the default
-       * value) and \f$ g_{\textrm{n}}\f$ is the gap function evaluated at the
-       * slave triangle gauss points as: \f[ g_{\textrm{n}} = -
-       * \mathbf{N}(\mathbf{X}^{(1)}) \cdot \left( \mathbf{x}^{(1)} -
-       * \mathbf{x}^{(2)}  \right) \f]
        */
-      MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
-      OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
-          const string lagrang_field_name, const string mesh_nodes_field,
-          boost::shared_ptr<double> cn,
-          boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-          int row_rank, const int col_rank)
-          : OpContactALELhs(lagrang_field_name, mesh_nodes_field,
-                            common_data_contact, ContactOp::FACESLAVESLAVE,
-                            row_rank, col_rank),
-            cNPtr(cn) {
-        sYmm = false; // This will make sure to loop over all intities (e.g.
-                      // for order=2 it will make doWork to loop 16 time)
-      }
+      struct OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX
+          : public OpContactALELhs {
 
-    private:
-      boost::shared_ptr<double> cNPtr;
-  };
+        /**
+         * @brief Integrates linearisation of the complementarity
+         * function at slave face gauss points and assembles
+         * components to LHS global matrix.
+         *
+         * Integrates and assembles the variation with respect to slave spatial
+         * positions of the complementarity function to fulfill KKT conditions
+         * in the integral sense and assembles components to LHS global matrix.
+         *
+         * \f[
+         * {\text D}{\overline C(\lambda, \mathbf{x}^{(i)}, \mathbf{X}^{(1)},
+         * \delta \lambda)}[\Delta \mathbf{X}^{(1)}] =
+         * \int_{{\gamma}^{(1)}_{\text c}} -\left[
+         * \frac{\partial{\mathbf{X}}^{(1)}}
+         * {\partial\xi} \cdot \left(\frac{\partial\Delta
+         *  {\mathbf{X}}^{(1)}}{\partial\eta}\times\left( {\mathbf{x}}^{(1)} -
+         * {\mathbf{x}}^{(2)}\right)\right)
+         * -\frac{\partial{\mathbf{X}}^{(1)}}
+         *  {\partial\eta} \cdot \left(\frac{\partial\Delta
+         * {\mathbf{X}}^{(1)}}{\partial\xi}\times
+         * \left( {\mathbf{x}}^{(1)} -
+         * {\mathbf{x}}^{(2)}\right)\right)\right] c_{\text n}  \left( 1 +
+         * {\text {sign}}\left( \lambda - c_{\text n} g_{\textrm{n}} \right)
+         * {\left| \lambda - c_{\text n}
+         * g_{\textrm{n}}\right|}^{r-1}\right) \delta{{\lambda}}
+         * \,\,{ {\text d} {\gamma}}
+         * \f]
+         * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration
+         * domain of the slave surface, \f$ \lambda\f$ is the Lagrange
+         * multiplier, \f$\mathbf{x}^{(i)}\f$ are the coordinates of the
+         * overlapping gauss points at slave and master triangles for  \f$i =
+         * 1\f$ and \f$i = 2\f$, respectively. Furthermore, \f$ c_{\text n}\f$
+         * works as an augmentation parameter and affects convergence, \f$r\f$
+         * is regularisation parameter that can be chosen in \f$[1, 1.1]\f$
+         * (\f$r = 1\f$ is the default value) and \f$ g_{\textrm{n}}\f$ is the
+         * gap function evaluated at the slave triangle gauss points as: \f[
+         * g_{\textrm{n}} = - \mathbf{N}(\mathbf{X}^{(1)}) \cdot \left(
+         * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right) \f]
+         */
+        MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+        OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
+            const string lagrang_field_name, const string mesh_nodes_field,
+            boost::shared_ptr<double> cn,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            int row_rank, const int col_rank)
+            : OpContactALELhs(lagrang_field_name, mesh_nodes_field,
+                              common_data_contact, ContactOp::FACESLAVESLAVE,
+                              row_rank, col_rank),
+              cNPtr(cn) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
 
-  /**
-   * @brief LHS-operator (material configuration) on the side volume of either
-   * master or slave side
-   *
-   * Computes the linearisation of the material component
-   * with respect to a variation of spatial coordinates on the side volume for
-   * either master or slave side.
-   */
-  struct OpContactMaterialVolOnSideLhs_dX_dx
-      : public OpContactMaterialVolOnSideLhs {
+      private:
+        boost::shared_ptr<double> cNPtr;
+      };
 
-    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+      /**
+       * @brief LHS-operator (material configuration) on the side volume of
+       * either master or slave side
+       *
+       * Computes the linearisation of the material component
+       * with respect to a variation of spatial coordinates on the side volume
+       * for either master or slave side.
+       */
+      struct OpContactMaterialVolOnSideLhs_dX_dx
+          : public OpContactMaterialVolOnSideLhs {
 
-    /**
-     * @brief Integrates over a face contribution from a side volume
-     *
-     * Computes linearisation of the material component
-     * with respect to a variation of spatial coordinates:
-     *
-     * \f[
-     * \textrm{D} \delta W^{(i)}_{\text{(material)}}({\mathbf{x}}^{(i)},
-     * {\mathbf{X}}^{(i)}, \delta{\mathbf{x}}^{(i)}, \lambda)
-     * [\Delta{\mathbf{x}}^{(i)}] = -\int\limits_{\mathcal{T}^{(i)}_{\xi}}
-     * \lambda \left\{\left[
-     * \frac{\partial\Delta{\mathbf{x}}^{(i)}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
-     * \right]^{\intercal}\cdot\left(\frac{\partial{\mathbf{X}}^{(i)}}{\partial\xi}
-     * \times\frac{\partial{\mathbf{X}}^{(i)}}{\partial\eta}\right)\right\}
-     * \cdot \delta{\mathbf{X}}^{(i)}\, \textrm{d}\xi\textrm{d}\eta
-     * \f]
-     *
-     * where \f$i\f$ denoted either master or slave side.
-     */
+        MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
-    OpContactMaterialVolOnSideLhs_dX_dx(
-        const string field_name_1, const string field_name_2,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const bool master_slave_name)
-        : OpContactMaterialVolOnSideLhs(field_name_1, field_name_2,
-                                        common_data_contact,
-                                        master_slave_name) {
-      sYmm = false; // This will make sure to loop over all entities
-    };
-  };
+        /**
+         * @brief Integrates over a face contribution from a side volume
+         *
+         * Computes linearisation of the material component
+         * with respect to a variation of spatial coordinates:
+         *
+         * \f[
+         * \textrm{D} \delta W^{(i)}_{\text{(material)}}({\mathbf{x}}^{(i)},
+         * {\mathbf{X}}^{(i)}, \delta{\mathbf{x}}^{(i)}, \lambda)
+         * [\Delta{\mathbf{x}}^{(i)}] = -\int\limits_{\mathcal{T}^{(i)}_{\xi}}
+         * \lambda \left\{\left[
+         * \frac{\partial\Delta{\mathbf{x}}^{(i)}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
+         * \right]^{\intercal}\cdot\left(\frac{\partial{\mathbf{X}}^{(i)}}{\partial\xi}
+         * \times\frac{\partial{\mathbf{X}}^{(i)}}{\partial\eta}\right)\right\}
+         * \cdot \delta{\mathbf{X}}^{(i)}\, \textrm{d}\xi\textrm{d}\eta
+         * \f]
+         *
+         * where \f$i\f$ denoted either master or slave side.
+         */
 
-  /**
-   * @brief LHS-operator for the contact element (material configuration)
-   *
-   * Computes linearisation of normal vector from the expression for material
-   * traction contribution with respect to material coordinates on slave or master side.
-   *
-   */
-  struct OpContactMaterialVolOnSideLhs_dX_dX
-      : public OpContactMaterialVolOnSideLhs {
+        OpContactMaterialVolOnSideLhs_dX_dx(
+            const string field_name_1, const string field_name_2,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const bool master_slave_name)
+            : OpContactMaterialVolOnSideLhs(field_name_1, field_name_2,
+                                            common_data_contact,
+                                            master_slave_name) {
+          sYmm = false; // This will make sure to loop over all entities
+        };
+      };
 
-    /**
-     * @brief Compute part of the left-hand side
-     *
-     * Computes the linearisation of the material component
-     * with respect to a variation of material coordinates
-     * \f$(\Delta{\mathbf{X}}^{(i)})\f$:
-     *
-     * \f[
-     * \textrm{D} \delta W^\text{(i)}_{\rm{material}}({\mathbf{x}}^{(i)},
-     * {\mathbf{X}}^{(i)}, \delta{\mathbf{x}}^{(i)})
-     * [\Delta{\mathbf{X}}^{(i)}] = -\int\limits_{\mathcal{T}^{(i)}_{\xi}}
-     * \lambda \, \mathbf{F}^{\intercal}\cdot \left[
-     * \frac{\partial{\mathbf{X}}^{(i)}}
-     * {\partial\xi} \cdot \left(\frac{\partial\Delta
-     *  {\mathbf{X}}^{(i)}}{\partial\eta}\times\delta{\mathbf{x}}^{(i)}\right)
-     * -\frac{\partial{\mathbf{X}}^{(i)}}
-     *  {\partial\eta} \cdot \left(\frac{\partial\Delta
-     * {\mathbf{X}}^{(i)}}{\partial\xi}\times
-     * \delta{\mathbf{x}}^{(i)}\right)\right] \textrm{d}\xi\textrm{d}\eta \f]
-     *
-     * Here superscript \f$(i)\f$ is either equal to 1 or 2 denoting slave or
-     * master side coordinates and surfaces, respectively. Moreover,
-     * \f$\lambda\f$ is the lagrange multiplier.
-     */
-    MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
-                             DataForcesAndSourcesCore::EntData &col_data);
+      /**
+       * @brief LHS-operator for the contact element (material configuration)
+       *
+       * Computes linearisation of normal vector from the expression for
+       * material traction contribution with respect to material coordinates on
+       * slave or master side.
+       *
+       */
+      struct OpContactMaterialVolOnSideLhs_dX_dX
+          : public OpContactMaterialVolOnSideLhs {
 
-    OpContactMaterialVolOnSideLhs_dX_dX(
-        const string field_name_1, const string field_name_2,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
-        const bool master_slave_name)
-        : OpContactMaterialVolOnSideLhs(field_name_1, field_name_2,
-                                        common_data_contact,
-                                        master_slave_name) {
-      sYmm = false; // This will make sure to loop over all entities
-    };
-  };
+        /**
+         * @brief Compute part of the left-hand side
+         *
+         * Computes the linearisation of the material component
+         * with respect to a variation of material coordinates
+         * \f$(\Delta{\mathbf{X}}^{(i)})\f$:
+         *
+         * \f[
+         * \textrm{D} \delta W^\text{(i)}_{\rm{material}}({\mathbf{x}}^{(i)},
+         * {\mathbf{X}}^{(i)}, \delta{\mathbf{x}}^{(i)})
+         * [\Delta{\mathbf{X}}^{(i)}] = -\int\limits_{\mathcal{T}^{(i)}_{\xi}}
+         * \lambda \, \mathbf{F}^{\intercal}\cdot \left[
+         * \frac{\partial{\mathbf{X}}^{(i)}}
+         * {\partial\xi} \cdot \left(\frac{\partial\Delta
+         *  {\mathbf{X}}^{(i)}}{\partial\eta}\times\delta{\mathbf{x}}^{(i)}\right)
+         * -\frac{\partial{\mathbf{X}}^{(i)}}
+         *  {\partial\eta} \cdot \left(\frac{\partial\Delta
+         * {\mathbf{X}}^{(i)}}{\partial\xi}\times
+         * \delta{\mathbf{x}}^{(i)}\right)\right] \textrm{d}\xi\textrm{d}\eta
+         * \f]
+         *
+         * Here superscript \f$(i)\f$ is either equal to 1 or 2 denoting slave
+         * or master side coordinates and surfaces, respectively. Moreover,
+         * \f$\lambda\f$ is the lagrange multiplier.
+         */
+        MoFEMErrorCode iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+                                 DataForcesAndSourcesCore::EntData &col_data);
 
-  struct OpLoopForSideLhs
-      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+        OpContactMaterialVolOnSideLhs_dX_dX(
+            const string field_name_1, const string field_name_2,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const bool master_slave_name)
+            : OpContactMaterialVolOnSideLhs(field_name_1, field_name_2,
+                                            common_data_contact,
+                                            master_slave_name) {
+          sYmm = false; // This will make sure to loop over all entities
+        };
+      };
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-        sideFe;
-    std::string sideFeName;
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    const bool isMaster;
+      /// \brief Operator that allows for looping over operators belonging to
+      /// side volume element adjacent to the contact prism under consideration
+      struct OpLoopForSideLhs
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
 
-    OpLoopForSideLhs(
-        const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
-            side_fe,
-        const std::string &side_fe_name, const bool is_master)
-        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
-              field_name, UserDataOperator::OPROWCOL,
-              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
-                  FACESLAVESLAVE),
-          commonDataSimpleContact(common_data_contact), sideFe(side_fe),
-          sideFeName(side_fe_name), isMaster(is_master) {}
+            sideFe;
+        std::string sideFeName;
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const bool isMaster;
 
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type,
-                          DataForcesAndSourcesCore::EntData &row_data,
-                          DataForcesAndSourcesCore::EntData &col_data);
-  };
+        OpLoopForSideLhs(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            boost::shared_ptr<
+                VolumeElementForcesAndSourcesCoreOnContactPrismSide>
+                side_fe,
+            const std::string &side_fe_name, const bool is_master)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), sideFe(side_fe),
+              sideFeName(side_fe_name), isMaster(is_master) {}
 
-  /**
-   * @brief Function for the simple contact element that sets the user data
-   * post processing operators
-   *
-   * @param  fe_post_proc_simple_contact Pointer to the FE instance for post
-   * processing
-   * @param  common_data_simple_contact  Pointer to the common data for simple
-   * contact element
-   * @param  field_name                  String of field name for spatial
-   * positions
-   * @param  mesh_node_field_name        String of field name for material
-   * positions
-   * @param  lagrang_field_name          String of field name for Lagrange
-   * multipliers
-   * @param  side_fe_name                String of 3D element adjacent to the
-   * present contact element
-   * @return                             Error code
-   *
-   */
-    MoFEMErrorCode setContactOperatorsRhsALEMaterial(
-        boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact_ale,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-        const string field_name, const string mesh_node_field_name,
-        const string lagrang_field_name, const string side_fe_name);
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+      };
 
-    /**
-     * @brief Function for the simple contact element that sets the user data
-     * LHS-operators
-     *
-     * @param  fe_lhs_simple_contact_ale  Pointer to the FE instance for LHS
-     * @param  common_data_simple_contact Pointer to the common data for simple
-     * contact element
-     * @param  field_name                 String of field name for spatial
-     * positions
-     * @param  mesh_node_field_name       String of field name for material
-     * positions
-     * @param  lagrang_field_name         String of field name for Lagrange
-     * multipliers
-     * @param  side_fe_name               String of 3D element adjacent to the
-     * present contact element
-     * @return                            Error code
-     *
-     */
-    MoFEMErrorCode setContactOperatorsLhsALEMaterial(
-        boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-        const string field_name, const string mesh_node_field_name,
-        const string lagrang_field_name, const string side_fe_name);
+      /**
+       * @brief Function for the simple contact element that sets the user data
+       * post processing operators
+       *
+       * @param  fe_post_proc_simple_contact Pointer to the FE instance for post
+       * processing
+       * @param  common_data_simple_contact  Pointer to the common data for
+       * simple contact element
+       * @param  field_name                  String of field name for spatial
+       * positions
+       * @param  mesh_node_field_name        String of field name for material
+       * positions
+       * @param  lagrang_field_name          String of field name for Lagrange
+       * multipliers
+       * @param  side_fe_name                String of 3D element adjacent to
+       * the present contact element
+       * @return                             Error code
+       *
+       */
+      MoFEMErrorCode setContactOperatorsRhsALEMaterial(
+          boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact_ale,
+          boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+          const string field_name, const string mesh_node_field_name,
+          const string lagrang_field_name, const string side_fe_name);
 
-    /**
-     * @brief Function for the simple contact element that sets the user data
-     * LHS-operators
-     *
-     * @param  fe_lhs_simple_contact_ale  Pointer to the FE instance for LHS
-     * @param  common_data_simple_contact Pointer to the common data for simple
-     * contact element
-     * @param  field_name                 String of field name for spatial
-     * positions
-     * @param  mesh_node_field_name       String of field name for material
-     * positions
-     * @param  lagrang_field_name         String of field name for Lagrange
-     * multipliers
-     * @return                            Error code
-     *
-     */
-    MoFEMErrorCode setContactOperatorsLhsALE(
-        boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-        const string field_name, const string mesh_node_field_name,
-        const string lagrang_field_name);
-    struct OpGetGaussPtsState : public ContactOp {
+      /**
+       * @brief Function for the simple contact element that sets the user data
+       * LHS-operators
+       *
+       * @param  fe_lhs_simple_contact_ale  Pointer to the FE instance for LHS
+       * @param  common_data_simple_contact Pointer to the common data for
+       * simple contact element
+       * @param  field_name                 String of field name for spatial
+       * positions
+       * @param  mesh_node_field_name       String of field name for material
+       * positions
+       * @param  lagrang_field_name         String of field name for Lagrange
+       * multipliers
+       * @param  side_fe_name               String of 3D element adjacent to the
+       * present contact element
+       * @return                            Error code
+       *
+       */
+      MoFEMErrorCode setContactOperatorsLhsALEMaterial(
+          boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
+          boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+          const string field_name, const string mesh_node_field_name,
+          const string lagrang_field_name, const string side_fe_name);
 
-      OpGetGaussPtsState(
-          const string lagrange_field_name,
-          boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-          const double cn, const bool alm_flag = false)
-          : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
-                      ContactOp::FACESLAVE),
-            commonDataSimpleContact(common_data_contact), cN(cn),
-            almFlag(alm_flag) {}
+      /**
+       * @brief Function for the simple contact element that sets the user data
+       * LHS-operators
+       *
+       * @param  fe_lhs_simple_contact_ale  Pointer to the FE instance for LHS
+       * @param  common_data_simple_contact Pointer to the common data for
+       * simple contact element
+       * @param  field_name                 String of field name for spatial
+       * positions
+       * @param  mesh_node_field_name       String of field name for material
+       * positions
+       * @param  lagrang_field_name         String of field name for Lagrange
+       * multipliers
+       * @return                            Error code
+       *
+       */
+      MoFEMErrorCode setContactOperatorsLhsALE(
+          boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
+          boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+          const string field_name, const string mesh_node_field_name,
+          const string lagrang_field_name);
+      struct OpGetGaussPtsState : public ContactOp {
 
-      MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+        OpGetGaussPtsState(
+            const string lagrange_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+            const double cn, const bool alm_flag = false)
+            : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact), cN(cn),
+              almFlag(alm_flag) {}
 
-    private:
-      boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-      const double cN;
-      const bool almFlag;
-      VectorDouble vecR;
-  };
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
-  struct OpGetContactArea : public ContactOp {
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double cN;
+        const bool almFlag;
+        VectorDouble vecR;
+      };
 
-    OpGetContactArea(
-        const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-        const double cn, const bool alm_flag = false)
-        : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
-                    ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact), cN(cn),
-          almFlag(alm_flag) {}
+      struct OpGetContactArea : public ContactOp {
 
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+        OpGetContactArea(
+            const string lagrange_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+            const double cn, const bool alm_flag = false)
+            : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact), cN(cn),
+              almFlag(alm_flag) {}
 
-  private:
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    const double cN;
-    const bool almFlag;
-    VectorDouble vecR;
-  };
-};
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double cN;
+        const bool almFlag;
+        VectorDouble vecR;
+      };
+    };
 
 double SimpleContactProblem::Sign(double x) {
   if (x == 0)
