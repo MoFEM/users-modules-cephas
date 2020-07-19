@@ -75,7 +75,7 @@ Below we consider several examples of contact interfaces arrangement, outlining 
 ```bash
 cd $HOME/mofem_install/um/build_release/basic_finite_elements/simple_contact/examples/salome
 ```
-- To see all block IDs in the _MED_ file:
+- To list IDs of all blocks in the _med_ file:
 ```bash
 $HOME/mofem_install/um/build_release/tools/read_med -med_file punch_test.med
 ```
