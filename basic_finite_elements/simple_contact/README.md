@@ -37,7 +37,7 @@ Below we consider several examples of contact interfaces arrangement, outlining 
 - Contact interface consisting of non-intersecting surfaces: **SUPPORTED**, given that the outlined below conditions are satisfied, with the distance threshold considered as 3 elements in the bulk mesh  
 ![alt text](figures/contact_case_4.png "Case 4: Contact interface consisting of non-intersecting surfaces") *Case 4: Contact interface consisting of non-intersecting surfaces (SUPPORTED)*
 
-## 2. Creation of the _MED_ mesh file in _Salome_ 
+## 2. Creation of the _med_ mesh file in _Salome_ 
 
 ***_NOTE:_*** In order to use the matching meshes contact the solids need to touch each other along the contact surface in the input mesh. Presented below is a rather general approach which permits to mesh the contacting solids separately, refine these meshes around the contact surface, and, finally, merge the meshes together.
 
@@ -147,7 +147,6 @@ Name | Description | Default value
 `my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | `1`
 `my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | `1` 
 `my_alm_flag` | Defines the choice of the algorithm: `0` (False) - Complementarity function approach, `1` (True) - Augmented Lagrangian method | `0`  
-`my_out_integ_pts` | If set to `1` (True), values of contact Lagrange multipliers are output at gauss points of the contact interface | `0`  
 `my_convect` | If set to `1` (True), moderate relative tangential displacements can be  taken into account | `0`  
 
 
@@ -173,5 +172,5 @@ The obtained `vtk` files can be viewed in *Paraview*, in particular:
 
 - File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute the displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
 - File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to the contact pressure (tag `LAGMULT`)
-- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (equivalent to the contact pressure) at Gauss points of the contact interface (tag `LAGRANGE_MULTIPLIER`). Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation.
+- File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (tag `LAGMULT`) and the normal gap (tag `GAP`) at Gauss points of the contact interface. Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation in *Paraview*.
 

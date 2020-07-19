@@ -49,8 +49,7 @@ int main(int argc, char *argv[]) {
                                  "-my_step_num 1 \n"
                                  "-my_cn_value 1. \n"
                                  "-my_r_value 1. \n"
-                                 "-my_alm_flag 0 \n"
-                                 "-my_out_integ_pts 0 \n";
+                                 "-my_alm_flag 0 \n";
                                  
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -97,7 +96,6 @@ int main(int argc, char *argv[]) {
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscInt test_num = 0;
     PetscBool convect_pts = PETSC_FALSE;
-    PetscBool out_integ_pts = PETSC_FALSE;
     PetscBool print_contact_state = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
     PetscBool wave_surf_flag = PETSC_FALSE;
@@ -143,9 +141,6 @@ int main(int argc, char *argv[]) {
                            PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_out_integ_pts",
-                            "output data at contact integration points", "",
-                            PETSC_FALSE, &out_integ_pts, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_print_contact_state",
                             "output number of active gp at every iteration", "",
                             PETSC_FALSE, &print_contact_state, PETSC_NULL);
@@ -881,7 +876,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    if (out_integ_pts) {
+    {
       string out_file_name;
       std::ostringstream strm;
       strm << "out_contact_integ_pts"
