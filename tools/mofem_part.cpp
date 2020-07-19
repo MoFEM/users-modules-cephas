@@ -105,11 +105,12 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface(meshsets_interface_ptr);
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
 
+    MOFEM_LOG_CHANNEL("WORLD");
+    MOFEM_LOG_TAG("WORLD", "mofem_part")
     for (CubitMeshSet_multiIndex::iterator cit =
              meshsets_interface_ptr->getBegin();
-         cit != meshsets_interface_ptr->getEnd(); cit++) {
-      std::cout << *cit << endl;
-    }
+         cit != meshsets_interface_ptr->getEnd(); cit++) 
+      MOFEM_LOG("WORLD", Sev::inform) << *cit;
 
     {
       Range ents_dim;
