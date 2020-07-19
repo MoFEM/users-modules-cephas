@@ -70,8 +70,13 @@ Below we consider several examples of contact interfaces arrangement, outlining 
 - Build _Compound mesh_ of solids with node merging on
 - Export the Compound mesh to the _MED_ file
 
+***_NOTE:_*** An example of the geometry (*hdf*) and the mesh (*med*) files for a contact problem set-up can be found in the following directory: 
+```bash
+$HOME/mofem_install/um/build_release/basic_finite_elements/simple_contact/examples/salome
+```
+
 ## 3. Preparation of the config file
-- Change directory to the following:
+***_NOTE:_*** All required files for an example of the contact problem set-up considered below can be accessed as:
 ```bash
 cd $HOME/mofem_install/um/build_release/basic_finite_elements/simple_contact/examples/salome
 ```
