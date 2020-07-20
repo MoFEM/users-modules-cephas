@@ -1371,8 +1371,8 @@ to solve 3D problem with few changes as follows
   - Using `VolumeElementForcesAndSourcesCore` instead of `FaceElementForcesAndSourcesCore`
 
 - Change FTensore objects that have two components to three (`.hpp` file)
-  - Using `FTensor::Index<'i', 3> i;` instead of `FTensor::Index<'i', 2> i;`
-  - Using `getFTensor1DiffN<3>` instead of `getFTensor1DiffN<2>`
+  - Using *FTensor::Index<'i', 3> i;* instead of *FTensor::Index<'i', 2> i;*
+  - Using *getFTensor1DiffN<3>* instead of *getFTensor1DiffN<2>*
 
 - No need to specifically calculate inverse of Jacobian in 3D case, it is done
   automatically behind the curtain (`.cpp` file)
@@ -1386,10 +1386,10 @@ to solve 3D problem with few changes as follows
 - [Optional] Objects' name changed for readability (`.cpp` and `.hpp` file)
   - Using `Poisson3DHomogeneous` instead of `Poisson2DHomogeneous`
   - Using `Poisson3DHomogeneousOperators` instead of `Poisson2DHomogeneousOperators`
-  - Using `volume` instead of `area`
+  - Using variable `volume` instead of `area`
 
 You can find the complete code to solve 3D version of the Poisson problem with
-homogeneous boundary condition in poisson_3d_homogeneous.hpp and poisson_3d_homogeneous.cpp
+homogeneous boundary condition in poisson_3d_homogeneous.hpp and poisson_3d_homogeneous.cpp located in the same path with the source codes for 2D problem `mofem_install/um_view/tutorials/scl-1/`.
 
 To run the analysis, you will follow very similar procedure as for the 2D case
 using the same `param_file.petsc` file with slight changes in the command lines
