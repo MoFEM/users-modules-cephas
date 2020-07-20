@@ -4284,8 +4284,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
           mesh_node_field_name, field_name, common_data_simple_contact, false));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpLoopForSideOfContactPrism(mesh_node_field_name, feMatSideLhs_dx, side_fe_name,
-                           ContactOp::FACESLAVE));
+      new OpLoopForSideOfContactPrism(mesh_node_field_name,
+                                      feMatSideLhsSlave_dx, side_fe_name,
+                                      ContactOp::FACESLAVE));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialSlaveOnFaceLhs_dX_dX(
