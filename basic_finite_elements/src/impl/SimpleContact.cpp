@@ -2798,8 +2798,12 @@ MoFEMErrorCode SimpleContactProblem::OpLoopForSideOfContactPrism::doWork(int sid
   int side_number;
   if (faceType == ContactOp::FACEMASTER)
     side_number = 3;
-  else
+  else if (faceType == ContactOp::FACESLAVE)
     side_number = 4;
+  else
+    SETERRQ3(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+             "faceType should be either %d or %d, instead is set to %d",
+             ContactOp::FACEMASTER, ContactOp::FACESLAVE, faceType);
 
   const EntityHandle tri = getSideEntity(side_number, type);
 
