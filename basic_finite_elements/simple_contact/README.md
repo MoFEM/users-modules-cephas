@@ -142,18 +142,27 @@ Check the essential contact parameters in the file `param_file.petsc`:
 
 ### Contact parameters
 
-Name | Description | Default value
---- | --- | ---
-`my_order` | Approximation order of the field of spatial positions for the entire mesh | `1`
-`my_order_lambda` | Approximation order of the field of contact Lagrange multipliers | `1`
-`my_order_contact` | Approximation order of the field of spatial positions for the contact elements and a given number of tetrahedral element layers adjacent to the contact interface | `1`
-`my_ho_levels_num` | Number of tetrahedral element layers adjacent to the contact interface with higher order of the field of spatial positions (if `my_order_contact` is higher than `my_order`) | `1` 
-`my_cn_value` | Augmentation parameter which affects the convergence and has minimal effect on the solution. Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10 | `1`
-`my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | `1`
-`my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | `1` 
-`my_alm_flag` | Defines the choice of the algorithm: `0` (False) - Complementarity function approach, `1` (True) - Augmented Lagrangian method | `0`  
-`my_convect` | If set to `1` (True), moderate relative tangential displacements can be  taken into account | `0`  
-
+| --- | --- | --- |
+| Name | Description | Default value |
+| --- | --- | --- |
+| `my_order` | Approximation order of the field of spatial positions for the entire mesh | `1` |
+| --- | --- | --- |
+| `my_order_lambda` | Approximation order of the field of contact Lagrange multipliers | `1` |
+| --- | --- | --- |
+| `my_order_contact` | Approximation order of the field of spatial positions for the contact elements and a given number of tetrahedral element layers adjacent to the contact interface | `1` |
+| --- | --- | --- |
+| `my_ho_levels_num` | Number of tetrahedral element layers adjacent to the contact interface with higher order of the field of spatial positions (if `my_order_contact` is higher than `my_order`) | `1` |
+| --- | --- | --- |
+| `my_cn_value` | Augmentation parameter which affects the convergence and has minimal effect on the solution. Recommended initial value is the Young's modulus of contacting solids (or harmonic mean in case of different values). The optimal value can be found by repetitively increasing/decreasing the initial value by e.g. a factor of 10 | `1` |
+| --- | --- | --- |
+| `my_r_value` | Contact regularisation parameter which can lie between 1.0 and 1.1. Values greater than 1 can speed-up the convergence, but will also alter the stiffness of the contact interface, therefore it is not recommended to change this parameter | `1` |
+| --- | --- | --- |
+| `my_step_num` | Number of steps used to achieve the specified load value (so-called load control). Note that multi-stepping can be particularly important to obtain a solution for highly nonlinear problems | `1` |
+| --- | --- | --- |
+| `my_alm_flag` | Defines the choice of the algorithm: `0` (False) - Complementarity function approach, `1` (True) - Augmented Lagrangian method | `0` |
+| --- | --- | --- |
+| `my_convect` | If set to `1` (True), moderate relative tangential displacements can be  taken into account | `0` |
+| --- | --- | --- |
 
 ## 6. Running the contact simulation
 
