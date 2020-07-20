@@ -67,8 +67,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.build_fields();
 
     bool field_flg = false;
-    const Field_multiIndex *fields_ptr;
-    CHKERR m_field.get_fields(&fields_ptr);
+    auto fields_ptr = m_field.get_fields();
     for(auto field : (*fields_ptr)) {
       bool check_space = field->getSpace() == H1;
       if(field->getName() == field_name && check_space) field_flg = true;
