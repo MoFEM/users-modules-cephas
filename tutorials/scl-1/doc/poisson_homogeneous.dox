@@ -585,7 +585,7 @@ memory address where the first components of the local stiffness matrix
 the iterative solver namely [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) in PETSc.
 
 And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we tranpose
-everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
+everything that has already assembled to form the full matrix of \f$ {\bf K} \f$. This process is implemented and visualised as follows
 \code
       if (row_side != col_side || row_type != col_type) {
         transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
@@ -594,6 +594,9 @@ everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
                             ADD_VALUES);
       }
 \endcode
+
+\anchor figure_symmetric_matrix_assembling
+\image html symmetric_matrix_assembling.png "Figure 1: Symmetric matrix (for a general 3D case)." width = 900px
 
 \subsubsection OpDomainRhsVectorF
 In this part, we will talk about the implementation of the second UDO
@@ -1333,7 +1336,7 @@ Then open it in Paraview and use the filter `WarpByScalar`, you will be able to
 see the deformation as below
 
 \anchor figure_poisson_homogeneous
-\image html poisson_homogeneous.png "Figure 1: Poisson homogeneous visualisation." width = 900px
+\image html poisson_homogeneous.png "Figure 2: Poisson homogeneous visualisation." width = 900px
 
 
 \subsection basic_tutorials_poisson_homogeneous_discussion Discussion
