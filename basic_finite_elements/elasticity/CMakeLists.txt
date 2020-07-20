@@ -54,6 +54,13 @@ add_test(ElasticityDirichletOnPartition
  -ksp_type cg -pc_type asm -sub_pc_type lu
  -ksp_monitor -log_view -my_is_partitioned -is_atom_test 2)
 
+add_test(ElasticityRotationTest
+ ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+ ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+ -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShapeRot.cub
+ -ksp_type cg -pc_type asm -sub_pc_type lu
+ -ksp_monitor -log_view -my_order 2 -is_atom_test 3)
+
 add_test(MultiGridViaOrderSolver
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
@@ -94,5 +101,5 @@ add_test(Spring
     ${CMAKE_CURRENT_BINARY_DIR}/elasticity
     -my_file ${CMAKE_CURRENT_SOURCE_DIR}/free_beam.h5m 
     -my_order 4 -ksp_type cg -pc_type lu 
-    -ksp_monitor -is_atom_test 3
+    -ksp_monitor -is_atom_test 4
   )
