@@ -88,15 +88,12 @@ approximate \f$ u \f$ assuming its solution has the form
 \f[
 u \approx u^h = \sum_{j=0}^{N-1} \phi_j U_j
 \f]
-This expression can be interpreted as follow. Find the approximate solution \f$
+This expression can be interpreted as follows. Find the approximate solution \f$
 u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by the summation of the
-multiplication of the *approximation functions* \f$ \phi_j \f$ and
-*coefficients* \f$ U_j \f$. 
+multiplication of the *approximation functions* \f$ \phi_j \f$ and *coefficients* \f$ U_j \f$. 
 
-Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process
-which will be discussed later in this tutorial, MoFEM gives you values of \f$
-u^h \f$ by default (provided that you give it some hints) and you will find the
-solution of \f$ u^h \f$, of course, with the help of MoFEM.
+Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process,
+which will be discussed later in this tutorial, MoFEM gives you values of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
 Remember that, in the weak form, we have another term that also needs to be
 taken care of, that is the test function \f$ v \f$. As we were saying, the weak
