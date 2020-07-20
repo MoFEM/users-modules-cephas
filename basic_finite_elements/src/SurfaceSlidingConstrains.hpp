@@ -27,6 +27,9 @@
  */
 struct GenericSliding {
 
+  GenericSliding() = default;
+  virtual ~GenericSliding() = default;
+
   struct OpGetActiveDofsLambda
       : public MoFEM::ForcesAndSourcesCore::UserDataOperator {
     boost::shared_ptr<VectorDouble> activeVariablesPtr;
@@ -414,6 +417,8 @@ struct SurfaceSlidingConstrains : public GenericSliding {
     ierr = getOptions();
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
   }
+
+  virtual ~SurfaceSlidingConstrains() = default;
 
   struct OpJacobian
       : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {

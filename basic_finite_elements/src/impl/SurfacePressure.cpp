@@ -331,8 +331,8 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannPressureLhs_dx_dX::doWork(
   };
 
   double lambda = 1;
-  if (dataAtIntegrationPts->arcLengthDof) {
-    lambda = dataAtIntegrationPts->arcLengthDof->getFieldData();
+  if (auto arc_dof = dataAtIntegrationPts->arcLengthDof.lock()) {
+    lambda = arc_dof->getFieldData();
   }
 
   auto t_w = getFTensor0IntegrationWeight();
@@ -614,8 +614,8 @@ NeumannForcesSurface::OpNeumannPressureMaterialLhs_dX_dX::iNtegrate(
   auto t_F = getFTensor2FromMat<3, 3>(dataAtPts->FMat);
 
   double lambda = 1;
-  if (dataAtPts->arcLengthDof) {
-    lambda = dataAtPts->arcLengthDof->getFieldData();
+  if (auto arc_dof = dataAtPts->arcLengthDof.lock()) {
+    lambda = arc_dof->getFieldData();
   }
 
   auto t_w = getFTensor0IntegrationWeight();
@@ -788,8 +788,8 @@ NeumannForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dx::iNtegrate(
   auto t_inv_H = getFTensor2FromMat<3, 3>(dataAtPts->invHMat);
 
   double lambda = 1;
-  if (dataAtPts->arcLengthDof) {
-    lambda = dataAtPts->arcLengthDof->getFieldData();
+  if (auto arc_dof = dataAtPts->arcLengthDof.lock()) {
+    lambda = arc_dof->getFieldData();
   }
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -902,8 +902,8 @@ NeumannForcesSurface::OpNeumannPressureMaterialVolOnSideLhs_dX_dX::iNtegrate(
   FTensor::Tensor2<double, 3, 3> t_d;
 
   double lambda = 1;
-  if (dataAtPts->arcLengthDof) {
-    lambda = dataAtPts->arcLengthDof->getFieldData();
+  if (auto arc_dof = dataAtPts->arcLengthDof.lock()) {
+    lambda = arc_dof->getFieldData();
   }
 
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {

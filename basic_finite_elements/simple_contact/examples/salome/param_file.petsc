@@ -1,0 +1,20 @@
+-ksp_type fgmres
+-pc_type lu
+-pc_factor_mat_solver_type mumps
+-snes_type newtonls
+-snes_linesearch_type basic
+-snes_divergence_tolerance 0
+-snes_max_it 50
+-snes_atol 1e-8
+-snes_rtol 1e-10
+-snes_monitor
+-ksp_monitor
+-snes_converged_reason
+-my_order 2
+-my_order_lambda 1
+-my_order_contact 2
+-my_ho_levels_num 1
+-my_step_num 1
+-my_cn_value 1.e3
+-my_r_value 1.0
+-my_alm_flag 0
