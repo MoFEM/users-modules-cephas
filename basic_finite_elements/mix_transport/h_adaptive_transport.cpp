@@ -217,8 +217,7 @@ struct MyTransport : public MixTransportElement {
     MeshRefinement *refine_ptr;
     MoFEMFunctionBegin;
     // get refined edges having child vertex
-    const RefEntity_multiIndex *ref_ents_ptr;
-    CHKERR mField.get_ref_ents(&ref_ents_ptr);
+    auto ref_ents_ptr = mField.get_ref_ents();
     typedef RefEntity_multiIndex::index<
         Composite_EntType_and_ParentEntType_mi_tag>::type RefEntsByComposite;
     const RefEntsByComposite &ref_ents =
@@ -327,10 +326,9 @@ struct MyTransport : public MixTransportElement {
     all_but_0.flip();
     BitRefLevel garbage_bit;
     garbage_bit.set(BITREFLEVEL_SIZE - 1); // Garbage level
-    const RefEntity_multiIndex *refined_ents_ptr;
-    CHKERR mField.get_ref_ents(&refined_ents_ptr);
-    RefEntity_multiIndex::iterator mit = refined_ents_ptr->begin();
-    for (; mit != refined_ents_ptr->end(); mit++) {
+    auto ref_ents_ptr = mField.get_ref_ents();
+    RefEntity_multiIndex::iterator mit = ref_ents_ptr->begin();
+    for (; mit != ref_ents_ptr->end(); mit++) {
       if (mit->get()->getEntType() == MBENTITYSET)
         continue;
       BitRefLevel bit = mit->get()->getBitRefLevel();
