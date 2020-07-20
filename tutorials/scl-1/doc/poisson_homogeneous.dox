@@ -596,7 +596,7 @@ everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
 \endcode
 
 \anchor figure_symmetric_matrix_assembling
-\image html symmetric_matrix_assembling.png "Figure 1: Symmetric matrix (for a general 3D case)." width = 900px
+\image html symmetric_matrix_assembling.png "Figure 1: Symmetric matrix assembling (for a general 3D case)." width = 350px
 
 \subsubsection OpDomainRhsVectorF
 In this part, we will talk about the implementation of the second UDO
