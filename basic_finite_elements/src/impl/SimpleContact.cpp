@@ -2798,13 +2798,9 @@ MoFEMErrorCode SimpleContactProblem::OpLoopForSideOfContactPrism::doWork(int sid
   int side_number;
   if (faceType == ContactOp::FACEMASTER)
     side_number = 3;
-  else if (faceType == ContactOp::FACESLAVE)
-    side_number = 4;
   else
-    SETERRQ3(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-             "faceType should be either %d or %d, instead is set to %d",
-             ContactOp::FACEMASTER, ContactOp::FACESLAVE, faceType);
-
+    side_number = 4;
+  
   const EntityHandle tri = getSideEntity(side_number, type);
 
   CHKERR loopSideVolumes(sideFeName, *sideFe, 3, tri);
@@ -4074,7 +4070,7 @@ MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::doWork(
   tangentOne->resize(3, false);
   tangentTwo->resize(3, false);
 
-  if (masterSlaveName) {
+  if (isMaster) {
     normalVector = commonDataSimpleContact->normalVectorMasterPtr;
     tangentOne = commonDataSimpleContact->tangentOneVectorMasterPtr;
     tangentTwo = commonDataSimpleContact->tangentOneVectorMasterPtr;
@@ -4132,7 +4128,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact_ale,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     const string field_name, const string mesh_node_field_name,
-    const string lagrang_field_name, const string side_fe_name) {
+    const string lagrange_field_name, const string side_fe_name) {
   MoFEMFunctionBegin;
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
@@ -4175,7 +4171,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
       new OpGetGapSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   fe_mat_side_rhs_master->getOpPtrVector().push_back(new OpCalculateDeformation(
@@ -4206,7 +4202,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     const string field_name, const string mesh_node_field_name,
-    const string lagrang_field_name, const string side_fe_name) {
+    const string lagrange_field_name, const string side_fe_name) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -4217,7 +4213,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
                                common_data_simple_contact));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
@@ -4256,7 +4252,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialMasterSlaveLhs_dX_dLagmult(
-          mesh_node_field_name, lagrang_field_name, common_data_simple_contact,
+          mesh_node_field_name, lagrange_field_name, common_data_simple_contact,
           POSITION_RANK, LAGRANGE_RANK));
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnContactPrismSide>
@@ -4295,7 +4291,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALEMaterial(
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpContactMaterialSlaveSlaveLhs_dX_dLagmult(
-          mesh_node_field_name, lagrang_field_name, common_data_simple_contact,
+          mesh_node_field_name, lagrange_field_name, common_data_simple_contact,
           POSITION_RANK, LAGRANGE_RANK));
 
   MoFEMFunctionReturn(0);
@@ -4305,7 +4301,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     const string field_name, const string mesh_node_field_name,
-    const string lagrang_field_name) {
+    const string lagrange_field_name) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -4326,7 +4322,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
       new OpGetGapSlave(field_name, common_data_simple_contact));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetLagMulAtGaussPtsSlave(lagrang_field_name,
+      new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
@@ -4346,7 +4342,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
-          lagrang_field_name, mesh_node_field_name, cnValuePtr,
+          lagrange_field_name, mesh_node_field_name, cnValuePtr,
           common_data_simple_contact, LAGRANGE_RANK, POSITION_RANK));
   MoFEMFunctionReturn(0);
 }
