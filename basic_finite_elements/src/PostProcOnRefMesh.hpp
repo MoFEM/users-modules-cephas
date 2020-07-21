@@ -310,7 +310,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
       MoFEMFunctionReturn(0);
     };
 
-    MoFEM::Core m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
+    MoFEM::CoreTmp<-1> m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
     MoFEM::Interface &m_field_ref = m_core_ref;
 
     auto refine_ref_tetrahedron = [this, &m_field_ref, max_level]() {
@@ -415,8 +415,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     auto get_element_max_dofs_order = [this]() {
       int max_order = 0;
-      auto &dofs_multi_index = *this->dataPtr;
-      for (auto &dof : dofs_multi_index) {
+      for (auto &dof : this->getDataDofs()) {
         const int dof_order = dof->getDofOrder();
         max_order = (max_order < dof_order) ? dof_order : max_order;
       };

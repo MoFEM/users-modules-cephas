@@ -42,7 +42,8 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     hi_it = data.getFieldDofs().end();
     for (int ii = 0; it != hi_it; it++, ii++) {
       int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
+                          ->getRowDofs()
+                          .find((*it)->getLocalUniqueId())
                           ->get()
                           ->getPetscLocalDofIdx();
       vAlues[ii] = a[local_idx];
@@ -217,7 +218,8 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     hi_it = data.getFieldDofs().end();
     for (int ii = 0; it != hi_it; it++, ii++) {
       int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
+                          ->getRowDofs()
+                          .find((*it)->getLocalUniqueId())
                           ->get()
                           ->getPetscLocalDofIdx();
       vAlues[ii] = a[local_idx];

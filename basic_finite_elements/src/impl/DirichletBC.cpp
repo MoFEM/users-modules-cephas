@@ -21,22 +21,21 @@ using namespace MoFEM;
 using namespace boost::numeric;
 
 static MoFEMErrorCode set_numered_dofs_on_ents(
-    const Problem *problem_ptr, const string &field_name, Range &ents,
+    const Problem *problem_ptr, const FieldBitNumber bit_number, Range &ents,
     boost::function<
         MoFEMErrorCode(const boost::shared_ptr<MoFEM::NumeredDofEntity> &dof)>
         for_each_dof) {
   MoFEMFunctionBegin;
 
-  auto &dofs_by_name_ent_and_dofs_ids =
-      problem_ptr->getNumeredDofsRows()
-          ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>();
+  auto &dofs_by_uid = problem_ptr->getNumeredDofsRows()->get<Unique_mi_tag>();
 
   for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit) {
 
-    auto lo_dit = dofs_by_name_ent_and_dofs_ids.lower_bound(
-        boost::make_tuple(field_name, eit->first, 0));
-    auto hi_dit = dofs_by_name_ent_and_dofs_ids.upper_bound(
-        boost::make_tuple(field_name, eit->second, MAX_DOFS_ON_ENTITY));
+    auto lo_dit = dofs_by_uid.lower_bound(
+        DofEntity::getLoFieldEntityUId(bit_number, eit->first));
+    auto hi_dit = dofs_by_uid.upper_bound(
+        DofEntity::getHiFieldEntityUId(bit_number, eit->first));
+
     for (; lo_dit != hi_dit; ++lo_dit) {
       auto &dof = *lo_dit;
       if (dof->getHasLocalIndex())
@@ -244,9 +243,9 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
           MoFEMFunctionReturnHot(0);
         };
 
-        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName,
+        CHKERR set_numered_dofs_on_ents(problemPtr,
+                                        getFieldBitNumber(fieldName),
                                         bc_it.bc_ents[dim], for_each_dof);
-
       }
     }
     dofsIndices.resize(mapZeroRows.size());
@@ -375,8 +374,8 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 
     const FieldEntity_multiIndex *field_ents;
     CHKERR mField.get_field_ents(&field_ents);
-    auto &field_entities_by_name_and_ent =
-        field_ents->get<Composite_Name_And_Ent_mi_tag>();
+    auto &field_ents_by_uid = field_ents->get<Unique_mi_tag>();
+
     VectorDouble3 coords(3);
 
     for (auto &bc_it : bcData) {
@@ -391,9 +390,10 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
 
             EntityHandle node = dof->getEnt();
             if (!dof->getDofCoeffIdx()) {
-              auto eit = field_entities_by_name_and_ent.find(
-                  boost::make_tuple(materialPositions, node));
-              if (eit != field_entities_by_name_and_ent.end())
+              auto eit =
+                  field_ents_by_uid.find(FieldEntity::getLocalUniqueIdCalculate(
+                      getFieldBitNumber(materialPositions), node));
+              if (eit != field_ents_by_uid.end())
                 noalias(coords) = (*eit)->getEntFieldData();
               else
                 CHKERR mField.get_moab().get_coords(&node, 1,
@@ -434,7 +434,8 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
           MoFEMFunctionReturnHot(0);
         };
 
-        CHKERR set_numered_dofs_on_ents(problemPtr, fieldName,
+        CHKERR set_numered_dofs_on_ents(problemPtr,
+                                        getFieldBitNumber(fieldName),
                                         bc_it.bc_ents[dim], for_each_dof);
 
         auto fix_field_dof = [&](auto &dof) {
@@ -444,7 +445,8 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
         };
 
         for (auto &fix_field : fixFields) {
-          CHKERR set_numered_dofs_on_ents(problemPtr, fix_field,
+          CHKERR set_numered_dofs_on_ents(problemPtr,
+                                          getFieldBitNumber(fix_field),
                                           bc_it.bc_ents[dim], fix_field_dof);
         }
       }
@@ -499,8 +501,8 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
         MoFEMFunctionReturnHot(0);
       };
 
-      CHKERR set_numered_dofs_on_ents(problemPtr, fieldName, ents,
-                                      for_each_dof);
+      CHKERR set_numered_dofs_on_ents(problemPtr, getFieldBitNumber(fieldName),
+                                      ents, for_each_dof);
     }
 
     MoFEMFunctionReturnHot(0);
@@ -563,8 +565,8 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
         MoFEMFunctionReturnHot(0);
       };
 
-      CHKERR set_numered_dofs_on_ents(problemPtr, field_name, eNts,
-                                      for_each_dof);
+      CHKERR set_numered_dofs_on_ents(problemPtr, getFieldBitNumber(field_name),
+                                      eNts, for_each_dof);
     }
 
     dofsIndices.resize(mapZeroRows.size());
@@ -738,8 +740,9 @@ MoFEMErrorCode Reactions::calculateReactions(Vec &internal) {
       MoFEMFunctionReturnHot(0);
     };
 
-    CHKERR set_numered_dofs_on_ents(problem_ptr, fieldName, verts,
-                                    for_each_dof);
+    CHKERR set_numered_dofs_on_ents(problem_ptr,
+                                    mField.get_field_bit_number(fieldName),
+                                    verts, for_each_dof);
 
     double *res_array;
 

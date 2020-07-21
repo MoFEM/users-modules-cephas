@@ -207,20 +207,20 @@ MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize(Range &tris) {
                                            moab::Interface::UNION);
   ents.merge(tris);
 
+  const auto bit_number = mField.get_field_bit_number(fieldName);
+
   for (auto eit = ents.pair_begin(); eit != ents.pair_end(); eit++) {
     const auto f = eit->first;
     const auto s = eit->second;
-    auto &dofs = problem_ptr->numeredDofsRows;
-    auto dit =
-        dofs->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>().lower_bound(
-            boost::make_tuple(fieldName, f, 0));
-    auto hi_dit =
-        dofs->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>().lower_bound(
-            boost::make_tuple(fieldName, s, MAX_DOFS_ON_ENTITY));
+
+    auto &dofs = *problemPtr->numeredDofsRows;
+    auto dit = dofs.get<Unique_mi_tag>().lower_bound(
+        DofEntity::getLoFieldEntityUId(bit_number, f));
+    auto hi_dit = dofs.get<Unique_mi_tag>().upper_bound(
+        DofEntity::getLoFieldEntityUId(bit_number, s));
     for (; dit != hi_dit; ++dit) {
-      if (dit.getPart() == mField.get_comm_rank()) {
-        mapZeroRows[dof->get()->getPetscGlobalDofIdx()] =
-            dof->get()->getFieldData();
+      if ((*dit)->getPart() == mField.get_comm_rank()) {
+        mapZeroRows[(*dit)->getPetscGlobalDofIdx()] = (*dit)->getFieldData();
       }
     }
   }
