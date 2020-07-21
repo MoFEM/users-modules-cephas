@@ -392,7 +392,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
             if (!dof->getDofCoeffIdx()) {
               auto eit =
                   field_ents_by_uid.find(FieldEntity::getLocalUniqueIdCalculate(
-                      getFieldBitNumber(materialPositions), node));
+                      mField.get_field_bit_number(materialPositions), node));
               if (eit != field_ents_by_uid.end())
                 noalias(coords) = (*eit)->getEntFieldData();
               else
@@ -435,7 +435,7 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
         };
 
         CHKERR set_numered_dofs_on_ents(problemPtr,
-                                        getFieldBitNumber(fieldName),
+                                        mField.get_field_bit_number(fieldName),
                                         bc_it.bc_ents[dim], for_each_dof);
 
         auto fix_field_dof = [&](auto &dof) {
@@ -445,9 +445,9 @@ MoFEMErrorCode DirichletSpatialPositionsBc::iNitalize() {
         };
 
         for (auto &fix_field : fixFields) {
-          CHKERR set_numered_dofs_on_ents(problemPtr,
-                                          getFieldBitNumber(fix_field),
-                                          bc_it.bc_ents[dim], fix_field_dof);
+          CHKERR set_numered_dofs_on_ents(
+              problemPtr, mField.get_field_bit_number(fix_field),
+              bc_it.bc_ents[dim], fix_field_dof);
         }
       }
     }
@@ -501,7 +501,8 @@ MoFEMErrorCode DirichletTemperatureBc::iNitalize() {
         MoFEMFunctionReturnHot(0);
       };
 
-      CHKERR set_numered_dofs_on_ents(problemPtr, getFieldBitNumber(fieldName),
+      CHKERR set_numered_dofs_on_ents(problemPtr,
+                                      mField.get_field_bit_number(fieldName),
                                       ents, for_each_dof);
     }
 
@@ -565,7 +566,8 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::iNitalize() {
         MoFEMFunctionReturnHot(0);
       };
 
-      CHKERR set_numered_dofs_on_ents(problemPtr, getFieldBitNumber(field_name),
+      CHKERR set_numered_dofs_on_ents(problemPtr,
+                                      mField.get_field_bit_number(field_name),
                                       eNts, for_each_dof);
     }
 
