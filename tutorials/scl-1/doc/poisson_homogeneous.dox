@@ -688,7 +688,7 @@ in Eq. (4) and only need to loop over row DOFs as follows
     // get base function
     auto t_base = data.getFTensor0N();
 \endcode
-and later using the constant body source (force) that predefined at the
+and later using the constant body source (force) that is predefined at the
 beginning of the `*.hpp` to calculate the local vector
 \code
         for (int rr = 0; rr != nb_dofs; rr++) {
@@ -835,7 +835,7 @@ MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
 }
 \endcode
 Apart from the codes for error handling, the main three lines of code
-is a standard way to read a input mesh using Simple interface. Inteface in MoFEM
+is a standard way to read an input mesh using Simple interface. Inteface in MoFEM
 is a set of rules through which program developers use to setup a problem.
 Simple interface provides simplest but also less flexible way to setup a
 problem. More on the intefaces can be found at \ref
@@ -961,7 +961,7 @@ current problem of Poisson's equation with homogeneous boundary condition
     interior edges and faces to the set of entities on which boundary condition
     applies. We may normally forget this step but it is essential to have those
     vertices included, making sure the implementation of boundary condition is
-    correct and avoiding errors in results. The inclusion is done in this part
+    correct and avoids errors in results. The inclusion is done in this part
     of the code
     \code
     // Add vertices to boundary entities
@@ -985,7 +985,7 @@ current problem of Poisson's equation with homogeneous boundary condition
 
 \subsubsection basic_tutorials_poisson_homogeneous_assemble assembleSystem() 
 
-This part is about the function that responsible for the assembling of the
+This part is about the function that is responsible for the assembling of the
 system of equations. As a reminder, at the beginning of the
 section \ref basic_tutorials_poisson_homogeneous_implementation, we were
 mentioning *two important concepts* in MoFEM, namely **UDO** and **Pipiline**.
@@ -1359,7 +1359,7 @@ MoFEM.
 
 \subsection basic_tutorials_poisson_homogeneous_extension Possible extension
 
-With the implementation for 2D problem is done, you can effortlessly extend it
+With the implementation for 2D problem done, you can effortlessly extend it
 to solve 3D problem with few changes as follows
 
 - Change all `Face` to `Volume` (`.cpp` and `.hpp` files)
