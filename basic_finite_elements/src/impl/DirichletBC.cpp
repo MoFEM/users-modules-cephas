@@ -244,7 +244,7 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
         };
 
         CHKERR set_numered_dofs_on_ents(problemPtr,
-                                        getFieldBitNumber(fieldName),
+                                        mField.get_field_bit_number(fieldName),
                                         bc_it.bc_ents[dim], for_each_dof);
       }
     }
