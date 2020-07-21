@@ -98,7 +98,7 @@ struct BodyForceConstantField {
     }
   };
 
-  MoFEMErrorCode addBlock(const std::string field_name, Vec &F, int ms_id) {
+  MoFEMErrorCode addBlock(const std::string field_name, Vec F, int ms_id) {
     const CubitMeshSets *cubit_meshset_ptr;
     MeshsetsManager *mmanager_ptr;
     MoFEMFunctionBegin;

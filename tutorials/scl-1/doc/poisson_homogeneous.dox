@@ -29,7 +29,7 @@ how_to_compile_program.
 
 \subsection basic_tutorials_poisson_homogeneous_problem The problem
 
-In this first tutorial, that actually solves something using MoFEM, we
+In this practical example, that actually solves something using MoFEM, we
 will solve a simple Poisson's equation in 2D with homogeneous boundary condition
 (zero boundary values). The physical example of this equation is that you
 have a membrane that is fixed at its boundary and it experiences a uniformly
@@ -51,7 +51,7 @@ Additionally, \f$ f \f$ is the body force and \f$ {\bf x} \f$ is the position in
 Essentially, this is a continuous problem and there is analytical solution for
 it. However, as a first practice with MoFEM, we are solving it numerically using
 finite element approach. This is done by subdividing the domain into multiple
-elements and solving a discrete problem.
+elements, building piece-wise approximations, and solving a discrete problem.
 
 As you may have already learned from the basic finite element method, in order
 to approximate the field \f$ u \f$ of the problem equation, we need to 
@@ -89,14 +89,10 @@ approximate \f$ u \f$ assuming its solution has the form
 u \approx u^h = \sum_{j=0}^{N-1} \phi_j U_j
 \f]
 This expression can be interpreted as follows. Find the approximate solution \f$
-u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by the summation of the
-multiplication of the *approximation functions* \f$ \phi_j \f$ and
-*coefficients* \f$ U_j \f$. 
+u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution of base function \f$ \phi_j \f$ with the *coefficient* of the contribution is \f$ U_j \f$. 
 
-Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process
-which will be discussed later in this tutorial, MoFEM gives you values of \f$
-u^h \f$ by default (provided that you give it some hints) and you will find the
-solution of \f$ u^h \f$, of course, with the help of MoFEM.
+Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process,
+which will be discussed later in this tutorial, MoFEM gives you values of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
 Remember that, in the weak form, we have another term that also needs to be
 taken care of, that is the test function \f$ v \f$. As we were saying, the weak
@@ -130,9 +126,8 @@ of element stiffness matrix and element force vector are calculated as
     F_i^e &= \int_{\Omega^e} \phi_i f
   \end{align}
 \f]
-One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric
-  which means later in the implementation we can save computer memory by
-  assembling and storing data of just half of the matrix.
+One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric which means there will be opportunity to save time later in the implementation.
+
 
 
 We are almost at the place where we can start the implementation, but still, you
@@ -335,9 +330,7 @@ a little more details of those four objects of the class in the followings
 - `locLhs` <br>
   This private member object of type MatrixDouble is used to
   store the results of the calculation of components of element stiffness
-  matrix. This object is used only in function `doWork()` above which is a
-  member of the current class. That is why it is declared as a private object
-  meaning it can be accessed only inside of the class.
+  matrix. This object is made private because only member of the class know how to use it, members from other classes have no access to this private object avoiding unpredictable consequences, i.e. errors. 
   
 - `transLocLhs` <br>
   This private member object also of type MatrixDouble is
@@ -592,7 +585,7 @@ memory address where the first components of the local stiffness matrix
 the iterative solver namely [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) in PETSc.
 
 And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we tranpose
-everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
+everything that has already assembled to form the full matrix of \f$ {\bf K} \f$. This process is implemented and visualised as follows
 \code
       if (row_side != col_side || row_type != col_type) {
         transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
@@ -601,6 +594,9 @@ everything that has already assembled to form the full matrix of \f$ {\bf K} \f$
                             ADD_VALUES);
       }
 \endcode
+
+\anchor figure_symmetric_matrix_assembling
+\image html symmetric_matrix_assembling.png "Figure 1: Symmetric matrix assembling (for a general 3D case)." width = 350px
 
 \subsubsection OpDomainRhsVectorF
 In this part, we will talk about the implementation of the second UDO
@@ -684,8 +680,8 @@ counterpart. The code for this function is as follows
     MoFEMFunctionReturn(0);
   }
 \endcode
-Apart from the input arguments of this function is slight different from the UDO
-for stiffness matrix, in this UDO for force vector, we use get the base function
+A part from the input arguments of this function is slightly different from the UDO
+for stiffness matrix. In this UDO for force vector, we use the base function
 value to calculate the components of local vector reflecting what is presented
 in Eq. (4) and only need to loop over row DOFs as follows
 \code
@@ -1340,7 +1336,7 @@ Then open it in Paraview and use the filter `WarpByScalar`, you will be able to
 see the deformation as below
 
 \anchor figure_poisson_homogeneous
-\image html poisson_homogeneous.png "Figure 1: Poisson homogeneous visualisation." width = 900px
+\image html poisson_homogeneous.png "Figure 2: Poisson homogeneous visualisation." width = 900px
 
 
 \subsection basic_tutorials_poisson_homogeneous_discussion Discussion
@@ -1371,8 +1367,8 @@ to solve 3D problem with few changes as follows
   - Using `VolumeElementForcesAndSourcesCore` instead of `FaceElementForcesAndSourcesCore`
 
 - Change FTensore objects that have two components to three (`.hpp` file)
-  - Using `FTensor::Index<'i', 3> i;` instead of `FTensor::Index<'i', 2> i;`
-  - Using `getFTensor1DiffN<3>` instead of `getFTensor1DiffN<2>`
+  - Using *FTensor::Index<'i', 3> i;* instead of *FTensor::Index<'i', 2> i;*
+  - Using *getFTensor1DiffN<3>* instead of *getFTensor1DiffN<2>*
 
 - No need to specifically calculate inverse of Jacobian in 3D case, it is done
   automatically behind the curtain (`.cpp` file)
@@ -1386,10 +1382,10 @@ to solve 3D problem with few changes as follows
 - [Optional] Objects' name changed for readability (`.cpp` and `.hpp` file)
   - Using `Poisson3DHomogeneous` instead of `Poisson2DHomogeneous`
   - Using `Poisson3DHomogeneousOperators` instead of `Poisson2DHomogeneousOperators`
-  - Using `volume` instead of `area`
+  - Using variable `volume` instead of `area`
 
 You can find the complete code to solve 3D version of the Poisson problem with
-homogeneous boundary condition in poisson_3d_homogeneous.hpp and poisson_3d_homogeneous.cpp
+homogeneous boundary condition in poisson_3d_homogeneous.hpp and poisson_3d_homogeneous.cpp located in the same path with the source codes for 2D problem `mofem_install/um_view/tutorials/scl-1/`.
 
 To run the analysis, you will follow very similar procedure as for the 2D case
 using the same `param_file.petsc` file with slight changes in the command lines
