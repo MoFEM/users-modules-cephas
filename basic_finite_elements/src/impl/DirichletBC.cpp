@@ -34,7 +34,7 @@ static MoFEMErrorCode set_numered_dofs_on_ents(
     auto lo_dit = dofs_by_uid.lower_bound(
         DofEntity::getLoFieldEntityUId(bit_number, eit->first));
     auto hi_dit = dofs_by_uid.upper_bound(
-        DofEntity::getHiFieldEntityUId(bit_number, eit->first));
+        DofEntity::getHiFieldEntityUId(bit_number, eit->second));
 
     for (; lo_dit != hi_dit; ++lo_dit) {
       auto &dof = *lo_dit;
