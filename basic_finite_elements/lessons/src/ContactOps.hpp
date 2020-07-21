@@ -30,7 +30,7 @@ FTensor::Index<'l', 2> l;
 
 struct OpInternalBoundaryContactRhs : public BoundaryEleOp {
   OpInternalBoundaryContactRhs(const std::string field_name,
-                         boost::shared_ptr<CommonData> common_data_ptr);
+                               boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
@@ -39,7 +39,7 @@ private:
 
 struct OpInternalDomainContactRhs : public DomainEleOp {
   OpInternalDomainContactRhs(const std::string field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr);
+                             boost::shared_ptr<CommonData> common_data_ptr);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
@@ -141,7 +141,7 @@ inline FTensor::Tensor1<double, 2> normal(FTensor::Tensor1<T1, 3> &t_coords,
 
 template <typename T>
 inline double gap0(FTensor::Tensor1<T, 3> &t_coords,
-                  FTensor::Tensor1<double, 2> &t_normal) {
+                   FTensor::Tensor1<double, 2> &t_normal) {
   return (-1 - t_coords(1)) * t_normal(1);
 }
 
@@ -166,9 +166,7 @@ inline double sign(double x) {
     return -1;
 };
 
-inline double w(const double g, const double t) {
-  return g - cn * t;
-}
+inline double w(const double g, const double t) { return g - cn * t; }
 
 inline double constrian(double &&g0, double &&g, double &&t) {
   return (w(g - g0, t) + std::abs(w(g - g0, t))) / 2 + g0;
@@ -188,8 +186,8 @@ OpInternalBoundaryContactRhs::OpInternalBoundaryContactRhs(
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
-                                              EntData &data) {
-   MoFEMFunctionBegin;
+                                                    EntData &data) {
+  MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = getGaussPts().size2();
   const size_t nb_dofs = data.getIndices().size();
@@ -243,7 +241,7 @@ OpInternalDomainContactRhs::OpInternalDomainContactRhs(
       commonDataPtr(common_data_ptr) {}
 
 MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
-                                                    EntData &data) {
+                                                  EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = getGaussPts().size2();
   const size_t nb_dofs = data.getIndices().size();
@@ -277,7 +275,7 @@ MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
         ++t_base;
         ++t_diff_base;
       }
-      for (; bb < nb_base_functions; ++bb)  {
+      for (; bb < nb_base_functions; ++bb) {
         ++t_base;
         ++t_diff_base;
       }
@@ -334,11 +332,12 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       auto t_contact_normal = normal(t_coords, t_disp);
       FTensor::Tensor2<double, 2, 2> t_contact_normal_tensor;
       t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
-      
+
       FTensor::Tensor2<double, 2, 2> t_contact_tangent_tensor;
       t_contact_tangent_tensor(i, j) = t_contact_normal_tensor(i, j);
       t_contact_tangent_tensor(0, 0) -= 1;
       t_contact_tangent_tensor(1, 1) -= 1;
+      t_contact_tangent_tensor(i, j) *= -1;
 
       FTensor::Tensor1<double, 2> t_rhs_constrains;
 
@@ -488,6 +487,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
       t_contact_tangent_tensor(i, j) = t_contact_normal_tensor(i, j);
       t_contact_tangent_tensor(0, 0) -= 1;
       t_contact_tangent_tensor(1, 1) -= 1;
+      t_contact_tangent_tensor(i, j) *= -1;
 
       auto diff_constrain = diff_constrains_dgap(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
@@ -505,7 +505,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
           const double beta = alpha * row_base * t_col_base;
 
-          t_mat(i, j) += (beta * diff_constrain) * t_contact_normal_tensor(i, j);
+          t_mat(i, j) +=
+              (beta * diff_constrain) * t_contact_normal_tensor(i, j);
           t_mat(i, j) += beta * t_contact_tangent_tensor(i, j);
 
           ++t_col_base;
@@ -579,6 +580,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
       t_contact_tangent_tensor(i, j) = t_contact_normal_tensor(i, j);
       t_contact_tangent_tensor(0, 0) -= 1;
       t_contact_tangent_tensor(1, 1) -= 1;
+      t_contact_tangent_tensor(i, j) *= -1;
 
       const double diff_traction = diff_constrains_dtraction(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
@@ -656,9 +658,9 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
       for (; bb != nb_dofs / 2; ++bb) {
         const double t_div_base = t_diff_base(0, 0) + t_diff_base(1, 1);
 
-        t_nf(i) += alpha * (t_base(j) * t_grad(i, j)); 
+        t_nf(i) += alpha * (t_base(j) * t_grad(i, j));
         t_nf(i) += alpha * t_div_base * t_disp(i);
-            
+
         ++t_nf;
         ++t_base;
         ++t_diff_base;
@@ -732,13 +734,13 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 
         for (size_t cc = 0; cc != col_nb_dofs / 2; ++cc) {
 
-            t_mat_diag(i) += alpha * t_row_base(j) * t_col_diff_base(j);
-            t_mat_diag(i) += alpha * t_row_div_base * t_col_base;
+          t_mat_diag(i) += alpha * t_row_base(j) * t_col_diff_base(j);
+          t_mat_diag(i) += alpha * t_row_div_base * t_col_base;
 
-            ++t_col_base;
-            ++t_col_diff_base;
-            ++t_mat_diag;
-            ++t_mat;
+          ++t_col_base;
+          ++t_col_diff_base;
+          ++t_mat_diag;
+          ++t_mat;
         }
 
         ++t_row_diff_base;
