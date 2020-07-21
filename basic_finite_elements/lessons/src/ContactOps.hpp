@@ -46,6 +46,15 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
+struct OpInternalBoundaryContactRhs : public BoundaryEleOp {
+  OpInternalBoundaryContactRhs(const std::string field_name,
+                         boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
 struct OpConstrainBoundaryLhs_dU : public BoundaryEleOp {
   OpConstrainBoundaryLhs_dU(const std::string row_field_name,
                             const std::string col_field_name,
@@ -306,6 +315,61 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       ++t_disp;
       ++t_traction;
       ++t_coords;
+      ++t_w;
+    }
+
+    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpInternalBoundaryContactRhs::OpInternalBoundaryContactRhs(
+    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+    : BoundaryEleOp(field_name, DomainEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {}
+
+MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
+                                              EntData &data) {
+   MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t nb_dofs = data.getIndices().size();
+
+  if (nb_dofs) {
+
+    std::array<double, MAX_DOFS_ON_ENTITY> nf;
+    std::fill(&nf[0], &nf[nb_dofs], 0);
+
+    FTensor::Tensor1<double, 2> t_direction{getDirection()[0],
+                                            getDirection()[1]};
+    FTensor::Tensor1<double, 2> t_normal{-t_direction(1), t_direction(0)};
+    const double ls = sqrt(t_normal(i) * t_normal(i));
+    t_normal(i) /= ls;
+    t_direction(i) /= ls;
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_traction =
+        getFTensor1FromMat<2>(*(commonDataPtr->contactTractionPtr));
+
+    size_t nb_base_functions = data.getN().size2();
+    auto t_base = data.getFTensor0N();
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf{&nf[0], &nf[1]};
+
+      const double alpha = t_w * ls;
+
+      size_t bb = 0;
+      for (; bb != nb_dofs / 2; ++bb) {
+        t_nf(i) += alpha * t_base * t_traction(i);
+        ++t_nf;
+        ++t_base;
+      }
+      for (; bb != nb_base_functions; ++bb)
+        ++t_base;
+
+      ++t_traction;
       ++t_w;
     }
 
@@ -802,6 +866,101 @@ MoFEMErrorCode OpSpringLhs::doWork(int row_side, int col_side,
   MoFEMFunctionReturn(0);
 }
 
+struct OpPostProcDebug : public BoundaryEleOp {
+  OpPostProcDebug(MoFEM::Interface &m_field, const std::string field_name,
+                     boost::shared_ptr<CommonData> common_data_ptr,
+                     bool update = false,
+                     moab::Interface *moab_debug = nullptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  MoFEM::Interface &mField;
+  moab::Interface *moabDebug;
+  boost::shared_ptr<CommonData> commonDataPtr;
+  bool uPdate;
+};
+
+OpPostProcDebug::OpPostProcDebug(
+    MoFEM::Interface &m_field, const std::string field_name,
+    boost::shared_ptr<CommonData> common_data_ptr, bool update,
+    moab::Interface *moab_debug)
+    : mField(m_field), BoundaryEleOp(field_name, DomainEleOp::OPROW),
+      commonDataPtr(common_data_ptr), uPdate(update), moabDebug(moab_debug) {}
+
+MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
+                                          EntData &data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t nb_dofs = data.getIndices().size();
+  std::array<double, 9> def;
+  std::fill(def.begin(), def.end(), 0);
+
+  auto get_tag = [&](const std::string name, size_t size) {
+    Tag th;
+    CHKERR moabDebug->tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def.data());
+    return th;
+  };
+
+  if (nb_dofs) {
+
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+    auto t_disp = getFTensor1FromMat<2>(*(commonDataPtr->contactDispPtr));
+    auto t_traction =
+        getFTensor1FromMat<2>(*(commonDataPtr->contactTractionPtr));
+
+    FTensor::Tensor1<double, 3> coords_a(0., 0., 0.);
+    FTensor::Tensor1<double, 2> disp_a(0., 0.);
+
+    auto th_gap = get_tag("GAP", 1);
+    auto th_gap0 = get_tag("GAP0", 1);
+    auto th_cons = get_tag("CONSTRAINT", 1);
+    auto th_traction = get_tag("TRACTION", 3);
+    auto th_normal = get_tag("NORMAL", 3);
+    auto th_disp = get_tag("DISPLACEMENT", 3);
+
+    EntityHandle ent = getFEEntityHandle();
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      double coords[] = {0, 0, 0};
+      EntityHandle new_vertex;
+      for (int dd = 0; dd != 2; dd++) {
+        coords[dd] = getCoordsAtGaussPts()(gg, dd);
+      }
+      CHKERR moabDebug->create_vertex(&coords[0], new_vertex);
+      FTensor::Tensor1<double, 3> trac(t_traction(0), t_traction(1), 0.);
+      FTensor::Tensor1<double, 3> disp(t_disp(0), t_disp(1), 0.);
+
+      auto t_contact_normal = normal(t_coords, t_disp);
+      double _gap0 = gap0(t_coords, t_contact_normal);
+      double _gap = gap(t_disp, t_contact_normal);
+      double constra = constrian(gap0(t_coords, t_contact_normal),
+                                 gap(t_disp, t_contact_normal),
+                                 normal_traction(t_traction,
+                                 t_contact_normal));
+      CHKERR moabDebug->tag_set_data(th_gap, &new_vertex, 1, &_gap);
+      CHKERR moabDebug->tag_set_data(th_gap0, &new_vertex, 1, &_gap0);
+      CHKERR moabDebug->tag_set_data(th_cons, &new_vertex, 1, &constra);
+
+      FTensor::Tensor1<double, 3> norm(t_contact_normal(0), t_contact_normal(1),
+                                       0.);
+
+      CHKERR moabDebug->tag_set_data(th_traction, &new_vertex, 1, &trac(0));
+      CHKERR moabDebug->tag_set_data(th_normal, &new_vertex, 1, &norm(0));
+      CHKERR moabDebug->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
+
+
+      ++t_traction;
+      ++t_coords;
+      ++t_disp;
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
@@ -824,6 +983,15 @@ struct Monitor : public FEMethod {
           "out_contact_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
       MoFEMFunctionReturn(0);
     };
+
+    { // for debugging
+
+      std::ostringstream ostrm;
+      ostrm << "out_debug_" << ts_step << ".vtk";
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", debug_post_proc);
+      CHKERR moab_debug.write_file(ostrm.str().c_str(), "VTK", "");
+      mb_post_debug.delete_mesh();
+    }
 
     auto print_max_min = [&](auto &tuple, const std::string msg) {
       MoFEMFunctionBegin;

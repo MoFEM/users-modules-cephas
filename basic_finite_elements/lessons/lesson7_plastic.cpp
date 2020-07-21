@@ -30,12 +30,12 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr double young_modulus = 1e1;
+constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
-constexpr double sigmaY = 1;
+constexpr double sigmaY = 1000;
 constexpr double H = 1e-2;
 constexpr double cn = H;
-constexpr int order = 2;
+constexpr int order = 3;
 
 #include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
@@ -228,7 +228,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
-      return FTensor::Tensor1<double, 2>{0., 1.};
+      return FTensor::Tensor1<double, 2>{0., 0.};
     };
     pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
     pipeline.push_back(new OpCalculatePlasticFlowRhs("EP", commonDataPtr));

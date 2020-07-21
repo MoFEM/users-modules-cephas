@@ -30,11 +30,15 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using BoundaryEle = PipelineManager::EdgeEle2D;
 using BoundaryEleOp = BoundaryEle::UserDataOperator;
 
-constexpr int order = 4;
+constexpr int order = 3;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
-constexpr double spring_stiffness = 1e-6;
+constexpr double spring_stiffness = 0;
+
+boost::shared_ptr<EdgeElementForcesAndSourcesCore> debug_post_proc;
+moab::Core mb_post_debug;
+moab::Interface &moab_debug = mb_post_debug;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -96,19 +100,7 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
 
   auto skin_edges = getEntsOnMeshSkin();
-
-  // filter not owned entities, those are not on boundary
-  Range boundary_ents;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  if (pcomm == NULL) {
-    pcomm = new ParallelComm(&mField.get_moab(), mField.get_comm());
-  }
-
-  CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                               PSTATUS_NOT, -1, &boundary_ents);
-
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
   // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
 
   CHKERR simple->setUp();
@@ -155,6 +147,16 @@ MoFEMErrorCode Example::createCommonData() {
 
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
+
+  debug_post_proc = boost::make_shared<EdgeElementForcesAndSourcesCore>(mField);
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpSetContrariantPiolaTransformOnEdge());
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<2>("U", commonDataPtr->contactDispPtr));
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpPostProcDebug(mField, "U", commonDataPtr, true, &moab_debug));
 
   MoFEMFunctionReturn(0);
 }
@@ -229,7 +231,8 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
-      return FTensor::Tensor1<double, 2>{0., 1.};
+      // return FTensor::Tensor1<double, 2>{0., 1.};
+      return FTensor::Tensor1<double, 2>{0., 0.};
     };
     pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
 
@@ -247,7 +250,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
-    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+    //FIXME: here
+    // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -267,7 +271,20 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+     //FIXME: here
+    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, 5, "FORCE") == 0) {
+        Range my_edges;
+        std::vector<double> force_vec;
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   my_edges, true);
+        it->getAttributes(force_vec);
+        pipeline.push_back(new OpEdgeForceRhs("U", my_edges, force_vec));
+      }
+    }
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -280,7 +297,7 @@ MoFEMErrorCode Example::OPs() {
   add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  auto integration_rule = [](int, int, int approx_order) { return 2 * order; };
+  auto integration_rule = [](int, int, int approx_order) { return 2 * order + 1; };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
