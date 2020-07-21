@@ -34,7 +34,7 @@ constexpr int order = 4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
-constexpr double spring_stiffness = 1e-6;
+constexpr double spring_stiffness = 0;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
