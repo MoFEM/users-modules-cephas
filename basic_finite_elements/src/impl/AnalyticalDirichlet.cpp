@@ -217,7 +217,7 @@ MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize(Range &tris) {
     auto dit = dofs.get<Unique_mi_tag>().lower_bound(
         DofEntity::getLoFieldEntityUId(bit_number, f));
     auto hi_dit = dofs.get<Unique_mi_tag>().upper_bound(
-        DofEntity::getLoFieldEntityUId(bit_number, s));
+        DofEntity::getHiFieldEntityUId(bit_number, s));
     for (; dit != hi_dit; ++dit) {
       if ((*dit)->getPart() == mField.get_comm_rank()) {
         mapZeroRows[(*dit)->getPetscGlobalDofIdx()] = (*dit)->getFieldData();
