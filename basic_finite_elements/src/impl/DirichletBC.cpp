@@ -638,7 +638,7 @@ MoFEMErrorCode DirichletFixFieldAtEntitiesBc::postProcess() {
                               dIag, PETSC_NULL, PETSC_NULL);
   } break;
   default:
-    SETERRQ(PETSC_COMM_SELF, 1, "unknown snes stage");
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "unknown snes stage");
   }
 
   MoFEMFunctionReturn(0);
