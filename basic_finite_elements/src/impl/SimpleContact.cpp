@@ -1772,6 +1772,8 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
                       std::abs(gap_ptr - cN * normal_traction)) *
           t_contact_normal(i);
 
+      // cerr << "t_rhs_constrains " << t_rhs_constrains << "\n";
+
       // t_rhs_constrains(i) =
       //     (-t_contact_normal(j) * t_x_master(j) - cN * normal_traction +
       //      std::abs(gap_ptr - cN * normal_traction)) *

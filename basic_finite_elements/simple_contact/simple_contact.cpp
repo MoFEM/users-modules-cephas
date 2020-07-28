@@ -267,6 +267,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
     } else {
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
       Range slave_tets;
       CHKERR moab.get_adjacencies(slave_tris, 3, false, slave_tets,
                                   moab::Interface::UNION);
