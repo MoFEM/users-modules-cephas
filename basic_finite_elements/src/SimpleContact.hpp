@@ -1327,6 +1327,45 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     };
 
+    struct OpPassHdivToSlaveNormal
+        : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+      double cN;
+      OpPassHdivToSlaveNormal(
+          const string field_name,
+          boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+          double cn_value)
+          : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                field_name, UserDataOperator::OPCOL,
+                ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                    FACESLAVE),
+            commonDataSimpleContact(common_data_contact), cN(cn_value) {}
+
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            DataForcesAndSourcesCore::EntData &data);
+
+    private:
+      boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    };
+
+    struct OpPassHdivToSlaveVariationX
+        : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+      OpPassHdivToSlaveVariationX(
+          const string field_name,
+          boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+          : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                field_name, UserDataOperator::OPCOL,
+                ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                    FACESLAVE),
+            commonDataSimpleContact(common_data_contact) {}
+
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            DataForcesAndSourcesCore::EntData &data);
+
+    private:
+      boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    };
+
     struct OpInternalDomainContactRhs
         : public VolumeElementForcesAndSourcesCore::UserDataOperator {
       OpInternalDomainContactRhs(
