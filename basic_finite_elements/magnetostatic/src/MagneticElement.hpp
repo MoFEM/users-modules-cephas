@@ -363,7 +363,7 @@ struct MagneticElement {
       auto &dofs = problem_ptr->numeredDofsRows;
       auto dit = dofs->get<Unique_mi_tag>().lower_bound(
           DofEntity::getLoFieldEntityUId(block_bit_number, f));
-      auto hi_dit = dofs->get<Unique_mi_tag>().lower_bound(
+      auto hi_dit = dofs->get<Unique_mi_tag>().upper_bound(
           DofEntity::getHiFieldEntityUId(block_bit_number, s));
       for (; dit != hi_dit; ++dit) {
         if ((*dit)->getPart() == mField.get_comm_rank()) {
