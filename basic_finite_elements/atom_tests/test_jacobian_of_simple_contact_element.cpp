@@ -478,22 +478,22 @@ int main(int argc, char *argv[]) {
       Range nodes;
       CHKERR moab.get_connectivity(all_tets, nodes, false);
 
-      // CHKERR DMMoFEMSNESSetFunction(
-      //     dm, "ALE_CONTACT_ELEM",
-      //     get_contact_material_rhs(contact_problem, make_contact_element,
-      //                              nodes),
-      //     PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "ALE_CONTACT_ELEM",
+          get_contact_material_rhs(contact_problem, make_contact_element,
+                                   nodes),
+          PETSC_NULL, PETSC_NULL);
 
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "ALE_CONTACT_ELEM",
           get_simple_contact_ale_lhs(contact_problem, make_contact_element),
           NULL, NULL);
 
-      // CHKERR DMMoFEMSNESSetJacobian(
-      //     dm, "ALE_CONTACT_ELEM",
-      //     get_simple_contact_ale_material_lhs(contact_problem,
-      //                                         make_contact_element, nodes),
-      //     NULL, NULL);
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "ALE_CONTACT_ELEM",
+          get_simple_contact_ale_material_lhs(contact_problem,
+                                              make_contact_element, nodes),
+          NULL, NULL);
     }
 
     if (test_jacobian == PETSC_TRUE) {
