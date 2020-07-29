@@ -908,14 +908,16 @@ struct SimpleContactProblem {
      * {\delta
      * W^{(2)}_{\text c}(\lambda,
      * \delta \mathbf{x}^{(2)}}) \,\,  =
-     * \int_{{\gamma}^{(1)}_{\text c}} \lambda
+     * - \int_{{\gamma}^{(1)}_{\text c}} \lambda \mathbf{n}(\mathbf{x}^{(1)}) \cdot
      * \delta{\mathbf{x}^{(2)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
+     *
      * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
      * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
-     * \f$\mathbf{x}^{(2)}\f$ are the coordinates of the overlapping gauss
-     * points at master triangles.
+     * \f$\mathbf{n}(\mathbf{x}^{(1)})\f$ is the outward normal vector at the
+     * slave triangle gauss points, \f$\mathbf{x}^{(2)}\f$ are the coordinates of
+     * the overlapping gauss points at master triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
@@ -950,15 +952,16 @@ struct SimpleContactProblem {
      * \f[
      * {\delta
      * W^{(1)}_{\text c}(\lambda,
-     * \delta \mathbf{x}^{(1)}}) \,\,  = -
-     * \int_{{\gamma}^{(1)}_{\text c}} \lambda
-     * \delta{\mathbf{x}^{(1)}}
+     * \delta \mathbf{x}^{(1)}}) \,\,  =
+     * \int_{{\gamma}^{(1)}_{\text c}} \lambda \mathbf{n}(\mathbf{x}^{(1)})
+     * \cdot \delta{\mathbf{x}^{(1)}}
      * \,\,{ {\text d} {\gamma}}
      * \f]
      * where \f${\gamma}^{(1)}_{\text c}\f$ is the surface integration domain
-     * of the slave surface, \f$ \lambda\f$ is the Lagrange multiplier,
-     * \f$\mathbf{x}^{(1)}\f$ are the coordinates of the overlapping gauss
-     * points at slave triangles.
+     * of the slave surface, \f$\mathbf{n}(\mathbf{x}^{(1)})\f$ is the outward
+     * normal vector at the slave triangle gauss points, \f$ \lambda\f$ is the
+     * Lagrange multiplier, \f$\mathbf{x}^{(1)}\f$ are the coordinates of the
+     * overlapping gauss points at slave triangles.
      */
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
