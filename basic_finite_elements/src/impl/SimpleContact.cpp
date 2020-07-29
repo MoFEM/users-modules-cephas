@@ -2060,7 +2060,7 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
 
   Tag th_lag_mult;
   if (lagFieldSet)
-    CHKERR moabOut.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
+    CHKERR moabOut.tag_get_handle("LAGMULT", 1, MB_TYPE_DOUBLE,
                                   th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
                                   &def_vals);
 

@@ -30,7 +30,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 bfe_build_and_install(simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
 
-bfe_copy_and_install("README" "${permissions_default}")
+bfe_copy_and_install("README.md" "${permissions_default}")
 
 file(
   COPY examples DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
