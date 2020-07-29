@@ -244,8 +244,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
                                MB_TAG_SPARSE, MF_ZERO);
     } else {
-      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3,
-                               MB_TAG_SPARSE, MF_ZERO);
+      // CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3,
+      //                          MB_TAG_SPARSE, MF_ZERO);
     }
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
@@ -260,6 +260,9 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
+
+    auto contact_problem = boost::make_shared<SimpleContactProblem>(
+        m_field, cn_value, is_newton_cotes);
 
     Range slave_tets;
     if (!is_hdiv_trace) {
@@ -282,9 +285,9 @@ int main(int argc, char *argv[]) {
       CHKERR moab.get_adjacencies(slave_tets, 2, true, full_slave_tets_tris,
                                   moab::Interface::UNION);
 
-      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
+      // CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
+      // CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
+      // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
       // CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", 0);
       // CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 0);
 
@@ -300,16 +303,29 @@ int main(int argc, char *argv[]) {
       Range tris_not_needed;
       CHKERR moab.get_adjacencies(slave_tets, 2, false, tris_not_needed,
                                   moab::Interface::UNION);
-      CHKERR m_field.add_ents_to_field_by_type(tris_not_needed, MBTRI,
-                                               "LAGMULT");
+      // CHKERR m_field.add_ents_to_field_by_type(tris_not_needed, MBTRI,
+      //                                          "LAGMULT");
       tris_not_needed = subtract(tris_not_needed, slave_tris);
-      CHKERR m_field.set_field_order(tris_not_needed, "LAGMULT", 0);
+      // CHKERR m_field.set_field_order(tris_not_needed, "LAGMULT", 0);
       cerr << "SIZE!!     " << slave_tris.size() << "\n";
       cerr << "TETS!!     " << slave_tets.size() << "\n";
       cerr << "contact prisms " << contact_prisms.size() << "\n";
       cerr << "PRISMS CHECK " << prisms_check.size() << "\n";
-      CHKERR m_field.set_field_order(slave_tris, "LAGMULT",
-      order_lambda);
+      // CHKERR m_field.set_field_order(slave_tris, "LAGMULT",
+      // order_lambda);
+
+      CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3,
+                               MB_TAG_SPARSE, MF_ZERO);
+
+      // CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
+      // CHKERR m_field.set_field_order(slave_tets, "LAGMULT", 0);
+      // CHKERR m_field.add_ents_to_field_by_type(tris_not_needed, MBTRI,
+      //                                          "LAGMULT");
+      // CHKERR m_field.set_field_order(tris_not_needed, "LAGMULT", 0);
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
+
+      CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
 
       // Range slave_edges, master_edges;
 
@@ -351,6 +367,10 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_ents_to_finite_element_by_type(slave_tets, MBTET,
                                                         "HDIVMATERIAL");
       CHKERR m_field.build_finite_elements("HDIVMATERIAL", &slave_tets);
+
+      // add fields to the global matrix by adding the element
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms);
     }
 
       // build field
@@ -501,12 +521,7 @@ int main(int argc, char *argv[]) {
         return fe_lhs_simple_contact;
       };
 
-      auto contact_problem = boost::make_shared<SimpleContactProblem>(
-          m_field, cn_value, is_newton_cotes);
-
-      // add fields to the global matrix by adding the element
-      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                         "LAGMULT", contact_prisms);
+      
 
       CHKERR MetaNeumannForces::addNeumannBCElements(m_field,
                                                      "SPATIAL_POSITION");
@@ -635,10 +650,10 @@ int main(int argc, char *argv[]) {
               get_master_traction_rhs(contact_problem, make_contact_element),
               PETSC_NULL, PETSC_NULL);
         }else {
-          // CHKERR DMMoFEMSNESSetFunction(
-          //     dm, "CONTACT_ELEM",
-          //     get_hdiv_surface_rhs(contact_problem, make_contact_element),
-          //     PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "CONTACT_ELEM",
+              get_hdiv_surface_rhs(contact_problem, make_contact_element),
+              PETSC_NULL, PETSC_NULL);
           CHKERR DMMoFEMSNESSetFunction(
               dm, "HDIVMATERIAL",
               get_hdiv_volume_rhs(contact_problem, make_volume_hdiv_element),
@@ -677,11 +692,11 @@ int main(int argc, char *argv[]) {
               get_master_traction_lhs(contact_problem, make_contact_element),
               NULL, NULL);
         } else {
-          // CHKERR DMMoFEMSNESSetJacobian(
-          //     dm, "CONTACT_ELEM",
-          //     get_hdiv_surface_contact_lhs(contact_problem,
-          //                                  make_contact_element),
-          //     NULL, NULL);
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "CONTACT_ELEM",
+              get_hdiv_surface_contact_lhs(contact_problem,
+                                           make_contact_element),
+              NULL, NULL);
            CHKERR DMMoFEMSNESSetJacobian(
                dm, "HDIVMATERIAL",
                get_hdiv_volume_contact_lhs(contact_problem,

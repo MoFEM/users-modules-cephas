@@ -1508,8 +1508,8 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainDomainRhs::doWork(
     std::fill(&nf[0], &nf[nb_dofs], 0);
     const size_t nb_base_functions = data.getN().size2() / 3;
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_base = data.getFTensor1N<3>();
-    auto t_diff_base = data.getFTensor2DiffN<3, 3>();
+    // auto t_base = data.getFTensor1N<3>();
+    // auto t_diff_base = data.getFTensor2DiffN<3, 3>();
     auto t_lambdas = getFTensor2FromMat<3, 3>(
         *(commonDataSimpleContact->lagMatMultAtGaussPtsPtr));
     auto t_x = getFTensor1FromMat<3>(*(commonDataSimpleContact->xAtPts));
@@ -1523,21 +1523,24 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainDomainRhs::doWork(
       t_grad(0, 0) -= 1;
       t_grad(1, 1) -= 1;
       t_grad(2, 2) -= 1;
+      auto t_diff_base = data.getFTensor2DiffN<3,3>(gg, 0);
+      auto t_base = data.getFTensor1N<3>(gg, 0);
+
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         const double t_div_base =
             t_diff_base(0, 0) + t_diff_base(1, 1) + t_diff_base(2, 2);
-        t_nf(i) += alpha * (t_base(j) * t_grad(i, j));
+        t_nf(i) -= alpha * (t_base(j) * t_grad(i, j));
         // t_nf(i) += alpha * (t_base(i) * t_grad(i, j));
-        t_nf(i) += alpha * t_div_base * (t_x(i) - t_X(i));
+        t_nf(i) -= alpha * t_div_base * (t_x(i) - t_X(i));
         ++t_nf;
         ++t_base;
         ++t_diff_base;
       }
-      for (; bb < nb_base_functions; ++bb) {
-        ++t_base;
-        ++t_diff_base;
-      }
+      // for (; bb < nb_base_functions; ++bb) {
+      //   ++t_base;
+      //   ++t_diff_base;
+      // }
       ++t_lambdas;
       ++t_x;
       ++t_X;
@@ -1561,8 +1564,8 @@ MoFEMErrorCode SimpleContactProblem::OpInternalDomainContactRhs::doWork(
     std::fill(&nf[0], &nf[nb_dofs], 0);
     const size_t nb_base_functions = data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_base = data.getFTensor0N();
-    auto t_diff_base = data.getFTensor1DiffN<3>();
+    // auto t_base = data.getFTensor0N();
+    // auto t_diff_base = data.getFTensor1DiffN<3>();
     auto t_lambdas = getFTensor2FromMat<3, 3>(
         *(commonDataSimpleContact->lagMatMultAtGaussPtsPtr));
     auto t_div_stress = getFTensor1FromMat<3>(
@@ -1571,19 +1574,23 @@ MoFEMErrorCode SimpleContactProblem::OpInternalDomainContactRhs::doWork(
       const double alpha = getVolume() * t_w;
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf{&nf[0], &nf[1],
                                                               &nf[2]};
+
+      auto t_diff_base = data.getFTensor1DiffN<3>(gg, 0);
+      auto t_base = data.getFTensor0N(gg, 0);
+
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
-        t_nf(i) += alpha * t_base * t_div_stress(i);
-        t_nf(i) += alpha * t_diff_base(j) * t_lambdas(i, j);
+        t_nf(i) -= alpha * t_base * t_div_stress(i);
+        t_nf(i) -= alpha * t_diff_base(j) * t_lambdas(i, j);
         ++t_nf;
         ++t_base;
         ++t_diff_base;
       }
 
-      for (; bb < nb_base_functions; ++bb) {
-        ++t_base;
-        ++t_diff_base;
-      }
+      // for (; bb < nb_base_functions; ++bb) {
+      //   ++t_base;
+      //   ++t_diff_base;
+      // }
 
       ++t_div_stress;
       ++t_lambdas;
@@ -1852,17 +1859,16 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
         //////////
         // t_nf(i) += beta * t_rhs_constrains(i);
 
-        // t_nf(i) -= beta * tangent_1_disp(i);
-        // t_nf(i) -= beta * tangent_2_disp(i);
+        t_nf(i) += beta * tangent_1_disp(i);
+        t_nf(i) += beta * tangent_2_disp(i);
 
-        // t_nf(i) -= beta * tangent_1_disp_master(i);
-        // t_nf(i) -= beta * tangent_2_disp_master(i);
+        // t_nf(i) += beta * tangent_1_disp_master(i);
+        // t_nf(i) += beta * tangent_2_disp_master(i);
 
-        // t_nf(i) += cN * beta * tangent_1_traction(i);
-        // t_nf(i) += cN * beta * tangent_2_traction(i);
+        t_nf(i) += cN * beta * tangent_1_traction(i);
+        t_nf(i) += cN * beta * tangent_2_traction(i);
         //////////
-        t_nf(i) -= beta * (t_x_master(i) - t_X_master(i));
-
+        
         // This is for tangent 28/05
         // t_nf(i) += alpha * cN *
         //            (t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
@@ -2063,9 +2069,9 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToMasterNormal::doWork(
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         ///////
-        // t_nf(i) -= alpha * t_base * t_normal(i) * t_traction(j) * t_normal(j);
+        t_nf(i) -= alpha * t_base * t_normal(i) * t_traction(j) * t_normal(j);
         ///////
-        t_nf(i) -= alpha * t_base  * t_traction(i) ;
+        // t_nf(i) -= alpha * t_base  * t_traction(i) ;
         // t_normal(j); t_nf(i) -= alpha * t_base * t_tangent_1_at_gp(i) *
         // t_traction(j) * t_tangent_1_at_gp(j); t_nf(i) -= alpha * t_base *
         // t_tangent_2_at_gp(i) * t_traction(j) * t_tangent_2_at_gp(j);
@@ -2186,23 +2192,27 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainDomainLhs_dU::doWork(
     locMat.resize(row_nb_dofs, col_nb_dofs, false);
     locMat.clear();
     transLocMat.resize(col_nb_dofs, row_nb_dofs, false);
-
+    
     size_t nb_base_functions = row_data.getN().size2() / 3;
-    auto t_row_base = row_data.getFTensor1N<3>();
-    auto t_row_diff_base = row_data.getFTensor2DiffN<3, 3>();
+    // auto t_row_base = row_data.getFTensor1N<3>();
+    // auto t_row_diff_base = row_data.getFTensor2DiffN<3, 3>();
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       const double alpha = getVolume() * t_w;
+
+      auto t_row_base = row_data.getFTensor1N<3>(gg, 0);
+      auto t_row_diff_base = row_data.getFTensor2DiffN<3, 3>(gg, 0);
+
       size_t rr = 0;
       for (; rr != row_nb_dofs / 3; ++rr) {
         FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_mat_diag{
             &locMat(3 * rr + 0, 0), &locMat(3 * rr + 1, 1),
             &locMat(3 * rr + 2, 2)};
-        FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3> t_mat{
-            &locMat(3 * rr + 0, 0), &locMat(3 * rr + 0, 1),
-            &locMat(3 * rr + 0, 2), &locMat(3 * rr + 1, 0),
-            &locMat(3 * rr + 1, 1), &locMat(3 * rr + 1, 2),
-            &locMat(3 * rr + 2, 0), &locMat(3 * rr + 2, 1),
-            &locMat(3 * rr + 2, 2)};
+        // FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3> t_mat{
+        //     &locMat(3 * rr + 0, 0), &locMat(3 * rr + 0, 1),
+        //     &locMat(3 * rr + 0, 2), &locMat(3 * rr + 1, 0),
+        //     &locMat(3 * rr + 1, 1), &locMat(3 * rr + 1, 2),
+        //     &locMat(3 * rr + 2, 0), &locMat(3 * rr + 2, 1),
+        //     &locMat(3 * rr + 2, 2)};
 
         const double t_row_div_base = t_row_diff_base(0, 0) +
                                       t_row_diff_base(1, 1) +
@@ -2210,20 +2220,20 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainDomainLhs_dU::doWork(
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
         for (size_t cc = 0; cc != col_nb_dofs / 3; ++cc) {
-          t_mat_diag(i) += alpha * t_row_base(j) * t_col_diff_base(j);
-          t_mat_diag(i) += alpha * t_row_div_base * t_col_base;
+          t_mat_diag(i) -= alpha * t_row_base(j) * t_col_diff_base(j);
+          t_mat_diag(i) -= alpha * t_row_div_base * t_col_base;
           ++t_col_base;
           ++t_col_diff_base;
           ++t_mat_diag;
-          ++t_mat;
+          // ++t_mat;
         }
         ++t_row_diff_base;
         ++t_row_base;
       }
-      for (; rr < nb_base_functions; ++rr) {
-        ++t_row_diff_base;
-        ++t_row_base;
-      }
+      // for (; rr < nb_base_functions; ++rr) {
+      //   ++t_row_diff_base;
+      //   ++t_row_base;
+      // }
       ++t_w;
     }
     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
@@ -2333,10 +2343,10 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_dlambda_Master::doWork(
         for (; cc != col_nb_dofs / 3; ++cc) {
           const double col_base = t_col_base(i) * t_contact_normal(i);
           const double beta = alpha * col_base * t_row_base;
-          // t_mat(i, j) -= beta * t_contact_normal_tensor(i, j);
-          t_mat(0, 0) -= beta;
-          t_mat(1, 1) -= beta;
-          t_mat(2, 2) -= beta;
+          t_mat(i, j) += beta * t_contact_normal_tensor(i, j);
+          // t_mat(0, 0) -= beta;
+          // t_mat(1, 1) -= beta;
+          // t_mat(2, 2) -= beta;
 
           // t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
           // t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
@@ -2466,21 +2476,21 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_Slave_tied::doWork(
           const double beta_t_1 = alpha * row_base_n * t_col_base;
           const double beta_t_2 = alpha * row_base_n * t_col_base;
 
-          t_mat(0, 0) -= beta_n;
+          // t_mat(0, 0) -= beta_n;
 
-          t_mat(1, 1) -= beta_n;
+          // t_mat(1, 1) -= beta_n;
 
-          t_mat(2, 2) -= beta_n;
+          // t_mat(2, 2) -= beta_n;
 
-          // t_mat(i, j) -=
-          //     beta_t_1 * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
-          // t_mat(i, j) -=
-          //     beta_t_2 * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          t_mat(i, j) -=
+              beta_t_1 * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          t_mat(i, j) -=
+              beta_t_2 * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           // //  t_mat(i, j) += beta * t_contact_tangent_tensor(i, j);
 
-          // t_mat(i, j) += beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
-          // t_mat(i, j) += beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          // t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          // t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           ++t_col_base;
           ++t_mat;
@@ -2603,9 +2613,12 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryLhs_dxdTraction::doWork(
         for (size_t cc = 0; cc != col_nb_dofs / 3; ++cc) {
           const double col_base = t_col_base(i) * t_normal(i);
           const double beta = alpha * row_base * col_base;
+        //do not forget
+          // t_mat(i, j) +=
+          //     (beta * diff_constrain_d_lambda) * t_contact_normal_tensor(i, j);
 
-          t_mat(i, j) +=
-              (beta * diff_constrain_d_lambda) * t_contact_normal_tensor(i, j);
+
+
 
           //  t_mat(i, j) += 2 * beta * cN * t_contact_tangent_tensor(i, j);
 
@@ -2743,13 +2756,14 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryLhs_dU_Slave::doWork(
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != col_nb_dofs / 3; ++cc) {
           const double beta = alpha * row_base * t_col_base;
-          t_mat(i, j) +=
-              (beta * diff_constrain_d_slave) * t_contact_normal_tensor(i, j);
+          //here
+          // t_mat(i, j) +=
+          //     (beta * diff_constrain_d_slave) * t_contact_normal_tensor(i, j);
 
           //  t_mat(i, j) += beta * t_contact_tangent_tensor(i, j);
 
-          t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
-          t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          t_mat(i, j) += beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          t_mat(i, j) += beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           ++t_col_base;
           ++t_mat;
@@ -2878,15 +2892,15 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryLhs_dU_Master::doWork(
           // t_mat(i, j) +=
           //     (beta * diff_constrain_d_master) * t_contact_normal_tensor(i, j);
           ///
-          // t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
-          // t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          t_mat(i, j) += beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          t_mat(i, j) += beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           // t_mat(i, j) += beta  *
           //                t_contact_normal_tensor(i, j);
 
-          t_mat(0, 0) -= beta;
-          t_mat(1, 1) -= beta;
-          t_mat(2, 2) -= beta;
+          // t_mat(0, 0) -= beta;
+          // t_mat(1, 1) -= beta;
+          // t_mat(2, 2) -= beta;
 
           // t_mat_trans(i, j) -= beta * t_contact_normal_tensor(i, j);
 
@@ -3268,8 +3282,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsOperatorsHdiv3DSurfac
   //                                  common_data_simple_contact, cnValue));
   //====
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpPassHdivToMasterNormal(field_name, common_data_simple_contact));
+  // fe_rhs_simple_contact->getOpPtrVector().push_back(
+  //     new OpPassHdivToMasterNormal(field_name, common_data_simple_contact));
 
   // fe_rhs_simple_contact->getOpPtrVector().push_back(
   //     new OpPassHdivToMasterVariationX(lagrang_field_name,
@@ -3361,27 +3375,29 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsOperatorsHdiv3DSurfac
     //           common_data_simple_contact, cnValue));
 
 ////
-      // fe_lhs_simple_contact->getOpPtrVector().push_back(
-      //     new OpConstrainBoundaryLhs_dxdTraction(
-      //         lagrange_field_name, lagrange_field_name,
-      //         common_data_simple_contact, cnValue));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpConstrainBoundaryLhs_dxdTraction(
+              lagrange_field_name, lagrange_field_name,
+              common_data_simple_contact, cnValue));
 
-      // fe_lhs_simple_contact->getOpPtrVector().push_back(
-      //     new OpConstrainBoundaryLhs_dU_Slave(lagrange_field_name,
-      //     field_name,
-      //                                         common_data_simple_contact,
-      //                                         cnValue));
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpConstrainBoundaryLhs_dU_Slave(lagrange_field_name,
+          field_name,
+                                              common_data_simple_contact,
+                                              cnValue));
     ////
 
-    fe_lhs_simple_contact->getOpPtrVector().push_back(
-        new OpConstrainBoundaryLhs_dU_Master(lagrange_field_name, field_name,
-                                             common_data_simple_contact,
-                                             cnValue));
+    // fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //     new OpConstrainBoundaryLhs_dU_Master(lagrange_field_name, field_name,
+    //                                          common_data_simple_contact,
+    //                                          cnValue));
 
-    fe_lhs_simple_contact->getOpPtrVector().push_back(
-        new OpConstrainBoundaryLhs_dU_dlambda_Master(
-            field_name, lagrange_field_name, common_data_simple_contact,
-            cnValue));
+    // fe_lhs_simple_contact->getOpPtrVector().push_back(
+    //     new OpConstrainBoundaryLhs_dU_dlambda_Master(
+    //         field_name, lagrange_field_name, common_data_simple_contact,
+    //         cnValue));
+
+    ///until here
 
     //       fe_lhs_simple_contact->getOpPtrVector().push_back(
     //   new OpConstrainBoundaryLhs_dU_dlambda_Slave(
