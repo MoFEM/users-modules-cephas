@@ -39,7 +39,6 @@ int main(int argc, char *argv[]) {
     PetscBool flg_file;
     char mesh_file_name[255];
     PetscInt order = 1;
-    PetscInt order_material = 1;
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = 1.;
@@ -60,9 +59,6 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-my_order",
                            "approximation order for spatial positions", "", 1,
                            &order, PETSC_NULL);
-    CHKERR PetscOptionsInt("-my_order_material",
-                           "approximation order for material positions", "", 1,
-                           &order_material, PETSC_NULL);
     CHKERR PetscOptionsInt(
         "-my_order_lambda",
         "default approximation order of Lagrange multipliers", "", 1,
@@ -192,12 +188,9 @@ int main(int argc, char *argv[]) {
                              3, MB_TAG_SPARSE, MF_ZERO);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
-    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS",
-                                   order_material);
-    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS",
-                                   order_material);
-    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS",
-                                   order_material);
+    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
     // build field
