@@ -261,26 +261,42 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
 
+    Range slave_tets;
     if (!is_hdiv_trace) {
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
       CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
     } else {
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
-      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-      Range slave_tets;
+      // Range slave_tets;
+      slave_tets.clear();
       CHKERR moab.get_adjacencies(slave_tris, 3, false, slave_tets,
                                   moab::Interface::UNION);
-
       slave_tets = slave_tets.subset_by_type(MBTET);
+      Range prisms_check;
+      CHKERR moab.get_adjacencies(slave_tris, 3, false, prisms_check,
+                                  moab::Interface::UNION);
+      prisms_check = prisms_check.subset_by_type(MBPRISM);
 
       Range full_slave_tets_tris;
-      CHKERR moab.get_adjacencies(slave_tets, 2, false, full_slave_tets_tris,
+      CHKERR moab.get_adjacencies(slave_tets, 2, true, full_slave_tets_tris,
                                   moab::Interface::UNION);
 
-      CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
-      CHKERR m_field.set_field_order(slave_tets, "LAGMULT", 0);
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
+      CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
+      CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
+      // CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", 0);
+      // CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 0);
+
+      // CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
+      // CHKERR m_field.add_ents_to_field_by_type(full_slave_tets_tris, MBTRI,
+      //                                          "LAGMULT");
+      // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
+
+      // CHKERR m_field.set_field_order(slave_tets, "LAGMULT", 0);
+      // CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
+      // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
+
       Range tris_not_needed;
       CHKERR moab.get_adjacencies(slave_tets, 2, false, tris_not_needed,
                                   moab::Interface::UNION);
@@ -288,15 +304,19 @@ int main(int argc, char *argv[]) {
                                                "LAGMULT");
       tris_not_needed = subtract(tris_not_needed, slave_tris);
       CHKERR m_field.set_field_order(tris_not_needed, "LAGMULT", 0);
-      cerr << "SIZE!!     " << tris_not_needed.size() << "\n";
-      CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
+      cerr << "SIZE!!     " << slave_tris.size() << "\n";
+      cerr << "TETS!!     " << slave_tets.size() << "\n";
+      cerr << "contact prisms " << contact_prisms.size() << "\n";
+      cerr << "PRISMS CHECK " << prisms_check.size() << "\n";
+      CHKERR m_field.set_field_order(slave_tris, "LAGMULT",
+      order_lambda);
 
-      Range slave_edges, master_edges;
+      // Range slave_edges, master_edges;
 
-      CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
-                                  moab::Interface::UNION);
-      CHKERR moab.get_adjacencies(master_tris, 1, false, master_edges,
-                                  moab::Interface::UNION);
+      // CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
+      //                             moab::Interface::UNION);
+      // CHKERR moab.get_adjacencies(master_tris, 1, false, master_edges,
+      //                             moab::Interface::UNION);
 
       // CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION",
       //                                order+2);
@@ -615,10 +635,10 @@ int main(int argc, char *argv[]) {
               get_master_traction_rhs(contact_problem, make_contact_element),
               PETSC_NULL, PETSC_NULL);
         }else {
-          CHKERR DMMoFEMSNESSetFunction(
-              dm, "CONTACT_ELEM",
-              get_hdiv_surface_rhs(contact_problem, make_contact_element),
-              PETSC_NULL, PETSC_NULL);
+          // CHKERR DMMoFEMSNESSetFunction(
+          //     dm, "CONTACT_ELEM",
+          //     get_hdiv_surface_rhs(contact_problem, make_contact_element),
+          //     PETSC_NULL, PETSC_NULL);
           CHKERR DMMoFEMSNESSetFunction(
               dm, "HDIVMATERIAL",
               get_hdiv_volume_rhs(contact_problem, make_volume_hdiv_element),
@@ -657,16 +677,16 @@ int main(int argc, char *argv[]) {
               get_master_traction_lhs(contact_problem, make_contact_element),
               NULL, NULL);
         } else {
-          CHKERR DMMoFEMSNESSetJacobian(
-              dm, "CONTACT_ELEM",
-              get_hdiv_surface_contact_lhs(contact_problem,
-                                           make_contact_element),
-              NULL, NULL);
-          CHKERR DMMoFEMSNESSetJacobian(
-              dm, "HDIVMATERIAL",
-              get_hdiv_volume_contact_lhs(contact_problem,
-                                          make_volume_hdiv_element),
-              NULL, NULL);
+          // CHKERR DMMoFEMSNESSetJacobian(
+          //     dm, "CONTACT_ELEM",
+          //     get_hdiv_surface_contact_lhs(contact_problem,
+          //                                  make_contact_element),
+          //     NULL, NULL);
+           CHKERR DMMoFEMSNESSetJacobian(
+               dm, "HDIVMATERIAL",
+               get_hdiv_volume_contact_lhs(contact_problem,
+                                           make_volume_hdiv_element),
+               PETSC_NULL, PETSC_NULL);
         }
         }
       CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
@@ -707,6 +727,10 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc.addFieldValuesPostProc("SPATIAL_POSITION");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
+      PostProcVolumeOnRefinedMesh post_proc_hdiv(m_field);
+      CHKERR post_proc_hdiv.generateReferenceElementMesh();
+      CHKERR post_proc_hdiv.addFieldValuesPostProc("LAGMULT");
+      // CHKERR post_proc_hdiv.addFieldValuesGradientPostProc("LAGMULT");
 
       std::map<int, NonlinearElasticElement::BlockData>::iterator sit =
           elastic.setOfBlocks.begin();
@@ -732,6 +756,7 @@ int main(int argc, char *argv[]) {
 
       PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      CHKERR DMoFEMLoopFiniteElements(dm, "HDIVMATERIAL", &post_proc_hdiv);
 
       elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
       elastic.getLoopFeEnergy().eNergy = 0;
@@ -752,6 +777,9 @@ int main(int argc, char *argv[]) {
 
       CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
                                                "PARALLEL=WRITE_PART");
+
+      // CHKERR post_proc_hdiv.postProcMesh.write_file(
+      //     out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
 
       // moab_instance
       moab::Core mb_post;                   // create database
@@ -844,20 +872,27 @@ int main(int argc, char *argv[]) {
 
         EntityHandle out_meshset_slave_tris;
         EntityHandle out_meshset_master_tris;
+        EntityHandle out_meshset_slave_tets;
 
         CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tris);
         CHKERR moab.create_meshset(MESHSET_SET, out_meshset_master_tris);
+        CHKERR moab.create_meshset(MESHSET_SET, out_meshset_slave_tets);
 
         CHKERR moab.add_entities(out_meshset_slave_tris, slave_tris);
         CHKERR moab.add_entities(out_meshset_master_tris, master_tris);
+        CHKERR moab.add_entities(out_meshset_slave_tets, slave_tets);
 
         CHKERR moab.write_file("out_slave_tris.vtk", "VTK", "",
                                &out_meshset_slave_tris, 1);
         CHKERR moab.write_file("out_master_tris.vtk", "VTK", "",
                                &out_meshset_master_tris, 1);
 
+        CHKERR moab.write_file("out_slave_tets.vtk", "VTK", "",
+                               &out_meshset_slave_tets, 1);
+
         CHKERR moab.delete_entities(&out_meshset_slave_tris, 1);
         CHKERR moab.delete_entities(&out_meshset_master_tris, 1);
+        CHKERR moab.delete_entities(&out_meshset_slave_tets, 1);
       }
   CATCH_ERRORS;
 
