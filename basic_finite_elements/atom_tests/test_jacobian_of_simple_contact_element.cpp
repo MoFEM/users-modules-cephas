@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
                            "approximation order for spatial positions", "", 1,
                            &order, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_order_material",
-                           "approximation order for spatial positions", "", 1,
+                           "approximation order for material positions", "", 1,
                            &order_material, PETSC_NULL);
     CHKERR PetscOptionsInt(
         "-my_order_lambda",
