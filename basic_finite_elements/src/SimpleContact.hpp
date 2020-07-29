@@ -85,8 +85,12 @@ struct SimpleContactProblem {
 
     MoFEMErrorCode preProcess() {
       MoFEMFunctionBegin;
-      if (snes_ctx == CTX_SNESSETFUNCTION && contactStateVec)
+      if (snes_ctx == CTX_SNESSETFUNCTION && contactStateVec) {
+        CHKERR VecAssemblyBegin(contactStateVec);
+        CHKERR VecAssemblyEnd(contactStateVec);
+
         CHKERR VecZeroEntries(contactStateVec);
+      }
       MoFEMFunctionReturn(0);
     }
 
@@ -332,9 +336,15 @@ struct SimpleContactProblem {
 
       setOfSimpleContactPrism[1].pRisms = range_slave_master_prisms;
 
-      // Adding range_slave_master_prisms to Element element_name
-      CHKERR mField.add_ents_to_finite_element_by_type(
-          range_slave_master_prisms, MBPRISM, element_name);
+      Range ents_to_add = range_slave_master_prisms;
+      Range current_ents_with_fe;
+      CHKERR mField.get_finite_element_entities_by_handle(element_name,
+                                                          current_ents_with_fe);
+      Range ents_to_remove;
+      ents_to_remove = subtract(current_ents_with_fe, ents_to_add);
+      CHKERR mField.remove_ents_from_finite_element(element_name, ents_to_remove);
+      CHKERR mField.add_ents_to_finite_element_by_type(ents_to_add, MBPRISM,
+                                                      element_name);
     }
 
     MoFEMFunctionReturn(0);
