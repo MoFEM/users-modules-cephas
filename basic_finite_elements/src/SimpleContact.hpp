@@ -974,6 +974,30 @@ struct SimpleContactProblem {
     MatrixDouble NN;
   };
 
+  struct OpConstrainBoundaryLhs_dU_dlambda_Slave
+      : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+    OpConstrainBoundaryLhs_dU_dlambda_Slave(
+        const std::string row_field_name, const std::string col_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+        double &dn_value)
+        : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+              row_field_name, col_field_name, UserDataOperator::OPROWCOL,
+              ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                  FACESLAVESLAVE),
+          commonDataSimpleContact(common_data_contact), cN(dn_value) {
+      sYmm = false;
+    }
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    MatrixDouble locMat;
+    double cN;
+  };
+
   /**
    * @brief Operator for the simple contact element
    *
@@ -1514,6 +1538,27 @@ struct SimpleContactProblem {
 
     struct OpConstrainBoundaryLhs_dU_Slave_tied : public ContactOp {
       OpConstrainBoundaryLhs_dU_Slave_tied(
+          const std::string row_field_name, const std::string col_field_name,
+          boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+          double &dn_value)
+          : ContactOp(row_field_name, col_field_name,
+                      UserDataOperator::OPROWCOL, ContactOp::FACESLAVESLAVE),
+            commonDataSimpleContact(common_data_contact), cN(dn_value) {
+        sYmm = false;
+      }
+      MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                            EntityType col_type,
+                            DataForcesAndSourcesCore::EntData &row_data,
+                            DataForcesAndSourcesCore::EntData &col_data);
+
+    private:
+      boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+      MatrixDouble locMat;
+      double cN;
+    };
+
+    struct OpConstrainBoundaryLhs_dU_Master_tied : public ContactOp {
+      OpConstrainBoundaryLhs_dU_Master_tied(
           const std::string row_field_name, const std::string col_field_name,
           boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
           double &dn_value)
