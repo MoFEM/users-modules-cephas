@@ -852,7 +852,7 @@ int main(int argc, char *argv[]) {
         expected_nb_gauss_pts = 144;
         break;
       case WAVE_2D:
-        expected_energy = 0.008538894;
+        expected_energy = 0.008537863;
         expected_contact_area = 0.125;
         expected_nb_gauss_pts = 384;
         break;

@@ -3119,7 +3119,7 @@ SimpleContactProblem::OpGetNormalMasterALE::doWork(int side, EntityType type,
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixSlaveSlave_dX::iNtegrate(
+SimpleContactProblem::OpContactTractionSlaveSlave_dX::iNtegrate(
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
@@ -3204,7 +3204,7 @@ SimpleContactProblem::OpContactConstraintMatrixSlaveSlave_dX::iNtegrate(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixMasterSlave_dX::iNtegrate(
+SimpleContactProblem::OpContactTractionMasterSlave_dX::iNtegrate(
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
@@ -3300,7 +3300,7 @@ SimpleContactProblem::OpContactConstraintMatrixMasterSlave_dX::iNtegrate(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpContactConstraintMatrixMasterMaster_dX::iNtegrate(
+SimpleContactProblem::OpContactTractionMasterMaster_dX::iNtegrate(
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
@@ -3401,7 +3401,7 @@ SimpleContactProblem::OpContactConstraintMatrixMasterMaster_dX::iNtegrate(
 }
 
 MoFEMErrorCode
-SimpleContactProblem::OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX::
+SimpleContactProblem::OpCalDerIntCompFunSlaveSlave_dX::
     iNtegrate(EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
@@ -4326,22 +4326,22 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
                                      common_data_simple_contact));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixSlaveSlave_dX(
+      new OpContactTractionSlaveSlave_dX(
           field_name, mesh_node_field_name, common_data_simple_contact,
           POSITION_RANK, POSITION_RANK));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixMasterSlave_dX(
+      new OpContactTractionMasterSlave_dX(
           field_name, mesh_node_field_name, common_data_simple_contact,
           POSITION_RANK, POSITION_RANK));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpContactConstraintMatrixMasterMaster_dX(
+      new OpContactTractionMasterMaster_dX(
           field_name, mesh_node_field_name, common_data_simple_contact,
           POSITION_RANK, POSITION_RANK));
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpDerivativeBarTildeCFunODisplacementsSlaveSlaveALE_dX(
+      new OpCalDerIntCompFunSlaveSlave_dX(
           lagrange_field_name, mesh_node_field_name, cnValuePtr,
           common_data_simple_contact, LAGRANGE_RANK, POSITION_RANK));
   MoFEMFunctionReturn(0);
