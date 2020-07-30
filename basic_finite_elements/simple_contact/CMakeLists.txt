@@ -257,7 +257,7 @@ add_test(
   test_simple_contact_wave_2d_alm
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact 
-  -my_test_num 10
+  -my_test_num 11
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/plane_strain_contact.cub
   -my_order 1
   -my_order_contact 2
