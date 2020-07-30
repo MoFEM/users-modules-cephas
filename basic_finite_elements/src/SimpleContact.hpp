@@ -3003,10 +3003,10 @@ struct SimpleContactProblem {
          * \eta)}||} -
          * \frac{{\mathbf N}^{(1)}(\xi,
          * \eta)}{{\left(||{{\mathbf N}^{(1)}(\xi,
-         * \eta)}|| \right)}^{3}}\frac{\partial{\mathbf N}^{(1)}(\xi,
-         * \eta)}{\partial {\mathbf{X}}^{(1)}} \cdot {{\mathbf N}^{(1)}(\xi,
+         * \eta)}|| \right)}^{3}}
+         * \textrm{D}\mathbf{N}^{(1)}(\mathbf{X}^{(1)})[\Delta\mathbf{X}^{(1)}]
+         * \cdot {{\mathbf N}^{(1)}(\xi,
          * \eta)}
-         *
          * \right] \cdot \delta{\mathbf{x}}^{(1)}
          *
          * {||{{\mathbf N}^{(2)}(\xi, \eta)}||}
