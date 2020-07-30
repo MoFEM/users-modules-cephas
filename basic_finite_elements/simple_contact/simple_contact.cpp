@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
     SMILING_FACE = 8,
     SMILING_FACE_CONVECT = 9,
     WAVE_2D = 10,
+    WAVE_2D_ALM = 11,
     LAST_TEST
   };
 
@@ -853,6 +854,11 @@ int main(int argc, char *argv[]) {
         break;
       case WAVE_2D:
         expected_energy = 0.008537863;
+        expected_contact_area = 0.125;
+        expected_nb_gauss_pts = 384;
+        break;
+      case WAVE_2D_ALM:
+        expected_energy = 0.008538894;
         expected_contact_area = 0.125;
         expected_nb_gauss_pts = 384;
         break;
