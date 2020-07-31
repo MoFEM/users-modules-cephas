@@ -53,11 +53,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     vAluesPtr = &data.getFieldData();
   }
 
-<<<<<<< HEAD
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
-=======
   auto dof_ptr = data.getFieldDofs()[0];
->>>>>>> e7e8f90d63840a76f337c37009daf7749059eff3
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank;
@@ -232,11 +228,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     vAluesPtr = &data.getFieldData();
   }
 
-<<<<<<< HEAD
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
-=======
   auto dof_ptr = data.getFieldDofs()[0];
->>>>>>> e7e8f90d63840a76f337c37009daf7749059eff3
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank * 3;
@@ -834,11 +826,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
-<<<<<<< HEAD
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
-=======
   auto dof_ptr = data.getFieldDofs()[0];
->>>>>>> e7e8f90d63840a76f337c37009daf7749059eff3
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank * 3;
