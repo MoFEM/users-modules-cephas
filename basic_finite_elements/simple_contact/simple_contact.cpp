@@ -654,10 +654,10 @@ int main(int argc, char *argv[]) {
               dm, "CONTACT_ELEM",
               get_hdiv_surface_rhs(contact_problem, make_contact_element),
               PETSC_NULL, PETSC_NULL);
-          // CHKERR DMMoFEMSNESSetFunction(
-          //     dm, "HDIVMATERIAL",
-          //     get_hdiv_volume_rhs(contact_problem, make_volume_hdiv_element),
-          //     PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetFunction(
+              dm, "HDIVMATERIAL",
+              get_hdiv_volume_rhs(contact_problem, make_volume_hdiv_element),
+              PETSC_NULL, PETSC_NULL);
         }
         }
       CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
@@ -697,11 +697,11 @@ int main(int argc, char *argv[]) {
               get_hdiv_surface_contact_lhs(contact_problem,
                                            make_contact_element),
               NULL, NULL);
-          //  CHKERR DMMoFEMSNESSetJacobian(
-          //      dm, "HDIVMATERIAL",
-          //      get_hdiv_volume_contact_lhs(contact_problem,
-          //                                  make_volume_hdiv_element),
-          //      PETSC_NULL, PETSC_NULL);
+           CHKERR DMMoFEMSNESSetJacobian(
+               dm, "HDIVMATERIAL",
+               get_hdiv_volume_contact_lhs(contact_problem,
+                                           make_volume_hdiv_element),
+               PETSC_NULL, PETSC_NULL);
         }
         }
       CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
