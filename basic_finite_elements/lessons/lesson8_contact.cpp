@@ -34,7 +34,7 @@ constexpr int order = 3;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
-constexpr double spring_stiffness = 0;
+constexpr double spring_stiffness = 1e-6;
 
 boost::shared_ptr<EdgeElementForcesAndSourcesCore> debug_post_proc;
 moab::Core mb_post_debug;
@@ -232,7 +232,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
       // return FTensor::Tensor1<double, 2>{0., 1.};
-      return FTensor::Tensor1<double, 2>{0., 0.};
+      return FTensor::Tensor1<double, 2>{0., 1.};
     };
     pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
 
@@ -250,8 +250,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
-    //FIXME: here
-    // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+    // comment the line below for alternative implementation
+    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -271,9 +271,9 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-     //FIXME: here
-    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    // alternative implmenentation, comment OpInternalDomainContactRhs
+    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, 5, "FORCE") == 0) {

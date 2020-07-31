@@ -279,11 +279,11 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       auto t_contact_normal = normal(t_coords, t_disp);
       FTensor::Tensor2<double, 2, 2> t_contact_normal_tensor;
       t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
-      
+
       FTensor::Tensor2<double, 2, 2> t_contact_tangent_tensor;
       t_contact_tangent_tensor(i, j) = t_contact_normal_tensor(i, j);
-      t_contact_tangent_tensor(0, 0) -= 1;
-      t_contact_tangent_tensor(1, 1) -= 1;
+      t_contact_tangent_tensor(i, j) -= kronecker_delta(i, j);
+      t_contact_tangent_tensor(i, j) *= -1;
 
       FTensor::Tensor1<double, 2> t_rhs_constrains;
 
@@ -362,7 +362,7 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
 
       size_t bb = 0;
       for (; bb != nb_dofs / 2; ++bb) {
-        t_nf(i) += alpha * t_base * t_traction(i);
+        t_nf(i) -= alpha * t_base * t_traction(i);
         ++t_nf;
         ++t_base;
       }
@@ -486,8 +486,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
 
       FTensor::Tensor2<double, 2, 2> t_contact_tangent_tensor;
       t_contact_tangent_tensor(i, j) = t_contact_normal_tensor(i, j);
-      t_contact_tangent_tensor(0, 0) -= 1;
-      t_contact_tangent_tensor(1, 1) -= 1;
+      t_contact_tangent_tensor(i, j) -= kronecker_delta(i, j);
+      t_contact_tangent_tensor(i, j) *= -1;
 
       auto diff_constrain = diff_constrains_dgap(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
@@ -577,8 +577,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
       FTensor::Tensor2<double, 2, 2> t_contact_tangent_tensor;
       t_contact_tangent_tensor(i, j) = t_contact_normal_tensor(i, j);
-      t_contact_tangent_tensor(0, 0) -= 1;
-      t_contact_tangent_tensor(1, 1) -= 1;
+      t_contact_tangent_tensor(i, j) -= kronecker_delta(i, j);
+      t_contact_tangent_tensor(i, j) *= -1;
 
       const double diff_traction = diff_constrains_dtraction(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
