@@ -227,7 +227,7 @@ MoFEMErrorCode OpForceRhs::doWork(int side, EntityType type, EntData &data) {
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_base = data.getFTensor0N();
-    auto t_coords = getFTensor1Coords();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 

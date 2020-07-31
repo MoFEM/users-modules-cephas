@@ -221,9 +221,9 @@ struct NeumannForcesSurface {
     EntData *faceRowData;
 
     // Pointer to arc length method DOF, used to scale pressure in LHS
-    boost::shared_ptr<DofEntity> arcLengthDof;
+    boost::weak_ptr<DofEntity> arcLengthDof;
 
-    DataAtIntegrationPts() : faceRowData(nullptr), arcLengthDof(nullptr) {}
+    DataAtIntegrationPts() : faceRowData(nullptr) {}
 
     Range forcesOnlyOnEntitiesRow;
     Range forcesOnlyOnEntitiesCol;
