@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
     SMILING_FACE = 8,
     SMILING_FACE_CONVECT = 9,
     WAVE_2D = 10,
+    WAVE_2D_ALM = 11,
     LAST_TEST
   };
 
@@ -420,8 +421,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-
+    
     auto make_contact_element = [&]() {
+      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -487,12 +489,15 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
+    auto cn_value_ptr = boost::make_shared<double>(cn_value);
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+        m_field, cn_value_ptr, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+                                       "LAGMULT",
+                                       contact_prisms);
+                                       
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);
@@ -848,6 +853,11 @@ int main(int argc, char *argv[]) {
         expected_nb_gauss_pts = 144;
         break;
       case WAVE_2D:
+        expected_energy = 0.008537863;
+        expected_contact_area = 0.125;
+        expected_nb_gauss_pts = 384;
+        break;
+      case WAVE_2D_ALM:
         expected_energy = 0.008538894;
         expected_contact_area = 0.125;
         expected_nb_gauss_pts = 384;
