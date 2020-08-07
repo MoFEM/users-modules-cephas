@@ -479,7 +479,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
 
     locMat.resize(row_nb_dofs, col_nb_dofs, false);
     locMat.clear();
-
+    my_time = getTStime();
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       const double alpha = t_w * l;
