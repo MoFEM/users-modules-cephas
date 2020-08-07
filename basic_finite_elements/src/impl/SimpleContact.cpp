@@ -1359,6 +1359,9 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   double def_vals;
   def_vals = 0;
 
+  double def_vals_3[3];
+  def_vals_3[0] = def_vals_3[1] = def_vals_3[2] = 0;
+
   Tag th_gap;
   CHKERR moabOut.tag_get_handle("GAP", 1, MB_TYPE_DOUBLE, th_gap,
                                 MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
@@ -1374,6 +1377,11 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
     CHKERR moabOut.tag_get_handle("LAG_GAP_PROD", 1, MB_TYPE_DOUBLE,
                                   th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
                                   &def_vals);
+
+  Tag th_lag_3_lagrange;
+  CHKERR moabOut.tag_get_handle("3_LAGRANGE_MULTIPLIER", 3, MB_TYPE_DOUBLE,
+                                th_lag_3_lagrange, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                &def_vals);
 
   auto get_tag_pos = [&](const std::string name) {
     Tag th;
@@ -1399,6 +1407,8 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
       *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
   auto t_position_slave = getFTensor1FromMat<3>(
       *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+  auto t_traction =
+      getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
 
   std::array<double, 3> pos_vec;
 
@@ -1412,11 +1422,16 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
                                 &t_lag_gap_prod_slave);
     CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &t_lagrange_slave);
 
+    
+
     auto get_vec_ptr = [&](auto t) {
       for (int dd = 0; dd != 3; ++dd)
         pos_vec[dd] = t(dd);
       return pos_vec.data();
     };
+
+    CHKERR moabOut.tag_set_data(th_lag_3_lagrange, &new_vertex, 1,
+                                get_vec_ptr(t_traction));
 
     CHKERR moabOut.tag_set_data(th_pos_master, &new_vertex, 1,
                                 get_vec_ptr(t_position_master));
@@ -1431,6 +1446,7 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
     ++t_lag_gap_prod_slave;
     ++t_position_master;
     ++t_position_slave;
+    ++t_traction;
   }
   MoFEMFunctionReturn(0);
 }
@@ -1863,7 +1879,10 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
         t_nf(i) -= beta * tangent_2_disp(i);
 
         // t_nf(i) += beta * t_contact_normal_tensor(i, j);
+        
+        //07/08/2020
         t_nf(i) -= beta * t_contact_normal_tensor(i, j) * (t_x_master(j) /*- t_X_master(j)*/);
+
 
         t_nf(i) += cN * beta * tangent_1_traction(i);
         t_nf(i) += cN * beta * tangent_2_traction(i);
@@ -2637,6 +2656,7 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_Master_tied::doWork(
           // t_mat(i, j) -=
           //     beta_t_2 * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
+          //07/08/2020
           t_mat(i, j) -= beta_n * t_contact_normal_tensor(i, j);
 
           // t_mat(i, j) += beta_n * t_tangent_1_at_gp(i) *

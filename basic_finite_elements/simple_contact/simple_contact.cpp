@@ -852,38 +852,38 @@ int main(int argc, char *argv[]) {
         CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                                   "PARALLEL=WRITE_PART");
 
-        if (true) {
+        // if (true) {
 
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
-              new PostProcFaceOnRefinedMesh(m_field));
+        //   boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+        //       new PostProcFaceOnRefinedMesh(m_field));
 
-          CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+        //   CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
 
-          auto common_post_proc_data_simple_contact =
-              make_contact_common_data();
-          if (!is_hdiv_trace) {
-            CHKERR contact_problem->setPostProcContactOperators(
-                post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-                common_post_proc_data_simple_contact);
-          } else {
-            CHKERR contact_problem->setPostProcContactOperatorsHdiv(
-                post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
-                common_post_proc_data_simple_contact);
-          }
+        //   auto common_post_proc_data_simple_contact =
+        //       make_contact_common_data();
+        //   if (!is_hdiv_trace) {
+        //     CHKERR contact_problem->setPostProcContactOperators(
+        //         post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+        //         common_post_proc_data_simple_contact);
+        //   } else {
+        //     CHKERR contact_problem->setPostProcContactOperatorsHdiv(
+        //         post_proc_contact_ptr, "SPATIAL_POSITION", "LAGMULT",
+        //         common_post_proc_data_simple_contact);
+        //   }
 
-            CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK",
-                                            post_proc_contact_ptr);
-            std::ostringstream stm;
-            std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
-            stm << "file_name_for_lagrange"
-                << ".h5m";
+        //     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_VTK",
+        //                                     post_proc_contact_ptr);
+        //     std::ostringstream stm;
+        //     std::string file_name_for_lagrange = "out_lagrange_for_vtk_";
+        //     stm << "file_name_for_lagrange"
+        //         << ".h5m";
 
-            out_file_name = stm.str();
-            CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-                               out_file_name.c_str());
-            CHKERR post_proc_contact_ptr->postProcMesh.write_file(
-                out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
-          }
+        //     out_file_name = stm.str();
+        //     CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+        //                        out_file_name.c_str());
+        //     CHKERR post_proc_contact_ptr->postProcMesh.write_file(
+        //         out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+        //   }
 
         EntityHandle out_meshset_slave_tris;
         EntityHandle out_meshset_master_tris;
