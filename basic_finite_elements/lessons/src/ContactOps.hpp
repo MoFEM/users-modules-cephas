@@ -142,7 +142,11 @@ inline FTensor::Tensor1<double, 2> normal(FTensor::Tensor1<T1, 3> &t_coords,
 template <typename T>
 inline double gap0(FTensor::Tensor1<T, 3> &t_coords,
                   FTensor::Tensor1<double, 2> &t_normal) {
-  return (-1 - t_coords(1)) * t_normal(1);
+  if (t_coords(0) >= 0 && t_coords(0) <= 1.0)
+    return (-1 - t_coords(1)) * t_normal(1) + my_time * 0.1;
+  else {
+    return (-10 -t_coords(1)) * t_normal(1);
+  }
 }
 
 template <typename T>
@@ -286,7 +290,7 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       t_contact_tangent_tensor(i, j) *= -1;
 
       FTensor::Tensor1<double, 2> t_rhs_constrains;
-
+      my_time = getTStime();
       t_rhs_constrains(i) =
           t_contact_normal(i) *
           constrian(gap0(t_coords, t_contact_normal),

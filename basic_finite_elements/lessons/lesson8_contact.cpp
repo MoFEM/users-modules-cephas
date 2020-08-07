@@ -35,7 +35,7 @@ constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
 constexpr double spring_stiffness = 1e-6;
-
+double my_time = 0;
 boost::shared_ptr<EdgeElementForcesAndSourcesCore> debug_post_proc;
 moab::Core mb_post_debug;
 moab::Interface &moab_debug = mb_post_debug;
@@ -232,7 +232,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_rhs = [&](auto &pipeline) {
     auto gravity = [](double x, double y) {
       // return FTensor::Tensor1<double, 2>{0., 1.};
-      return FTensor::Tensor1<double, 2>{0., 1.};
+      return FTensor::Tensor1<double, 2>{0., 0.};
     };
     pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
 
