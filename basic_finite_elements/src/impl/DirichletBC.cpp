@@ -27,7 +27,7 @@ static MoFEMErrorCode set_numered_dofs_on_ents(
         for_each_dof) {
   MoFEMFunctionBegin;
 
-  auto &dofs_by_uid = problem_ptr->getNumeredDofsRows()->get<Unique_mi_tag>();
+  auto &dofs_by_uid = problem_ptr->getNumeredRowDofs()->get<Unique_mi_tag>();
 
   for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit) {
 
@@ -310,7 +310,7 @@ MoFEMErrorCode DirichletDisplacementBc::postProcess() {
       const double *a_snes_x;
       CHKERR VecGetArrayRead(snes_x, &a_snes_x);
       auto &dofs_by_glob_idx =
-          problemPtr->getNumeredDofsCols()->get<PetscGlobalIdx_mi_tag>();
+          problemPtr->getNumeredColDofs()->get<PetscGlobalIdx_mi_tag>();
       int idx = 0;
       for (auto git : dofsIndices) {
         auto dof_it = dofs_by_glob_idx.find(git);

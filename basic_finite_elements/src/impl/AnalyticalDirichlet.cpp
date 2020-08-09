@@ -213,7 +213,7 @@ MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize(Range &tris) {
     const auto f = eit->first;
     const auto s = eit->second;
 
-    auto &dofs = *problemPtr->numeredDofsRows;
+    auto &dofs = *problemPtr->getNumeredRowDofs();
     auto dit = dofs.get<Unique_mi_tag>().lower_bound(
         DofEntity::getLoFieldEntityUId(bit_number, f));
     auto hi_dit = dofs.get<Unique_mi_tag>().upper_bound(

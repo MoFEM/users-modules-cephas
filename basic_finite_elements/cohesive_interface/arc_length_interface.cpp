@@ -66,7 +66,7 @@ struct ArcLengthElement : public ArcLengthIntElemFEMethod {
     const auto bit_number_lambda = mField.get_field_bit_number("LAMBDA");
     
     boost::shared_ptr<NumeredDofEntity_multiIndex> numered_dofs_rows =
-        problemPtr->getNumeredDofsRows();
+        problemPtr->getNumeredRowDofs();
     auto lit = numered_dofs_rows->lower_bound(
         FieldEntity::getLoBitNumberUId(bit_number_lambda));
     auto hi_lit = numered_dofs_rows->upper_bound(

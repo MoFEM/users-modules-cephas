@@ -360,7 +360,7 @@ struct MagneticElement {
          eit != blockData.essentialBc.pair_end(); eit++) {
       const auto f = eit->first;
       const auto s = eit->second;
-      auto &dofs = problem_ptr->numeredDofsRows;
+      auto &dofs = problem_ptr->getNumeredRowDofs();
       auto dit = dofs->get<Unique_mi_tag>().lower_bound(
           DofEntity::getLoFieldEntityUId(block_bit_number, f));
       auto hi_dit = dofs->get<Unique_mi_tag>().upper_bound(
