@@ -1854,10 +1854,10 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
                           (t_x_slave(j) /*- t_X_slave(j)*/);
 
       tangent_1_disp_master(i) = t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) *
-                          (t_x_master(j) - t_X_master(j));
+                          (t_x_master(j) /*- t_X_master(j)*/);
 
       tangent_2_disp_master(i) = t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) *
-                          (t_x_master(j) - t_X_master(j));
+                          (t_x_master(j) /*- t_X_master(j)*/);
 
       tangent_1_traction(i) =
           t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) * t_traction(j);
@@ -1871,18 +1871,25 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         const double beta = alpha * (t_base(i) * t_normal(i));
+        // const double beta = alpha * (t_base(i) * t_normal(i));
+        // const double beta = alpha * (t_base(i) * t_normal(i));
 
         //////////
         // t_nf(i) += beta * t_rhs_constrains(i);
 
+        //11/08/2020
         t_nf(i) -= beta * tangent_1_disp(i);
         t_nf(i) -= beta * tangent_2_disp(i);
+        // t_nf(i) += beta * t_contact_normal_tensor(i, j) * t_x_slave(j);
 
         // t_nf(i) += beta * t_contact_normal_tensor(i, j);
         
         //07/08/2020
         t_nf(i) -= beta * t_contact_normal_tensor(i, j) * (t_x_master(j) /*- t_X_master(j)*/);
+        // t_nf(i) -= beta * tangent_1_disp_master(i);
+        // t_nf(i) -= beta * tangent_2_disp_master(i);
 
+        // t_nf(i) -= beta * t_x_master(i);
 
         t_nf(i) += cN * beta * tangent_1_traction(i);
         t_nf(i) += cN * beta * tangent_2_traction(i);
@@ -1906,8 +1913,8 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
         ++t_base;
         ++t_field_data;
       }
-      for (; bb < nb_base_functions; ++bb)
-       ++t_base;
+      // for (; bb < nb_base_functions; ++bb)
+      //  ++t_base;
 
       ++t_x_slave;
       ++t_x_master;
@@ -2071,6 +2078,9 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToMasterNormal::doWork(
     auto t_tangent_2_at_gp =
         get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorSlavePtr), 0);
 
+    FTensor::Tensor1<double, 3>  tangent_1_traction,
+        tangent_2_traction;
+
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
     std::array<double, MAX_DOFS_ON_ENTITY> nf;
@@ -2083,6 +2093,11 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToMasterNormal::doWork(
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
       // cerr << " traction " << t_traction(j) * t_normal(j) << "\n";
+      tangent_1_traction(i) =
+          t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) * t_traction(j);
+
+      tangent_2_traction(i) =
+          t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) * t_traction(j);
 
       const double alpha = area_m * t_w;
       FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf{&nf[0], &nf[1],
@@ -2090,7 +2105,13 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToMasterNormal::doWork(
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         ///////
-        t_nf(i) -= alpha * t_base * t_normal(i) * t_traction(j) * t_normal(j);
+        //Master 11/08/2020
+        // t_nf(i) -= alpha * t_base * t_normal(i) * t_traction(j) * t_normal(j);
+        // t_nf(i) -= alpha * t_base * tangent_1_traction(i);
+        // t_nf(i) -= alpha * t_base * tangent_2_traction(i);
+
+        t_nf(i) -= alpha * t_base * t_traction(i);
+
         ///////
         // t_nf(i) -= alpha * t_base  * t_traction(i) ;
         // t_normal(j); t_nf(i) -= alpha * t_base * t_tangent_1_at_gp(i) *
@@ -2363,11 +2384,17 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_dlambda_Master::doWork(
         size_t cc = 0;
         for (; cc != col_nb_dofs / 3; ++cc) {
           const double col_base = t_col_base(i) * t_contact_normal(i);
+          const double col_base_t_1 = t_col_base(i) * t_tangent_1_at_gp(i);
+          const double col_base_t_2 = t_col_base(i) * t_tangent_2_at_gp(i);
           const double beta = alpha * col_base * t_row_base;
-          t_mat(i, j) -= beta * t_contact_normal_tensor(i, j);
-          // t_mat(0, 0) -= beta;
-          // t_mat(1, 1) -= beta;
-          // t_mat(2, 2) -= beta;
+          const double beta_t_1 = alpha * col_base_t_1 * t_row_base;
+          const double beta_t_2 = alpha * col_base_t_2 * t_row_base;
+
+          //Master 11/08/2020
+          // t_mat(i, j) -= beta * t_contact_normal_tensor(i, j);
+          t_mat(0, 0) -= beta;
+          t_mat(1, 1) -= beta;
+          t_mat(2, 2) -= beta;
 
           // t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
           // t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
@@ -2642,8 +2669,8 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_Master_tied::doWork(
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != col_nb_dofs / 3; ++cc) {
           const double beta_n = alpha * row_base_n * t_col_base;
-          const double beta_t_1 = alpha * row_base_n * t_col_base;
-          const double beta_t_2 = alpha * row_base_n * t_col_base;
+          const double beta_t_1 = alpha * row_base_t_1 * t_col_base;
+          const double beta_t_2 = alpha * row_base_t_2 * t_col_base;
 
           // t_mat(0, 0) += beta_n;
 
@@ -2658,6 +2685,8 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_Master_tied::doWork(
 
           //07/08/2020
           t_mat(i, j) -= beta_n * t_contact_normal_tensor(i, j);
+          // t_mat(i, j) -= beta_n * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          // t_mat(i, j) -= beta_n * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           // t_mat(i, j) += beta_n * t_tangent_1_at_gp(i) *
           // t_tangent_1_at_gp(j); t_mat(i, j) += beta_n *
@@ -2933,9 +2962,11 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryLhs_dU_Slave::doWork(
           //     (beta * diff_constrain_d_slave) * t_contact_normal_tensor(i, j);
 
           //  t_mat(i, j) += beta * t_contact_tangent_tensor(i, j);
-
+          //11/08/2020
           t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
           t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          // t_mat(i, j) += beta * t_contact_normal(i) * t_contact_normal(j);
+
           // t_mat(0, 0) += beta;
           // t_mat(1, 1) += beta;
           // t_mat(2, 2) += beta;
