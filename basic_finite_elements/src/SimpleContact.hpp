@@ -333,6 +333,35 @@ struct SimpleContactProblem {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  struct OpConstrainBoundaryTractionForFace : public FaceUserDataOperator {
+    OpConstrainBoundaryTractionForFace(
+        const std::string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  };
+
+  struct OpConstrainBoundaryRhsForFace : public FaceUserDataOperator {
+    double cN;
+    OpConstrainBoundaryRhsForFace(
+        const std::string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        double &cn_value)
+        : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+          commonDataSimpleContact(common_data_contact), cN(cn_value) {}
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  };
+
   // FaceUserDataOperator
 
   /// \brief Computes normal to slave face that is common to all gauss points
@@ -1151,6 +1180,11 @@ struct SimpleContactProblem {
       string field_name, string lagrang_field_name);
 
   MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv3DSurface(
+      boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
+      boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      string field_name, string lagrang_field_name);
+
+  MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv3DForFace(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrang_field_name);
