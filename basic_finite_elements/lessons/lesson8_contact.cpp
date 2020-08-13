@@ -36,7 +36,7 @@ constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
 constexpr double spring_stiffness = 1e-6;
 double my_time = 0;
-boost::shared_ptr<EdgeElementForcesAndSourcesCore> debug_post_proc;
+boost::shared_ptr<BoundaryEle> debug_post_proc;
 moab::Core mb_post_debug;
 moab::Interface &moab_debug = mb_post_debug;
 
@@ -148,7 +148,7 @@ MoFEMErrorCode Example::createCommonData() {
   jAc.resize(2, 2, false);
   invJac.resize(2, 2, false);
 
-  debug_post_proc = boost::make_shared<EdgeElementForcesAndSourcesCore>(mField);
+  debug_post_proc = boost::make_shared<BoundaryEle>(mField);
   debug_post_proc->getOpPtrVector().push_back(
       new OpSetContrariantPiolaTransformOnEdge());
   debug_post_proc->getOpPtrVector().push_back(
