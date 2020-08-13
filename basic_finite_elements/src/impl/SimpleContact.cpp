@@ -413,6 +413,71 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpGetNormalAndTangentsFace::doWork(
+    int side, EntityType type, EntData &data) {
+
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  commonDataSimpleContact->normalVectorFacePtr.get()->resize(3);
+  commonDataSimpleContact->normalVectorFacePtr.get()->clear();
+
+  commonDataSimpleContact->tangentOneVectorFacePtr->resize(3, false);
+  commonDataSimpleContact->tangentOneVectorFacePtr->clear();
+
+  commonDataSimpleContact->tangentTwoVectorFacePtr->resize(3, false);
+  commonDataSimpleContact->tangentTwoVectorFacePtr->clear();
+
+  const double *normal_slave_ptr = &getNormal()[0];
+
+  auto t_normal =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorFacePtr));
+
+  for (int ii = 0; ii != 3; ++ii)
+    t_normal(ii) = normal_slave_ptr[ii];
+
+  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  t_normal(i) = t_normal(i) / normal_length;
+
+  const double *tangent_one_slave_ptr = &getTangent1()[0];
+  // const double *tangent_two_slave_ptr = &getTangent2()[0];
+
+  auto t_tangent_1 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorFacePtr));
+
+  auto t_tangent_2 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorFacePtr));
+
+  for (int ii = 0; ii != 3; ++ii) {
+    t_tangent_1(ii) = tangent_one_slave_ptr[ii];
+    // t_tangent_2(ii) = tangent_two_slave_ptr[ii];
+  }
+
+  const double l_tan_1 = sqrt(t_tangent_1(i) * t_tangent_1(i));
+
+  t_tangent_2(j) = FTensor::levi_civita(i, j, k) * t_tangent_1(i) * t_normal(k);
+
+  const double l_tan_2 = sqrt(t_tangent_2(i) * t_tangent_2(i));
+
+  t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
+  t_tangent_2(i) = t_tangent_2(i) / l_tan_2;
+
+  MoFEMFunctionReturn(0);
+    }
+
 MoFEMErrorCode SimpleContactProblem::OpGetNormalForTri::doWork(int side,
                                                               EntityType type,
                                                               EntData &data) {
@@ -1638,12 +1703,11 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTraction::doWork(
 
     auto t_normal = get_tensor_vec(
         commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
-
     auto t_traction =
         getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
     size_t nb_base_functions = data.getN().size2() / 3;
-    auto t_base = data.getFTensor1N<3>();
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      auto t_base = data.getFTensor1N<3>(gg, 0);
       auto t_field_data = data.getFTensor1FieldData<3>();
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
@@ -1655,8 +1719,8 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTraction::doWork(
         ++t_field_data;
         ++t_base;
       }
-      for (; bb < nb_base_functions; ++bb)
-        ++t_base;
+      // for (; bb < nb_base_functions; ++bb)
+      //   ++t_base;
 
       ++t_traction;
     }

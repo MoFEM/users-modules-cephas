@@ -250,6 +250,11 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> mGradPtr;
     boost::shared_ptr<MatrixDouble> contactTractionPtr;
 
+    boost::shared_ptr<MatrixDouble> xFaceAtPts;
+    boost::shared_ptr<VectorDouble> normalVectorFacePtr;
+    boost::shared_ptr<VectorDouble> tangentOneVectorFacePtr;
+    boost::shared_ptr<VectorDouble> tangentTwoVectorFacePtr;
+
     double areaSlave;
     double areaMaster;
 
@@ -282,6 +287,13 @@ struct SimpleContactProblem {
       lagGapProdPtr = boost::make_shared<VectorDouble>();
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+
+      // Face
+      xFaceAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      normalVectorFacePtr =  boost::make_shared<VectorDouble>();
+      tangentOneVectorFacePtr =  boost::make_shared<VectorDouble>();
+      tangentTwoVectorFacePtr =  boost::make_shared<VectorDouble>();
+
     }
 
   private:
@@ -304,6 +316,18 @@ struct SimpleContactProblem {
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpGetNormalAndTangentsFace : public FaceUserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetNormalAndTangentsFace(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
           commonDataSimpleContact(common_data_contact) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
