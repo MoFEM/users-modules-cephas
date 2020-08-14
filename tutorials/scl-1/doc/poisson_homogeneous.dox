@@ -739,15 +739,15 @@ basic_tutorials_poisson_homogeneous_run_analysis that calls other functions to
 perform finite element analysis.
 \code
 public:
-  Poisson2DHomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
+  Poisson2DHomogeneous(MoFEM::Interface &m_field);
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runWholeProgram();
+  MoFEMErrorCode runProgram();
 \endcode
 Then there are private functions doing certain tasks and can be recognised by
 their names
 \code
 private:
-  // Declaration of other main functions called in runWholeProgram()
+  // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -795,9 +795,8 @@ style and naming convention described at \ref coding_practice
 
 Now is the constructor
 \code
-Poisson2DHomogeneous::Poisson2DHomogeneous(moab::Core &mb_instance,
-                                           MoFEM::Core &core)
-    : domainField("U"), mOab(mb_instance), mField(core),
+Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
+    : domainField("U"), mField(m_field),
       mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
   pipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
   pipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
@@ -1175,14 +1174,14 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 }
 \endcode
 
-\subsubsection basic_tutorials_poisson_homogeneous_run_analysis runWholeProgram() 
+\subsubsection basic_tutorials_poisson_homogeneous_run_analysis runProgram() 
 
 Finally, having all the necessary tasks implemented in the corresponding
 functions, we can now put them together in the last function of the main class.
 This function is responsible for the calling sequence which is similar to most
 of other finite element programs
 \code
-MoFEMErrorCode Poisson2DHomogeneous::runWholeProgram() {
+MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -1220,11 +1219,11 @@ int main(int argc, char *argv[]) {
 
     // Create MoFEM instance
     MoFEM::Core core(moab); // finite element database
-    // MoFEM::Interface &m_field = core; // finite element interface
+    MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    Poisson2DHomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runWholeProgram();
+    Poisson2DHomogeneous poisson_problem(m_field);
+    CHKERR poisson_problem.runProgram();
   }
   CATCH_ERRORS;
 
@@ -1238,11 +1237,11 @@ So you can see, at the beginning, it creates the Discrete Managers that enable
 information flows between MoFEM (finite element implementation), MOAB (element
 topology management), and PETSc (algebraic solvers). After that, it creates
 variable `poisson_problem` of type/class `Poisson2DHomogeneous` which is
-previously defined and then run the analysis by triggering the public function runWholeProgram().
+previously defined and then run the analysis by triggering the public function runProgram().
 \code
     // Run the main analysis
-    Poisson2DHomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runWholeProgram();
+    Poisson2DHomogeneous poisson_problem(m_field);
+    CHKERR poisson_problem.runProgram();
 \endcode
 
 
