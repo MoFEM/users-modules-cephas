@@ -9,13 +9,13 @@ static char help[] = "...\n\n";
 
 struct Poisson3DHomogeneous {
 public:
-  Poisson3DHomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
+  Poisson3DHomogeneous(MoFEM::Interface &m_field);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runWholeProgram();
+  MoFEMErrorCode runProgram();
 
 private:
-  // Declaration of other main functions called in runWholeProgram()
+  // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -26,7 +26,6 @@ private:
 
   // MoFEM interfaces
   MoFEM::Interface &mField;
-  moab::Interface &mOab;
   Simple *simpleInterface;
 
   // mpi parallel communicator
@@ -51,15 +50,14 @@ private:
   boost::shared_ptr<VolEle> postProc;
 };
 
-Poisson3DHomogeneous::Poisson3DHomogeneous(moab::Core &mb_instance,
-                                           MoFEM::Core &core)
-    : domainField("U"), mOab(mb_instance), mField(core),
-      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
+Poisson3DHomogeneous::Poisson3DHomogeneous(MoFEM::Interface &m_field)
+    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
+      mpiRank(mField.get_comm_rank()) {
   pipelineLhs = boost::shared_ptr<VolEle>(new VolEle(mField));
   pipelineRhs = boost::shared_ptr<VolEle>(new VolEle(mField));
 }
 
-MoFEMErrorCode Poisson3DHomogeneous::runWholeProgram() {
+MoFEMErrorCode Poisson3DHomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -230,12 +228,12 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance; // mesh database interface
 
     // Create MoFEM instance
-    MoFEM::Core core(moab); // finite element database
-    // MoFEM::Interface &m_field = core; // finite element interface
+    MoFEM::Core core(moab);           // finite element database
+    MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    Poisson3DHomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runWholeProgram();
+    Poisson3DHomogeneous poisson_problem(m_field);
+    CHKERR poisson_problem.runProgram();
   }
   CATCH_ERRORS;
 
