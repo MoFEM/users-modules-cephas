@@ -51,8 +51,8 @@ private:
 };
 
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field),
-      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
+    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
+      mpiRank(mField.get_comm_rank()) {
   pipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
   pipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
 }
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance; // mesh database interface
 
     // Create MoFEM instance
-    MoFEM::Core core(moab); // finite element database
+    MoFEM::Core core(moab);           // finite element database
     MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
