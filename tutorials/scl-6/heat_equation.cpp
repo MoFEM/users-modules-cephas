@@ -39,13 +39,13 @@ static char help[] = "...\n\n";
 
 struct HeatEquation {
 public:
-  HeatEquation(moab::Core &mb_instance, MoFEM::Core &core);
+  HeatEquation(MoFEM::Interface &m_field);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runWholeProgram();
+  MoFEMErrorCode runProgram();
 
 private:
-  // Declaration of other main functions called in runWholeProgram()
+  // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -76,7 +76,6 @@ private:
 
   // Main interfaces
   MoFEM::Interface &mField;
-  moab::Interface &mOab;
   Simple *simpleInterface;
 
   // mpi parallel communicator
@@ -115,9 +114,9 @@ private:
   Range boundaryEntitiesForFieldsplit;
 };
 
-HeatEquation::HeatEquation(moab::Core &mb_instance, MoFEM::Core &core)
-    : domainField("U"), mOab(mb_instance), mField(core),
-      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
+HeatEquation::HeatEquation(MoFEM::Interface &m_field)
+    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
+      mpiRank(mField.get_comm_rank()) {
   stiffTangentLhsMatrixPipeline =
       boost::shared_ptr<FaceEle>(new FaceEle(mField));
   stiffFunctionRhsVectorPipeline =
@@ -386,7 +385,7 @@ MoFEMErrorCode HeatEquation::outputResults() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode HeatEquation::runWholeProgram() {
+MoFEMErrorCode HeatEquation::runProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -418,12 +417,12 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance; // mesh database interface
 
     // Create MoFEM instance
-    MoFEM::Core core(moab); // finite element database
-    // MoFEM::Interface &mField = core; // finite element interface
+    MoFEM::Core core(moab);           // finite element database
+    MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    HeatEquation heat_problem(mb_instance, core);
-    CHKERR heat_problem.runWholeProgram();
+    HeatEquation heat_problem(m_field);
+    CHKERR heat_problem.runProgram();
   }
   CATCH_ERRORS;
 
