@@ -9,13 +9,13 @@ static char help[] = "...\n\n";
 
 struct Poisson2DNonhomogeneous {
 public:
-  Poisson2DNonhomogeneous(moab::Core &mb_instance, MoFEM::Core &core);
+  Poisson2DNonhomogeneous(MoFEM::Interface &m_field);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runWholeProgram();
+  MoFEMErrorCode runProgram();
 
 private:
-  // Declaration of other main functions called in runWholeProgram()
+  // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -39,7 +39,6 @@ private:
 
   // Main interfaces
   MoFEM::Interface &mField;
-  moab::Interface &mOab;
   Simple *simpleInterface;
 
   // mpi parallel communicator
@@ -72,17 +71,16 @@ private:
   Range boundaryEntitiesForFieldsplit;
 };
 
-Poisson2DNonhomogeneous::Poisson2DNonhomogeneous(moab::Core &mb_instance,
-                                                 MoFEM::Core &core)
-    : domainField("U"), mOab(mb_instance), mField(core),
-      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
+Poisson2DNonhomogeneous::Poisson2DNonhomogeneous(MoFEM::Interface &m_field)
+    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
+      mpiRank(mField.get_comm_rank()) {
   domainPipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
   domainPipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
   boundaryPipelineLhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
   boundaryPipelineRhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
 }
 
-MoFEMErrorCode Poisson2DNonhomogeneous::runWholeProgram() {
+MoFEMErrorCode Poisson2DNonhomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -324,12 +322,12 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance; // mesh database interface
 
     // Create MoFEM instance
-    MoFEM::Core core(moab); // finite element database
-    // MoFEM::Interface &mField = core; // finite element interface
+    MoFEM::Core core(moab);           // finite element database
+    MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    Poisson2DNonhomogeneous poisson_problem(mb_instance, core);
-    CHKERR poisson_problem.runWholeProgram();
+    Poisson2DNonhomogeneous poisson_problem(m_field);
+    CHKERR poisson_problem.runProgram();
   }
   CATCH_ERRORS;
 
