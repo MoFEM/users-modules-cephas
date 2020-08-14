@@ -39,13 +39,13 @@ static char help[] = "...\n\n";
 
 struct WaveEquation {
 public:
-  WaveEquation(moab::Core &mb_instance, MoFEM::Core &core);
+  WaveEquation(MoFEM::Interface &m_field);
 
   // Declaration of the main function to run analysis
-  MoFEMErrorCode runWholeProgram();
+  MoFEMErrorCode runProgram();
 
 private:
-  // Declaration of other main functions called in runWholeProgram()
+  // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -88,7 +88,6 @@ private:
 
   // Main interfaces
   MoFEM::Interface &mField;
-  moab::Interface &mOab;
   Simple *simpleInterface;
 
   // mpi parallel communicator
@@ -139,8 +138,8 @@ private:
   Range boundaryEntitiesForFieldsplit;
 };
 
-WaveEquation::WaveEquation(moab::Core &mb_instance, MoFEM::Core &core)
-    : domainFieldU("U"), domainFieldV("V"), mOab(mb_instance), mField(core),
+WaveEquation::WaveEquation(MoFEM::Interface &m_field)
+    : domainFieldU("U"), domainFieldV("V"), mField(m_field),
       mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
   domainTangentLhsMatrixPipeline =
       boost::shared_ptr<FaceEle>(new FaceEle(mField));
@@ -476,7 +475,7 @@ MoFEMErrorCode WaveEquation::outputResults() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode WaveEquation::runWholeProgram() {
+MoFEMErrorCode WaveEquation::runProgram() {
   MoFEMFunctionBegin;
 
   readMesh();
@@ -508,12 +507,12 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance; // mesh database interface
 
     // Create MoFEM instance
-    MoFEM::Core core(moab); // finite element database
-    // MoFEM::Interface &mField = core; // finite element interface
+    MoFEM::Core core(moab);           // finite element database
+    MoFEM::Interface &m_field = core; // finite element interface
 
     // Run the main analysis
-    WaveEquation wave_problem(mb_instance, core);
-    CHKERR wave_problem.runWholeProgram();
+    WaveEquation wave_problem(m_field);
+    CHKERR wave_problem.runProgram();
   }
   CATCH_ERRORS;
 
