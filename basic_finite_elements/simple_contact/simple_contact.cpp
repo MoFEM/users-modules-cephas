@@ -236,7 +236,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
-
+    /// AINSWORTH_LEGENDRE_BASE
+    /// AINSWORTH_LOBATTO_BASE
+    /// AINSWORTH_BERNSTEIN_BEZIER_BASE
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3, MB_TAG_SPARSE, MF_ZERO);
 
@@ -359,7 +361,8 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
 
         CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
-
+        CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order);
+        CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order);
         // Range slave_edges, master_edges;
 
         // CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
@@ -405,6 +408,96 @@ int main(int argc, char *argv[]) {
         // add fields to the global matrix by adding the element
         contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                            "LAGMULT", contact_prisms);
+      }
+      
+      Range extra_tris;
+      if (is_hdiv_trace) {
+
+        for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit))
+        {
+          if (cit->getName().compare(0, 10, "HDIV_FACES") == 0) {
+            CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
+                               cit->getName().c_str(), cit->getMeshsetId());
+            // EntityHandle cubit_meshset = cit->meshset;
+            cerr << "?????????\n";
+            // get tet entities from back bit_level
+            // EntityHandle ref_level_meshset;
+            // CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
+            //                            ref_level_meshset);
+
+            // CHKERR m_field.getInterface<BitRefManager>()
+            //     ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
+            //                                    BitRefLevel().set(), MBTRI,
+            //                                    ref_level_meshset);
+            Range help_tris, help_ents;
+            CHKERR moab.get_entities_by_handle(cit->meshset, help_ents, true);
+            help_tris = help_ents.subset_by_type(MBTRI);
+
+            extra_tris.merge(help_tris);
+
+            cerr << "extra_tris  " << extra_tris.size() << "\n";
+            cerr << "help_tris  " << help_tris.size() << "\n";
+          }
+        }
+
+        Range face_tets;
+        face_tets.clear();
+        CHKERR moab.get_adjacencies(extra_tris, 3, false, face_tets,
+                                    moab::Interface::UNION);
+        face_tets = face_tets.subset_by_type(MBTET);
+
+        cerr << "SIZE!!     " << extra_tris.size() << "\n";
+        cerr << "face_tets!!     " << face_tets.size() << "\n";
+
+        CHKERR m_field.set_field_order(extra_tris, "LAGMULT", order_lambda);
+
+
+        CHKERR m_field.add_finite_element("HDIV_FACE_MATERIAL", MF_ZERO);
+
+        CHKERR m_field.modify_finite_element_add_field_row("HDIV_FACE_MATERIAL",
+                                                           "SPATIAL_POSITION");
+        CHKERR m_field.modify_finite_element_add_field_col("HDIV_FACE_MATERIAL",
+                                                           "SPATIAL_POSITION");
+        CHKERR m_field.modify_finite_element_add_field_data("HDIV_FACE_MATERIAL",
+                                                            "SPATIAL_POSITION");
+
+        CHKERR m_field.modify_finite_element_add_field_data(
+            "HDIV_FACE_MATERIAL", "MESH_NODE_POSITIONS");
+
+        CHKERR m_field.modify_finite_element_add_field_row("HDIV_FACE_MATERIAL",
+                                                           "LAGMULT");
+        CHKERR m_field.modify_finite_element_add_field_col("HDIV_FACE_MATERIAL",
+                                                           "LAGMULT");
+        CHKERR m_field.modify_finite_element_add_field_data("HDIV_FACE_MATERIAL",
+                                                            "LAGMULT");
+
+        CHKERR m_field.add_ents_to_finite_element_by_type(face_tets, MBTET,
+                                                          "HDIV_FACE_MATERIAL");
+        CHKERR m_field.build_finite_elements("HDIV_FACE_MATERIAL", &face_tets);
+
+        // add fields to the global matrix by adding the element
+        CHKERR m_field.add_finite_element("FACE_HELP", MF_ZERO);
+
+        CHKERR m_field.modify_finite_element_add_field_row("FACE_HELP",
+                                                           "SPATIAL_POSITION");
+        CHKERR m_field.modify_finite_element_add_field_col("FACE_HELP",
+                                                           "SPATIAL_POSITION");
+        CHKERR m_field.modify_finite_element_add_field_data(
+            "FACE_HELP", "SPATIAL_POSITION");
+
+        CHKERR m_field.modify_finite_element_add_field_data(
+            "FACE_HELP", "MESH_NODE_POSITIONS");
+
+        CHKERR m_field.modify_finite_element_add_field_row("FACE_HELP",
+                                                           "LAGMULT");
+        CHKERR m_field.modify_finite_element_add_field_col("FACE_HELP",
+                                                           "LAGMULT");
+        CHKERR m_field.modify_finite_element_add_field_data(
+            "FACE_HELP", "LAGMULT");
+
+        CHKERR m_field.add_ents_to_finite_element_by_type(extra_tris, MBTRI,
+                                                          "FACE_HELP");
+        CHKERR m_field.build_finite_elements("FACE_HELP", &extra_tris);
       }
 
         // build field
@@ -473,6 +566,10 @@ int main(int argc, char *argv[]) {
           return boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
         };
 
+        auto make_face_hdiv_element = [&]() {
+          return boost::make_shared<FaceElementForcesAndSourcesCore>(m_field);
+        };
+
         auto make_contact_common_data = [&]() {
           return boost::make_shared<
               SimpleContactProblem::CommonDataSimpleContact>(m_field);
@@ -502,6 +599,16 @@ int main(int argc, char *argv[]) {
           auto fe_rhs_simple_contact = make_element();
           auto common_data_simple_contact = make_contact_common_data();
           contact_problem->setContactOperatorsRhsOperatorsHdiv3DSurface(
+              fe_rhs_simple_contact, common_data_simple_contact,
+              "SPATIAL_POSITION", "LAGMULT");
+          return fe_rhs_simple_contact;
+        };
+
+        auto get_hdiv_surface_rhs_for_face = [&](auto contact_problem,
+                                        auto make_element) {
+          auto fe_rhs_simple_contact = make_element();
+          auto common_data_simple_contact = make_contact_common_data();
+          contact_problem->setContactOperatorsRhsOperatorsHdiv3DForFace(
               fe_rhs_simple_contact, common_data_simple_contact,
               "SPATIAL_POSITION", "LAGMULT");
           return fe_rhs_simple_contact;
@@ -542,6 +649,16 @@ int main(int argc, char *argv[]) {
           auto fe_lhs_simple_contact = make_element();
           auto common_data_simple_contact = make_contact_common_data();
           contact_problem->setContactOperatorsLhsOperatorsHdiv3DSurface(
+              fe_lhs_simple_contact, common_data_simple_contact,
+              "SPATIAL_POSITION", "LAGMULT");
+          return fe_lhs_simple_contact;
+        };
+
+        auto get_hdiv_surface_contact_lhs_for_face = [&](auto contact_problem,
+                                                auto make_element) {
+          auto fe_lhs_simple_contact = make_element();
+          auto common_data_simple_contact = make_contact_common_data();
+          contact_problem->setContactOperatorsLhsOperatorsHdiv3DForFace(
               fe_lhs_simple_contact, common_data_simple_contact,
               "SPATIAL_POSITION", "LAGMULT");
           return fe_lhs_simple_contact;
@@ -599,6 +716,10 @@ int main(int argc, char *argv[]) {
 
         if (is_hdiv_trace) {
           CHKERR DMMoFEMAddElement(dm, "HDIVMATERIAL");
+          if (extra_tris.size()) {
+            CHKERR DMMoFEMAddElement(dm, "HDIV_FACE_MATERIAL");
+            CHKERR DMMoFEMAddElement(dm, "FACE_HELP");
+          }
         }
 
         if (true) {
@@ -692,6 +813,20 @@ int main(int argc, char *argv[]) {
                 dm, "HDIVMATERIAL",
                 get_hdiv_volume_rhs(contact_problem, make_volume_hdiv_element),
                 PETSC_NULL, PETSC_NULL);
+            cerr << " 22222222 \n";
+            if (extra_tris.size()) {
+              cerr << " 11111111 \n";
+              CHKERR DMMoFEMSNESSetFunction(
+                  dm, "FACE_HELP",
+                  get_hdiv_surface_rhs_for_face(contact_problem,
+                                                make_face_hdiv_element),
+                  PETSC_NULL, PETSC_NULL);
+              CHKERR DMMoFEMSNESSetFunction(
+                  dm, "HDIV_FACE_MATERIAL",
+                  get_hdiv_volume_rhs(contact_problem,
+                                      make_volume_hdiv_element),
+                  PETSC_NULL, PETSC_NULL);
+            }
           }
         }
       CHKERR DMMoFEMSNESSetFunction(dm, "ELASTIC", &elastic.getLoopFeRhs(),
@@ -731,11 +866,25 @@ int main(int argc, char *argv[]) {
               get_hdiv_surface_contact_lhs(contact_problem,
                                            make_contact_element),
               NULL, NULL);
-           CHKERR DMMoFEMSNESSetJacobian(
-               dm, "HDIVMATERIAL",
-               get_hdiv_volume_contact_lhs(contact_problem,
-                                           make_volume_hdiv_element),
-               PETSC_NULL, PETSC_NULL);
+          CHKERR DMMoFEMSNESSetJacobian(
+              dm, "HDIVMATERIAL",
+              get_hdiv_volume_contact_lhs(contact_problem,
+                                          make_volume_hdiv_element),
+              PETSC_NULL, PETSC_NULL);
+
+          if (extra_tris.size()) {
+
+            CHKERR DMMoFEMSNESSetJacobian(
+                dm, "FACE_HELP",
+                get_hdiv_surface_contact_lhs_for_face(contact_problem,
+                                                      make_face_hdiv_element),
+                PETSC_NULL, PETSC_NULL);
+            CHKERR DMMoFEMSNESSetJacobian(
+                dm, "HDIV_FACE_MATERIAL",
+                get_hdiv_volume_contact_lhs(contact_problem,
+                                            make_volume_hdiv_element),
+                PETSC_NULL, PETSC_NULL);
+           }
         }
         }
       CHKERR DMMoFEMSNESSetJacobian(dm, "ELASTIC", &elastic.getLoopFeLhs(),
