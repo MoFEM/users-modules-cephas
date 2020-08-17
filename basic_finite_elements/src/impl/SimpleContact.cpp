@@ -4031,6 +4031,9 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToSlaveNormal::doWork(
         t_nf(i) += alpha * t_base * tangent_1_traction(i);
         t_nf(i) += alpha * t_base * tangent_2_traction(i);
 
+        //for augmented
+        t_nf(i) += alpha * t_base * tangent_2_traction(i);
+
         // t_nf(i) -= alpha * t_base * t_tangent_1_at_gp(i) *
         //            t_tangent_1_at_gp(j) * t_traction(j);
 
