@@ -415,7 +415,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     auto get_element_max_dofs_order = [this]() {
       int max_order = 0;
-      for (auto &dof : *(this->getDataVectorDofsPtr())) {
+      auto dofs_vec = this->getDataVectorDofsPtr();
+      for (auto &dof : *dofs_vec) {
         const int dof_order = dof->getDofOrder();
         max_order = (max_order < dof_order) ? dof_order : max_order;
       };
