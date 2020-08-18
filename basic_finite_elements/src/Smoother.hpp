@@ -288,35 +288,31 @@ struct Smoother {
         double *f_tangent_front_mesh_array;
         CHKERR VecGetArray(smootherData.tangentFrontF,
                            &f_tangent_front_mesh_array);
+
+        auto row_dofs = getFEMethod()->getRowDofsPtr();
+
         // iterate nodes on tet
         for (int nn = 0; nn < 4; nn++) {
 
           // get indices with Lagrange multiplier at node nn
-          auto dit =
-              getFEMethod()->getRowDofs().get<Unique_mi_tag>().lower_bound(
-                  DofEntity::getLoFieldEntityUId(
-                      bit_number_for_crack_area_tangent_constrain,
-                      getConn()[nn]));
-          auto hi_dit =
-              getFEMethod()->getRowDofs().get<Unique_mi_tag>().upper_bound(
-                  DofEntity::getHiFieldEntityUId(
-                      bit_number_for_crack_area_tangent_constrain,
-                      getConn()[nn]));
+          auto dit = row_dofs->get<Unique_mi_tag>().lower_bound(
+              DofEntity::getLoFieldEntityUId(
+                  bit_number_for_crack_area_tangent_constrain, getConn()[nn]));
+          auto hi_dit = row_dofs->get<Unique_mi_tag>().upper_bound(
+              DofEntity::getHiFieldEntityUId(
+                  bit_number_for_crack_area_tangent_constrain, getConn()[nn]));
 
           // continue if Lagrange are on element
           if (std::distance(dit, hi_dit) > 0) {
 
             // get mesh node positions at node nn
-            auto diit =
-                getFEMethod()->getRowDofs().get<Unique_mi_tag>().lower_bound(
-                  DofEntity::getLoFieldEntityUId(
-                      bit_number_for_mesh_position,
-                      getConn()[nn]));
+            auto diit = row_dofs->get<Unique_mi_tag>().lower_bound(
+                DofEntity::getLoFieldEntityUId(bit_number_for_mesh_position,
+                                               getConn()[nn]));
 
-            auto hi_diit =
-                getFEMethod()->getRowDofs().get<Unique_mi_tag>().upper_bound(
-                    DofEntity::getHiFieldEntityUId(bit_number_for_mesh_position,
-                                                   getConn()[nn]));
+            auto hi_diit = row_dofs->get<Unique_mi_tag>().upper_bound(
+                DofEntity::getHiFieldEntityUId(bit_number_for_mesh_position,
+                                               getConn()[nn]));
 
             // iterate over dofs on node nn
             for (; diit != hi_diit; diit++) {
