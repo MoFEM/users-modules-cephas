@@ -1,0 +1,30 @@
+reset
+
+create surface ellipse major radius 2 minor radius 2 zplane 
+create surface ellipse major radius 0.2 minor radius 0.2 zplane
+move Surface 2 x 0.5 y 0.5 z 0 include_merged 
+create surface ellipse major radius 0.2 minor radius 0.2 zplane
+imprint tolerant surface 1  with curve 3 2  merge 
+delete Body 3
+delete Body 2
+merge curve all with curve all 
+
+# Block for initial condition
+block 1 surface 2 3
+block 1 name "INITIAL"
+
+# Block for boundary condition
+block 2 curve 1
+block 2 name "BOUNDARY_CONDITION"
+
+# Mesh
+surface all scheme trimesh
+surface all size auto factor 5
+mesh surface all
+refine surface all numsplit 1 bias 1.0 depth 1 smooth
+
+
+save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/um_basics/heat_equation/mesh.cub" overwrite
+
+
+

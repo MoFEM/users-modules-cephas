@@ -1,0 +1,15 @@
+reset
+
+### Circular shape
+create surface circle radius 1 zplane
+block 1 curve 1
+block 1 name "BOUNDARY_CONDITION"
+# Mesh
+surface 1 size auto factor 5
+surface 1 scheme trimesh
+mesh surface 1
+refine curve 1  numsplit 1 bias 1.0 depth 3 smooth
+refine curve 1  numsplit 1 bias 1.0 depth 3 smooth
+
+save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/um_basics/minimal_surface_equation/mesh.cub" overwrite
+
