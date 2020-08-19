@@ -165,6 +165,8 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     MatrixDouble3by3 A(2, 2);
     MatrixDouble3by3 invA(2, 2);
     VectorDouble3 F(2);
+    MatrixDouble3by3 inv_matA(2, 2);
+    VectorDouble3 copy_F(2);
 
     auto get_t_coords = [](auto &m) {
       return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
@@ -276,18 +278,28 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
               Tools::shapeFunMBTRI2(t_xi_master(0), t_xi_master(1));
         };
 
-        auto linear_solver = [&]() {
-          ublas::lu_factorize(A);
-          ublas::inplace_solve(A, F, ublas::unit_lower_tag());
-          ublas::inplace_solve(A, F, ublas::upper_tag());
+        auto invert_2_by_2 = [&](MatrixDouble3by3 &inv_mat_A,
+                                 MatrixDouble3by3 &mat_A) {
+          double det_A = mat_A(0, 0) * mat_A(1, 1) - mat_A(1, 0) * mat_A(0, 1);
+          inv_mat_A(0, 0) = mat_A(1, 1) / det_A;
+          inv_mat_A(1, 1) = mat_A(0, 0) / det_A;
+          inv_mat_A(0, 1) = -mat_A(1, 0) / det_A;
+          inv_mat_A(1, 0) = -mat_A(0, 1) / det_A;
+        };
+
+        auto linear_solver = [&]() {          
+          invert_2_by_2(inv_matA, A);
+          FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2> t_copy_F(
+              &copy_F[0], &copy_F[1]);
+          FTensor::Tensor2<double *, 2, 2> t_inv_matA(
+              &inv_matA(0, 0), &inv_matA(0, 1), &inv_matA(1, 0),
+              &inv_matA(1, 1));
+          t_copy_F(J) = t_f(J);
+          t_f(I) = t_inv_matA(I, J) * t_copy_F(J);
         };
 
         auto invert_A = [&]() {
-          ublas::lu_factorize(A);
-          invA.resize(2, 2, false);
-          noalias(invA) = ublas::identity_matrix<double>(2);
-          ublas::inplace_solve(A, invA, ublas::unit_lower_tag());
-          ublas::inplace_solve(A, invA, ublas::upper_tag());
+          invert_2_by_2(invA, A);
         };
 
         auto nonlinear_solve = [&]() {
