@@ -1,0 +1,38 @@
+/*! \page basic_tutorials_wave_equation SCL-7: Wave equation
+
+\tableofcontents
+
+\note Prerequisite of this tutorial is \ref basic_tutorials_heat_equation
+
+<br>
+
+\note Intended learning outcome:
+- practice of time-dependent problem in MoFEM
+- how to formulate and implement code in MoFEM using PETSc time-stepping solver [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html)
+- TS solver with implicit scheme
+
+
+\tableofcontents
+
+\section basic_tutorials_wave_equation_introduction Introduction
+
+
+\subsection basic_tutorials_wave_equation_introduction Possible extensions
+
+\section basic_tutorials_wave_equation_plain_program Plain program 
+
+
+The plain program for both the implementation of the UDOs (\c *.hpp) and the
+main program (\c *.cpp) are as follows
+
+\subsection basic_tutorials_wave_equation_impl_udo Implementation of User Data Operators (*.hpp)
+
+\include wave_equation.hpp
+
+\subsection basic_tutorials_wave_equation_impl_main Implementation of the main program (*.cpp) 
+
+\include wave_equation.cpp
+
+
+
+*/

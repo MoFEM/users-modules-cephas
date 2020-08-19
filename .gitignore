@@ -12,6 +12,8 @@
 !scripts/**
 !tools
 !tools/**
+!tutorials
+!tutorials/**
 !.gitignore
 !CMakeLists.txt
 !CTestConfig.cmake
