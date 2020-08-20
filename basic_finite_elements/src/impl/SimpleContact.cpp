@@ -167,6 +167,10 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
     VectorDouble3 F(2);
     MatrixDouble3by3 inv_matA(2, 2);
     VectorDouble3 copy_F(2);
+    FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2> t_copy_F(&copy_F[0],
+                                                                &copy_F[1]);
+    FTensor::Tensor2<double *, 2, 2> t_inv_matA(
+        &inv_matA(0, 0), &inv_matA(0, 1), &inv_matA(1, 0), &inv_matA(1, 1));
 
     auto get_t_coords = [](auto &m) {
       return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
@@ -280,20 +284,13 @@ SimpleContactProblem::ConvectSlaveIntegrationPts::convectSlaveIntegrationPts() {
 
         auto invert_2_by_2 = [&](MatrixDouble3by3 &inv_mat_A,
                                  MatrixDouble3by3 &mat_A) {
-          double det_A = mat_A(0, 0) * mat_A(1, 1) - mat_A(1, 0) * mat_A(0, 1);
-          inv_mat_A(0, 0) = mat_A(1, 1) / det_A;
-          inv_mat_A(1, 1) = mat_A(0, 0) / det_A;
-          inv_mat_A(0, 1) = -mat_A(1, 0) / det_A;
-          inv_mat_A(1, 0) = -mat_A(0, 1) / det_A;
+          double det_A;
+          CHKERR determinantTensor2by2(mat_A, det_A);
+          CHKERR invertTensor2by2(mat_A, det_A, inv_mat_A);
         };
 
         auto linear_solver = [&]() {          
           invert_2_by_2(inv_matA, A);
-          FTensor::Tensor1<FTensor::PackPtr<double *, 0>, 2> t_copy_F(
-              &copy_F[0], &copy_F[1]);
-          FTensor::Tensor2<double *, 2, 2> t_inv_matA(
-              &inv_matA(0, 0), &inv_matA(0, 1), &inv_matA(1, 0),
-              &inv_matA(1, 1));
           t_copy_F(J) = t_f(J);
           t_f(I) = t_inv_matA(I, J) * t_copy_F(J);
         };
