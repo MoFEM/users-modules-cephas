@@ -246,8 +246,8 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
-    // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
