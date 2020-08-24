@@ -246,7 +246,7 @@ MoFEMErrorCode Example::OPs() {
         "SIGMA", commonDataPtr->contactStressPtr));
     pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
         "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    // pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
@@ -268,7 +268,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
-    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
