@@ -989,7 +989,6 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       CHKERR postProcMesh.tag_get_handle("BLOCK_ID", 1, MB_TYPE_INTEGER, th_id,
                                          MB_TAG_CREAT | MB_TAG_SPARSE,
                                          &def_block_id);
-      CHKERR postProcMesh.tag_set_data(th_id, &fe_ent, 1, &block_id);
 
       // Create mesh tag. Tags are created on post-processing mesh and
       // visable in post-processor, e.g. Paraview
@@ -1040,6 +1039,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         CHKERR block_data->calC();
         double C = block_data->C;
         CHKERR postProcMesh.tag_set_data(th_c, &mapGaussPts[gg], 1, &C);
+
+        // Set block iD
+        CHKERR postProcMesh.tag_set_data(th_id, &mapGaussPts[gg], 1, &block_id);
+
         ++t_h;
         ++t_coords;
       }
