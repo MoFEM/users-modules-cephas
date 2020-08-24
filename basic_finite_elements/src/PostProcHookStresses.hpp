@@ -238,9 +238,9 @@ struct PostProcHookStress
                   (commonData.gradMap[rowFieldName][gg])(2, 0);
 
       if (!isFieldDisp) {
-        strain[0] -= 1.;
-        strain[1] -= 1.;
-        strain[2] -= 1.;
+        strain[0] -= 1.0;
+        strain[1] -= 1.0;
+        strain[2] -= 1.0;
       }
 
       stress.resize(6);
