@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 # Get file name
 if [ -z ${1+x} ]; then
