@@ -657,13 +657,14 @@ struct HookeElement {
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
     bool isALE;
+    bool isFieldDisp;
 
     OpPostProcHookeElement(const string row_field,
                            boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
                            map<int, BlockData> &block_sets_ptr,
                            moab::Interface &post_proc_mesh,
                            std::vector<EntityHandle> &map_gauss_pts,
-                           bool is_ale = false);
+                           bool is_ale = false, bool is_field_disp = true);
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -1403,10 +1404,11 @@ template <class ELEMENT>
 HookeElement::OpPostProcHookeElement<ELEMENT>::OpPostProcHookeElement(
     const string row_field, boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
     map<int, BlockData> &block_sets_ptr, moab::Interface &post_proc_mesh,
-    std::vector<EntityHandle> &map_gauss_pts, bool is_ale)
+    std::vector<EntityHandle> &map_gauss_pts, bool is_ale, bool is_field_disp)
     : ELEMENT::UserDataOperator(row_field, UserDataOperator::OPROW),
       dataAtPts(data_at_pts), blockSetsPtr(block_sets_ptr),
-      postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), isALE(is_ale) {}
+      postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), isALE(is_ale),
+      isFieldDisp(is_field_disp) {}
 
 template <class ELEMENT>
 MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
@@ -1483,11 +1485,13 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
       CHKERR invertTensor3by3(t_H, detH, t_invH);
       t_F(i, j) = t_h(i, k) * t_invH(k, j);
       t_small_strain_symm(i, j) = (t_F(i, j) || t_F(j, i)) / 2.;
+      ++t_H;
+    }
 
+    if (isALE || !isFieldDisp) {
       t_small_strain_symm(0, 0) -= 1;
       t_small_strain_symm(1, 1) -= 1;
       t_small_strain_symm(2, 2) -= 1;
-      ++t_H;
     }
 
     // symmetric tensors need improvement
