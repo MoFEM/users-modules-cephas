@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x
+
 # Get file name
 if [ -z ${1+x} ]; then
   MESHFILE=1dTest.cub
@@ -50,7 +52,7 @@ fi
 rm -f out_*.h5m 
 #make -j 4 unsaturated_transport 
 
-#mpirun --allow-run-as-root -np $NBPROCS \
+mpirun --allow-run-as-root -np $NBPROCS \
 ./unsaturated_transport \
 -my_file out.h5m  -configure $CONFIGFILE  \
 -ts_monitor -ts_type beuler \
