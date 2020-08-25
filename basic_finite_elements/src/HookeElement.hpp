@@ -1445,8 +1445,10 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
 
-  auto t_h = getFTensor2FromMat<3, 3>(*(dataAtPts->hMat));
-  auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
+  auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
+  if (isALE) {
+    auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
+  }
 
   dataAtPts->stiffnessMat->resize(36, 1, false);
   FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
