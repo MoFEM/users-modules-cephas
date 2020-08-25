@@ -1,8 +1,6 @@
 #!/bin/bash
 set -x
 
-set -x
-
 # Get file name
 if [ -z ${1+x} ]; then
   MESHFILE=1dTest.cub
