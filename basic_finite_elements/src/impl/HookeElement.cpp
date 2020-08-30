@@ -595,14 +595,15 @@ MoFEMErrorCode HookeElement::setOperators(
     boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr,
     boost::shared_ptr<map<int, BlockData>> block_sets_ptr,
     const std::string x_field, const std::string X_field, const bool ale,
-    const bool field_disp, const EntityType type, boost::shared_ptr<DataAtIntegrationPts> data_at_pts) {
+    const bool field_disp, const EntityType type,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts) {
   MoFEMFunctionBegin;
 
   if (!block_sets_ptr)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "Pointer to block of sets is null");
 
-  if(!data_at_pts)
+  if (!data_at_pts)
     data_at_pts = boost::make_shared<DataAtIntegrationPts>();
 
   if (fe_lhs_ptr) {

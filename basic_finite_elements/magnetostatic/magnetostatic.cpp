@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
     CHKERR magnetic.getEssentialBc();
     CHKERR magnetic.createFields();
     CHKERR magnetic.createElements();
-    CHKERR magnetic.createProblem();
+    CHKERR magnetic.createProblem(is_partitioned);
     CHKERR magnetic.solveProblem(regression_test == PETSC_TRUE);
     CHKERR magnetic.postProcessResults();
     CHKERR magnetic.destroyProblem();
