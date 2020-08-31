@@ -462,6 +462,12 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<VectorDouble> normalVectorSlavePtr;
     boost::shared_ptr<VectorDouble> normalVectorMasterPtr;
+
+
+    boost::shared_ptr<VectorDouble> normalVectorTriPtr;
+    boost::shared_ptr<VectorDouble> tangentOneVectorTriPtr;
+    boost::shared_ptr<VectorDouble> tangentTwoVectorTriPtr;
+
     boost::shared_ptr<MatrixDouble> tangentGapPtr;
     boost::shared_ptr<VectorDouble> normAugTangentLambdasPtr;
 
@@ -489,9 +495,14 @@ struct SimpleContactProblem {
       lagGapProdPtr = boost::make_shared<VectorDouble>();
       normalVectorSlavePtr = boost::make_shared<VectorDouble>();
       normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+      normalVectorTriPtr = boost::make_shared<VectorDouble>();
+
       tangentOneVectorSlavePtr = boost::make_shared<VectorDouble>();
       tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>();
       normAugTangentLambdasPtr = boost::make_shared<VectorDouble>();
+
+      tangentOneVectorTriPtr = boost::make_shared<VectorDouble>();
+      tangentTwoVectorTriPtr = boost::make_shared<VectorDouble>();
 
       tangentLambdasPtr = boost::make_shared<MatrixDouble>();
       allLambdasPtr = boost::make_shared<MatrixDouble>();
@@ -562,6 +573,68 @@ struct SimpleContactProblem {
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
+
+  struct OpGetNormalTri
+      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetNormalTri(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpGetOrthonormalTangentsTri
+      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetOrthonormalTangentsTri(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPCOL),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  struct OpPostProcContactOnTri
+      : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+    OpPostProcContactOnTri(
+        const std::string field_name, moab::Interface &post_proc_mesh,
+        std::vector<EntityHandle> &map_gauss_pts,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_ptr)
+        : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+              field_name, UserDataOperator::OPROW),
+          postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+          commonDataSimpleContact(common_data_ptr) {
+      // Opetor is only executed for vertices
+      std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+    };
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    moab::Interface &postProcMesh;
+    std::vector<EntityHandle> &mapGaussPts;
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  };
+
+  // SimpleContactProblem::OpPostProcContactOnTri::OpPostProcContactOnTri(
+  //     const std::string field_name, moab::Interface &post_proc_mesh,
+  //     std::vector<EntityHandle> &map_gauss_pts,
+  //     boost::shared_ptr<CommonDataSimpleContact> common_data_ptr)
+  //     : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+  //           field_name, DomainEleOp::OPROW),
+  //       postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+  //       commonDataPtr(common_data_ptr) {
+  //   // Opetor is only executed for vertices
+  //   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  // }
 
   /**
    * @brief Operator for the simple contact element
@@ -722,6 +795,24 @@ struct SimpleContactProblem {
         boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
         : ContactOp(lagrange_field_name, UserDataOperator::OPROW,
                     ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates Lagrange multipliers at the gauss points on the slave triangle.
+   *
+   */
+  struct OpGetLagMulAtGaussPtsTri : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetLagMulAtGaussPtsTri(
+        const string lagrange_field_name,
+        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+        : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(lagrange_field_name, UserDataOperator::OPROW),
           commonDataSimpleContact(common_data_contact) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
