@@ -298,8 +298,13 @@ struct MagneticElement {
     CHKERR DMMoFEMAddElement(blockData.dM, blockData.feName.c_str());
     CHKERR DMMoFEMAddElement(blockData.dM, blockData.feNaturalBCName.c_str());
     CHKERR DMSetUp(blockData.dM);
-    // create matrices and vectors
-    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.D);
+
+    // remove essential DOFs
+    const MoFEM::Problem *problem_ptr;
+    CHKERR DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
+    CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        problem_ptr->getName(), blockData.fieldName, blockData.essentialBc);
+    
     MoFEMFunctionReturn(0);
   }
 
@@ -323,15 +328,18 @@ struct MagneticElement {
    */
   MoFEMErrorCode solveProblem(const bool regression_test = false) {
     MoFEMFunctionBegin;
-    CHKERR DMCreateMatrix(blockData.dM, &blockData.A);
-    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.F);
-    CHKERR VecDuplicate(blockData.F, &blockData.D);
-
+    
     VolumeFE vol_fe(mField);
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
     tri_fe.getOpPtrVector().push_back(new OpNaturalBC(blockData));
+
+    // create matrices and vectors
+    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.D);
+    CHKERR DMCreateMatrix(blockData.dM, &blockData.A);
+    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.F);
+    CHKERR VecDuplicate(blockData.F, &blockData.D);
 
     CHKERR MatZeroEntries(blockData.A);
     CHKERR VecZeroEntries(blockData.F);
@@ -350,37 +358,6 @@ struct MagneticElement {
     CHKERR VecAssemblyBegin(blockData.F);
     CHKERR VecAssemblyEnd(blockData.F);
 
-    // Boundary conditions
-    std::vector<int> dofs_bc_indices;
-
-    const MoFEM::Problem *problem_ptr;
-    CHKERR DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
-    auto block_bit_number = mField.get_field_bit_number(blockData.fieldName);
-
-    for (auto eit = blockData.essentialBc.pair_begin();
-         eit != blockData.essentialBc.pair_end(); eit++) {
-      const auto f = eit->first;
-      const auto s = eit->second;
-      auto &dofs = problem_ptr->getNumeredRowDofs();
-      auto dit = dofs->get<Unique_mi_tag>().lower_bound(
-          DofEntity::getLoFieldEntityUId(block_bit_number, f));
-      auto hi_dit = dofs->get<Unique_mi_tag>().upper_bound(
-          DofEntity::getHiFieldEntityUId(block_bit_number, s));
-      for (; dit != hi_dit; ++dit) {
-        if ((*dit)->getPart() == mField.get_comm_rank()) {
-          std::bitset<8> pstatus((*dit)->getPStatus());
-          if (pstatus.test(0))
-            continue; // only local
-          dofs_bc_indices.push_back((*dit)->getPetscGlobalDofIdx());
-        }
-      }
-    }
-
-    const double diag = 1;
-    CHKERR MatZeroRowsColumns(
-        blockData.A, dofs_bc_indices.size(),
-        dofs_bc_indices.empty() ? PETSC_NULL : &*dofs_bc_indices.begin(), diag,
-        PETSC_NULL, PETSC_NULL);
 
     KSP solver;
     CHKERR KSPCreate(PETSC_COMM_WORLD, &solver);
