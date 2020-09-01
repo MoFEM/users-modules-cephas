@@ -290,7 +290,7 @@ struct MagneticElement {
    *
    * @return error code
    */
-  MoFEMErrorCode createProblem(PetscBool is_partitioned) {
+  MoFEMErrorCode createProblem() {
     MoFEMFunctionBegin;
     // set up DM
     CHKERR DMRegister_MoFEM("DMMOFEM");
@@ -299,7 +299,7 @@ struct MagneticElement {
     CHKERR DMMoFEMCreateMoFEM(blockData.dM, &mField, "MAGNETIC_PROBLEM",
                               BitRefLevel().set(0));
     CHKERR DMSetFromOptions(blockData.dM);
-    CHKERR DMMoFEMSetIsPartitioned(blockData.dM, is_partitioned);
+    CHKERR DMMoFEMSetIsPartitioned(blockData.dM, PETSC_TRUE);
     // add elements to blockData.dM
     CHKERR DMMoFEMAddElement(blockData.dM, blockData.feName.c_str());
     CHKERR DMMoFEMAddElement(blockData.dM, blockData.feNaturalBCName.c_str());
