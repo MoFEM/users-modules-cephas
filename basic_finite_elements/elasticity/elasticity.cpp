@@ -411,7 +411,6 @@ int main(int argc, char *argv[]) {
                 continue;
               if (block_data[it->getMeshsetId()].oRder == order)
                 continue;
-              MOFEM_LOG_CHANNEL("ELASTIC");
               MOFEM_LOG_C("ELASTIC", Sev::inform, "Set block %d order to %d",
                           it->getMeshsetId(),
                           block_data[it->getMeshsetId()].oRder);

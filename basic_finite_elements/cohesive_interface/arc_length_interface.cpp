@@ -63,14 +63,23 @@ struct ArcLengthElement : public ArcLengthIntElemFEMethod {
     MoFEMFunctionBegin;
     FILE *datafile;
     PetscFOpen(PETSC_COMM_SELF, DATAFILENAME, "a+", &datafile);
+    const auto bit_number_lambda = mField.get_field_bit_number("LAMBDA");
+    
     boost::shared_ptr<NumeredDofEntity_multiIndex> numered_dofs_rows =
-        problemPtr->getNumeredDofsRows();
-    NumeredDofEntityByFieldName::iterator lit;
-    lit = numered_dofs_rows->get<FieldName_mi_tag>().find("LAMBDA");
-    if (lit == numered_dofs_rows->get<FieldName_mi_tag>().end()) {
+        problemPtr->getNumeredRowDofs();
+    auto lit = numered_dofs_rows->lower_bound(
+        FieldEntity::getLoBitNumberUId(bit_number_lambda));
+    auto hi_lit = numered_dofs_rows->upper_bound(
+        FieldEntity::getHiBitNumberUId(bit_number_lambda));
+
+    if (lit == numered_dofs_rows->end()) {
       fclose(datafile);
       MoFEMFunctionReturnHot(0);
+    } else if (std::distance(lit, hi_lit) != 1) {
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Only one DOF is expected");
     }
+
     Range::iterator nit = postProcNodes.begin();
     for (; nit != postProcNodes.end(); nit++) {
       NumeredDofEntityByEnt::iterator dit, hi_dit;

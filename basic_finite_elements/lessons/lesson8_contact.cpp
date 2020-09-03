@@ -34,7 +34,7 @@ constexpr int order = 4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
-constexpr double spring_stiffness = 1e-6;
+constexpr double spring_stiffness = 0;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -268,6 +268,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());

@@ -85,23 +85,25 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
     const Problem *problem_ptr;
     CHKERR m_field.get_problem(problem_name, &problem_ptr);
     boost::shared_ptr<NumeredDofEntity_multiIndex> dofs_ptr_no_const =
-        problem_ptr->getNumeredDofsRows();
-    NumeredDofEntityByFieldName::iterator hi_dit;
-    dIt = dofs_ptr_no_const->get<FieldName_mi_tag>().lower_bound(field_name);
-    hi_dit = dofs_ptr_no_const->get<FieldName_mi_tag>().upper_bound(field_name);
+        problem_ptr->getNumeredRowDofs();
+    auto bit_number = m_field.get_field_bit_number(field_name);
+    auto dIt = dofs_ptr_no_const->get<Unique_mi_tag>().lower_bound(
+        FieldEntity::getLoBitNumberUId(bit_number));
+    auto hi_dit = dofs_ptr_no_const->get<Unique_mi_tag>().upper_bound(
+        FieldEntity::getHiBitNumberUId(bit_number));
     if (std::distance(dIt, hi_dit) != 1)
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
               ("can not find unique LAMBDA (load factor) but found " +
                boost::lexical_cast<std::string>(std::distance(dIt, hi_dit)))
                   .c_str());
-
+    arcDofRawPtr = (*dIt).get();
     MoFEMFunctionReturn(0);
   };
 
   auto create_ghost_vecs = [&]() {
     MoFEMFunctionBegin;
     Vec ghost_d_lambda, ghost_diag;
-    if ((unsigned int)mField.get_comm_rank() == (*dIt)->getPart()) {
+    if ((unsigned int)mField.get_comm_rank() == arcDofRawPtr->getPart()) {
       CHKERR VecCreateGhostWithArray(mField.get_comm(), 1, 1, 0, PETSC_NULL,
                                      &dLambda, &ghost_d_lambda);
 
