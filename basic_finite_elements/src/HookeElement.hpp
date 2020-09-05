@@ -1441,9 +1441,6 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   
   auto th_stress = make_tag("STRESS", 9);
   auto th_psi =  make_tag("ENERGY", 1);
-  auto th_sigma0 = make_tag("SIGMA0", 3);
-  auto th_sigma1 = make_tag("SIGMA1", 3);
-  auto th_sigma2 = make_tag("SIGMA2", 3);
 
   const int nb_integration_pts = mapGaussPts.size();
 
@@ -1514,35 +1511,6 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
     CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
                                      &t_stress(0, 0));
-
-    auto calculate_principal_stress = [&]() {
-      VectorDouble3 eigen_values(3);
-      // LAPACK - eigenvalues and vectors. Applied twice for initial creates
-      // memory space
-      int n = 3, lda = 3, info, lwork = -1;
-      double wkopt;
-      info = lapack_dsyev('V', 'U', n, &(t_stress(0, 0)), lda,
-                          &(eigen_values[0]), &wkopt, lwork);
-      if (info != 0)
-        SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                 "is something wrong with lapack_dsyev info = %d", info);
-      lwork = (int)wkopt;
-      double work[lwork];
-      info = lapack_dsyev('V', 'U', n, &(t_stress(0, 0)), lda,
-                          &(eigen_values[0]), work, lwork);
-      if (info != 0)
-        SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                 "is something wrong with lapack_dsyev info = %d", info);
-      std::array<Tag, 3> tags = {th_sigma0, th_sigma1, th_sigma2};
-      for (auto ii : {0, 1, 2}) {
-        FTensor::Tensor1<double, 3> t_sigma;
-        t_sigma(i) = t_stress(ii, i) * eigen_values[ii];
-        CHKERR postProcMesh.tag_set_data(tags[ii], &mapGaussPts[gg], 1,
-                                         &(t_sigma(0)));
-      }
-    };
-
-    calculate_principal_stress();
 
     ++t_h;
   }
