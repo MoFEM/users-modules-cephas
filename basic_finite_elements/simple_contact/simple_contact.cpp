@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
                                  "-my_cn_value 1. \n"
                                  "-my_r_value 1. \n"
                                  "-my_alm_flag 0 \n";
-                                 
+
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
     std::ofstream file(param_file.c_str(), std::ios::ate);
@@ -84,8 +84,11 @@ int main(int argc, char *argv[]) {
 
   try {
     PetscBool flg_file;
+    PetscBool flg_data_file;
 
     char mesh_file_name[255];
+    char data_file_name_1[255];
+    char data_file_name_2[255];
     PetscInt order = 1;
     PetscInt order_contact = 1;
     PetscInt nb_ho_levels = 0;
@@ -105,11 +108,19 @@ int main(int argc, char *argv[]) {
     PetscReal wave_length = 1.0;
     PetscReal wave_ampl = 0.01;
     PetscReal mesh_height = 1.0;
+    PetscInt nb_side_nodes = 1;
+    PetscBool rough_surf_flag = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
+    CHKERR PetscOptionsString("-my_data_file_1", "data file name", "",
+                              "data.txt", data_file_name_1, 255,
+                              &flg_data_file);
+    CHKERR PetscOptionsString("-my_data_file_2", "data file name", "",
+                              "data.txt", data_file_name_2, 255,
+                              &flg_data_file);
 
     CHKERR PetscOptionsInt("-my_order",
                            "approximation order of spatial positions", "", 1,
@@ -152,6 +163,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_wave_surf",
                             "if set true, make one of the surfaces wavy", "",
                             PETSC_FALSE, &wave_surf_flag, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_rough_surf",
+                            "if set true, make contact surfaces rough", "",
+                            PETSC_FALSE, &rough_surf_flag, PETSC_NULL);                        
     CHKERR PetscOptionsInt("-my_wave_surf_block_id",
                            "make wavy surface of the block with this id", "",
                            wave_surf_block_id, &wave_surf_block_id, PETSC_NULL);
@@ -161,8 +175,12 @@ int main(int argc, char *argv[]) {
                             wave_length, &wave_length, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
                             &wave_ampl, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh ",
-                            "", mesh_height, &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_mesh_height",
+                            "vertical dimension of the mesh ", "", mesh_height,
+                            &mesh_height, PETSC_NULL);
+
+    CHKERR PetscOptionsInt("-my_side_nodes_num", "number of nodes on each side",
+                           "", nb_side_nodes, &nb_side_nodes, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -180,7 +198,7 @@ int main(int argc, char *argv[]) {
     const char *option;
     option = "";
     CHKERR moab.load_file(mesh_file_name, 0, option);
-    
+
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -320,6 +338,130 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
+    auto make_rough_surface = [&](int block_id, char *data_file_name,
+                                  double height, bool invert) {
+      MoFEMFunctionBegin;
+      Range all_tets, all_nodes;
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "MAT_ELASTIC") == 0) {
+          const int id = bit->getMeshsetId();
+          if (id == block_id) {
+            CHKERR m_field.get_moab().get_entities_by_dimension(
+                bit->getMeshset(), 3, all_tets, true);
+          }
+        }
+      }
+      CHKERR moab.get_connectivity(all_tets, all_nodes);
+
+      std::ifstream infile(data_file_name, std::ios::in);
+      std::vector<double> surface_data;
+      std::vector<bool> surface_check;
+
+      if (!infile.is_open()) {
+        SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_FOUND,
+                "could not open surface data file");
+      }
+
+      std::string line;
+      while (std::getline(infile, line)) {
+        std::istringstream iss(line);
+        double num = 0.0;
+        if (iss >> num)
+          surface_data.push_back(num);
+        else
+          continue;
+      }
+
+      double max_surf_height =
+          *std::max_element(std::begin(surface_data), std::end(surface_data));
+      for (auto &node_data : surface_data) {
+        node_data -= max_surf_height;
+      }
+
+      surface_check.resize(surface_data.size());
+      std::fill(surface_check.begin(), surface_check.end(), false);
+
+      double edge_length = 1.0 / (double)(nb_side_nodes - 1);
+      double tol = 1e-8;
+
+      auto flat_ind = [&](int i, int j) { return i * nb_side_nodes + j; };
+
+      int surf_sign = 1;
+      if (invert)
+        surf_sign = -1;
+
+      for (Range::iterator nit = all_nodes.begin(); nit != all_nodes.end();
+           nit++) {
+        double coords[3];
+        CHKERR moab.get_coords(&*nit, 1, coords);
+        double x = coords[0];
+        double y = coords[1];
+        double z = coords[2];
+        z *= surf_sign;
+        double height_coef = (height + z) / height;
+        double ksi, eta;
+        double pos_x = x / edge_length;
+        double pos_y = y / edge_length;
+        int i, j, i_next, j_next;
+        i = i_next = (int)std::floor(pos_x);
+        j = j_next = (int)std::floor(pos_y);
+
+        if (std::abs(pos_x - std::floor(pos_x)) < tol) {
+          ksi = -1.0;
+        } else {
+          ksi = (pos_x - std::floor(pos_x)) * 2.0 - 1.0;
+          if (ksi < -1. - tol || ksi > 1. + tol) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                     "Wrong ksi for i = %d, j = %d", i, j);
+          }
+          i_next++;
+        }
+        if (std::abs(pos_y - std::floor(pos_y)) < tol) {
+          eta = -1.0;
+        } else {
+          eta = (pos_y - std::floor(pos_y)) * 2.0 - 1.0;
+          if (eta < -1. - tol || eta > 1. + tol) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                     "Wrong eta for i = %d, j = %d", i, j);
+          }
+          j_next++;
+        }
+        if (std::abs(z) < tol) {
+          if (std::abs(pos_x - std::floor(pos_x)) > tol ||
+              std::abs(pos_y - std::floor(pos_y)) > tol) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                     "Cannot find data for surface node i = %d, j = %d", i, j);
+          } else {
+            if (surface_check[flat_ind(i, j)]) {
+              SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                       "Data used twice for surface node i = %d, j = %d", i, j);
+            } else {
+              surface_check[flat_ind(i, j)] = true;
+            }
+          }
+        }
+
+        std::array<double, 4> shape_quad;
+        shape_quad[0] = 0.25 * (1.0 - ksi) * (1.0 - eta);
+        shape_quad[1] = 0.25 * (1.0 + ksi) * (1.0 - eta);
+        shape_quad[2] = 0.25 * (1.0 + ksi) * (1.0 + eta);
+        shape_quad[3] = 0.25 * (1.0 - ksi) * (1.0 + eta);
+
+        std::array<double, 4> gap_quad;
+        gap_quad[0] = surface_data[flat_ind(i, j)];
+        gap_quad[1] = surface_data[flat_ind(i_next, j)];
+        gap_quad[2] = surface_data[flat_ind(i_next, j_next)];
+        gap_quad[3] = surface_data[flat_ind(i, j_next)];
+
+        for (int k : {0, 1, 2, 3}) {
+          coords[2] += shape_quad[k] * gap_quad[k] * height_coef * surf_sign;
+        }
+        CHKERR moab.set_coords(&*nit, 1, coords);
+      }
+
+      MoFEMFunctionReturn(0);
+    };
+
     auto set_contact_order = [&](Range &contact_prisms, int order_contact,
                                  int nb_ho_levels) {
       MoFEMFunctionBegin;
@@ -365,6 +507,11 @@ int main(int argc, char *argv[]) {
     if (wave_surf_flag) {
       CHKERR make_wavy_surface(wave_surf_block_id, wave_dim, wave_length,
                                wave_ampl, mesh_height);
+    }
+
+    if (rough_surf_flag) {
+      CHKERR make_rough_surface(1, data_file_name_1, mesh_height, false);
+      CHKERR make_rough_surface(2, data_file_name_2, mesh_height, true);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -421,9 +568,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-    
+
     auto make_contact_element = [&]() {
-      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -495,9 +641,8 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT",
-                                       contact_prisms);
-                                       
+                                       "LAGMULT", contact_prisms);
+
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);
