@@ -24,27 +24,21 @@ file(
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
 
-cm_export_file("magnetic_coil.cub" export_files_magnetostatic)
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.cub DESTINATION ${BFE_MOD_DIR})
-
 add_test(MagnetostaticTest
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
   ${CMAKE_CURRENT_BINARY_DIR}/magnetostatic
-  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.cub -my_order 1 
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil_2parts.h5m -my_order 1 
   -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps 
   -ksp_monitor -my_max_post_proc_ref_level 0 -regression_test 1)
 
-cm_export_file("magnetic_coil.jou" export_files_magenotstatic)
-cm_export_file("magnetic_coil.cub" export_files_magenotstatic)
-cm_export_file("README" export_files_magenotstatic)
+set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
 
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.cub
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil.jou
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)  
+bfe_copy_and_install("*.jou" "${permissions_default}")
+bfe_copy_and_install("*.cub" "${permissions_default}")
+bfe_copy_and_install("*.h5m" "${permissions_default}")
+bfe_copy_and_install("README" "${permissions_default}")
+
+

@@ -48,7 +48,7 @@ struct MagneticElement {
   struct VolumeFE : public MoFEM::VolumeElementForcesAndSourcesCore {
     VolumeFE(MoFEM::Interface &m_field)
         : MoFEM::VolumeElementForcesAndSourcesCore(m_field) {}
-    int getRule(int order) { return 2 * (order - 1); };
+    int getRule(int order) { return 2 * order + 1; };
   };
 
   // /// \brief  definition of volume element
@@ -65,7 +65,7 @@ struct MagneticElement {
   struct TriFE : public MoFEM::FaceElementForcesAndSourcesCore {
     TriFE(MoFEM::Interface &m_field)
         : MoFEM::FaceElementForcesAndSourcesCore(m_field) {}
-    int getRule(int order) { return 2 * (order - 1); };
+    int getRule(int order) { return 2 * order; };
   };
 
   MagneticElement(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -134,6 +134,8 @@ struct MagneticElement {
    * @return      error code
    */
   MoFEMErrorCode getEssentialBc() {
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
     MoFEMFunctionBegin;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 10, "ESSENTIALBC") == 0) {
@@ -152,9 +154,13 @@ struct MagneticElement {
       Range skin_faces; // skin faces from 3d ents
       CHKERR skin.find_skin(0, tets, false, skin_faces);
       skin_faces = subtract(skin_faces, blockData.naturalBc);
+      Range proc_skin;
+      CHKERR pcomm->filter_pstatus(skin_faces,
+                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                   PSTATUS_NOT, -1, &proc_skin);
       CHKERR mField.get_moab().get_adjacencies(
-          skin_faces, 1, true, blockData.essentialBc, moab::Interface::UNION);
-      blockData.essentialBc.merge(skin_faces);
+          proc_skin, 1, true, blockData.essentialBc, moab::Interface::UNION);
+      blockData.essentialBc.merge(proc_skin);
     }
     MoFEMFunctionReturn(0);
   }
@@ -293,12 +299,18 @@ struct MagneticElement {
     CHKERR DMMoFEMCreateMoFEM(blockData.dM, &mField, "MAGNETIC_PROBLEM",
                               BitRefLevel().set(0));
     CHKERR DMSetFromOptions(blockData.dM);
+    CHKERR DMMoFEMSetIsPartitioned(blockData.dM, PETSC_TRUE);
     // add elements to blockData.dM
     CHKERR DMMoFEMAddElement(blockData.dM, blockData.feName.c_str());
     CHKERR DMMoFEMAddElement(blockData.dM, blockData.feNaturalBCName.c_str());
     CHKERR DMSetUp(blockData.dM);
-    // create matrices and vectors
-    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.D);
+
+    // remove essential DOFs
+    const MoFEM::Problem *problem_ptr;
+    CHKERR DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
+    CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+        problem_ptr->getName(), blockData.fieldName, blockData.essentialBc);
+    
     MoFEMFunctionReturn(0);
   }
 
@@ -308,7 +320,6 @@ struct MagneticElement {
    * @return [description]
    */
   MoFEMErrorCode destroyProblem() {
-
     MoFEMFunctionBegin;
     CHKERR DMDestroy(&blockData.dM);
     MoFEMFunctionReturn(0);
@@ -322,15 +333,24 @@ struct MagneticElement {
    */
   MoFEMErrorCode solveProblem(const bool regression_test = false) {
     MoFEMFunctionBegin;
-    CHKERR DMCreateMatrix(blockData.dM, &blockData.A);
-    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.F);
-    CHKERR VecDuplicate(blockData.F, &blockData.D);
 
     VolumeFE vol_fe(mField);
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
     tri_fe.getOpPtrVector().push_back(new OpNaturalBC(blockData));
+
+    // create matrices and vectors
+    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.D);
+    // CHKERR DMCreateMatrix(blockData.dM, &blockData.A);
+    CHKERR DMCreateGlobalVector(blockData.dM, &blockData.F);
+    CHKERR VecDuplicate(blockData.F, &blockData.D);
+
+    const MoFEM::Problem *problem_ptr;
+    CHKERR DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
+    CHKERR mField.getInterface<MatrixManager>()
+        ->createMPIAIJ<PetscGlobalIdx_mi_tag>(problem_ptr->getName(),
+                                              &blockData.A);
 
     CHKERR MatZeroEntries(blockData.A);
     CHKERR VecZeroEntries(blockData.F);
@@ -349,49 +369,13 @@ struct MagneticElement {
     CHKERR VecAssemblyBegin(blockData.F);
     CHKERR VecAssemblyEnd(blockData.F);
 
-    // Boundary conditions
-    std::vector<int> dofs_bc_indices;
-
-    const MoFEM::Problem *problem_ptr;
-    CHKERR DMMoFEMGetProblemPtr(blockData.dM, &problem_ptr);
-    auto block_bit_number = mField.get_field_bit_number(blockData.fieldName);
-
-    for (auto eit = blockData.essentialBc.pair_begin();
-         eit != blockData.essentialBc.pair_end(); eit++) {
-      const auto f = eit->first;
-      const auto s = eit->second;
-      auto &dofs = problem_ptr->getNumeredRowDofs();
-      auto dit = dofs->get<Unique_mi_tag>().lower_bound(
-          DofEntity::getLoFieldEntityUId(block_bit_number, f));
-      auto hi_dit = dofs->get<Unique_mi_tag>().upper_bound(
-          DofEntity::getHiFieldEntityUId(block_bit_number, s));
-      for (; dit != hi_dit; ++dit) {
-        if ((*dit)->getPart() == mField.get_comm_rank()) {
-          std::bitset<8> pstatus((*dit)->getPStatus());
-          if (pstatus.test(0))
-            continue; // only local
-          dofs_bc_indices.push_back((*dit)->getPetscGlobalDofIdx());
-        }
-      }
-    }
-
-    const double diag = 1;
-    CHKERR MatZeroRowsColumns(
-        blockData.A, dofs_bc_indices.size(),
-        dofs_bc_indices.empty() ? PETSC_NULL : &*dofs_bc_indices.begin(), diag,
-        PETSC_NULL, PETSC_NULL);
-
     KSP solver;
     CHKERR KSPCreate(PETSC_COMM_WORLD, &solver);
     CHKERR KSPSetOperators(solver, blockData.A, blockData.A);
     CHKERR KSPSetFromOptions(solver);
     CHKERR KSPSetUp(solver);
     CHKERR KSPSolve(solver, blockData.F, blockData.D);
-    CHKERR VecGhostUpdateBegin(blockData.D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(blockData.D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR KSPDestroy(&solver);
-    CHKERR VecDestroy(&blockData.F);
-    CHKERR MatDestroy(&blockData.A);
 
     CHKERR VecGhostUpdateBegin(blockData.D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(blockData.D, INSERT_VALUES, SCATTER_FORWARD);
@@ -411,6 +395,9 @@ struct MagneticElement {
     }
 
     CHKERR VecDestroy(&blockData.D);
+    CHKERR VecDestroy(&blockData.F);
+    CHKERR MatDestroy(&blockData.A);
+
     MoFEMFunctionReturn(0);
   }
 
