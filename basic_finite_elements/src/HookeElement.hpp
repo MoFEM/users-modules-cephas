@@ -1428,15 +1428,22 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     t2(1, 2) = t2(2, 1) = t1(2, 1);
   };
 
-  double def_VAL[9];
-  bzero(def_VAL, 9 * sizeof(double));
+  std::array<double,9> def_val;
+  def_val.fill(0);
 
-  Tag th_stress;
-  CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
-                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-  Tag th_psi;
-  CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
-                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+  auto make_tag = [&](auto name, auto size) {
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name, size, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def_val.data());
+    return th;
+  };
+  
+  auto th_stress = make_tag("STRESS", 9);
+  auto th_psi =  make_tag("ENERGY", 1);
+  auto th_sigma0 = make_tag("SIGMA0", 3);
+  auto th_sigma1 = make_tag("SIGMA1", 3);
+  auto th_sigma2 = make_tag("SIGMA2", 3);
 
   const int nb_integration_pts = mapGaussPts.size();
 
@@ -1478,6 +1485,12 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
 
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
+    if (isFieldDisp) {
+      t_h(0, 0) += 1;
+      t_h(1, 1) += 1;
+      t_h(2, 2) += 1;
+    }
+
     if (!isALE) {
       t_small_strain_symm(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
     } else {
@@ -1488,11 +1501,9 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
       ++t_H;
     }
 
-    if (isALE || !isFieldDisp) {
-      t_small_strain_symm(0, 0) -= 1;
-      t_small_strain_symm(1, 1) -= 1;
-      t_small_strain_symm(2, 2) -= 1;
-    }
+    t_small_strain_symm(0, 0) -= 1;
+    t_small_strain_symm(1, 1) -= 1;
+    t_small_strain_symm(2, 2) -= 1;
 
     // symmetric tensors need improvement
     t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
@@ -1503,6 +1514,35 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
     CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
                                      &t_stress(0, 0));
+
+    auto calculate_principal_stress = [&]() {
+      VectorDouble3 eigen_values(3);
+      // LAPACK - eigenvalues and vectors. Applied twice for initial creates
+      // memory space
+      int n = 3, lda = 3, info, lwork = -1;
+      double wkopt;
+      info = lapack_dsyev('V', 'U', n, &(t_stress(0, 0)), lda,
+                          &(eigen_values[0]), &wkopt, lwork);
+      if (info != 0)
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                 "is something wrong with lapack_dsyev info = %d", info);
+      lwork = (int)wkopt;
+      double work[lwork];
+      info = lapack_dsyev('V', 'U', n, &(t_stress(0, 0)), lda,
+                          &(eigen_values[0]), work, lwork);
+      if (info != 0)
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                 "is something wrong with lapack_dsyev info = %d", info);
+      std::array<Tag, 3> tags = {th_sigma0, th_sigma1, th_sigma2};
+      for (auto ii : {0, 1, 2}) {
+        FTensor::Tensor1<double, 3> t_sigma;
+        t_sigma(i) = t_stress(ii, i) * eigen_values[ii];
+        CHKERR postProcMesh.tag_set_data(tags[ii], &mapGaussPts[gg], 1,
+                                         &(t_sigma(0)));
+      }
+    };
+
+    calculate_principal_stress();
 
     ++t_h;
   }

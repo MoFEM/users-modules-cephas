@@ -145,6 +145,7 @@ int main(int argc, char *argv[]) {
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_calculating_frequency = PETSC_FALSE;
+    PetscBool is_post_proc_volume  = PETSC_FALSE;
 
     // Select base
     enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
@@ -179,6 +180,10 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool(
         "-my_is_calculating_frequency", "set if frequency will be calculated",
         "", is_calculating_frequency, &is_calculating_frequency, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_is_post_proc_volume",
+                            "if true post proc volume", "", is_post_proc_volume,
+                            &is_post_proc_volume, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
@@ -467,8 +472,8 @@ int main(int argc, char *argv[]) {
 
     // Add elastic element
 
-    boost::shared_ptr<std::map<int, BlockData>> block_sets_ptr =
-        boost::make_shared<std::map<int, BlockData>>();
+    boost::shared_ptr<std::map<int, HookeElement::BlockData>> block_sets_ptr =
+        boost::make_shared<std::map<int, HookeElement::BlockData>>();
     CHKERR HookeElement::setBlocks(m_field, block_sets_ptr);
     CHKERR setting_blocks_data_and_order_from_config_file(block_sets_ptr);
 
@@ -491,6 +496,29 @@ int main(int argc, char *argv[]) {
     CHKERR HookeElement::addElasticElement(m_field, block_sets_ptr, "ELASTIC",
                                            "DISPLACEMENT",
                                            "MESH_NODE_POSITIONS", false);
+
+    auto add_skin_element_for_post_processing = [&]() {
+      MoFEMFunctionBegin;
+      Range elastic_element_ents;
+      CHKERR m_field.get_finite_element_entities_by_dimension(
+          "ELASTIC", 3, elastic_element_ents);
+      Skinner skin(&m_field.get_moab());
+      Range skin_faces; // skin faces from 3d ents
+      CHKERR skin.find_skin(0, elastic_element_ents, false, skin_faces);
+      Range proc_skin;
+      CHKERR pcomm->filter_pstatus(skin_faces,
+                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                   PSTATUS_NOT, -1, &proc_skin);
+      CHKERR m_field.add_finite_element("POST_PROC_SKIN");
+      CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
+                                                          "DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_data(
+          "POST_PROC_SKIN", "MESH_NODE_POSITIONS");
+      CHKERR m_field.add_ents_to_finite_element_by_dim(proc_skin, 2,
+                                                       "POST_PROC_SKIN");
+      MoFEMFunctionReturn(0);
+    };
+    CHKERR add_skin_element_for_post_processing();
 
     auto data_at_pts = boost::make_shared<HookeElement::DataAtIntegrationPts>();
     if (mesh_has_tets) {
@@ -675,6 +703,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "FLUID_PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "FORCE_FE");
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
+    CHKERR DMMoFEMAddElement(dm, "POST_PROC_SKIN");
     CHKERR DMSetUp(dm);
 
     // Create matrices & vectors. Note that native PETSc DM interface is used,
@@ -712,7 +741,6 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR MatZeroEntries(Aij);
-
 
     // Below particular implementations of finite elements are used to assemble
     // problem matrixes and vectors.  Implementation of element does not change
@@ -895,38 +923,82 @@ int main(int argc, char *argv[]) {
     // Set up solver
     CHKERR KSPSetUp(solver);
 
-    // Set up post-processor. It is some generic implementation of finite
-    // element.
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
-    // Add operators to the elements, starting with some generic operators
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
-    CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-    CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
-    // Add problem specific operator on element to post-process stresses
-    post_proc.getOpPtrVector().push_back(new PostProcHookStress(
-        m_field, post_proc.postProcMesh, post_proc.mapGaussPts, "DISPLACEMENT",
-        post_proc.commonData, block_sets_ptr.get()));
+    auto set_post_proc_skin = [&](auto &post_proc_skin) {
+      MoFEMFunctionBegin;
+      CHKERR post_proc_skin.generateReferenceElementMesh();
+      auto my_vol_side_fe_ptr =
+          boost::make_shared<MoFEM::VolumeElementForcesAndSourcesCoreOnSide>(
+              m_field);
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>("MESH_NODE_POSITIONS",
+                                                   data_at_pts->HMat));
+      my_vol_side_fe_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>("DISPLACEMENT",
+                                                   data_at_pts->hMat));
 
-    PostProcEdgeOnRefinedMesh post_proc_edge(m_field);
-    CHKERR post_proc_edge.generateReferenceElementMesh();
-    CHKERR post_proc_edge.addFieldValuesPostProc("DISPLACEMENT");
+      CHKERR post_proc_skin.addFieldValuesPostProc("DISPLACEMENT");
+      CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+      post_proc_skin.getOpPtrVector().push_back(
+          new PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin(
+              post_proc_skin.postProcMesh, post_proc_skin.mapGaussPts,
+              "DISPLACEMENT", "DISPLACEMENT_GRAD", my_vol_side_fe_ptr,
+              "ELASTIC", data_at_pts->hMat, true));
+      post_proc_skin.getOpPtrVector().push_back(
+          new HookeElement::OpPostProcHookeElement<
+              FaceElementForcesAndSourcesCore>(
+              "DISPLACEMENT", data_at_pts, *block_sets_ptr,
+              post_proc_skin.postProcMesh, post_proc_skin.mapGaussPts, true,
+              true));
+      MoFEMFunctionReturn(0);
+    };
 
+    auto set_post_proc_tets = [&](auto &post_proc) {
+      MoFEMFunctionBegin;
+      // Add operators to the elements, starting with some generic operators
+      CHKERR post_proc.generateReferenceElementMesh();
+      CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
+      CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+      CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+      // Add problem specific operator on element to post-process stresses
+      post_proc.getOpPtrVector().push_back(new PostProcHookStress(
+          m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
+          "DISPLACEMENT", post_proc.commonData, block_sets_ptr.get()));
+      MoFEMFunctionReturn(0);
+    };
+
+    auto set_post_proc_edge = [&](auto &post_proc_edge) {
+      MoFEMFunctionBegin;
+      CHKERR post_proc_edge.generateReferenceElementMesh();
+      CHKERR post_proc_edge.addFieldValuesPostProc("DISPLACEMENT");
+      MoFEMFunctionReturn(0);
+    };
+
+    auto set_post_proc_prisms = [&](auto &prism_post_proc) {
+      MoFEMFunctionBegin;
+      CHKERR prism_post_proc.generateReferenceElementMesh();
+      boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
+      prism_post_proc.getOpPtrVector().push_back(
+          new OpCalculateInvJacForFatPrism(inv_jac_ptr));
+      prism_post_proc.getOpPtrVector().push_back(
+          new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
+      CHKERR prism_post_proc.addFieldValuesPostProc("DISPLACEMENT");
+      CHKERR prism_post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+      CHKERR prism_post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
+      prism_post_proc.getOpPtrVector().push_back(new PostProcHookStress(
+          m_field, prism_post_proc.postProcMesh, prism_post_proc.mapGaussPts,
+          "DISPLACEMENT", prism_post_proc.commonData, block_sets_ptr.get()));
+      MoFEMFunctionReturn(0);
+    };
+
+    PostProcFaceOnRefinedMesh post_proc_skin(m_field);
     PostProcFatPrismOnRefinedMesh prism_post_proc(m_field);
-    CHKERR prism_post_proc.generateReferenceElementMesh();
+    PostProcEdgeOnRefinedMesh post_proc_edge(m_field);
+    PostProcVolumeOnRefinedMesh post_proc(m_field);
 
-    boost::shared_ptr<MatrixDouble> inv_jac_ptr(new MatrixDouble);
-    prism_post_proc.getOpPtrVector().push_back(
-        new OpCalculateInvJacForFatPrism(inv_jac_ptr));
-    prism_post_proc.getOpPtrVector().push_back(
-        new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
-
-    CHKERR prism_post_proc.addFieldValuesPostProc("DISPLACEMENT");
-    CHKERR prism_post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-    CHKERR prism_post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");
-    prism_post_proc.getOpPtrVector().push_back(new PostProcHookStress(
-        m_field, prism_post_proc.postProcMesh, prism_post_proc.mapGaussPts,
-        "DISPLACEMENT", prism_post_proc.commonData, block_sets_ptr.get()));
+    CHKERR set_post_proc_skin(post_proc_skin);
+    CHKERR set_post_proc_tets(post_proc);
+    CHKERR set_post_proc_prisms(prism_post_proc);
+    CHKERR set_post_proc_edge(post_proc_edge);
 
     // Temperature field is defined on the mesh
     if (m_field.check_field("TEMP")) {
@@ -1013,11 +1085,21 @@ int main(int argc, char *argv[]) {
           // Save data on mesh
           CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
           // Post-process results
-          CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+          if (is_post_proc_volume) {
+            MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
+            CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+            std::ostringstream o1;
+            o1 << "out_" << sit->step_number << ".h5m";
+            CHKERR post_proc.writeFile(o1.str().c_str());
+            MOFEM_LOG("ELASTIC", Sev::inform) << "done ...";
+          }
 
-          std::ostringstream o1;
-          o1 << "out_" << sit->step_number << ".h5m";
-          CHKERR post_proc.writeFile(o1.str().c_str());
+          MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
+          CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc_skin);
+          std::ostringstream o1_skin;
+          o1_skin << "out_skin" << sit->step_number << ".h5m";
+          CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
+          MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done ...";
         }
       } else {
 
@@ -1065,19 +1147,25 @@ int main(int argc, char *argv[]) {
         // Update ghost values for solution vector
         CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
         CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
         // Save data on mesh
-        CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-        CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
-        // Save results to file
-        MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
-        CHKERR post_proc.writeFile("out.h5m");
-        MOFEM_LOG("ELASTIC", Sev::inform) << "done";
+        if (is_post_proc_volume) {
+          MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
+          CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+          // Save results to file
+          CHKERR post_proc.writeFile("out.h5m");
+          MOFEM_LOG("ELASTIC", Sev::inform) << "done";
+        }
+
+        MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
+        CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc_skin);
+        CHKERR post_proc_skin.writeFile("out_skin.h5m");
+        MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done";
       }
 
       // Destroy vector, no needed any more
       CHKERR VecDestroy(&F_thermal);
-
     } else {
       // Elastic analysis no temperature field
       // VecView(F, PETSC_VIEWER_STDOUT_WORLD);
@@ -1095,13 +1183,20 @@ int main(int argc, char *argv[]) {
       // Save data from vector on mesh
       CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
       // Post-process results
-      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      MOFEM_LOG("ELASTIC", Sev::inform) << "Post-process start ...";
+      if (is_post_proc_volume) {
+        CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+      }
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &prism_post_proc);
       CHKERR DMoFEMLoopFiniteElements(dm, "SIMPLE_ROD", &post_proc_edge);
+      CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN", &post_proc_skin);
+      MOFEM_LOG("ELASTIC", Sev::inform) << "done";
+
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
       if (mesh_has_tets) {
         CHKERR post_proc.writeFile("out.h5m");
+        CHKERR post_proc_skin.writeFile("out_skin.h5m");
       }
       if (mesh_has_prisms) {
         CHKERR prism_post_proc.writeFile("prism_out.h5m");
