@@ -25,10 +25,20 @@ struct EssentialBcStorage : public EntityStorage {
 std::vector<boost::shared_ptr<EssentialBcStorage>>
     EssentialBcStorage::feStorage;
 
+/**
+ * @brief Set values to vector in operator
+ * 
+ * @param V 
+ * @param data 
+ * @param ptr 
+ * @param iora 
+ * @return MoFEMErrorCode 
+ */
 inline MoFEMErrorCode
 VecSetValues(Vec V, const DataForcesAndSourcesCore::EntData &data,
              const double *ptr, InsertMode iora) {
 
+  CHKERR VecSetOption(V, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
   if (!data.getFieldEntities().empty()) {
     if (auto e_ptr = data.getFieldEntities()[0]) {
       if (auto stored_data_ptr =
@@ -44,6 +54,16 @@ VecSetValues(Vec V, const DataForcesAndSourcesCore::EntData &data,
                         &*data.getIndices().begin(), ptr, iora);
 }
 
+/**
+ * @brief Set valyes to matrix in operator
+ * 
+ * @param M 
+ * @param row_data 
+ * @param col_data 
+ * @param ptr 
+ * @param iora 
+ * @return MoFEMErrorCode 
+ */
 inline MoFEMErrorCode MatSetValues(
     Mat M, const DataForcesAndSourcesCore::EntData &row_data,
     const DataForcesAndSourcesCore::EntData &col_data, const double *ptr,
@@ -71,6 +91,15 @@ inline MoFEMErrorCode MatSetValues(
 typedef boost::function<double(const double, const double, const double)>
     ScalarFunc;
 
+/**
+ * @brief Set indices on entities on finite element
+ *
+ * If indices is marked, set its value to -1. DOF which such indice is not
+ * assembled into system.
+ * 
+ * Indices are strored on on entity.
+ *
+ */
 struct OpSetBc : public ForcesAndSourcesCore::UserDataOperator {
   OpSetBc(std::string field_name,
           boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
@@ -99,6 +128,10 @@ public:
   boost::shared_ptr<std::vector<bool>> boundaryMarker;
 };
 
+/**
+ * @brief Clear stored indicies on entities.
+ * 
+ */
 struct OpUnSetBc : public ForcesAndSourcesCore::UserDataOperator {
   OpUnSetBc(std::string field_name)
       : ForcesAndSourcesCore::UserDataOperator(field_name, OpFaceEle::OPROW) {}
@@ -239,7 +272,6 @@ public:
       }
 
       // FILL VALUES OF THE GLOBAL VECTOR ENTRIES FROM THE LOCAL ONES
-      CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
       CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
     }
 
