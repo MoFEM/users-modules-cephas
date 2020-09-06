@@ -16,16 +16,103 @@ namespace Poisson2DNonhomogeneousOperators {
 
 FTensor::Index<'i', 2> i;
 
+struct EssentialBcStorage : public EntityStorage {
+  EssentialBcStorage(VectorInt &indices) : entityIndices(indices) {}
+  VectorInt entityIndices;
+  static std::vector<boost::shared_ptr<EssentialBcStorage>> feStorage;
+};
+
+std::vector<boost::shared_ptr<EssentialBcStorage>>
+    EssentialBcStorage::feStorage;
+
+inline MoFEMErrorCode
+VecSetValues(Vec V, const DataForcesAndSourcesCore::EntData &data,
+             const double *ptr, InsertMode iora) {
+
+  if (!data.getFieldEntities().empty()) {
+    if (auto e_ptr = data.getFieldEntities()[0]) {
+      if (auto stored_data_ptr =
+              e_ptr->getSharedStoragePtr<EssentialBcStorage>()) {
+        return ::VecSetValues(V, stored_data_ptr->entityIndices.size(),
+                              &*stored_data_ptr->entityIndices.begin(), ptr,
+                              iora);
+      }
+    }
+  }
+
+  return ::VecSetValues(V, data.getIndices().size(),
+                        &*data.getIndices().begin(), ptr, iora);
+}
+
+inline MoFEMErrorCode MatSetValues(
+    Mat M, const DataForcesAndSourcesCore::EntData &row_data,
+    const DataForcesAndSourcesCore::EntData &col_data, const double *ptr,
+    InsertMode iora) {
+
+  if (!row_data.getFieldEntities().empty()) {
+    if (auto e_ptr = row_data.getFieldEntities()[0]) {
+      if (auto stored_data_ptr =
+              e_ptr->getSharedStoragePtr<EssentialBcStorage>()) {
+
+        return ::MatSetValues(M, stored_data_ptr->entityIndices.size(),
+                              &*stored_data_ptr->entityIndices.begin(),
+                              col_data.getIndices().size(),
+                              &*col_data.getIndices().begin(), ptr, iora);
+      }
+    }
+  }
+
+  return ::MatSetValues(
+      M, row_data.getIndices().size(), &*row_data.getIndices().begin(),
+      col_data.getIndices().size(), &*col_data.getIndices().begin(), ptr, iora);
+}
+
 // const double body_source = 10;
 typedef boost::function<double(const double, const double, const double)>
     ScalarFunc;
 
+struct OpSetBc : public ForcesAndSourcesCore::UserDataOperator {
+  OpSetBc(std::string field_name,
+          boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+      : ForcesAndSourcesCore::UserDataOperator(field_name, OpFaceEle::OPROW) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+    if (boundaryMarker) {
+      if (!data.getFieldEntities().empty()) {
+        if (auto e_ptr = data.getFieldEntities()[0]) {
+          auto indices = data.getIndices();
+          for (int r = 0; r != data.getIndices().size(); ++r) {
+            if ((*boundaryMarker)[data.getLocalIndices()[r]]) {
+              indices[r] = -1;
+            }
+          }
+          EssentialBcStorage::feStorage.push_back(
+              boost::make_shared<EssentialBcStorage>(indices));
+          e_ptr->getWeakStoragePtr() = EssentialBcStorage::feStorage.back();
+        }
+      }
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+public:
+  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+};
+
+struct OpUnSetBc : public ForcesAndSourcesCore::UserDataOperator {
+  OpUnSetBc(std::string field_name)
+      : ForcesAndSourcesCore::UserDataOperator(field_name, OpFaceEle::OPROW) {}
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+    EssentialBcStorage::feStorage.clear();
+    MoFEMFunctionReturn(0);
+  }
+};
+
 struct OpDomainLhs : public OpFaceEle {
 public:
-  OpDomainLhs(std::string row_field_name, std::string col_field_name,
-              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
-        boundaryMarker(boundary_marker) {
+  OpDomainLhs(std::string row_field_name, std::string col_field_name)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
     sYmm = true;
   }
 
@@ -80,32 +167,10 @@ public:
 
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
 
-      // store original row indices
-      auto row_indices = row_data.getIndices();
-      // mark indices of boundary DOFs as -1
-      if (boundaryMarker) {
-        for (int r = 0; r != row_data.getIndices().size(); ++r) {
-          if ((*boundaryMarker)[row_data.getLocalIndices()[r]]) {
-            row_data.getIndices()[r] = -1;
-          }
-        }
-      }
       // Fill value to local stiffness matrix ignoring boundary DOFs
       CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
                           ADD_VALUES);
-      // Revert back row indices to the original
-      row_data.getIndices().data().swap(row_indices.data());
 
-      // store original column row indices
-      auto col_indices = col_data.getIndices();
-      // mark indices of boundary DOFs as -1
-      if (boundaryMarker) {
-        for (int c = 0; c != col_data.getIndices().size(); ++c) {
-          if ((*boundaryMarker)[col_data.getLocalIndices()[c]]) {
-            col_data.getIndices()[c] = -1;
-          }
-        }
-      }
       // Fill values of symmetric local stiffness matrix
       if (row_side != col_side || row_type != col_type) {
         transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
@@ -113,8 +178,6 @@ public:
         CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
                             ADD_VALUES);
       }
-      // Revert back row indices to the original
-      col_data.getIndices().data().swap(col_indices.data());
     }
 
     MoFEMFunctionReturn(0);
@@ -127,10 +190,9 @@ private:
 
 struct OpDomainRhs : public OpFaceEle {
 public:
-  OpDomainRhs(std::string field_name, ScalarFunc source_term_function,
-              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+  OpDomainRhs(std::string field_name, ScalarFunc source_term_function)
       : OpFaceEle(field_name, OpFaceEle::OPROW),
-        sourceTermFunc(source_term_function), boundaryMarker(boundary_marker) {}
+        sourceTermFunc(source_term_function) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -177,21 +239,8 @@ public:
       }
 
       // FILL VALUES OF THE GLOBAL VECTOR ENTRIES FROM THE LOCAL ONES
-
-      auto row_indices = data.getIndices();
-      // Mark the boundary DOFs and fill only domain DOFs
-      if (boundaryMarker) {
-        for (int r = 0; r != data.getIndices().size(); ++r) {
-          if ((*boundaryMarker)[data.getLocalIndices()[r]]) {
-            data.getIndices()[r] = -1;
-          }
-        }
-      }
       CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
       CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
-
-      // revert back the indices
-      data.getIndices().data().swap(row_indices.data());
     }
 
     MoFEMFunctionReturn(0);
@@ -199,7 +248,6 @@ public:
 
 private:
   ScalarFunc sourceTermFunc;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
   VectorDouble locRhs;
 };
 

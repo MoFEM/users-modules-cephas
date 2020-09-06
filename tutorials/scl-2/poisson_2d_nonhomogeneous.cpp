@@ -187,15 +187,22 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
         new OpCalculateInvJacForFace(invJac));
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(invJac));
-
     domainPipelineLhs->getOpPtrVector().push_back(
-        new OpDomainLhs(domainField, domainField, boundaryMarker));
+        new OpSetBc(domainField, boundaryMarker));
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpDomainLhs(domainField, domainField));
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpUnSetBc(domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // domain elements
     domainPipelineRhs->getOpPtrVector().push_back(
-        new OpDomainRhs(domainField, sourceTermFunction, boundaryMarker));
+        new OpSetBc(domainField, boundaryMarker));
+    domainPipelineRhs->getOpPtrVector().push_back(
+        new OpDomainRhs(domainField, sourceTermFunction));
+    domainPipelineRhs->getOpPtrVector().push_back(
+        new OpUnSetBc(domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS of
