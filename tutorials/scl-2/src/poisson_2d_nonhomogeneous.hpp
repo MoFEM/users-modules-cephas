@@ -106,21 +106,22 @@ struct OpSetBc : public ForcesAndSourcesCore::UserDataOperator {
       : ForcesAndSourcesCore::UserDataOperator(field_name, OpFaceEle::OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
-    if (boundaryMarker) {
-      if (!data.getFieldEntities().empty()) {
-        if (auto e_ptr = data.getFieldEntities()[0]) {
-          auto indices = data.getIndices();
-          for (int r = 0; r != data.getIndices().size(); ++r) {
-            if ((*boundaryMarker)[data.getLocalIndices()[r]]) {
-              indices[r] = -1;
+    if (!data.getIndices().empty())
+      if (boundaryMarker) {
+        if (!data.getFieldEntities().empty()) {
+          if (auto e_ptr = data.getFieldEntities()[0]) {
+            auto indices = data.getIndices();
+            for (int r = 0; r != data.getIndices().size(); ++r) {
+              if ((*boundaryMarker)[data.getLocalIndices()[r]]) {
+                indices[r] = -1;
+              }
             }
+            EssentialBcStorage::feStorage.push_back(
+                boost::make_shared<EssentialBcStorage>(indices));
+            e_ptr->getWeakStoragePtr() = EssentialBcStorage::feStorage.back();
           }
-          EssentialBcStorage::feStorage.push_back(
-              boost::make_shared<EssentialBcStorage>(indices));
-          e_ptr->getWeakStoragePtr() = EssentialBcStorage::feStorage.back();
         }
       }
-    }
     MoFEMFunctionReturn(0);
   }
 
