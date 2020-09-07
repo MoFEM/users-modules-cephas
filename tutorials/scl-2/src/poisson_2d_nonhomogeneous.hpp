@@ -14,8 +14,6 @@ using EntData = DataForcesAndSourcesCore::EntData;
 
 namespace Poisson2DNonhomogeneousOperators {
 
-FTensor::Index<'i', 2> i;
-
 struct EssentialBcStorage : public EntityStorage {
   EssentialBcStorage(VectorInt &indices) : entityIndices(indices) {}
   VectorInt entityIndices;
@@ -25,24 +23,29 @@ struct EssentialBcStorage : public EntityStorage {
 std::vector<boost::shared_ptr<EssentialBcStorage>>
     EssentialBcStorage::feStorage;
 
+}
+
 /**
  * @brief Set values to vector in operator
- * 
- * @param V 
- * @param data 
- * @param ptr 
- * @param iora 
- * @return MoFEMErrorCode 
+ *
+ * @param V
+ * @param data
+ * @param ptr
+ * @param iora
+ * @return MoFEMErrorCode
  */
+template <>
 inline MoFEMErrorCode
-VecSetValues(Vec V, const DataForcesAndSourcesCore::EntData &data,
-             const double *ptr, InsertMode iora) {
-
+MoFEM::VecSetValues<Poisson2DNonhomogeneousOperators::EssentialBcStorage>(
+    Vec V, const DataForcesAndSourcesCore::EntData &data, const double *ptr,
+    InsertMode iora) {
+  MoFEMFunctionBegin;
   CHKERR VecSetOption(V, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
   if (!data.getFieldEntities().empty()) {
     if (auto e_ptr = data.getFieldEntities()[0]) {
       if (auto stored_data_ptr =
-              e_ptr->getSharedStoragePtr<EssentialBcStorage>()) {
+              e_ptr->getSharedStoragePtr<
+                  Poisson2DNonhomogeneousOperators::EssentialBcStorage>()) {
         return ::VecSetValues(V, stored_data_ptr->entityIndices.size(),
                               &*stored_data_ptr->entityIndices.begin(), ptr,
                               iora);
@@ -52,6 +55,8 @@ VecSetValues(Vec V, const DataForcesAndSourcesCore::EntData &data,
 
   return ::VecSetValues(V, data.getIndices().size(),
                         &*data.getIndices().begin(), ptr, iora);
+
+  MoFEMFunctionReturn(0);
 }
 
 /**
@@ -64,7 +69,9 @@ VecSetValues(Vec V, const DataForcesAndSourcesCore::EntData &data,
  * @param iora 
  * @return MoFEMErrorCode 
  */
-inline MoFEMErrorCode MatSetValues(
+template <>
+inline MoFEMErrorCode
+MoFEM::MatSetValues<Poisson2DNonhomogeneousOperators::EssentialBcStorage>(
     Mat M, const DataForcesAndSourcesCore::EntData &row_data,
     const DataForcesAndSourcesCore::EntData &col_data, const double *ptr,
     InsertMode iora) {
@@ -72,7 +79,8 @@ inline MoFEMErrorCode MatSetValues(
   if (!row_data.getFieldEntities().empty()) {
     if (auto e_ptr = row_data.getFieldEntities()[0]) {
       if (auto stored_data_ptr =
-              e_ptr->getSharedStoragePtr<EssentialBcStorage>()) {
+              e_ptr->getSharedStoragePtr<
+                  Poisson2DNonhomogeneousOperators::EssentialBcStorage>()) {
 
         return ::MatSetValues(M, stored_data_ptr->entityIndices.size(),
                               &*stored_data_ptr->entityIndices.begin(),
@@ -86,6 +94,15 @@ inline MoFEMErrorCode MatSetValues(
       M, row_data.getIndices().size(), &*row_data.getIndices().begin(),
       col_data.getIndices().size(), &*col_data.getIndices().begin(), ptr, iora);
 }
+
+namespace Poisson2DNonhomogeneousOperators {
+
+constexpr auto VecSetValues =
+     MoFEM::VecSetValues<Poisson2DNonhomogeneousOperators::EssentialBcStorage>;
+constexpr auto MatSetValues =
+    MoFEM::MatSetValues<Poisson2DNonhomogeneousOperators::EssentialBcStorage>;
+
+FTensor::Index<'i', 2> i;
 
 // const double body_source = 10;
 typedef boost::function<double(const double, const double, const double)>
