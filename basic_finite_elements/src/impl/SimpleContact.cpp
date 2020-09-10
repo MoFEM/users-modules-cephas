@@ -852,7 +852,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetTangentGapVelocitySlave::doWork(
     t_tangent_gap_ptr(1) +=
         t_tangent_2_at_gp(i) *
         (t_position_slave_gp(i) - t_position_master_gp(i) -
-         -(t_prev_position_slave_gp(i) - t_prev_position_master_gp(i)));
+         (t_prev_position_slave_gp(i) - t_prev_position_master_gp(i)));
 
     ++t_position_slave_gp;
     ++t_position_master_gp;
