@@ -431,6 +431,16 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> invHMat;
     boost::shared_ptr<VectorDouble> detHVec;
 
+    boost::shared_ptr<MatrixDouble> lagMatMultAtGaussPtsPtr;
+    boost::shared_ptr<MatrixDouble> contactLagrangeHdivDivergencePtr;
+    boost::shared_ptr<MatrixDouble> mGradPtr;
+    boost::shared_ptr<MatrixDouble> contactTractionPtr;
+
+    boost::shared_ptr<MatrixDouble> xFaceAtPts;
+    boost::shared_ptr<VectorDouble> normalVectorFacePtr;
+    boost::shared_ptr<VectorDouble> tangentOneVectorFacePtr;
+    boost::shared_ptr<VectorDouble> tangentTwoVectorFacePtr;
+
     double areaSlave;
     double areaMaster;
 
