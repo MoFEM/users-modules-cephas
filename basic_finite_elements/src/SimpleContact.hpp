@@ -3970,6 +3970,48 @@ struct SimpleContactProblem {
         MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
       };
 
+      struct OpGetNormalForTri : public FaceUserDataOperator {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetNormalForTri(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      struct OpPostProcContactContinuous : public FaceUserDataOperator {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        moab::Interface &postProcMesh;
+        std::vector<EntityHandle> &mapGaussPts;
+        string lagMultName;
+        string fieldName;
+
+        OpPostProcContactContinuous(const string lag_mult_name,
+                                    const string field_name,
+                                    moab::Interface &post_proc_mesh,
+                                    std::vector<EntityHandle> &map_gauss_pts,
+                                    boost::shared_ptr<CommonDataSimpleContact>
+                                        &common_data_simple_contact)
+            : FaceElementForcesAndSourcesCore::UserDataOperator(
+                  lag_mult_name, UserDataOperator::OPROW),
+              lagMultName(lag_mult_name), fieldName(field_name),
+              commonDataSimpleContact(common_data_simple_contact),
+              postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts) {
+          doVertices = true;
+          doEdges = false;
+          doQuads = false;
+          doTris = false;
+          doTets = false;
+          doPrisms = false;
+        };
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
 ///<<<<<<<<<HDIV
 
     };

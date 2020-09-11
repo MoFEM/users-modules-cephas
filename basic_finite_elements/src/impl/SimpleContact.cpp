@@ -6073,52 +6073,6 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhsForFace::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTractionForFace::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  MoFEMFunctionBegin;
-  const size_t nb_gauss_pts = getGaussPts().size2();
-
-  const size_t nb_dofs = data.getIndices().size();
-  if (nb_dofs) {
-    FTensor::Index<'i', 3> i;
-    FTensor::Index<'j', 3> j;
-
-    if (/*side == 0 &&*/ type == MBTRI) {
-      commonDataSimpleContact->contactTractionPtr->resize(3, nb_gauss_pts);
-      commonDataSimpleContact->contactTractionPtr->clear();
-    }
-
-    auto get_tensor_vec = [](VectorDouble &n, const int r) {
-      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
-    };
-
-    auto t_normal = get_tensor_vec(
-        commonDataSimpleContact->normalVectorFacePtr.get()[0], 0);
-    auto t_traction =
-        getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
-    size_t nb_base_functions = data.getN().size2() / 3;
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      auto t_base = data.getFTensor1N<3>(gg, 0);
-      auto t_field_data = data.getFTensor1FieldData<3>();
-      size_t bb = 0;
-      for (; bb != nb_dofs / 3; ++bb) {
-        // cerr << " WTF "
-        //      << "   bb    " << bb << "   gg   " << gg << "   t_base       "
-        //      << t_base << "    t_field_data      " << t_field_data << "\n";
-        t_traction(j) += (t_base(i) * t_normal(i)) * t_field_data(j);
-
-        ++t_field_data;
-        ++t_base;
-      }
-      // for (; bb < nb_base_functions; ++bb)
-      //   ++t_base;
-
-      ++t_traction;
-    }
-  }
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode
 SimpleContactProblem::OpConstrainBoundaryLhs_dxdTractionForFace::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -6335,6 +6289,73 @@ MoFEMErrorCode SimpleContactProblem::OpGetFromHdivLagMulAtGaussPtsSlave::doWork(
     t_lagrange_slave += t_traction(i) * t_normal(i);
     ++t_traction;
     ++t_lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetNormalForTri::doWork(int side,
+                                                               EntityType type,
+                                                               EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  const double *normal_slave_ptr = &getNormal()[0];
+
+  commonDataSimpleContact->normalVectorSlavePtr.get()->resize(3);
+  commonDataSimpleContact->normalVectorSlavePtr.get()->clear();
+
+  auto t_normal =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+
+  for (int ii = 0; ii != 3; ++ii)
+    t_normal(ii) = normal_slave_ptr[ii];
+
+  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  t_normal(i) = t_normal(i) / normal_length;
+
+  commonDataSimpleContact->areaSlave = 0.5 * normal_length;
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpPostProcContactContinuous::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
+
+  double def_VAL[9];
+  bzero(def_VAL, 9 * sizeof(double));
+
+  Tag th_lag_mult;
+
+  CHKERR postProcMesh.tag_get_handle("LAGRANGE_MULTIPLIER", 1, MB_TYPE_DOUBLE,
+                                     th_lag_mult, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                     def_VAL);
+
+  auto t_lagrange =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  const int nb_gauss_pts =
+      commonDataSimpleContact->lagMultAtGaussPtsPtr->size();
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    CHKERR postProcMesh.tag_set_data(th_lag_mult, &mapGaussPts[gg], 1,
+                                     &t_lagrange);
+    ++t_lagrange;
   }
 
   MoFEMFunctionReturn(0);
