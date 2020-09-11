@@ -431,6 +431,13 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> invHMat;
     boost::shared_ptr<VectorDouble> detHVec;
 
+
+    boost::shared_ptr<MatrixDouble> xAtPts;
+    boost::shared_ptr<MatrixDouble> xInitAtPts;
+
+    boost::shared_ptr<MatrixDouble> meshPositionAtGaussPtsMasterPtr;
+    boost::shared_ptr<MatrixDouble> meshPositionAtGaussPtsSlavePtr;
+
     boost::shared_ptr<MatrixDouble> lagMatMultAtGaussPtsPtr;
     boost::shared_ptr<MatrixDouble> contactLagrangeHdivDivergencePtr;
     boost::shared_ptr<MatrixDouble> mGradPtr;
@@ -488,9 +495,17 @@ struct SimpleContactProblem {
       tangentOneVectorFacePtr = boost::make_shared<VectorDouble>();
       tangentTwoVectorFacePtr = boost::make_shared<VectorDouble>();
 
-          int local_size = (mField.get_comm_rank() == 0)
-                               ? CommonDataSimpleContact::LAST_ELEMENT
-                               : 0;
+      xAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      xInitAtPts = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      meshPositionAtGaussPtsMasterPtr =
+          boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      meshPositionAtGaussPtsSlavePtr =
+          boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      int local_size = (mField.get_comm_rank() == 0)
+                           ? CommonDataSimpleContact::LAST_ELEMENT
+                           : 0;
       gaussPtsStateVec = createSmartVectorMPI(
           mField.get_comm(), local_size, CommonDataSimpleContact::LAST_ELEMENT);
       contactAreaVec = createSmartVectorMPI(

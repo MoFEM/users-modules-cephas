@@ -4953,7 +4953,7 @@ MoFEMErrorCode SimpleContactProblem::OpInternalDomainContactRhs::doWork(
       ++t_div_stress;
       ++t_lambdas;
       ++t_w;
-      ++t_grad;
+      // ++t_grad;
     }
     CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
   }
