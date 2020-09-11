@@ -3792,6 +3792,184 @@ struct SimpleContactProblem {
         MatrixDouble transLocMat;
       };
 
+      struct OpGetOrthonormalTangents : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataExtendedContact;
+        OpGetOrthonormalTangents(const string field_name,
+                                 boost::shared_ptr<CommonDataSimpleContact>
+                                     common_data_extended_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataExtendedContact(common_data_extended_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+      };
+
+      struct OpGetMeshPositionAtGaussPtsMaster : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetMeshPositionAtGaussPtsMaster(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACEMASTER),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+      };
+
+      struct OpGetMeshPositionAtGaussPtsSlave : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetMeshPositionAtGaussPtsSlave(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+      };
+
+      struct OpGetNormalAndTangentsFace : public FaceUserDataOperator {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetNormalAndTangentsFace(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+              commonDataSimpleContact(common_data_contact) {
+          doVertices = true;
+          doEdges = true;
+          doTris = true;
+        }
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      struct OpConstrainBoundaryTractionForFace : public FaceUserDataOperator {
+        OpConstrainBoundaryTractionForFace(
+            const std::string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+      };
+
+      struct OpConstrainBoundaryRhsForFace : public FaceUserDataOperator {
+        double cN;
+        OpConstrainBoundaryRhsForFace(
+            const std::string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+            double &cn_value)
+            : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+              commonDataSimpleContact(common_data_contact), cN(cn_value) {}
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+      };
+
+      struct OpConstrainBoundaryLhs_dxdTractionForFace
+          : public FaceUserDataOperator {
+        OpConstrainBoundaryLhs_dxdTractionForFace(
+            const std::string row_field_name, const std::string col_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double &dn_value)
+            : FaceUserDataOperator(row_field_name, col_field_name,
+                                   UserDataOperator::OPROWCOL),
+              commonDataSimpleContact(common_data_contact), cN(dn_value) {
+          sYmm = false;
+        }
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        MatrixDouble locMat;
+        double cN;
+      };
+
+      struct OpConstrainBoundaryLhs_dU_ForFace : public FaceUserDataOperator {
+        OpConstrainBoundaryLhs_dU_ForFace(
+            const std::string row_field_name, const std::string col_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double &dn_value)
+            : FaceUserDataOperator(row_field_name, col_field_name,
+                                   UserDataOperator::OPROWCOL),
+              commonDataSimpleContact(common_data_contact), cN(dn_value) {
+          sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        MatrixDouble locMat;
+        double cN;
+      };
+
+      struct OpConstrainBoundaryTractionPostProc : public FaceUserDataOperator {
+        OpConstrainBoundaryTractionPostProc(
+            const std::string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+      };
+
+      /**
+       * @brief Operator for the simple contact element
+       *
+       * Calculates Lagrange multipliers at the gauss points on the slave
+       * triangle.
+       *
+       */
+      struct OpGetFromHdivLagMulAtGaussPtsSlavePostProc
+          : public FaceUserDataOperator {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetFromHdivLagMulAtGaussPtsSlavePostProc(
+            const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : FaceUserDataOperator(lagrang_field_name, UserDataOperator::OPROW),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      struct OpGetFromHdivLagMulAtGaussPtsSlave : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetFromHdivLagMulAtGaussPtsSlave(
+            const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : ContactOp(lagrang_field_name, UserDataOperator::OPROW,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
 ///<<<<<<<<<HDIV
 
     };

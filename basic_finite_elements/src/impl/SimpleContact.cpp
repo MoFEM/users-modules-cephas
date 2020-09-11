@@ -5724,6 +5724,622 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainDomainLhs_dU::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpGetOrthonormalTangents::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  commonDataExtendedContact->tangentOneVectorSlavePtr->resize(3, false);
+  commonDataExtendedContact->tangentOneVectorSlavePtr->clear();
+
+  commonDataExtendedContact->tangentTwoVectorSlavePtr->resize(3, false);
+  commonDataExtendedContact->tangentTwoVectorSlavePtr->clear();
+
+  const double *tangent_one_slave_ptr = &getTangentSlaveOne()[0];
+  const double *tangent_two_slave_ptr = &getTangentSlaveTwo()[0];
+
+  auto t_tangent_1 =
+      get_tensor_vec(*(commonDataExtendedContact->tangentOneVectorSlavePtr));
+
+  auto t_tangent_2 =
+      get_tensor_vec(*(commonDataExtendedContact->tangentTwoVectorSlavePtr));
+
+  for (int ii = 0; ii != 3; ++ii) {
+    t_tangent_1(ii) = tangent_one_slave_ptr[ii];
+    t_tangent_2(ii) = tangent_two_slave_ptr[ii];
+  }
+
+  const double l_tan_1 = sqrt(t_tangent_1(i) * t_tangent_1(i));
+
+  const double l_tan_2 = sqrt(t_tangent_2(i) * t_tangent_2(i));
+
+  t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
+  t_tangent_2(i) = t_tangent_2(i) / l_tan_2;
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetMeshPositionAtGaussPtsMaster::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->meshPositionAtGaussPtsMasterPtr.get()->resize(
+        3, nb_gauss_pts, false);
+
+    commonDataSimpleContact->meshPositionAtGaussPtsMasterPtr.get()->clear();
+  }
+
+  auto position_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->meshPositionAtGaussPtsMasterPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_master(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; bb++) {
+      position_master(i) += t_base_master * t_field_data_master(i);
+
+      ++t_base_master;
+      ++t_field_data_master;
+    }
+    ++position_master;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetMeshPositionAtGaussPtsSlave::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->meshPositionAtGaussPtsSlavePtr.get()->resize(
+        3, nb_gauss_pts, false);
+
+    commonDataSimpleContact->meshPositionAtGaussPtsSlavePtr.get()->clear();
+  }
+
+  auto position_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->meshPositionAtGaussPtsSlavePtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; bb++) {
+      position_slave(i) += t_base_slave * t_field_data_slave(i);
+
+      ++t_base_slave;
+      ++t_field_data_slave;
+    }
+    ++position_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetNormalAndTangentsFace::doWork(
+    int side, EntityType type, EntData &data) {
+
+  MoFEMFunctionBegin;
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  commonDataSimpleContact->normalVectorFacePtr.get()->resize(3);
+  commonDataSimpleContact->normalVectorFacePtr.get()->clear();
+
+  commonDataSimpleContact->tangentOneVectorFacePtr->resize(3, false);
+  commonDataSimpleContact->tangentOneVectorFacePtr->clear();
+
+  commonDataSimpleContact->tangentTwoVectorFacePtr->resize(3, false);
+  commonDataSimpleContact->tangentTwoVectorFacePtr->clear();
+
+  const double *normal_slave_ptr = &getNormal()[0];
+
+  auto t_normal =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorFacePtr));
+
+  for (int ii = 0; ii != 3; ++ii)
+    t_normal(ii) = normal_slave_ptr[ii];
+
+  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  t_normal(i) = t_normal(i) / normal_length;
+
+  const double *tangent_one_slave_ptr = &getTangent1()[0];
+  // const double *tangent_two_slave_ptr = &getTangent2()[0];
+
+  auto t_tangent_1 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorFacePtr));
+
+  auto t_tangent_2 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorFacePtr));
+
+  for (int ii = 0; ii != 3; ++ii) {
+    t_tangent_1(ii) = tangent_one_slave_ptr[ii];
+    // t_tangent_2(ii) = tangent_two_slave_ptr[ii];
+  }
+
+  const double l_tan_1 = sqrt(t_tangent_1(i) * t_tangent_1(i));
+
+  t_tangent_2(j) = FTensor::levi_civita(i, j, k) * t_tangent_1(i) * t_normal(k);
+
+  const double l_tan_2 = sqrt(t_tangent_2(i) * t_tangent_2(i));
+
+  t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
+  t_tangent_2(i) = t_tangent_2(i) / l_tan_2;
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTractionForFace::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  const size_t nb_gauss_pts = getGaussPts().size2();
+
+  const size_t nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+
+    if (/*side == 0 &&*/ type == MBTRI) {
+      commonDataSimpleContact->contactTractionPtr->resize(3, nb_gauss_pts);
+      commonDataSimpleContact->contactTractionPtr->clear();
+    }
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    auto t_normal = get_tensor_vec(
+        commonDataSimpleContact->normalVectorFacePtr.get()[0], 0);
+    auto t_traction =
+        getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+    size_t nb_base_functions = data.getN().size2() / 3;
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      auto t_base = data.getFTensor1N<3>(gg, 0);
+      auto t_field_data = data.getFTensor1FieldData<3>();
+      size_t bb = 0;
+      for (; bb != nb_dofs / 3; ++bb) {
+        // cerr << " WTF "
+        //      << "   bb    " << bb << "   gg   " << gg << "   t_base       "
+        //      << t_base << "    t_field_data      " << t_field_data << "\n";
+        t_traction(j) += (t_base(i) * t_normal(i)) * t_field_data(j);
+
+        ++t_field_data;
+        ++t_base;
+      }
+      // for (; bb < nb_base_functions; ++bb)
+      //   ++t_base;
+
+      ++t_traction;
+    }
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhsForFace::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+
+    std::array<double, MAX_DOFS_ON_ENTITY> nf;
+    std::fill(&nf[0], &nf[nb_dofs], 0);
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+
+    const double area_m = getMeasure(); // same area in master and slave
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    auto t_normal = get_tensor_vec(
+        commonDataSimpleContact->normalVectorFacePtr.get()[0], 0);
+
+    auto t_w = getFTensor0IntegrationWeight();
+
+    auto t_x = getFTensor1FromMat<3>(*commonDataSimpleContact->xFaceAtPts);
+
+    auto t_traction =
+        getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+
+    // auto t_coords = getFTensor1CoordsAtGaussPtsSlave();
+    size_t nb_base_functions = data.getN().size2() / 3;
+    // auto t_base = data.getFTensor1N<3>();
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_nf{&nf[0], &nf[1],
+                                                              &nf[2]};
+      auto t_base = data.getFTensor1N<3>(gg, 0);
+      const double alpha = t_w * area_m;
+
+      //
+      auto t_contact_normal = get_tensor_vec(
+          commonDataSimpleContact->normalVectorFacePtr.get()[0], 0);
+
+      FTensor::Tensor2<double, 3, 3> t_contact_normal_tensor;
+      t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
+      FTensor::Tensor2<double, 3, 3> t_contact_tangent_tensor;
+
+      auto t_tangent_1_at_gp = get_tensor_vec(
+          *(commonDataSimpleContact->tangentOneVectorFacePtr), 0);
+
+      auto t_tangent_2_at_gp = get_tensor_vec(
+          *(commonDataSimpleContact->tangentTwoVectorFacePtr), 0);
+
+      FTensor::Tensor1<double, 3> t_rhs_constrains;
+      const double normal_traction = t_traction(i) * t_contact_normal(i);
+
+      FTensor::Tensor1<double, 3> t_rhs_tangent_disp, t_rhs_tangent_traction,
+          t_rhs_normal_traction;
+
+      FTensor::Tensor1<double, 3> tangent_1_disp, tangent_2_disp,
+          tangent_1_disp_master, tangent_2_disp_master, tangent_1_traction,
+          tangent_2_traction;
+
+      t_rhs_normal_traction(i) =
+          cN * t_contact_normal_tensor(i, j) * t_traction(j);
+
+      tangent_1_disp(i) = t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) * t_x(j);
+
+      tangent_2_disp(i) = t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) * t_x(j);
+
+      tangent_1_traction(i) =
+          t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j) * t_traction(j);
+
+      tangent_2_traction(i) =
+          t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j) * t_traction(j);
+
+      auto t_field_data = data.getFTensor1FieldData<3>();
+      size_t bb = 0;
+      for (; bb != nb_dofs / 3; ++bb) {
+        const double beta = alpha * (t_base(i) * t_normal(i));
+        // t_nf(i) -= beta * tangent_1_disp(i);
+        // t_nf(i) -= beta * tangent_2_disp(i);
+
+        // t_nf(i) += cN * beta * tangent_1_traction(i);
+        // t_nf(i) += cN * beta * tangent_2_traction(i);
+        //////////
+
+        t_nf(i) -= beta * t_x(i);
+        t_nf(i) += cN * beta * t_traction(i);
+
+        ++t_nf;
+        ++t_base;
+        ++t_field_data;
+      }
+
+      ++t_x;
+      ++t_traction;
+      ++t_w;
+    }
+
+    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTractionForFace::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  const size_t nb_gauss_pts = getGaussPts().size2();
+
+  const size_t nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+
+    if (/*side == 0 &&*/ type == MBTRI) {
+      commonDataSimpleContact->contactTractionPtr->resize(3, nb_gauss_pts);
+      commonDataSimpleContact->contactTractionPtr->clear();
+    }
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    auto t_normal = get_tensor_vec(
+        commonDataSimpleContact->normalVectorFacePtr.get()[0], 0);
+    auto t_traction =
+        getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+    size_t nb_base_functions = data.getN().size2() / 3;
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      auto t_base = data.getFTensor1N<3>(gg, 0);
+      auto t_field_data = data.getFTensor1FieldData<3>();
+      size_t bb = 0;
+      for (; bb != nb_dofs / 3; ++bb) {
+        // cerr << " WTF "
+        //      << "   bb    " << bb << "   gg   " << gg << "   t_base       "
+        //      << t_base << "    t_field_data      " << t_field_data << "\n";
+        t_traction(j) += (t_base(i) * t_normal(i)) * t_field_data(j);
+
+        ++t_field_data;
+        ++t_base;
+      }
+      // for (; bb < nb_base_functions; ++bb)
+      //   ++t_base;
+
+      ++t_traction;
+    }
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpConstrainBoundaryLhs_dxdTractionForFace::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+  MoFEMFunctionBegin;
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t row_nb_dofs = row_data.getIndices().size();
+  const size_t col_nb_dofs = col_data.getIndices().size();
+
+  if (row_nb_dofs && col_nb_dofs) {
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+
+    const double area_m = getMeasure(); // same area in master and slave
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    auto t_normal = get_tensor_vec(
+        commonDataSimpleContact->normalVectorFacePtr.get()[0], 0);
+
+    locMat.resize(row_nb_dofs, col_nb_dofs, false);
+    locMat.clear();
+
+    auto t_traction =
+        getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+
+    auto t_tangent_1_at_gp =
+        get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorFacePtr), 0);
+
+    auto t_tangent_2_at_gp =
+        get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorFacePtr), 0);
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_row_base = row_data.getFTensor1N<3>();
+    size_t nb_face_functions = row_data.getN().size2() / 3;
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      //  cerr << "Traction " << t_traction << "\n";
+
+      const double alpha = t_w * area_m;
+      //  auto t_contact_normal = normal(t_coords, t_disp);
+      FTensor::Tensor2<double, 3, 3> t_contact_normal_tensor;
+      t_contact_normal_tensor(i, j) = t_normal(i) * t_normal(j);
+
+      const double normal_traction = t_traction(i) * t_normal(i);
+
+      size_t rr = 0;
+      for (; rr != row_nb_dofs / 3; ++rr) {
+        FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3> t_mat(
+            &locMat(3 * rr + 0, 0), &locMat(3 * rr + 0, 1),
+            &locMat(3 * rr + 0, 2), &locMat(3 * rr + 1, 0),
+            &locMat(3 * rr + 1, 1), &locMat(3 * rr + 1, 2),
+            &locMat(3 * rr + 2, 0), &locMat(3 * rr + 2, 1),
+            &locMat(3 * rr + 2, 2));
+
+        const double row_base = t_row_base(i) * t_normal(i);
+        auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
+        for (size_t cc = 0; cc != col_nb_dofs / 3; ++cc) {
+          const double col_base = t_col_base(i) * t_normal(i);
+          const double beta = alpha * row_base * col_base;
+          // Until here 28/05
+
+          t_mat(i, j) += cN * beta * t_normal(i) * t_normal(j);
+
+          t_mat(i, j) +=
+              cN * beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+
+          t_mat(i, j) +=
+              cN * beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+
+          ++t_col_base;
+          ++t_mat;
+        }
+        ++t_row_base;
+      }
+      for (; rr < nb_face_functions; ++rr)
+        ++t_row_base;
+
+      ++t_traction;
+      ++t_w;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpConstrainBoundaryTractionPostProc::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  if (side == 0 && type == MBTRI) {
+    commonDataSimpleContact->contactTractionPtr->resize(3, nb_gauss_pts);
+    commonDataSimpleContact->contactTractionPtr->clear();
+  }
+
+  const size_t nb_dofs = data.getIndices().size();
+  if (nb_dofs) {
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+
+    auto get_tensor_vec = [](VectorDouble &n, const int r) {
+      return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+    };
+
+    auto t_normal = get_tensor_vec(
+        commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+
+    auto t_traction =
+        getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+
+    size_t nb_base_functions = data.getN().size2() / 3;
+    auto t_base = data.getFTensor1N<3>();
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      auto t_field_data = data.getFTensor1FieldData<3>();
+      size_t bb = 0;
+      for (; bb != nb_dofs / 3; ++bb) {
+        // cerr << " WTF "
+        //      << "   bb    " << bb << "   gg   " << gg << "   t_base       "
+        //      << t_base << "    t_field_data      " << t_field_data << "\n";
+        // this 2 is comming from the triangle transformation (is it eventually
+        // done time 0.5?)
+        t_traction(j) += (t_base(i) * t_normal(i)) * t_field_data(j);
+
+        ++t_field_data;
+        ++t_base;
+      }
+      for (; bb < nb_base_functions; ++bb)
+        ++t_base;
+
+      ++t_traction;
+    }
+  }
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpGetFromHdivLagMulAtGaussPtsSlavePostProc::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBTRI)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->clear();
+
+  auto get_tensor_vec = [](VectorDouble &n, const int r) {
+    return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+
+  auto t_normal =
+      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+
+  auto t_traction =
+      getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+
+  auto t_lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    t_lagrange_slave += t_traction(i) * t_normal(i);
+    ++t_traction;
+    ++t_lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetFromHdivLagMulAtGaussPtsSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBTRI)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->lagMultAtGaussPtsPtr.get()->clear();
+
+  auto get_tensor_vec = [](VectorDouble &n, const int r) {
+    return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
+  };
+
+  FTensor::Index<'i', 3> i;
+
+  auto t_normal =
+      get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+
+  auto t_traction =
+      getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
+
+  auto t_lagrange_slave =
+      getFTensor0FromVec(*commonDataSimpleContact->lagMultAtGaussPtsPtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+    t_lagrange_slave += t_traction(i) * t_normal(i);
+    ++t_traction;
+    ++t_lagrange_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 ///<<<<<SettersHDIV
     MoFEMErrorCode
     SimpleContactProblem::setContactOperatorsRhsOperatorsHdiv3DSurface(
