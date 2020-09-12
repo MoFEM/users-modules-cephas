@@ -199,13 +199,13 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
-  readMesh();
-  setupProblem();
-  setIntegrationRules();
-  boundaryCondition();
-  assembleSystem();
-  solveSystem();
-  outputResults();
+  CHKERR readMesh();
+  CHKERR setupProblem();
+  CHKERR setIntegrationRules();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
 
   MoFEMFunctionReturn(0);
 }
