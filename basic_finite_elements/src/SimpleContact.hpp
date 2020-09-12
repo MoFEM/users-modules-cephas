@@ -3794,13 +3794,13 @@ struct SimpleContactProblem {
 
       struct OpGetOrthonormalTangents : public ContactOp {
 
-        boost::shared_ptr<CommonDataSimpleContact> commonDataExtendedContact;
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
         OpGetOrthonormalTangents(const string field_name,
                                  boost::shared_ptr<CommonDataSimpleContact>
-                                     common_data_extended_contact)
+                                     common_data_simple_contact)
             : ContactOp(field_name, UserDataOperator::OPCOL,
                         ContactOp::FACESLAVE),
-              commonDataExtendedContact(common_data_extended_contact) {}
+              commonDataSimpleContact(common_data_simple_contact) {}
 
         MoFEMErrorCode doWork(int side, EntityType type,
                               DataForcesAndSourcesCore::EntData &data);
