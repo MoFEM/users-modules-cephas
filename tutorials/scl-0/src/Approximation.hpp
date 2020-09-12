@@ -1,3 +1,12 @@
+/**
+ * \file Approximation.cpp
+ * \example Approximation.cpp
+ *
+ * Setting opetators for Least square problem, or to calculate mass matrix for
+ * scalar problem.
+ *
+ */
+
 /* This file is part of MoFEM.
  * MoFEM is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the

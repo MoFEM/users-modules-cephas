@@ -1,6 +1,6 @@
 /**
- * \file lesson2_approximaton.cpp
- * \example lesson2_approximaton.cpp
+ * \file approximation.cpp
+ * \example approximation.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
@@ -33,7 +33,7 @@ using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
-#include <BaseOps.hpp>
+#include <Approximation.hpp>
 
 using OpDomainMass = OpTools<DomainEleOp>::OpMass;
 using OpDomainSource = OpTools<DomainEleOp>::OpSource<2>;
