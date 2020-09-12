@@ -22,7 +22,6 @@ set(BFE_DIRS
   poisson
   lessons
   hello_world
-  hierarchical_approximation
   reaction_diffusion_equation
   simple_contact)
 

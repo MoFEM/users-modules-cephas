@@ -46,18 +46,22 @@ struct Example {
 
 private:
   MoFEM::Interface &mField;
+  Simple *simpleInterface;
 
+  //! [Approximated function]
   static double approxFunction(const double x, const double y, const double z) {
     return sin(x * 10.) * cos(y * 10.);
   }
-  static int integrationRule(int, int, int p_data) { return 2 * p_data; };
+  //! [Approximated function]
 
-  MoFEMErrorCode setUP();
+  MoFEMErrorCode readMesh();
+  MoFEMErrorCode setupProblem();
+  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode createCommonData();
-  MoFEMErrorCode bC();
-  MoFEMErrorCode OPs();
-  MoFEMErrorCode kspSolve();
-  MoFEMErrorCode postProcess();
+  MoFEMErrorCode boundaryCondition();
+  MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode solveSystem();
+  MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
   struct CommonData {
@@ -75,37 +79,66 @@ private:
   };
 };
 
+//! [Run programme]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
-  CHKERR setUP();
+  CHKERR readMesh();
+  CHKERR setupProblem();
+  CHKERR setIntegrationRules();
   CHKERR createCommonData();
-  CHKERR bC();
-  CHKERR OPs();
-  CHKERR kspSolve();
-  CHKERR postProcess();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
+//! [Run programme]
+
+//! [Read mesh]
+MoFEMErrorCode Example::readMesh() {
+  MoFEMFunctionBegin;
+
+  CHKERR mField.getInterface(simpleInterface);
+  CHKERR simpleInterface->getOptions();
+  CHKERR simpleInterface->loadFile();
+
+  MoFEMFunctionReturn(0);
+}
+//! [Read mesh]
 
 //! [Set up problem]
-MoFEMErrorCode Example::setUP() {
+MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addDomainField("U", H1,
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   constexpr int order = 4;
-  CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setUp();
+  CHKERR simpleInterface->setFieldOrder("U", order);
+  CHKERR simpleInterface->setUp();
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
+
+//! [Set integration rule]
+MoFEMErrorCode Example::setIntegrationRules() {
+  MoFEMFunctionBegin;
+
+  auto rule = [](int, int, int p) -> int { return 2 * p; };
+
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Set integration rule]
 
 //! [Create common data]
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
   commonDataPtr = boost::make_shared<CommonData>();
-  commonDataPtr->resVec = smartCreateDMVector(simple->getDM());
+  commonDataPtr->resVec = smartCreateDMVector(simpleInterface->getDM());
   commonDataPtr->L2Vec = createSmartVectorMPI(
       mField.get_comm(), (!mField.get_comm_rank()) ? 1 : 0, 1);
   commonDataPtr->approxVals = boost::make_shared<VectorDouble>();
@@ -114,11 +147,11 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Create common data]
 
 //! [Boundary condition]
-MoFEMErrorCode Example::bC() { return 0; }
+MoFEMErrorCode Example::boundaryCondition() { return 0; }
 //! [Boundary condition]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode Example::OPs() {
+MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto beta = [](const double, const double, const double) { return 1; };
@@ -126,22 +159,19 @@ MoFEMErrorCode Example::OPs() {
       new OpDomainMass("U", "U", beta));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDomainSource("U", Example::approxFunction));
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
 
 //! [Solve]
-MoFEMErrorCode Example::kspSolve() {
+MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 
-  auto dm = simple->getDM();
+  auto dm = simpleInterface->getDM();
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
@@ -153,7 +183,7 @@ MoFEMErrorCode Example::kspSolve() {
 }
 
 //! [Solve]
-MoFEMErrorCode Example::postProcess() {
+MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
@@ -177,7 +207,6 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpError(commonDataPtr));
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR VecAssemblyBegin(commonDataPtr->L2Vec);
   CHKERR VecAssemblyEnd(commonDataPtr->L2Vec);
@@ -219,12 +248,6 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);           ///< finite element database
     MoFEM::Interface &m_field = core; ///< finite element database insterface
     //! [Create MoFEM]
-
-    //! [Load mesh]
-    Simple *simple = m_field.getInterface<Simple>();
-    CHKERR simple->getOptions();
-    CHKERR simple->loadFile("");
-    //! [Load mesh]
 
     //! [Example]
     Example ex(m_field);
