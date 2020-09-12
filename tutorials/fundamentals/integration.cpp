@@ -204,8 +204,9 @@ MoFEMErrorCode Example::pushOperators() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   // Push an operator which calculates values of density at integration points
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpCalculateScalarFieldValues(
-      "rho", commonDataPtr->getRhoAtIntegrationPtsPtr()));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues(
+          "rho", commonDataPtr->getRhoAtIntegrationPtsPtr()));
 
   // Push an operator to pipeline to calculate zero moment of inertia (mass)
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpZero(commonDataPtr));
@@ -250,14 +251,14 @@ MoFEMErrorCode Example::postProcess() {
   const double *array;
   CHKERR VecGetArrayRead(commonDataPtr->petscVec, &array);
   if (mField.get_comm_rank() == 0) {
-    PetscPrintf(PETSC_COMM_SELF, "Mass %6.4e\n", array[CommonData::ZERO]);
-    PetscPrintf(PETSC_COMM_SELF,
-                "First moment of inertia [ %6.4e, %6.4e, %6.4e ] \n",
+    MOFEM_LOG_C("SELF", Sev::inform, "Mass %6.4e", array[CommonData::ZERO]);
+    MOFEM_LOG_C("SELF", Sev::inform,
+                "First moment of inertia [ %6.4e, %6.4e, %6.4e ]",
                 array[CommonData::FIRST_X], array[CommonData::FIRST_Y],
                 array[CommonData::FIRST_Z]);
-    PetscPrintf(PETSC_COMM_SELF,
+    MOFEM_LOG_C("SELF", Sev::inform,
                 "Second moment of inertia [ %6.4e, %6.4e, %6.4e; %6.4e %6.4e; "
-                "%6.4e ]\n",
+                "%6.4e ]",
                 array[CommonData::SECOND_XX], array[CommonData::SECOND_XY],
                 array[CommonData::SECOND_XZ], array[CommonData::SECOND_YY],
                 array[CommonData::SECOND_YZ], array[CommonData::SECOND_ZZ]);

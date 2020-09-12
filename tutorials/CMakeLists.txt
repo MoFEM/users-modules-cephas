@@ -73,6 +73,7 @@ function(tutorials_copy_and_install extension file_permissions)
 endfunction()
 
 set(TUTORIALS_DIRS 
+  fundamentals
   scl-1
   scl-2
   scl-3
