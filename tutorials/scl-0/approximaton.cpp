@@ -2,8 +2,8 @@
  * \file lesson2_approximaton.cpp
  * \example lesson2_approximaton.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions, and
- * integral of flux on the boundary. Since the h-div space is used, volume
+ * Using PipelineManager interface calculate the divergence of base functions,
+ * and integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
 
@@ -122,7 +122,8 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto beta = [](const double, const double, const double) { return 1; };
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpDomainMass("U", "U", beta));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpDomainMass("U", "U", beta));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDomainSource("U", Example::approxFunction));
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);

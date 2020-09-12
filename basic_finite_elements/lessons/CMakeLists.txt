@@ -15,10 +15,6 @@ include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/lessons)
 include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/lessons/src)
 
 bfe_build_and_install(
-    basic_approx
-    ${CMAKE_CURRENT_SOURCE_DIR}/lesson2_approximaton.cpp)  
-
-bfe_build_and_install(
     basic_poisson
     ${CMAKE_CURRENT_SOURCE_DIR}/lesson3_poisson.cpp)  
 
