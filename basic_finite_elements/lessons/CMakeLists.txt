@@ -46,8 +46,3 @@ set(permissions_default
 bfe_copy_and_install(".petscrc" "${permissions_default}")
 bfe_copy_and_install("*.h5m" "${permissions_default}")
 
-add_test(
-  basic_moment_of_inertia
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
-  ${CMAKE_CURRENT_BINARY_DIR}/basic_moment_of_inertia
-  -file_name ${CMAKE_CURRENT_BINARY_DIR}/cube.h5m -test)
