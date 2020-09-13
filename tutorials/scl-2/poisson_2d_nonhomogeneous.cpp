@@ -188,7 +188,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(invJac));
     domainPipelineLhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, boundaryMarker));
+        new OpSetBc(domainField, true, boundaryMarker));
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpDomainLhs(domainField, domainField));
     domainPipelineLhs->getOpPtrVector().push_back(
@@ -198,7 +198,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // domain elements
     domainPipelineRhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, boundaryMarker));
+        new OpSetBc(domainField, true, boundaryMarker));
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpDomainRhs(domainField, sourceTermFunction));
     domainPipelineRhs->getOpPtrVector().push_back(
