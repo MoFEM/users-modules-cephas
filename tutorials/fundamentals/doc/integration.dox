@@ -592,7 +592,7 @@ ctest -VV
 
 In particular, the code in this tutorial is tested by executing
 \code
-./basic_moment_of_inertia -file_name cube.h5m -test
+./integration -file_name cube.h5m -test
 \endcode
 and code is validated in function Example::checkResults.
 
@@ -634,8 +634,8 @@ launch (in VS Code) configuration for LLDB and example from this lesson
 {
   "type": "lldb",
   "request": "launch",
-  "name": "basic_moment_of_inertia",
-  "program": "basic_moment_of_inertia",
+  "name": "integration",
+  "program": "integration",
   "args": [
     "-file_name", "cube.h5m"
   ],
