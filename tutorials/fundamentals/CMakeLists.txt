@@ -23,7 +23,7 @@ set(permissions_default
   OWNER_READ
   GROUP_READ)
 
-tutorials_copy_and_install(".petscrc" "${permissions_default}")
+tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.h5m" "${permissions_default}")
 
 add_test(

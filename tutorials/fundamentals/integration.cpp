@@ -309,8 +309,9 @@ MoFEMErrorCode Example::checkResults() {
 //! [main]
 int main(int argc, char *argv[]) {
 
-  // Initialisation of MoFEM/PETSc and MoAB data structures
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  // Initialisation of MoFEM/PETSc and MOAB data structures
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
   // Error handling
   try {
