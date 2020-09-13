@@ -455,10 +455,10 @@ MoFEMErrorCode WaveEquation::solveSystem() {
                                  SCATTER_FORWARD);
 
   // Solve problem
-  double max_time = 1;
+  // double max_time = 1;
   // double max_steps = 1000;
   CHKERR TSSetDM(tsSolver, dM);
-  CHKERR TSSetMaxTime(tsSolver, max_time);
+  // CHKERR TSSetMaxTime(tsSolver, max_time);
   // CHKERR TSSetMaxSteps(tsSolver, max_steps);
   CHKERR TSSetSolution(tsSolver, global_solution);
   CHKERR TSSetFromOptions(tsSolver);
