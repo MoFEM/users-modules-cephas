@@ -194,7 +194,7 @@ MoFEMErrorCode Example::outputResults() {
 }
 //! [Postprocess results]
 
-//! [Solve]
+//! [Check results]
 MoFEMErrorCode Example::checkResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -223,7 +223,7 @@ MoFEMErrorCode Example::checkResults() {
             "Not converged solution");
   MoFEMFunctionReturn(0);
 }
-//! [Solver]
+//! [Check results]
 
 int main(int argc, char *argv[]) {
 
