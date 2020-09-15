@@ -38,8 +38,8 @@ using EdgeEleOp = EdgeEle::UserDataOperator;
 
 using OpDomainGradGrad = OpDiffOps<DomainEleOp>::OpGradGrad<2>;
 using OpDomainMass = OpDiffOps<DomainEleOp>::OpMass;
-using OpDomainSource = OpDiffOps<DomainEleOp>::OpSource<2>;
 using OpBoundaryMass = OpDiffOps<EdgeEleOp>::OpMass;
+using OpBoundarySource = OpDiffOps<EdgeEleOp>::OpSource<2>;
 
 struct Example {
 
@@ -49,8 +49,8 @@ struct Example {
 
 private:
   MoFEM::Interface &mField;
-  MoFEM::Interface &mField;
   Simple *simpleInterface;
+  boost::shared_ptr<std::vector<bool>> boundaryMarker;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -97,7 +97,7 @@ MoFEMErrorCode Example::setupProblem() {
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   CHKERR simpleInterface->addBoundaryField("U_IMAG", H1,
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  constexpr int order = 10;
+  constexpr int order = 4;
   CHKERR simpleInterface->setFieldOrder("U_REAL", order);
   CHKERR simpleInterface->setFieldOrder("U_IMAG", order);
   CHKERR simpleInterface->setUp();
@@ -108,6 +108,49 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Applying essential BC]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
+
+  auto get_ents_on_mesh_skin = [&]() {
+    Range boundary_entities;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+      if (entity_name.compare(0, 2, "BC") == 0) {
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   boundary_entities, true);
+      }
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
+
+    cerr << boundary_vertices << endl;
+
+    return boundary_entities;
+  };
+
+  auto mark_boundary_dofs = [&](Range &&skin_edges) {
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    auto marker_ptr = boost::make_shared<std::vector<bool>>();
+    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+                              skin_edges, *marker_ptr);
+    return marker_ptr;
+  };
+
+  auto remove_dofs_from_problem = [&](Range &&skin_edges) {
+    MoFEMFunctionBegin;
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    CHKERR problem_manager->removeDofsOnEntities(
+        simpleInterface->getProblemName(), "U_IMAG", skin_edges, 0, 1);
+    MoFEMFunctionReturn(0);
+  };
+
+  // Get global local vector of marked DOFs. Is global, since is set for all
+  // DOFs on processor. Is local since only DOFs on processor are in the
+  // vector. To access DOFs use local indices.
+  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
+
   MoFEMFunctionReturn(0);
 }
 //! [Applying essential BC]
@@ -116,16 +159,6 @@ MoFEMErrorCode Example::boundaryCondition() {
 MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-
-  auto vol_source_function = [](const double x, const double y,
-                                const double z) {
-    const double xc = 0;
-    const double yc = -1.25;
-    const double xs = x - xc;
-    const double ys = y - yc;
-    constexpr double eps = 60;
-    return exp(-pow(eps * sqrt(xs * xs + ys * ys), 2));
-  };
 
   constexpr double k = 90;
 
@@ -141,6 +174,10 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
+
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetBc("U_REAL", true, boundaryMarker));
+
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainGradGrad("U_REAL", "U_REAL", beta));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -151,8 +188,8 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainMass("U_IMAG", "U_IMAG", k2));
 
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainSource("U_REAL", vol_source_function));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpUnSetBc("U_REAL"));
 
     CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
@@ -162,9 +199,26 @@ MoFEMErrorCode Example::assembleSystem() {
   auto set_boundary = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("U_REAL", true, boundaryMarker));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryMass("U_IMAG", "U_REAL", kp));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryMass("U_REAL", "U_IMAG", km));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("U_REAL", false, boundaryMarker));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("U_REAL", "U_REAL", beta));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpSetBc("U_REAL", false, boundaryMarker));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpBoundarySource("U_REAL", beta));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+
+    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
