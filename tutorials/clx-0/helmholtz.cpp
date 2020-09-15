@@ -58,6 +58,7 @@ private:
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
+  MoFEMErrorCode checkResults();
 
   MatrixDouble invJac;
 };
@@ -70,6 +71,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
+  CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 
@@ -97,7 +99,8 @@ MoFEMErrorCode Example::setupProblem() {
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   CHKERR simpleInterface->addBoundaryField("U_IMAG", H1,
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  constexpr int order = 4;
+  int order = 6;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder("U_REAL", order);
   CHKERR simpleInterface->setFieldOrder("U_IMAG", order);
   CHKERR simpleInterface->setUp();
@@ -123,8 +126,6 @@ MoFEMErrorCode Example::boundaryCondition() {
     CHKERR mField.get_moab().get_connectivity(boundary_entities,
                                               boundary_vertices, true);
     boundary_entities.merge(boundary_vertices);
-
-    cerr << boundary_vertices << endl;
 
     return boundary_entities;
   };
@@ -160,7 +161,8 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  constexpr double k = 90;
+  double k = 90;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
 
   auto beta = [](const double, const double, const double) { return -1; };
   auto k2 = [k](const double, const double, const double) { return pow(k, 2); };
@@ -268,6 +270,33 @@ MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
+
+//! [Check results]
+MoFEMErrorCode Example::checkResults() {
+  MoFEMFunctionBegin;
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+
+  auto dm = simpleInterface->getDM();
+  auto D = smartCreateDMVector(dm);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+  double nrm2;
+  CHKERR VecNorm(D, NORM_2, &nrm2);
+  MOFEM_LOG("WORLD", Sev::inform)
+      << std::setprecision(9) << "Solution norm " << nrm2;
+
+  PetscBool test_flg = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg,
+                             PETSC_NULL);
+  if (test_flg) {
+    constexpr double regersion_test = 97.261672;
+    constexpr double eps = 1e-6;
+    if (std::abs(nrm2 - regersion_test) / regersion_test > eps)
+      SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+              "Not converged solution");
+  }
+  MoFEMFunctionReturn(0);
+}
+//! [Check results]
 
 int main(int argc, char *argv[]) {
 

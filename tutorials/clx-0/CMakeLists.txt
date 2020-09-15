@@ -34,3 +34,9 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
   helmholtz ${CMAKE_CURRENT_SOURCE_DIR}/helmholtz.cpp)
+
+add_test(
+  helmholtz
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+  ${CMAKE_CURRENT_BINARY_DIR}/helmholtz
+  -file_name part.h5m  -ksp_monitor -order 4 -k 90 -log_no_color)
