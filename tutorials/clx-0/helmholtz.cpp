@@ -2,9 +2,8 @@
  * \file helmholtz.cpp
  * \example helmholtz.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions,
- * and integral of flux on the boundary. Since the h-div space is used, volume
- * integral and boundary integral should give the same result.
+ * Using PipelineManager interface calculate Helmholtz problem. Example show how
+ * to manage complex variable fields.
  */
 
 /* This file is part of MoFEM.
@@ -288,9 +287,9 @@ MoFEMErrorCode Example::checkResults() {
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg,
                              PETSC_NULL);
   if (test_flg) {
-    constexpr double regersion_test = 97.261672;
+    constexpr double regression_test = 97.261672;
     constexpr double eps = 1e-6;
-    if (std::abs(nrm2 - regersion_test) / regersion_test > eps)
+    if (std::abs(nrm2 - regression_test) / regression_test > eps)
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
               "Not converged solution");
   }

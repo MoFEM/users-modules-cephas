@@ -1,4 +1,4 @@
-/*! \page basic_tutorials_least_square_approximation SCL-0: Least square approximaton 
+/*! \page tutorial_hemholtz_problem CLX-0: Hemholtz problem 
 
 \note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
 
