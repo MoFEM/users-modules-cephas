@@ -1,9 +1,9 @@
 /**
- * \file lesson5_helmholtz.cpp
- * \example lesson5_helmholtz.cpp
+ * \file helmholtz.cpp
+ * \example helmholtz.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions, and
- * integral of flux on the boundary. Since the h-div space is used, volume
+ * Using PipelineManager interface calculate the divergence of base functions,
+ * and integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
 
@@ -36,12 +36,10 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
-#include <BaseOps.hpp>
-
-using OpDomainGradGrad = OpTools<DomainEleOp>::OpGradGrad<2>;
-using OpDomainMass = OpTools<DomainEleOp>::OpMass;
-using OpDomainSource = OpTools<DomainEleOp>::OpSource<2>;
-using OpBoundaryMass = OpTools<EdgeEleOp>::OpMass;
+using OpDomainGradGrad = OpDiffOps<DomainEleOp>::OpGradGrad<2>;
+using OpDomainMass = OpDiffOps<DomainEleOp>::OpMass;
+using OpDomainSource = OpDiffOps<DomainEleOp>::OpSource<2>;
+using OpBoundaryMass = OpDiffOps<EdgeEleOp>::OpMass;
 
 struct Example {
 
@@ -51,56 +49,71 @@ struct Example {
 
 private:
   MoFEM::Interface &mField;
+  MoFEM::Interface &mField;
+  Simple *simpleInterface;
 
-  MoFEMErrorCode setUP();
-  MoFEMErrorCode bC();
-  MoFEMErrorCode OPs();
-  MoFEMErrorCode kspSolve();
-  MoFEMErrorCode postProcess();
+  MoFEMErrorCode readMesh();
+  MoFEMErrorCode setupProblem();
+  MoFEMErrorCode boundaryCondition();
+  MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode solveSystem();
+  MoFEMErrorCode outputResults();
 
   MatrixDouble invJac;
 };
 
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
-  CHKERR setUP();
-  CHKERR bC();
-  CHKERR OPs();
-  CHKERR kspSolve();
-  CHKERR postProcess();
+  CHKERR readMesh();
+  CHKERR setupProblem();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
   MoFEMFunctionReturn(0);
 }
 
-//! [Set up problem]
-MoFEMErrorCode Example::setUP() {
+//! [Read mesh]
+MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
+
+  CHKERR mField.getInterface(simpleInterface);
+  CHKERR simpleInterface->getOptions();
+  CHKERR simpleInterface->loadFile();
+
+  MoFEMFunctionReturn(0);
+}
+//! [Read mesh]
+
+//! [Set up problem]
+MoFEMErrorCode Example::setupProblem() {
+  MoFEMFunctionBegin;
   // Add field
-  CHKERR simple->addDomainField("U_REAL", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
-                                1);
-  CHKERR simple->addDomainField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
-                                1);
-  CHKERR simple->addBoundaryField("U_REAL", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
-                                1);
-  CHKERR simple->addBoundaryField("U_IMAG", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
-                                1);
+  CHKERR simpleInterface->addDomainField("U_REAL", H1,
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addDomainField("U_IMAG", H1,
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addBoundaryField("U_REAL", H1,
+                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addBoundaryField("U_IMAG", H1,
+                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   constexpr int order = 10;
-  CHKERR simple->setFieldOrder("U_REAL", order);
-  CHKERR simple->setFieldOrder("U_IMAG", order);
-  CHKERR simple->setUp();
+  CHKERR simpleInterface->setFieldOrder("U_REAL", order);
+  CHKERR simpleInterface->setFieldOrder("U_IMAG", order);
+  CHKERR simpleInterface->setUp();
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
 
 //! [Applying essential BC]
-MoFEMErrorCode Example::bC() {
+MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
   MoFEMFunctionReturn(0);
 }
 //! [Applying essential BC]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode Example::OPs() {
+MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
@@ -126,7 +139,8 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainGradGrad("U_REAL", "U_REAL", beta));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -163,15 +177,14 @@ MoFEMErrorCode Example::OPs() {
 //! [Push operators to pipeline]
 
 //! [Solve]
-MoFEMErrorCode Example::kspSolve() {
+MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
 
-  auto dm = simple->getDM();
+  auto dm = simpleInterface->getDM();
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
 
@@ -184,7 +197,7 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Solve]
 
 //! [Postprocess results]
-MoFEMErrorCode Example::postProcess() {
+MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
@@ -204,7 +217,9 @@ MoFEMErrorCode Example::postProcess() {
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  // Initialisation of MoFEM/PETSc and MOAB data structures
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
   try {
 
@@ -222,12 +237,6 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);           ///< finite element database
     MoFEM::Interface &m_field = core; ///< finite element database insterface
     //! [Create MoFEM]
-
-    //! [Load mesh]
-    Simple *simple = m_field.getInterface<Simple>();
-    CHKERR simple->getOptions();
-    CHKERR simple->loadFile();
-    //! [Load mesh]
 
     //! [Example]
     Example ex(m_field);

@@ -82,6 +82,7 @@ set(TUTORIALS_DIRS
   scl-5
   scl-6
   scl-7
+  clx-0
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})

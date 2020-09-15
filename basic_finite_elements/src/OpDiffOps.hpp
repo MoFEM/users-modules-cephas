@@ -1,6 +1,6 @@
 /**
- * \file Approximation.cpp
- * \example Approximation.cpp
+ * \file OpDiffOps.cpp
+ * \example OpDiffOps.cpp
  *
  * Setting opetators for Least square problem, or to calculate mass matrix for
  * scalar problem.
@@ -21,16 +21,20 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-typedef boost::function<double(const double, const double, const double)>
-    ScalarFun;
+#ifndef _OPDIFFTOOLS_HPP
+#define _OPDIFFTOOLS_HPP
 
-template <typename EleOp> struct OpTools {
+template <typename EleOp> struct OpDiffOps {
+
+  using EntData = DataForcesAndSourcesCore::EntData;
+
+  typedef boost::function<double(const double, const double, const double)>
+      ScalarFun;
 
   struct OpBase : public EleOp {
 
     OpBase(const std::string row_field_name, const std::string col_field_name,
-           const typename EleOp::OpType type,
-           boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+           const typename EleOp::OpType type)
         : EleOp(row_field_name, col_field_name, type, false) {}
 
     /**
@@ -58,7 +62,6 @@ template <typename EleOp> struct OpTools {
     MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
 
   protected:
-
     int nbRows;           ///< number of dofs on rows
     int nbCols;           ///< number if dof on column
     int nbIntegrationPts; ///< number of integration points
@@ -102,10 +105,9 @@ template <typename EleOp> struct OpTools {
   //! [Source operator]
   template <int DIM> struct OpSource : public OpBase {
 
-    OpSource(const std::string field_name, ScalarFun source_fun,
-             boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(field_name, field_name, OpBase::OPROW, boundary_marker),
-          sourceFun(source_fun) {}
+    OpSource(const std::string field_name, ScalarFun source_fun)
+        : OpBase(field_name, field_name, OpBase::OPROW), sourceFun(source_fun) {
+    }
 
   protected:
     ScalarFun sourceFun;
@@ -139,14 +141,110 @@ template <typename EleOp> struct OpTools {
   };
   //! [Source operator]
 
+  //! [Grad operator]
+  template <int DIM> struct OpGradGrad : public OpBase {
+
+    OpGradGrad(const std::string row_field_name,
+               const std::string col_field_name, ScalarFun beta)
+        : OpBase(row_field_name, col_field_name, OpBase::OPROWCOL),
+          betaCoeff(beta) {}
+
+  protected:
+    ScalarFun betaCoeff;
+    FTensor::Index<'i', DIM> i; ///< summit Index
+
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+      MoFEMFunctionBegin;
+      // get element volume
+      const double vol = OpBase::getMeasure();
+      // get integration weights
+      auto t_w = OpBase::getFTensor0IntegrationWeight();
+      // get base function gradient on rows
+      auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
+      // get coordinate at integration points
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts();
+
+      // loop over integration points
+      for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+        const double beta =
+            vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
+        // take into account Jacobean
+        const double alpha = t_w * beta;
+        // loop over rows base functions
+        for (int rr = 0; rr != OpBase::nbRows; rr++) {
+          // get column base functions gradient at gauss point gg
+          auto t_col_grad = col_data.getFTensor1DiffN<DIM>(gg, 0);
+          // loop over columns
+          for (int cc = 0; cc != OpBase::nbCols; cc++) {
+            // calculate element of local matrix
+            OpBase::locMat(rr, cc) += alpha * (t_row_grad(i) * t_col_grad(i));
+            ++t_col_grad; // move to another gradient of base function on column
+          }
+          ++t_row_grad; // move to another element of gradient of base function
+                        // on row
+        }
+        ++t_coords;
+        ++t_w; // move to another integration weight
+      }
+      MoFEMFunctionReturn(0);
+    }
+  };
+  //! [Grad operator]
+
+  //! [Grad residual operator]
+  template <int DIM> struct OpGradGradResidual : public OpBase {
+
+    OpGradGradResidual(const std::string field_name, ScalarFun beta,
+                       boost::shared_ptr<MatrixDouble> &approx_grad_vals)
+        : OpBase(field_name, field_name, OpBase::OPROW),
+          approxGradVals(approx_grad_vals), betaCoeff(beta) {}
+
+  protected:
+    ScalarFun betaCoeff;
+    boost::shared_ptr<MatrixDouble> approxGradVals;
+    FTensor::Index<'i', DIM> i; ///< summit Index
+
+    MoFEMErrorCode iNtegrate(EntData &row_data) {
+      MoFEMFunctionBegin;
+      // get element volume
+      const double vol = OpBase::getMeasure();
+      // get integration weights
+      auto t_w = OpBase::getFTensor0IntegrationWeight();
+      // get base function gradient on rows
+      auto t_row_grad = row_data.getFTensor1DiffN<DIM>();
+      // get filed gradient values
+      auto t_val_grad = getFTensor1FromMat<DIM>(*(approxGradVals));
+      // get coordinate at integration points
+      auto t_coords = OpBase::getFTensor1CoordsAtGaussPts();
+
+      // loop over integration points
+      for (int gg = 0; gg != OpBase::nbIntegrationPts; gg++) {
+        const double beta =
+            vol * betaCoeff(t_coords(0), t_coords(1), t_coords(2));
+        // take into account Jacobean
+        const double alpha = t_w * beta;
+        // loop over rows base functions
+        for (int rr = 0; rr != OpBase::nbRows; rr++) {
+          // calculate element of local matrix
+          OpBase::locF[rr] += alpha * (t_row_grad(i) * t_val_grad(i));
+          ++t_row_grad; // move to another element of gradient of base function
+                        // on row
+        }
+        ++t_coords;
+        ++t_val_grad;
+        ++t_w; // move to another integration weight
+      }
+      MoFEMFunctionReturn(0);
+    }
+  };
+  //! [Grad residual operator]
+
   //! [Mass operator]
   struct OpMass : public OpBase {
 
     OpMass(const std::string row_field_name, const std::string col_field_name,
-           ScalarFun beta,
-           boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-        : OpBase(row_field_name, col_field_name, OpBase::OPROWCOL,
-                 boundary_marker),
+           ScalarFun beta)
+        : OpBase(row_field_name, col_field_name, OpBase::OPROWCOL),
           betaCoeff(beta) {}
 
   protected:
@@ -185,16 +283,32 @@ template <typename EleOp> struct OpTools {
         ++t_w; // move to another integration weight
       }
       MoFEMFunctionReturn(0);
-    }
+    };
+    //! [Mass operator]
   };
-  //! [Mass operator]
 };
 
+/**
+ * \brief Assemble local entity block matrix
+ * @param  row_data row data (consist base functions on row entity)
+ * @param  col_data column data (consist base functions on column entity)
+ * @return          error code
+ */
 template <typename EleOp>
 MoFEMErrorCode
-OpTools<EleOp>::OpBase::doWork(int row_side, int col_side, EntityType row_type,
-                               EntityType col_type, EntData &row_data,
-                               EntData &col_data) {
+OpDiffOps<EleOp>::OpBase::aSsemble(OpDiffOps<EleOp>::EntData &row_data,
+                                   OpDiffOps<EleOp>::EntData &col_data) {
+  MoFEMFunctionBegin;
+  // assemble local matrix
+  CHKERR MatSetValues<EssentialBcStorage>(this->getKSPB(), row_data, col_data,
+                                          &*locMat.data().begin(), ADD_VALUES);
+  MoFEMFunctionReturn(0);
+}
+
+template <typename EleOp>
+MoFEMErrorCode OpDiffOps<EleOp>::OpBase::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    OpDiffOps<EleOp>::EntData &row_data, OpDiffOps<EleOp>::EntData &col_data) {
   MoFEMFunctionBegin;
   // get number of dofs on row
   OpBase::nbRows = row_data.getIndices().size();
@@ -220,22 +334,6 @@ OpTools<EleOp>::OpBase::doWork(int row_side, int col_side, EntityType row_type,
 }
 
 /**
- * \brief Assemble local entity block matrix
- * @param  row_data row data (consist base functions on row entity)
- * @param  col_data column data (consist base functions on column entity)
- * @return          error code
- */
-template <typename EleOp>
-MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
-                                                EntData &col_data) {
-  MoFEMFunctionBegin;
-  // assemble local matrix
-  CHKERR MatSetValues(this->getKSPB(), row_data, col_data,
-                      &*locMat.data().begin(), ADD_VALUES);
-  MoFEMFunctionReturn(0);
-}
-
-/**
  * \brief This function is called by finite element
  *
  * Do work is composed from two operations, integrate and assembly. Also,
@@ -243,8 +341,9 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
  *
  */
 template <typename EleOp>
-MoFEMErrorCode OpTools<EleOp>::OpBase::doWork(int row_side, EntityType row_type,
-                                              EntData &row_data) {
+MoFEMErrorCode
+OpDiffOps<EleOp>::OpBase::doWork(int row_side, EntityType row_type,
+                                 OpDiffOps<EleOp>::EntData &row_data) {
   MoFEMFunctionBegin;
   // get number of dofs on row
   OpBase::nbRows = row_data.getIndices().size();
@@ -269,12 +368,14 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::doWork(int row_side, EntityType row_type,
  */
 template <typename EleOp>
 MoFEMErrorCode
-OpTools<EleOp>::OpBase::aSsemble(DataForcesAndSourcesCore::EntData &data) {
+OpDiffOps<EleOp>::OpBase::aSsemble(OpDiffOps<EleOp>::EntData &data) {
   MoFEMFunctionBegin;
   // get values from local vector
   const double *vals = &*locF.data().begin();
   // assemble vector
-  CHKERR VecSetOption(this->getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-  CHKERR VecSetValues(this->getKSPf(), data, vals, ADD_VALUES);
+  CHKERR VecSetValues<EssentialBcStorage>(this->getKSPf(), data, vals,
+                                          ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
+
+#endif // _OPDIFFTOOLS_HPP

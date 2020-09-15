@@ -7,6 +7,7 @@
 \note Intended learning outcome:
 - general structure of a program developed using MoFEM
 - idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
+- working woth complex variable fields
 - idea of Domain element in MoFEM and how to use it
 - Use default differential operators from OpDiffTools
 - how to **push** the developed UDOs to the *Pipeline*
@@ -14,6 +15,6 @@
 
 \tableofcontents
 
-\include approximaton.cpp
+\include helmholtz.cpp
 
 */

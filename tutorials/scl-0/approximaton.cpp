@@ -32,11 +32,8 @@ static char help[] = "...\n\n";
 using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
-
-#include <Approximation.hpp>
-
-using OpDomainMass = OpTools<DomainEleOp>::OpMass;
-using OpDomainSource = OpTools<DomainEleOp>::OpSource<2>;
+using OpDomainMass = OpDiffOps<DomainEleOp>::OpMass;
+using OpDomainSource = OpDiffOps<DomainEleOp>::OpSource<2>;
 
 struct Example {
 

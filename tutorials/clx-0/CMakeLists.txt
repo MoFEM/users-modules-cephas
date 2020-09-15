@@ -33,10 +33,4 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
-  approximaton ${CMAKE_CURRENT_SOURCE_DIR}/approximaton.cpp)
-
-add_test(
-  approximaton
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/approximaton
-  -file_name ${CMAKE_CURRENT_BINARY_DIR}/mesh2d.h5m -log_no_color)
+  helmholtz ${CMAKE_CURRENT_SOURCE_DIR}/helmholtz.cpp)
