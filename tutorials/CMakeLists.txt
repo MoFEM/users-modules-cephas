@@ -84,6 +84,7 @@ set(TUTORIALS_DIRS
   scl-7
   clx-0
   max-0
+  max-1
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
