@@ -15,7 +15,6 @@ set(BFE_DIRS
   simple_elasticity
   elasticity_mixed_formulation
   nonlinear_elasticity
-  mix_transport
   thermal
   cohesive_interface
   poisson

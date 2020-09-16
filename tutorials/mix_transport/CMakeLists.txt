@@ -27,32 +27,25 @@ set(permissions_execute
   OWNER_EXECUTE 
   GROUP_EXECUTE)
 
-bfe_copy_and_install("*.msh" "${permissions_default}")
-bfe_copy_and_install("*.cfg" "${permissions_default}")
-bfe_copy_and_install("*.jou" "${permissions_default}")
-bfe_copy_and_install("*.cub" "${permissions_default}")
-bfe_copy_and_install("*.h5m" "${permissions_default}")
-bfe_copy_and_install("*.sh" "${permissions_execute}")
+tutorials_copy_and_install("*.msh" "${permissions_default}")
+tutorials_copy_and_install("*.cfg" "${permissions_default}")
+tutorials_copy_and_install("*.jou" "${permissions_default}")
+tutorials_copy_and_install("*.cub" "${permissions_default}")
+tutorials_copy_and_install("*.h5m" "${permissions_default}")
+tutorials_copy_and_install("*.sh" "${permissions_execute}")
+tutorials_copy_and_install("README" "${permissions_execute}")
 
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)  
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
-bfe_build_and_install(
+tutorials_build_and_install(
   h_adaptive_transport ${CMAKE_CURRENT_SOURCE_DIR}/h_adaptive_transport.cpp)
 
 if(ADOL-C_LIBRARY)
 
-  bfe_build_and_install(
+  tutorials_build_and_install(
     unsaturated_transport ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated_transport.cpp)
 
   add_test(
     unsaturated_flow ${CMAKE_CURRENT_BINARY_DIR}/run_uf.sh
-    ${CMAKE_CURRENT_SOURCE_DIR}/soil_impermeable.cub 
+    ${CMAKE_CURRENT_SOURCE_DIR}/soil_impermeable.h5m
     ${CMAKE_CURRENT_SOURCE_DIR}/unsaturated.cfg 2 0.0001 0.0003)
 
 endif(ADOL-C_LIBRARY)

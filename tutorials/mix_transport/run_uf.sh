@@ -75,9 +75,7 @@ mpirun --allow-run-as-root -np $NBPROCS \
 -snes_converged_reason \
 -my_order $ORDER \
 -how_often_output 5 \
--my_max_post_proc_ref_level 0 2>&1 | tee log && \
-rm -f out_*.vtk && \
-../nonlinear_elasticity/do_vtk.sh out_*h5m
+-my_max_post_proc_ref_level 0 2>&1 | tee log 
 
 # Will exit with status of last command.
 

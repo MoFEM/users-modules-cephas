@@ -85,6 +85,7 @@ set(TUTORIALS_DIRS
   clx-0
   max-0
   max-1
+  mix_transport
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
