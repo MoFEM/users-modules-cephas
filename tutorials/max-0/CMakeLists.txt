@@ -13,16 +13,10 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-bfe_build_and_install(
+tutorials_build_and_install(
   magnetostatic ${CMAKE_CURRENT_SOURCE_DIR}/magnetostatic.cpp)
-bfe_build_and_install(
+tutorials_build_and_install(
   lorentz_force ${CMAKE_CURRENT_SOURCE_DIR}/lorentz_force.cpp)
-
-file(
-    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
 
 add_test(MagnetostaticTest
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
@@ -36,9 +30,9 @@ set(permissions_default
   OWNER_READ
   GROUP_READ)
 
-bfe_copy_and_install("*.jou" "${permissions_default}")
-bfe_copy_and_install("*.cub" "${permissions_default}")
-bfe_copy_and_install("*.h5m" "${permissions_default}")
-bfe_copy_and_install("README" "${permissions_default}")
+tutorials_copy_and_install("*.jou" "${permissions_default}")
+tutorials_copy_and_install("*.cub" "${permissions_default}")
+tutorials_copy_and_install("*.h5m" "${permissions_default}")
+tutorials_copy_and_install("README" "${permissions_default}")
 
 

@@ -18,7 +18,6 @@ set(BFE_DIRS
   mix_transport
   thermal
   cohesive_interface
-  magnetostatic
   poisson
   lessons
   hello_world
