@@ -8,3 +8,6 @@ unite volume all
 surface all scheme triadvance 
 surface all size auto factor 1
 mesh surface all
+
+block 1 add curve 7
+block 1 name "BC" 
