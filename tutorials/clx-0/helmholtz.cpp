@@ -28,8 +28,6 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using EntData = DataForcesAndSourcesCore::EntData;
-
 using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
