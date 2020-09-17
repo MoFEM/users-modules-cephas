@@ -187,43 +187,30 @@ int main(int argc, char *argv[]) {
     // setup problem
     CHKERR simple->setUp();
 
-    // create elements instances
-    boost::shared_ptr<ForcesAndSourcesCore> domain_fe(
-        new VolumeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore> boundary_fe(
-        new FaceElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore> skeleton_fe(
-        new FaceElementForcesAndSourcesCore(m_field));
+    auto pipeline_mng = m_field.getInterface<PipelineManager>();
+
+    // set operator to the volume element instance
+    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpRow("U"));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpVolume("U"));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpRowCol("U", "U", true));
+
+    // set operator to the face element instance
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpRow("L"));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpFace("L"));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpRowCol("U", "L", false));
+
+    // set operator to the face element on skeleton instance
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe(
         new VolumeElementForcesAndSourcesCoreOnSide(m_field));
-    // set operator to the volume element instance
-    domain_fe->getOpPtrVector().push_back(new OpRow("U"));
-    domain_fe->getOpPtrVector().push_back(new OpRowCol("U", "U", true));
-    domain_fe->getOpPtrVector().push_back(new OpVolume("U"));
-    // set operator to the face element instance
-    boundary_fe->getOpPtrVector().push_back(new OpRow("L"));
-    boundary_fe->getOpPtrVector().push_back(new OpRowCol("U", "L", false));
-    boundary_fe->getOpPtrVector().push_back(new OpFace("L"));
-    // set operator to the face element on skeleton instance
-    skeleton_fe->getOpPtrVector().push_back(new OpRow("S"));
-    skeleton_fe->getOpPtrVector().push_back(new OpFaceSide("S", side_fe));
+    pipeline_mng->getOpSkeletonRhsPipeline().push_back(new OpRow("S"));
+    pipeline_mng->getOpSkeletonRhsPipeline().push_back(
+        new OpFaceSide("S", side_fe));
     // set operator to the volume on side of the skeleton face
     side_fe->getOpPtrVector().push_back(new OpVolumeSide("U"));
 
-    auto dm = simple->getDM();
-    // iterate domain elements and execute element instance with operator on
-    // mesh entities
-    CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), domain_fe);
-    MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
-    // iterate boundary elements and execute element instance with operator on
-    // mesh entities
-    CHKERR DMoFEMLoopFiniteElements(dm, simple->getBoundaryFEName(),
-                                    boundary_fe);
-    MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
-    // iterate skeleton elements and execute element instance with operator on
-    // mesh entities
-    CHKERR DMoFEMLoopFiniteElements(dm, simple->getSkeletonFEName(),
-                                    skeleton_fe);
+    CHKERR pipeline_mng->loopFiniteElements();
     MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
   }
   CATCH_ERRORS;
