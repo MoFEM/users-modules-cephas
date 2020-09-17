@@ -87,6 +87,7 @@ set(TUTORIALS_DIRS
   max-0
   max-1
   mix_transport
+  simple_elasticity
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})

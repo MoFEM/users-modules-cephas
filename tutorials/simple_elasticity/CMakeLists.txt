@@ -14,7 +14,7 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-bfe_build_and_install(simple_elasticity simple_elasticity.cpp)
+tutorials_build_and_install(simple_elasticity simple_elasticity.cpp)
 
 add_test(simple_elasticity
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
@@ -25,19 +25,23 @@ add_test(simple_elasticity
 
  cm_export_file("simple_elasticity.h5m" export_files_simple_elasticity)
 
-  file(
-    COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-    FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README DESTINATION ${BFE_MOD_DIR})
+set(permissions_default 
+ OWNER_WRITE 
+ OWNER_READ
+ GROUP_READ)
 
+set(permissions_execute 
+ OWNER_WRITE 
+ OWNER_READ
+ GROUP_READ
+ OWNER_EXECUTE 
+ GROUP_EXECUTE)
 
- install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/simple_elasticity.h5m
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
-
- cm_export_file("README" export_files_simple_elasticity)
-
- install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
+ tutorials_copy_and_install("*.msh" "${permissions_default}")
+ tutorials_copy_and_install("*.cfg" "${permissions_default}")
+ # tutorials_copy_and_install("*.jou" "${permissions_default}")
+ tutorials_copy_and_install("*.cub" "${permissions_default}")
+ tutorials_copy_and_install("*.h5m" "${permissions_default}")
+ tutorials_copy_and_install("*.petsc" "${permissions_default}")
+ tutorials_copy_and_install("*.sh" "${permissions_execute}")
+ tutorials_copy_and_install("*.geo" "${permissions_execute}")
