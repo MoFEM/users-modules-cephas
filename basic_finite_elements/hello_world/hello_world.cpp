@@ -189,28 +189,36 @@ int main(int argc, char *argv[]) {
 
     auto pipeline_mng = m_field.getInterface<PipelineManager>();
 
-    // set operator to the volume element instance
+    //! [set operator to the volume element instance]
     pipeline_mng->getOpDomainRhsPipeline().push_back(new OpRow("U"));
     pipeline_mng->getOpDomainRhsPipeline().push_back(new OpVolume("U"));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpRowCol("U", "U", true));
+    //! [set operator to the volume element instance]
 
-    // set operator to the face element instance
+    //! [set operator to the face element instance]
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpRow("L"));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpFace("L"));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpRowCol("U", "L", false));
+    //! [set operator to the face element instance]
 
-    // set operator to the face element on skeleton instance
+    //! [create skeleton side element and push operator to it]
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe(
         new VolumeElementForcesAndSourcesCoreOnSide(m_field));
+    side_fe->getOpPtrVector().push_back(new OpVolumeSide("U"));
+    //! [create skeleton side element and push operator to it]
+
+    //! [set operator to the face element on skeleton instance]
     pipeline_mng->getOpSkeletonRhsPipeline().push_back(new OpRow("S"));
     pipeline_mng->getOpSkeletonRhsPipeline().push_back(
         new OpFaceSide("S", side_fe));
-    // set operator to the volume on side of the skeleton face
-    side_fe->getOpPtrVector().push_back(new OpVolumeSide("U"));
+    //! [set operator to the face element on skeleton instance]
 
+    //! [executing finite elements]
     CHKERR pipeline_mng->loopFiniteElements();
+    //! [executing finite elements] 
+
     MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
   }
   CATCH_ERRORS;
