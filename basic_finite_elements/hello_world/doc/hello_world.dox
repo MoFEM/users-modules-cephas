@@ -89,8 +89,10 @@ object is given in \ref figure_2_meshed_object "Figure 2".
 The indication that MoFEM database has been initialized is that the MoFEM
 version and git commit id are shown on the terminal as below.
 \verbatim
-MoFEM version 0.8.13 (MOAB 5.0.2 Petsc Release Version 3.9.3, Jul, 02, 2018 )
-git commit id 549c206e489d605e1c9d531f5d463b99ec2adc32
+[0] <inform> MoFEM version 0.10.0 (MOAB 5.1.0 Petsc Release Version 3.11.3, Jun, 26, 2019 )
+[0] <inform> git commit id 8e79d6cc5f02e48a97287c6663c53b1e871766f4
+[0] <inform> Local time: 2020-Sep-17 15:55:3
+[0] <inform> UTC time: 2020-Sep-17 14:55:3
 \endverbatim
 It should be noted that the message can be different depending on the time of installation and update.
 
@@ -124,9 +126,9 @@ approximation base. \ref hierarchical_approximation_1 provides more details on t
 
 When one runs the program later in \ref hello_word_running_program, the output of this part of the code is printed on terminal as follows
 \verbatim
-add: name U BitFieldId 1 bit number 1 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316768
-add: name L BitFieldId 2 bit number 2 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316769
-add: name S BitFieldId 4 bit number 3 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316770
+[0] <inform> [FieldCore] Add field U field_id 1 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316767
+[0] <inform> [FieldCore] Add field L field_id 2 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316768
+[0] <inform> [FieldCore] Add field S field_id 4 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 3 meshset 12682136550675316769
 \endverbatim
 where at the end entity handle to meshset is printed. This meshset consisting
 all entities to which field is set. The effect of the setting of
@@ -162,44 +164,42 @@ add problem: SimpleProblem
 - In the following lines, degrees of freedom (DOFs) are constructed for fields U, L and S added in \ref hello_world_adding_fields. The number of DOFs
 on each field entity depends on the approximation order and approximation space which have also been defined in \ref hello_world_adding_fields.
 \verbatim
-Build Field U (rank 0)
-nb added dofs (vertices) 27 (inactive 0)
-nb added dofs (edges) 234 (inactive 0)
-nb added dofs (triangles) 270 (inactive 0)
-nb added dofs (tets) 36 (inactive 0)
-nb added dofs 567 (number of inactive dofs 0)
-Build Field L (rank 0)
-nb added dofs (vertices) 24 (inactive 0)
-nb added dofs (edges) 108 (inactive 0)
-nb added dofs (triangles) 36 (inactive 0)
-nb added dofs 168 (number of inactive dofs 0)
-Build Field S (rank 0)
-nb added dofs (vertices) 24 (inactive 0)
-nb added dofs (edges) 108 (inactive 0)
-nb added dofs (triangles) 36 (inactive 0)
-nb added dofs 168 (number of inactive dofs 0)
-Nb. dofs 903
+[0] <verbose> [FieldCore] Build field U
+[0] <verbose> [FieldCore] Nb. of dofs (vertices) 27 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (edge) 234 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (triangles) 270 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (tetrahedra) 36 (inactive 0)
+[0] <verbose> [FieldCore] Nb. added dofs 567 (number of inactive dofs 0 )
+[0] <verbose> [FieldCore] Build field L
+[0] <verbose> [FieldCore] Nb. of dofs (vertices) 24 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (edge) 108 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (triangles) 36 (inactive 0)
+[0] <verbose> [FieldCore] Nb. added dofs 168 (number of inactive dofs 0 )
+[0] <verbose> [FieldCore] Build field S
+[0] <verbose> [FieldCore] Nb. of dofs (vertices) 27 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (edge) 156 (inactive 0)
+[0] <verbose> [FieldCore] Nb. of dofs (triangles) 90 (inactive 0)
+[0] <verbose> [FieldCore] Nb. added dofs 273 (number of inactive dofs 0 )
+[0] <inform> [FieldCore] Number of dofs 1008
 \endverbatim
 
 - The following lines indicate domain, boundary and skeleton finite element structures have been succesfully constructed.
 \verbatim
-Build Finite Elements dFE
-id 00000000000000000000000000000001 name dFE f_id_row 00000000000000000000000000000001 f_id_col 00000000000000000000000000000001 BitFEId_data 00000000000000000000000000000001 Nb. FEs 12
-Build Finite Elements bFE
-id 00000000000000000000000000000010 name bFE f_id_row 00000000000000000000000000000111 f_id_col 00000000000000000000000000000111 BitFEId_data 00000000000000000000000000000111 Nb. FEs 12
-Build Finite Elements sFE
-id 00000000000000000000000000000100 name sFE f_id_row 00000000000000000000000000000111 f_id_col 00000000000000000000000000000111 BitFEId_data 00000000000000000000000000000111 Nb. FEs 30
+[0] <verbose> [FECore] Build Finite Elements dFE
+[0] <inform> [FECore] Finite element dFE added. Nb. of elements added 12
+[0] <verbose> [FECore] Build Finite Elements bFE
+[0] <inform> [FECore] Finite element bFE added. Nb. of elements added 12
+[0] <verbose> [FECore] Build Finite Elements sFE
+[0] <inform> [FECore] Finite element sFE added. Nb. of elements added 30
+[0] <inform> [FECore] Number of adjacencies 1374
 \endverbatim
 
 - Finally, the problem data structure are constructed, in particular knowing finite element DOFs adjacencies
 and enumeration of DOFs, matrices and vectors can be created.
 \verbatim
-Nb. entFEAdjacencies 918
-partition_problem: rank = 0 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name SimpleProblem Nb. local dof 903 nb global row dofs 903
-partition_problem: rank = 0 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name SimpleProblem Nb. local dof 903 nb global col dofs 903
-problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name SimpleProblem Nb. elems 54 on proc 0
-partition_ghost_col_dofs: rank = 0 FEs col ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name SimpleProblem Nb. col ghost dof 0 Nb. local dof 903
-partition_ghost_row_dofs: rank = 0 FEs row ghost dofs problem id 00000000000000000000000000000001 FiniteElement id 00000000000000000000000000000111 name SimpleProblem Nb. row ghost dof 0 Nb. local dof 903
+[0] <inform> [ProblemsManager] SimpleProblem Nb. local dof 1008 by 1008 nb global dofs 1008 by 1008
+[0] <verbose> [ProblemsManager] SimpleProblem nb. elems 54
+[0] <inform> [ProblemsManager]  FEs ghost dofs on problem SimpleProblem Nb. ghost dof 0 by 0 Nb. local dof 1008 by 1008
 \endverbatim
 
 \subsection hello_world_fe_instances Allocating finite element instances
@@ -303,22 +303,18 @@ CHKERR DMoFEMLoopFiniteElements(dm,simple->getDomainFEName(),domain_fe);
 \endcode
 as results we get
 \verbatim
-**** 0 ****
-**** Operators ****
-Hello Operator OpRow: field name U side 0 type Vertex nb dofs on entity 12
+[0] <inform> **** 0 ****
+[0] <inform> **** Operators ****
+[0] <inform> Hello Operator OpRow: field name U side 0 type Vertex nb dofs on entity 12
+[0] <inform> Hello Operator OpRow: field name U side 0 type Edge nb dofs on entity 9
 ...
-Hello Operator OpRow: field name U side 0 type Tetrahedra nb dofs on entity 3
-Hello Operator OpRowCol: row field name U row side 0 row type Vertex nb dofs on row entity12 :  col field name U col side 0 col type Vertex nb dofs on col entity12
-...
-Hello Operator OpRowCol: row field name U row side 0 row type Tetrahedra nb dofs on row entity3 :  col field name U col side 0 col type Tetrahedra nb dofs on col entity3
-Hello Operator OpVolume: volume 0.0834851
-
-**** 2 ****
-**** Operators ****
-...
-
-**** 11 ****
-**** Operators ****
+[0] <inform> Hello Operator OpRow: field name U side 0 type Triangle nb dofs on entity 9
+[0] <inform> Hello Operator OpRow: field name U side 1 type Triangle nb dofs on entity 9
+[0] <inform> Hello Operator OpRow: field name U side 2 type Triangle nb dofs on entity 9
+[0] <inform> Hello Operator OpRow: field name U side 3 type Triangle nb dofs on entity 9
+[0] <inform> Hello Operator OpRow: field name U side 0 type Tetrahedra nb dofs on entity 3
+[0] <inform> Hello Operator OpRowCol: row field name U row side 0 row type Vertex nb dofs on row entity12 :  col field name U col side 0 col type Vertex nb dofs on col entity12
+[0] <inform> Hello Operator OpRowCol: row field name U row side 0 row type Vertex nb dofs on row entity12 :  col field name U col side 0 col type Edge nb dofs on col entity9
 ...
 \endverbatim
 where dots are added for the abbreviation of output. Note that operators are
