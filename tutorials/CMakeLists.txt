@@ -74,6 +74,7 @@ endfunction()
 
 set(TUTORIALS_DIRS 
   fundamentals
+  hello_world
   scl-0
   scl-1
   scl-2

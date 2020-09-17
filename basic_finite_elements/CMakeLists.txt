@@ -19,7 +19,6 @@ set(BFE_DIRS
   cohesive_interface
   poisson
   lessons
-  hello_world
   reaction_diffusion_equation
   simple_contact)
 

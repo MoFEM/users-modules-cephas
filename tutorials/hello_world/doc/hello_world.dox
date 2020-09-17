@@ -384,7 +384,7 @@ volume can be accessed.
 In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. This can be done as follows
 
 \code
-cd mofem_install/um/build/basic_finite_elements/hello_world
+cd mofem_install/um/build/tutorials/hello_world
 make -j2
 ./hello_world
 \endcode

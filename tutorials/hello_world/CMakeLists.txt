@@ -11,24 +11,23 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hello_world)
+set(permissions_default 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ)
 
-file(
-  COPY ${CMAKE_CURRENT_SOURCE_DIR}/README
-  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-  FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
+set(permissions_execute 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ
+  OWNER_EXECUTE 
+  GROUP_EXECUTE)
 
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/README 
-  DESTINATION ${BFE_MOD_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE)
+tutorials_copy_and_install("*.h5m" "${permissions_default}")
+tutorials_copy_and_install("README" "${permissions_execute}")
 
-bfe_build_and_install(hello_world
-  ${CMAKE_CURRENT_SOURCE_DIR}/hello_world.cpp)
-  
-cm_export_file("mesh.h5m" export_files_hello_world)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.h5m
-  DESTINATION ${BFE_MOD_DIR})
+tutorials_build_and_install(
+  hello_world ${CMAKE_CURRENT_SOURCE_DIR}/hello_world.cpp)
 
 add_test(hello_world
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
