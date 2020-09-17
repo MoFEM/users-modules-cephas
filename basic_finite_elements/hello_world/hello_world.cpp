@@ -30,22 +30,27 @@ static char help[] = "...\n\n";
 
 static map<EntityType, std::string> type_name;
 
+#define HelloFunctionBegin                                                     \
+  MoFEMFunctionBegin;                                                          \
+  MOFEM_LOG_CHANNEL("SYNC");                                                   \
+  MOFEM_LOG_FUNCTION();                                                        \
+  MOFEM_LOG_TAG("WORLD", "HelloWorld");
+
 struct OpRow : public ForcesAndSourcesCore::UserDataOperator {
   OpRow(const std::string &field_name)
       : ForcesAndSourcesCore::UserDataOperator(field_name, field_name, OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
+    HelloFunctionBegin;
     if (type == MBVERTEX) {
       // get number of evaluated element in the loop
-      std::cout << std::endl
-                << "**** " << getNinTheLoop() << " **** " << std::endl;
-      std::cout << "**** Operators **** " << std::endl;
+      MOFEM_LOG("SYNC", Sev::inform) << "**** " << getNinTheLoop() << " ****";
+      MOFEM_LOG("SYNC", Sev::inform) << "**** Operators ****";
     }
-    std::cout << "Hello Operator OpRow:"
-              << " field name " << rowFieldName << " side " << side << " type "
-              << type_name[type] << " nb dofs on entity "
-              << data.getIndices().size() << std::endl;
+    MOFEM_LOG("SYNC", Sev::inform)
+        << "Hello Operator OpRow:"
+        << " field name " << rowFieldName << " side " << side << " type "
+        << type_name[type] << " nb dofs on entity " << data.getIndices().size();
     MoFEMFunctionReturn(0);
   }
 };
@@ -59,14 +64,15 @@ struct OpRowCol : public ForcesAndSourcesCore::UserDataOperator {
                         EntityType col_type,
                         DataForcesAndSourcesCore::EntData &row_data,
                         DataForcesAndSourcesCore::EntData &col_data) {
-    MoFEMFunctionBegin;
-    std::cout << "Hello Operator OpRowCol:"
-              << " row field name " << rowFieldName << " row side " << row_side
-              << " row type " << type_name[row_type] << " nb dofs on row entity"
-              << row_data.getIndices().size() << " : "
-              << " col field name " << colFieldName << " col side " << col_side
-              << " col type " << type_name[col_type] << " nb dofs on col entity"
-              << col_data.getIndices().size() << std::endl;
+    HelloFunctionBegin;
+    MOFEM_LOG("SYNC", Sev::inform)
+        << "Hello Operator OpRowCol:"
+        << " row field name " << rowFieldName << " row side " << row_side
+        << " row type " << type_name[row_type] << " nb dofs on row entity"
+        << row_data.getIndices().size() << " : "
+        << " col field name " << colFieldName << " col side " << col_side
+        << " col type " << type_name[col_type] << " nb dofs on col entity"
+        << col_data.getIndices().size();
     MoFEMFunctionReturn(0);
   }
 };
@@ -78,10 +84,10 @@ struct OpVolume : public VolumeElementForcesAndSourcesCore::UserDataOperator {
   }
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
+    HelloFunctionBegin;
     if (type == MBVERTEX) {
-      std::cout << "Hello Operator OpVolume:"
-                << " volume " << getVolume() << endl;
+      MOFEM_LOG("SYNC", Sev::inform) << "Hello Operator OpVolume:"
+                                     << " volume " << getVolume();
     }
     MoFEMFunctionReturn(0);
   }
@@ -92,10 +98,10 @@ struct OpFace : public FaceElementForcesAndSourcesCore::UserDataOperator {
       : FaceElementForcesAndSourcesCore::UserDataOperator(field_name, OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
+    HelloFunctionBegin;
     if (type == MBVERTEX) {
-      std::cout << "Hello Operator OpFace:"
-                << " normal " << getNormal() << endl;
+      MOFEM_LOG("SYNC", Sev::inform) << "Hello Operator OpFace:"
+                                     << " normal " << getNormal();
     }
     MoFEMFunctionReturn(0);
   }
@@ -111,9 +117,9 @@ struct OpFaceSide : public FaceElementForcesAndSourcesCore::UserDataOperator {
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
 
-    MoFEMFunctionBegin;
+    HelloFunctionBegin;
     if (type == MBVERTEX) {
-      std::cout << "Hello Operator OpSideFace" << endl;
+      MOFEM_LOG("SYNC", Sev::inform) << "Hello Operator OpSideFace";
       CHKERR loopSideVolumes("dFE", *feSidePtr);
     }
     MoFEMFunctionReturn(0);
@@ -127,11 +133,11 @@ struct OpVolumeSide
             field_name, field_name, OPROW) {}
   MoFEMErrorCode doWork(int side, EntityType type,
                         DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
+    HelloFunctionBegin;
     if (type == MBVERTEX) {
-      std::cout << "Hello Operator OpVolumeSide:"
-                << " volume " << getVolume() << " normal " << getNormal()
-                << endl;
+      MOFEM_LOG("SYNC", Sev::inform)
+          << "Hello Operator OpVolumeSide:"
+          << " volume " << getVolume() << " normal " << getNormal();
     }
     MoFEMFunctionReturn(0);
   }
@@ -208,14 +214,17 @@ int main(int argc, char *argv[]) {
     // iterate domain elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple->getDomainFEName(), domain_fe);
+    MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
     // iterate boundary elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple->getBoundaryFEName(),
                                     boundary_fe);
+    MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
     // iterate skeleton elements and execute element instance with operator on
     // mesh entities
     CHKERR DMoFEMLoopFiniteElements(dm, simple->getSkeletonFEName(),
                                     skeleton_fe);
+    MOFEM_LOG_SYNCHRONISE(m_field.get_comm());
   }
   CATCH_ERRORS;
 
