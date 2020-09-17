@@ -16,7 +16,6 @@ set(BFE_DIRS
   nonlinear_elasticity
   thermal
   cohesive_interface
-  poisson
   lessons
   reaction_diffusion_equation
   simple_contact)

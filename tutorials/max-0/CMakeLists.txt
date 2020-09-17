@@ -16,7 +16,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 tutorials_build_and_install(
   magnetostatic ${CMAKE_CURRENT_SOURCE_DIR}/magnetostatic.cpp)
 
-add_test(MagnetostaticTest
+add_test(magnetostatic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
   ${CMAKE_CURRENT_BINARY_DIR}/magnetostatic
   -my_file ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil_2parts.h5m -my_order 1 
