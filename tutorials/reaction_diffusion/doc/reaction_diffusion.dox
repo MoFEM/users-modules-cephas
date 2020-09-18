@@ -657,8 +657,8 @@ a MoFEM interface to manage DOFs and finite elements on the problem.
 \section reaction_diffusion_code The plain program.
 
 The plain program is located in
-basic_finite_elements/reaction_diffusion_equation/reaction_diffusion_equation.cpp
+basic_finite_elements/reaction_diffusion_equation/reaction_diffusion.cpp
 
-\include reaction_diffusion_equation.cpp
+\include reaction_diffusion.cpp
 
 */

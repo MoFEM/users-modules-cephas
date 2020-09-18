@@ -1,6 +1,6 @@
 /**
- * \file reaction_diffusion_equation.cpp
- * \example reaction_diffusion_equation.cpp
+ * \file reaction_diffusion.cpp
+ * \example reaction_diffusion.cpp
  *
  **/
 

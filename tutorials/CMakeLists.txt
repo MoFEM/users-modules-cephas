@@ -88,6 +88,7 @@ set(TUTORIALS_DIRS
   max-1
   mix_transport
   poisson
+  reaction_diffusion
   simple_elasticity
 )
 

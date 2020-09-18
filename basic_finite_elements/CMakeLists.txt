@@ -17,7 +17,6 @@ set(BFE_DIRS
   thermal
   cohesive_interface
   lessons
-  reaction_diffusion_equation
   simple_contact)
 
 function(bfe_install bfe_mod_dir)
