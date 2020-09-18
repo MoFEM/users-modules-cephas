@@ -1,4 +1,4 @@
-/*! \page hello_world_tut1 Hello world
+/*! \page hello_world_tut1 fun-0: Hello world
 
 In this tutorial, basic ideas about MoFEM::Simple interface, MoFEM::PipelineManager, and programming
 with user data operators (UDO) are presented. This tutorial aims at providing
@@ -384,7 +384,7 @@ volume can be accessed.
 In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. This can be done as follows
 
 \code
-cd mofem_install/um/build/tutorials/hello_world
+cd mofem_install/um/build/tutorials/fun-0
 make -j2
 ./hello_world
 \endcode

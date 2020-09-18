@@ -73,8 +73,8 @@ function(tutorials_copy_and_install extension file_permissions)
 endfunction()
 
 set(TUTORIALS_DIRS 
-  fundamentals
-  hello_world
+  fun-0
+  fun-1
   scl-0
   scl-1
   scl-2

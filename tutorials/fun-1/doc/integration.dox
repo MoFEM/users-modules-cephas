@@ -1,4 +1,4 @@
-/*! \page integration Integration on finite element mesh
+/*! \page integration fun-1: Integration on finite element mesh
 
 \section integration_intro Introduction
 
@@ -305,18 +305,18 @@ If you want to develop code in MoFEM, and you probably do if you are reading thi
 
 Executable files are located in
 \code
-$HOME/mofem_install/um/build_debug/tutorials/fundamentals
+$HOME/mofem_install/um/build_debug/tutorials/fun-1
 \endcode
 whereas the source code is located in 
 \code
-$HOME/mofem_install/mofem-cephas/mofem/users_modules/tutorials/fundamentals
+$HOME/mofem_install/mofem-cephas/mofem/users_modules/tutorials/fun-1
 \endcode
 This is called \em out-of-source \em compilation since code and programs are located in two different locations. It is a convenient way if you have different compilation options or linking different libraries, and you would like to test them all against the same source code. Code in `build_debug` is compiled with debugging flags and is not optimised. Using the debugger you can run such code line by line, which can help you understand how it works and find errors in your code. Information on how to debug code can be found
 <a href="https://code.visualstudio.com/docs/introvideos/debugging">here</a>.
 
 \note In the default MoFEM installation you can create executables under another location which is
 \code 
-$HOME/mofem_install/um/build_release/tutorials/fundamentals
+$HOME/mofem_install/um/build_release/tutorials/fun-1
 \endcode
 Executable files in `build_release` location are optimised, and are running much faster but are also harder to inspect with the debugger. 
 
@@ -324,7 +324,7 @@ Executable files in `build_release` location are optimised, and are running much
 
 To run code type:
 \code
-cd $HOME/mofem_install/build_release/tutorials/fundamentals
+cd $HOME/mofem_install/build_release/tutorials/fun-1
 ./integration -file_name cube.h5m
 \endcode
 
