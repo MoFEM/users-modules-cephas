@@ -12,7 +12,6 @@
 
 set(BFE_DIRS 
   elasticity
-  elasticity_mixed_formulation
   nonlinear_elasticity
   thermal
   cohesive_interface

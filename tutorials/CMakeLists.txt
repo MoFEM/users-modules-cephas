@@ -90,6 +90,7 @@ set(TUTORIALS_DIRS
   poisson
   reaction_diffusion
   simple_elasticity
+  elasticity_mixed_formulation
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
