@@ -90,7 +90,7 @@ set(TUTORIALS_DIRS
   low/poisson
   low/simple_elasticity
   low/elasticity_mixed_formulation
-  reaction_diffusion
+  low/reaction_diffusion
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
