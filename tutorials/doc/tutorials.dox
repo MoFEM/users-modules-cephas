@@ -102,35 +102,35 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\ref basic_tutorials_poisson_homogeneous</td>
-       <td> Solve the Poisson's equation with zero value boundary conditions
+       <td> Solve the %Poisson's equation with zero value boundary conditions
        <br/> *Keywords:* [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/group__mofem__simple__interface.html#details), [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) solver, [mofem_part](http://mofem.eng.gla.ac.uk/mofem/html/mofem__part_8cpp.html), [mbconvert](https://gitlab.kitware.com/third-party/moab/-/blob/17ddd284930a23d8e8e48efa4510ff6fe56ade4f/tools/mbconvert.man), 3D extension
        </td>
   </tr>
 
   <tr valign="top">
        <td>\ref basic_tutorials_poisson_nonhomogeneous</td>
-       <td> An expansion of previous tutorial to cover non-homogeneous (non-zero value) boundary condition of Poisson's equation
+       <td> An expansion of previous tutorial to cover non-homogeneous (non-zero value) boundary condition of %Poisson's equation
        <br/> *Keywords:* Least square approximation
        </td>
   </tr>
 
   <tr valign="top">
        <td>\ref basic_tutorials_poisson_lagrange_multiplier</td>
-       <td> Solve the Poisson's equation using Lagrange multiplier for the non-homogeneous boundary condition
+       <td> Solve the %Poisson's equation using Lagrange multiplier for the non-homogeneous boundary condition
        <br/> *Keywords:* [PCFIELDSPLIT](http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html) block solver
        </td>
   </tr>
 
   <tr valign="top">
        <td>\ref basic_tutorials_poisson_nonlinear</td>
-       <td> Solve nonlinear Poisson's equation using Newton iterative scheme
+       <td> Solve nonlinear %Poisson's equation using Newton iterative scheme
        <br/> *Keywords:* [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html) solver
        </td>
   </tr>
 
   <tr valign="top">
        <td>\ref basic_tutorials_minimal_surface_equation</td>
-       <td> A variant of the nonlinear Poisson's equation
+       <td> A variant of the nonlinear %Poisson's equation
        <br/> *Keywords:* [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html) solver
        </td>
   </tr>
@@ -306,14 +306,14 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">LOW-3: \subpage poisson_tut1</td>
        <td> Poison equation again with different implementations
-       <br/> *Keywords:* Poisson problem
+       <br/> *Keywords:* %Poisson problem
        </td>
   </tr>
 
   <tr valign="top">
        <td width="350px">LOW-4: \subpage poisson_tut2</td>
        <td> Poison equation implementation of differentation operators
-       <br/> *Keywords:* Poisson problem
+       <br/> *Keywords:* %Poisson problem
        </td>
   </tr>
 
@@ -344,6 +344,14 @@ continuing with the one you are most excited about.
         <br/> *Keywords:* Pressure field and incompressibility
         </td>
   </tr>
+
+  <tr valign="top">
+        <td width="350px">LOW-9: \subpage spring_element</td>
+        <td> Implementation of boundary element with sprinfs
+        <br/> *Keywords:* face element, spring, user data operators
+        </td>
+  </tr>
+
 
 </table>
 
