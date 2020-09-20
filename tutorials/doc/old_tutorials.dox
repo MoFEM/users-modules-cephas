@@ -7,15 +7,6 @@ general problem on particular examples.
 
 \section simple_interface Simple interface
 
-\subsection hierarchical_approximation Hierarchical approximation
-
-Introduces the reader to the basic concepts of finite element approach using
-Hierarchical basis functions.
-
-- \subpage hierarchical_approximation_1
-
-- \subpage hello_world_tut1
-
 \subsection poisson_problem The Poisson equation and difussion problems
 
 The Poisson equation is solved using MoFEM::Simple interface. The generic

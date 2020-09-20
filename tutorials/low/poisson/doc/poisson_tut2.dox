@@ -114,7 +114,7 @@ To integrate fields on body surface, we have two finite element instances,
 \e boundary_lhs_fe and \e boundary_rhs_fe, see \ref figure_2_operators_boundary_element "Figure 2".
 
 \anchor figure_2_operators_boundary_element
-\image html poisson_tut1_fig3.png "Figure 2. Operators of boundary finite element" width=400px
+\image html poisson_tut1_fig3.png "Figure 2. Operators of boundary finite element" width=700px
 
 \section poisson_tut2_op_set_up Setup of a finite element
 

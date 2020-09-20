@@ -298,14 +298,54 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">LOW-2: \subpage mix_us_flow</td>
-       <td> Mix formulation for capilary flo
+       <td> Mix formulation for capilary flow
        <br/> *Keywords:* Caplilary flow in unsaturated soil. Nonlinear mix-formulation
        </td>
   </tr>
 
+  <tr valign="top">
+       <td width="350px">LOW-3: \subpage poisson_tut1</td>
+       <td> Poison equation again with different implementations
+       <br/> *Keywords:* Poisson problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">LOW-4: \subpage poisson_tut2</td>
+       <td> Poison equation implementation of differentation operators
+       <br/> *Keywords:* Poisson problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">LOW-5: \subpage poisson_tut3</td>
+       <td> Poison equation implementation of differentation operators
+       <br/> *Keywords:* Using subproblems and nested matrices
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">LOW-6: \subpage poisson_tut4</td>
+       <td> Poison nonlinear equation again
+       <br/> *Keywords:* SNES solver and linearisation
+       </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">LOW-7: \subpage simple_elasticity_1</td>
+        <td> Older impolementation of elastic problem
+        <br/> *Keywords:* Operators and low level implementation
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">LOW-8: \subpage elasticity_mixed_formulation</td>
+        <td> Older impolementation of mix elastic problem
+        <br/> *Keywords:* Pressure field and incompressibility
+        </td>
+  </tr>
+
 </table>
-
-
 
 \note We also have some tutorials that created some time ago at \ref old_tutorials and \ref runningprograms.
 */

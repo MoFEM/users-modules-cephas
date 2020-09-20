@@ -86,11 +86,11 @@ set(TUTORIALS_DIRS
   clx-0
   max-0
   max-1
-  mix_transport
-  poisson
+  low/mix_transport
+  low/poisson
+  low/simple_elasticity
+  low/elasticity_mixed_formulation
   reaction_diffusion
-  simple_elasticity
-  elasticity_mixed_formulation
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})

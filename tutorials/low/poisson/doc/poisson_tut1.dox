@@ -101,7 +101,7 @@ u(\mathbf{x})=\overline{u}(\mathbf{x}),\quad \textrm{on}\,\partial\Omega
 \f]
 where \f$\overline{u}\f$ is prescribed function on the boundary.
 
-\image html poisson_tut1_fig2.png "Figure 2. Poisson Problem" width=400px
+\image html poisson_tut1_fig2.png "Figure 2. Poisson Problem" width=800px
 
 The Laplacian \f$\nabla^2\f$ in 3d space with Cartesian coordinates is
 \f[
