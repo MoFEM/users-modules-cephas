@@ -149,13 +149,6 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
-  <tr valign="top">
-       <td>\ref basic_tutorials_reaction_diffusion_equation</td>
-       <td> Time-dependent reaction-diffusion equation using Implicit-Explicit (IMEX) scheme
-       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, Implicit-Explicit scheme
-       </td>
-  </tr>
-
 </table>
 
 \section tutorials_complex_field_problems Problems with complex variable fields
@@ -362,5 +355,45 @@ continuing with the one you are most excited about.
 
 </table>
 
-\note We also have some tutorials that created some time ago at \ref old_tutorials and \ref runningprograms.
+\section running_programms Running code
+
+<table style="width:100%">
+
+  <tr valign="top">
+        <td width="350px">RUN-0: \subpage elastic_dynamics</td>
+        <td> Elasto-dynamics
+        <br/> *Keywords:* Time solver, elasticity, dynamics
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-1: \subpage unsaturated_flow</td>
+        <td> Unsaturated flow in 2d
+        <br/> *Keywords:* Time solver, soil, capilary forces
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-3: \subpage um_bone_remodelling_readnme</td>
+        <td> Bone remodelling
+        <br/> *Keywords:* bine
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-4: \subpage using_Gmsh_tut</td>
+        <td> Meshing with Gmsh
+        <br/> *Keywords:* meshing
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-4: \subpage using_salome_tut_elasticity</td>
+        <td> Meshing with Salome
+        <br/> *Keywords:* meshing
+        </td>
+  </tr>
+
+ </table>
+
 */
