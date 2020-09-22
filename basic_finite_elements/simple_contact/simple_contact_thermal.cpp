@@ -720,9 +720,22 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
 
-    post_proc.getOpPtrVector().push_back(new PostProcHookStress(
-        m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
-        "SPATIAL_POSITION", post_proc.commonData, block_sets_ptr.get(), false));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
+
+    // post_proc.getOpPtrVector().push_back(new PostProcHookStress(
+    //     m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
+    //     "SPATIAL_POSITION", post_proc.commonData, block_sets_ptr.get(), false))
+
+    post_proc.getOpPtrVector().push_back(
+        new HookeElement::OpPostProcHookeElement<
+            VolumeElementForcesAndSourcesCore>(
+            "MESH_NODE_POSITIONS", data_hooke_element_at_pts, *block_sets_ptr.get(),
+            post_proc.postProcMesh, post_proc.mapGaussPts, false, false));
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {
       SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;

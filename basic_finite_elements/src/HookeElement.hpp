@@ -106,6 +106,8 @@ struct HookeElement {
 
     boost::shared_ptr<MatrixDouble> eshelbyStress_dx;
 
+    boost::shared_ptr<MatrixDouble> internalStressMat;
+
     DataAtIntegrationPts() {
 
       smallStrainMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
@@ -120,9 +122,11 @@ struct HookeElement {
       stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       energyVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       eshelbyStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      // stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
       eshelbyStress_dx = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      internalStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
 
     Range forcesOnlyOnEntitiesRow;
@@ -590,6 +594,29 @@ struct HookeElement {
         StrainFunctions;
 
     OpAnalyticalInternalStain_dx(
+        const std::string row_field,
+        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        StrainFunctions strain_fun);
+
+  protected:
+    MoFEMErrorCode iNtegrate(EntData &row_data);
+    StrainFunctions strainFun;
+  };
+
+  template <int S> struct OpGetAnalyticalInternalStress : public OpAssemble {
+
+    typedef boost::function<
+
+        FTensor::Tensor2_symmetric<double, 3>(
+
+            FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords
+
+            )
+
+        >
+        StrainFunctions;
+
+    OpGetAnalyticalInternalStress(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
         StrainFunctions strain_fun);
@@ -1434,6 +1461,11 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   Tag th_stress;
   CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+  Tag th_strain;
+  CHKERR postProcMesh.tag_get_handle("STRAIN", 9, MB_TYPE_DOUBLE, th_strain,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
   Tag th_psi;
   CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
@@ -1498,12 +1530,15 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
     tensor_to_tensor(t_stress_symm, t_stress);
 
+    tensor_to_tensor(t_small_strain_symm, t_small_strain);
+
     const double psi = 0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
 
     CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
     CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
                                      &t_stress(0, 0));
-
+    CHKERR postProcMesh.tag_set_data(th_strain, &mapGaussPts[gg], 1,
+                                     &t_small_strain(0, 0));
     ++t_h;
   }
 
@@ -1576,7 +1611,7 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
 
     int rr = 0;
     for (; rr != nbRows / 3; ++rr) {
-      t_nf(i) += a * t_row_diff_base(j) * t_stress(i, j);
+      t_nf(i) -= a * t_row_diff_base(j) * t_stress(i, j);
       ++t_row_diff_base;
       ++t_nf;
     }
@@ -1585,6 +1620,54 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
       ++t_row_diff_base;
 
     ++t_w;
+    ++t_coords;
+    ++t_D;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+template <int S>
+HookeElement::OpGetAnalyticalInternalStress<S>::OpGetAnalyticalInternalStress(
+    const std::string row_field,
+    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+    StrainFunctions strain_fun)
+    : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
+      strainFun(strain_fun) {}
+
+template <int S>
+MoFEMErrorCode
+HookeElement::OpGetAnalyticalInternalStress<S>::iNtegrate(EntData &row_data) {
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  MoFEMFunctionBegin;
+
+  const int nb_integration_pts = getGaussPts().size2();
+
+  auto get_coords = [&]() {
+    if (getHoCoordsAtGaussPts().size1() == nb_integration_pts)
+      return getFTensor1HoCoordsAtGaussPts();
+    else
+      return getFTensor1CoordsAtGaussPts();
+  };
+  auto t_coords = get_coords();
+
+  // elastic stiffness tensor (4th rank tensor with minor and major
+  // symmetry)
+  FTensor::Ddg<FTensor::PackPtr<double *, S>, 3, 3> t_D(
+      MAT_TO_DDG(dataAtPts->stiffnessMat));
+  
+  dataAtPts->internalStressMat->resize(6, nb_integration_pts, false);
+  auto t_internal_stress =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->internalStressMat));
+
+  for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+
+    auto t_fun_strain = strainFun(t_coords);
+    t_internal_stress(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
+
     ++t_coords;
     ++t_D;
   }
