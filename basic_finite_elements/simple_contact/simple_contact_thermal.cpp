@@ -66,21 +66,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  enum contact_tests {
-    EIGHT_CUBE = 1,
-    FOUR_SEASONS = 2,
-    T_INTERFACE = 3,
-    PUNCH_TOP_AND_MID = 4,
-    PUNCH_TOP_ONLY = 5,
-    PLANE_AXI = 6,
-    ARC_THREE_SURF = 7,
-    SMILING_FACE = 8,
-    SMILING_FACE_CONVECT = 9,
-    WAVE_2D = 10,
-    WAVE_2D_ALM = 11,
-    LAST_TEST
-  };
-
   // Initialize MoFEM
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
@@ -448,20 +433,20 @@ int main(int argc, char *argv[]) {
                                       block_sets_ptr, "SPATIAL_POSITION",
                                       "MESH_NODE_POSITIONS", false, false,
                                       MBTET, data_hooke_element_at_pts);
-    // auto thermal_strain =
-    //     [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
-    //       FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
-    //       constexpr double alpha = 1;
-    //       FTensor::Index<'i', 3> i;
-    //       FTensor::Index<'k', 3> j;
-    //       constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    //       t_thermal_strain(i, j) = alpha * t_coords(2) * t_kd(i, j);
-    //       return t_thermal_strain;
-    //     };
+    auto thermal_strain =
+        [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
+          FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
+          constexpr double alpha = 2.5e-3;
+          FTensor::Index<'i', 3> i;
+          FTensor::Index<'k', 3> j;
+          constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+          t_thermal_strain(i, j) = alpha * t_kd(i, j);
+          return t_thermal_strain;
+        };
 
-    // fe_rhs_ptr->getOpPtrVector().push_back(
-    //     new HookeElement::OpAnalyticalInternalStain_dx<0>(
-    //         "SPATIAL_POSITION", data_at_pts, thermal_strain));
+    fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+        new HookeElement::OpAnalyticalInternalStain_dx<0>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts, thermal_strain));
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
