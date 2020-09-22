@@ -727,14 +727,15 @@ int main(int argc, char *argv[]) {
         new OpCalculateVectorFieldGradient<3, 3>(
             "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
 
-    // post_proc.getOpPtrVector().push_back(new PostProcHookStress(
-    //     m_field, post_proc.postProcMesh, post_proc.mapGaussPts,
-    //     "SPATIAL_POSITION", post_proc.commonData, block_sets_ptr.get(), false))
+    post_proc.getOpPtrVector().push_back(
+        new HookeElement::OpGetAnalyticalInternalStress<0>(
+            "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
+            thermal_strain));
 
     post_proc.getOpPtrVector().push_back(
         new HookeElement::OpPostProcHookeElement<
             VolumeElementForcesAndSourcesCore>(
-            "MESH_NODE_POSITIONS", data_hooke_element_at_pts, *block_sets_ptr.get(),
+            "SPATIAL_POSITION", data_hooke_element_at_pts, *block_sets_ptr.get(),
             post_proc.postProcMesh, post_proc.mapGaussPts, false, false));
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {

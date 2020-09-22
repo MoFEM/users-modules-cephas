@@ -603,7 +603,8 @@ struct HookeElement {
     StrainFunctions strainFun;
   };
 
-  template <int S> struct OpGetAnalyticalInternalStress : public OpAssemble {
+  template <int S = 0>
+  struct OpGetAnalyticalInternalStress : public VolUserDataOperator {
 
     typedef boost::function<
 
@@ -617,13 +618,15 @@ struct HookeElement {
         StrainFunctions;
 
     OpGetAnalyticalInternalStress(
-        const std::string row_field,
-        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+        const std::string row_field, const std::string col_field,
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
         StrainFunctions strain_fun);
 
+    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data);
+
   protected:
-    MoFEMErrorCode iNtegrate(EntData &row_data);
     StrainFunctions strainFun;
+    boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
   };
 
   template <int S> struct OpAnalyticalInternalAleStain_dX : public OpAssemble {
@@ -1462,6 +1465,10 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
+  Tag th_actual_stress;
+  CHKERR postProcMesh.tag_get_handle("STRESS_ACTUAL", 9, MB_TYPE_DOUBLE, th_actual_stress,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);                                   
+
   Tag th_strain;
   CHKERR postProcMesh.tag_get_handle("STRAIN", 9, MB_TYPE_DOUBLE, th_strain,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
@@ -1505,8 +1512,14 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   FTensor::Tensor2<double, 3, 3> t_F;
   FTensor::Tensor2<double, 3, 3> t_stress;
   FTensor::Tensor2<double, 3, 3> t_small_strain;
+  FTensor::Tensor2<double, 3, 3> t_actual_stress;
+
   FTensor::Tensor2_symmetric<double, 3> t_stress_symm;
   FTensor::Tensor2_symmetric<double, 3> t_small_strain_symm;
+  FTensor::Tensor2_symmetric<double, 3> t_actual_stress_symm;
+
+  auto t_internal_stress_symm =
+      getFTensor2SymmetricFromMat<3>(*(dataAtPts->internalStressMat));
 
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -1529,17 +1542,22 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     // symmetric tensors need improvement
     t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
     tensor_to_tensor(t_stress_symm, t_stress);
-
     tensor_to_tensor(t_small_strain_symm, t_small_strain);
+
+    t_actual_stress_symm(i, j) = t_stress_symm(i, j) - t_internal_stress_symm(i, j);
+    tensor_to_tensor(t_actual_stress_symm, t_actual_stress);
 
     const double psi = 0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
 
     CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
     CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
                                      &t_stress(0, 0));
+     CHKERR postProcMesh.tag_set_data(th_actual_stress, &mapGaussPts[gg], 1,
+                                     &t_actual_stress(0, 0));                                 
     CHKERR postProcMesh.tag_set_data(th_strain, &mapGaussPts[gg], 1,
                                      &t_small_strain(0, 0));
     ++t_h;
+    ++t_internal_stress_symm;
   }
 
   MoFEMFunctionReturn(0);
@@ -1629,15 +1647,17 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
 
 template <int S>
 HookeElement::OpGetAnalyticalInternalStress<S>::OpGetAnalyticalInternalStress(
-    const std::string row_field,
-    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+    const std::string row_field, const std::string col_field,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
     StrainFunctions strain_fun)
-    : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
-      strainFun(strain_fun) {}
+    : VolUserDataOperator(row_field, col_field, OPROW, true),
+      dataAtPts(data_at_pts), strainFun(strain_fun) {
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+}
 
 template <int S>
-MoFEMErrorCode
-HookeElement::OpGetAnalyticalInternalStress<S>::iNtegrate(EntData &row_data) {
+MoFEMErrorCode HookeElement::OpGetAnalyticalInternalStress<S>::doWork(
+    int row_side, EntityType row_type, EntData &row_data) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
@@ -1670,6 +1690,7 @@ HookeElement::OpGetAnalyticalInternalStress<S>::iNtegrate(EntData &row_data) {
 
     ++t_coords;
     ++t_D;
+    ++t_internal_stress;
   }
 
   MoFEMFunctionReturn(0);
