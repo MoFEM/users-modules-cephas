@@ -397,7 +397,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetNormalSlave::doWork(int side,
     MoFEMFunctionReturnHot(0);
 
   FTensor::Index<'i', 3> i;
-
+  
   auto get_tensor_vec = [](VectorDouble &n) {
     return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
   };
@@ -4474,8 +4474,8 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTraction::doWork(
   if (nb_dofs) {
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
-
-    if (/*side == 0 &&*/ type == MBTRI) {
+    cerr << "Check1\n";
+    if (side == 0 && type == MBTRI) {
       commonDataSimpleContact->contactTractionPtr->resize(3, nb_gauss_pts);
       commonDataSimpleContact->contactTractionPtr->clear();
     }
@@ -4486,25 +4486,30 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryTraction::doWork(
 
     auto t_normal = get_tensor_vec(
         commonDataSimpleContact->normalVectorSlavePtr.get()[0], 0);
+    cerr << "Check2\n";
     auto t_traction =
         getFTensor1FromMat<3>(*(commonDataSimpleContact->contactTractionPtr));
     size_t nb_base_functions = data.getN().size2() / 3;
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      cerr << "Check3\n";
       auto t_base = data.getFTensor1N<3>(gg, 0);
+      cerr << "Check4\n";
       auto t_field_data = data.getFTensor1FieldData<3>();
+      cerr << "Chec5\n";
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
-        // cerr << " WTF "
-        //      << "   bb    " << bb << "   gg   " << gg << "   t_base       "
-        //      << t_base << "    t_field_data      " << t_field_data << "\n";
+        cerr << " WTF "
+             << "   bb    " << bb << "   gg   " << gg <<"    t_field_data      " << t_field_data << "\n";
         t_traction(j) += (t_base(i) * t_normal(i)) * t_field_data(j);
-
+        cerr << "Chec6\n";
         ++t_field_data;
+        cerr << "Chec7\n";
         ++t_base;
+        cerr << "Chec8\n";
       }
       // for (; bb < nb_base_functions; ++bb)
       //   ++t_base;
-
+      cerr << "Check4\n";
       ++t_traction;
     }
   }
