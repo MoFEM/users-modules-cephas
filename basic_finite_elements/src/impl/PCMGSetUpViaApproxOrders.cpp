@@ -656,7 +656,7 @@ MoFEMErrorCode PCMGSetUpViaApproxOrdersCtx::createIsAtLevel(int kk, IS *is) {
   CHKERR DMMoFEMGetProblemPtr(dM, &problem_ptr);
   int order_at_next_level = kk + coarseOrder;
   if (kk == nbLevels - 1) {
-    int first = problem_ptr->getNumeredDofsRows()
+    int first = problem_ptr->getNumeredRowDofs()
                     ->get<PetscLocalIdx_mi_tag>()
                     .find(0)
                     ->get()

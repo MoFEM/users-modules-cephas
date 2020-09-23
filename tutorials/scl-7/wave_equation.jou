@@ -1,0 +1,32 @@
+reset
+
+create surface rectangle width 2 zplane 
+
+# Block for initial condition
+block 1 surface 1
+block 1 name "INITIAL"
+
+
+#create surface rectangle width 2 zplane 
+#create surface circle radius 0.2 zplane
+#imprint tolerant surface 1  with curve 5  merge 
+
+## Block for initial condition
+#block 1 surface 2 4
+#block 1 name "INITIAL"
+
+# Block for boundary condition
+block 2 curve 1 2 3 4
+block 2 name "BOUNDARY_CONDITION"
+
+# Mesh
+surface all scheme trimesh
+surface all size auto factor 10
+mesh surface all
+refine surface 1 numsplit 7 bias 1 depth 1 smooth
+
+
+save as "/Users/hoangnguyen/mofem_install/mofem-cephas/mofem/users_modules/um_basics/wave_equation/mesh.cub" overwrite
+
+
+

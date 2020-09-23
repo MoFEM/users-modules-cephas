@@ -77,10 +77,10 @@ struct Smoother {
 
       CHKERR VolumeElementForcesAndSourcesCore::preProcess();
 
-      if (A != PETSC_NULL) 
+      if (A != PETSC_NULL)
         snes_B = A;
 
-      if (F != PETSC_NULL) 
+      if (F != PETSC_NULL)
         snes_f = F;
       switch (snes_ctx) {
       case CTX_SNESSETFUNCTION: {
@@ -279,38 +279,40 @@ struct Smoother {
 
       if (smootherData.tangentFrontF) {
 
+        const auto bit_number_for_crack_area_tangent_constrain =
+            getFEMethod()->getFieldBitNumber(fieldCrackAreaTangentConstrains);
+        const auto bit_number_for_mesh_position =
+            getFEMethod()->getFieldBitNumber("MESH_NODE_POSITIONS");
+
         // get tangent vector array
         double *f_tangent_front_mesh_array;
         CHKERR VecGetArray(smootherData.tangentFrontF,
                            &f_tangent_front_mesh_array);
+
+        auto row_dofs = getFEMethod()->getRowDofsPtr();
+
         // iterate nodes on tet
         for (int nn = 0; nn < 4; nn++) {
 
           // get indices with Lagrange multiplier at node nn
-          FENumeredDofEntityByNameAndEnt::iterator dit, hi_dit;
-          dit = getFEMethod()
-                    ->rowPtr->get<Composite_Name_And_Ent_mi_tag>()
-                    .lower_bound(boost::make_tuple(
-                        fieldCrackAreaTangentConstrains, getConn()[nn]));
-          hi_dit = getFEMethod()
-                       ->rowPtr->get<Composite_Name_And_Ent_mi_tag>()
-                       .upper_bound(boost::make_tuple(
-                           fieldCrackAreaTangentConstrains, getConn()[nn]));
+          auto dit = row_dofs->get<Unique_mi_tag>().lower_bound(
+              DofEntity::getLoFieldEntityUId(
+                  bit_number_for_crack_area_tangent_constrain, getConn()[nn]));
+          auto hi_dit = row_dofs->get<Unique_mi_tag>().upper_bound(
+              DofEntity::getHiFieldEntityUId(
+                  bit_number_for_crack_area_tangent_constrain, getConn()[nn]));
 
           // continue if Lagrange are on element
           if (std::distance(dit, hi_dit) > 0) {
 
-            FENumeredDofEntityByNameAndEnt::iterator diit, hi_diit;
-
             // get mesh node positions at node nn
-            diit = getFEMethod()
-                       ->rowPtr->get<Composite_Name_And_Ent_mi_tag>()
-                       .lower_bound(boost::make_tuple("MESH_NODE_POSITIONS",
-                                                      getConn()[nn]));
-            hi_diit = getFEMethod()
-                          ->rowPtr->get<Composite_Name_And_Ent_mi_tag>()
-                          .upper_bound(boost::make_tuple("MESH_NODE_POSITIONS",
-                                                         getConn()[nn]));
+            auto diit = row_dofs->get<Unique_mi_tag>().lower_bound(
+                DofEntity::getLoFieldEntityUId(bit_number_for_mesh_position,
+                                               getConn()[nn]));
+
+            auto hi_diit = row_dofs->get<Unique_mi_tag>().upper_bound(
+                DofEntity::getHiFieldEntityUId(bit_number_for_mesh_position,
+                                               getConn()[nn]));
 
             // iterate over dofs on node nn
             for (; diit != hi_diit; diit++) {

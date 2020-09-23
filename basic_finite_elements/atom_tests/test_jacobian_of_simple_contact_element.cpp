@@ -45,6 +45,7 @@ int main(int argc, char *argv[]) {
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscBool test_jacobian = PETSC_FALSE;
     PetscBool convect_pts = PETSC_FALSE;
+    PetscBool test_ale = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
@@ -56,8 +57,8 @@ int main(int argc, char *argv[]) {
                               mesh_file_name, 255, &flg_file);
 
     CHKERR PetscOptionsInt("-my_order",
-                           "default approximation order for spatial positions",
-                           "", 1, &order, PETSC_NULL);
+                           "approximation order for spatial positions", "", 1,
+                           &order, PETSC_NULL);
     CHKERR PetscOptionsInt(
         "-my_order_lambda",
         "default approximation order of Lagrange multipliers", "", 1,
@@ -73,6 +74,9 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag", "set to convect integration pts",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
+
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_ale", &test_ale,
+                               PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -106,8 +110,7 @@ int main(int argc, char *argv[]) {
 
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
-          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-                                     ref_level_meshset);
+          CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
           CHKERR m_field.getInterface<BitRefManager>()
               ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
                                              BitRefLevel().set(), MBTET,
@@ -181,6 +184,15 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
 
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+                             3, MB_TAG_SPARSE, MF_ZERO);
+
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+
     // build field
     CHKERR m_field.build_fields();
 
@@ -216,10 +228,22 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure,
                                                             "LAGMULT");
 
+    if (test_ale == PETSC_TRUE) {
+      CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+          set_coord, "MESH_NODE_POSITIONS");
+    } else {
+      // MESH_NODE_POSITIONS
+      {
+        Projection10NodeCoordsOnField ent_method(m_field, "MESH_NODE_POSITIONS");
+        CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
+      }
+    }
+
     PetscRandomDestroy(&rctx);
 
+    auto cn_value_ptr = boost::make_shared<double>(cn_value);
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+        m_field, cn_value_ptr, is_newton_cotes);
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -243,7 +267,8 @@ int main(int argc, char *argv[]) {
           m_field);
     };
 
-    auto get_contact_rhs = [&](auto contact_problem, auto make_element, bool is_alm = false) {
+    auto get_contact_rhs = [&](auto contact_problem, auto make_element,
+                               bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsRhs(
@@ -282,9 +307,75 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
+    auto get_contact_material_rhs = [&](auto contact_problem, auto make_element,
+                                        Range &ale_nodes) {
+      auto fe_rhs_simple_contact_ale_material = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      common_data_simple_contact->forcesOnlyOnEntitiesRow.clear();
+      common_data_simple_contact->forcesOnlyOnEntitiesRow = ale_nodes;
+      contact_problem->setContactOperatorsRhsALEMaterial(
+          fe_rhs_simple_contact_ale_material, common_data_simple_contact,
+          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
+      return fe_rhs_simple_contact_ale_material;
+    };
+
+    auto get_simple_contact_ale_lhs = [&](auto contact_problem,
+                                          auto make_element) {
+      auto fe_lhs_simple_contact_ale = make_element();
+      auto common_data_simple_contact = make_contact_common_data();
+      contact_problem->setContactOperatorsLhsALE(
+          fe_lhs_simple_contact_ale, common_data_simple_contact,
+          "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT");
+      return fe_lhs_simple_contact_ale;
+    };
+
+    auto get_simple_contact_ale_material_lhs =
+        [&](auto contact_problem, auto make_element, Range &ale_nodes) {
+          auto fe_lhs_simple_contact_material_ale = make_element();
+          auto common_data_simple_contact = make_contact_common_data();
+          common_data_simple_contact->forcesOnlyOnEntitiesRow.clear();
+          common_data_simple_contact->forcesOnlyOnEntitiesRow = ale_nodes;
+          contact_problem->setContactOperatorsLhsALEMaterial(
+              fe_lhs_simple_contact_material_ale, common_data_simple_contact,
+              "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "LAGMULT", "MATERIAL");
+          return fe_lhs_simple_contact_material_ale;
+        };
+
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                        "LAGMULT", contact_prisms);
+    Range all_tets;
+    if (test_ale == PETSC_TRUE) {
+      contact_problem->addContactElementALE(
+          "ALE_CONTACT_ELEM", "SPATIAL_POSITION", "MESH_NODE_POSITIONS",
+          "LAGMULT", contact_prisms);
+
+      Range faces;
+      CHKERR moab.get_adjacencies(contact_prisms, 2, false, faces,
+                                  moab::Interface::UNION);
+      Range tris = faces.subset_by_type(MBTRI);
+
+      CHKERR moab.get_adjacencies(tris, 3, false, all_tets,
+                                  moab::Interface::UNION);
+
+      // Add finite elements
+      CHKERR m_field.add_finite_element("MATERIAL", MF_ZERO);
+      CHKERR m_field.modify_finite_element_add_field_row("MATERIAL",
+                                                         "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_col("MATERIAL",
+                                                         "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_row("MATERIAL",
+                                                         "MESH_NODE_POSITIONS");
+      CHKERR m_field.modify_finite_element_add_field_col("MATERIAL",
+                                                         "MESH_NODE_POSITIONS");
+      CHKERR m_field.modify_finite_element_add_field_data("MATERIAL",
+                                                          "SPATIAL_POSITION");
+      CHKERR m_field.modify_finite_element_add_field_data(
+          "MATERIAL", "MESH_NODE_POSITIONS");
+      CHKERR m_field.add_ents_to_finite_element_by_type(all_tets, MBTET,
+                                                        "MATERIAL");
+      CHKERR m_field.build_finite_elements("MATERIAL", &all_tets);
+    }
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
@@ -313,6 +404,11 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, PETSC_FALSE);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "CONTACT_ELEM");
+
+    if (test_ale == PETSC_TRUE) {
+      CHKERR DMMoFEMAddElement(dm, "ALE_CONTACT_ELEM");
+      CHKERR DMMoFEMAddElement(dm, "MATERIAL");
+    }
 
     CHKERR DMSetUp(dm);
 
@@ -345,7 +441,7 @@ int main(int argc, char *argv[]) {
           dm, "CONTACT_ELEM",
           get_master_contact_lhs(contact_problem,
                                  make_convective_master_element),
-          PETSC_NULL, PETSC_NULL);
+          NULL, NULL);
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
           get_master_traction_rhs(contact_problem,
@@ -355,23 +451,22 @@ int main(int argc, char *argv[]) {
           dm, "CONTACT_ELEM",
           get_master_traction_lhs(contact_problem,
                                   make_convective_slave_element),
-          PETSC_NULL, PETSC_NULL);
+          NULL, NULL);
     } else {
-
       CHKERR DMMoFEMSNESSetFunction(
           dm, "CONTACT_ELEM",
           get_contact_rhs(contact_problem, make_contact_element, alm_flag),
+          PETSC_NULL, PETSC_NULL);
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "CONTACT_ELEM",
+          get_master_traction_rhs(contact_problem, make_contact_element,
+                                  alm_flag),
           PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetJacobian(dm, "CONTACT_ELEM",
                                     get_master_contact_lhs(contact_problem,
                                                            make_contact_element,
                                                            alm_flag),
                                     PETSC_NULL, PETSC_NULL);
-      CHKERR DMMoFEMSNESSetFunction(
-          dm, "CONTACT_ELEM",
-          get_master_traction_rhs(contact_problem, make_contact_element,
-                                  alm_flag),
-          PETSC_NULL, PETSC_NULL);
       CHKERR DMMoFEMSNESSetJacobian(
           dm, "CONTACT_ELEM",
           get_master_traction_lhs(contact_problem, make_contact_element,
@@ -379,10 +474,34 @@ int main(int argc, char *argv[]) {
           PETSC_NULL, PETSC_NULL);
     }
 
+    if (test_ale == PETSC_TRUE) {
+      Range nodes;
+      CHKERR moab.get_connectivity(all_tets, nodes, false);
+
+      CHKERR DMMoFEMSNESSetFunction(
+          dm, "ALE_CONTACT_ELEM",
+          get_contact_material_rhs(contact_problem, make_contact_element,
+                                   nodes),
+          PETSC_NULL, PETSC_NULL);
+
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "ALE_CONTACT_ELEM",
+          get_simple_contact_ale_lhs(contact_problem, make_contact_element),
+          NULL, NULL);
+
+      CHKERR DMMoFEMSNESSetJacobian(
+          dm, "ALE_CONTACT_ELEM",
+          get_simple_contact_ale_material_lhs(contact_problem,
+                                              make_contact_element, nodes),
+          NULL, NULL);
+    }
+
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 "
+          "-snes_max_it "
+          "1 ";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
@@ -432,10 +551,11 @@ int main(int argc, char *argv[]) {
                 "difference matrix is too big");
       }
     }
-    } CATCH_ERRORS;
+  }
+  CATCH_ERRORS;
 
-    // finish work cleaning memory, getting statistics, etc
-    MoFEM::Core::Finalize();
+  // finish work cleaning memory, getting statistics, etc
+  MoFEM::Core::Finalize();
 
-    return 0;
+  return 0;
 }

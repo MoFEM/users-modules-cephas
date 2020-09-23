@@ -34,7 +34,7 @@ constexpr int order = 4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 1;
-constexpr double spring_stiffness = 1e-6;
+constexpr double spring_stiffness = 0;
 
 #include <ElasticOps.hpp>
 #include <ContactOps.hpp>
@@ -96,7 +96,19 @@ MoFEMErrorCode Example::setUP() {
   CHKERR simple->setFieldOrder("SIGMA", 0);
 
   auto skin_edges = getEntsOnMeshSkin();
-  CHKERR simple->setFieldOrder("SIGMA", order - 1, &skin_edges);
+
+  // filter not owned entities, those are not on boundary
+  Range boundary_ents;
+  ParallelComm *pcomm =
+      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+  if (pcomm == NULL) {
+    pcomm = new ParallelComm(&mField.get_moab(), mField.get_comm());
+  }
+
+  CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                               PSTATUS_NOT, -1, &boundary_ents);
+
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
   // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
 
   CHKERR simple->setUp();
@@ -256,6 +268,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());

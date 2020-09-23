@@ -40,9 +40,9 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     VectorDofs::iterator it, hi_it;
     it = data.getFieldDofs().begin();
     hi_it = data.getFieldDofs().end();
+    auto row_dofs = getFEMethod()->getRowDofsPtr();
     for (int ii = 0; it != hi_it; it++, ii++) {
-      int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
+      int local_idx = row_dofs->find((*it)->getLocalUniqueId())
                           ->get()
                           ->getPetscLocalDofIdx();
       vAlues[ii] = a[local_idx];
@@ -53,7 +53,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     vAluesPtr = &data.getFieldData();
   }
 
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
+  auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank;
@@ -215,9 +215,9 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     VectorDofs::iterator it, hi_it;
     it = data.getFieldDofs().begin();
     hi_it = data.getFieldDofs().end();
+    auto row_dofs = getFEMethod()->getRowDofsPtr();
     for (int ii = 0; it != hi_it; it++, ii++) {
-      int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
+      int local_idx = row_dofs->find((*it)->getLocalUniqueId())
                           ->get()
                           ->getPetscLocalDofIdx();
       vAlues[ii] = a[local_idx];
@@ -228,7 +228,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     vAluesPtr = &data.getFieldData();
   }
 
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
+  auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank * 3;
@@ -826,7 +826,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
+  auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank * 3;

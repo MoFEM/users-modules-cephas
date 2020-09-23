@@ -73,10 +73,6 @@ int main(int argc, char *argv[]) {
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsInt("-my_order", "default approximation order", "",
                            order, &order, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_is_partitioned",
-                            "set if mesh is partitioned (this result that each "
-                            "process keeps only part of the mesh)",
-                            "", PETSC_FALSE, &is_partitioned, PETSC_NULL);
     CHKERR PetscOptionsBool(
         "-regression_test",
         "if set norm of solution vector is check agains expected value ",
@@ -86,18 +82,12 @@ int main(int argc, char *argv[]) {
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
 
-    if (is_partitioned == PETSC_TRUE) {
-      // Read mesh to MOAB
-      const char *option;
-      option = "PARALLEL=READ_PART;"
-               "PARALLEL_RESOLVE_SHARED_ENTS;"
-               "PARTITION=PARALLEL_PARTITION;";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
-    } else {
-      const char *option;
-      option = "";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
-    }
+    // Read mesh to MOAB
+    const char *option;
+    option = "PARALLEL=READ_PART;"
+             "PARALLEL_RESOLVE_SHARED_ENTS;"
+             "PARTITION=PARALLEL_PARTITION;";
+    CHKERR moab.load_file(mesh_file_name, 0, option);
 
     // Create mofem interface
     MoFEM::Core core(moab);

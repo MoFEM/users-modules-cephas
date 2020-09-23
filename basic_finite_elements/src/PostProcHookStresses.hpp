@@ -55,6 +55,7 @@ struct PostProcHookStress
   MoFEM::Interface &mField;
   moab::Interface &postProcMesh;
   std::vector<EntityHandle> &mapGaussPts;
+  bool isFieldDisp;
 
 #ifdef __NONLINEAR_ELASTIC_HPP
   /// Material block data, ket is block id
@@ -70,13 +71,12 @@ struct PostProcHookStress
   PostProcHookStress(MoFEM::Interface &m_field, moab::Interface &post_proc_mesh,
                      std::vector<EntityHandle> &map_gauss_pts,
                      const std::string field_name,
-                     PostProcVolumeOnRefinedMesh::CommonData &common_data
+                     PostProcVolumeOnRefinedMesh::CommonData &common_data,
 #ifdef __NONLINEAR_ELASTIC_HPP
-                     ,
                      const std::map<int, NonlinearElasticElement::BlockData>
-                         *set_of_block_data_ptr = NULL
+                         *set_of_block_data_ptr = NULL,
 #endif
-                     )
+                     const bool is_field_disp = true)
       : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
             field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
         mField(m_field), postProcMesh(post_proc_mesh),
@@ -84,7 +84,7 @@ struct PostProcHookStress
 #ifdef __NONLINEAR_ELASTIC_HPP
         setOfBlocksMaterialDataPtr(set_of_block_data_ptr),
 #endif //__NONLINEAR_ELASTIC_HPP
-        commonData(common_data) {
+        commonData(common_data), isFieldDisp(is_field_disp) {
   }
 
   /**
@@ -236,6 +236,12 @@ struct PostProcHookStress
                   (commonData.gradMap[rowFieldName][gg])(2, 1);
       strain[5] = (commonData.gradMap[rowFieldName][gg])(0, 2) +
                   (commonData.gradMap[rowFieldName][gg])(2, 0);
+
+      if (!isFieldDisp) {
+        strain[0] -= 1.0;
+        strain[1] -= 1.0;
+        strain[2] -= 1.0;
+      }
 
       stress.resize(6);
       noalias(stress) = prod(D, strain);

@@ -26,6 +26,8 @@ using namespace std;
 using namespace MoFEM;
 
 static char help[] = "\n";
+double SimpleContactProblem::LoadScale::lAmbda = 1;
+
 int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
@@ -33,15 +35,22 @@ int main(int argc, char *argv[]) {
                                  "-pc_factor_mat_solver_type mumps \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
-                                 "-snes_max_it 10 \n"
+                                 "-snes_divergence_tolerance 0 \n"
+                                 "-snes_max_it 50 \n"
                                  "-snes_atol 1e-8 \n"
-                                 "-snes_rtol 1e-8 \n"
-                                 "-my_order 2 \n"
+                                 "-snes_rtol 1e-10 \n"
+                                 "-snes_monitor \n"
+                                 "-ksp_monitor \n"
+                                 "-snes_converged_reason \n"
+                                 "-my_order 1 \n"
                                  "-my_order_lambda 1 \n"
+                                 "-my_order_contact 2 \n"
+                                 "-my_ho_levels_num 1 \n"
+                                 "-my_step_num 1 \n"
                                  "-my_cn_value 1. \n"
-                                 "-my_test_num 0 \n"
+                                 "-my_r_value 1. \n"
                                  "-my_alm_flag 0 \n";
-
+                                 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
     std::ofstream file(param_file.c_str(), std::ios::ate);
@@ -62,6 +71,7 @@ int main(int argc, char *argv[]) {
     SMILING_FACE = 8,
     SMILING_FACE_CONVECT = 9,
     WAVE_2D = 10,
+    WAVE_2D_ALM = 11,
     LAST_TEST
   };
 
@@ -82,11 +92,12 @@ int main(int argc, char *argv[]) {
     PetscInt order_lambda = 1;
     PetscReal r_value = 1.;
     PetscReal cn_value = -1;
+    PetscInt nb_sub_steps = 1;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_newton_cotes = PETSC_FALSE;
     PetscInt test_num = 0;
     PetscBool convect_pts = PETSC_FALSE;
-    PetscBool out_integ_pts = PETSC_FALSE;
+    PetscBool print_contact_state = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
     PetscBool wave_surf_flag = PETSC_FALSE;
     PetscInt wave_dim = 2;
@@ -113,6 +124,9 @@ int main(int argc, char *argv[]) {
                            "approximation order of Lagrange multipliers", "", 1,
                            &order_lambda, PETSC_NULL);
 
+    CHKERR PetscOptionsInt("-my_step_num", "number of steps", "", nb_sub_steps,
+                           &nb_sub_steps, PETSC_NULL);
+
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
@@ -128,9 +142,9 @@ int main(int argc, char *argv[]) {
                            PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_out_integ_pts",
-                            "output data at contact integration points", "",
-                            PETSC_FALSE, &out_integ_pts, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_print_contact_state",
+                            "output number of active gp at every iteration", "",
+                            PETSC_FALSE, &print_contact_state, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag",
                             "if set use ALM, if not use C-function", "",
                             PETSC_FALSE, &alm_flag, PETSC_NULL);
@@ -147,7 +161,7 @@ int main(int argc, char *argv[]) {
                             wave_length, &wave_length, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
                             &wave_ampl, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh",
+    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh ",
                             "", mesh_height, &mesh_height, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
@@ -159,18 +173,14 @@ int main(int argc, char *argv[]) {
     }
 
     if (is_partitioned == PETSC_TRUE) {
-      // Read mesh to MOAB
-      const char *option;
-      option = "PARALLEL=BCAST_DELETE;"
-               "PARALLEL_RESOLVE_SHARED_ENTS;"
-               "PARTITION=PARALLEL_PARTITION;";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
-    } else {
-      const char *option;
-      option = "";
-      CHKERR moab.load_file(mesh_file_name, 0, option);
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "Partitioned mesh is not supported");
     }
 
+    const char *option;
+    option = "";
+    CHKERR moab.load_file(mesh_file_name, 0, option);
+    
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -201,8 +211,7 @@ int main(int argc, char *argv[]) {
 
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
-          CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-                                     ref_level_meshset);
+          CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
           CHKERR m_field.getInterface<BitRefManager>()
               ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
                                              BitRefLevel().set(), MBTET,
@@ -412,8 +421,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-
+    
     auto make_contact_element = [&]() {
+      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -439,6 +449,10 @@ int main(int argc, char *argv[]) {
                                bool is_alm = false) {
       auto fe_rhs_simple_contact = make_element();
       auto common_data_simple_contact = make_contact_common_data();
+      if (print_contact_state) {
+        fe_rhs_simple_contact->contactStateVec =
+            common_data_simple_contact->gaussPtsStateVec;
+      }
       contact_problem->setContactOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
           "LAGMULT", is_alm);
@@ -475,12 +489,15 @@ int main(int argc, char *argv[]) {
       return fe_lhs_simple_contact;
     };
 
+    auto cn_value_ptr = boost::make_shared<double>(cn_value);
     auto contact_problem = boost::make_shared<SimpleContactProblem>(
-        m_field, cn_value, is_newton_cotes);
+        m_field, cn_value_ptr, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+                                       "LAGMULT",
+                                       contact_prisms);
+                                       
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);
@@ -561,6 +578,7 @@ int main(int argc, char *argv[]) {
     boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
         neumann_forces.begin();
     for (; mit != neumann_forces.end(); mit++) {
+      mit->second->methodsOp.push_back(new SimpleContactProblem::LoadScale());
       CHKERR DMMoFEMSNESSetFunction(dm, mit->first.c_str(),
                                     &mit->second->getLoopFe(), NULL, NULL);
     }
@@ -682,14 +700,23 @@ int main(int argc, char *argv[]) {
           sit->second, post_proc.commonData));
     }
 
-    CHKERR SNESSolve(snes, PETSC_NULL, D);
+    for (int ss = 0; ss != nb_sub_steps; ++ss) {
+      SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Load scale: %6.4e\n",
+                         SimpleContactProblem::LoadScale::lAmbda);
 
-    CHKERR SNESGetConvergedReason(snes, &snes_reason);
+      CHKERR SNESSolve(snes, PETSC_NULL, D);
 
-    int its;
-    CHKERR SNESGetIterationNumber(snes, &its);
-    CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n\n",
-                       its);
+      CHKERR SNESGetConvergedReason(snes, &snes_reason);
+
+      int its;
+      CHKERR SNESGetIterationNumber(snes, &its);
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Number of Newton iterations = %D\n",
+                         its);
+
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    }
 
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -826,6 +853,11 @@ int main(int argc, char *argv[]) {
         expected_nb_gauss_pts = 144;
         break;
       case WAVE_2D:
+        expected_energy = 0.008537863;
+        expected_contact_area = 0.125;
+        expected_nb_gauss_pts = 384;
+        break;
+      case WAVE_2D_ALM:
         expected_energy = 0.008538894;
         expected_contact_area = 0.125;
         expected_nb_gauss_pts = 384;
@@ -853,7 +885,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    if (out_integ_pts) {
+    {
       string out_file_name;
       std::ostringstream strm;
       strm << "out_contact_integ_pts"
