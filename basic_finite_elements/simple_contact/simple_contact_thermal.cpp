@@ -98,6 +98,7 @@ int main(int argc, char *argv[]) {
     PetscReal mesh_height = 1.0;
 
     PetscBool ignore_contact = PETSC_FALSE;
+    PetscBool analytical = PETSC_TRUE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -160,6 +161,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-my_ignore_contact", "if set true, ignore contact",
                             "", PETSC_FALSE, &ignore_contact, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_analytical", "if set true, use analytical internal strain",
+                            "", PETSC_TRUE, &analytical, PETSC_NULL);
+
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -444,9 +448,29 @@ int main(int argc, char *argv[]) {
           return t_thermal_strain;
         };
 
-    fe_elastic_rhs_ptr->getOpPtrVector().push_back(
-        new HookeElement::OpAnalyticalInternalStain_dx<0>(
-            "SPATIAL_POSITION", data_hooke_element_at_pts, thermal_strain));
+    if (analytical) {
+
+      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+          new HookeElement::OpAnalyticalInternalStain_dx<0>(
+              "SPATIAL_POSITION", data_hooke_element_at_pts, thermal_strain));
+
+      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(
+              "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
+      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldGradient<3, 3>(
+              "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
+
+      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+          new HookeElement::OpGetAnalyticalInternalStress<0>(
+              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
+              thermal_strain));
+      
+      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+          new HookeElement::OpSaveStress(
+              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
+              *block_sets_ptr.get(), moab, false, false));
+    }
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -755,6 +779,8 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
+
+    CHKERR  moab.write_file("stress.h5m", "MOAB", "PARALLEL=WRITE_PART");
 
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
