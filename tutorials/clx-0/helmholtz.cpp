@@ -33,10 +33,14 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 
-using OpDomainGradGrad = OpDiffOps<DomainEleOp>::OpGradGrad<2>;
-using OpDomainMass = OpDiffOps<DomainEleOp>::OpMass;
-using OpBoundaryMass = OpDiffOps<EdgeEleOp>::OpMass;
-using OpBoundarySource = OpDiffOps<EdgeEleOp>::OpSource<2>;
+using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
+using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpBoundaryMass = FormsIntegrators<EdgeEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpBoundarySource = FormsIntegrators<EdgeEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
 struct Example {
 
@@ -187,8 +191,7 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainMass("U_IMAG", "U_IMAG", k2));
 
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpUnSetBc("U_REAL"));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("U_REAL"));
 
     CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
@@ -282,8 +285,7 @@ MoFEMErrorCode Example::checkResults() {
       << std::setprecision(9) << "Solution norm " << nrm2;
 
   PetscBool test_flg = PETSC_FALSE;
-  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg,
-                             PETSC_NULL);
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg, PETSC_NULL);
   if (test_flg) {
     constexpr double regression_test = 97.261672;
     constexpr double eps = 1e-6;

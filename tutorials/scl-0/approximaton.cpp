@@ -32,8 +32,10 @@ static char help[] = "...\n\n";
 using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
-using OpDomainMass = OpDiffOps<DomainEleOp>::OpMass;
-using OpDomainSource = OpDiffOps<DomainEleOp>::OpSource<2>;
+using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
 struct Example {
 

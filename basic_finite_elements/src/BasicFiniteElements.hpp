@@ -35,7 +35,6 @@ extern "C" {
 
 #include <cholesky.hpp>
 
-#include <OpDiffOps.hpp>
 #include <MethodForForceScaling.hpp>
 #include <DirichletBC.hpp>
 #include <ArcLengthTools.hpp>
