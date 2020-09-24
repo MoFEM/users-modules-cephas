@@ -431,6 +431,12 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> invHMat;
     boost::shared_ptr<VectorDouble> detHVec;
 
+    boost::shared_ptr<MatrixDouble> prevPositionAtGaussPtsMasterPtr;
+    boost::shared_ptr<MatrixDouble> prevPositionAtGaussPtsSlavePtr;
+    boost::shared_ptr<MatrixDouble> tangentLambdasPtr;
+    boost::shared_ptr<MatrixDouble> tangentAugmentedLambdasPtr;
+    boost::shared_ptr<MatrixDouble> allLambdasPtr;
+
     double areaSlave;
     double areaMaster;
 
@@ -466,6 +472,18 @@ struct SimpleContactProblem {
       tangentOneVectorMasterPtr = boost::make_shared<VectorDouble>() ;
       tangentTwoVectorMasterPtr = boost::make_shared<VectorDouble>() ;
 
+      prevPositionAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
+      prevPositionAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
+      tangentGapPtr = boost::make_shared<MatrixDouble>();
+      normAugTangentLambdasPtr = boost::make_shared<VectorDouble>();
+
+      tangentOneVectorTriPtr = boost::make_shared<VectorDouble>();
+      tangentTwoVectorTriPtr = boost::make_shared<VectorDouble>();
+
+      tangentLambdasPtr = boost::make_shared<MatrixDouble>();
+      allLambdasPtr = boost::make_shared<MatrixDouble>();
+      tangentAugmentedLambdasPtr = boost::make_shared<MatrixDouble>();
+
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
                            : 0;
@@ -483,6 +501,8 @@ struct SimpleContactProblem {
   bool newtonCotes;
   boost::shared_ptr<double> cnValuePtr;
   MoFEM::Interface &mField;
+  double cTangentValue;
+  double muTangent;
 
   SimpleContactProblem(MoFEM::Interface &m_field,
                        boost::shared_ptr<double> cn_value,
@@ -490,6 +510,12 @@ struct SimpleContactProblem {
       : mField(m_field), cnValuePtr(cn_value), newtonCotes(newton_cotes) {
     cnValue = *cnValuePtr.get();
   }
+
+  SimpleContactProblem(MoFEM::Interface &m_field, double &cn_value,
+                       double &c_tan_value, double &mu_tangent,
+                       bool newton_cotes = false)
+      : mField(m_field), cnValue(cn_value), newtonCotes(newton_cotes),
+        cTangentValue(c_tan_value), muTangent(mu_tangent) {}
 
   struct OpContactMaterialLhs : public ContactOp {
 
