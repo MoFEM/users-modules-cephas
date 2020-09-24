@@ -780,7 +780,7 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
 
-    CHKERR  moab.write_file("stress.h5m", "MOAB", "PARALLEL=WRITE_PART");
+    CHKERR moab.write_file("stress.h5m", "MOAB", "PARALLEL=WRITE_PART");
 
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);

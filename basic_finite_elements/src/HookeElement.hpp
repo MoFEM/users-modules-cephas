@@ -742,18 +742,20 @@ struct HookeElement {
 
       const int val_num = 9 * nb_integration_pts;
 
-      double def_VAL[val_num];
-      bzero(def_VAL, val_num * sizeof(double));
+      // double def_VAL[val_num];
+      // bzero(def_VAL, val_num * sizeof(double));
+
+      std::vector<double> def_vals(val_num, 0.0);
 
       Tag th_internal_stress;
       CHKERR outputMesh.tag_get_handle("STRESS_INTERNAL", val_num,
                                        MB_TYPE_DOUBLE, th_internal_stress,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, &*def_vals.begin());
 
       Tag th_actual_stress;
       CHKERR outputMesh.tag_get_handle("STRESS_ACTUAL", val_num, MB_TYPE_DOUBLE,
                                        th_actual_stress,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, &*def_vals.begin());
 
       FTensor::Index<'i', 3> i;
       FTensor::Index<'j', 3> j;
@@ -838,12 +840,12 @@ struct HookeElement {
       // CHKERR outputMesh.tag_set_data(th_actual_stress, &ent, 1,
       //                                &t_actual_stress_out(0, 0));
 
-      // CHKERR outputMesh.tag_set_data(
-      //     th_internal_stress, &ent, 1,
-      //     &*(dataAtPts->internalStressMat->data().begin()));
-      // CHKERR outputMesh.tag_set_data(
-      //     th_actual_stress, &ent, 1,
-      //     &*(dataAtPts->actualStressMat->data().begin()));
+      CHKERR outputMesh.tag_set_data(
+          th_internal_stress, &ent, 1,
+          &*(dataAtPts->internalStressMat->data().begin()));
+      CHKERR outputMesh.tag_set_data(
+          th_actual_stress, &ent, 1,
+          &*(dataAtPts->actualStressMat->data().begin()));
 
       MoFEMFunctionReturn(0);
     };
