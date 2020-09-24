@@ -3459,6 +3459,229 @@ struct SimpleContactProblem {
         const bool almFlag;
         VectorDouble vecR;
       };
+
+///Friction stuff
+
+      MoFEMErrorCode setContactFrictionAugmentedOperatorsRhs(
+          boost::shared_ptr<SimpleContactElement> fe_rhs_extended_contact,
+          boost::shared_ptr<CommonDataSimpleContact>
+              common_data_extended_contact,
+          string field_name, string lagrang_field_name,
+          string tangent_lagrang_field_name, string previously_converged_spat);
+
+      /**
+       * @brief Operator for the simple contact element
+       *
+       * Calculates Lagrange multipliers at the gauss points on the slave
+       * triangle.
+       *
+       */
+      struct OpGetLagMulAtGaussPtsSlave3D : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetLagMulAtGaussPtsSlave3D(
+            const string lagrange_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact)
+            : ContactOp(lagrange_field_name, UserDataOperator::OPROW,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      struct OpGetOrthonormalTangents : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetOrthonormalTangents(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      /**
+       * @brief Operator for the simple contact element
+       *
+       * Calculates the spacial coordinates converged at the previous step of
+       * the gauss points of slave triangle.
+       *
+       */
+      struct OpGetPreviousPositionAtGaussPtsMaster : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetPreviousPositionAtGaussPtsMaster(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACEMASTER),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      /**
+       * @brief Operator for the simple contact element
+       *
+       * Calculates the spacial coordinates converged at the previous step of
+       * the gauss points of slave triangle.
+       *
+       */
+      struct OpGetPreviousPositionAtGaussPtsSlave : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetPreviousPositionAtGaussPtsSlave(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      /**
+       * @brief Operator for the simple contact element
+       *
+       * Calculates gap function at the gauss points on the slave triangle.
+       *
+       */
+      struct OpGetTangentGapVelocitySlave : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+
+        OpGetTangentGapVelocitySlave(
+            const string field_name, // ign: does it matter??
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPROW,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+        //@todo:
+        /**
+         * @brief Evaluates gap function at slave face gauss points
+         *
+         * Computes gap function at slave face gauss points:
+         *
+         * \f[
+         * g_{\textrm{n}} = - \mathbf{n}(\mathbf{x}^{(1)}) \cdot \left(
+         * \mathbf{x}^{(1)} - \mathbf{x}^{(2)}  \right)
+         * \f]
+         * where \f$\mathbf{n}(\mathbf{x}^{(1)})\f$ is the outward normal vector
+         * at the slave triangle gauss points, \f$\mathbf{x}^{(1)}\f$ and
+         * \f$\mathbf{x}^{(2)}\f$ are the spatial coordinates of the overlapping
+         * gauss points located at the slave and master triangles, respectively.
+         *
+         *
+         */
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      /**
+       * @brief Operator for the simple contact element
+       *
+       * Calculates the spacial coordinates of the gauss points of slave
+       * triangle.
+       *
+       */
+      struct OpGetTangentLagrange : public ContactOp {
+
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        OpGetTangentLagrange(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+      };
+
+      struct OpGetTangentAugmentedLambdaSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpGetTangentAugmentedLambdaSlave(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const double cn_tan)
+            : ContactOp(field_name, UserDataOperator::OPCOL,
+                        ContactOp::FACESLAVE),
+              commonDataSimpleContact(common_data_contact),
+              cNtAngentPtr(cn_tan) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double cNtAngentPtr;
+      };
+      struct OpCalAugmentedTangentTractionsRhsMaster
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentTractionsRhsMaster(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const double mu_tangent)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name, UserDataOperator::OPCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACEMASTER),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double muTan;
+        VectorDouble vecF;
+      };
+      struct OpCalAugmentedTangentTractionsRhsSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentTractionsRhsSlave(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const double mu_tangent)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name, UserDataOperator::OPCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double muTan;
+        VectorDouble vecF;
+      };
+
+      struct OpCalAugmentedTangentialContCondition
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentialContCondition(
+            const string field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            const double mu_tangent, const double cn_tangent)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name, UserDataOperator::OPCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent) {}
+
+        MoFEMErrorCode doWork(int side, EntityType type,
+                              DataForcesAndSourcesCore::EntData &data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double muTan;
+        const double cNTangentPtr;
+        VectorDouble vecF;
+      };
     };
 
 double SimpleContactProblem::Sign(double x) {
