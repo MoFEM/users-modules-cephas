@@ -161,9 +161,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-my_ignore_contact", "if set true, ignore contact",
                             "", PETSC_FALSE, &ignore_contact, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_analytical", "if set true, use analytical internal strain",
-                            "", PETSC_TRUE, &analytical, PETSC_NULL);
-
+    CHKERR PetscOptionsBool("-my_analytical",
+                            "if set true, use analytical internal strain", "",
+                            PETSC_TRUE, &analytical, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -460,12 +460,10 @@ int main(int argc, char *argv[]) {
       fe_elastic_rhs_ptr->getOpPtrVector().push_back(
           new OpCalculateVectorFieldGradient<3, 3>(
               "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
-
       fe_elastic_rhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpGetAnalyticalInternalStress<0>(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
               thermal_strain));
-      
       fe_elastic_rhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpSaveStress(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
@@ -760,13 +758,13 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpGetAnalyticalInternalStress<0>(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
               thermal_strain));
+      post_proc.getOpPtrVector().push_back(
+          new HookeElement::OpPostProcHookeElement<
+              VolumeElementForcesAndSourcesCore>(
+              "SPATIAL_POSITION", data_hooke_element_at_pts,
+              *block_sets_ptr.get(), post_proc.postProcMesh,
+              post_proc.mapGaussPts, false, false));
     }
-
-    post_proc.getOpPtrVector().push_back(
-        new HookeElement::OpPostProcHookeElement<
-            VolumeElementForcesAndSourcesCore>(
-            "SPATIAL_POSITION", data_hooke_element_at_pts, *block_sets_ptr.get(),
-            post_proc.postProcMesh, post_proc.mapGaussPts, false, false));
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {
       SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
@@ -786,7 +784,8 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
     if (analytical) {
-      CHKERR moab.write_file("test_internal.h5m", "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR moab.write_file("test_internal.h5m", "MOAB",
+                             "PARALLEL=WRITE_PART");
     }
 
     // save on mesh
