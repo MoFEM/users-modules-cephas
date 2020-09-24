@@ -45,7 +45,7 @@ fi
 
 
 # Partition mesh
-../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
+../../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
 
 # Run code
 rm -f out_*.h5m 
