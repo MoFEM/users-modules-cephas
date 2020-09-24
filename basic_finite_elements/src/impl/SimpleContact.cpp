@@ -4633,7 +4633,7 @@ SimpleContactProblem::OpGetPreviousPositionAtGaussPtsSlave::doWork(
   MoFEMFunctionReturn(0);
 }
 
-oFEMErrorCode
+MoFEMErrorCode
 SimpleContactProblem::OpGetPreviousPositionAtGaussPtsMaster::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
