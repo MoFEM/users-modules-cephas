@@ -470,6 +470,10 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpSaveStress(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
               *block_sets_ptr.get(), moab, false, false));
+    } else {
+      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+          new HookeElement::OpInternalStain_dx(
+              "SPATIAL_POSITION", data_hooke_element_at_pts, moab));
     }
 
     auto make_contact_element = [&]() {
@@ -563,7 +567,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.build_adjacencies(bit_levels.back());
 
     // define problems
-    CHKERR m_field.add_problem("CONTACT_PROB");
+    CHKERR m_field.add_problem("CONTACT_PROB", MF_ZERO);
 
     // set refinement level for problem
     CHKERR m_field.modify_problem_ref_level_add_bit("CONTACT_PROB",
@@ -751,10 +755,12 @@ int main(int argc, char *argv[]) {
         new OpCalculateVectorFieldGradient<3, 3>(
             "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
 
-    post_proc.getOpPtrVector().push_back(
-        new HookeElement::OpGetAnalyticalInternalStress<0>(
-            "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
-            thermal_strain));
+    if (analytical) {
+      post_proc.getOpPtrVector().push_back(
+          new HookeElement::OpGetAnalyticalInternalStress<0>(
+              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
+              thermal_strain));
+    }
 
     post_proc.getOpPtrVector().push_back(
         new HookeElement::OpPostProcHookeElement<
@@ -779,8 +785,9 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
-
-    CHKERR moab.write_file("stress.h5m", "MOAB", "PARALLEL=WRITE_PART");
+    if (analytical) {
+      CHKERR moab.write_file("test_internal.h5m", "MOAB", "PARALLEL=WRITE_PART");
+    }
 
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
