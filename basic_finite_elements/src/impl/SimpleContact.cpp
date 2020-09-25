@@ -7745,3 +7745,202 @@ MoFEMErrorCode SimpleContactProblem::setContactFrictionAugmentedOperatorsLhs(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpGetNormalTri::doWork(int side,
+                                                            EntityType type,
+                                                            EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  const double *normal_master_ptr = &getNormal()[0];
+  commonDataSimpleContact->normalVectorTriPtr.get()->resize(3);
+  commonDataSimpleContact->normalVectorTriPtr.get()->clear();
+
+  auto t_normal =
+      get_tensor_vec(commonDataSimpleContact->normalVectorTriPtr.get()[0]);
+  for (int ii = 0; ii != 3; ++ii)
+    t_normal(ii) = normal_master_ptr[ii];
+
+  const double normal_length = sqrt(t_normal(i) * t_normal(i));
+  t_normal(i) = t_normal(i) / normal_length;
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetOrthonormalTangentsTri::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  commonDataSimpleContact->tangentOneVectorTriPtr->resize(3, false);
+  commonDataSimpleContact->tangentOneVectorTriPtr->clear();
+
+  commonDataSimpleContact->tangentTwoVectorTriPtr->resize(3, false);
+  commonDataSimpleContact->tangentTwoVectorTriPtr->clear();
+
+  auto t_normal =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorTriPtr));
+
+  const double *tangent_one_slave_ptr = &getTangent1()[0];
+  const double *tangent_two_slave_ptr = &getTangent2()[0];
+
+  auto t_tangent_1 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorTriPtr));
+
+  auto t_tangent_2 =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorTriPtr));
+
+  for (int ii = 0; ii != 3; ++ii) {
+    t_tangent_1(ii) = tangent_one_slave_ptr[ii];
+    // t_tangent_2(ii) = tangent_two_slave_ptr[ii];
+  }
+
+  const double l_tan_1 = sqrt(t_tangent_1(i) * t_tangent_1(i));
+
+  // const double l_tan_2 = sqrt(t_tangent_2(i) * t_tangent_2(i));
+
+  t_tangent_1(i) = t_tangent_1(i) / l_tan_1;
+
+  t_tangent_2(k) = FTensor::levi_civita(i, j, k) * t_normal(i) * t_tangent_1(j);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetLagMulAtGaussPtsTri::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->allLambdasPtr.get()->resize(3, nb_gauss_pts,
+                                                         false);
+    commonDataSimpleContact->allLambdasPtr.get()->clear();
+  }
+
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  FTensor::Index<'i', 3> i;
+
+  int nb_base_fun_row = data.getFieldData().size() / 3;
+
+  auto t_lagrange_slave_3 =
+      getFTensor1FromMat<3>(*commonDataSimpleContact->allLambdasPtr);
+
+  auto t_normal =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorSlavePtr));
+
+  for (int gg = 0; gg != nb_gauss_pts; gg++) {
+
+    FTensor::Tensor0<double *> t_base_lambda(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_row; ++bb) {
+      t_lagrange_slave_3(i) += t_base_lambda * t_field_data_slave(i);
+      ++t_base_lambda;
+      ++t_field_data_slave;
+    }
+    // cerr << "Normal"
+    //      << "     " << t_lagrange_slave << "\n";
+
+    ++t_lagrange_slave_3;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpPostProcContactOnTri::doWork(int side, EntityType type,
+                                                     EntData &data) {
+  MoFEMFunctionBegin;
+
+  auto get_tag_double = [&](const std::string name) {
+    double def_vals;
+    def_vals = 0.;
+
+    Tag th;
+
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), 1, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+    return th;
+  };
+
+  auto set_tag = [&](auto th, auto gg, double &data) {
+    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1, &data);
+  };
+
+  auto th_normal = get_tag_double("NORMAL_LAMBDA");
+  auto th_tangent = get_tag_double("TANGENT_LAMBDA");
+
+  size_t nb_gauss_pts = getGaussPts().size2();
+  auto get_tensor_vec = [](VectorDouble &n) {
+    return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
+  };
+
+  auto get_tensor_vec_2 = [](VectorDouble3 &n) {
+    return FTensor::Tensor1<double *, 2>(&n(0), &n(1));
+  };
+
+  VectorDouble3 tangent_lambda_2(2);
+  auto t_tangent_lagrange = get_tensor_vec_2(tangent_lambda_2);
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'I', 2> I;
+
+  auto t_lagrange_slave_3 =
+      getFTensor1FromMat<3>(*commonDataSimpleContact->allLambdasPtr);
+
+  auto t_tangent_1_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentOneVectorTriPtr));
+
+  auto t_tangent_2_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->tangentTwoVectorTriPtr));
+
+  auto t_normal_at_gp =
+      get_tensor_vec(*(commonDataSimpleContact->normalVectorTriPtr));
+
+  for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    t_tangent_lagrange(0) = t_lagrange_slave_3(i) * t_tangent_1_at_gp(i);
+    t_tangent_lagrange(1) = t_lagrange_slave_3(i) * t_tangent_2_at_gp(i);
+
+    double normal_lambda = t_lagrange_slave_3(i) * t_normal_at_gp(i);
+    double tangent_lambda = sqrt(t_tangent_lagrange(I) * t_tangent_lagrange(I));
+    CHKERR set_tag(th_normal, gg, normal_lambda);
+    CHKERR set_tag(th_tangent, gg, tangent_lambda);
+    ++t_lagrange_slave_3;
+  }
+
+  MoFEMFunctionReturn(0);
+}
