@@ -3711,7 +3711,335 @@ struct SimpleContactProblem {
         const double cNTangentPtr;
         VectorDouble vecF;
       };
-    };
+
+      MoFEMErrorCode setContactFrictionAugmentedOperatorsLhs(
+          boost::shared_ptr<SimpleContactElement> fe_rhs_extended_contact,
+          boost::shared_ptr<CommonDataSimpleContact>
+              common_data_extended_contact,
+          string field_name, string lagrang_field_name,
+          string tangent_lagrang_field_name, string previously_converged_spat);
+
+      struct OpContactAugmentedFrictionMasterMaster
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpContactAugmentedFrictionMasterMaster(
+            const string field_name_row, const string field_name_col,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tangent, const double cn_tangent, const double cn_normal)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name_row, field_name_col, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACEMASTERMASTER),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent), cNNormalPtr(cn_normal) {
+          sYmm = false;
+        }
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        const double cNNormalPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpContactAugmentedFrictionMasterSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpContactAugmentedFrictionMasterSlave(
+            const string field_name_row, const string field_name_col,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tangent, const double cn_tangent, const double cn_normal)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name_row, field_name_col, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACEMASTERSLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent), cNNormalPtr(cn_normal) {
+          sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        const double cNNormalPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave(
+            const string field_name, const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tan)
+            : ContactOp(field_name, lagrang_field_name,
+                        UserDataOperator::OPROWCOL, ContactOp::FACEMASTERSLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tan) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type, EntData &row_data,
+                              EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        const double muTan;
+        MatrixDouble NN;
+      };
+
+      struct OpCalContactAugmentedTangentLambdaOverLambdaTanMasterSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalContactAugmentedTangentLambdaOverLambdaTanMasterSlave(
+            const string field_name, const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tan)
+            : ContactOp(field_name, lagrang_field_name,
+                        UserDataOperator::OPROWCOL, ContactOp::FACEMASTERSLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tan) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type, EntData &row_data,
+                              EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        MatrixDouble NN;
+      };
+
+      struct OpContactAugmentedFrictionSlaveSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpContactAugmentedFrictionSlaveSlave(
+            const string field_name_row, const string field_name_col,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tangent, const double cn_tangent, const double cn_normal)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name_row, field_name_col, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent), cNNormalPtr(cn_normal) {
+          sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        const double cNNormalPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpContactAugmentedFrictionSlaveMaster
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpContactAugmentedFrictionSlaveMaster(
+            const string field_name_row, const string field_name_col,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tangent, const double cn_tangent, const double cn_normal)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name_row, field_name_col, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVEMASTER),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent), cNNormalPtr(cn_normal) {
+          sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        const double cNNormalPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpCalContactAugmentedTangentLambdaOverLambdaSlaveSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalContactAugmentedTangentLambdaOverLambdaSlaveSlave(
+            const string field_name, const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tan)
+            : ContactOp(field_name, lagrang_field_name,
+                        UserDataOperator::OPROWCOL, ContactOp::FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tan) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type, EntData &row_data,
+                              EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        MatrixDouble NN;
+      };
+
+      struct OpCalContactAugmentedTangentLambdaOverLambdaTanSlaveSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalContactAugmentedTangentLambdaOverLambdaTanSlaveSlave(
+            const string field_name, const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tan)
+            : ContactOp(field_name, lagrang_field_name,
+                        UserDataOperator::OPROWCOL, ContactOp::FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tan) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type, EntData &row_data,
+                              EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        MatrixDouble NN;
+      };
+
+      struct OpCalAugmentedTangentialContConditionDispSlaveSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentialContConditionDispSlaveSlave(
+            const string field_name_row, const string field_name_col,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tangent, const double cn_tangent, const double cn_normal)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name_row, field_name_col, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent), cNNormalPtr(cn_normal) {
+          sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        const double cNNormalPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpCalAugmentedTangentialContConditionDispSlaveMaster
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentialContConditionDispSlaveMaster(
+            const string field_name_row, const string field_name_col,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tangent, const double cn_tangent, const double cn_normal)
+            : ContactPrismElementForcesAndSourcesCore::UserDataOperator(
+                  field_name_row, field_name_col, UserDataOperator::OPROWCOL,
+                  ContactPrismElementForcesAndSourcesCore::UserDataOperator::
+                      FACESLAVEMASTER),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tangent),
+              cNTangentPtr(cn_tangent), cNNormalPtr(cn_normal) {
+          sYmm = false;
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type,
+                              DataForcesAndSourcesCore::EntData &row_data,
+                              DataForcesAndSourcesCore::EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        const double cNNormalPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpCalAugmentedTangentialContConditionLambdaNormSlaveSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentialContConditionLambdaNormSlaveSlave(
+            const string field_name, const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tan, const double cn_tangent_value)
+            : ContactOp(field_name, lagrang_field_name,
+                        UserDataOperator::OPROWCOL, ContactOp::FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tan),
+              cNTangentPtr(cn_tangent_value) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type, EntData &row_data,
+                              EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        MatrixDouble NN;
+      };
+
+      struct OpCalAugmentedTangentialContConditionLambdaTanSlaveSlave
+          : public ContactPrismElementForcesAndSourcesCore::UserDataOperator {
+
+        OpCalAugmentedTangentialContConditionLambdaTanSlaveSlave(
+            const string field_name, const string lagrang_field_name,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
+            double mu_tan, const double cn_tangent_value)
+            : ContactOp(field_name, lagrang_field_name,
+                        UserDataOperator::OPROWCOL, ContactOp::FACESLAVESLAVE),
+              commonDataSimpleContact(common_data_contact), muTan(mu_tan),
+              cNTangentPtr(cn_tangent_value) {
+          sYmm = false; // This will make sure to loop over all intities (e.g.
+                        // for order=2 it will make doWork to loop 16 time)
+        }
+
+        MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                              EntityType col_type, EntData &row_data,
+                              EntData &col_data);
+
+      private:
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+        double muTan;
+        const double cNTangentPtr;
+        MatrixDouble NN;
+      };
+};
 
 double SimpleContactProblem::Sign(double x) {
   if (x == 0)
