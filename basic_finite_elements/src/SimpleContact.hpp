@@ -438,7 +438,10 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> allLambdasPtr;
     boost::shared_ptr<MatrixDouble> tangentGapPtr;
     boost::shared_ptr<VectorDouble> normAugTangentLambdasPtr;
-    
+
+    boost::shared_ptr<VectorDouble> normalVectorTriPtr;
+    boost::shared_ptr<VectorDouble> tangentOneVectorTriPtr;
+    boost::shared_ptr<VectorDouble> tangentTwoVectorTriPtr;
 
     double areaSlave;
     double areaMaster;
@@ -480,8 +483,9 @@ struct SimpleContactProblem {
       tangentGapPtr = boost::make_shared<MatrixDouble>();
       normAugTangentLambdasPtr = boost::make_shared<VectorDouble>();
 
-      // tangentOneVectorTriPtr = boost::make_shared<VectorDouble>();
-      // tangentTwoVectorTriPtr = boost::make_shared<VectorDouble>();
+      normalVectorTriPtr = boost::make_shared<VectorDouble>();
+      tangentOneVectorTriPtr = boost::make_shared<VectorDouble>();
+      tangentTwoVectorTriPtr = boost::make_shared<VectorDouble>();
 
       tangentLambdasPtr = boost::make_shared<MatrixDouble>();
       allLambdasPtr = boost::make_shared<MatrixDouble>();
