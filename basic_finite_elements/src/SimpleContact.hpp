@@ -4092,19 +4092,28 @@ struct SimpleContactProblem {
         MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
       };
 
-      // struct OpPostProcContactOnTri
-      //     : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
-      //   OpPostProcContactOnTri(
-      //       const std::string field_name, moab::Interface &post_proc_mesh,
-      //       std::vector<EntityHandle> &map_gauss_pts,
-      //       boost::shared_ptr<CommonDataSimpleContact> common_data_ptr)
-      //       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
-      //             field_name, UserDataOperator::OPROW),
-      //         postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-      //         commonDataSimpleContact(common_data_ptr) {
-      //     // Opetor is only executed for vertices
-      //     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-      //   };
+      struct OpPostProcContactOnTri
+          : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+        OpPostProcContactOnTri(
+            const std::string field_name, moab::Interface &post_proc_mesh,
+            std::vector<EntityHandle> &map_gauss_pts,
+            boost::shared_ptr<CommonDataSimpleContact> common_data_ptr)
+            : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
+                  field_name, UserDataOperator::OPROW),
+              postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+              commonDataSimpleContact(common_data_ptr) {
+          // Opetor is only executed for vertices
+          std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+        };
+
+        MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+      private:
+        moab::Interface &postProcMesh;
+        std::vector<EntityHandle> &mapGaussPts;
+        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+      };
+      
       };
 
 double SimpleContactProblem::Sign(double x) {
