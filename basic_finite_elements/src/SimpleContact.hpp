@@ -2149,13 +2149,16 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     moab::Interface &moabOut;
     bool lagFieldSet;
+    bool isTangLagrange;
 
     OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
                    boost::shared_ptr<CommonDataSimpleContact> &common_data,
-                   moab::Interface &moab_out, bool lagrange_field = true)
+                   moab::Interface &moab_out, bool lagrange_field = true,
+                   bool tangent_lagrange_field = false)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
-          moabOut(moab_out), lagFieldSet(lagrange_field) {}
+          moabOut(moab_out), lagFieldSet(lagrange_field),
+          isTangLagrange(tangent_lagrange_field) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
