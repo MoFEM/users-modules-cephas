@@ -3,7 +3,7 @@
  * \example lesson4_elastic.cpp
  *
  * Plane stress elastic problem
- * 
+ *
  */
 
 /* This file is part of MoFEM.
@@ -24,11 +24,13 @@
 
 using namespace MoFEM;
 
-using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
-using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
-using BoundaryEleOp = BoundaryEle::UserDataOperator;
+
+using OpGradSymTensorGrad = FormsIntegrators<DomainEle>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradSymTensorGrad<1, 2, 2, 0>;
+using OpBaseTimesVec = FormsIntegrators<DomainEle>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVec<1, 2, 0>;
 
 constexpr int order = 2;
 constexpr double young_modulus = 1;
@@ -46,31 +48,46 @@ struct Example {
 private:
   MoFEM::Interface &mField;
 
+  MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode createCommonData();
-  MoFEMErrorCode bC();
-  MoFEMErrorCode OPs();
-  MoFEMErrorCode kspSolve();
-  MoFEMErrorCode postProcess();
+  MoFEMErrorCode boundaryCondition();
+  MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode solveSystem();
+  MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
   MatrixDouble invJac;
-  boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> matStrain;
+  boost::shared_ptr<MatrixDouble> matStress;
+  boost::shated_ptr<MatrixDouble> matD;
+  boost::shared_ptr<MatrixDouble> bodyForceMat;
 };
 
 //! [Run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
+  CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR createCommonData();
-  CHKERR bC();
-  CHKERR OPs();
-  CHKERR kspSolve();
-  CHKERR postProcess();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 //! [Run problem]
+
+//! [Read mesh]
+MoFEMErrorCode Example::readMesh() {
+  MoFEMFunctionBegin;
+  CHKERR mField.getInterface(simpleInterface);
+  CHKERR simpleInterface->getOptions();
+  CHKERR simpleInterface->loadFile();
+  MoFEMFunctionReturn(0);
+}
+//! [Read mesh]
 
 //! [Set up problem]
 MoFEMErrorCode Example::setupProblem() {
@@ -89,8 +106,19 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto get_matrial_stiffens = [&](FTensor::Ddg<double, 2, 2> &t_D) {
+  auto set_matrial_stiffens = [&]() {
     MoFEMFunctionBegin;
+
+    auto getD = [&]() {
+      matD->resize(9, 1, false);
+      auto m = *matD;
+      return FTensor::Ddg<FTensor::PackPtr<double *, S>, 2, 2>{
+          &m(0, 0), &m(1, 0), &m(2, 0), &m(3, 0), &m(4, 0),
+          &m(5, 0), &m(6, 0), &m(7, 0), &m(8, 0)};
+    };
+
+    auto t_D = getD();
+
     FTensor::Index<'i', 2> i;
     FTensor::Index<'j', 2> j;
     FTensor::Index<'k', 2> k;
@@ -107,20 +135,38 @@ MoFEMErrorCode Example::createCommonData() {
     t_D(1, 1, 1, 1) = c;
 
     t_D(0, 1, 0, 1) = (1 - poisson_ratio) * c;
+
     MoFEMFunctionReturn(0);
   };
 
-  commonDataPtr = boost::make_shared<CommonData>();
-  CHKERR get_matrial_stiffens(commonDataPtr->tD);
-  commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+  auto set_body_force = [&]() {
+    MoFEMFunctionBegin;
+    auto getF = [&]() {
+      bodyForceMat->resize(2, 1, false);
+      return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> {
+        &bodyForceMat[0], &bodyForceMat[1], &bodyForceMat[2];
+      };
+    };
+
+    auto t_force = getF();
+    t_force(0) = 0;
+    t_force(1) = 1;
+    MoFEMFunctionReturn(0);
+  };
+
+  matStrain = boost::make_shared<MatrixDouble>();
+  matStress = boost::make_shared<MatrixDouble>();
+  matD = boost::make_shared<MatrixDouble>();
+  bodyForceMat = boost::make_shared<MatrixDouble>();
+  CHKERR set_matrial_stiffens();
+  CHKERR set_body_force();
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
 
 //! [Boundary condition]
-MoFEMErrorCode Example::bC() {
+MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
 
   auto fix_disp = [&](const std::string blockset_name) {
@@ -159,21 +205,18 @@ MoFEMErrorCode Example::bC() {
 //! [Boundary condition]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode Example::OPs() {
+MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
-
-  auto gravity = [](double x, double y) {
-    return FTensor::Tensor1<double, 2>{0., -1.};
-  };
+      new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpGradSymTensorGrad("U", "U", matD));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpForceRhs("U", commonDataPtr, gravity));
+      new OpBaseTimesVec("U", bodyForceMat));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -186,7 +229,7 @@ MoFEMErrorCode Example::OPs() {
 //! [Push operators to pipeline]
 
 //! [Solve]
-MoFEMErrorCode Example::kspSolve() {
+MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -207,7 +250,7 @@ MoFEMErrorCode Example::kspSolve() {
 //! [Solve]
 
 //! [Postprocess results]
-MoFEMErrorCode Example::postProcess() {
+MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
@@ -242,11 +285,14 @@ MoFEMErrorCode Example::checkResults() {
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetInvJacH1ForFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpStrain("U", commonDataPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpStress("U", commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpStrain("U", commonDataPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpStress("U", commonDataPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForceRhs("U", commonDataPtr));
 
@@ -285,7 +331,9 @@ static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  // Initialisation of MoFEM/PETSc and MOAB data structures
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
   try {
 
@@ -303,12 +351,6 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);           ///< finite element database
     MoFEM::Interface &m_field = core; ///< finite element database insterface
     //! [Create MoFEM]
-
-    //! [Load mesh]
-    Simple *simple = m_field.getInterface<Simple>();
-    CHKERR simple->getOptions();
-    CHKERR simple->loadFile("");
-    //! [Load mesh]
 
     //! [Example]
     Example ex(m_field);
