@@ -303,13 +303,13 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", matStrainPtr, matStressPtr, matDPtr));
-  auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", beta, matStressPtr));
-  // pipeline_mng->getOpDomainRhsPipeline().push_back(
-  //     new OpBodyForce("U", bodyForceMatPtr));
+      new OpInternalForce("U", matStressPtr));
+  (*bodyForceMatPtr) *= -1;
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpBodyForce("U", bodyForceMatPtr));
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
+  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data-1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
