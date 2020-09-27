@@ -35,7 +35,7 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 
-constexpr int order = 2;
+constexpr int order = 1;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 
@@ -79,7 +79,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
-  CHKERR checkResults();
+  // CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 //! [Run problem]
@@ -114,15 +114,7 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
   auto set_matrial_stiffens = [&]() {
     MoFEMFunctionBegin;
 
-    auto getD = [&]() {
-      matDPtr->resize(9, 1, false);
-      auto m = *matDPtr;
-      return FTensor::Ddg<FTensor::PackPtr<double *, 0>, 2, 2>{
-          &m(0, 0), &m(1, 0), &m(2, 0), &m(3, 0), &m(4, 0),
-          &m(5, 0), &m(6, 0), &m(7, 0), &m(8, 0)};
-    };
-
-    auto t_D = getD();
+    auto t_D = getFTensor4DdgFromMat<2, 2, 0>(*matDPtr);
 
     FTensor::Index<'i', 2> i;
     FTensor::Index<'j', 2> j;
@@ -146,13 +138,7 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
 
   auto set_body_force = [&]() {
     MoFEMFunctionBegin;
-    auto getF = [&]() {
-      bodyForceMatPtr->resize(2, 1, false);
-      return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>{
-          &(*bodyForceMatPtr)(0, 0), &(*bodyForceMatPtr)(1, 0)};
-    };
-
-    auto t_force = getF();
+    auto t_force = getFTensor1FromMat<2, 0>(*bodyForceMatPtr);
     t_force(0) = 0;
     t_force(1) = 1;
     MoFEMFunctionReturn(0);
@@ -282,9 +268,9 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", matStrainPtr, matStressPtr, matDPtr));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpPostProcElastic("U", post_proc_fe->postProcMesh,
-  //                           post_proc_fe->mapGaussPts, commonDataPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
+      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
+      matStressPtr));
   post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
