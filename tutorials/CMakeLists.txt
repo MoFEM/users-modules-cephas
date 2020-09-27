@@ -84,6 +84,7 @@ set(TUTORIALS_DIRS
   scl-6
   scl-7
   clx-0
+  vec-0
   max-0
   max-1
   low/mix_transport
