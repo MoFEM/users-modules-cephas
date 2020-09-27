@@ -169,7 +169,7 @@ continuing with the one you are most excited about.
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref VEC-0: \ref tutorial_elastic_problem</td>
+       <td width="350px">\ref tutorial_elastic_problem</td>
        <td> Linear elasticity 
        <br/> *Keywords:* 
        </td>
