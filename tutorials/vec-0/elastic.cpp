@@ -38,7 +38,6 @@ using OpInternalForce =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
         GAUSS>::OpGradTimesSymmetricTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr int order = 1;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 
@@ -104,6 +103,8 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  int order = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);

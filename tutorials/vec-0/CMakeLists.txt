@@ -41,4 +41,4 @@ add_test(
   elastic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/elastic
-  -file_name part.h5m  -ksp_monitor -order 4 -log_no_color)
+  -file_name part.h5m -order 3 -log_no_color)
