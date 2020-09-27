@@ -8,7 +8,7 @@
 - general structure of a program developed using MoFEM
 - idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
 - idea of Domain element in MoFEM and how to use it
-- Use default differential operators from OpDiffTools
+- Use default Forms Integrals
 - how to **push** the developed UDOs to the *Pipeline*
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 

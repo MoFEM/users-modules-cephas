@@ -169,15 +169,15 @@ continuing with the one you are most excited about.
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref VEC-0: Linear elasticity</td>
-       <td> Linear elasticity problem
+       <td width="350px">\ref VEC-0: \ref tutorial_elastic_problem</td>
+       <td> Linear elasticity 
        <br/> *Keywords:* 
        </td>
   </tr>
 
   <tr valign="top">
        <td width="350px">\ref VEC-1: Nonlinear elasticity</td>
-       <td> Nonlinear elasticity problem
+       <td> Nonlinear elasticity
        <br/> *Keywords:* 
        </td>
   </tr>
