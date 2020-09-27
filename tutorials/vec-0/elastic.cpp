@@ -34,8 +34,6 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
-using OpResidualForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr int order = 2;
 constexpr double young_modulus = 1;
@@ -56,8 +54,7 @@ private:
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   template <int DIM = SPACE_DIM> MoFEMErrorCode createCommonData();
-  template<>
-  MoFEMErrorCode createCommonData<2>();
+  template <> MoFEMErrorCode createCommonData<2>();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
@@ -65,11 +62,11 @@ private:
   MoFEMErrorCode checkResults();
 
   MatrixDouble invJac;
-  boost::shared_ptr<MatrixDouble> matGrad;
-  boost::shared_ptr<MatrixDouble> matStrain;
-  boost::shared_ptr<MatrixDouble> matStress;
-  boost::shared_ptr<MatrixDouble> matD;
-  boost::shared_ptr<MatrixDouble> bodyForceMat;
+  boost::shared_ptr<MatrixDouble> matGradPtr;
+  boost::shared_ptr<MatrixDouble> matStrainPtr;
+  boost::shared_ptr<MatrixDouble> matStressPtr;
+  boost::shared_ptr<MatrixDouble> matDPtr;
+  boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
 };
 
 //! [Run problem]
@@ -103,8 +100,7 @@ MoFEMErrorCode Example::setupProblem() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
-                                  SPACE_DIM);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -119,8 +115,8 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
     MoFEMFunctionBegin;
 
     auto getD = [&]() {
-      matD->resize(9, 1, false);
-      auto m = *matD;
+      matDPtr->resize(9, 1, false);
+      auto m = *matDPtr;
       return FTensor::Ddg<FTensor::PackPtr<double *, 0>, 2, 2>{
           &m(0, 0), &m(1, 0), &m(2, 0), &m(3, 0), &m(4, 0),
           &m(5, 0), &m(6, 0), &m(7, 0), &m(8, 0)};
@@ -151,9 +147,9 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
   auto set_body_force = [&]() {
     MoFEMFunctionBegin;
     auto getF = [&]() {
-      bodyForceMat->resize(2, 1, false);
+      bodyForceMatPtr->resize(2, 1, false);
       return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>{
-          &(*bodyForceMat)(0, 0), &(*bodyForceMat)(0, 1)};
+          &(*bodyForceMatPtr)(0, 0), &(*bodyForceMatPtr)(1, 0)};
     };
 
     auto t_force = getF();
@@ -162,10 +158,15 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
     MoFEMFunctionReturn(0);
   };
 
-  matStrain = boost::make_shared<MatrixDouble>();
-  matStress = boost::make_shared<MatrixDouble>();
-  matD = boost::make_shared<MatrixDouble>();
-  bodyForceMat = boost::make_shared<MatrixDouble>();
+  matGradPtr = boost::make_shared<MatrixDouble>();
+  matStrainPtr = boost::make_shared<MatrixDouble>();
+  matStressPtr = boost::make_shared<MatrixDouble>();
+  matDPtr = boost::make_shared<MatrixDouble>();
+  bodyForceMatPtr = boost::make_shared<MatrixDouble>();
+
+  matDPtr->resize(9, 1);
+  bodyForceMatPtr->resize(2, 1);
+
   CHKERR set_matrial_stiffens();
   CHKERR set_body_force();
 
@@ -227,10 +228,9 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpCalculateInvJacForFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpK("U", "U", matD));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMat));
+      new OpBodyForce("U", bodyForceMatPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -276,12 +276,12 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                                   matGrad));
+                                                               matGradPtr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGrad, matStrain));
+      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
   post_proc_fe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM>("U", matStrain, matStress,
-                                                    matD));
+      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+          "U", matStrainPtr, matStressPtr, matDPtr));
   // post_proc_fe->getOpPtrVector().push_back(
   //     new OpPostProcElastic("U", post_proc_fe->postProcMesh,
   //                           post_proc_fe->mapGaussPts, commonDataPtr));
@@ -307,16 +307,14 @@ MoFEMErrorCode Example::checkResults() {
       new OpSetInvJacH1ForFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                                   matGrad));
+                                                               matGradPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGrad, matStrain));
+      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM>("U", matStrain, matStress,
-                                                    matD));
+      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+          "U", matStrainPtr, matStressPtr, matDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpResidualForce("U", matStress));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMat));
+      new OpBodyForce("U", bodyForceMatPtr));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
@@ -377,5 +375,3 @@ int main(int argc, char *argv[]) {
 
   CHKERR MoFEM::Core::Finalize();
 }
-
-
