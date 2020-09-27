@@ -34,6 +34,9 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+using OpInternalForce =
+    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+        GAUSS>::OpGradTimesSymmetricTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr int order = 1;
 constexpr double young_modulus = 1;
@@ -79,7 +82,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
-  // CHKERR checkResults();
+  CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 //! [Run problem]
@@ -140,7 +143,7 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
     MoFEMFunctionBegin;
     auto t_force = getFTensor1FromMat<2, 0>(*bodyForceMatPtr);
     t_force(0) = 0;
-    t_force(1) = 1;
+    t_force(1) = -1;
     MoFEMFunctionReturn(0);
   };
 
@@ -299,8 +302,11 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
           "U", matStrainPtr, matStressPtr, matDPtr));
+  auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMatPtr));
+      new OpInternalForce("U", beta, matStressPtr));
+  // pipeline_mng->getOpDomainRhsPipeline().push_back(
+  //     new OpBodyForce("U", bodyForceMatPtr));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
@@ -319,9 +325,10 @@ MoFEMErrorCode Example::checkResults() {
   double nrm2;
   CHKERR VecNorm(res, NORM_2, &nrm2);
   PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e\n", nrm2);
-  constexpr double eps = 1e-8;
-  if (nrm2 > eps)
-    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
+  // constexpr double eps = 1e-8;
+  // if (nrm2 > eps)
+  //   SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not
+  //   zero");
 
   MoFEMFunctionReturn(0);
 }
