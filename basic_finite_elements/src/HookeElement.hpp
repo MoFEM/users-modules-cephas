@@ -1445,6 +1445,9 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
 
+  cerr << "\nhMat    " << dataAtPts->hMat << "\n";
+  cerr << "\nHMat    " << dataAtPts->HMat << "\n";
+
   auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
   auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
   
