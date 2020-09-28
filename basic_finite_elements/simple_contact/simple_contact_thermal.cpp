@@ -162,8 +162,8 @@ int main(int argc, char *argv[]) {
                             "vertical dimension of the mesh ", "", mesh_height,
                             &mesh_height, PETSC_NULL);
 
-    CHKERR PetscOptionsReal("-my_scale_factor", "scale factor", "", scale_factor,
-                            &scale_factor, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_scale_factor", "scale factor", "",
+                            scale_factor, &scale_factor, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_ignore_contact", "if set true, ignore contact",
                             "", PETSC_FALSE, &ignore_contact, PETSC_NULL);
@@ -171,8 +171,8 @@ int main(int argc, char *argv[]) {
                             "if set true, use analytical internal strain", "",
                             PETSC_TRUE, &analytical, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_use_internal_stress",
-                            "if set true, use internal stress", "",
-                            PETSC_TRUE, &use_internal_stress, PETSC_NULL);                        
+                            "if set true, use internal stress", "", PETSC_TRUE,
+                            &use_internal_stress, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -453,7 +453,9 @@ int main(int argc, char *argv[]) {
           FTensor::Index<'i', 3> i;
           FTensor::Index<'k', 3> j;
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          t_thermal_strain(i, j) = alpha * t_kd(i, j);
+          t_thermal_strain(i, j) =
+              alpha * t_kd(i, j) *
+              sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
           return t_thermal_strain;
         };
 
@@ -479,8 +481,9 @@ int main(int argc, char *argv[]) {
               *block_sets_ptr.get(), moab, scale_factor, false, false));
     } else {
       fe_elastic_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpInternalStain_dx(
-              "SPATIAL_POSITION", data_hooke_element_at_pts, moab, use_internal_stress));
+          new HookeElement::OpInternalStain_dx("SPATIAL_POSITION",
+                                               data_hooke_element_at_pts, moab,
+                                               use_internal_stress));
     }
 
     auto make_contact_element = [&]() {
@@ -791,11 +794,10 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
-    
+
     if (analytical) {
-      CHKERR moab.write_file(mesh_file_name, "MOAB",
-                             "PARALLEL=WRITE_PART");
-    } 
+      CHKERR moab.write_file(mesh_file_name, "MOAB", "PARALLEL=WRITE_PART");
+    }
 
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -820,17 +822,17 @@ int main(int argc, char *argv[]) {
               "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
       fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
           new HookeElement::OpGetInternalStress(
-              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts, moab));
-
+              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
+              moab));
       fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
           new HookeElement::OpPostProcIntegPts(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
-              *block_sets_ptr.get(), mb_post, use_internal_stress, false, false));
+              *block_sets_ptr.get(), mb_post, use_internal_stress, false,
+              false));
 
       mb_post.delete_mesh();
 
-      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC",
-                                      fe_elastic_post_proc_ptr);
+      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_elastic_post_proc_ptr);
 
       {
         string out_file_name;
@@ -838,7 +840,7 @@ int main(int argc, char *argv[]) {
         strm << "out_integ_pts.h5m";
         out_file_name = strm.str();
         CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
-                          out_file_name.c_str());
+                           out_file_name.c_str());
         CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
                                   "PARALLEL=WRITE_PART");
       }

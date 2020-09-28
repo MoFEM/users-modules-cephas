@@ -609,9 +609,10 @@ struct HookeElement {
 
     OpInternalStain_dx(const std::string row_field,
                        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-                       moab::Interface &input_mesh, bool use_internal_stress = true)
+                       moab::Interface &input_mesh,
+                       bool use_internal_stress = true)
         : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
-          inputMesh(input_mesh), useInternalStress(use_internal_stress) {};
+          inputMesh(input_mesh), useInternalStress(use_internal_stress){};
 
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data) {
@@ -684,10 +685,10 @@ struct HookeElement {
 
         int rr = 0;
         for (; rr != nbRows / 3; ++rr) {
-          if (useInternalStress) 
-            t_nf(i) -= a * t_row_diff_base(j) * t_internal_stress(i, j);
-          else 
-            t_nf(i) -= a * t_row_diff_base(j) * t_actual_stress(i, j);
+          if (useInternalStress)
+            t_nf(i) += a * t_row_diff_base(j) * t_internal_stress(i, j);
+          else
+            t_nf(i) += a * t_row_diff_base(j) * t_actual_stress(i, j);
           ++t_row_diff_base;
           ++t_nf;
         }
@@ -737,17 +738,19 @@ struct HookeElement {
 
     OpGetInternalStress(const std::string row_field,
                         const std::string col_field,
-                        boost::shared_ptr<DataAtIntegrationPts> data_at_pts, 
-                        moab::Interface &input_mesh) : VolUserDataOperator(row_field, col_field, OPROW, true),
-      dataAtPts(data_at_pts), inputMesh(input_mesh) {
-  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
-      };
+                        boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+                        moab::Interface &input_mesh)
+        : VolUserDataOperator(row_field, col_field, OPROW, true),
+          dataAtPts(data_at_pts), inputMesh(input_mesh) {
+      std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+    };
 
-    MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data) {
-  
-  MoFEMFunctionBegin;
+    MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                          EntData &row_data) {
 
-   const EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
+      MoFEMFunctionBegin;
+
+      const EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
 
       const int nb_integration_pts = getGaussPts().size2();
 
@@ -780,8 +783,8 @@ struct HookeElement {
       auto t_actual_stress =
           getFTensor2FromMat<3, 3>(*dataAtPts->actualStressMat);
 
-  MoFEMFunctionReturn(0);
-};
+      MoFEMFunctionReturn(0);
+    };
 
   protected:
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
@@ -871,11 +874,12 @@ struct HookeElement {
     OpSaveStress(const string row_field, const string col_field,
                  boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
                  map<int, BlockData> &block_sets_ptr,
-                 moab::Interface &output_mesh, double scale_factor, bool is_ale = false,
-                 bool is_field_disp = true)
+                 moab::Interface &output_mesh, double scale_factor,
+                 bool is_ale = false, bool is_field_disp = true)
         : VolUserDataOperator(row_field, col_field, OPROW, true),
           dataAtPts(data_at_pts), blockSetsPtr(block_sets_ptr),
-          outputMesh(output_mesh), scaleFactor(scale_factor), isALE(is_ale), isFieldDisp(is_field_disp){};
+          outputMesh(output_mesh), scaleFactor(scale_factor), isALE(is_ale),
+          isFieldDisp(is_field_disp){};
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           EntData &row_data) {
@@ -979,11 +983,10 @@ struct HookeElement {
 
         tensor_to_tensor(t_stress_symm, t_stress);
 
-        t_actual_stress(i, j) = t_stress(i, j) - t_internal_stress(i, j);
+        t_actual_stress(i, j) = t_stress(i, j) + t_internal_stress(i, j);
 
         t_actual_stress(i, j) *= scaleFactor;
         t_internal_stress(i, j) *= scaleFactor;
-
 
         ++t_h;
         ++t_actual_stress;
@@ -1011,13 +1014,15 @@ struct HookeElement {
     bool useInternalStress;
 
     OpPostProcIntegPts(const string row_field, const string col_field,
-                 boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
-                 map<int, BlockData> &block_sets_ptr,
-                 moab::Interface &output_mesh, bool use_internal_stress = true, bool is_ale = false,
-                 bool is_field_disp = true)
+                       boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+                       map<int, BlockData> &block_sets_ptr,
+                       moab::Interface &output_mesh,
+                       bool use_internal_stress = true, bool is_ale = false,
+                       bool is_field_disp = true)
         : VolUserDataOperator(row_field, col_field, OPROW, true),
           dataAtPts(data_at_pts), blockSetsPtr(block_sets_ptr),
-          outputMesh(output_mesh), useInternalStress(use_internal_stress), isALE(is_ale), isFieldDisp(is_field_disp){};
+          outputMesh(output_mesh), useInternalStress(use_internal_stress),
+          isALE(is_ale), isFieldDisp(is_field_disp){};
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           EntData &row_data) {
@@ -1041,16 +1046,16 @@ struct HookeElement {
 
       Tag th_stress;
       CHKERR outputMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
-                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
       Tag th_actual_stress;
       CHKERR outputMesh.tag_get_handle("STRESS_ACTUAL", 9, MB_TYPE_DOUBLE,
-                                        th_actual_stress,
-                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+                                       th_actual_stress,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
       Tag th_strain;
       CHKERR outputMesh.tag_get_handle("STRAIN", 9, MB_TYPE_DOUBLE, th_strain,
-                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
       const int nb_integration_pts = row_data.getN().size1();
 
@@ -1092,10 +1097,10 @@ struct HookeElement {
       FTensor::Tensor2_symmetric<double, 3> t_stress_symm;
       FTensor::Tensor2_symmetric<double, 3> t_small_strain_symm;
 
-      auto  t_internal_stress =
-            getFTensor2FromMat<3, 3>(*dataAtPts->internalStressMat);
-      auto  t_actual_stress =
-            getFTensor2FromMat<3, 3>(*dataAtPts->actualStressMat);
+      auto t_internal_stress =
+          getFTensor2FromMat<3, 3>(*dataAtPts->internalStressMat);
+      auto t_actual_stress =
+          getFTensor2FromMat<3, 3>(*dataAtPts->actualStressMat);
 
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -1121,22 +1126,23 @@ struct HookeElement {
         tensor_to_tensor(t_small_strain_symm, t_small_strain);
 
         if (useInternalStress)
-          t_actual_stress_out(i, j) = t_stress(i, j) - t_internal_stress(i, j);
+          t_actual_stress_out(i, j) = t_stress(i, j) + t_internal_stress(i, j);
         else
-          t_actual_stress_out(i, j) = t_stress(i, j) - t_actual_stress(i, j);
+          t_actual_stress_out(i, j) = t_stress(i, j) + t_actual_stress(i, j);
+        
         EntityHandle new_vertex;
-
         const double *coords_ptr = &(getCoordsAtGaussPts()(gg, 0));
         CHKERR outputMesh.create_vertex(coords_ptr, new_vertex);
 
         CHKERR outputMesh.tag_set_data(th_stress, &new_vertex, 1,
-                                        &t_stress(0, 0));
+                                       &t_stress(0, 0));
         CHKERR outputMesh.tag_set_data(th_actual_stress, &new_vertex, 1,
-                                        &t_actual_stress_out(0, 0));
+                                       &t_actual_stress_out(0, 0));
         CHKERR outputMesh.tag_set_data(th_strain, &new_vertex, 1,
-                                        &t_small_strain(0, 0));
+                                       &t_small_strain(0, 0));
         ++t_h;
         ++t_internal_stress;
+        ++t_actual_stress;
       }
 
       MoFEMFunctionReturn(0);
@@ -1987,7 +1993,7 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     tensor_to_tensor(t_stress_symm, t_stress);
     tensor_to_tensor(t_small_strain_symm, t_small_strain);
 
-    t_actual_stress(i, j) = t_stress(i, j) - t_internal_stress(i, j);
+    t_actual_stress(i, j) = t_stress(i, j) + t_internal_stress(i, j);
 
     const double psi = 0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
 
@@ -2139,7 +2145,7 @@ MoFEMErrorCode HookeElement::OpGetAnalyticalInternalStress<S>::doWork(
   for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
     auto t_fun_strain = strainFun(t_coords);
-    t_internal_stress_symm(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
+    t_internal_stress_symm(i, j) = -t_D(i, j, k, l) * t_fun_strain(k, l);
 
     tensor_to_tensor(t_internal_stress_symm, t_internal_stress);
 
