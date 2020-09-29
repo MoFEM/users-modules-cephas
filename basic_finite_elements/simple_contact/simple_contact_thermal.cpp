@@ -99,6 +99,9 @@ int main(int argc, char *argv[]) {
 
     PetscReal scale_factor = 1.0;
 
+    PetscBool deform_flat_flag = PETSC_FALSE;
+    PetscReal flat_shift = 1.0;
+
     PetscBool ignore_contact = PETSC_FALSE;
     PetscBool analytical = PETSC_TRUE;
     PetscBool use_internal_stress = PETSC_TRUE;
@@ -174,6 +177,11 @@ int main(int argc, char *argv[]) {
                             "if set true, use internal stress", "", PETSC_TRUE,
                             &use_internal_stress, PETSC_NULL);
 
+    CHKERR PetscOptionsBool("-my_deform_flat", "if set true, deform flat", "",
+                            PETSC_FALSE, &deform_flat_flag, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_flat_shift", "flat shift ", "", flat_shift,
+                            &flat_shift, PETSC_NULL);
+
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
 
@@ -206,9 +214,7 @@ int main(int argc, char *argv[]) {
     // print block sets with materials
     CHKERR mmanager_ptr->printMaterialsSet();
 
-    auto add_prism_interface = [&](Range &contact_prisms, Range &master_tris,
-                                   Range &slave_tris,
-                                   std::vector<BitRefLevel> &bit_levels) {
+    auto add_prism_interface = [&](std::vector<BitRefLevel> &bit_levels) {
       MoFEMFunctionBegin;
       PrismInterface *interface;
       CHKERR m_field.getInterface(interface);
@@ -266,6 +272,14 @@ int main(int argc, char *argv[]) {
           bit_levels.pop_back();
         }
       }
+
+      MoFEMFunctionReturn(0);
+    };
+
+    auto find_contact_prisms = [&](std::vector<BitRefLevel> &bit_levels,
+                                   Range &contact_prisms, Range &master_tris,
+                                   Range &slave_tris) {
+      MoFEMFunctionBegin;
 
       EntityHandle meshset_prisms;
       CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
@@ -330,6 +344,43 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
+    auto deform_flat_surface = [&](int block_id, double shift, int dir,
+                                   double height) {
+      MoFEMFunctionBegin;
+      Range all_tets, all_nodes;
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "MAT_ELASTIC") == 0) {
+          const int id = bit->getMeshsetId();
+          Range tets;
+          if (id == block_id) {
+            CHKERR m_field.get_moab().get_entities_by_dimension(
+                bit->getMeshset(), 3, tets, true);
+            all_tets.merge(tets);
+          }
+        }
+      }
+      CHKERR m_field.get_moab().get_connectivity(all_tets, all_nodes);
+      double coords[3];
+      for (Range::iterator nit = all_nodes.begin(); nit != all_nodes.end();
+           nit++) {
+        CHKERR moab.get_coords(&*nit, 1, coords);
+        double x = coords[0];
+        double y = coords[1];
+        double z = coords[2];
+        double coef;
+        if (dir == -1) {
+          coef = (height + z) / height;
+          coords[2] -= shift * coef;
+        } else {
+          coef = (height - z) / height;
+          coords[2] += shift * coef;
+        }
+
+        CHKERR moab.set_coords(&*nit, 1, coords);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
     auto set_contact_order = [&](Range &contact_prisms, int order_contact,
                                  int nb_ho_levels) {
       MoFEMFunctionBegin;
@@ -369,14 +420,21 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels.back());
 
-    if (!ignore_contact) {
-      CHKERR add_prism_interface(contact_prisms, master_tris, slave_tris,
-                                 bit_levels);
+    if (!ignore_contact && analytical) {
+      CHKERR add_prism_interface(bit_levels);
     }
+
+    CHKERR find_contact_prisms(bit_levels, contact_prisms, master_tris,
+                               slave_tris);
 
     if (wave_surf_flag) {
       CHKERR make_wavy_surface(wave_surf_block_id, wave_dim, wave_length,
                                wave_ampl, mesh_height);
+    }
+
+    if (deform_flat_flag && analytical) {
+      CHKERR deform_flat_surface(1, flat_shift, -1, mesh_height);
+      CHKERR deform_flat_surface(2, flat_shift, 1, mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -424,6 +482,11 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
     }
 
+    Range slave_verts;
+    CHKERR moab.get_connectivity(slave_tris, slave_verts, true);
+    CHKERR m_field.getInterface<FieldBlas>()->setField(0.0, MBVERTEX,
+                                                       slave_verts, "LAGMULT");
+
     // Add elastic element
     boost::shared_ptr<std::map<int, BlockData>> block_sets_ptr =
         boost::make_shared<std::map<int, BlockData>>();
@@ -453,9 +516,8 @@ int main(int argc, char *argv[]) {
           FTensor::Index<'i', 3> i;
           FTensor::Index<'k', 3> j;
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          t_thermal_strain(i, j) =
-              alpha * t_kd(i, j) *
-              sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
+          t_thermal_strain(i, j) = alpha * t_kd(i, j);
+          // sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
           return t_thermal_strain;
         };
 
@@ -796,7 +858,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (analytical) {
-      CHKERR moab.write_file(mesh_file_name, "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR moab.write_file("test.h5m", "MOAB", "PARALLEL=WRITE_PART");
     }
 
     // save on mesh
