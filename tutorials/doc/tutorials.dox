@@ -176,15 +176,15 @@ continuing with the one you are most excited about.
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref tutorial_eigen_elastic_problem</td>
-       <td> Eigen elasti problem
+       <td width="350px">\ref tutorial_eigen_elastic</td>
+       <td> Eigen elastic
        <br/> *Keywords:* Eigen values, SLEP
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref VEC-2: Dynamic porblem</td>
-       <td> Dynamic porblem
+       <td width="350px">\ref VEC-2: Dynamic elastic</td>
+       <td> Dynamic elastic
        <br/> *Keywords:* Time dependent problem
        </td>
   </tr>

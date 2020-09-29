@@ -1,4 +1,4 @@
-/*! \page tutorial_eigen_elastic_problem VEC-1: Eigen elasticity problem
+/*! \page tutorial_eigen_elastic VEC-1: Eigen elastic
 
 \note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
 

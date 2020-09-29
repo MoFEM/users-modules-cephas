@@ -1,6 +1,6 @@
 /**
- * \file lesson4_elastic.cpp
- * \example lesson4_elastic.cpp
+ * \file eigen_elastic.cpp
+ * \example eigen_elastic.cpp
  *
  * Plane stress elastic problem
  *
@@ -67,7 +67,6 @@ private:
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
-  boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
 
   SmartPetscObj<Mat> M;
   SmartPetscObj<Mat> K;
@@ -103,25 +102,14 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_body_force = [&]() {
-    MoFEMFunctionBegin;
-    auto t_force = getFTensor1FromMat<2, 0>(*bodyForceMatPtr);
-    t_force(0) = 0;
-    t_force(1) = -1;
-    MoFEMFunctionReturn(0);
-  };
-
   matGradPtr = boost::make_shared<MatrixDouble>();
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
-  bodyForceMatPtr = boost::make_shared<MatrixDouble>();
 
   matDPtr->resize(9, 1);
-  bodyForceMatPtr->resize(2, 1);
 
   CHKERR set_matrial_stiffens();
-  CHKERR set_body_force();
 
   MoFEMFunctionReturn(0);
 }
@@ -159,8 +147,6 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 SPACE_DIM);
-  // CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
-  // SPACE_DIM);
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
