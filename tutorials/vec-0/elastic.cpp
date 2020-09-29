@@ -55,8 +55,7 @@ private:
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  template <int DIM = SPACE_DIM> MoFEMErrorCode createCommonData();
-  template <> MoFEMErrorCode createCommonData<2>();
+  template <int DIM> MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
@@ -70,46 +69,6 @@ private:
   boost::shared_ptr<MatrixDouble> matDPtr;
   boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
 };
-
-//! [Run problem]
-MoFEMErrorCode Example::runProblem() {
-  MoFEMFunctionBegin;
-  CHKERR readMesh();
-  CHKERR setupProblem();
-  CHKERR createCommonData();
-  CHKERR boundaryCondition();
-  CHKERR assembleSystem();
-  CHKERR solveSystem();
-  CHKERR outputResults();
-  CHKERR checkResults();
-  MoFEMFunctionReturn(0);
-}
-//! [Run problem]
-
-//! [Read mesh]
-MoFEMErrorCode Example::readMesh() {
-  MoFEMFunctionBegin;
-  auto simple = mField.getInterface<Simple>();
-  CHKERR simple->getOptions();
-  CHKERR simple->loadFile();
-  MoFEMFunctionReturn(0);
-}
-//! [Read mesh]
-
-//! [Set up problem]
-MoFEMErrorCode Example::setupProblem() {
-  MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
-  // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  int order = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setUp();
-  MoFEMFunctionReturn(0);
-}
-//! [Set up problem]
 
 //! [Create common data]
 template <> MoFEMErrorCode Example::createCommonData<2>() {
@@ -163,6 +122,46 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
+
+//! [Run problem]
+MoFEMErrorCode Example::runProblem() {
+  MoFEMFunctionBegin;
+  CHKERR readMesh();
+  CHKERR setupProblem();
+  CHKERR createCommonData<SPACE_DIM>();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
+  CHKERR checkResults();
+  MoFEMFunctionReturn(0);
+}
+//! [Run problem]
+
+//! [Read mesh]
+MoFEMErrorCode Example::readMesh() {
+  MoFEMFunctionBegin;
+  auto simple = mField.getInterface<Simple>();
+  CHKERR simple->getOptions();
+  CHKERR simple->loadFile();
+  MoFEMFunctionReturn(0);
+}
+//! [Read mesh]
+
+//! [Set up problem]
+MoFEMErrorCode Example::setupProblem() {
+  MoFEMFunctionBegin;
+  Simple *simple = mField.getInterface<Simple>();
+  // Add field
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  int order = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setUp();
+  MoFEMFunctionReturn(0);
+}
+//! [Set up problem]
 
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
@@ -235,8 +234,8 @@ MoFEMErrorCode Example::assembleSystem() {
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto *simple = mField.getInterface<Simple>();
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto solver = pipeline_mng->createKSP();
   CHKERR KSPSetFromOptions(solver);
   CHKERR KSPSetUp(solver);
