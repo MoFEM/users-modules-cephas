@@ -71,7 +71,7 @@ private:
 
   SmartPetscObj<Mat> M;
   SmartPetscObj<Mat> K;
-  SmartPetscObj<EPS> Eps;
+  SmartPetscObj<EPS> ePS;
 };
 
 //! [Create common data]
@@ -249,9 +249,7 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
-    auto get_rho = [](const double, const double, const double) {
-      return rho;
-    };
+    auto get_rho = [](const double, const double, const double) { return rho; };
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpMass("U", "U", get_rho));
     auto integration_rule = [](int, int, int approx_order) {
@@ -284,7 +282,7 @@ MoFEMErrorCode Example::solveSystem() {
   };
 
   // Create eigensolver context
-  auto eps = createEPS(mField.get_comm());
+  ePS = createEPS(mField.get_comm());
 
   ST st;
   EPSType type;
@@ -292,25 +290,25 @@ MoFEMErrorCode Example::solveSystem() {
   PetscInt nev, maxit, its;
 
   // Set operators. In this case, it is a generalized eigenvalue problem
-  CHKERR EPSSetOperators(eps, K, M);
+  CHKERR EPSSetOperators(ePS, K, M);
 
   // Set solver parameters at runtime
-  CHKERR EPSSetFromOptions(eps);
-  
-  // Optional: Get some information from the solver and display it
-  CHKERR EPSSolve(eps);
+  CHKERR EPSSetFromOptions(ePS);
 
   // Optional: Get some information from the solver and display it
-  CHKERR EPSGetIterationNumber(eps, &its);
+  CHKERR EPSSolve(ePS);
+
+  // Optional: Get some information from the solver and display it
+  CHKERR EPSGetIterationNumber(ePS, &its);
   MOFEM_LOG_C("WORLD", Sev::inform, " Number of iterations of the method: %D",
               its);
-  CHKERR EPSGetST(eps, &st);
-  CHKERR EPSGetType(eps, &type);
+  CHKERR EPSGetST(ePS, &st);
+  CHKERR EPSGetType(ePS, &type);
   MOFEM_LOG_C("WORLD", Sev::inform, " Solution method: %s", type);
-  CHKERR EPSGetDimensions(eps, &nev, NULL, NULL);
+  CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
   MOFEM_LOG_C("WORLD", Sev::inform, " Number of requested eigenvalues: %D",
               nev);
-  CHKERR EPSGetTolerances(eps, &tol, &maxit);
+  CHKERR EPSGetTolerances(ePS, &tol, &maxit);
   MOFEM_LOG_C("WORLD", Sev::inform, " Stopping condition: tol=%.4g, maxit=%D",
               (double)tol, maxit);
 
@@ -321,29 +319,48 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
-  // PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto *simple = mField.getInterface<Simple>();
 
-  // pipeline_mng->getDomainLhsFE().reset();
-  // auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
-  // post_proc_fe->generateReferenceElementMesh();
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculateInvJacForFace(invJac));
-  // post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-  //                                                              matGradPtr));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
-  // post_proc_fe->getOpPtrVector().push_back(
-  //     new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-  //         "U", matStrainPtr, matStressPtr, matDPtr));
-  // post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
-  //     "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
-  //     matStressPtr));
-  // post_proc_fe->addFieldValuesPostProc("U");
-  // pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  // CHKERR pipeline_mng->loopFiniteElements();
-  // CHKERR post_proc_fe->writeFile("out_elastic.h5m");
+  pipeline_mng->getDomainLhsFE().reset();
+  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateInvJacForFace(invJac));
+  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                               matGradPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+          "U", matStrainPtr, matStressPtr, matDPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
+      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
+      matStressPtr));
+  post_proc_fe->addFieldValuesPostProc("U");
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+
+  auto dm = simple->getDM();
+  auto D = smartCreateDMVector(dm);
+
+  PetscInt nev;
+  CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
+  PetscScalar eigr, eigi, nrm2r;
+  for (int nn = 0; nn < nev; nn++) {
+    CHKERR EPSGetEigenpair(ePS, nn, &eigr, &eigi, D, PETSC_NULL);
+    CHKERR VecNorm(D, NORM_2, &nrm2r);
+    MOFEM_LOG_C(
+        "WORLD", Sev::inform,
+        " ncov = %D eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
+        eigr, eigi, 1. / eigr, nrm2r);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR pipeline_mng->loopFiniteElements();
+    CHKERR post_proc_fe->writeFile(
+        "out_eig_" + boost::lexical_cast<std::string>(nn) + ".h5m");
+  }
+
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
