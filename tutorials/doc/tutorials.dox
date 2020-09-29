@@ -170,14 +170,28 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\ref tutorial_elastic_problem</td>
-       <td> Linear elasticity 
-       <br/> *Keywords:* 
+       <td> Linear elastic 
+       <br/> *Keywords:* Hooke equation
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref VEC-1: Nonlinear elasticity</td>
-       <td> Nonlinear elasticity
+       <td width="350px">\ref tutorial_eigen_elastic_problem</td>
+       <td> Eigen elasti problem
+       <br/> *Keywords:* Eigen values, SLEP
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref VEC-2: Dynamic porblem</td>
+       <td> Dynamic porblem
+       <br/> *Keywords:* Time dependent problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref VEC-2: Nonlinear elasticity</td>
+       <td> Nonlinear elastic
        <br/> *Keywords:* 
        </td>
   </tr>

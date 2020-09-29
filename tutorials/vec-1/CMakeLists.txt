@@ -40,10 +40,10 @@ if(SLEPC_LIBRARY)
   tutorials_build_and_install(
     eigen_elastic ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp)
 
-  # add_test(
-  #   eigen_elastic
-  #   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  #   ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic
-  #   -file_name part.h5m -order 3 -log_no_color)
+  add_test(
+    eigen_elastic
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+    ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic
+    -file_name part.h5m -order 3 -log_no_color)
 
 endif(SLEPC_LIBRARY)

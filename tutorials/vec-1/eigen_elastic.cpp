@@ -157,8 +157,10 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
+                                SPACE_DIM);
+  // CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE,
+  // SPACE_DIM);
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
@@ -290,7 +292,7 @@ MoFEMErrorCode Example::solveSystem() {
   PetscInt nev, maxit, its;
 
   // Set operators. In this case, it is a generalized eigenvalue problem
-  CHKERR EPSSetOperators(ePS, K, M);
+  CHKERR EPSSetOperators(ePS, M, K);
 
   // Set solver parameters at runtime
   CHKERR EPSSetFromOptions(ePS);
@@ -350,6 +352,8 @@ MoFEMErrorCode Example::outputResults() {
   PetscScalar eigr, eigi, nrm2r;
   for (int nn = 0; nn < nev; nn++) {
     CHKERR EPSGetEigenpair(ePS, nn, &eigr, &eigi, D, PETSC_NULL);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecNorm(D, NORM_2, &nrm2r);
     MOFEM_LOG_C(
         "WORLD", Sev::inform,
@@ -368,6 +372,16 @@ MoFEMErrorCode Example::outputResults() {
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
   MoFEMFunctionBegin;
+  PetscBool test_flg = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg, PETSC_NULL);
+  if (test_flg) {
+    PetscScalar eigr, eigi;
+    CHKERR EPSGetEigenpair(ePS, 0, &eigr, &eigi, PETSC_NULL, PETSC_NULL);
+    constexpr double regression_value = 5.862;
+    if (fabs(eigr - regression_value) > 1e-2)
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+              "Regression test faileed; wrong eigen value.");
+  }
   MoFEMFunctionReturn(0);
 }
 //! [Check]
@@ -405,5 +419,6 @@ int main(int argc, char *argv[]) {
   }
   CATCH_ERRORS;
 
+  SlepcFinalize();
   CHKERR MoFEM::Core::Finalize();
 }

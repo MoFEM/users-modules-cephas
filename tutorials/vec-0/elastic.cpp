@@ -325,11 +325,10 @@ MoFEMErrorCode Example::checkResults() {
   double nrm2;
   CHKERR VecNorm(res, NORM_2, &nrm2);
   PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e\n", nrm2);
-  // constexpr double eps = 1e-8;
-  // if (nrm2 > eps)
-  //   SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not
-  //   zero");
-
+  constexpr double eps = 1e-8;
+  if (nrm2 > eps)
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
+    
   MoFEMFunctionReturn(0);
 }
 //! [Check]
