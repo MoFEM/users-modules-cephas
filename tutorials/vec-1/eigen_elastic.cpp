@@ -37,9 +37,11 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 
+constexpr double rho = 1;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
-constexpr double rho = 1;
+constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
 #include <OpPostProcElastic.hpp>
 using namespace Tutorial;
@@ -55,7 +57,7 @@ private:
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  template <int DIM = SPACE_DIM> MoFEMErrorCode createCommonData();
+  MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
   MoFEMErrorCode solveSystem();
@@ -74,31 +76,24 @@ private:
 };
 
 //! [Create common data]
-template <> MoFEMErrorCode Example::createCommonData<2>() {
+MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
   auto set_matrial_stiffens = [&]() {
+    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'j', SPACE_DIM> j;
+    FTensor::Index<'k', SPACE_DIM> k;
+    FTensor::Index<'l', SPACE_DIM> l;
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
     MoFEMFunctionBegin;
-
+    constexpr double A =
+        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
+                               (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+                         : 1;
     auto t_D = getFTensor4DdgFromMat<2, 2, 0>(*matDPtr);
-
-    FTensor::Index<'i', 2> i;
-    FTensor::Index<'j', 2> j;
-    FTensor::Index<'k', 2> k;
-    FTensor::Index<'l', 2> l;
-    t_D(i, j, k, l) = 0;
-
-    constexpr double c = young_modulus / (1 - poisson_ratio * poisson_ratio);
-    constexpr double o = poisson_ratio * c;
-
-    t_D(0, 0, 0, 0) = c;
-    t_D(0, 0, 1, 1) = o;
-
-    t_D(1, 1, 0, 0) = o;
-    t_D(1, 1, 1, 1) = c;
-
-    t_D(0, 1, 0, 1) = (1 - poisson_ratio) * c;
-
+    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+                          t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
 
@@ -107,7 +102,8 @@ template <> MoFEMErrorCode Example::createCommonData<2>() {
   matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
 
-  matDPtr->resize(9, 1);
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  matDPtr->resize(size_symm * size_symm, 1);
 
   CHKERR set_matrial_stiffens();
 
@@ -230,7 +226,7 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto salculate_matrix = [&]() {
+  auto calculate_matrix = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
     auto get_rho = [](const double, const double, const double) { return rho; };
@@ -248,7 +244,7 @@ MoFEMErrorCode Example::assembleSystem() {
   };
 
   CHKERR calculate_stiffness_matrix();
-  CHKERR salculate_matrix();
+  CHKERR calculate_matrix();
 
   MoFEMFunctionReturn(0);
 }
@@ -361,7 +357,7 @@ MoFEMErrorCode Example::checkResults() {
   if (test_flg) {
     PetscScalar eigr, eigi;
     CHKERR EPSGetEigenpair(ePS, 0, &eigr, &eigi, PETSC_NULL, PETSC_NULL);
-    constexpr double regression_value = 0.2725;
+    constexpr double regression_value = 0.2013;
     if (fabs(eigr - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
               "Regression test faileed; wrong eigen value.");
