@@ -44,6 +44,6 @@ if(SLEPC_LIBRARY)
     eigen_elastic
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
     ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic
-    -file_name part.h5m -order 3 -log_no_color)
+    -file_name part.h5m -order 1 -log_no_color -test)
 
 endif(SLEPC_LIBRARY)

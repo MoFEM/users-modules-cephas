@@ -222,7 +222,7 @@ MoFEMErrorCode Example::assembleSystem() {
     auto integration_rule = [](int, int, int approx_order) {
       return 2 * (approx_order - 1);
     };
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     pipeline_mng->getDomainLhsFE()->B = K;
     CHKERR pipeline_mng->loopFiniteElements();
     CHKERR MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
@@ -233,17 +233,13 @@ MoFEMErrorCode Example::assembleSystem() {
   auto salculate_matrix = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
     auto get_rho = [](const double, const double, const double) { return rho; };
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpMass("U", "U", get_rho));
     auto integration_rule = [](int, int, int approx_order) {
-      return 2 * (approx_order - 1);
+      return 2 * approx_order;
     };
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     pipeline_mng->getDomainLhsFE()->B = M;
     CHKERR pipeline_mng->loopFiniteElements();
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
@@ -278,7 +274,9 @@ MoFEMErrorCode Example::solveSystem() {
   PetscInt nev, maxit, its;
 
   // Set operators. In this case, it is a generalized eigenvalue problem
-  CHKERR EPSSetOperators(ePS, M, K);
+  CHKERR EPSSetOperators(ePS, K, M);
+  CHKERR EPSSetProblemType(ePS, EPS_GHEP);
+  CHKERR EPSSetWhichEigenpairs(ePS, EPS_SMALLEST_MAGNITUDE);
 
   // Set solver parameters at runtime
   CHKERR EPSSetFromOptions(ePS);
@@ -363,7 +361,7 @@ MoFEMErrorCode Example::checkResults() {
   if (test_flg) {
     PetscScalar eigr, eigi;
     CHKERR EPSGetEigenpair(ePS, 0, &eigr, &eigi, PETSC_NULL, PETSC_NULL);
-    constexpr double regression_value = 5.862;
+    constexpr double regression_value = 0.2725;
     if (fabs(eigr - regression_value) > 1e-2)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
               "Regression test faileed; wrong eigen value.");
