@@ -252,6 +252,7 @@ MoFEMErrorCode Example::assembleSystem() {
 
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
+  MOFEM_LOG_CHANNEL("WORLD");
   MoFEMFunctionBegin;
 
   auto createEPS = [](MPI_Comm comm) {
@@ -300,6 +301,7 @@ MoFEMErrorCode Example::solveSystem() {
 
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
+  MOFEM_LOG_CHANNEL("WORLD");
   MoFEMFunctionBegin;
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto *simple = mField.getInterface<Simple>();

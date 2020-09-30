@@ -281,6 +281,7 @@ MoFEMErrorCode Example::outputResults() {
 
 //! [Check]
 MoFEMErrorCode Example::checkResults() {
+  MOFEM_LOG_CHANNEL("WORLD");
   Simple *simple = mField.getInterface<Simple>();
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   MoFEMFunctionBegin;
@@ -321,7 +322,7 @@ MoFEMErrorCode Example::checkResults() {
 
   double nrm2;
   CHKERR VecNorm(res, NORM_2, &nrm2);
-  PetscPrintf(PETSC_COMM_WORLD, "residual = %3.4e\n", nrm2);
+  MOFEM_LOG_C("WORLD", Sev::verbose, "residual = %3.4e\n", nrm2);
   constexpr double eps = 1e-8;
   if (nrm2 > eps)
     SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
