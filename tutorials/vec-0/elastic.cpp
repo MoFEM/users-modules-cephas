@@ -176,8 +176,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     return fix_ents;
   };
 
-  auto remove_ents = [&](const Range &&ents, const bool fix_x,
-                         const bool fix_y) {
+  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
     auto prb_mng = mField.getInterface<ProblemsManager>();
     auto simple = mField.getInterface<Simple>();
     MoFEMFunctionBegin;
@@ -190,16 +189,16 @@ MoFEMErrorCode Example::boundaryCondition() {
                                                moab::Interface::UNION);
       verts.merge(adj);
     };
-    const int lo_coeff = fix_x ? 0 : 1;
-    const int hi_coeff = fix_y ? 1 : 0;
+
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo_coeff, hi_coeff);
+                                         lo, hi);
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR remove_ents(fix_disp("FIX_X"), true, false);
-  CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
+  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
+  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
+  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
+  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
 
   MoFEMFunctionReturn(0);
 }
@@ -210,10 +209,12 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(invJac));
+  if (SPACE_DIM == 2) {
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
+  }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", bodyForceMatPtr));
@@ -257,9 +258,11 @@ MoFEMErrorCode Example::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  if (SPACE_DIM) {
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  }
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
@@ -288,10 +291,12 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetInvJacH1ForFace(invJac));
+  if (SPACE_DIM) {
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
+  }
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
@@ -306,7 +311,7 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", bodyForceMatPtr));
 
-  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data-1); };
+  auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
 
   auto dm = simple->getDM();
@@ -326,7 +331,7 @@ MoFEMErrorCode Example::checkResults() {
   constexpr double eps = 1e-8;
   if (nrm2 > eps)
     SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Residual is not zero");
-    
+
   MoFEMFunctionReturn(0);
 }
 //! [Check]

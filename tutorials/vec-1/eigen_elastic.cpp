@@ -26,11 +26,26 @@
 
 using namespace MoFEM;
 
-using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
-using DomainEleOp = DomainEle::UserDataOperator;
+template <int DIM> struct ElementsAndOps {};
+
+template <> struct ElementsAndOps<2> {
+  using DomainEle = FaceElementForcesAndSourcesCoreBase;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+};
+
+template <> struct ElementsAndOps<3> {
+  using DomainEle = VolumeElementForcesAndSourcesCoreBase;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using PostProcEle = PostProcVolumeOnRefinedMesh;
+};
 
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+
+using EntData = DataForcesAndSourcesCore::EntData;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -167,8 +182,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     return fix_ents;
   };
 
-  auto remove_ents = [&](const Range &&ents, const bool fix_x,
-                         const bool fix_y) {
+  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
     auto prb_mng = mField.getInterface<ProblemsManager>();
     auto simple = mField.getInterface<Simple>();
     MoFEMFunctionBegin;
@@ -181,16 +195,16 @@ MoFEMErrorCode Example::boundaryCondition() {
                                                moab::Interface::UNION);
       verts.merge(adj);
     };
-    const int lo_coeff = fix_x ? 0 : 1;
-    const int hi_coeff = fix_y ? 1 : 0;
+
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo_coeff, hi_coeff);
+                                         lo, hi);
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR remove_ents(fix_disp("FIX_X"), true, false);
-  CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
+  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
+  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
+  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
+  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
 
   MoFEMFunctionReturn(0);
 }
@@ -209,15 +223,25 @@ MoFEMErrorCode Example::assembleSystem() {
   auto calculate_stiffness_matrix = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
+
+    if (SPACE_DIM == 2) {
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpCalculateInvJacForFace(invJac));
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpSetInvJacH1ForFace(invJac));
+    }
+
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpK("U", "U", matDPtr));
     auto integration_rule = [](int, int, int approx_order) {
       return 2 * (approx_order - 1);
     };
+    // auto get_rho = [](const double, const double, const double) {
+    //   return rho * 1e-4;
+    // };
+    // pipeline_mng->getOpDomainLhsPipeline().push_back(
+    //     new OpMass("U", "U", get_rho));
+
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     pipeline_mng->getDomainLhsFE()->B = K;
     CHKERR pipeline_mng->loopFiniteElements();
@@ -307,11 +331,15 @@ MoFEMErrorCode Example::outputResults() {
   auto *simple = mField.getInterface<Simple>();
 
   pipeline_mng->getDomainLhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateInvJacForFace(invJac));
-  post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+
+  if (SPACE_DIM == 2) {
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  }
+
   post_proc_fe->getOpPtrVector().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
@@ -323,6 +351,7 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
       "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
       matStressPtr));
+
   post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
@@ -337,14 +366,15 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecNorm(D, NORM_2, &nrm2r);
+    MOFEM_LOG_CHANNEL("WORLD");
     MOFEM_LOG_C(
         "WORLD", Sev::inform,
         " ncov = %D eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
         eigr, eigi, 1. / eigr, nrm2r);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR pipeline_mng->loopFiniteElements();
-    CHKERR post_proc_fe->writeFile(
-        "out_eig_" + boost::lexical_cast<std::string>(nn) + ".h5m");
+    post_proc_fe->writeFile("out_eig_" + boost::lexical_cast<std::string>(nn) +
+                            ".h5m");
   }
 
   MoFEMFunctionReturn(0);
