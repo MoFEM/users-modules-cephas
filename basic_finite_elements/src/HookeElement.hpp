@@ -109,6 +109,9 @@ struct HookeElement {
     boost::shared_ptr<MatrixDouble> internalStressMat;
     boost::shared_ptr<MatrixDouble> actualStressMat;
 
+    boost::shared_ptr<MatrixDouble> spatPosMat;
+    boost::shared_ptr<MatrixDouble> meshNodePosMat;
+
     DataAtIntegrationPts() {
 
       smallStrainMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
@@ -129,6 +132,9 @@ struct HookeElement {
 
       internalStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       actualStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+      spatPosMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      meshNodePosMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
 
     Range forcesOnlyOnEntitiesRow;
@@ -1057,6 +1063,13 @@ struct HookeElement {
       CHKERR outputMesh.tag_get_handle("STRAIN", 9, MB_TYPE_DOUBLE, th_strain,
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
+      double def_VAL_3[3];
+      bzero(def_VAL_3, 3 * sizeof(double));
+      Tag th_disp;
+      CHKERR outputMesh.tag_get_handle("DISPLACEMENT", 3, MB_TYPE_DOUBLE,
+                                       th_disp, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def_VAL_3);
+
       const int nb_integration_pts = row_data.getN().size1();
 
       FTensor::Index<'i', 3> i;
@@ -1102,6 +1115,10 @@ struct HookeElement {
       auto t_actual_stress =
           getFTensor2FromMat<3, 3>(*dataAtPts->actualStressMat);
 
+      auto t_spat_pos = getFTensor1FromMat<3>(*dataAtPts->spatPosMat);
+      auto t_mesh_node_pos = getFTensor1FromMat<3>(*dataAtPts->meshNodePosMat);
+      FTensor::Tensor1<double, 3> t_disp;
+
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
         if (!isALE) {
@@ -1129,7 +1146,9 @@ struct HookeElement {
           t_actual_stress_out(i, j) = t_stress(i, j) + t_internal_stress(i, j);
         else
           t_actual_stress_out(i, j) = t_stress(i, j) + t_actual_stress(i, j);
-        
+
+        t_disp(i) = t_spat_pos(i) - t_mesh_node_pos(i);
+
         EntityHandle new_vertex;
         const double *coords_ptr = &(getCoordsAtGaussPts()(gg, 0));
         CHKERR outputMesh.create_vertex(coords_ptr, new_vertex);
@@ -1140,9 +1159,13 @@ struct HookeElement {
                                        &t_actual_stress_out(0, 0));
         CHKERR outputMesh.tag_set_data(th_strain, &new_vertex, 1,
                                        &t_small_strain(0, 0));
+        CHKERR outputMesh.tag_set_data(th_disp, &new_vertex, 1, &t_disp(0));
+
         ++t_h;
         ++t_internal_stress;
         ++t_actual_stress;
+        ++t_spat_pos;
+        ++t_mesh_node_pos;
       }
 
       MoFEMFunctionReturn(0);
@@ -1927,6 +1950,12 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   CHKERR postProcMesh.tag_get_handle("ENERGY", 1, MB_TYPE_DOUBLE, th_psi,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
+  double def_VAL_3[3];
+  bzero(def_VAL_3, 3 * sizeof(double));
+  Tag th_disp;
+  CHKERR postProcMesh.tag_get_handle("DISPLACEMENT", 3, MB_TYPE_DOUBLE, th_disp,
+                                   MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL_3);
+
   const int nb_integration_pts = mapGaussPts.size();
 
   FTensor::Index<'i', 3> i;
@@ -1970,6 +1999,10 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   auto t_internal_stress =
       getFTensor2FromMat<3, 3>(*dataAtPts->internalStressMat);
 
+  auto t_spat_pos = getFTensor1FromMat<3>(*dataAtPts->spatPosMat);
+  auto t_mesh_node_pos = getFTensor1FromMat<3>(*dataAtPts->meshNodePosMat);
+  FTensor::Tensor1<double, 3> t_disp;
+
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
     if (!isALE) {
@@ -1995,6 +2028,8 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
 
     t_actual_stress(i, j) = t_stress(i, j) + t_internal_stress(i, j);
 
+    t_disp(i) = t_spat_pos(i) - t_mesh_node_pos(i);
+
     const double psi = 0.5 * t_stress_symm(i, j) * t_small_strain_symm(i, j);
 
     CHKERR postProcMesh.tag_set_data(th_psi, &mapGaussPts[gg], 1, &psi);
@@ -2004,8 +2039,13 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
                                      &t_actual_stress(0, 0));
     CHKERR postProcMesh.tag_set_data(th_strain, &mapGaussPts[gg], 1,
                                      &t_small_strain(0, 0));
+    CHKERR postProcMesh.tag_set_data(th_disp, &mapGaussPts[gg], 1,
+                                     &t_disp(0));
+
     ++t_h;
     ++t_internal_stress;
+    ++t_spat_pos;
+    ++t_mesh_node_pos;
   }
 
   MoFEMFunctionReturn(0);

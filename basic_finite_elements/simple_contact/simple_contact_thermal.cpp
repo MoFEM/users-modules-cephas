@@ -97,6 +97,8 @@ int main(int argc, char *argv[]) {
     PetscReal wave_ampl = 0.01;
     PetscReal mesh_height = 1.0;
 
+    PetscReal thermal_expansion_coef = 1.0;
+
     PetscReal scale_factor = 1.0;
 
     PetscBool deform_flat_flag = PETSC_FALSE;
@@ -181,6 +183,10 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &deform_flat_flag, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_flat_shift", "flat shift ", "", flat_shift,
                             &flat_shift, PETSC_NULL);
+
+    CHKERR PetscOptionsReal(
+        "-my_thermal_expansion_coef", "thermal expansion coef ", "",
+        thermal_expansion_coef, &thermal_expansion_coef, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -302,7 +308,7 @@ int main(int argc, char *argv[]) {
     };
 
     auto make_wavy_surface = [&](int block_id, int dim, double lambda,
-                                 double delta, double height) {
+                                 double delta, double height, int dir) {
       MoFEMFunctionBegin;
       Range all_tets, all_nodes;
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
@@ -324,15 +330,15 @@ int main(int argc, char *argv[]) {
         double x = coords[0];
         double y = coords[1];
         double z = coords[2];
-        double coef = (height + z) / height;
+        double coef = (height + z * (-dir)) / height;
         switch (dim) {
         case 2:
-          coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
+          coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda)) * (-dir);
           break;
         case 3:
           coords[2] -=
               coef * delta *
-              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda));
+              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda)) * (-dir);
           break;
         default:
           SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -369,11 +375,11 @@ int main(int argc, char *argv[]) {
         double z = coords[2];
         double coef;
         if (dir == -1) {
-          coef = (height + z) / height;
-          coords[2] -= shift * coef;
+          // coef = (height + z) / height;
+          coords[2] -= shift;
         } else {
-          coef = (height - z) / height;
-          coords[2] += shift * coef;
+          // coef = (height - z) / height;
+          coords[2] += shift;
         }
 
         CHKERR moab.set_coords(&*nit, 1, coords);
@@ -427,9 +433,11 @@ int main(int argc, char *argv[]) {
     CHKERR find_contact_prisms(bit_levels, contact_prisms, master_tris,
                                slave_tris);
 
-    if (wave_surf_flag) {
-      CHKERR make_wavy_surface(wave_surf_block_id, wave_dim, wave_length,
-                               wave_ampl, mesh_height);
+    if (wave_surf_flag && analytical) {
+      CHKERR make_wavy_surface(1, wave_dim, wave_length,
+                               wave_ampl, mesh_height, -1);
+       CHKERR make_wavy_surface(2, wave_dim, wave_length,
+                               wave_ampl, mesh_height, 1);                         
     }
 
     if (deform_flat_flag && analytical) {
@@ -510,13 +518,15 @@ int main(int argc, char *argv[]) {
                                       "MESH_NODE_POSITIONS", false, false,
                                       MBTET, data_hooke_element_at_pts);
     auto thermal_strain =
-        [](FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
+        [&thermal_expansion_coef](
+            FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
           FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
-          constexpr double alpha = 2.5e-3;
           FTensor::Index<'i', 3> i;
           FTensor::Index<'k', 3> j;
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          t_thermal_strain(i, j) = alpha * t_kd(i, j);
+          // t_thermal_strain(i, j) = 0.0;
+          // t_thermal_strain(2, 2) = thermal_expansion_coef;
+          t_thermal_strain(i, j) = thermal_expansion_coef * t_kd(i, j);
           // sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
           return t_thermal_strain;
         };
@@ -820,24 +830,30 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
 
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
+    post_proc.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
+
     if (analytical) {
-      post_proc.getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(
-              "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
-      post_proc.getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(
-              "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
       post_proc.getOpPtrVector().push_back(
           new HookeElement::OpGetAnalyticalInternalStress<0>(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
               thermal_strain));
-      post_proc.getOpPtrVector().push_back(
-          new HookeElement::OpPostProcHookeElement<
-              VolumeElementForcesAndSourcesCore>(
-              "SPATIAL_POSITION", data_hooke_element_at_pts,
-              *block_sets_ptr.get(), post_proc.postProcMesh,
-              post_proc.mapGaussPts, false, false));
     }
+
+    post_proc.getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
+        "SPATIAL_POSITION", data_hooke_element_at_pts->spatPosMat));
+    post_proc.getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
+        "MESH_NODE_POSITIONS", data_hooke_element_at_pts->meshNodePosMat));
+    post_proc.getOpPtrVector().push_back(
+        new HookeElement::OpPostProcHookeElement<
+            VolumeElementForcesAndSourcesCore>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts,
+            *block_sets_ptr.get(), post_proc.postProcMesh,
+            post_proc.mapGaussPts, false, false));
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {
       SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
@@ -886,6 +902,13 @@ int main(int argc, char *argv[]) {
           new HookeElement::OpGetInternalStress(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
               moab));
+      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>(
+              "SPATIAL_POSITION", data_hooke_element_at_pts->spatPosMat));
+      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>(
+              "MESH_NODE_POSITIONS",
+              data_hooke_element_at_pts->meshNodePosMat));
       fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
           new HookeElement::OpPostProcIntegPts(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
