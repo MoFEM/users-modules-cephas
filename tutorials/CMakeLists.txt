@@ -88,11 +88,11 @@ set(TUTORIALS_DIRS
   vec-1
   max-0
   max-1
-  low/mix_transport
-  low/poisson
-  low/simple_elasticity
-  low/elasticity_mixed_formulation
-  low/reaction_diffusion
+  other_tutorials/mix_transport
+  other_tutorials/poisson
+  other_tutorials/simple_elasticity
+  other_tutorials/elasticity_mixed_formulation
+  other_tutorials/reaction_diffusion
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
