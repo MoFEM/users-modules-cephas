@@ -52,11 +52,12 @@ using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+    GAUSS>::OpSource<1, SPACE_DIM>;
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
 constexpr double rho = 1;
+constexpr double omega = 1;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
@@ -92,7 +93,6 @@ private:
   boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matAccelerationPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
-  boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
 
 };
 
@@ -118,28 +118,16 @@ MoFEMErrorCode Example::createCommonData() {
     MoFEMFunctionReturn(0);
   };
 
-  auto set_body_force = [&]() {
-    FTensor::Index<'i', SPACE_DIM> i;
-    MoFEMFunctionBegin;
-    auto t_force = getFTensor1FromMat<SPACE_DIM, 0>(*bodyForceMatPtr);
-    t_force(i) = 0;
-    t_force(1) = -1;
-    MoFEMFunctionReturn(0);
-  };
-
   matGradPtr = boost::make_shared<MatrixDouble>();
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
   matAccelerationPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
-  bodyForceMatPtr = boost::make_shared<MatrixDouble>();
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
-  bodyForceMatPtr->resize(SPACE_DIM, 1);
 
   CHKERR set_matrial_stiffens();
-  CHKERR set_body_force();
 
   MoFEMFunctionReturn(0);
 }
@@ -249,16 +237,25 @@ MoFEMErrorCode Example::assembleSystem() {
   // Get pointer to U_tt shift in domain element
   auto fe_domain_lhs = pipeline_mng->getDomainLhsFE();
   ts_aa_ptr = &(fe_domain_lhs->ts_aa);
+  auto get_rho = [](const double, const double, const double) {
+    return rho * (*ts_aa_ptr);
+  };
+
+  auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+  ts_time_ptr = &(fe_domain_lhs->ts_t);
+  auto get_body_force = [](const double, const double, const double) {
+    auto t_source = FTensor::Tensor1<double, SPACE_DIM>{1, 0};
+    FTensor::Index<'i', SPACE_DIM> i;
+    t_source(i) *= sin((*ts_time_ptr) * omega);
+    return t_source;
+  };
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-  auto get_rho = [](const double, const double, const double) {
-    return rho * (*ts_time_ptr);
-  };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpMass("U", "U", get_rho));
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMatPtr));
+      new OpBodyForce("U", get_body_force));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
