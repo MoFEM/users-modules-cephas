@@ -236,11 +236,6 @@ MoFEMErrorCode Example::assembleSystem() {
     auto integration_rule = [](int, int, int approx_order) {
       return 2 * (approx_order - 1);
     };
-    // auto get_rho = [](const double, const double, const double) {
-    //   return rho * 1e-4;
-    // };
-    // pipeline_mng->getOpDomainLhsPipeline().push_back(
-    //     new OpMass("U", "U", get_rho));
 
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     pipeline_mng->getDomainLhsFE()->B = K;
