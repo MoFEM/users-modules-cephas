@@ -36,7 +36,7 @@ using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 using OpInternalForce =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-        GAUSS>::OpGradTimesSymmetricTensor<1, SPACE_DIM, SPACE_DIM>;
+        GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
