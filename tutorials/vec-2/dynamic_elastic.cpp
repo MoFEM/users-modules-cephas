@@ -57,7 +57,7 @@ using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
 constexpr double rho = 1;
-constexpr double omega = 1;
+constexpr double omega = 2.4;
 constexpr double young_modulus = 1;
 constexpr double poisson_ratio = 0.25;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
@@ -92,8 +92,8 @@ private:
   boost::shared_ptr<MatrixDouble> matStrainPtr;
   boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matAccelerationPtr;
+  boost::shared_ptr<MatrixDouble> matInertiaPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
-
 };
 
 //! [Create common data]
@@ -122,6 +122,7 @@ MoFEMErrorCode Example::createCommonData() {
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
   matAccelerationPtr = boost::make_shared<MatrixDouble>();
+  matInertiaPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -235,18 +236,19 @@ MoFEMErrorCode Example::assembleSystem() {
   }
 
   // Get pointer to U_tt shift in domain element
-  auto fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-  ts_aa_ptr = &(fe_domain_lhs->ts_aa);
-  auto get_rho = [](const double, const double, const double) {
-    return rho * (*ts_aa_ptr);
+  auto get_rho = [this](const double, const double, const double) {
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+    return rho * fe_domain_lhs->ts_aa;
   };
 
-  auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-  ts_time_ptr = &(fe_domain_lhs->ts_t);
-  auto get_body_force = [](const double, const double, const double) {
-    auto t_source = FTensor::Tensor1<double, SPACE_DIM>{1, 0};
+  auto get_body_force = [this](const double, const double, const double) {
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+    auto t_source = FTensor::Tensor1<double, SPACE_DIM>{0.1, 1.};
     FTensor::Index<'i', SPACE_DIM> i;
-    t_source(i) *= sin((*ts_time_ptr) * omega);
+    const auto time = fe_domain_rhs->ts_t;
+    t_source(i) *= sin(time * omega * M_PI);
     return t_source;
   };
 
@@ -270,7 +272,9 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
                                                         matAccelerationPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInertiaForce("U", matAccelerationPtr));
+      new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInertiaForce("U", matInertiaPtr));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -278,29 +282,68 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
-
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
+
+/**
+ * @brief Monitor solution
+ *
+ * This functions is called by TS solver at the end of each step. It is used
+ * to output results to the hard drive.
+ */
+struct Monitor : public FEMethod {
+  Monitor(SmartPetscObj<DM> dm, boost::shared_ptr<PostProcEle> post_proc)
+      : dM(dm), postProc(post_proc){};
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBegin;
+    constexpr int save_every_nth_step = 1;
+    if (ts_step % save_every_nth_step == 0) {
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
+      CHKERR postProc->writeFile(
+          "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<PostProcEle> postProc;
+};
 
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
   auto *simple = mField.getInterface<Simple>();
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-  
+
+  auto dm = simple->getDM();
   auto ts = pipeline_mng->createTS2();
+
+  // Setup postprocessing
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc("U");
+
+  // Add monitor to time solver
+  boost::shared_ptr<FEMethod> null_fe;
+  auto monitor_ptr = boost::make_shared<Monitor>(dm, post_proc_fe);
+  CHKERR DMMoFEMTSSetMonitor(dm, ts, simple->getDomainFEName(), null_fe,
+                             null_fe, monitor_ptr);
 
   double ftime = 1;
   CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
-  CHKERR TSSetFromOptions(ts);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
   auto T = smartCreateDMVector(simple->getDM());
+  auto TT = smartVectorDuplicate(T);
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
 
-  CHKERR TSSolve(ts, T);
+  CHKERR TS2SetSolution(ts, T, TT);
+  CHKERR TSSetFromOptions(ts);
+
+  CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
 
   PetscInt steps, snesfails, rejects, nonlinits, linits;
@@ -320,34 +363,7 @@ MoFEMErrorCode Example::solveSystem() {
 
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
-  MOFEM_LOG_CHANNEL("WORLD");
   MoFEMFunctionBegin;
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
-  auto *simple = mField.getInterface<Simple>();
-
-  pipeline_mng->getDomainLhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-
-  if (SPACE_DIM == 2) {
-    post_proc_fe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-  }
-
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
-      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
-      matStressPtr));
-  post_proc_fe->addFieldValuesPostProc("U");
-
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
