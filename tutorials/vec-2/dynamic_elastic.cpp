@@ -323,6 +323,22 @@ MoFEMErrorCode Example::solveSystem() {
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
+  if (SPACE_DIM) {
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+  }
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                               matGradPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+  post_proc_fe->getOpPtrVector().push_back(
+      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+          "U", matStrainPtr, matStressPtr, matDPtr));
+  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
+      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
+      matStressPtr));
   post_proc_fe->addFieldValuesPostProc("U");
 
   // Add monitor to time solver
