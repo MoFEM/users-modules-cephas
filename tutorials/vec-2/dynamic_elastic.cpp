@@ -380,6 +380,21 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
+  PetscBool test_flg = PETSC_FALSE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test", &test_flg, PETSC_NULL);
+  if (test_flg) {
+    auto *simple = mField.getInterface<Simple>();
+    auto T = smartCreateDMVector(simple->getDM());
+    CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
+                                      SCATTER_FORWARD);
+    double nrm2;
+    CHKERR VecNorm(T, NORM_2, &nrm2);
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;
+    constexpr double regression_value = 1.09572;
+    if (fabs(nrm2 - regression_value) > 1e-2)
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+              "Regression test faileed; wrong norm value.");
+  }
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]

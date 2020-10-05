@@ -41,5 +41,5 @@ tutorials_build_and_install(
 add_test(
   dynamic_elastic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic
-  -file_name part.h5m -order 1 -log_no_color -test)
+  ${CMAKE_CURRENT_BINARY_DIR}/dynamic_elastic
+  -file_name part.h5m -order 1 -ts_max_time 0.3 -ts_dt 0.1 -log_no_color -test)
