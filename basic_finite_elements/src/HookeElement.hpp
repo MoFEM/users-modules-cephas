@@ -1445,11 +1445,11 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
 
-  if (dataAtPts->hMat->size1() != 9 ) {
-    THROW_MESSAGE("hMat: wrong size of data matrix; numer "
-                  "of rows should be 9 but is " +
-                  boost::lexical_cast<std::string>(dataAtPts->hMat->size1()));
-  }
+  // if (dataAtPts->hMat->size1() != 9 ) {
+  //   THROW_MESSAGE("hMat: wrong size of data matrix; numer "
+  //                 "of rows should be 9 but is " +
+  //                 boost::lexical_cast<std::string>(dataAtPts->hMat->size1()));
+  // }
 
   if (dataAtPts->HMat->size1() != 9) {
     THROW_MESSAGE("HMat: wrong size of data matrix; numer "
