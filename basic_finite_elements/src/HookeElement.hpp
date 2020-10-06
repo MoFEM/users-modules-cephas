@@ -651,6 +651,8 @@ struct HookeElement {
 
   template <class ELEMENT>
   struct OpPostProcHookeElement : public ELEMENT::UserDataOperator {
+
+    MoFEM::Interface &mField;
     boost::shared_ptr<DataAtIntegrationPts> dataAtPts;
     map<int, BlockData>
         &blockSetsPtr; // FIXME: (works only with the first block)
@@ -664,7 +666,8 @@ struct HookeElement {
                            map<int, BlockData> &block_sets_ptr,
                            moab::Interface &post_proc_mesh,
                            std::vector<EntityHandle> &map_gauss_pts,
-                           bool is_ale = false, bool is_field_disp = true);
+                           bool is_ale = false, bool is_field_disp = true,
+                           MoFEM::Interface &m_field = NULL);
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
@@ -1404,11 +1407,12 @@ template <class ELEMENT>
 HookeElement::OpPostProcHookeElement<ELEMENT>::OpPostProcHookeElement(
     const string row_field, boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
     map<int, BlockData> &block_sets_ptr, moab::Interface &post_proc_mesh,
-    std::vector<EntityHandle> &map_gauss_pts, bool is_ale, bool is_field_disp)
+    std::vector<EntityHandle> &map_gauss_pts, bool is_ale, bool is_field_disp,
+    MoFEM::Interface &m_field)
     : ELEMENT::UserDataOperator(row_field, UserDataOperator::OPROW),
       dataAtPts(data_at_pts), blockSetsPtr(block_sets_ptr),
-      postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), isALE(is_ale),
-      isFieldDisp(is_field_disp) {}
+      postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), mField(m_field),
+      isALE(is_ale), isFieldDisp(is_field_disp) {}
 
 template <class ELEMENT>
 MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
