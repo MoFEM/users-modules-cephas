@@ -1448,9 +1448,9 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   if (dataAtPts->hMat->size1() != 9 ) {
 
     std::ostringstream file_skin;
-    file_skin << "erroneous_element" << mField.get_comm_rank() << ".vtk";
+    file_skin << "erroneous_element" << ".vtk";
 
-    EntityHandle meshset_skin = getFEEntityHandle();
+    EntityHandle meshset_skin = getFEMethod()->getFEEntityHandle();
     CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin);
     CHKERR mField.get_moab().write_file(file_skin.str().c_str(), "VTK", "",
                                         &meshset_skin, 1);
