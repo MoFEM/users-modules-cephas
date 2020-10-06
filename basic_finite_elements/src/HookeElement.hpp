@@ -1445,11 +1445,21 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
 
-  // if (dataAtPts->hMat->size1() != 9 ) {
-  //   THROW_MESSAGE("hMat: wrong size of data matrix; numer "
-  //                 "of rows should be 9 but is " +
-  //                 boost::lexical_cast<std::string>(dataAtPts->hMat->size1()));
-  // }
+  if (dataAtPts->hMat->size1() != 9 ) {
+
+    std::ostringstream file_skin;
+    file_skin << "erroneous_element" << mField.get_comm_rank() << ".vtk";
+
+    EntityHandle meshset_skin = getFEEntityHandle();
+    CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin);
+    CHKERR mField.get_moab().write_file(file_skin.str().c_str(), "VTK", "",
+                                        &meshset_skin, 1);
+    CHKERR mField.get_moab().delete_entities(&meshset_skin, 1);
+    
+    THROW_MESSAGE("hMat: wrong size of data matrix; numer "
+                  "of rows should be 9 but is " +
+                  boost::lexical_cast<std::string>(dataAtPts->hMat->size1()));
+  }
 
   if (dataAtPts->HMat->size1() != 9) {
     THROW_MESSAGE("HMat: wrong size of data matrix; numer "
