@@ -1457,9 +1457,9 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     EntityHandle meshset_skin = this->getFEEntityHandle();
     Range range_skin;
     range_skin.clear();
+    CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin);
     CHKERR mField.get_moab().add_entities(meshset_skin, range_skin);
 
-    CHKERR .create_meshset(MESHSET_SET, meshset_skin);
     CHKERR mField.get_moab().write_file(file_skin.str().c_str(), "VTK", "",
                                         &meshset_skin, 1);
     cerr << "range_skin.size()   " << range_skin.size() << "\n";
