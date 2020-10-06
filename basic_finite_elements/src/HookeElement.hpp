@@ -1450,11 +1450,11 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     std::ostringstream file_skin;
     file_skin << "erroneous_element" << ".vtk";
 
-    EntityHandle meshset_skin = getFEMethod()->getFEEntityHandle();
-    CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin);
-    CHKERR mField.get_moab().write_file(file_skin.str().c_str(), "VTK", "",
-                                        &meshset_skin, 1);
-    CHKERR mField.get_moab().delete_entities(&meshset_skin, 1);
+    EntityHandle meshset_skin = this->getFEEntityHandle();
+    // CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin);
+    // CHKERR mField.get_moab().write_file(file_skin.str().c_str(), "VTK", "",
+    //                                     &meshset_skin, 1);
+    // CHKERR mField.get_moab().delete_entities(&meshset_skin, 1);
     
     THROW_MESSAGE("hMat: wrong size of data matrix; numer "
                   "of rows should be 9 but is " +
