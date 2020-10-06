@@ -1454,15 +1454,20 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     std::ostringstream file_skin;
     file_skin << "erroneous_element" << ".vtk";
 
-    EntityHandle meshset_skin = this->getFEEntityHandle();
-    Range range_skin;
-    range_skin.clear();
+    EntityHandle meshset_skin;
+    //  meshset_skin = this->getFEEntityHandle();
+    auto fe = this->getFEEntityHandle();
     CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin);
-    CHKERR mField.get_moab().add_entities(meshset_skin, range_skin);
+    CHKERR mField.get_moab().add_entities(meshset_skin, &fe, 1);
+    // Range range_skin;
+    // range_skin.clear();
+    // range_skin = Range(this->getFEEntityHandle(), this->getFEEntityHandle());
+    // // meshset_skin = this->getFEEntityHandle();
+    // CHKERR mField.get_moab().add_entities(meshset_skin, range_skin);
 
     CHKERR mField.get_moab().write_file(file_skin.str().c_str(), "VTK", "",
                                         &meshset_skin, 1);
-    cerr << "range_skin.size()   " << range_skin.size() << "\n";
+    // cerr << "range_skin.size()   " << range_skin.size() << "\n";
     // CHKERR mField.get_moab().delete_entities(&meshset_skin, 1);
 
     THROW_MESSAGE("hMat: wrong size of data matrix; numer "
