@@ -354,6 +354,13 @@ struct SurfaceSlidingConstrains : public GenericSliding {
       elementOrientation = 1;
       MoFEMFunctionReturnHot(0);
     }
+    virtual MoFEMErrorCode
+    getElementOrientation(MoFEM::Interface &m_field,
+                                        const EntityHandle face) {
+      MoFEMFunctionBeginHot;
+      elementOrientation = 1;
+      MoFEMFunctionReturnHot(0);
+   }
   };
 
   MoFEM::Interface &mField;
@@ -430,6 +437,9 @@ struct SurfaceSlidingConstrains : public GenericSliding {
     DriverElementOrientation &oRientation;
     bool evaluateJacobian;
 
+    moab::Interface &moabFaces;
+    EntityHandle &meshsetFaces;
+
     const double &aLpha;
 
     OpJacobian(int tag, const std::string field_name,
@@ -437,13 +447,14 @@ struct SurfaceSlidingConstrains : public GenericSliding {
                boost::shared_ptr<VectorDouble> &results_ptr,
                boost::shared_ptr<MatrixDouble> &jacobian_ptr,
                DriverElementOrientation &orientation, bool evaluate_jacobian,
-               const double &alpha)
+               const double &alpha, moab::Interface &moab_faces,
+               EntityHandle &meshset_faces)
         : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           tAg(tag), activeVariablesPtr(active_variables_ptr),
           resultsPtr(results_ptr), jacobianPtr(jacobian_ptr),
           oRientation(orientation), evaluateJacobian(evaluate_jacobian),
-          aLpha(alpha) {}
+          aLpha(alpha), moabFaces(moab_faces), meshsetFaces(meshset_faces) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data) {
@@ -462,6 +473,11 @@ struct SurfaceSlidingConstrains : public GenericSliding {
       ublas::vector<adouble> position_dofs(9);
       for (int dd = 0; dd != 9; ++dd) {
         position_dofs[dd] <<= (*activeVariablesPtr)[3 + dd];
+      }
+
+      ublas::vector<double> position_dofs_test(9);
+      for (int dd = 0; dd != 9; ++dd) {
+        position_dofs_test[dd] = (*activeVariablesPtr)[3 + dd];
       }
 
       FTensor::Index<'i', 3> i;
@@ -487,12 +503,26 @@ struct SurfaceSlidingConstrains : public GenericSliding {
       FTensor::Tensor1<adouble, 3> t_normal;
       FTensor::Tensor1<adouble, 3> t_delta;
 
+      FTensor::Tensor1<double, 3> t_normal_test;
+      FTensor::Tensor1<double, 3> t_position_ksi_test;
+      FTensor::Tensor1<double, 3> t_position_eta_test;
+
       ublas::vector<adouble> c_vec(3);
       ublas::vector<adouble> f_vec(9);
       c_vec.clear();
       f_vec.clear();
 
       auto t_coord_ref = getFTensor1CoordsAtGaussPts();
+
+      Tag th_face_normal;
+      constexpr std::array<double, 3> def_vals = {0, 0, 0};
+      const EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
+      if (!evaluateJacobian) {
+        CHKERR moabFaces.add_entities(meshsetFaces, &ent, 1);
+        CHKERR moabFaces.tag_get_handle(
+            "FACE_NORMAL", 3, MB_TYPE_DOUBLE, th_face_normal,
+            MB_TAG_CREAT | MB_TAG_SPARSE, def_vals.data());
+      }
 
       for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -505,19 +535,42 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         t_position_eta(i) = 0;
         lambda = 0;
 
+        FTensor::Tensor1<double *, 3> t_position_dofs_test(
+            &position_dofs_test[0], &position_dofs_test[1], &position_dofs_test[2], 3);
+
+        t_position_ksi_test(i) = 0;
+        t_position_eta_test(i) = 0;
+
         for (int bb = 0; bb != nb_base_functions; ++bb) {
           t_position(i) += t_base1 * t_position_dofs(i);
           t_position_ksi(i) += t_diff_base(N0) * t_position_dofs(i);
           t_position_eta(i) += t_diff_base(N1) * t_position_dofs(i);
+
+          t_position_ksi_test(i) += t_diff_base(N0) * t_position_dofs_test(i);
+          t_position_eta_test(i) += t_diff_base(N1) * t_position_dofs_test(i);
+
           lambda += t_base1 * t_lambda_dof;
           ++t_base1;
           ++t_position_dofs;
+          ++t_position_dofs_test;
           ++t_lambda_dof;
           ++t_diff_base;
         }
 
         t_delta(i) = t_position(i) - t_coord_ref(i);
         t_normal(k) = FTensor::cross(t_position_ksi(i), t_position_eta(j), k);
+
+        t_normal_test(k) = FTensor::cross(t_position_ksi_test(i),
+                                               t_position_eta_test(j), k);
+        double length = sqrt(t_normal_test(i) * t_normal_test(i));
+
+        t_normal_test(i) /= length;
+        t_normal_test(i) *= eo;
+
+        if (!evaluateJacobian && gg == 0) {
+          CHKERR moabFaces.tag_set_data(th_face_normal, &ent, 1,
+                                        &t_normal_test(0));
+        }
 
         double w = getGaussPts()(2, gg) * 0.5 * aLpha;
         adouble val;
@@ -541,27 +594,25 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         ++t_coord_ref;
       }
 
-      for (int rr = 0; rr != 3; ++rr) 
+      for (int rr = 0; rr != 3; ++rr)
         c_vec[rr] >>= (*resultsPtr)[rr];
-      
-      for (int rr = 0; rr != 9; ++rr) 
+
+      for (int rr = 0; rr != 9; ++rr)
         f_vec(rr) >>= (*resultsPtr)[3 + rr];
-      
 
       trace_off();
 
       if (evaluateJacobian) {
         double *jac_ptr[3 + 9];
-        for (int rr = 0; rr != 3 + 9; ++rr) 
+        for (int rr = 0; rr != 3 + 9; ++rr)
           jac_ptr[rr] = &(*jacobianPtr)(rr, 0);
-        
+
         // play recorder for jacobians
         int r =
             ::jacobian(tAg, 3 + 9, 3 + 9, &(*activeVariablesPtr)[0], jac_ptr);
-        if (r < 0) 
+        if (r < 0)
           SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
                   "ADOL-C function evaluation with error");
-        
       }
 
       MoFEMFunctionReturn(0);
@@ -571,6 +622,8 @@ struct SurfaceSlidingConstrains : public GenericSliding {
   MoFEMErrorCode setOperators(int tag,
                               const std::string lagrange_multipliers_field_name,
                               const std::string material_field_name,
+                              moab::Interface &moab_faces,
+                              EntityHandle &meshset_faces,
                               const double *alpha = nullptr) {
     MoFEMFunctionBegin;
 
@@ -591,7 +644,8 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         material_field_name, active_variables_ptr));
     feRhs.getOpPtrVector().push_back(new OpJacobian(
         tag, lagrange_multipliers_field_name, active_variables_ptr, results_ptr,
-        jacobian_ptr, crackFrontOrientation, false, aLpha));
+        jacobian_ptr, crackFrontOrientation, false, aLpha, moab_faces,
+        meshset_faces));
     feRhs.getOpPtrVector().push_back(
         new OpAssembleRhs<3, 9>(lagrange_multipliers_field_name, results_ptr));
     feRhs.getOpPtrVector().push_back(
@@ -605,7 +659,8 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         material_field_name, active_variables_ptr));
     feLhs.getOpPtrVector().push_back(new OpJacobian(
         tag, lagrange_multipliers_field_name, active_variables_ptr, results_ptr,
-        jacobian_ptr, crackFrontOrientation, true, aLpha));
+        jacobian_ptr, crackFrontOrientation, true, aLpha, moab_faces,
+        meshset_faces));
     feLhs.getOpPtrVector().push_back(new OpAssembleLhs<3, 9>(
         lagrange_multipliers_field_name, material_field_name, jacobian_ptr));
     feLhs.getOpPtrVector().push_back(new OpAssembleLhs<3, 9>(
@@ -616,10 +671,10 @@ struct SurfaceSlidingConstrains : public GenericSliding {
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode
-  setOperatorsConstrainOnly(int tag,
-                            const std::string lagrange_multipliers_field_name,
-                            const std::string material_field_name) {
+  MoFEMErrorCode setOperatorsConstrainOnly(
+      int tag, const std::string lagrange_multipliers_field_name,
+      const std::string material_field_name, moab::Interface &moab_faces,
+      EntityHandle &meshset_faces) {
     MoFEMFunctionBegin;
 
     boost::shared_ptr<VectorDouble> active_variables_ptr(
@@ -636,7 +691,8 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         material_field_name, active_variables_ptr));
     feLhs.getOpPtrVector().push_back(new OpJacobian(
         tag, lagrange_multipliers_field_name, active_variables_ptr, results_ptr,
-        jacobian_ptr, crackFrontOrientation, true, aLpha));
+        jacobian_ptr, crackFrontOrientation, true, aLpha, moab_faces,
+        meshset_faces));
     feLhs.getOpPtrVector().push_back(new OpAssembleLhs<3, 9>(
         lagrange_multipliers_field_name, material_field_name, jacobian_ptr));
 
@@ -722,7 +778,10 @@ struct EdgeSlidingConstrains : public GenericSliding {
     }
 
     static MoFEMErrorCode setTags(moab::Interface &moab, Range edges,
-                                  Range tris, bool number_pathes = true) {
+                                  Range tris,  
+                                  boost::shared_ptr<SurfaceSlidingConstrains::DriverElementOrientation> contact_orientation, 
+                                  MoFEM::Interface &m_field,
+                                  bool number_pathes = true) {
       MoFEMFunctionBegin;
       Tag th0, th1, th2, th3;
       CHKERR createTag(moab, th0, th1, th2, th3);
@@ -762,6 +821,13 @@ struct EdgeSlidingConstrains : public GenericSliding {
             int orientation;
             CHKERR moab.tag_get_data(th3, &face, 1, &orientation);
             if (orientation == -1) {
+              t_n(i) *= -1;
+            }
+            // FIXME: TAG IS EMPTY!
+            CHKERR contact_orientation->getElementOrientation(m_field, face);
+
+            int eo = contact_orientation->elementOrientation;
+            if (eo == -1) {
               t_n(i) *= -1;
             }
             ++ff;
@@ -1084,16 +1150,16 @@ struct EdgeSlidingConstrains : public GenericSliding {
     }
   };
 
-  MoFEMErrorCode setOperators(int tag, Range edges, Range faces,
-                              const std::string lagrange_multipliers_field_name,
-                              const std::string material_field_name) {
-    MoFEMFunctionBegin;
-    CHKERR EdgeSlidingConstrains::CalculateEdgeBase::setTags(mField.get_moab(),
-                                                             edges, faces);
-    CHKERR setOperators(tag, lagrange_multipliers_field_name,
-                        material_field_name);
-    MoFEMFunctionReturn(0);
-  }
+  // MoFEMErrorCode setOperators(int tag, Range edges, Range faces,
+  //                             const std::string lagrange_multipliers_field_name,
+  //                             const std::string material_field_name) {
+  //   MoFEMFunctionBegin;
+  //   CHKERR EdgeSlidingConstrains::CalculateEdgeBase::setTags(mField.get_moab(),
+  //                                                            edges, faces);
+  //   CHKERR setOperators(tag, lagrange_multipliers_field_name,
+  //                       material_field_name);
+  //   MoFEMFunctionReturn(0);
+  // }
 
   MoFEMErrorCode setOperators(int tag,
                               const std::string lagrange_multipliers_field_name,
@@ -1143,18 +1209,18 @@ struct EdgeSlidingConstrains : public GenericSliding {
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode
-  setOperatorsConstrainOnly(int tag, Range edges, Range faces,
-                            const std::string lagrange_multipliers_field_name,
-                            const std::string material_field_name) {
-    MoFEMFunctionBegin;
+  // MoFEMErrorCode
+  // setOperatorsConstrainOnly(int tag, Range edges, Range faces,
+  //                           const std::string lagrange_multipliers_field_name,
+  //                           const std::string material_field_name) {
+  //   MoFEMFunctionBegin;
 
-    CHKERR EdgeSlidingConstrains::CalculateEdgeBase::setTags(mField.get_moab(),
-                                                             edges, faces);
-    CHKERR setOperatorsConstrainOnly(tag, lagrange_multipliers_field_name,
-                                     material_field_name);
-    MoFEMFunctionReturn(0);
-  }
+  //   CHKERR EdgeSlidingConstrains::CalculateEdgeBase::setTags(mField.get_moab(),
+  //                                                            edges, faces);
+  //   CHKERR setOperatorsConstrainOnly(tag, lagrange_multipliers_field_name,
+  //                                    material_field_name);
+  //   MoFEMFunctionReturn(0);
+  // }
 
   MoFEMErrorCode
   setOperatorsConstrainOnly(int tag,
