@@ -374,7 +374,7 @@ style, it improves code readability, and people understand each other better.
 \subsection basci_integration_main Main function
 
 The main function is relatively short and looks the same for each program in this set of tutorials:
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp main
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp main
 
 You can use the above snippet to start your code. The main function is responsible for kick-starting the job, and it has following stages:
 
@@ -414,10 +414,10 @@ indicate user what and where the problem is.
 \subsection integration_example_class Example class
 
 Each lesson in the tutorial series has an example class which has a very similar structure to the following:
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Example
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Example 
 
 Function Example::runProblem called by the main program has the following code:
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Run all
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Run all
 
 Note that every function starts and ends with error handling
 \code
@@ -431,7 +431,7 @@ This enables stacking functions calls in case of problems. We use function stack
 
 Before calculation can be performed, some bookkeeping has to be done to manage complexities related to the finite element method. MoFEM does most of this boring job "in the back-end" and only needs to be provided with initial information:
 
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Set up problem
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Set up problem
 
 We use MoFEM::Simple interface to read command line options, load mesh file, add a field and set its order. Note that the field is added by function `addDomainField` and is defined by name, space, approximation base and rank. To approximate density, we choose space `H1` of square-integrable functions with square-integrable derivatives and use a recipe from \cite NME:NME847 to construct base functions, while the rank (number of coefficients) of the base is one since density is a scalar field. The order of approximation is set to one, i.e. linear base functions are used. 
 
@@ -443,10 +443,10 @@ be used later by other parts of the code. You will find common data in all
 examples for the following lessons, and other parts of MoFEM implementation. 
 
 Common data structure is defined as follows:
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Common data
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Common data
 
 while an instance of Example::CommonData class is created by the following method:
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Create common data
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Create common data
 
 where memory for Example::CommonData is allocated and handled by a <a
 href="https://www.boost.org/doc/libs/1_61_0/libs/smart_ptr/shared_ptr.htm">shared
@@ -479,7 +479,7 @@ work with distributed meshes.
 
 \subsubsection integration_bc Setting density field
 
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Set density distribution
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Set density distribution
 
 For simplicity, density is set to unity at each node of the mesh, which represents a uniform density field. However, an arbitrary density field can be set using a small modification. Namely, function `set_density` in Example::setFieldValues gets coordinates as its arguments, thus you could set any density distribution you would like. Note that the MoFEM Core function MoFEM::FieldBlas::setVertexDofs is doing the hard work of setting field values to the mesh nodes. This function iterates over all nodes, gets each node's coordinates and calls the function provided by the user, i.e. `set_density`.
 
@@ -521,7 +521,7 @@ On each element, first operator MoFEM::OpCalculateScalarFieldValues is used to c
 
 To compute moments of inertia in MoFEM, you can use the MoFEM::PipelineManager interface, which provides pipelines where the discussed above operators can be pushed. More precisely, MoFEM::PipelineManager has several streams of pipelines to evaluate matrices and vectors for a more general class of problems, and these pipelines can be executed on domain or boundary (skin) elements. In the present tutorial we evaluate a vector by iterating domain elements, see \ref basic_l1_figure_8 "Figure 8", red box on the left. Operators are pushed to the pipeline by executing the following code:
 
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Push operators to pipeline
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Push operators to pipeline
 
 In the snippet above, you can see four operators pushed into the pipeline, as described in \ref
 basic_l1_figure_8 "Figure 8". Operators are pushed to `pipeline_mng->getOpDomainRhsPipeline`, which is a pipeline to calculate vectors on domain finite elements. Note that operators are executed on each finite element in the order that they are pushed to the pipeline.
@@ -537,17 +537,17 @@ Since we use a piecewise linear polynomial to approximate density, i.e. \f$p=1\f
 
 Once the problem is set up and user operators are pushed to an appropriate pipeline, the calculation can be triggered in the function
 
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Integrate
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Integrate
 
 in particular, by MoFEM::PipelineManager::loopFiniteElements. This is where all computations are happening, while the rest of the code is declaration and definition of the problem. The snippet above shows as well that vector of moments, i.e. Example::CommonData::petscVec, is zeroed before the loop over all elements is performed, and finally PETSCc functions are called to appropriately finalise assembly of an MPI Vector.
 
 Operator Example::OpSecond is defined as follows:
 
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Operator
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Operator
 
 Operators are derived classes, where essential part is an overloaded function Example::OpSecond::doWork, which is called by MoFEM::PipelineManager::loopFiniteElements on each finite element:
 
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp SecondOp
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp SecondOp
 
 We will discuss this operator since it is the most complex one among all three operators. We will dissect this code to understand it better. We start by getting a number of integration points, which depends on the previously set integration rule. In the following lines, three tensors are declared: two rank zero (scalar) tensors are set to integration weights and density values, respectively, and a tensor of rank one (vector) is set to coordinates of integration points. Note that we use here FTensor library, providing special tools to simplify data storage and operations with tensors, you can find more details <a href="http://mofem.eng.gla.ac.uk/mofem/html/group__ftensor.html">here</a>. In particular, three tensors declared above initially point to the respective values at the first integration point, however, subsequently they will iterate through all the integration points of the element using the following code:
 \code
@@ -598,7 +598,7 @@ In particular, the code in this tutorial is tested by executing
 and code is validated in function Example::checkResults.
 
 In function Example::checkResults test is run for a well-known solution for mesh in `cube.h5m`. Test like this verifies if mass (or volume in case of unit density), first moment and the second moment are calculated correctly. Function testing the code is as follows
-\snippet users_modules/basic_finite_elements/lessons/integration_moment_of_inertia.cpp Test example
+\snippet users_modules/basic_finite_elements/lessons/integration.cpp Test example
 
 You can see that at line
 \code
@@ -646,6 +646,6 @@ launch (in VS Code) configuration for LLDB and example from this lesson
 
 \section basci_integration_code Code
 
-The full source code is available here \ref integration_moment_of_inertia.cpp .
+The full source code is available here \ref integration.cpp .
 
 */
