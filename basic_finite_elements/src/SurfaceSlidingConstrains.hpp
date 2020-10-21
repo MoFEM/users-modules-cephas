@@ -730,7 +730,7 @@ struct EdgeSlidingConstrains : public GenericSliding {
         bool number_pathes = true,
         boost::shared_ptr<SurfaceSlidingConstrains::DriverElementOrientation>
             surface_orientation = nullptr,
-        MoFEM::Interface *m_field = nullptr) {
+        MoFEM::Interface *m_field_ptr = nullptr) {
       MoFEMFunctionBegin;
       Tag th0, th1, th2, th3;
       CHKERR createTag(moab, th0, th1, th2, th3);
@@ -773,8 +773,9 @@ struct EdgeSlidingConstrains : public GenericSliding {
             if (orientation == -1) {
               t_n(i) *= -1;
             }
-            if (surface_orientation && m_field) {
-              CHKERR surface_orientation->getElementOrientation(*m_field, face);
+            if (surface_orientation && m_field_ptr) {
+              CHKERR surface_orientation->getElementOrientation(*m_field_ptr,
+                                                                face);
               int eo = surface_orientation->elementOrientation;
               if (eo == -1) {
                 t_n(i) *= -1;
