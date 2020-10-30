@@ -24,13 +24,13 @@ if(EXTERNAL_MODULES_BUILD)
   find_package(
      UM REQUIRED HINTS ${MOFEM_DIR} ${PROJECT_BINARY_DIR} $ENV{MOFEM_DIR})  
 
-  if(UM_INSTALL_BREFIX)
+  if(UM_INSTALL_PREFIX)
     include(
-      ${UM_INSTALL_BREFIX}/lib/basic_finite_elements/users_modules_targets.cmake)
-  else(UM_INSTALL_BREFIX)
+      ${UM_INSTALL_PREFIX}/lib/basic_finite_elements/users_modules_targets.cmake)
+  else(UM_INSTALL_PREFIX)
     include(
       ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
-  endif(UM_INSTALL_BREFIX)
+  endif(UM_INSTALL_PREFIX)
 
 else(EXTERNAL_MODULES_BUILD)
 
