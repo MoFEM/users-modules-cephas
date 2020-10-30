@@ -45,12 +45,12 @@ Find \f$ u \in \bf{R} \f$ such that
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
 \f$ \partial { \Omega} \f$ is the boundary of the domain.
-Additionally, \f$ f \f$ is the body force and \f$ {\bf x} \f$ is the position in
+Additionally, \f$ f \f$ is the source function and \f$ {\bf x} \f$ is the position in
 \f$ {x-y} \f$ space of a point in the domain.
 
-Essentially, this is a continuous problem and there is analytical solution for
-it. However, as a first practice with MoFEM, we are solving it numerically using
-finite element approach. This is done by subdividing the domain into multiple
+For a Poisson problem, on rectangle domains, homogenous boundary conditions and source
+function \f$ f \f$, the analytical solution can be found. However, as the first practice with MoFEM, we are solving it numerically using
+a finite element approach. This is done by subdividing the domain into multiple
 elements, building piece-wise approximations, and solving a discrete problem.
 
 As you may have already learned from the basic finite element method, in order

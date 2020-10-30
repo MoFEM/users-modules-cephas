@@ -1,4 +1,4 @@
-/*! \page elastic_dynamics Nonlinear Elasticity (Usage example)
+/*! \page elastic_dynamics Nonlinear Elasticity
 
 This is simple example how to run a simple problem for linear and non-linear dynamics. Is is
 directed for beginners starting to work with MoFEM.

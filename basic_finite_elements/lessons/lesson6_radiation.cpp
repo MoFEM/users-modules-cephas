@@ -59,7 +59,7 @@ private:
 
   static int integrationRule(int, int, int p_data) { return 2 * p_data; };
 
-  MoFEMErrorCode setUP();
+  MoFEMErrorCode setupProblem();
   MoFEMErrorCode createCommonData();
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
@@ -111,7 +111,7 @@ private:
 
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
-  CHKERR setUP();
+  CHKERR setupProblem();
   CHKERR createCommonData();
   CHKERR bC();
   CHKERR OPs();
@@ -122,7 +122,7 @@ MoFEMErrorCode Example::runProblem() {
 }
 
 //! [Set up problem]
-MoFEMErrorCode Example::setUP() {
+MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field

@@ -486,7 +486,7 @@ block 6 attribute count 4
 block 6 attribute index 1 0.00230	
 block 6 attribute index 2 0.
 block 6 attribute index 3 0.
-block 6 attribute index 4 0
+block 6 attribute index 4 -10
 
 create Displacement 1 on surface 692 691 628 627 624 698 693 615 625 630 626  dof 1 2 3 fix 0
 
@@ -498,4 +498,5 @@ mesh volume all
 
 #block 7 tet all        
 #block 7 element type tetra10  
+
 

@@ -489,7 +489,7 @@ int main(int argc, char *argv[]) {
       MoFEMErrorCode potsProcessLoadPath() {
         MoFEMFunctionBeginHot;
         boost::shared_ptr<NumeredDofEntity_multiIndex> numered_dofs_rows =
-            problemPtr->getNumeredRowDofs();
+            problemPtr->getNumeredRowDofsPtr();
         Range::iterator nit = nodeSet.begin();
         for (; nit != nodeSet.end(); nit++) {
           NumeredDofEntityByEnt::iterator dit, hi_dit;
