@@ -158,8 +158,6 @@ struct PostProcHookStress
     if (data.getFieldData().size() == 0)
       MoFEMFunctionReturnHot(0);
 
-    // const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0];
-
     int id;
     double lambda, mu;
     CHKERR getMatParameters(&lambda, &mu, &id);
@@ -186,45 +184,24 @@ struct PostProcHookStress
     CHKERR postProcMesh.tag_get_handle("STRESS", 9, MB_TYPE_DOUBLE, th_stress,
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
-    Tag th_prin_stress_vect1, th_prin_stress_vect2, th_prin_stress_vect3;
-    CHKERR postProcMesh.tag_get_handle("S1", 3, MB_TYPE_DOUBLE,
-                                       th_prin_stress_vect1,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-    CHKERR postProcMesh.tag_get_handle("S2", 3, MB_TYPE_DOUBLE,
-                                       th_prin_stress_vect2,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-    CHKERR postProcMesh.tag_get_handle("S3", 3, MB_TYPE_DOUBLE,
-                                       th_prin_stress_vect3,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-
-    Tag th_prin_stress_vals;
-    CHKERR postProcMesh.tag_get_handle("PRINCIPAL_STRESS", 3, MB_TYPE_DOUBLE,
-                                       th_prin_stress_vals,
-                                       MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-
     Tag th_id;
     int def_block_id = -1;
     CHKERR postProcMesh.tag_get_handle("BLOCK_ID", 1, MB_TYPE_INTEGER, th_id,
                                        MB_TAG_CREAT | MB_TAG_SPARSE,
                                        &def_block_id);
     Range::iterator tit = commonData.tEts.begin();
-    for (; tit != commonData.tEts.end(); tit++) {
+    for (; tit != commonData.tEts.end(); tit++) 
       CHKERR postProcMesh.tag_set_data(th_id, &*tit, 1, &id);
-    }
 
     VectorDouble strain;
     VectorDouble stress;
     MatrixDouble Stress;
 
-    // Combine eigenvalues and vectors to create principal stress vector
-    MatrixDouble prin_stress_vect(3, 3);
-    VectorDouble prin_vals_vect(3);
-
     int nb_gauss_pts = data.getN().size1();
-    if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) {
+    if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) 
       SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
-    }
-    for (int gg = 0; gg < nb_gauss_pts; gg++) {
+
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
       strain.resize(6);
       strain[0] = (commonData.gradMap[rowFieldName][gg])(0, 0);
@@ -256,54 +233,6 @@ struct PostProcHookStress
 
       CHKERR postProcMesh.tag_set_data(th_stress, &mapGaussPts[gg], 1,
                                        &Stress(0, 0));
-
-      MatrixDouble eigen_vectors = Stress;
-      VectorDouble eigen_values(3);
-
-      // LAPACK - eigenvalues and vectors. Applied twice for initial creates
-      // memory space
-      int n = 3, lda = 3, info, lwork = -1;
-      double wkopt;
-      info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
-                          &(eigen_values.data()[0]), &wkopt, lwork);
-      if (info != 0)
-        SETERRQ1(PETSC_COMM_SELF, 1,
-                 "is something wrong with lapack_dsyev info = %d", info);
-      lwork = (int)wkopt;
-      double work[lwork];
-      info = lapack_dsyev('V', 'U', n, &(eigen_vectors.data()[0]), lda,
-                          &(eigen_values.data()[0]), work, lwork);
-      if (info != 0)
-        SETERRQ1(PETSC_COMM_SELF, 1,
-                 "is something wrong with lapack_dsyev info = %d", info);
-
-      map<double, int> eigen_sort;
-      eigen_sort[eigen_values[0]] = 0;
-      eigen_sort[eigen_values[1]] = 1;
-      eigen_sort[eigen_values[2]] = 2;
-
-      prin_stress_vect.clear();
-      prin_vals_vect.clear();
-
-      int ii = 0;
-      for (map<double, int>::reverse_iterator mit = eigen_sort.rbegin();
-           mit != eigen_sort.rend(); mit++) {
-        prin_vals_vect[ii] = eigen_values[mit->second];
-        for (int dd = 0; dd != 3; dd++) {
-          prin_stress_vect(ii, dd) = eigen_vectors.data()[3 * mit->second + dd];
-        }
-        ii++;
-      }
-
-      // Tag principle stress vectors 1, 2, 3
-      CHKERR postProcMesh.tag_set_data(th_prin_stress_vect1, &mapGaussPts[gg],
-                                       1, &prin_stress_vect(0, 0));
-      CHKERR postProcMesh.tag_set_data(th_prin_stress_vect2, &mapGaussPts[gg],
-                                       1, &prin_stress_vect(1, 0));
-      CHKERR postProcMesh.tag_set_data(th_prin_stress_vect3, &mapGaussPts[gg],
-                                       1, &prin_stress_vect(2, 0));
-      CHKERR postProcMesh.tag_set_data(th_prin_stress_vals, &mapGaussPts[gg], 1,
-                                       &prin_vals_vect[0]);
     }
 
     MoFEMFunctionReturn(0);

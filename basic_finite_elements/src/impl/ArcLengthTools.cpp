@@ -85,7 +85,7 @@ ArcLengthCtx::ArcLengthCtx(MoFEM::Interface &m_field,
     const Problem *problem_ptr;
     CHKERR m_field.get_problem(problem_name, &problem_ptr);
     boost::shared_ptr<NumeredDofEntity_multiIndex> dofs_ptr_no_const =
-        problem_ptr->getNumeredRowDofs();
+        problem_ptr->getNumeredRowDofsPtr();
     auto bit_number = m_field.get_field_bit_number(field_name);
     auto dIt = dofs_ptr_no_const->get<Unique_mi_tag>().lower_bound(
         FieldEntity::getLoBitNumberUId(bit_number));

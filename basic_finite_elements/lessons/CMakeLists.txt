@@ -15,28 +15,12 @@ include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/lessons)
 include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/lessons/src)
 
 bfe_build_and_install(
-  basic_moment_of_inertia
-  ${CMAKE_CURRENT_SOURCE_DIR}/lesson1_moment_of_inertia.cpp)
-
-bfe_build_and_install(
-    basic_approx
-    ${CMAKE_CURRENT_SOURCE_DIR}/lesson2_approximaton.cpp)  
-
-bfe_build_and_install(
     basic_poisson
     ${CMAKE_CURRENT_SOURCE_DIR}/lesson3_poisson.cpp)  
 
 bfe_build_and_install(
       basic_radiation
       ${CMAKE_CURRENT_SOURCE_DIR}/lesson6_radiation.cpp)    
-
-bfe_build_and_install(
-  basic_hemholtz
-  ${CMAKE_CURRENT_SOURCE_DIR}/lesson5_helmholtz.cpp)
-
-bfe_build_and_install(
-  basic_elastic
-  ${CMAKE_CURRENT_SOURCE_DIR}/lesson4_elastic.cpp)
 
 bfe_build_and_install(
   basic_plastic
@@ -54,8 +38,3 @@ set(permissions_default
 bfe_copy_and_install(".petscrc" "${permissions_default}")
 bfe_copy_and_install("*.h5m" "${permissions_default}")
 
-add_test(
-  basic_moment_of_inertia
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
-  ${CMAKE_CURRENT_BINARY_DIR}/basic_moment_of_inertia
-  -file_name ${CMAKE_CURRENT_BINARY_DIR}/cube.h5m -test)
