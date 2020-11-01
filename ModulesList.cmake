@@ -41,10 +41,6 @@ else(EXTERNAL_MODULES_BUILD)
 
   # Build basic finite element library
   include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
-  # Download some known modules (Obsolete). It is used to resting on the
-  # developemnt server to automatically clone some modules from git repsitort
-  # to root source directory.
-  include(cmake/WithModules.cmake)
   # Find modules in a users modules source directory. If file
   # InstalledAddModule.cmake if found in the directory, it is recognised that
   # director is module and name of directory become module name.
