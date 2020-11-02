@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-# Load precompile headers to the speed-up compilation process.
+# Load precompiled headers to the speed-up compilation process.
 include(cmake/PrecompileHeaders.cmake)
 
 # Get user module commit id and pass to cpp for logging
