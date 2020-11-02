@@ -28,7 +28,7 @@ set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 option(NOT_PRECOMPILED_HEADRES "Do not use procompiled headers" OFF)
 option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
 option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
-option(MOFEM_UM_BUILD_TESTS "If is ON enbale testing" ON)
+option(MOFEM_UM_BUILD_TESTS "If is ON enable testing" ON)
 
 # set MPI runtime flags when not set form command line but set in core library
 if(NOT MPI_RUN_FLAGS)
