@@ -43,7 +43,7 @@ else(EXTERNAL_MODULES_BUILD)
   include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
   # Find modules in a users modules source directory. If file
   # InstalledAddModule.cmake if found in the directory, it is recognised that
-  # director is module and name of directory become module name.
+  # directory is module pat and name of directory become module name.
   file(
     GLOB_RECURSE INSTLLED_MODULES
     FOLLOW_SYMLINKS
