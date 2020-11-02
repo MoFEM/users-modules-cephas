@@ -118,25 +118,27 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
     ".*/+" ""
     MODULE_NAME ${MODULE_DIRECTORY}
   )
-  message(STATUS "Add custom targets for ${MODULE_NAME}")
-  add_custom_target(
-    update_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} pull
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Update module ... ${MODULE_NAME}" VERBATIM)
-  add_dependencies(update_users_modules update_${MODULE_NAME})
-  add_custom_target(
-    checkout_develop_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} checkout develop
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Checkout develop baranch for module ${MODULE_NAME}" VERBATIM)
-  add_dependencies(checkout_develop checkout_develop_${MODULE_NAME})
-  add_custom_target(
-    checkout_master_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} checkout master
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Checkout master baranch for module ${MODULE_NAME}" VERBATIM)
-  add_dependencies(checkout_master checkout_master_${MODULE_NAME})
+  if(NOT ${MODULE_NAME} MATCHES "basic_finite_elements")
+    message(STATUS "Add custom targets for ${c}")
+    add_custom_target(
+      update_${MODULE_NAME}
+      COMMAND ${GIT_EXECUTABLE} pull
+      WORKING_DIRECTORY ${MODULE_DIRECTORY}
+      COMMENT "Update module ... ${MODULE_NAME}" VERBATIM)
+    add_dependencies(update_users_modules update_${MODULE_NAME})
+    add_custom_target(
+      checkout_develop_${MODULE_NAME}
+      COMMAND ${GIT_EXECUTABLE} checkout develop
+      WORKING_DIRECTORY ${MODULE_DIRECTORY}
+      COMMENT "Checkout develop baranch for module ${MODULE_NAME}" VERBATIM)
+    add_dependencies(checkout_develop checkout_develop_${MODULE_NAME})
+    add_custom_target(
+      checkout_master_${MODULE_NAME}
+      COMMAND ${GIT_EXECUTABLE} checkout master
+      WORKING_DIRECTORY ${MODULE_DIRECTORY}
+      COMMENT "Checkout master baranch for module ${MODULE_NAME}" VERBATIM)
+    add_dependencies(checkout_master checkout_master_${MODULE_NAME})
+  endif(NOT ${MODULE_NAME} MATCHES "basic_finite_elements")
   # include module
   include(${LOOP_MODULE})
 endforeach(LOOP_MODULE)
