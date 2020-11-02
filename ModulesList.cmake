@@ -119,7 +119,7 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
     MODULE_NAME ${MODULE_DIRECTORY}
   )
   if(NOT ${MODULE_NAME} MATCHES "basic_finite_elements")
-    message(STATUS "Add custom targets for ${c}")
+    message(STATUS "Add custom targets for ${MODULE_NAME}")
     add_custom_target(
       update_${MODULE_NAME}
       COMMAND ${GIT_EXECUTABLE} pull
