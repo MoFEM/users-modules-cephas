@@ -17,7 +17,7 @@ project(MoFEM-UserModules C CXX)
 
 # Set fallback version. Fallback version is version of users moudles which is used
 # as default version if version from the git tags can not be extracted. For exammple 
-# that is a keys when somone install mofem from tarball.
+# that is a case when somone install mofem from tarball.
 set(UM_FALLBACK_VERSION "0.10.1" CACHE STRING "Fallback version" FORCE)
 message(STATUS "Falback vecrsion v${UM_FALLBACK_VERSION}")
 
