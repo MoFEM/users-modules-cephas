@@ -118,8 +118,11 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
     ".*/+" ""
     MODULE_NAME ${MODULE_DIRECTORY}
   )
-  if(NOT ${MODULE_NAME} MATCHES "basic_finite_elements")
-    message(STATUS "Add custom targets for ${MODULE_NAME}")
+  if(
+    NOT ${MODULE_NAME} MATCHES "basic_finite_elements" 
+    AND 
+    NOT ${MODULE_NAME} MATCHES "tutorials")
+    #message(STATUS "Add custom targets for ${MODULE_NAME}")
     add_custom_target(
       update_${MODULE_NAME}
       COMMAND ${GIT_EXECUTABLE} pull
@@ -138,7 +141,10 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
       WORKING_DIRECTORY ${MODULE_DIRECTORY}
       COMMENT "Checkout master baranch for module ${MODULE_NAME}" VERBATIM)
     add_dependencies(checkout_master checkout_master_${MODULE_NAME})
-  endif(NOT ${MODULE_NAME} MATCHES "basic_finite_elements")
+  endif(
+    NOT ${MODULE_NAME} MATCHES "basic_finite_elements" 
+    AND
+    NOT ${MODULE_NAME} MATCHES "tutorials")
   # include module
   include(${LOOP_MODULE})
 endforeach(LOOP_MODULE)
