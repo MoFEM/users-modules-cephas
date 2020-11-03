@@ -153,36 +153,36 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       auto logC =
           EigenProjection<double, double, DIM, DIM>::getMat(eig, eigen_vec, f);
 
-      // T(i, j) = t_D(i, j, k, l) * logC(k, l);
+      T(i, j) = t_D(i, j, k, l) * logC(k, l);
 
-      // auto dlogC_dC =
+      auto dlogC_dC =
 
-      //     EigenProjection<double, double, DIM>::getDiffMat(eig, eigen_vec, f,
-      //                                                      d_f);
-      // S(k, l) = T(i, j) * dlogC_dC(i, j, k, l);
-      // P(i, l) = F(i, k) * S(k, l);
+          EigenProjection<double, double, DIM, DIM>::getDiffMat(eig, eigen_vec,
+                                                                f, d_f);
+      S(k, l) = T(i, j) * dlogC_dC(i, j, k, l);
+      P(i, l) = F(i, k) * S(k, l);
 
-      // if (IS_LHS) {
-      //   FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
-      //   dC_dF(i, j, k, l) = (t_kd(i, l) * F(k, j)) + (t_kd(j, l) * F(k, i));
+      if (IS_LHS) {
+        FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
+        dC_dF(i, j, k, l) = (t_kd(i, l) * F(k, j)) + (t_kd(j, l) * F(k, i));
 
-      //   // DIM does not work? use 3 for now
-      //   auto TL =
-      //       EigenProjection<double, double, 3>::getDiffDiffMat<decltype(T)>(
-      //           eig, eigen_vec, f, d_f, dd_f, T);
+        // DIM does not work? use 2 for now
+        auto TL =
+            EigenProjection<double, double, 2, 2>::getDiffDiffMat<decltype(T)>(
+                eig, eigen_vec, f, d_f, dd_f, T);
 
-      //   FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
-      //   P_D_P_plus_TL(i, j, k, l) =
-      //       TL(i, j, k, l) +
-      //       (dlogC_dC(i, j, o, p) * t_D(o, p, m, n)) * dlogC_dC(m, n, k, l);
+        FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
+        P_D_P_plus_TL(i, j, k, l) =
+            TL(i, j, k, l) +
+            (dlogC_dC(i, j, o, p) * t_D(o, p, m, n)) * dlogC_dC(m, n, k, l);
 
-      //   // auto P4 = get_tensor4_from_ddg(P_D_P_plus_TL);
-      //   dP_dF(i, j, m, n) = t_kd(i, m) * t_kd(k, n) * S(k, j);
-      //   dP_dF(i, j, m, n) +=
-      //       F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
+        //   // auto P4 = get_tensor4_from_ddg(P_D_P_plus_TL);
+        dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * S(k, j));
+        dP_dF(i, j, m, n) +=
+            F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
 
-      //   ++dP_dF;
-      // }
+        ++dP_dF;
+      }
 
       t_stress(i, j) = P(i, j);
       ++t_grad;
@@ -412,7 +412,7 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpHenckyStressAndTangent<SPACE_DIM, false>(
           "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", matStressPtr)); //FIXME:
+      new OpInternalForce("U", matStressPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
                                                         matAccelerationPtr));
