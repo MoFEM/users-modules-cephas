@@ -417,13 +417,13 @@ struct SimpleContactProblem {
     boost::shared_ptr<VectorDouble> gapPtr;
     boost::shared_ptr<VectorDouble> lagGapProdPtr;
 
-    boost::shared_ptr<VectorDouble> tangentOneVectorSlavePtr;
-    boost::shared_ptr<VectorDouble> tangentTwoVectorSlavePtr;
-    boost::shared_ptr<VectorDouble> tangentOneVectorMasterPtr;
-    boost::shared_ptr<VectorDouble> tangentTwoVectorMasterPtr;
+    boost::shared_ptr<MatrixDouble> tangentOneVectorSlavePtr;
+    boost::shared_ptr<MatrixDouble> tangentTwoVectorSlavePtr;
+    boost::shared_ptr<MatrixDouble> tangentOneVectorMasterPtr;
+    boost::shared_ptr<MatrixDouble> tangentTwoVectorMasterPtr;
 
-    boost::shared_ptr<VectorDouble> normalVectorSlavePtr;
-    boost::shared_ptr<VectorDouble> normalVectorMasterPtr;
+    boost::shared_ptr<MatrixDouble> normalVectorSlavePtr;
+    boost::shared_ptr<MatrixDouble> normalVectorMasterPtr;
 
     boost::shared_ptr<MatrixDouble> hMat;
     boost::shared_ptr<MatrixDouble> FMat;
@@ -451,8 +451,8 @@ struct SimpleContactProblem {
 
       gapPtr = boost::make_shared<VectorDouble>();
       lagGapProdPtr = boost::make_shared<VectorDouble>();
-      normalVectorSlavePtr = boost::make_shared<VectorDouble>();
-      normalVectorMasterPtr = boost::make_shared<VectorDouble>();
+      normalVectorSlavePtr = boost::make_shared<MatrixDouble>();
+      normalVectorMasterPtr = boost::make_shared<MatrixDouble>();
 
       hMat = boost::make_shared<MatrixDouble>();
       FMat = boost::make_shared<MatrixDouble>();
@@ -461,10 +461,10 @@ struct SimpleContactProblem {
           boost::make_shared<MatrixDouble>();
       detHVec = boost::make_shared<VectorDouble>();
 
-      tangentOneVectorSlavePtr = boost::make_shared<VectorDouble>() ;
-      tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>() ;
-      tangentOneVectorMasterPtr = boost::make_shared<VectorDouble>() ;
-      tangentTwoVectorMasterPtr = boost::make_shared<VectorDouble>() ;
+      tangentOneVectorSlavePtr = boost::make_shared<MatrixDouble>() ;
+      tangentTwoVectorSlavePtr = boost::make_shared<MatrixDouble>() ;
+      tangentOneVectorMasterPtr = boost::make_shared<MatrixDouble>() ;
+      tangentTwoVectorMasterPtr = boost::make_shared<MatrixDouble>() ;
 
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
@@ -609,10 +609,10 @@ struct SimpleContactProblem {
     int nb_base_fun_row;
     int nb_base_fun_col;
 
-    boost::shared_ptr<VectorDouble> tangentOne;
-    boost::shared_ptr<VectorDouble> tangentTwo;
+    boost::shared_ptr<MatrixDouble> tangentOne;
+    boost::shared_ptr<MatrixDouble> tangentTwo;
 
-    boost::shared_ptr<VectorDouble> normalVector;
+    boost::shared_ptr<MatrixDouble> normalVector;
     double aRea;
 
     MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -651,101 +651,101 @@ struct SimpleContactProblem {
           commonDataSimpleContact(common_data_contact),
           isMaster(is_master) {
       sYmm = false; // This will make sure to loop over all entities
-      normalVector = boost::make_shared<VectorDouble>();
-      tangentOne = boost::make_shared<VectorDouble>();
-      tangentTwo = boost::make_shared<VectorDouble>();
+      normalVector = boost::make_shared<MatrixDouble>();
+      tangentOne = boost::make_shared<MatrixDouble>();
+      tangentTwo = boost::make_shared<MatrixDouble>();
     }
 
   private:
     bool isMaster;
   };
 
-  /// \brief Computes, for reference configuration, normal to slave face that is
-  /// common to all gauss points
-  struct OpGetNormalSlave : public ContactOp {
+  // /// \brief Computes, for reference configuration, normal to slave face that is
+  // /// common to all gauss points
+  // struct OpGetNormalSlave : public ContactOp {
 
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpGetNormalSlave(
-        const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
-          commonDataSimpleContact(common_data_contact) {}
-    /**
-     * @brief Evaluates unit normal vector to the slave surface vector based on
-     * reference base coordinates
-     *
-     * Computes normal vector based on reference base coordinates based on mesh
-     * (moab vertices) coordinates:
-     *
-     * \f[
-     * {\mathbf N}^{(1)}({\boldsymbol{\chi}}(\xi, \eta)) =
-     * \frac{\partial\mathbf{X}(\xi, \eta)}{\partial\xi}\times\frac{\partial
-     * \mathbf{X}(\xi, \eta)}
-     * {\partial\eta}
-     * \f]
-     *
-     * where \f${\boldsymbol{\chi}}^{(1)}(\xi, \eta)\f$ is the vector of
-     * reference coordinates at the gauss point on slave surface with parent
-     * coordinates \f$\xi\f$ and \f$\eta\f$ evaluated according to
-     *
-     * \f[
-     * {\boldsymbol{\chi}}(\xi, \eta) =
-     * \sum\limits^{3}_{i = 1}
-     * N_i(\xi, \eta){{\boldsymbol{\chi}}}_i
-     * \f]
-     *
-     * where \f$ N_i \f$ is the shape function corresponding to the \f$
-     * i-{\rm{th}}\f$ degree of freedom in the reference configuration
-     * \f${{\boldsymbol{\chi}}}^{(1)}_i\f$ corresponding to the 3 nodes of the
-     * triangular slave face.
-     *
-     */
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
+  //   boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  //   OpGetNormalSlave(
+  //       const string field_name,
+  //       boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+  //       : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+  //         commonDataSimpleContact(common_data_contact) {}
+  //   /**
+  //    * @brief Evaluates unit normal vector to the slave surface vector based on
+  //    * reference base coordinates
+  //    *
+  //    * Computes normal vector based on reference base coordinates based on mesh
+  //    * (moab vertices) coordinates:
+  //    *
+  //    * \f[
+  //    * {\mathbf N}^{(1)}({\boldsymbol{\chi}}(\xi, \eta)) =
+  //    * \frac{\partial\mathbf{X}(\xi, \eta)}{\partial\xi}\times\frac{\partial
+  //    * \mathbf{X}(\xi, \eta)}
+  //    * {\partial\eta}
+  //    * \f]
+  //    *
+  //    * where \f${\boldsymbol{\chi}}^{(1)}(\xi, \eta)\f$ is the vector of
+  //    * reference coordinates at the gauss point on slave surface with parent
+  //    * coordinates \f$\xi\f$ and \f$\eta\f$ evaluated according to
+  //    *
+  //    * \f[
+  //    * {\boldsymbol{\chi}}(\xi, \eta) =
+  //    * \sum\limits^{3}_{i = 1}
+  //    * N_i(\xi, \eta){{\boldsymbol{\chi}}}_i
+  //    * \f]
+  //    *
+  //    * where \f$ N_i \f$ is the shape function corresponding to the \f$
+  //    * i-{\rm{th}}\f$ degree of freedom in the reference configuration
+  //    * \f${{\boldsymbol{\chi}}}^{(1)}_i\f$ corresponding to the 3 nodes of the
+  //    * triangular slave face.
+  //    *
+  //    */
+  //   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  // };
 
-  /// \brief Computes, for reference configuration, normal to master face that
-  /// is common to all gauss points
-  struct OpGetNormalMaster : public ContactOp {
+  // /// \brief Computes, for reference configuration, normal to master face that
+  // /// is common to all gauss points
+  // struct OpGetNormalMaster : public ContactOp {
 
-    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    OpGetNormalMaster(
-        const string field_name,
-        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
-        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
-          commonDataSimpleContact(common_data_contact) {}
+  //   boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+  //   OpGetNormalMaster(
+  //       const string field_name,
+  //       boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+  //       : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+  //         commonDataSimpleContact(common_data_contact) {}
 
-    /**
-     * @brief Evaluates unit normal vector to the master surface vector based on
-     * reference base coordinates
-     *
-     * Computes normal vector based on reference base coordinates based on mesh
-     * (moab vertices) coordinates:
-     *
-     * \f[
-     * {\mathbf N}^{(2)}({\mathbf\chi}(\xi, \eta)) =
-     * \frac{\partial\mathbf{X}(\xi, \eta)}{\partial\xi}\times\frac{\partial
-     * \mathbf{X}(\xi, \eta)}
-     * {\partial\eta}
-     * \f]
-     *
-     * where \f${\mathbf\chi}(\xi, \eta)\f$ is the vector of reference
-     * coordinates at the gauss point on master surface with parent coordinates
-     * \f$\xi\f$ and \f$\eta\f$ evaluated according to
-     *
-     * \f[
-     * {\mathbf\chi}(\xi, \eta) =
-     * \sum\limits^{3}_{i = 1}
-     * N_i(\xi, \eta){\overline{\mathbf\chi}}_i
-     * \f]
-     *
-     * where \f$ N_i \f$ is the shape function corresponding to the \f$
-     * i-{\rm{th}}\f$ degree of freedom in the reference configuration
-     * \f${\overline{\mathbf\chi}}_i\f$ corresponding to the 3 nodes of the
-     * triangular master face.
-     *
-     */
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
+  //   /**
+  //    * @brief Evaluates unit normal vector to the master surface vector based on
+  //    * reference base coordinates
+  //    *
+  //    * Computes normal vector based on reference base coordinates based on mesh
+  //    * (moab vertices) coordinates:
+  //    *
+  //    * \f[
+  //    * {\mathbf N}^{(2)}({\mathbf\chi}(\xi, \eta)) =
+  //    * \frac{\partial\mathbf{X}(\xi, \eta)}{\partial\xi}\times\frac{\partial
+  //    * \mathbf{X}(\xi, \eta)}
+  //    * {\partial\eta}
+  //    * \f]
+  //    *
+  //    * where \f${\mathbf\chi}(\xi, \eta)\f$ is the vector of reference
+  //    * coordinates at the gauss point on master surface with parent coordinates
+  //    * \f$\xi\f$ and \f$\eta\f$ evaluated according to
+  //    *
+  //    * \f[
+  //    * {\mathbf\chi}(\xi, \eta) =
+  //    * \sum\limits^{3}_{i = 1}
+  //    * N_i(\xi, \eta){\overline{\mathbf\chi}}_i
+  //    * \f]
+  //    *
+  //    * where \f$ N_i \f$ is the shape function corresponding to the \f$
+  //    * i-{\rm{th}}\f$ degree of freedom in the reference configuration
+  //    * \f${\overline{\mathbf\chi}}_i\f$ corresponding to the 3 nodes of the
+  //    * triangular master face.
+  //    *
+  //    */
+  //   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  // };
 
   /**
    * @brief Operator for the simple contact element
