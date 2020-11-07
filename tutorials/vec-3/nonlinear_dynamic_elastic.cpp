@@ -121,15 +121,17 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
     // };
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-    const size_t nb_gauss_pts = matGradPtr->size2();
+    // const size_t nb_gauss_pts = matGradPtr->size2();
+    const size_t nb_gauss_pts = getGaussPts().size2();
     constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
     matTangentPtr->resize(DIM * DIM * DIM * DIM, nb_gauss_pts);
+    matStressPtr->resize(DIM * DIM, nb_gauss_pts, false);
+    auto dP_dF = getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(*matTangentPtr);
+
 
     auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
-    auto dP_dF = getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(*matTangentPtr);
-    auto t_grad = getFTensor2FromMat<DIM, DIM>(*(matGradPtr));
-    auto t_stress = getFTensor2FromMat<DIM, DIM>(*(matStressPtr));
-    matStressPtr->resize(DIM * DIM, nb_gauss_pts, false);
+    auto t_grad = getFTensor2FromMat<DIM, DIM>(*matGradPtr);
+    auto t_stress = getFTensor2FromMat<DIM, DIM>(*matStressPtr);
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -138,17 +140,17 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       FTensor::Tensor2_symmetric<double, DIM> T; // stress measure
       FTensor::Tensor2_symmetric<double, DIM> S; // 2nd Piola Stress
       FTensor::Tensor2<double, DIM, DIM> P;      // 1st Piola Stress
-
-      F(i, j) = t_grad(i, j) + t_kd(i, j);
-      C(i, j) = F(k, i) ^ F(k, j);
-
       FTensor::Tensor1<double, DIM> eig;
       FTensor::Tensor2<double, DIM, DIM> eigen_vec;
-      CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
 
       auto f = [](double v) { return 0.5 * log(v); };
       auto d_f = [](double v) { return 0.5 / v; };
       auto dd_f = [](double v) { return -0.5 / (v * v); };
+
+      F(i, j) = t_grad(i, j) + t_kd(i, j);
+      C(i, j) = F(k, i) ^ F(k, j);
+
+      CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
 
       auto logC =
           EigenProjection<double, double, DIM, DIM>::getMat(eig, eigen_vec, f);
@@ -159,24 +161,23 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
 
           EigenProjection<double, double, DIM, DIM>::getDiffMat(eig, eigen_vec,
                                                                 f, d_f);
-      S(k, l) = T(i, j) * dlogC_dC(i, j, k, l);
+      S(k, l) = 2. * T(i, j) * dlogC_dC(i, j, k, l);
       P(i, l) = F(i, k) * S(k, l);
 
       if (IS_LHS) {
         FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
         dC_dF(i, j, k, l) = (t_kd(i, l) * F(k, j)) + (t_kd(j, l) * F(k, i));
 
-        // DIM does not work? use 2 for now
         auto TL =
             EigenProjection<double, double, 2, 2>::getDiffDiffMat<decltype(T)>(
                 eig, eigen_vec, f, d_f, dd_f, T);
 
+        TL(i, j, k, l) *= 4;
         FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
         P_D_P_plus_TL(i, j, k, l) =
             TL(i, j, k, l) +
             (dlogC_dC(i, j, o, p) * t_D(o, p, m, n)) * dlogC_dC(m, n, k, l);
 
-        //   // auto P4 = get_tensor4_from_ddg(P_D_P_plus_TL);
         dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * S(k, j));
         dP_dF(i, j, m, n) +=
             F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));

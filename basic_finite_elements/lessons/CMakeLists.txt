@@ -13,6 +13,7 @@
 
 include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/lessons)
 include_directories(${PROJECT_SOURCE_DIR}/basic_finite_elements/lessons/src)
+include_directories(${PROJECT_SOURCE_DIR}/tutorials/vec-0/src)
 
 bfe_build_and_install(
     basic_poisson

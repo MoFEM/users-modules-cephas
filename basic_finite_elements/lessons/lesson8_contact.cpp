@@ -24,21 +24,49 @@
 
 using namespace MoFEM;
 
-using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = PipelineManager::FaceEle2D;
-using DomainEleOp = DomainEle::UserDataOperator;
-using BoundaryEle = PipelineManager::EdgeEle2D;
-using BoundaryEleOp = BoundaryEle::UserDataOperator;
+template <int DIM> struct ElementsAndOps {};
 
-constexpr int order = 4;
-constexpr double young_modulus = 1;
+template <> struct ElementsAndOps<2> {
+  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+};
+
+template <> struct ElementsAndOps<3> {
+  using DomainEle = VolumeElementForcesAndSourcesCoreBase;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = FaceElementForcesAndSourcesCoreBase;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcVolumeOnRefinedMesh;
+};
+
+constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
+
+using EntData = DataForcesAndSourcesCore::EntData;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+
+using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpSource<1, SPACE_DIM>;
+
+constexpr int order = 2;
+constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
-constexpr double cn = 1;
+constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0;
 
-#include <ElasticOps.hpp>
 #include <ContactOps.hpp>
-using namespace OpElasticTools;
+#include <OpPostProcElastic.hpp>
 using namespace OpContactTools;
 
 struct Example {
@@ -60,11 +88,12 @@ private:
 
   MatrixDouble invJac, jAc;
   boost::shared_ptr<OpContactTools::CommonData> commonDataPtr;
-  boost::shared_ptr<PostProcFaceOnRefinedMeshFor2D> postProcFe;
+  boost::shared_ptr<PostProcEle> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-  Range getEntsOnMeshSkin();
+  template <int DIM> Range getEntsOnMeshSkin();
 };
 
 //! [Run problem]
@@ -86,16 +115,21 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
 
-  CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  if (SPACE_DIM == 2) {
+    CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+    CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
+  } else {
+    CHKERR simple->addDomainField("SIGMA", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
+    CHKERR simple->addBoundaryField("SIGMA", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
+  }
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
 
-  auto skin_edges = getEntsOnMeshSkin();
+  auto skin_edges = getEntsOnMeshSkin<SPACE_DIM>();
 
   // filter not owned entities, those are not on boundary
   Range boundary_ents;
@@ -120,29 +154,30 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto get_matrial_stiffens = [&](FTensor::Ddg<double, 2, 2> &t_D) {
+  auto set_matrial_stiffness = [&]() {
     MoFEMFunctionBegin;
-    FTensor::Index<'i', 2> i;
-    FTensor::Index<'j', 2> j;
-    FTensor::Index<'k', 2> k;
-    FTensor::Index<'l', 2> l;
-    t_D(i, j, k, l) = 0;
-
-    constexpr double c = young_modulus / (1 - poisson_ratio * poisson_ratio);
-    constexpr double o = poisson_ratio * c;
-
-    t_D(0, 0, 0, 0) = c;
-    t_D(0, 0, 1, 1) = o;
-
-    t_D(1, 1, 0, 0) = o;
-    t_D(1, 1, 1, 1) = c;
-
-    t_D(0, 1, 0, 1) = (1 - poisson_ratio) * c;
+    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'j', SPACE_DIM> j;
+    FTensor::Index<'k', SPACE_DIM> k;
+    FTensor::Index<'l', SPACE_DIM> l;
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+    constexpr double bulk_modulus_K =
+        young_modulus / (3 * (1 - 2 * poisson_ratio));
+    constexpr double shear_modulus_G =
+        young_modulus / (2 * (1 + poisson_ratio));
+    constexpr double A =
+        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
+                               (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+                         : 1;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+                          t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
 
   commonDataPtr = boost::make_shared<OpContactTools::CommonData>();
-  CHKERR get_matrial_stiffens(commonDataPtr->tD);
 
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
@@ -152,10 +187,15 @@ MoFEMErrorCode Example::createCommonData() {
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
-  jAc.resize(2, 2, false);
-  invJac.resize(2, 2, false);
+  commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->mDPtr->resize(size_symm * size_symm, 1);
 
+  jAc.resize(SPACE_DIM, SPACE_DIM, false);
+  invJac.resize(SPACE_DIM, SPACE_DIM, false);
+
+  CHKERR set_matrial_stiffness();
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
@@ -176,32 +216,38 @@ MoFEMErrorCode Example::bC() {
     return fix_ents;
   };
 
-  auto remove_ents = [&](const Range &&ents, const bool fix_x,
-                         const bool fix_y) {
+  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
     auto prb_mng = mField.getInterface<ProblemsManager>();
     auto simple = mField.getInterface<Simple>();
     MoFEMFunctionBegin;
     Range verts;
     CHKERR mField.get_moab().get_connectivity(ents, verts, true);
     verts.merge(ents);
-    const int lo_coeff = fix_x ? 0 : 1;
-    const int hi_coeff = fix_y ? 1 : 0;
+    if (SPACE_DIM == 3) {
+      Range adj;
+      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
+                                               moab::Interface::UNION);
+      verts.merge(adj);
+    };
+
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo_coeff, hi_coeff);
+                                         lo, hi);
     MoFEMFunctionReturn(0);
   };
 
   Range boundary_ents;
   boundary_ents.merge(fix_disp("FIX_X"));
   boundary_ents.merge(fix_disp("FIX_Y"));
+  boundary_ents.merge(fix_disp("FIX_Z"));
   boundary_ents.merge(fix_disp("FIX_ALL"));
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
       mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
       0, 2);
 
-  CHKERR remove_ents(fix_disp("FIX_X"), true, false);
-  CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
+  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
+  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
+  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
+  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
 
   MoFEMFunctionReturn(0);
 }
@@ -213,46 +259,61 @@ MoFEMErrorCode Example::OPs() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpCalculateJacForFace(jAc));
-    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
-    pipeline.push_back(new OpMakeHdivFromHcurl());
-    pipeline.push_back(new OpSetContravariantPiolaTransformFace(jAc));
-    pipeline.push_back(new OpSetInvJacHcurlFace(invJac));
+    if (SPACE_DIM == 2) {
+      pipeline.push_back(new OpCalculateJacForFace(jAc));
+      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+      pipeline.push_back(new OpMakeHdivFromHcurl());
+      pipeline.push_back(new OpSetContravariantPiolaTransformFace(jAc));
+      pipeline.push_back(new OpSetInvJacHcurlFace(invJac));
+    }
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+    pipeline.push_back(new OpK("U", "U", commonDataPtr->mDPtr));
     pipeline.push_back(
         new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
-    auto gravity = [](double x, double y) {
-      return FTensor::Tensor1<double, 2>{0., 1.};
+    auto get_body_force = [this](const double, const double, const double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Tensor1<double, SPACE_DIM> t_source;
+      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      const auto time = fe_domain_rhs->ts_t;
+      // hardcoded gravity load
+      t_source(i) = 0;
+      t_source(1) = 1.0 * time;
+      return t_source;
     };
-    pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
 
-    pipeline.push_back(
-        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-    pipeline.push_back(new OpStrain("U", commonDataPtr));
-    pipeline.push_back(new OpStress("U", commonDataPtr));
-    pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
+    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr));
+    pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
+    pipeline.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+        "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+        commonDataPtr->mDPtr));
+    pipeline.push_back(new OpInternalForce("U", commonDataPtr->mStressPtr));
 
-    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+    pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
 
-    pipeline.push_back(new OpCalculateHVecTensorField<2, 2>(
+    pipeline.push_back(new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
         "SIGMA", commonDataPtr->contactStressPtr));
-    pipeline.push_back(new OpCalculateHVecTensorDivergence<2, 2>(
-        "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    pipeline.push_back(
+        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+            "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
-    pipeline.push_back(new OpCalculateVectorFieldValues<2>(
+    if (SPACE_DIM == 2)
+      pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
+    pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
   };
@@ -268,6 +329,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    // for tests, comment OpInternalDomainContactRhs
     // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
@@ -281,7 +343,9 @@ MoFEMErrorCode Example::OPs() {
   add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  auto integration_rule = [](int, int, int approx_order) { return 2 * order; };
+  auto integration_rule = [](int, int, int approx_order) {
+    return 2 * order + 1;
+  };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
@@ -324,33 +388,43 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
+    postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
+    if (SPACE_DIM == 2) {
+      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAc));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetContravariantPiolaTransformFace(jAc));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+    }
 
-    postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAc));
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
     postProcFe->getOpPtrVector().push_back(
-        new OpSetContravariantPiolaTransformFace(jAc));
-    postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
-
+        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+            commonDataPtr->mDPtr));
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-    postProcFe->getOpPtrVector().push_back(new OpStress("U", commonDataPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorDivergence<2, 2>(
+        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    postProcFe->getOpPtrVector().push_back(new OpCalculateHVecTensorField<2, 2>(
-        "SIGMA", commonDataPtr->contactStressPtr));
-
-    postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
-        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
     postProcFe->getOpPtrVector().push_back(
-        new OpPostProcContact("SIGMA", postProcFe->postProcMesh,
-                              postProcFe->mapGaussPts, commonDataPtr));
+        new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+            "SIGMA", commonDataPtr->contactStressPtr));
+
+    postProcFe->getOpPtrVector().push_back(
+        new Tutorial::OpPostProcElastic<SPACE_DIM>(
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
+
+    postProcFe->getOpPtrVector().push_back(new OpPostProcContact<SPACE_DIM>(
+        "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+        commonDataPtr));
     postProcFe->addFieldValuesPostProc("U");
     MoFEMFunctionReturn(0);
   };
@@ -372,7 +446,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto set_time_monitor = [&]() {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, postProcFe, uXScatter, uYScatter));
+        new Monitor(dm, postProcFe, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -383,6 +457,8 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR create_post_process_element();
   uXScatter = scatter_create(0);
   uYScatter = scatter_create(1);
+  if(SPACE_DIM == 3)
+    uZScatter = scatter_create(2);
   CHKERR set_time_monitor();
 
   CHKERR TSSolve(solver, D);
@@ -403,13 +479,16 @@ MoFEMErrorCode Example::postProcess() { return 0; }
 MoFEMErrorCode Example::checkResults() { return 0; }
 //! [Check]
 
-Range Example::getEntsOnMeshSkin() {
+template <int DIM> Range Example::getEntsOnMeshSkin() {
   Range faces;
-  CHKERR mField.get_moab().get_entities_by_type(0, MBTRI, faces);
+  EntityType type = MBTRI;
+  if (DIM == 3)
+    type = MBTET;
+  CHKERR mField.get_moab().get_entities_by_type(0, type, faces);
   Skinner skin(&mField.get_moab());
-  Range skin_edges;
-  CHKERR skin.find_skin(0, faces, false, skin_edges);
-  return skin_edges;
+  Range skin_ents;
+  CHKERR skin.find_skin(0, faces, false, skin_ents);
+  return skin_ents;
 };
 
 static char help[] = "...\n\n";
