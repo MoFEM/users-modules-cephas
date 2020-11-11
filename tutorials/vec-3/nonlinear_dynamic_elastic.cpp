@@ -157,7 +157,7 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       int nb_uniq = std::distance(&eig(0), it);
       if(nb_uniq == 2)
         string wait2; //here you have to sort eigen values and vectors //FIXME:
-      auto logC = EigenMatrix::getMat(eig, eigen_vec, f, nb_uniq);
+      auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
 
       T(i, j) = t_D(i, j, k, l) * logC(k, l);
 
