@@ -37,6 +37,36 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
   nonlinear_dynamic_elastic ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
+  tutorials_build_and_install(
+    nonlinear_dynamic_elastic_2D ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
+    
+set(EXECUTABLE_DIMENSION 3)
+set_target_properties(nonlinear_dynamic_elastic PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+set_target_properties(nonlinear_dynamic_elastic_2D PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+
+target_link_libraries(nonlinear_dynamic_elastic
+  mofem_matrix_function
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${PROJECT_LIBS}
+)
+
+target_link_libraries(nonlinear_dynamic_elastic_2D
+  mofem_matrix_function
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${PROJECT_LIBS}
+)
 
 add_test(
   nonlinear_dynamic_elastic

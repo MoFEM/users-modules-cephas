@@ -38,7 +38,7 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM = EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -128,7 +128,6 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
     matStressPtr->resize(DIM * DIM, nb_gauss_pts, false);
     auto dP_dF = getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(*matTangentPtr);
 
-
     auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
     auto t_grad = getFTensor2FromMat<DIM, DIM>(*matGradPtr);
     auto t_stress = getFTensor2FromMat<DIM, DIM>(*matStressPtr);
@@ -152,16 +151,21 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
 
       CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
 
-      auto logC =
-          EigenProjection<double, double, DIM, DIM>::getMat(eig, eigen_vec, f);
+      auto it = unique(&eig(0), &eig(0) + DIM,
+                       [](double a, double b) { return abs(a - b) < 1e-8; });
+
+      int nb_uniq = std::distance(&eig(0), it);
+      if(nb_uniq == 2)
+        string wait2; //here you have to sort eigen values and vectors //FIXME:
+      auto logC = EigenMatrix::getMat(eig, eigen_vec, f, nb_uniq);
 
       T(i, j) = t_D(i, j, k, l) * logC(k, l);
 
       auto dlogC_dC =
+          EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
+      dlogC_dC(i, j, k, l) *= 2;
 
-          EigenProjection<double, double, DIM, DIM>::getDiffMat(eig, eigen_vec,
-                                                                f, d_f);
-      S(k, l) = 2. * T(i, j) * dlogC_dC(i, j, k, l);
+      S(k, l) = T(i, j) * dlogC_dC(i, j, k, l);
       P(i, l) = F(i, k) * S(k, l);
 
       if (IS_LHS) {
@@ -169,15 +173,14 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
         dC_dF(i, j, k, l) = (t_kd(i, l) * F(k, j)) + (t_kd(j, l) * F(k, i));
 
         auto TL =
-            EigenProjection<double, double, 2, 2>::getDiffDiffMat<decltype(T)>(
-                eig, eigen_vec, f, d_f, dd_f, T);
+            EigenMatrix::getDiffDiffMat(eig, eigen_vec, f, d_f, dd_f, T, nb_uniq);
 
         TL(i, j, k, l) *= 4;
         FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
         P_D_P_plus_TL(i, j, k, l) =
             TL(i, j, k, l) +
             (dlogC_dC(i, j, o, p) * t_D(o, p, m, n)) * dlogC_dC(m, n, k, l);
-
+        P_D_P_plus_TL(i, j, k, l) *= 0.5;
         dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * S(k, j));
         dP_dF(i, j, m, n) +=
             F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
@@ -307,7 +310,7 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 SPACE_DIM);
-  int order = 3;
+  int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
@@ -386,8 +389,11 @@ MoFEMErrorCode Example::assembleSystem() {
   auto get_body_force = [this](const double, const double, const double) {
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
     auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    auto t_source = FTensor::Tensor1<double, SPACE_DIM>{0.1, 1.};
     FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Tensor1<double, SPACE_DIM> t_source;
+    t_source(i) = 0.;
+    t_source(0) = 0.1;
+    t_source(1) = 1.;
     const auto time = fe_domain_rhs->ts_t;
     t_source(i) *= sin(time * omega * M_PI);
     return t_source;
@@ -445,7 +451,6 @@ struct Monitor : public FEMethod {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
     }

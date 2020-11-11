@@ -20,6 +20,10 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+#ifndef EXECUTABLE_DIMENSION
+  #define EXECUTABLE_DIMENSION 3
+#endif
+
 #include <MoFEM.hpp>
 
 using namespace MoFEM;
@@ -35,16 +39,17 @@ template <> struct ElementsAndOps<2> {
 };
 
 template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCoreBase;
+  using DomainEle = VolumeElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = FaceElementForcesAndSourcesCoreBase;
+  using BoundaryEle = FaceElementForcesAndSourcesCore;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
-constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
+constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
@@ -64,6 +69,17 @@ constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0;
+
+double integral_1_lhs = 0;
+double integral_1_rhs = 0;
+double integral_2_lhs = 0;
+double integral_2_rhs = 0;
+double integral_3_lhs = 0;
+double integral_3_rhs = 0;
+
+boost::shared_ptr<BoundaryEle> debug_post_proc;
+moab::Core mb_post_debug;
+moab::Interface &moab_debug = mb_post_debug;
 
 #include <ContactOps.hpp>
 #include <OpPostProcElastic.hpp>
@@ -143,7 +159,7 @@ MoFEMErrorCode Example::setupProblem() {
                                PSTATUS_NOT, -1, &boundary_ents);
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
-  // CHKERR simple->setFieldOrder("U", order + 1, &skin_edges);
+  // CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -195,6 +211,20 @@ MoFEMErrorCode Example::createCommonData() {
   jAc.resize(SPACE_DIM, SPACE_DIM, false);
   invJac.resize(SPACE_DIM, SPACE_DIM, false);
 
+  debug_post_proc = boost::make_shared<BoundaryEle>(mField);
+  if (SPACE_DIM == 2) 
+    debug_post_proc->getOpPtrVector().push_back(
+        new OpSetContrariantPiolaTransformOnEdge());
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldValues<SPACE_DIM>(
+          "U", commonDataPtr->contactDispPtr));
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
+  debug_post_proc->getOpPtrVector().push_back(
+      new OpPostProcDebug(mField, "U", commonDataPtr, &moab_debug));
+  debug_post_proc->setRuleHook = [](int a, int b, int c) {
+    return 2 * order + 1;
+  };
   CHKERR set_matrial_stiffness();
   MoFEMFunctionReturn(0);
 }
@@ -330,7 +360,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
     // for tests, comment OpInternalDomainContactRhs
-    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
+    //just for testing, does not assemble
+    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -425,7 +456,7 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(new OpPostProcContact<SPACE_DIM>(
         "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
         commonDataPtr));
-    postProcFe->addFieldValuesPostProc("U");
+    postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
     MoFEMFunctionReturn(0);
   };
 
@@ -457,7 +488,7 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR create_post_process_element();
   uXScatter = scatter_create(0);
   uYScatter = scatter_create(1);
-  if(SPACE_DIM == 3)
+  if (SPACE_DIM == 3)
     uZScatter = scatter_create(2);
   CHKERR set_time_monitor();
 

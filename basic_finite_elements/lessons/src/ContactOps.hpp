@@ -207,9 +207,6 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
     std::array<double, MAX_DOFS_ON_ENTITY> nf;
     std::fill(&nf[0], &nf[nb_dofs], 0);
 
-    auto t_normal = getFTensor1Normal();
-    t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
-
     auto t_w = getFTensor0IntegrationWeight();
     auto t_traction =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
@@ -225,6 +222,9 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
       size_t bb = 0;
       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
         t_nf(i) -= alpha * t_base * t_traction(i);
+        for (int zz = 0; zz != SPACE_DIM; ++zz)
+          integral_1_rhs -= alpha * t_base * t_traction(zz);
+
         ++t_nf;
         ++t_base;
       }
@@ -235,7 +235,7 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
       ++t_w;
     }
 
-    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
+    // CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -261,10 +261,10 @@ MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
     auto t_w = getFTensor0IntegrationWeight();
     auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
-    auto t_stress =
-        getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->contactStressPtr));
-    auto t_div_stress =
-        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactStressDivergencePtr));
+    auto t_stress = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
+        *(commonDataPtr->contactStressPtr));
+    auto t_div_stress = getFTensor1FromMat<SPACE_DIM>(
+        *(commonDataPtr->contactStressDivergencePtr));
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -277,6 +277,14 @@ MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
         t_nf(i) += alpha * t_base * t_div_stress(i);
         t_nf(i) += alpha * t_diff_base(j) * t_stress(i, j);
 
+        for (int zz = 0; zz != SPACE_DIM; ++zz)
+          integral_1_lhs += alpha * t_base * t_div_stress(zz);
+        FTensor::Tensor1<double, SPACE_DIM> inte;
+        inte(i) = alpha * t_diff_base(j) * t_stress(i, j);
+        for (int zz = 0; zz != SPACE_DIM; ++zz)
+          integral_1_lhs += inte(zz);
+        // if(SPACE_DIM == 3)
+        //   t_nf(i) *= -1;
         ++t_nf;
         ++t_base;
         ++t_diff_base;
@@ -316,9 +324,12 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+    if (SPACE_DIM == 2) //FIXME: make normal outward
+      t_normal(i) *= -1;
 
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+    auto t_disp =
+        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
     auto t_traction =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
     auto t_coords = getFTensor1CoordsAtGaussPts();
@@ -347,7 +358,8 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
                     gap(t_disp, t_contact_normal),
                     normal_traction(t_traction, t_contact_normal));
 
-      FTensor::Tensor1<double, SPACE_DIM> t_rhs_tangent_disp, t_rhs_tangent_traction;
+      FTensor::Tensor1<double, SPACE_DIM> t_rhs_tangent_disp,
+          t_rhs_tangent_traction;
       t_rhs_tangent_disp(i) = t_contact_tangent_tensor(i, j) * t_disp(j);
       t_rhs_tangent_traction(i) =
           cn * t_contact_tangent_tensor(i, j) * t_traction(j);
@@ -403,6 +415,8 @@ MoFEMErrorCode OpConstrainBoundaryTraction::doWork(int side, EntityType type,
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+    if (SPACE_DIM == 2) //FIXME: make normal outward
+      t_normal(i) *= -1;
 
     auto t_traction =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
@@ -456,8 +470,11 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+    if (SPACE_DIM == 2) //FIXME: make normal outward
+      t_normal(i) *= -1;
 
-    auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+    auto t_disp =
+        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
     auto t_traction =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
     auto t_coords = getFTensor1CoordsAtGaussPts();
@@ -546,8 +563,11 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+    if (SPACE_DIM == 2) //FIXME: make normal outward
+      t_normal(i) *= -1;
 
-    auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+    auto t_disp =
+        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
     auto t_traction =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
     auto t_coords = getFTensor1CoordsAtGaussPts();
@@ -565,7 +585,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
       t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
 
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_tangent_tensor;
-       t_contact_tangent_tensor(i, j) =
+      t_contact_tangent_tensor(i, j) =
           kronecker_delta(i, j) - t_contact_normal_tensor(i, j);
 
       const double diff_traction = diff_constrains_dtraction(
@@ -574,7 +594,7 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / SPACE_DIM; ++rr) {
-     
+
         auto t_mat = getFTensor2FromArray<SPACE_DIM, SPACE_DIM, SPACE_DIM>(
             locMat, SPACE_DIM * rr);
         const double row_base = t_row_base(i) * t_normal(i);
@@ -629,10 +649,12 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
     auto t_w = getFTensor0IntegrationWeight();
     auto t_base = data.getFTensor1N<3>();
     auto t_diff_base = data.getFTensor2DiffN<3, SPACE_DIM>();
-    auto t_stress =
-        getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->contactStressPtr));
-    auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
-    auto t_grad = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
+    auto t_stress = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
+        *(commonDataPtr->contactStressPtr));
+    auto t_disp =
+        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+    auto t_grad =
+        getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -643,8 +665,11 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
         const double t_div_base = t_diff_base(i, i);
 
-        t_nf(i) += alpha * (t_base(j) * t_grad(i, j));
+        t_nf(i) += alpha * t_base(j) * t_grad(i, j);
         t_nf(i) += alpha * t_div_base * t_disp(i);
+
+        for (int zz = 0; zz != SPACE_DIM; ++zz)
+          integral_2_lhs += alpha * t_div_base * t_disp(zz);
 
         ++t_nf;
         ++t_base;
@@ -760,7 +785,8 @@ MoFEMErrorCode OpSpringRhs::doWork(int side, EntityType type, EntData &data) {
     std::fill(&nf[0], &nf[nb_dofs], 0);
 
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+    auto t_disp =
+        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
 
     size_t nb_base_functions = data.getN().size2();
     auto t_base = data.getFTensor0N();
@@ -822,7 +848,7 @@ MoFEMErrorCode OpSpringLhs::doWork(int row_side, int col_side,
 
       size_t rr = 0;
       for (; rr != row_nb_dofs / SPACE_DIM; ++rr) {
- 
+
         auto t_mat_diag = getFTensor1FromArrayDiag<SPACE_DIM, SPACE_DIM>(
             locMat, SPACE_DIM * rr);
 
@@ -844,6 +870,106 @@ MoFEMErrorCode OpSpringLhs::doWork(int row_side, int col_side,
     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
                         ADD_VALUES);
   }
+
+  MoFEMFunctionReturn(0);
+}
+
+struct OpPostProcDebug : public BoundaryEleOp {
+  OpPostProcDebug(MoFEM::Interface &m_field, const std::string field_name,
+                  boost::shared_ptr<CommonData> common_data_ptr,
+                  moab::Interface *moab_debug = nullptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  MoFEM::Interface &mField;
+  moab::Interface *moabDebug;
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+OpPostProcDebug::OpPostProcDebug(MoFEM::Interface &m_field,
+                                 const std::string field_name,
+                                 boost::shared_ptr<CommonData> common_data_ptr,
+                                 moab::Interface *moab_debug)
+    : mField(m_field), BoundaryEleOp(field_name, BoundaryEleOp::OPROW),
+      commonDataPtr(common_data_ptr), moabDebug(moab_debug) {
+  std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
+  doEntities[boundary_ent] = true;
+}
+
+MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
+                                       EntData &data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t nb_dofs = data.getIndices().size();
+  std::array<double, 9> def;
+  std::fill(def.begin(), def.end(), 0);
+
+  auto get_tag = [&](const std::string name, size_t size) {
+    Tag th;
+    CHKERR moabDebug->tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE, def.data());
+    return th;
+  };
+
+  // if (nb_dofs) {
+
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+  auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
+  auto t_traction =
+      getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
+
+  auto th_gap = get_tag("GAP", 1);
+  auto th_cons = get_tag("CONSTRAINT", 1);
+  auto th_traction = get_tag("TRACTION", 3);
+  auto th_normal = get_tag("NORMAL", 3);
+  auto th_cont_normal = get_tag("CONTACT_NORMAL", 3);
+  auto th_disp = get_tag("DISPLACEMENT", 3);
+
+  EntityHandle ent = getFEEntityHandle();
+
+  for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    double coords[] = {0, 0, 0};
+    EntityHandle new_vertex;
+    for (int dd = 0; dd != 3; dd++) {
+      coords[dd] = getCoordsAtGaussPts()(gg, dd);
+    }
+    CHKERR moabDebug->create_vertex(&coords[0], new_vertex);
+    FTensor::Tensor1<double, 3> trac(t_traction(0), t_traction(1), 0.);
+    FTensor::Tensor1<double, 3> disp(t_disp(0), t_disp(1), 0.);
+
+    auto t_contact_normal = normal(t_coords, t_disp);
+    double _gap0 = gap0(t_coords, t_contact_normal);
+    double _gap = gap(t_disp, t_contact_normal);
+    double gap_tot = _gap - _gap0;
+    double constra = constrian(gap0(t_coords, t_contact_normal),
+                               gap(t_disp, t_contact_normal),
+                               normal_traction(t_traction, t_contact_normal));
+    CHKERR moabDebug->tag_set_data(th_gap, &new_vertex, 1, &gap_tot);
+    CHKERR moabDebug->tag_set_data(th_cons, &new_vertex, 1, &constra);
+
+    FTensor::Tensor1<double, 3> norm(t_contact_normal(0), t_contact_normal(1),
+                                     0.);
+
+    if (SPACE_DIM == 3) {
+      trac(2) = t_traction(2);
+      norm(2) = t_contact_normal(2);
+      disp(2) = t_disp(2);
+    }
+
+    CHKERR moabDebug->tag_set_data(th_traction, &new_vertex, 1, &trac(0));
+    CHKERR moabDebug->tag_set_data(th_cont_normal, &new_vertex, 1, &norm(0));
+    CHKERR moabDebug->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
+    auto t_normal = getFTensor1Normal();
+    if (SPACE_DIM == 2) //FIXME: make normal outward
+      t_normal(i) *= -1;
+    CHKERR moabDebug->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
+    ++t_traction;
+    ++t_coords;
+    ++t_disp;
+  }
+  // }
 
   MoFEMFunctionReturn(0);
 }
@@ -871,6 +997,15 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
+    { // for debugging
+
+      std::ostringstream ostrm;
+      ostrm << "out_debug_" << ts_step << ".vtk";
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", debug_post_proc);
+      CHKERR moab_debug.write_file(ostrm.str().c_str(), "VTK", "");
+      mb_post_debug.delete_mesh();
+    }
+
     auto print_max_min = [&](auto &tuple, const std::string msg) {
       MoFEMFunctionBegin;
       CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
@@ -890,6 +1025,16 @@ struct Monitor : public FEMethod {
     CHKERR print_max_min(uYScatter, "Uy");
     if (SPACE_DIM == 3)
       CHKERR print_max_min(uZScatter, "Uz");
+
+    cout << " integral_1_lhs: " << integral_1_lhs
+         << " integral_1_rhs: " << integral_1_rhs << endl;
+    cout << " integral_2_lhs: " << integral_2_lhs
+         << " integral_2_rhs: " << integral_2_rhs << endl;
+    cout << " integral_3_lhs: " << integral_3_lhs
+         << " integral_3_rhs: " << integral_3_rhs << endl;
+
+    integral_1_lhs = integral_1_rhs = integral_2_lhs = integral_2_rhs =
+        integral_3_lhs = integral_3_rhs = 0;
 
     MoFEMFunctionReturn(0);
   }
