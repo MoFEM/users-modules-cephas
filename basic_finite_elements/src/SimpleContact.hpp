@@ -431,6 +431,8 @@ struct SimpleContactProblem {
     boost::shared_ptr<MatrixDouble> invHMat;
     boost::shared_ptr<VectorDouble> detHVec;
 
+    boost::shared_ptr<VectorDouble> gaussPtsStatePtr;
+
     double areaSlave;
     double areaMaster;
 
@@ -457,14 +459,15 @@ struct SimpleContactProblem {
       hMat = boost::make_shared<MatrixDouble>();
       FMat = boost::make_shared<MatrixDouble>();
       HMat = boost::make_shared<MatrixDouble>();
-      invHMat =
-          boost::make_shared<MatrixDouble>();
+      invHMat = boost::make_shared<MatrixDouble>();
       detHVec = boost::make_shared<VectorDouble>();
 
-      tangentOneVectorSlavePtr = boost::make_shared<VectorDouble>() ;
-      tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>() ;
-      tangentOneVectorMasterPtr = boost::make_shared<VectorDouble>() ;
-      tangentTwoVectorMasterPtr = boost::make_shared<VectorDouble>() ;
+      tangentOneVectorSlavePtr = boost::make_shared<VectorDouble>();
+      tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>();
+      tangentOneVectorMasterPtr = boost::make_shared<VectorDouble>();
+      tangentTwoVectorMasterPtr = boost::make_shared<VectorDouble>();
+
+      gaussPtsStatePtr = boost::make_shared<VectorDouble>();
 
       int local_size = (mField.get_comm_rank() == 0)
                            ? CommonDataSimpleContact::LAST_ELEMENT
@@ -2108,6 +2111,11 @@ struct SimpleContactProblem {
   };
 
   /**
+   * \brief Choice of the contact prism side where to put the state tag
+   */
+  enum StateTagSide { NO_TAG = 0, MASTER_SIDE = 1, SLAVE_SIDE = 2 };
+
+  /**
    * @brief Operator for the simple contact element
    *
    * Prints to .vtk file pre-calculated gaps, Lagrange multipliers and their
@@ -2120,13 +2128,16 @@ struct SimpleContactProblem {
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     moab::Interface &moabOut;
     bool lagFieldSet;
+    StateTagSide stateTagSide;
 
     OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
                    boost::shared_ptr<CommonDataSimpleContact> &common_data,
-                   moab::Interface &moab_out, bool lagrange_field = true)
+                   moab::Interface &moab_out, bool lagrange_field = true,
+                   StateTagSide state_tag_side = NO_TAG)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
-          moabOut(moab_out), lagFieldSet(lagrange_field) {}
+          moabOut(moab_out), lagFieldSet(lagrange_field),
+          stateTagSide(state_tag_side) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
@@ -2247,7 +2258,7 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
       moab::Interface &moab_out, bool alm_flag = false,
-      bool lagrange_field = true);
+      bool lagrange_field = true, StateTagSide state_tag_side = NO_TAG);
 
   /**
    * @brief Calculate tangent operator for contact force for change of

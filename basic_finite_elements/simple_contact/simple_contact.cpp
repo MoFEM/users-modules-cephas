@@ -762,7 +762,8 @@ int main(int argc, char *argv[]) {
 
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
+        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag, true,
+        SimpleContactProblem::MASTER_SIDE);
 
     mb_post.delete_mesh();
 
@@ -771,6 +772,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
+
+    CHKERR moab.write_file("mesh.h5m", "MOAB", "PARALLEL=WRITE_PART");                                
 
     std::array<double, 2> nb_gauss_pts;
     std::array<double, 2> contact_area;
