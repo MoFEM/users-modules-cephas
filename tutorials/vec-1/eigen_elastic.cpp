@@ -365,7 +365,7 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR VecNorm(D, NORM_2, &nrm2r);
     MOFEM_LOG_C(
         "EXAMPLE", Sev::inform,
-        " ncov = %D eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
+        " ncov = %d eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
         eigr, eigi, 1. / eigr, nrm2r);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR pipeline_mng->loopFiniteElements();
