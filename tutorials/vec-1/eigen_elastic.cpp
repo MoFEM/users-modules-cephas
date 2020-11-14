@@ -364,7 +364,7 @@ MoFEMErrorCode Example::outputResults() {
     MOFEM_LOG_CHANNEL("WORLD");
     MOFEM_LOG_C(
         "WORLD", Sev::inform,
-        " ncov = %D eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
+        " ncov = %d eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
         eigr, eigi, 1. / eigr, nrm2r);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR pipeline_mng->loopFiniteElements();
