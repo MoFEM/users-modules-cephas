@@ -35,12 +35,13 @@ template <> struct ElementsAndOps<2> {
 };
 
 template <> struct ElementsAndOps<3> {
-  using DomainEle = VolumeElementForcesAndSourcesCoreBase;
+  using DomainEle = VolumeElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -145,6 +146,9 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
+
+  MOFEM_LOG("EXAMPLE", Sev::inform)
+      << "Read mesh for problem in " << EXECUTABLE_DIMENSION;
   CHKERR simple->getOptions();
   CHKERR simple->loadFile();
   MoFEMFunctionReturn(0);
@@ -271,7 +275,6 @@ MoFEMErrorCode Example::assembleSystem() {
 
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
-  MOFEM_LOG_CHANNEL("WORLD");
   MoFEMFunctionBegin;
 
   auto createEPS = [](MPI_Comm comm) {
@@ -302,16 +305,16 @@ MoFEMErrorCode Example::solveSystem() {
 
   // Optional: Get some information from the solver and display it
   CHKERR EPSGetIterationNumber(ePS, &its);
-  MOFEM_LOG_C("WORLD", Sev::inform, " Number of iterations of the method: %D",
+  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Number of iterations of the method: %D",
               its);
   CHKERR EPSGetST(ePS, &st);
   CHKERR EPSGetType(ePS, &type);
-  MOFEM_LOG_C("WORLD", Sev::inform, " Solution method: %s", type);
+  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Solution method: %s", type);
   CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
-  MOFEM_LOG_C("WORLD", Sev::inform, " Number of requested eigenvalues: %D",
+  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Number of requested eigenvalues: %D",
               nev);
   CHKERR EPSGetTolerances(ePS, &tol, &maxit);
-  MOFEM_LOG_C("WORLD", Sev::inform, " Stopping condition: tol=%.4g, maxit=%D",
+  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Stopping condition: tol=%.4g, maxit=%D",
               (double)tol, maxit);
 
   MoFEMFunctionReturn(0);
@@ -320,7 +323,6 @@ MoFEMErrorCode Example::solveSystem() {
 
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
-  MOFEM_LOG_CHANNEL("WORLD");
   MoFEMFunctionBegin;
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
   auto *simple = mField.getInterface<Simple>();
@@ -361,9 +363,8 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecNorm(D, NORM_2, &nrm2r);
-    MOFEM_LOG_CHANNEL("WORLD");
     MOFEM_LOG_C(
-        "WORLD", Sev::inform,
+        "EXAMPLE", Sev::inform,
         " ncov = %d eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
         eigr, eigi, 1. / eigr, nrm2r);
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
@@ -401,6 +402,13 @@ int main(int argc, char *argv[]) {
   const char param_file[] = "param_file.petsc";
   SlepcInitialize(&argc, &argv, param_file, help);
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+  LogManager::setLog("EXAMPLE");
+  MOFEM_LOG_TAG("EXAMPLE", "example");
 
   try {
 

@@ -38,10 +38,17 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 if(SLEPC_LIBRARY)
 
   tutorials_build_and_install(
-    eigen_elastic ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp)
+    eigen_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp)
+  set_target_properties(
+    eigen_elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+
+  tutorials_build_and_install(
+    eigen_elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp) 
+  set_target_properties(
+    eigen_elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
   add_test(
-    eigen_elastic
+    eigen_elastic_2d
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
     ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic
     -file_name part.h5m -order 1 -log_no_color -test)
