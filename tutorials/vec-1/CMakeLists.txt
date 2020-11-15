@@ -50,7 +50,7 @@ if(SLEPC_LIBRARY)
   add_test(
     eigen_elastic_2d
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-    ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic
+    ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic_2d
     -file_name part.h5m -order 1 -log_no_color -test)
 
 endif(SLEPC_LIBRARY)
