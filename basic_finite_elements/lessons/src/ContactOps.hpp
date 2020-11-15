@@ -138,6 +138,20 @@ private:
   MatrixDouble transLocMat;
 };
 
+struct OpConstrainDomainLhs_dLdL : public DomainEleOp {
+  OpConstrainDomainLhs_dLdL(const std::string row_field_name,
+                          const std::string col_field_name,
+                          boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+  MatrixDouble locMat;
+  MatrixDouble transLocMat;
+};
+
 template <typename T1, typename T2>
 inline FTensor::Tensor1<double, SPACE_DIM>
 normal(FTensor::Tensor1<T1, 3> &t_coords,
@@ -701,6 +715,82 @@ OpConstrainDomainLhs_dU::OpConstrainDomainLhs_dU(
 }
 
 MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
+                                               EntityType row_type,
+                                               EntityType col_type,
+                                               EntData &row_data,
+                                               EntData &col_data) {
+  MoFEMFunctionBegin;
+
+  const size_t nb_gauss_pts = getGaussPts().size2();
+  const size_t row_nb_dofs = row_data.getIndices().size();
+  const size_t col_nb_dofs = col_data.getIndices().size();
+
+  if (row_nb_dofs && col_nb_dofs) {
+
+    auto t_w = getFTensor0IntegrationWeight();
+
+    locMat.resize(row_nb_dofs, col_nb_dofs, false);
+    locMat.clear();
+    transLocMat.resize(col_nb_dofs, row_nb_dofs, false);
+
+    size_t nb_base_functions = row_data.getN().size2() / 3;
+    auto t_row_base = row_data.getFTensor1N<3>();
+    auto t_row_diff_base = row_data.getFTensor2DiffN<3, SPACE_DIM>();
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      const double alpha = getMeasure() * t_w;
+
+      size_t rr = 0;
+      for (; rr != row_nb_dofs / SPACE_DIM; ++rr) {
+
+        auto t_mat_diag = getFTensor1FromArrayDiag<SPACE_DIM, SPACE_DIM>(
+            locMat, SPACE_DIM * rr);
+        const double t_row_div_base = t_row_diff_base(i, i);
+
+        auto t_col_base = col_data.getFTensor0N(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+
+        for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
+
+          t_mat_diag(i) += alpha * t_row_base(j) * t_col_diff_base(j);
+          t_mat_diag(i) += alpha * t_row_div_base * t_col_base;
+
+          ++t_col_base;
+          ++t_col_diff_base;
+          ++t_mat_diag;
+        }
+
+        ++t_row_diff_base;
+        ++t_row_base;
+      }
+      for (; rr < nb_base_functions; ++rr) {
+        ++t_row_diff_base;
+        ++t_row_base;
+      }
+
+      ++t_w;
+    }
+
+    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+                        ADD_VALUES);
+    noalias(transLocMat) = trans(locMat);
+    CHKERR MatSetValues(getSNESB(), col_data, row_data,
+                        &*transLocMat.data().begin(), ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpConstrainDomainLhs_dU::OpConstrainDomainLhs_dLdL(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {
+  sYmm = false;
+}
+
+MoFEMErrorCode OpConstrainDomainLhs_dLdL::doWork(int row_side, int col_side,
                                                EntityType row_type,
                                                EntityType col_type,
                                                EntData &row_data,
