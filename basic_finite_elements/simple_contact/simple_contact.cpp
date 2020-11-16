@@ -491,8 +491,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
 
       CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order);
-      CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order);
+      CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order+1);
+      CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order+1);
       // Range slave_edges, master_edges;
 
       // CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
@@ -605,15 +605,15 @@ int main(int argc, char *argv[]) {
       return fe_rhs_simple_contact;
     };
 
-    auto get_hdiv_surface_rhs_for_face = [&](auto contact_problem,
-                                             auto make_element) {
-      auto fe_rhs_simple_contact = make_element();
-      auto common_data_simple_contact = make_contact_common_data();
-      contact_problem->setContactOperatorsRhsOperatorsHdiv3DForFace(
-          fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT");
-      return fe_rhs_simple_contact;
-    };
+    // auto get_hdiv_surface_rhs_for_face = [&](auto contact_problem,
+    //                                          auto make_element) {
+    //   auto fe_rhs_simple_contact = make_element();
+    //   auto common_data_simple_contact = make_contact_common_data();
+    //   contact_problem->setContactOperatorsRhsOperatorsHdiv3DForFace(
+    //       fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
+    //       "LAGMULT");
+    //   return fe_rhs_simple_contact;
+    // };
 
     auto get_contact_rhs = [&](auto contact_problem, auto make_element,
                                bool is_alm = false) {

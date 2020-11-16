@@ -3506,11 +3506,11 @@ struct SimpleContactProblem {
                   common_data_simple_contact,
               string field_name, string lagrang_field_name);
 
-      MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv3DForFace(
-          boost::shared_ptr<FaceElementForcesAndSourcesCore>
-              fe_rhs_simple_contact,
-          boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-          string field_name, string lagrang_field_name);
+      // MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv3DForFace(
+      //     boost::shared_ptr<FaceElementForcesAndSourcesCore>
+      //         fe_rhs_simple_contact,
+      //     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+      //     string field_name, string lagrang_field_name);
 
       MoFEMErrorCode setContactOperatorsRhsOperatorsHdiv3DVolume(
           boost::shared_ptr<VolumeElementForcesAndSourcesCore>

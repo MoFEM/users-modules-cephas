@@ -4686,12 +4686,12 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
         // t_nf(i) += beta * t_contact_normal_tensor(i, j);
 
         // 07/08/2020
-        t_nf(i) -= beta * t_contact_normal_tensor(i, j) *
-                   (t_x_master(j) /*- t_X_master(j)*/);
+        // t_nf(i) -= beta * t_contact_normal_tensor(i, j) *
+        //            (t_x_master(j) /*- t_X_master(j)*/);
 
 
-        // t_nf(i) -= beta * tangent_1_disp_master(i);
-        // t_nf(i) -= beta * tangent_2_disp_master(i);
+        t_nf(i) -= beta * tangent_1_disp_master(i);
+        t_nf(i) -= beta * tangent_2_disp_master(i);
 
         // t_nf(i) -= beta * t_x_master(i);
 
@@ -4791,7 +4791,7 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToMasterNormal::doWork(
         // t_nf(i) -= alpha * t_base * tangent_2_traction(i);
 
         t_nf(i) += alpha * t_base * t_traction(j) * t_normal(j) 
-                   * t_traction(i);
+                   * t_normal(i);
 
         // for augmented
         // t_nf(i) -= alpha * t_base * gap_ptr * t_normal(i);
@@ -5365,8 +5365,8 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_dlambda_Master::doWork(
           ++t_col_base;
           ++t_mat;
         }
-        for (; cc < nb_face_functions; ++cc)
-          ++t_col_base;
+        // for (; cc < nb_face_functions; ++cc)
+        //   ++t_col_base;
 
         ++t_row_base;
       }
@@ -5631,13 +5631,13 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_Master_tied::doWork(
 
           // t_mat(2, 2) += beta_n;
           // t_mat_diag(i) -= beta_n;
-          // t_mat(i, j) -=
-          //     beta_t_1 * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
-          // t_mat(i, j) -=
-          //     beta_t_2 * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          t_mat(i, j) -=
+              beta_t_1 * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          t_mat(i, j) -=
+              beta_t_2 * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           // 07/08/2020
-          t_mat(i, j) += beta_n * t_contact_normal_tensor(i, j);
+          // t_mat(i, j) += beta_n * t_contact_normal_tensor(i, j);
           // t_mat(i, j) -= beta_n * t_tangent_1_at_gp(i) *
           // t_tangent_1_at_gp(j); t_mat(i, j) -= beta_n * t_tangent_2_at_gp(i)
           // * t_tangent_2_at_gp(j);
@@ -6523,39 +6523,39 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryLhs_dU_ForFace::doWork(
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode
-SimpleContactProblem::setContactOperatorsRhsOperatorsHdiv3DForFace(
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_rhs_simple_contact,
-    boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name) {
-  MoFEMFunctionBegin;
-  cerr << "0000000000000000\n";
+// MoFEMErrorCode
+// SimpleContactProblem::setContactOperatorsRhsOperatorsHdiv3DForFace(
+//     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_rhs_simple_contact,
+//     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
+//     string field_name, string lagrange_field_name) {
+//   MoFEMFunctionBegin;
+//   cerr << "0000000000000000\n";
 
-  // fe_rhs_simple_contact->getOpPtrVector().push_back(
-  //     new OpGetNormalAndTangentsFace(field_name, common_data_simple_contact));
+//   // fe_rhs_simple_contact->getOpPtrVector().push_back(
+//   //     new OpGetNormalAndTangentsFace(field_name, common_data_simple_contact));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetNormalSlave(field_name, common_data_simple_contact));
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetNormalMaster(field_name, common_data_simple_contact));
+//   fe_rhs_simple_contact->getOpPtrVector().push_back(
+//       new OpGetNormalSlave(field_name, common_data_simple_contact));
+//   fe_rhs_simple_contact->getOpPtrVector().push_back(
+//       new OpGetNormalMaster(field_name, common_data_simple_contact));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetOrthonormalTangents(field_name, common_data_simple_contact));
+//   fe_rhs_simple_contact->getOpPtrVector().push_back(
+//       new OpGetOrthonormalTangents(field_name, common_data_simple_contact));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<3>(
-          field_name, common_data_simple_contact->xFaceAtPts));
+//   fe_rhs_simple_contact->getOpPtrVector().push_back(
+//       new OpCalculateVectorFieldValues<3>(
+//           field_name, common_data_simple_contact->xFaceAtPts));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpConstrainBoundaryTractionForFace(lagrange_field_name,
-                                             common_data_simple_contact));
+//   fe_rhs_simple_contact->getOpPtrVector().push_back(
+//       new OpConstrainBoundaryTractionForFace(lagrange_field_name,
+//                                              common_data_simple_contact));
 
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpConstrainBoundaryRhsForFace(lagrange_field_name,
-                                        common_data_simple_contact, cnValue));
+//   fe_rhs_simple_contact->getOpPtrVector().push_back(
+//       new OpConstrainBoundaryRhsForFace(lagrange_field_name,
+//                                         common_data_simple_contact, cnValue));
 
-  MoFEMFunctionReturn(0);
-}
+//   MoFEMFunctionReturn(0);
+// }
 
 MoFEMErrorCode
 SimpleContactProblem::setContactOperatorsLhsOperatorsHdiv3DForFace(
