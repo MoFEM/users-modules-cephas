@@ -69,7 +69,7 @@ constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0;
-constexor double stab = 1e-12;
+constexpr double stab = 1;
 
 double integral_1_lhs = 0;
 double integral_1_rhs = 0;
@@ -304,6 +304,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpK("U", "U", commonDataPtr->mDPtr));
     pipeline.push_back(
         new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(
+        new OpConstrainDomainLhs_Stab("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -339,6 +341,7 @@ MoFEMErrorCode Example::OPs() {
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+    pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA", commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
