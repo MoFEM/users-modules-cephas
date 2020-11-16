@@ -869,7 +869,6 @@ MoFEMErrorCode OpConstrainDomainLhs_Stab::doWork(int row_side, int col_side,
     locMat.clear();
 
     size_t nb_base_functions = row_data.getN().size2() / 3;
-    auto t_row_base = row_data.getFTensor1N<3>();
     auto t_row_diff_base = row_data.getFTensor2DiffN<3, SPACE_DIM>();
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
@@ -896,7 +895,6 @@ MoFEMErrorCode OpConstrainDomainLhs_Stab::doWork(int row_side, int col_side,
       }
       for (; rr < nb_base_functions; ++rr) {
         ++t_row_diff_base;
-        ++t_row_base;
       }
 
       ++t_w;

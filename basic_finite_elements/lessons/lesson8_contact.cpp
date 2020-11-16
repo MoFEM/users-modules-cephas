@@ -69,7 +69,7 @@ constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0;
-constexpr double stab = 1;
+constexpr double stab = 0;
 
 double integral_1_lhs = 0;
 double integral_1_rhs = 0;
