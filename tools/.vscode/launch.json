@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+  
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Smoothing",
+        "program": "/Users/ignatiosathanasiadis/mofem_install/users_modules_debug/tools/arbitrary_smooth_contact_surface",
+        "args": [
+          "-my_file",
+          "sphere_1.cub",
+        ],
+        "cwd": "/Users/ignatiosathanasiadis/jobs/testsNonMatching/smoothing_sphere",
+        "stopOnEntry": true,
+        "preLaunchTask": "build_tools",
+      }
+    ]
+  }

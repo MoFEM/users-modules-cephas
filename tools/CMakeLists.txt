@@ -170,4 +170,18 @@ if(ADOL-C_LIBRARY)
   )
   install(TARGETS mesh_smoothing DESTINATION bin)
 
+  add_executable(arbitrary_smooth_contact_surface ${CMAKE_CURRENT_SOURCE_DIR}/arbitrary_smooth_contact_surface.cpp)
+  target_link_libraries(arbitrary_smooth_contact_surface
+    users_modules
+    mofem_finite_elements
+    mofem_interfaces
+    mofem_multi_indices
+    mofem_petsc
+    mofem_approx
+    mofem_cblas
+    mofem_third_party
+    ${MoFEM_PROJECT_LIBS}
+  )
+  install(TARGETS arbitrary_smooth_contact_surface DESTINATION bin)
+
 endif(ADOL-C_LIBRARY)

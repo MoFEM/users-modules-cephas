@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "macFrameworkPath": [],
+            "compilerPath": "/Users/ignatiosathanasiadis/spack/opt/spack/darwin-catalina-x86_64/apple-clang-11.0.0/gcc-9.2.0-ie4mp5d7u3ygeu3icgelktq437acyzw6/bin/gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

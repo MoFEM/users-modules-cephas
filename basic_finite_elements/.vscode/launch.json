@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    
+  
+  
+  
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Displacements_Check",
+        "program": "/Users/ignatiosathanasiadis/mofem_install/users_modules_debug/basic_finite_elements/simple_contact",
+        "args": [
+          "-my_file",
+          "punch_top_and_mid.cub",
+        ],
+        "cwd": "/Users/ignatiosathanasiadis/mofem_install/users_modules_debug/basic_finite_elements/simple_contact/examples",
+        "stopOnEntry": true,
+        //"preLaunchTask": "build_fracture",
+      }
+    ]
+  }
