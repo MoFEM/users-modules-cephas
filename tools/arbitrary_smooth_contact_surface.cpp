@@ -28,9 +28,9 @@ static char help[] = "...\n\n";
 #include <BasicFiniteElements.hpp>
 
 using EntData = DataForcesAndSourcesCore::EntData;
-using FaceEle = FaceElementForcesAndSourcesCoreBase;
+using FaceEle = FaceElementForcesAndSourcesCore;
 using FaceEleOp = FaceEle::UserDataOperator;
-using VolumeEle = VolumeElementForcesAndSourcesCoreBase;
+using VolumeEle = VolumeElementForcesAndSourcesCore;
 using VolumeEleOp = VolumeEle::UserDataOperator;
 
 struct ArbitrarySmoothingProblem {
@@ -43,10 +43,6 @@ struct ArbitrarySmoothingProblem {
 
   int getRule(int order) { return 2 * order; };
 
-    MoFEMErrorCode preProcess() {
-      MoFEMFunctionBeginHot;
-      MoFEMFunctionReturnHot(0);
-    }
     // Destructor
     ~SurfaceSmoothingElement() {}
   };
@@ -140,7 +136,8 @@ struct ArbitrarySmoothingProblem {
         const string field_name,
         boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
         : FaceEleOp(field_name, UserDataOperator::OPCOL),
-          commonSurfaceSmoothingElement(common_data_smoothing) {}
+          commonSurfaceSmoothingElement(common_data_smoothing) {
+          }
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
@@ -197,6 +194,10 @@ struct ArbitrarySmoothingProblem {
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
+
+
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
 
       if (type != MBVERTEX)
         PetscFunctionReturn(0);
@@ -321,18 +322,26 @@ struct ArbitrarySmoothingProblem {
             getFTensor0FromVec(*commonSurfaceSmoothingElement->divNormalHdiv);
 
         int nb_base_fun_row = data.getFieldData().size();
-
         for (unsigned int gg = 0; gg != ngp; ++gg) {
           FTensor::Tensor0<double *> t_field_data_slave(
               &data.getFieldData()[0]);
           auto t_base = data.getFTensor1N<3>(gg, 0);
-          auto t_row_diff_base = data.getFTensor2DiffN<3, 3>(gg, 0);
+          
+          // const double *grad_ptr = &data.getDiffN()(gg, 0);
+          // FTensor::Tensor1<FTensor::PackPtr<const double *, 9>, 3> t_grad_base(
+          //     grad_ptr, &grad_ptr[1], &grad_ptr[2]);
+
+          double *grad_ptr =
+              const_cast<double *>(&(data.getDiffN(gg)(0, 0)));
+
+          FTensor::Tensor1<double *, 3> t_grad_base(grad_ptr, &grad_ptr[1],
+                                                    &grad_ptr[2], 3);
 
           for (int bb = 0; bb != nb_base_fun_row; ++bb) {
             t_n_h_div(i) += t_field_data_slave * t_base(i);
-            t_divergence_n_h_div += t_field_data_slave * t_row_diff_base(i, i);
+            t_divergence_n_h_div += t_field_data_slave * (t_grad_base(0) + t_grad_base(1) + t_grad_base(2));
             ++t_base;
-            ++t_row_diff_base;
+            ++t_grad_base;
           }
           ++t_n_h_div;
           ++t_divergence_n_h_div;
@@ -873,14 +882,6 @@ int main(int argc, char *argv[]) {
                                                vertices_smoothed);
       CHKERR m_field.set_field_order(vertices_smoothed, "CONTACT_MESH_NODE_POSITIONS", order);
 
-    
-
-      // CHKERR m_field.set_field_order(0, MBTRI, "CONTACT_MESH_NODE_POSITIONS",
-      //                                order);
-      // CHKERR m_field.set_field_order(0, MBEDGE, "CONTACT_MESH_NODE_POSITIONS",
-      //                                order);
-      // CHKERR m_field.set_field_order(0, MBVERTEX, "CONTACT_MESH_NODE_POSITIONS",
-      //                                1);
     }
     if (!master_tris.empty()) {
       CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
@@ -894,12 +895,6 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.get_moab().get_connectivity(master_tris,
                                                vertices_smoothed);
       CHKERR m_field.set_field_order(vertices_smoothed, "CONTACT_MESH_NODE_POSITIONS", order);
-      // CHKERR m_field.set_field_order(0, MBTRI, "CONTACT_MESH_NODE_POSITIONS",
-      //                                order);
-      // CHKERR m_field.set_field_order(0, MBEDGE, "CONTACT_MESH_NODE_POSITIONS",
-      //                                order);
-      // CHKERR m_field.set_field_order(0, MBVERTEX, "CONTACT_MESH_NODE_POSITIONS",
-      //                                1);
     }
 
     if (!slave_tris.empty()) {
@@ -1095,7 +1090,9 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
       CHKERR SNESSetFromOptions(snes);
     }
-
+  // CHKERR DMoFEMLoopFiniteElements(dm, "SURFACE_SMOOTHING_ELEM",
+  //                                     get_smooth_face_rhs(smooth_problem, make_arbitrary_smooth_element_face));
+      
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
     CHKERR SNESGetConvergedReason(snes, &snes_reason);

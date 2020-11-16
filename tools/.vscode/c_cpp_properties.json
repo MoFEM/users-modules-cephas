@@ -6,12 +6,15 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "macFrameworkPath": [],
-            "compilerPath": "/Users/ignatiosathanasiadis/spack/opt/spack/darwin-catalina-x86_64/apple-clang-11.0.0/gcc-9.2.0-ie4mp5d7u3ygeu3icgelktq437acyzw6/bin/gcc",
-            "cStandard": "gnu17",
+            "macFrameworkPath": ["/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk/System/Library/Frameworks/"],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
             "cppStandard": "gnu++14",
-            "intelliSenseMode": "gcc-x64"
+            "cppStandard": "c++14",
+            "intelliSenseMode": "clang-x64",
+            "compileCommands": " /Users/ignatiosathanasiadis/mofem_install/users_modules_debug/compile_commands.json "
         }
     ],
     "version": 4
+    }
 }
