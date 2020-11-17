@@ -167,7 +167,6 @@ template <typename T1, typename T2>
 inline FTensor::Tensor1<double, SPACE_DIM>
 normal(FTensor::Tensor1<T1, 3> &t_coords,
        FTensor::Tensor1<T2, SPACE_DIM> &t_disp) {
-
   FTensor::Tensor1<double, SPACE_DIM> t_normal;
   t_normal(i) = 0;
   t_normal(1) = 1.;
@@ -177,7 +176,7 @@ normal(FTensor::Tensor1<T1, 3> &t_coords,
 template <typename T>
 inline double gap0(FTensor::Tensor1<T, 3> &t_coords,
                    FTensor::Tensor1<double, SPACE_DIM> &t_normal) {
-  return (-1 - t_coords(1)) * t_normal(1);
+  return (-0.5 - t_coords(1)) * t_normal(1);
 }
 
 template <typename T>
@@ -189,7 +188,7 @@ inline double gap(FTensor::Tensor1<T, SPACE_DIM> &t_disp,
 template <typename T>
 inline double normal_traction(FTensor::Tensor1<T, SPACE_DIM> &t_traction,
                               FTensor::Tensor1<double, SPACE_DIM> &t_normal) {
-  return t_traction(i) * t_normal(i);
+  return -t_traction(i) * t_normal(i);
 }
 
 inline double sign(double x) {
@@ -366,15 +365,14 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       const double alpha = t_w * getMeasure();
 
       auto t_contact_normal = normal(t_coords, t_disp);
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_normal_tensor;
-      // t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
+      t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
       // Temporary solution to test if sliding boundary conditions works
-      t_contact_normal_tensor(i, j) = t_normal(i) * t_normal(j);
+      // t_P(i, j) = t_normal(i) * t_normal(j);
 
 
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_tangent_tensor;
-      t_contact_tangent_tensor(i, j) =
-          kronecker_delta(i, j) - t_contact_normal_tensor(i, j);
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
+      t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
       FTensor::Tensor1<double, SPACE_DIM> t_rhs_constrains;
 
@@ -386,15 +384,15 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
 
       FTensor::Tensor1<double, SPACE_DIM> t_rhs_tangent_disp,
           t_rhs_tangent_traction;
-      t_rhs_tangent_disp(i) = t_contact_tangent_tensor(i, j) * t_disp(j);
+      t_rhs_tangent_disp(i) = t_Q(i, j) * t_disp(j);
       t_rhs_tangent_traction(i) =
-          cn * t_contact_tangent_tensor(i, j) * t_traction(j);
+          cn * t_Q(i, j) * t_traction(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
         const double beta = alpha * (t_base(i) * t_normal(i));
 
-        // t_nf(i) += beta * t_rhs_constrains(i);
+        t_nf(i) -= beta * t_rhs_constrains(i);
         t_nf(i) -= beta * t_rhs_tangent_disp(i);
         t_nf(i) += beta * t_rhs_tangent_traction(i);
 
