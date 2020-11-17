@@ -3523,12 +3523,7 @@ struct SimpleContactProblem {
           boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
           string field_name, string lagrange_field_name);
 
-      MoFEMErrorCode setContactOperatorsLhsOperatorsHdiv3DForFace(
-          boost::shared_ptr<FaceElementForcesAndSourcesCore>
-              fe_lhs_simple_contact,
-          boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-          string field_name, string lagrange_field_name);
-
+      
       MoFEMErrorCode setContactOperatorsLhsOperatorsHdiv3DVolume(
           boost::shared_ptr<VolumeElementForcesAndSourcesCore>
               fe_hdiv_lhs_slave_tet,
@@ -3857,21 +3852,6 @@ struct SimpleContactProblem {
             : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
               commonDataSimpleContact(common_data_contact) {}
 
-        MoFEMErrorCode doWork(int side, EntityType type,
-                              DataForcesAndSourcesCore::EntData &data);
-
-      private:
-        boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-      };
-
-      struct OpConstrainBoundaryRhsForFace : public FaceUserDataOperator {
-        double cN;
-        OpConstrainBoundaryRhsForFace(
-            const std::string field_name,
-            boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
-            double &cn_value)
-            : FaceUserDataOperator(field_name, UserDataOperator::OPCOL),
-              commonDataSimpleContact(common_data_contact), cN(cn_value) {}
         MoFEMErrorCode doWork(int side, EntityType type,
                               DataForcesAndSourcesCore::EntData &data);
 

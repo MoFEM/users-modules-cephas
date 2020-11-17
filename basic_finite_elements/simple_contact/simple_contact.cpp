@@ -418,21 +418,6 @@ int main(int argc, char *argv[]) {
       CHKERR moab.get_adjacencies(slave_tets, 2, true, full_slave_tets_tris,
                                   moab::Interface::UNION);
 
-      // CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
-      // CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
-      // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
-      // CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", 0);
-      // CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 0);
-
-      // CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
-      // CHKERR m_field.add_ents_to_field_by_type(full_slave_tets_tris, MBTRI,
-      //                                          "LAGMULT");
-      // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
-
-      // CHKERR m_field.set_field_order(slave_tets, "LAGMULT", 0);
-      // CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
-      // CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", 0);
-
       Range tris_not_needed;
       CHKERR moab.get_adjacencies(slave_tets, 2, false, tris_not_needed,
                                   moab::Interface::UNION);
@@ -450,67 +435,12 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.add_field("LAGMULT", HDIV, DEMKOWICZ_JACOBI_BASE, 3,
                                MB_TAG_SPARSE, MF_ZERO);
 
-      // CHKERR m_field.add_ents_to_field_by_type(slave_tets, MBTET, "LAGMULT");
-      // CHKERR m_field.set_field_order(slave_tets, "LAGMULT", 0);
-      // CHKERR m_field.add_ents_to_field_by_type(tris_not_needed, MBTRI,
-      //                                          "LAGMULT");
-      // CHKERR m_field.set_field_order(tris_not_needed, "LAGMULT", 0);
-      // Range extra_tris, extra_tets;
-      // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit)) {
-      //   if (cit->getName().compare(0, 10, "HDIV_FACES") == 0) {
-      //     CHKERR PetscPrintf(PETSC_COMM_WORLD, "Insert %s (id: %d)\n",
-      //                        cit->getName().c_str(), cit->getMeshsetId());
-      //     EntityHandle cubit_meshset = cit->getMeshset();
-      //     cerr << "?????????\n";
-      //     // get tet entities from back bit_level
-      //     EntityHandle ref_level_meshset;
-      //     CHKERR moab.create_meshset(MESHSET_SET | MESHSET_TRACK_OWNER,
-      //                                ref_level_meshset);
-
-      //     CHKERR m_field.getInterface<BitRefManager>()
-      //         ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-      //                                        BitRefLevel().set(), MBTRI,
-      //                                        ref_level_meshset);
-
-      //     CHKERR moab.get_entities_by_handle(ref_level_meshset, extra_tris);
-      //     cerr << "extra_tris  " << extra_tris.size() << "\n";
-      //     // CHKERR moab.get_adjacencies(extra_tris, 3, false, extra_tets,
-      //     //                             moab::Interface::UNION);
-      //     // extra_tets = extra_tets.subset_by_type(MBTET);
-      //     Range check_tris;
-      //     CHKERR moab.get_adjacencies(slave_tets, 2, false, check_tris,
-      //                                 moab::Interface::UNION);
-      //     extra_tris = intersect(extra_tris, check_tris);
-      //     cerr << "extra_tris.size() " << extra_tris.size() << "\n";
-      //     // slave_tets.merge(extra_tets);
-      //     slave_tris.merge(extra_tris);
-      //   }
-      // }
-
       CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "LAGMULT");
       CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
 
       CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order);
-      CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order);
-      // Range slave_edges, master_edges;
-
-      // CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
-      //                             moab::Interface::UNION);
-      // CHKERR moab.get_adjacencies(master_tris, 1, false, master_edges,
-      //                             moab::Interface::UNION);
-
-      // CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION",
-      //                                order+2);
-
-      // CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION",
-      // order + 2);
-
-      // CHKERR m_field.set_field_order(slave_edges, "SPATIAL_POSITION",
-      //                                order + 2);
-
-      // CHKERR m_field.set_field_order(master_edges, "SPATIAL_POSITION",
-      //                                order + 2);
+      CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order + 1);
+      CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order + 1);
 
       CHKERR m_field.add_finite_element("HDIVMATERIAL", MF_ZERO);
 
