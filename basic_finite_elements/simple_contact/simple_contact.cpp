@@ -491,8 +491,8 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.set_field_order(0, MBTET, "LAGMULT", 0);
 
       CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order_lambda);
-      CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order+1);
-      CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order+1);
+      CHKERR m_field.set_field_order(slave_tris, "SPATIAL_POSITION", order);
+      CHKERR m_field.set_field_order(master_tris, "SPATIAL_POSITION", order);
       // Range slave_edges, master_edges;
 
       // CHKERR moab.get_adjacencies(slave_tris, 1, false, slave_edges,
