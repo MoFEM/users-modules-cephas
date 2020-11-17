@@ -64,12 +64,12 @@ using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
 
-constexpr int order = 2;
+constexpr int order = 4;
 constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0;
-constexpr double stab = 0;
+constexpr double stab = 1e-12;
 
 double integral_1_lhs = 0;
 double integral_1_rhs = 0;
@@ -160,7 +160,7 @@ MoFEMErrorCode Example::setupProblem() {
                                PSTATUS_NOT, -1, &boundary_ents);
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
-  CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
+  // CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -204,6 +204,8 @@ MoFEMErrorCode Example::createCommonData() {
       boost::make_shared<MatrixDouble>();
   commonDataPtr->contactTractionPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->contactDispPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->curlContactStressPtr = boost::make_shared<MatrixDouble>();
+
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
   commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
@@ -329,6 +331,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
         commonDataPtr->mDPtr));
+
     pipeline.push_back(new OpInternalForce("U", commonDataPtr->mStressPtr));
 
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
@@ -341,7 +344,12 @@ MoFEMErrorCode Example::OPs() {
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+
+    // Stabilisation
+    pipeline.push_back(new OpContactTools::OpCalculateHcurlVectorCurl(
+        "SIGMA", commonDataPtr->curlContactStressPtr));
     pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA", commonDataPtr));
+
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -362,10 +370,10 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
     // for tests, comment OpInternalDomainContactRhs
     //just for testing, does not assemble
-    pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
+    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -375,8 +383,8 @@ MoFEMErrorCode Example::OPs() {
 
   add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
-  // add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
-  // add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
+  add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * order + 1;
