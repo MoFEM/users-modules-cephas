@@ -4786,14 +4786,16 @@ MoFEMErrorCode SimpleContactProblem::OpPassHdivToMasterNormal::doWork(
       for (; bb != nb_dofs / 3; ++bb) {
         ///////
         // Master 11/08/2020
-        t_nf(i) -= alpha * t_base * t_normal(i) * t_traction(j) *
-        t_normal(j); 
-        t_nf(i) -= alpha * t_base * tangent_1_traction(i);
-        t_nf(i) -= alpha * t_base * tangent_2_traction(i);
+        // t_nf(i) -= alpha * t_base * t_normal(i) * t_traction(j) *
+        // t_normal(j); 
+        // t_nf(i) -= alpha * t_base * tangent_1_traction(i);
+        // t_nf(i) -= alpha * t_base * tangent_2_traction(i);
         // t_nf(i) -= alpha;
         // t_nf(i) -= alpha * t_base * t_traction(j) * t_normal(j) 
         //            * t_normal(i);
 
+        t_nf(i) -= alpha * t_base * t_traction(i);
+        
         // for augmented
         // t_nf(i) -= alpha * t_base * gap_ptr * t_normal(i);
 
@@ -5355,12 +5357,12 @@ SimpleContactProblem::OpConstrainBoundaryLhs_dU_dlambda_Master::doWork(
           // t_mat(1, 1) -= beta;
           // t_mat(2, 2) -= beta;
 
-          t_mat(i, j) -= beta * t_contact_normal(i) * t_contact_normal(j);
+          // t_mat(i, j) -= beta * t_contact_normal(i) * t_contact_normal(j);
           // t_mat(1, 1) -= beta;
           // t_mat(2, 2) -= beta;
 // t_mat(i, j)-= alpha;
-          t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
-          t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
+          // t_mat(i, j) -= beta * t_tangent_1_at_gp(i) * t_tangent_1_at_gp(j);
+          // t_mat(i, j) -= beta * t_tangent_2_at_gp(i) * t_tangent_2_at_gp(j);
 
           // cerr << "WTF  ~~~~~   " << t_mat << "\n";
 
