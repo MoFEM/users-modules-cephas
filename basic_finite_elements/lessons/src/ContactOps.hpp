@@ -521,12 +521,12 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
       auto t_contact_normal = normal(t_coords, t_disp);
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_normal_tensor;
       // t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
+      // Temporary solution to test if sliding boundary conditions works
+      t_contact_normal_tensor(i, j) = t_normal(i) * t_normal(j);
 
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_tangent_tensor;
       t_contact_tangent_tensor(i, j) =
           kronecker_delta(i, j) - t_contact_normal_tensor(i, j);
-      // Temporary solution to test if sliding boundary conditions works
-      t_contact_normal_tensor(i, j) = t_normal(i) * t_normal(j);
 
       auto diff_constrain = diff_constrains_dgap(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),

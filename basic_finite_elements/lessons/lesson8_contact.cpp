@@ -64,12 +64,12 @@ using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
 
-constexpr int order = 4;
+constexpr int order = 2;
 constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 0;
-constexpr double stab = 1e-12;
+constexpr double stab = std::numeric_limits<double>::epsilon();
 
 double integral_1_lhs = 0;
 double integral_1_rhs = 0;
@@ -306,8 +306,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpK("U", "U", commonDataPtr->mDPtr));
     pipeline.push_back(
         new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
-    pipeline.push_back(
-        new OpConstrainDomainLhs_Stab("SIGMA", "SIGMA", commonDataPtr));
+    // pipeline.push_back(
+    //     new OpConstrainDomainLhs_Stab("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -346,9 +346,9 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
 
     // Stabilisation
-    pipeline.push_back(new OpContactTools::OpCalculateHcurlVectorCurl(
-        "SIGMA", commonDataPtr->curlContactStressPtr));
-    pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA", commonDataPtr));
+    // pipeline.push_back(new OpContactTools::OpCalculateHcurlVectorCurl(
+    //     "SIGMA", commonDataPtr->curlContactStressPtr));
+    // pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA", commonDataPtr));
 
   };
 
