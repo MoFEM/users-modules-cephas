@@ -160,7 +160,7 @@ MoFEMErrorCode Example::setupProblem() {
                                PSTATUS_NOT, -1, &boundary_ents);
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
-  // CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
+  CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
