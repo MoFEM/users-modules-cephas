@@ -370,7 +370,6 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       // Temporary solution to test if sliding boundary conditions works
       // t_P(i, j) = t_normal(i) * t_normal(j);
 
-
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
       t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
@@ -385,8 +384,7 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       FTensor::Tensor1<double, SPACE_DIM> t_rhs_tangent_disp,
           t_rhs_tangent_traction;
       t_rhs_tangent_disp(i) = t_Q(i, j) * t_disp(j);
-      t_rhs_tangent_traction(i) =
-          cn * t_Q(i, j) * t_traction(j);
+      t_rhs_tangent_traction(i) = cn * t_Q(i, j) * t_traction(j);
 
       size_t bb = 0;
       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
@@ -511,14 +509,13 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
       const double alpha = t_w * getMeasure();
 
       auto t_contact_normal = normal(t_coords, t_disp);
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_normal_tensor;
-      // t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
+      t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
       // Temporary solution to test if sliding boundary conditions works
-      t_contact_normal_tensor(i, j) = t_normal(i) * t_normal(j);
+      // t_P(i, j) = t_normal(i) * t_normal(j);
 
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_tangent_tensor;
-      t_contact_tangent_tensor(i, j) =
-          kronecker_delta(i, j) - t_contact_normal_tensor(i, j);
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
+      t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
       auto diff_constrain = diff_constrains_dgap(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
@@ -536,9 +533,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
         for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
           const double beta = alpha * row_base * t_col_base;
 
-          // t_mat(i, j) +=
-          //     (beta * diff_constrain) * t_contact_normal_tensor(i, j);
-          t_mat(i, j) -= beta * t_contact_tangent_tensor(i, j);
+          t_mat(i, j) -= (beta * diff_constrain) * t_P(i, j);
+          t_mat(i, j) -= beta * t_Q(i, j);
 
           ++t_col_base;
           ++t_mat;
@@ -601,14 +597,13 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
       const double alpha = t_w * getMeasure();
 
       auto t_contact_normal = normal(t_coords, t_disp);
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_normal_tensor;
-      // t_contact_normal_tensor(i, j) = t_contact_normal(i) * t_contact_normal(j);
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
+      t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
       // Temporary solution to test if sliding boundary conditions works
-      t_contact_normal_tensor(i, j) = t_normal(i) * t_normal(j);
+      // t_P(i, j) = t_normal(i) * t_normal(j);
 
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_contact_tangent_tensor;
-      t_contact_tangent_tensor(i, j) =
-          kronecker_delta(i, j) - t_contact_normal_tensor(i, j);
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
+      t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
 
       const double diff_traction = diff_constrains_dtraction(
           gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
@@ -626,9 +621,8 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
           const double col_base = t_col_base(i) * t_normal(i);
           const double beta = alpha * row_base * col_base;
 
-          // t_mat(i, j) += (beta * diff_traction) * t_contact_normal_tensor(i,
-          // j);
-          t_mat(i, j) += beta * cn * t_contact_tangent_tensor(i, j);
+          t_mat(i, j) += (beta * diff_traction) * t_P(i, j);
+          t_mat(i, j) += beta * cn * t_Q(i, j);
 
           ++t_col_base;
           ++t_mat;
@@ -792,8 +786,8 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 }
 
 // OpConstrainDomainRhs_Stab::OpConstrainDomainRhs_Stab(
-//     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-//     : DomainEleOp(field_name, DomainEleOp::OPROW),
+//     const std::string field_name, boost::shared_ptr<CommonData>
+//     common_data_ptr) : DomainEleOp(field_name, DomainEleOp::OPROW),
 //       commonDataPtr(common_data_ptr) {}
 
 // MoFEMErrorCode OpConstrainDomainRhs_Stab::doWork(int side, EntityType type,
@@ -842,7 +836,6 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 //   MoFEMFunctionReturn(0);
 // }
 
-
 // OpConstrainDomainLhs_Stab::OpConstrainDomainLhs_Stab(
 //     const std::string row_field_name, const std::string col_field_name,
 //     boost::shared_ptr<CommonData> common_data_ptr)
@@ -881,12 +874,13 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 
 //         auto t_mat_diag = getFTensor1FromArrayDiag<SPACE_DIM, SPACE_DIM>(
 //             locMat, SPACE_DIM * rr);
-        
-//         FTensor::Tensor1<double, SPACE_DIM> t_curl_row;
-//         t_curl_row(k) = (FTensor::levi_civita(j, i, k) * t_row_diff_base(i, j));
 
-//         auto t_col_diff_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg, 0);
-//         for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
+//         FTensor::Tensor1<double, SPACE_DIM> t_curl_row;
+//         t_curl_row(k) = (FTensor::levi_civita(j, i, k) * t_row_diff_base(i,
+//         j));
+
+//         auto t_col_diff_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg,
+//         0); for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
 //           FTensor::Tensor1<double, SPACE_DIM> t_curl_col;
 //           t_curl_col(k) =
 //               (FTensor::levi_civita(j, i, k) * t_col_diff_base(i, j));
@@ -905,7 +899,8 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
 //       ++t_w;
 //     }
 
-//     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+//     CHKERR MatSetValues(getSNESB(), row_data, col_data,
+//     &*locMat.data().begin(),
 //                         ADD_VALUES);
 
 //   }
@@ -1107,7 +1102,7 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
     CHKERR moabDebug->tag_set_data(th_cont_normal, &new_vertex, 1, &norm(0));
     CHKERR moabDebug->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
     auto t_normal = getFTensor1Normal();
-    if (SPACE_DIM == 2) //FIXME: make normal outward
+    if (SPACE_DIM == 2) // FIXME: make normal outward
       t_normal(i) *= -1;
     CHKERR moabDebug->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
     ++t_traction;
@@ -1319,7 +1314,8 @@ MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
 //       auto t_dof = data.getFTensor1FieldData<SPACE_DIM>();
 //       int bb = 0;
 //       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
-//         t_curl(l, k) += t_dof(l) * (levi_civita(j, i, k) * t_diff_base(i, j));
+//         t_curl(l, k) += t_dof(l) * (levi_civita(j, i, k) * t_diff_base(i,
+//         j));
 
 //         ++t_diff_base;
 //         ++t_dof;

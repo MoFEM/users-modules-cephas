@@ -64,7 +64,7 @@ using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
 
-constexpr int order = 2;
+constexpr int order = 6;
 constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
@@ -160,7 +160,7 @@ MoFEMErrorCode Example::setupProblem() {
                                PSTATUS_NOT, -1, &boundary_ents);
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
-  CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
+  // CHKERR simple->setFieldOrder("U", order + 1, &boundary_ents);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
