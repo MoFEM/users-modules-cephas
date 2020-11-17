@@ -68,7 +68,7 @@ constexpr int order = 2;
 constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
-constexpr double spring_stiffness = 0;
+constexpr double spring_stiffness = 1e-2;
 constexpr double stab = std::numeric_limits<double>::epsilon();
 
 double integral_1_lhs = 0;
@@ -370,7 +370,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    // pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
     // for tests, comment OpInternalDomainContactRhs
     //just for testing, does not assemble
     // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
