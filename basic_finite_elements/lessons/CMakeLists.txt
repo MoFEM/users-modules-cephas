@@ -35,7 +35,6 @@ bfe_build_and_install(
     basic_contact_2D
     ${CMAKE_CURRENT_SOURCE_DIR}/lesson8_contact.cpp)
     
-set(EXECUTABLE_DIMENSION 3)
 set_target_properties(basic_contact PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 set_target_properties(basic_contact_2D PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 

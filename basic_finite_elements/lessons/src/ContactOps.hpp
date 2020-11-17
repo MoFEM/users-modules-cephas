@@ -140,28 +140,28 @@ private:
   MatrixDouble transLocMat;
 };
 
-struct OpConstrainDomainRhs_Stab : public DomainEleOp {
-  OpConstrainDomainRhs_Stab(const std::string field_name,
-                       boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+// struct OpConstrainDomainRhs_Stab : public DomainEleOp {
+//   OpConstrainDomainRhs_Stab(const std::string field_name,
+//                        boost::shared_ptr<CommonData> common_data_ptr);
+//   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
+// private:
+//   boost::shared_ptr<CommonData> commonDataPtr;
+// };
 
-struct OpConstrainDomainLhs_Stab : public DomainEleOp {
-  OpConstrainDomainLhs_Stab(const std::string row_field_name,
-                          const std::string col_field_name,
-                          boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                        EntityType col_type, EntData &row_data,
-                        EntData &col_data);
+// struct OpConstrainDomainLhs_Stab : public DomainEleOp {
+//   OpConstrainDomainLhs_Stab(const std::string row_field_name,
+//                           const std::string col_field_name,
+//                           boost::shared_ptr<CommonData> common_data_ptr);
+//   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+//                         EntityType col_type, EntData &row_data,
+//                         EntData &col_data);
 
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-  MatrixDouble locMat;
-  MatrixDouble transLocMat;
-};
+// private:
+//   boost::shared_ptr<CommonData> commonDataPtr;
+//   MatrixDouble locMat;
+//   MatrixDouble transLocMat;
+// };
 
 template <typename T1, typename T2>
 inline FTensor::Tensor1<double, SPACE_DIM>
@@ -801,127 +801,127 @@ MoFEMErrorCode OpConstrainDomainLhs_dU::doWork(int row_side, int col_side,
   MoFEMFunctionReturn(0);
 }
 
-OpConstrainDomainRhs_Stab::OpConstrainDomainRhs_Stab(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {}
+// OpConstrainDomainRhs_Stab::OpConstrainDomainRhs_Stab(
+//     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
+//     : DomainEleOp(field_name, DomainEleOp::OPROW),
+//       commonDataPtr(common_data_ptr) {}
 
-MoFEMErrorCode OpConstrainDomainRhs_Stab::doWork(int side, EntityType type,
-                                            EntData &data) {
-  MoFEMFunctionBegin;
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t nb_dofs = data.getIndices().size();
+// MoFEMErrorCode OpConstrainDomainRhs_Stab::doWork(int side, EntityType type,
+//                                             EntData &data) {
+//   MoFEMFunctionBegin;
+//   const size_t nb_gauss_pts = getGaussPts().size2();
+//   const size_t nb_dofs = data.getIndices().size();
 
-  if (nb_dofs) {
+//   if (nb_dofs) {
 
-    std::array<double, MAX_DOFS_ON_ENTITY> nf;
-    std::fill(&nf[0], &nf[nb_dofs], 0);
+//     std::array<double, MAX_DOFS_ON_ENTITY> nf;
+//     std::fill(&nf[0], &nf[nb_dofs], 0);
 
-    const size_t nb_base_functions = data.getN().size2() / 3;
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_diff_base = data.getFTensor2DiffN<3, SPACE_DIM>();
-    auto t_curl = getFTensor2FromMat<SPACE_DIM, 3>(
-        *(commonDataPtr->curlContactStressPtr));
+//     const size_t nb_base_functions = data.getN().size2() / 3;
+//     auto t_w = getFTensor0IntegrationWeight();
+//     auto t_diff_base = data.getFTensor2DiffN<3, SPACE_DIM>();
+//     auto t_curl = getFTensor2FromMat<SPACE_DIM, 3>(
+//         *(commonDataPtr->curlContactStressPtr));
 
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+//     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      const double alpha = stab * getMeasure() * t_w;
-      auto t_nf = getFTensor1FromPtr<SPACE_DIM>(nf.data());
+//       const double alpha = stab * getMeasure() * t_w;
+//       auto t_nf = getFTensor1FromPtr<SPACE_DIM>(nf.data());
 
-      size_t bb = 0;
-      for (; bb != nb_dofs / SPACE_DIM; ++bb) {
+//       size_t bb = 0;
+//       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
 
-        FTensor::Tensor1<double, SPACE_DIM> t_curl_row;
-        t_curl_row(k) = (FTensor::levi_civita(j, i, k) * t_diff_base(i, j));
-        t_nf(i) += alpha * t_curl_row(k) * t_curl(i, k);
+//         FTensor::Tensor1<double, SPACE_DIM> t_curl_row;
+//         t_curl_row(k) = (FTensor::levi_civita(j, i, k) * t_diff_base(i, j));
+//         t_nf(i) += alpha * t_curl_row(k) * t_curl(i, k);
 
-        ++t_nf;
-        ++t_diff_base;
-      }
-      for (; bb < nb_base_functions; ++bb) {
-        ++t_diff_base;
-      }
+//         ++t_nf;
+//         ++t_diff_base;
+//       }
+//       for (; bb < nb_base_functions; ++bb) {
+//         ++t_diff_base;
+//       }
 
-      ++t_curl;
-      ++t_w;
-    }
+//       ++t_curl;
+//       ++t_w;
+//     }
 
-    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
-  }
+//     CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
+//   }
 
-  MoFEMFunctionReturn(0);
-}
+//   MoFEMFunctionReturn(0);
+// }
 
 
-OpConstrainDomainLhs_Stab::OpConstrainDomainLhs_Stab(
-    const std::string row_field_name, const std::string col_field_name,
-    boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
-      commonDataPtr(common_data_ptr) {
-  sYmm = false;
-}
+// OpConstrainDomainLhs_Stab::OpConstrainDomainLhs_Stab(
+//     const std::string row_field_name, const std::string col_field_name,
+//     boost::shared_ptr<CommonData> common_data_ptr)
+//     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+//       commonDataPtr(common_data_ptr) {
+//   sYmm = false;
+// }
 
-MoFEMErrorCode OpConstrainDomainLhs_Stab::doWork(int row_side, int col_side,
-                                               EntityType row_type,
-                                               EntityType col_type,
-                                               EntData &row_data,
-                                               EntData &col_data) {
-  MoFEMFunctionBegin;
+// MoFEMErrorCode OpConstrainDomainLhs_Stab::doWork(int row_side, int col_side,
+//                                                EntityType row_type,
+//                                                EntityType col_type,
+//                                                EntData &row_data,
+//                                                EntData &col_data) {
+//   MoFEMFunctionBegin;
 
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t row_nb_dofs = row_data.getIndices().size();
-  const size_t col_nb_dofs = col_data.getIndices().size();
+//   const size_t nb_gauss_pts = getGaussPts().size2();
+//   const size_t row_nb_dofs = row_data.getIndices().size();
+//   const size_t col_nb_dofs = col_data.getIndices().size();
 
-  if (row_nb_dofs && col_nb_dofs) {
+//   if (row_nb_dofs && col_nb_dofs) {
 
-    auto t_w = getFTensor0IntegrationWeight();
+//     auto t_w = getFTensor0IntegrationWeight();
 
-    locMat.resize(row_nb_dofs, col_nb_dofs, false);
-    locMat.clear();
+//     locMat.resize(row_nb_dofs, col_nb_dofs, false);
+//     locMat.clear();
 
-    size_t nb_base_functions = row_data.getN().size2() / 3;
-    auto t_row_diff_base = row_data.getFTensor2DiffN<3, SPACE_DIM>();
+//     size_t nb_base_functions = row_data.getN().size2() / 3;
+//     auto t_row_diff_base = row_data.getFTensor2DiffN<3, SPACE_DIM>();
 
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+//     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      const double alpha = stab * getMeasure() * t_w;
+//       const double alpha = stab * getMeasure() * t_w;
 
-      size_t rr = 0;
-      for (; rr != row_nb_dofs / SPACE_DIM; ++rr) {
+//       size_t rr = 0;
+//       for (; rr != row_nb_dofs / SPACE_DIM; ++rr) {
 
-        auto t_mat_diag = getFTensor1FromArrayDiag<SPACE_DIM, SPACE_DIM>(
-            locMat, SPACE_DIM * rr);
+//         auto t_mat_diag = getFTensor1FromArrayDiag<SPACE_DIM, SPACE_DIM>(
+//             locMat, SPACE_DIM * rr);
         
-        FTensor::Tensor1<double, SPACE_DIM> t_curl_row;
-        t_curl_row(k) = (FTensor::levi_civita(j, i, k) * t_row_diff_base(i, j));
+//         FTensor::Tensor1<double, SPACE_DIM> t_curl_row;
+//         t_curl_row(k) = (FTensor::levi_civita(j, i, k) * t_row_diff_base(i, j));
 
-        auto t_col_diff_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg, 0);
-        for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
-          FTensor::Tensor1<double, SPACE_DIM> t_curl_col;
-          t_curl_col(k) =
-              (FTensor::levi_civita(j, i, k) * t_col_diff_base(i, j));
-          t_mat_diag(i) += alpha * t_curl_row(i) * t_curl_col(i);
+//         auto t_col_diff_base = col_data.getFTensor2DiffN<3, SPACE_DIM>(gg, 0);
+//         for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
+//           FTensor::Tensor1<double, SPACE_DIM> t_curl_col;
+//           t_curl_col(k) =
+//               (FTensor::levi_civita(j, i, k) * t_col_diff_base(i, j));
+//           t_mat_diag(i) += alpha * t_curl_row(i) * t_curl_col(i);
 
-          ++t_col_diff_base;
-          ++t_mat_diag;
-        }
+//           ++t_col_diff_base;
+//           ++t_mat_diag;
+//         }
 
-        ++t_row_diff_base;
-      }
-      for (; rr < nb_base_functions; ++rr) {
-        ++t_row_diff_base;
-      }
+//         ++t_row_diff_base;
+//       }
+//       for (; rr < nb_base_functions; ++rr) {
+//         ++t_row_diff_base;
+//       }
 
-      ++t_w;
-    }
+//       ++t_w;
+//     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+//     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
+//                         ADD_VALUES);
 
-  }
+//   }
 
-  MoFEMFunctionReturn(0);
-}
+//   MoFEMFunctionReturn(0);
+// }
 
 OpSpringRhs::OpSpringRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr)
@@ -1295,53 +1295,53 @@ MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
 }
 //! [Postprocessing]
 
-struct OpCalculateHcurlVectorCurl
-    : public ForcesAndSourcesCore::UserDataOperator {
+// struct OpCalculateHcurlVectorCurl
+//     : public ForcesAndSourcesCore::UserDataOperator {
 
-  boost::shared_ptr<MatrixDouble> dataPtr;
+//   boost::shared_ptr<MatrixDouble> dataPtr;
 
-  OpCalculateHcurlVectorCurl(const std::string field_name,
-                             boost::shared_ptr<MatrixDouble> data_ptr)
-      : ForcesAndSourcesCore::UserDataOperator(
-            field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
-        dataPtr(data_ptr) {
-    if (!dataPtr)
-      THROW_MESSAGE("Pointer is not set");
-  }
+//   OpCalculateHcurlVectorCurl(const std::string field_name,
+//                              boost::shared_ptr<MatrixDouble> data_ptr)
+//       : ForcesAndSourcesCore::UserDataOperator(
+//             field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
+//         dataPtr(data_ptr) {
+//     if (!dataPtr)
+//       THROW_MESSAGE("Pointer is not set");
+//   }
 
-  MoFEMErrorCode doWork(int side, EntityType type,
-                        DataForcesAndSourcesCore::EntData &data) {
-    MoFEMFunctionBegin;
-    const int nb_integration_points = getGaussPts().size2();
-    if (type == MBTRI && side == 0) {
-      dataPtr->resize(SPACE_DIM * 3, nb_integration_points, false);
-      dataPtr->clear();
-    }
-    const int nb_dofs = data.getFieldData().size();
-    if (!nb_dofs)
-      MoFEMFunctionReturnHot(0);
+//   MoFEMErrorCode doWork(int side, EntityType type,
+//                         DataForcesAndSourcesCore::EntData &data) {
+//     MoFEMFunctionBegin;
+//     const int nb_integration_points = getGaussPts().size2();
+//     if (type == MBTRI && side == 0) {
+//       dataPtr->resize(SPACE_DIM * 3, nb_integration_points, false);
+//       dataPtr->clear();
+//     }
+//     const int nb_dofs = data.getFieldData().size();
+//     if (!nb_dofs)
+//       MoFEMFunctionReturnHot(0);
 
-    const int nb_base_functions = data.getN().size2() / SPACE_DIM;
-    auto t_diff_base = data.getFTensor2DiffN<3, SPACE_DIM>();
-    auto t_curl = getFTensor2FromMat<SPACE_DIM, 3>(*dataPtr);
-    for (int gg = 0; gg != nb_integration_points; ++gg) {
+//     const int nb_base_functions = data.getN().size2() / SPACE_DIM;
+//     auto t_diff_base = data.getFTensor2DiffN<3, SPACE_DIM>();
+//     auto t_curl = getFTensor2FromMat<SPACE_DIM, 3>(*dataPtr);
+//     for (int gg = 0; gg != nb_integration_points; ++gg) {
 
-      auto t_dof = data.getFTensor1FieldData<SPACE_DIM>();
-      int bb = 0;
-      for (; bb != nb_dofs / SPACE_DIM; ++bb) {
-        t_curl(l, k) += t_dof(l) * (levi_civita(j, i, k) * t_diff_base(i, j));
+//       auto t_dof = data.getFTensor1FieldData<SPACE_DIM>();
+//       int bb = 0;
+//       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
+//         t_curl(l, k) += t_dof(l) * (levi_civita(j, i, k) * t_diff_base(i, j));
 
-        ++t_diff_base;
-        ++t_dof;
-      }
+//         ++t_diff_base;
+//         ++t_dof;
+//       }
 
-      for (; bb != nb_base_functions; ++bb)
-        ++t_diff_base;
-      ++t_curl;
-    }
+//       for (; bb != nb_base_functions; ++bb)
+//         ++t_diff_base;
+//       ++t_curl;
+//     }
 
-    MoFEMFunctionReturn(0);
-  }
-};
+//     MoFEMFunctionReturn(0);
+//   }
+// };
 
 }; // namespace OpContactTools
