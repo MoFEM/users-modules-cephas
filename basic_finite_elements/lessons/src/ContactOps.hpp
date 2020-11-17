@@ -349,8 +349,6 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
-    if (SPACE_DIM == 2) //FIXME: make normal outward
-      t_normal(i) *= -1;
 
     auto t_w = getFTensor0IntegrationWeight();
     auto t_disp =
@@ -443,8 +441,6 @@ MoFEMErrorCode OpConstrainBoundaryTraction::doWork(int side, EntityType type,
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
-    if (SPACE_DIM == 2) //FIXME: make normal outward
-      t_normal(i) *= -1;
 
     auto t_traction =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
@@ -498,8 +494,6 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
-    if (SPACE_DIM == 2) //FIXME: make normal outward
-      t_normal(i) *= -1;
 
     auto t_disp =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
@@ -593,8 +587,6 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
     auto t_normal = getFTensor1Normal();
     t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
-    if (SPACE_DIM == 2) //FIXME: make normal outward
-      t_normal(i) *= -1;
 
     auto t_disp =
         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
