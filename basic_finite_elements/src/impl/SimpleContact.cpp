@@ -4592,6 +4592,9 @@ MoFEMErrorCode SimpleContactProblem::OpConstrainBoundaryRhs::doWork(
       size_t bb = 0;
       for (; bb != nb_dofs / 3; ++bb) {
         const double beta = alpha * (t_base(i) * t_normal(i));
+
+        t_nf(i) += beta * t_rhs_constrains(i);
+        
         t_nf(i) -= beta * t_contact_normal_tensor(i, j) *
                    t_x_master(j);
 
