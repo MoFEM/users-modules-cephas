@@ -1155,7 +1155,7 @@ struct Monitor : public FEMethod {
       double max, min;
       CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
       CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      PetscPrintf(PETSC_COMM_WORLD, "%s time %3.4e min %3.4e max %3.4e\n",
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
                   msg.c_str(), ts_t, min, max);
       MoFEMFunctionReturn(0);
     };
@@ -1165,16 +1165,6 @@ struct Monitor : public FEMethod {
     CHKERR print_max_min(uYScatter, "Uy");
     if (SPACE_DIM == 3)
       CHKERR print_max_min(uZScatter, "Uz");
-
-    cout << " integral_1_lhs: " << integral_1_lhs
-         << " integral_1_rhs: " << integral_1_rhs << endl;
-    cout << " integral_2_lhs: " << integral_2_lhs
-         << " integral_2_rhs: " << integral_2_rhs << endl;
-    cout << " integral_3_lhs: " << integral_3_lhs
-         << " integral_3_rhs: " << integral_3_rhs << endl;
-
-    integral_1_lhs = integral_1_rhs = integral_2_lhs = integral_2_rhs =
-        integral_3_lhs = integral_3_rhs = 0;
 
     MoFEMFunctionReturn(0);
   }
