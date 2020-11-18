@@ -36,40 +36,20 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
-  nonlinear_dynamic_elastic ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
-  tutorials_build_and_install(
-    nonlinear_dynamic_elastic_2D ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
+  nonlinear_dynamic_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
+tutorials_build_and_install(
+    nonlinear_dynamic_elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
     
-set(EXECUTABLE_DIMENSION 3)
-set_target_properties(nonlinear_dynamic_elastic PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
-set_target_properties(nonlinear_dynamic_elastic_2D PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+set_target_properties(
+  nonlinear_dynamic_elastic_3d 
+  PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 
-target_link_libraries(nonlinear_dynamic_elastic
-  mofem_matrix_function
-  mofem_finite_elements
-  mofem_interfaces
-  mofem_multi_indices
-  mofem_petsc
-  mofem_approx
-  mofem_cblas
-  mofem_third_party
-  ${PROJECT_LIBS}
-)
-
-target_link_libraries(nonlinear_dynamic_elastic_2D
-  mofem_matrix_function
-  mofem_finite_elements
-  mofem_interfaces
-  mofem_multi_indices
-  mofem_petsc
-  mofem_approx
-  mofem_cblas
-  mofem_third_party
-  ${PROJECT_LIBS}
-)
+set_target_properties(
+  nonlinear_dynamic_elastic_2d 
+  PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
 add_test(
   nonlinear_dynamic_elastic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/nonlinear_dynamic_elastic
+  ${CMAKE_CURRENT_BINARY_DIR}/nonlinear_dynamic_elastic_2d
   -file_name part.h5m -order 1 -ts_max_time 0.3 -ts_dt 0.1 -log_no_color -test)
