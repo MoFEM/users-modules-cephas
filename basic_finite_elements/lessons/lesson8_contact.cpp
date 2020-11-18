@@ -21,7 +21,7 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 #ifndef EXECUTABLE_DIMENSION
-  #define EXECUTABLE_DIMENSION 3
+#define EXECUTABLE_DIMENSION 3
 #endif
 
 #include <MoFEM.hpp>
@@ -59,10 +59,18 @@ using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMixDivTimesVec<SPACE_DIM>;
+using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMixTensorTimesGrad<SPACE_DIM>;
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
+using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpMixDivTimesU<SPACE_DIM>;
+using OpMiXLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpMixTensorTimesGradU<SPACE_DIM>;
 
 constexpr int order = 3;
 constexpr double young_modulus = 10;
@@ -208,7 +216,7 @@ MoFEMErrorCode Example::createCommonData() {
   invJac.resize(SPACE_DIM, SPACE_DIM, false);
 
   debug_post_proc = boost::make_shared<BoundaryEle>(mField);
-  if (SPACE_DIM == 2) 
+  if (SPACE_DIM == 2)
     debug_post_proc->getOpPtrVector().push_back(
         new OpSetContrariantPiolaTransformOnEdge());
   debug_post_proc->getOpPtrVector().push_back(
@@ -297,8 +305,10 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpK("U", "U", commonDataPtr->mDPtr));
-    pipeline.push_back(
-        new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
+    pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
+    pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
+    // pipeline.push_back(
+    //     new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
     // pipeline.push_back(
     //     new OpConstrainDomainLhs_Stab("SIGMA", "SIGMA", commonDataPtr));
   };
@@ -335,14 +345,20 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
+
+    pipeline.push_back(
+        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr));
+    pipeline.push_back(
+      new OpMiXLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
+
+    // pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
 
     // Stabilisation
     // pipeline.push_back(new OpContactTools::OpCalculateHcurlVectorCurl(
     //     "SIGMA", commonDataPtr->curlContactStressPtr));
-    // pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA", commonDataPtr));
-
+    // pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA",
+    // commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -365,7 +381,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
     // for tests, comment OpInternalDomainContactRhs
-    //just for testing, does not assemble
+    // just for testing, does not assemble
     // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
