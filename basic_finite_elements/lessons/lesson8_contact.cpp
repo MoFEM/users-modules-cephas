@@ -77,7 +77,6 @@ constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 1e-1;
-constexpr double stab = std::numeric_limits<double>::epsilon();
 
 boost::shared_ptr<BoundaryEle> debug_post_proc;
 moab::Core mb_post_debug;
@@ -307,10 +306,6 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpK("U", "U", commonDataPtr->mDPtr));
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
-    // pipeline.push_back(
-    //     new OpConstrainDomainLhs_dU("SIGMA", "U", commonDataPtr));
-    // pipeline.push_back(
-    //     new OpConstrainDomainLhs_Stab("SIGMA", "SIGMA", commonDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -351,14 +346,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
       new OpMiXLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
 
-    // pipeline.push_back(new OpConstrainDomainRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
 
-    // Stabilisation
-    // pipeline.push_back(new OpContactTools::OpCalculateHcurlVectorCurl(
-    //     "SIGMA", commonDataPtr->curlContactStressPtr));
-    // pipeline.push_back(new OpConstrainDomainRhs_Stab("SIGMA",
-    // commonDataPtr));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
