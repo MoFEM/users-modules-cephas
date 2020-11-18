@@ -64,19 +64,12 @@ using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
 
-constexpr int order = 6;
+constexpr int order = 3;
 constexpr double young_modulus = 10;
 constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
-constexpr double spring_stiffness = 1e-2;
+constexpr double spring_stiffness = 1e-1;
 constexpr double stab = std::numeric_limits<double>::epsilon();
-
-double integral_1_lhs = 0;
-double integral_1_rhs = 0;
-double integral_2_lhs = 0;
-double integral_2_rhs = 0;
-double integral_3_lhs = 0;
-double integral_3_rhs = 0;
 
 boost::shared_ptr<BoundaryEle> debug_post_proc;
 moab::Core mb_post_debug;

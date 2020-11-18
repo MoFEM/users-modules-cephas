@@ -246,9 +246,6 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
       size_t bb = 0;
       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
         t_nf(i) -= alpha * t_base * t_traction(i);
-        for (int zz = 0; zz != SPACE_DIM; ++zz)
-          integral_1_rhs -= alpha * t_base * t_traction(zz);
-
         ++t_nf;
         ++t_base;
       }
@@ -301,14 +298,6 @@ MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
         t_nf(i) += alpha * t_base * t_div_stress(i);
         t_nf(i) += alpha * t_diff_base(j) * t_stress(i, j);
 
-        for (int zz = 0; zz != SPACE_DIM; ++zz)
-          integral_1_lhs += alpha * t_base * t_div_stress(zz);
-        FTensor::Tensor1<double, SPACE_DIM> inte;
-        inte(i) = alpha * t_diff_base(j) * t_stress(i, j);
-        for (int zz = 0; zz != SPACE_DIM; ++zz)
-          integral_1_lhs += inte(zz);
-        // if(SPACE_DIM == 3)
-        //   t_nf(i) *= -1;
         ++t_nf;
         ++t_base;
         ++t_diff_base;
@@ -684,9 +673,6 @@ MoFEMErrorCode OpConstrainDomainRhs::doWork(int side, EntityType type,
 
         t_nf(i) += alpha * t_base(j) * t_grad(i, j);
         t_nf(i) += alpha * t_div_base * t_disp(i);
-
-        for (int zz = 0; zz != SPACE_DIM; ++zz)
-          integral_2_lhs += alpha * t_div_base * t_disp(zz);
 
         ++t_nf;
         ++t_base;
@@ -1102,8 +1088,6 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
     CHKERR moabDebug->tag_set_data(th_cont_normal, &new_vertex, 1, &norm(0));
     CHKERR moabDebug->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
     auto t_normal = getFTensor1Normal();
-    if (SPACE_DIM == 2) // FIXME: make normal outward
-      t_normal(i) *= -1;
     CHKERR moabDebug->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
     ++t_traction;
     ++t_coords;
