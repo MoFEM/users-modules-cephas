@@ -71,6 +71,10 @@ using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpMixDivTimesU<SPACE_DIM>;
 using OpMiXLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpMixTensorTimesGradU<SPACE_DIM>;
+using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpMixVecTimesDivLambda<SPACE_DIM>;
+using OpMixUTimesLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr int order = 3;
 constexpr double young_modulus = 10;
@@ -345,8 +349,11 @@ MoFEMErrorCode Example::OPs() {
         new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr));
     pipeline.push_back(
       new OpMiXLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
-
-    pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+    pipeline.push_back(new OpMixUTimesDivLambdaRhs(
+        "U", commonDataPtr->contactStressDivergencePtr));
+    pipeline.push_back(
+        new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr));
+    // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
 
   };
 

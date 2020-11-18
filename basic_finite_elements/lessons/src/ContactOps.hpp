@@ -44,15 +44,6 @@ private:
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-struct OpInternalDomainContactRhs : public DomainEleOp {
-  OpInternalDomainContactRhs(const std::string field_name,
-                             boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
 struct OpConstrainBoundaryRhs : public BoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
@@ -216,61 +207,6 @@ MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-OpInternalDomainContactRhs::OpInternalDomainContactRhs(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : DomainEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {}
-
-MoFEMErrorCode OpInternalDomainContactRhs::doWork(int side, EntityType type,
-                                                  EntData &data) {
-  MoFEMFunctionBegin;
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t nb_dofs = data.getIndices().size();
-
-  if (nb_dofs) {
-
-    std::array<double, MAX_DOFS_ON_ENTITY> nf;
-    std::fill(&nf[0], &nf[nb_dofs], 0);
-
-    const size_t nb_base_functions = data.getN().size2();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_base = data.getFTensor0N();
-    auto t_diff_base = data.getFTensor1DiffN<SPACE_DIM>();
-    auto t_stress = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
-        *(commonDataPtr->contactStressPtr));
-    auto t_div_stress = getFTensor1FromMat<SPACE_DIM>(
-        *(commonDataPtr->contactStressDivergencePtr));
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      const double alpha = getMeasure() * t_w;
-      auto t_nf = getFTensor1FromPtr<SPACE_DIM>(nf.data());
-
-      size_t bb = 0;
-      for (; bb != nb_dofs / SPACE_DIM; ++bb) {
-
-        t_nf(i) += alpha * t_base * t_div_stress(i);
-        t_nf(i) += alpha * t_diff_base(j) * t_stress(i, j);
-
-        ++t_nf;
-        ++t_base;
-        ++t_diff_base;
-      }
-      for (; bb < nb_base_functions; ++bb) {
-        ++t_base;
-        ++t_diff_base;
-      }
-
-      ++t_div_stress;
-      ++t_stress;
-      ++t_w;
-    }
-
-    CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
 
 OpConstrainBoundaryRhs::OpConstrainBoundaryRhs(
     const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
