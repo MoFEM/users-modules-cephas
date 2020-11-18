@@ -4,6 +4,9 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
+
+
         
   
       {
@@ -14,6 +17,8 @@
         "args": [
           "-my_file",
           "sphere_1.cub",
+          "-my_order",
+          "3"
         ],
         "cwd": "/Users/ignatiosathanasiadis/jobs/testsNonMatching/smoothing_sphere",
         "stopOnEntry": true,
