@@ -1113,7 +1113,6 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsInt("-my_order",
                            "approximation order of spatial positions", "", 1,
                            &order, PETSC_NULL);
-
     CHKERR PetscOptionsBool("-my_is_partitioned",
                             "set if mesh is partitioned (this result that each "
                             "process keeps only part of the mes",
@@ -1182,7 +1181,6 @@ int main(int argc, char *argv[]) {
     Range meshset_level0;
     CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByRefLevel(
         bit_levels.back(), BitRefLevel().set(), meshset_level0);
-
     PetscSynchronizedPrintf(PETSC_COMM_WORLD, "meshset_level0 %d\n",
                             meshset_level0.size());
     PetscSynchronizedFlush(PETSC_COMM_WORLD, PETSC_STDOUT);
@@ -1447,7 +1445,6 @@ int main(int argc, char *argv[]) {
 
     auto snes = MoFEM::createSNES(m_field.get_comm());
     CHKERR SNESSetDM(snes, dm);
-
     SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
     // create snes nonlinear solver
