@@ -1085,7 +1085,7 @@ int main(int argc, char *argv[]) {
           // Save data on mesh
           CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
           // Post-process results
-          if (is_post_proc_volume) {
+          if (is_post_proc_volume == PETSC_TRUE) {
             MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
             CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
             std::ostringstream o1;
@@ -1150,7 +1150,7 @@ int main(int argc, char *argv[]) {
         CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
         // Save data on mesh
-        if (is_post_proc_volume) {
+        if (is_post_proc_volume == PETSC_TRUE) {
           MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
           CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
           // Save results to file
@@ -1184,7 +1184,7 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
       // Post-process results
       MOFEM_LOG("ELASTIC", Sev::inform) << "Post-process start ...";
-      if (is_post_proc_volume) {
+      if (is_post_proc_volume == PETSC_TRUE) {
         CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
       }
       CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &prism_post_proc);
@@ -1195,7 +1195,9 @@ int main(int argc, char *argv[]) {
       // Write mesh in parallel (using h5m MOAB format, writing is in parallel)
       MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
       if (mesh_has_tets) {
-        CHKERR post_proc.writeFile("out.h5m");
+        if (is_post_proc_volume == PETSC_TRUE) {
+          CHKERR post_proc.writeFile("out.h5m");
+        }
         CHKERR post_proc_skin.writeFile("out_skin.h5m");
       }
       if (mesh_has_prisms) {
