@@ -75,6 +75,10 @@ using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpMixVecTimesDivLambda<SPACE_DIM>;
 using OpMixUTimesLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
+using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
+using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM>;
 
 constexpr int order = 3;
 constexpr double young_modulus = 10;
@@ -370,12 +374,18 @@ MoFEMErrorCode Example::OPs() {
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
-    pipeline.push_back(new OpSpringLhs("U", "U"));
+    pipeline.push_back(new OpSpringLhs(
+        "U", "U",
+
+        [this](double, double, double) { return spring_stiffness; }
+
+        ));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    pipeline.push_back(new OpSpringRhs("U", commonDataPtr));
+    pipeline.push_back(
+        new OpSpringRhs("U", commonDataPtr->contactDispPtr, spring_stiffness));
     // for tests, comment OpInternalDomainContactRhs
     // just for testing, does not assemble
     // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
