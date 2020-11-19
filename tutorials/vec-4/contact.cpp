@@ -1,6 +1,6 @@
 /**
- * \file lesson8_contact.cpp
- * \example lesson8_contact.cpp
+ * \file contact.cpp
+ * \example contact.cpp
  *
  * Example of contact problem
  *
@@ -493,7 +493,9 @@ static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  // Initialisation of MoFEM/PETSc and MOAB data structures
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
   // Add logging channel for example
   auto core_log = logging::core::get();
