@@ -190,8 +190,15 @@ continuing with the one you are most excited about.
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref VEC-2: Nonlinear elasticity</td>
+       <td width="350px">\ref VEC-3: Nonlinear elasticity</td>
        <td> Nonlinear elastic
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_contact_problem</td>
+       <td> Contact problem
        <br/> *Keywords:* 
        </td>
   </tr>

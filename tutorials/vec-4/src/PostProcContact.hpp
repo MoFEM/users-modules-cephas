@@ -301,7 +301,7 @@ struct Monitor : public FEMethod {
     auto post_proc_boundary = [&] {
       MoFEMFunctionBegin;
       std::ostringstream ostrm;
-      ostrm << "out_debug_" << ts_step << ".h5m";
+      ostrm << "out_boundary_contact_" << ts_step << ".h5m";
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", vertexPostProc);
       CHKERR moabVertex.write_file(ostrm.str().c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");

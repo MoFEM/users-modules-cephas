@@ -217,8 +217,6 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
       auto t_contact_normal = normal(t_coords, t_disp);
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
       t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
-      // Temporary solution to test if sliding boundary conditions works
-      // t_P(i, j) = t_normal(i) * t_normal(j);
 
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
       t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
@@ -308,8 +306,6 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dU::doWork(int row_side, int col_side,
       auto t_contact_normal = normal(t_coords, t_disp);
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
       t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
-      // Temporary solution to test if sliding boundary conditions works
-      // t_P(i, j) = t_normal(i) * t_normal(j);
 
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
       t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
@@ -396,8 +392,6 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
       auto t_contact_normal = normal(t_coords, t_disp);
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_P;
       t_P(i, j) = t_contact_normal(i) * t_contact_normal(j);
-      // Temporary solution to test if sliding boundary conditions works
-      // t_P(i, j) = t_normal(i) * t_normal(j);
 
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_Q;
       t_Q(i, j) = kronecker_delta(i, j) - t_P(i, j);
