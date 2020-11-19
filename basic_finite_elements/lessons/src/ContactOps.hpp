@@ -79,26 +79,6 @@ private:
   MatrixDouble locMat;
 };
 
-// struct OpSpringRhs : public BoundaryEleOp {
-//   OpSpringRhs(const std::string field_name,
-//               boost::shared_ptr<CommonData> common_data_ptr);
-//   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-// private:
-//   boost::shared_ptr<CommonData> commonDataPtr;
-// };
-
-// struct OpSpringLhs : public BoundaryEleOp {
-//   OpSpringLhs(const std::string row_field_name,
-//               const std::string col_field_name);
-//   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-//                         EntityType col_type, EntData &row_data,
-//                         EntData &col_data);
-
-// private:
-//   MatrixDouble locMat;
-// };
-
 struct OpConstrainBoundaryTraction : public BoundaryEleOp {
   OpConstrainBoundaryTraction(const std::string field_name,
                               boost::shared_ptr<CommonData> common_data_ptr);
@@ -524,112 +504,6 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
 
   MoFEMFunctionReturn(0);
 }
-
-// OpSpringRhs::OpSpringRhs(const std::string field_name,
-//                          boost::shared_ptr<CommonData> common_data_ptr)
-//     : BoundaryEleOp(field_name, DomainEleOp::OPROW),
-//       commonDataPtr(common_data_ptr) {}
-
-// MoFEMErrorCode OpSpringRhs::doWork(int side, EntityType type, EntData &data) {
-//   MoFEMFunctionBegin;
-
-//   const size_t nb_gauss_pts = getGaussPts().size2();
-//   const size_t nb_dofs = data.getIndices().size();
-
-//   if (nb_dofs) {
-
-//     std::array<double, MAX_DOFS_ON_ENTITY> nf;
-//     std::fill(&nf[0], &nf[nb_dofs], 0);
-
-//     auto t_w = getFTensor0IntegrationWeight();
-//     auto t_disp =
-//         getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
-
-//     size_t nb_base_functions = data.getN().size2();
-//     auto t_base = data.getFTensor0N();
-//     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-//       auto t_nf = getFTensor1FromPtr<SPACE_DIM>(nf.data());
-//       const double alpha = t_w * getMeasure();
-
-//       size_t bb = 0;
-//       for (; bb != nb_dofs / SPACE_DIM; ++bb) {
-
-//         const double beta = alpha * t_base;
-//         t_nf(i) += beta * spring_stiffness * t_disp(i);
-
-//         ++t_nf;
-//         ++t_base;
-//       }
-//       for (; bb < nb_base_functions; ++bb)
-//         ++t_base;
-
-//       ++t_disp;
-//       ++t_w;
-//     }
-
-//     CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
-//   }
-
-//   MoFEMFunctionReturn(0);
-// }
-
-// OpSpringLhs::OpSpringLhs(const std::string row_field_name,
-//                          const std::string col_field_name)
-//     : BoundaryEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL) {
-//   sYmm = false;
-// }
-
-// MoFEMErrorCode OpSpringLhs::doWork(int row_side, int col_side,
-//                                    EntityType row_type, EntityType col_type,
-//                                    EntData &row_data, EntData &col_data) {
-
-//   MoFEMFunctionBegin;
-
-//   const size_t nb_gauss_pts = getGaussPts().size2();
-//   const size_t row_nb_dofs = row_data.getIndices().size();
-//   const size_t col_nb_dofs = col_data.getIndices().size();
-
-//   if (row_nb_dofs && col_nb_dofs) {
-
-//     locMat.resize(row_nb_dofs, col_nb_dofs, false);
-//     locMat.clear();
-
-//     auto t_w = getFTensor0IntegrationWeight();
-//     auto t_row_base = row_data.getFTensor0N();
-//     size_t nb_face_functions = row_data.getN().size2();
-
-//     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-//       const double alpha = t_w * getMeasure();
-
-//       size_t rr = 0;
-//       for (; rr != row_nb_dofs / SPACE_DIM; ++rr) {
-
-//         auto t_mat_diag = getFTensor1FromArrayDiag<SPACE_DIM, SPACE_DIM>(
-//             locMat, SPACE_DIM * rr);
-
-//         auto t_col_base = col_data.getFTensor0N(gg, 0);
-//         for (size_t cc = 0; cc != col_nb_dofs / SPACE_DIM; ++cc) {
-//           t_mat_diag(i) += alpha * spring_stiffness * t_row_base * t_col_base;
-//           ++t_col_base;
-//           ++t_mat_diag;
-//         }
-
-//         ++t_row_base;
-//       }
-//       for (; rr < nb_face_functions; ++rr)
-//         ++t_row_base;
-
-//       ++t_w;
-//     }
-
-//     CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-//                         ADD_VALUES);
-//   }
-
-//   MoFEMFunctionReturn(0);
-// }
 
 struct OpPostProcDebug : public BoundaryEleOp {
   OpPostProcDebug(MoFEM::Interface &m_field, const std::string field_name,
