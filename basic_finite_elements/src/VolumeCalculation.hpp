@@ -23,40 +23,41 @@
 #ifndef __VOLUME_CALCULATION_HPP__
 #define __VOLUME_CALCULATION_HPP__
 
-struct VolumeCalculation: public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+/**
+ * @brief Calculate volume 
+ * 
+ */
+struct VolumeCalculation
+    : public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
 
   Vec volumeVec;
 
-  VolumeCalculation(const std::string &field_name,Vec volume_vec):
-  MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(field_name,UserDataOperator::OPROW),
-  volumeVec(volume_vec) {
-  }
+  VolumeCalculation(const std::string &field_name, Vec volume_vec)
+      : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
+            field_name, UserDataOperator::OPROW),
+        volumeVec(volume_vec) {}
 
-  
+  MoFEMErrorCode doWork(int row_side, EntityType row_type,
+                        DataForcesAndSourcesCore::EntData &row_data) {
+    MoFEMFunctionBegin;
 
-  MoFEMErrorCode doWork(
-    int row_side,EntityType row_type,DataForcesAndSourcesCore::EntData &row_data
-  ) {
-    MoFEMFunctionBeginHot;
-
-    //do it only once, no need to repeat this for edges,faces or tets
-    if(row_type != MBVERTEX) MoFEMFunctionReturnHot(0);
+    // do it only once, no need to repeat this for edges,faces or tets
+    if (row_type != MBVERTEX)
+      MoFEMFunctionReturnHot(0);
 
     int nb_gauss_pts = row_data.getN().size1();
-    for(int gg = 0;gg<nb_gauss_pts;gg++) {
+    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      double vol = getVolume()*getGaussPts()(3,gg);
-      if(getHoGaussPtsDetJac().size()>0) {
+      double vol = getVolume() * getGaussPts()(3, gg);
+      if (getHoGaussPtsDetJac().size() > 0) {
         vol *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
       }
 
-      ierr = VecSetValue(volumeVec,0,vol,ADD_VALUES); CHKERRG(ierr);
-
+      CHKERR VecSetValue(volumeVec, 0, vol, ADD_VALUES);
     }
 
-    MoFEMFunctionReturnHot(0);
+    MoFEMFunctionReturn(0);
   }
-
 };
 
 #endif //__VOLUME_CALCULATION_HPP__
