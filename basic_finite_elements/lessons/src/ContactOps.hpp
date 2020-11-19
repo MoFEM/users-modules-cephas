@@ -79,15 +79,6 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpConstrainBoundaryTraction : public BoundaryEleOp {
-  OpConstrainBoundaryTraction(const std::string field_name,
-                              boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
 template <typename T1, typename T2>
 inline FTensor::Tensor1<double, SPACE_DIM>
 normal(FTensor::Tensor1<T1, 3> &t_coords,
@@ -266,59 +257,6 @@ MoFEMErrorCode OpConstrainBoundaryRhs::doWork(int side, EntityType type,
     }
 
     CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-OpConstrainBoundaryTraction::OpConstrainBoundaryTraction(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : BoundaryEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {
-  std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
-  doEntities[boundary_ent] = true;
-}
-
-MoFEMErrorCode OpConstrainBoundaryTraction::doWork(int side, EntityType type,
-                                                   EntData &data) {
-
-  MoFEMFunctionBegin;
-
-  const size_t nb_gauss_pts = getGaussPts().size2();
-
-  if (side == 0 && type == boundary_ent) {
-    commonDataPtr->contactTractionPtr->resize(SPACE_DIM, nb_gauss_pts);
-    commonDataPtr->contactTractionPtr->clear();
-  }
-
-  const size_t nb_dofs = data.getIndices().size();
-  if (nb_dofs) {
-
-    auto t_normal = getFTensor1Normal();
-    t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
-
-    auto t_traction =
-        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
-
-    size_t nb_base_functions = data.getN().size2() / 3;
-    auto t_base = data.getFTensor1N<3>();
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      auto t_field_data = data.getFTensor1FieldData<SPACE_DIM>();
-
-      size_t bb = 0;
-      for (; bb != nb_dofs / SPACE_DIM; ++bb) {
-        t_traction(j) += (t_base(i) * t_normal(i)) * t_field_data(j);
-        ++t_field_data;
-        ++t_base;
-      }
-
-      for (; bb < nb_base_functions; ++bb)
-        ++t_base;
-
-      ++t_traction;
-    }
   }
 
   MoFEMFunctionReturn(0);
@@ -505,33 +443,32 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
   MoFEMFunctionReturn(0);
 }
 
-struct OpPostProcDebug : public BoundaryEleOp {
-  OpPostProcDebug(MoFEM::Interface &m_field, const std::string field_name,
+struct OpPostProcVertex : public BoundaryEleOp {
+  OpPostProcVertex(MoFEM::Interface &m_field, const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr,
-                  moab::Interface *moab_debug = nullptr);
+                  moab::Interface *moab_vertex);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
   MoFEM::Interface &mField;
-  moab::Interface *moabDebug;
+  moab::Interface *moabVertex;
   boost::shared_ptr<CommonData> commonDataPtr;
   ParallelComm *pComm;
 };
 
-OpPostProcDebug::OpPostProcDebug(MoFEM::Interface &m_field,
-                                 const std::string field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr,
-                                 moab::Interface *moab_debug)
+OpPostProcVertex::OpPostProcVertex(
+    MoFEM::Interface &m_field, const std::string field_name,
+    boost::shared_ptr<CommonData> common_data_ptr, moab::Interface *moab_vertex)
     : mField(m_field), BoundaryEleOp(field_name, BoundaryEleOp::OPROW),
-      commonDataPtr(common_data_ptr), moabDebug(moab_debug) {
+      commonDataPtr(common_data_ptr), moabVertex(moab_vertex) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   doEntities[boundary_ent] = true;
-  pComm = ParallelComm::get_pcomm(moabDebug, MYPCOMM_INDEX);
+  pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
   if (pComm == NULL)
-    pComm = new ParallelComm(moabDebug, PETSC_COMM_WORLD);
+    pComm = new ParallelComm(moabVertex, PETSC_COMM_WORLD);
 }
 
-MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
+MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
                                        EntData &data) {
   MoFEMFunctionBegin;
 
@@ -542,7 +479,7 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
 
   auto get_tag = [&](const std::string name, size_t size) {
     Tag th;
-    CHKERR moabDebug->tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
+    CHKERR moabVertex->tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def.data());
     return th;
   };
@@ -568,7 +505,7 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
     for (int dd = 0; dd != 3; dd++) {
       coords[dd] = getCoordsAtGaussPts()(gg, dd);
     }
-    CHKERR moabDebug->create_vertex(&coords[0], new_vertex);
+    CHKERR moabVertex->create_vertex(&coords[0], new_vertex);
     FTensor::Tensor1<double, 3> trac(t_traction(0), t_traction(1), 0.);
     FTensor::Tensor1<double, 3> disp(t_disp(0), t_disp(1), 0.);
 
@@ -579,8 +516,8 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
     const double constra = constrian(
         gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
         normal_traction(t_traction, t_contact_normal));
-    CHKERR moabDebug->tag_set_data(th_gap, &new_vertex, 1, &gap_tot);
-    CHKERR moabDebug->tag_set_data(th_cons, &new_vertex, 1, &constra);
+    CHKERR moabVertex->tag_set_data(th_gap, &new_vertex, 1, &gap_tot);
+    CHKERR moabVertex->tag_set_data(th_cons, &new_vertex, 1, &constra);
 
     FTensor::Tensor1<double, 3> norm(t_contact_normal(0), t_contact_normal(1),
                                      0.);
@@ -591,16 +528,16 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
       disp(2) = t_disp(2);
     }
 
-    CHKERR moabDebug->tag_set_data(th_traction, &new_vertex, 1, &trac(0));
-    CHKERR moabDebug->tag_set_data(th_cont_normal, &new_vertex, 1, &norm(0));
-    CHKERR moabDebug->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
+    CHKERR moabVertex->tag_set_data(th_traction, &new_vertex, 1, &trac(0));
+    CHKERR moabVertex->tag_set_data(th_cont_normal, &new_vertex, 1, &norm(0));
+    CHKERR moabVertex->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
     auto t_normal = getFTensor1Normal();
-    CHKERR moabDebug->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
+    CHKERR moabVertex->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
 
     auto set_part = [&](const auto vert) {
       MoFEMFunctionBegin;
       const int rank = mField.get_comm_rank();
-      CHKERR moabDebug->tag_set_data(pComm->part_tag(), &vert, 1, &rank);
+      CHKERR moabVertex->tag_set_data(pComm->part_tag(), &vert, 1, &rank);
       MoFEMFunctionReturn(0);
     };
 
@@ -613,71 +550,6 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
 
   MoFEMFunctionReturn(0);
 }
-
-struct Monitor : public FEMethod {
-
-  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<PostProcEle> &post_proc_fe,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
-      : dM(dm), postProcFe(post_proc_fe), uXScatter(ux_scatter),
-        uYScatter(uy_scatter), uZScatter(uz_scatter){};
-
-  MoFEMErrorCode preProcess() { return 0; }
-  MoFEMErrorCode operator()() { return 0; }
-
-  MoFEMErrorCode postProcess() {
-    MoFEMFunctionBegin;
-
-    auto make_vtk = [&]() {
-      MoFEMFunctionBegin;
-      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
-      CHKERR postProcFe->writeFile(
-          "out_contact_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
-      MoFEMFunctionReturn(0);
-    };
-
-    { // for debugging
-
-      std::ostringstream ostrm;
-      ostrm << "out_debug_" << ts_step << ".h5m";
-      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", debug_post_proc);
-      CHKERR moab_debug.write_file(ostrm.str().c_str(), "MOAB",
-                                   "PARALLEL=WRITE_PART");
-      mb_post_debug.delete_mesh();
-    }
-
-    auto print_max_min = [&](auto &tuple, const std::string msg) {
-      MoFEMFunctionBegin;
-      CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
-                             INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecScatterEnd(std::get<1>(tuple), ts_u, std::get<0>(tuple),
-                           INSERT_VALUES, SCATTER_FORWARD);
-      double max, min;
-      CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
-      CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
-                  msg.c_str(), ts_t, min, max);
-      MoFEMFunctionReturn(0);
-    };
-
-    CHKERR make_vtk();
-    CHKERR print_max_min(uXScatter, "Ux");
-    CHKERR print_max_min(uYScatter, "Uy");
-    if (SPACE_DIM == 3)
-      CHKERR print_max_min(uZScatter, "Uz");
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  SmartPetscObj<DM> dM;
-  boost::shared_ptr<PostProcEle> postProcFe;
-  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
-  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
-  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
-};
-
 template <int DIM> struct OpPostProcContact : public DomainEleOp {
   OpPostProcContact(const std::string field_name,
                     moab::Interface &post_proc_mesh,
@@ -690,6 +562,7 @@ private:
   std::vector<EntityHandle> &mapGaussPts;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
+
 //! [Operators definitions]
 template <int DIM>
 OpPostProcContact<DIM>::OpPostProcContact(
@@ -770,5 +643,140 @@ MoFEMErrorCode OpPostProcContact<DIM>::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 //! [Postprocessing]
+
+struct Monitor : public FEMethod {
+
+  Monitor(SmartPetscObj<DM> &dm, boost::shared_ptr<CommonData> common_data_ptr,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
+      : dM(dm), commonDataPtr(common_data_ptr), uXScatter(ux_scatter),
+        uYScatter(uy_scatter), uZScatter(uz_scatter),
+        moabVertex(mbVertexPostproc) {
+    MoFEM::Interface *m_field_ptr;
+    CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
+    vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
+
+    if (SPACE_DIM == 2)
+      vertexPostProc->getOpPtrVector().push_back(
+          new OpSetContrariantPiolaTransformOnEdge());
+    vertexPostProc->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<SPACE_DIM>(
+            "U", commonDataPtr->contactDispPtr));
+    vertexPostProc->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+            "SIGMA", commonDataPtr->contactTractionPtr));
+    vertexPostProc->getOpPtrVector().push_back(
+        new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
+    vertexPostProc->setRuleHook = [](int a, int b, int c) {
+      return 2 * order + 1;
+    };
+
+    MatrixDouble inv_jac, jac;
+    postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
+    postProcFe->generateReferenceElementMesh();
+    if (SPACE_DIM == 2) {
+      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFace(inv_jac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac));
+      postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetContravariantPiolaTransformFace(jac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(inv_jac));
+    }
+
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+            commonDataPtr->mDPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+            "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+            "SIGMA", commonDataPtr->contactStressPtr));
+
+    postProcFe->getOpPtrVector().push_back(
+        new Tutorial::OpPostProcElastic<SPACE_DIM>(
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
+
+    postProcFe->getOpPtrVector().push_back(new OpPostProcContact<SPACE_DIM>(
+        "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+        commonDataPtr));
+    postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
+  }
+
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode operator()() { return 0; }
+
+  MoFEMErrorCode postProcess() {
+    MoFEMFunctionBegin;
+
+    auto post_proc_volume = [&]() {
+      MoFEMFunctionBegin;
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
+      CHKERR postProcFe->writeFile(
+          "out_contact_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+      MoFEMFunctionReturn(0);
+    };
+
+    auto post_proc_boundary = [&] {
+      MoFEMFunctionBegin;
+      std::ostringstream ostrm;
+      ostrm << "out_debug_" << ts_step << ".h5m";
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", vertexPostProc);
+      CHKERR moabVertex.write_file(ostrm.str().c_str(), "MOAB",
+                                   "PARALLEL=WRITE_PART");
+      moabVertex.delete_mesh();
+      MoFEMFunctionReturn(0);
+    };
+
+    auto print_max_min = [&](auto &tuple, const std::string msg) {
+      MoFEMFunctionBegin;
+      CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                             INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecScatterEnd(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                           INSERT_VALUES, SCATTER_FORWARD);
+      double max, min;
+      CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
+      CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
+                  msg.c_str(), ts_t, min, max);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR post_proc_volume();
+    CHKERR post_proc_boundary();
+    CHKERR print_max_min(uXScatter, "Ux");
+    CHKERR print_max_min(uYScatter, "Uy");
+    if (SPACE_DIM == 3)
+      CHKERR print_max_min(uZScatter, "Uz");
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<CommonData> commonDataPtr;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+
+  boost::shared_ptr<PostProcEle> postProcFe;
+  boost::shared_ptr<BoundaryEle> vertexPostProc;
+  moab::Core mbVertexPostproc;
+  moab::Interface &moabVertex;
+
+};
+
+
+
 
 }; // namespace OpContactTools

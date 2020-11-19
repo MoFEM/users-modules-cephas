@@ -86,12 +86,8 @@ constexpr double poisson_ratio = 0.25;
 constexpr double cn = 0.1;
 constexpr double spring_stiffness = 1e-1;
 
-boost::shared_ptr<BoundaryEle> debug_post_proc;
-moab::Core mb_post_debug;
-moab::Interface &moab_debug = mb_post_debug;
-
-#include <ContactOps.hpp>
 #include <OpPostProcElastic.hpp>
+#include <ContactOps.hpp>
 using namespace OpContactTools;
 
 struct Example {
@@ -222,20 +218,7 @@ MoFEMErrorCode Example::createCommonData() {
   jAc.resize(SPACE_DIM, SPACE_DIM, false);
   invJac.resize(SPACE_DIM, SPACE_DIM, false);
 
-  debug_post_proc = boost::make_shared<BoundaryEle>(mField);
-  if (SPACE_DIM == 2)
-    debug_post_proc->getOpPtrVector().push_back(
-        new OpSetContrariantPiolaTransformOnEdge());
-  debug_post_proc->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldValues<SPACE_DIM>(
-          "U", commonDataPtr->contactDispPtr));
-  debug_post_proc->getOpPtrVector().push_back(
-      new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
-  debug_post_proc->getOpPtrVector().push_back(
-      new OpPostProcDebug(mField, "U", commonDataPtr, &moab_debug));
-  debug_post_proc->setRuleHook = [](int a, int b, int c) {
-    return 2 * order + 1;
-  };
+
   CHKERR set_matrial_stiffness();
   MoFEMFunctionReturn(0);
 }
@@ -366,7 +349,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
-    pipeline.push_back(new OpConstrainBoundaryTraction("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
+        "SIGMA", commonDataPtr->contactTractionPtr));
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
@@ -444,49 +428,6 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto create_post_process_element = [&]() {
-    MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcEle>(mField);
-    postProcFe->generateReferenceElementMesh();
-    if (SPACE_DIM == 2) {
-      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAc));
-      postProcFe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(invJac));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-      postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
-      postProcFe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformFace(jAc));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
-    }
-
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-            commonDataPtr->mDPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressDivergencePtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-            "SIGMA", commonDataPtr->contactStressPtr));
-
-    postProcFe->getOpPtrVector().push_back(
-        new Tutorial::OpPostProcElastic<SPACE_DIM>(
-            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
-
-    postProcFe->getOpPtrVector().push_back(new OpPostProcContact<SPACE_DIM>(
-        "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-        commonDataPtr));
-    postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
-    MoFEMFunctionReturn(0);
-  };
-
   auto scatter_create = [&](auto coeff) {
     SmartPetscObj<IS> is;
     CHKERR is_manager->isCreateProblemFieldAndRank(simple->getProblemName(),
@@ -504,7 +445,7 @@ MoFEMErrorCode Example::tsSolve() {
   auto set_time_monitor = [&]() {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, postProcFe, uXScatter, uYScatter, uZScatter));
+        new Monitor(dm, commonDataPtr, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -512,7 +453,6 @@ MoFEMErrorCode Example::tsSolve() {
   };
 
   CHKERR set_section_monitor();
-  CHKERR create_post_process_element();
   uXScatter = scatter_create(0);
   uYScatter = scatter_create(1);
   if (SPACE_DIM == 3)
