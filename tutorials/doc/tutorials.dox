@@ -196,13 +196,6 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
-  <tr valign="top">
-       <td width="350px">\ref tutorial_contact_problem</td>
-       <td> Contact problem
-       <br/> *Keywords:* 
-       </td>
-  </tr>
-
 </table>
 
 
@@ -256,35 +249,35 @@ continuing with the one you are most excited about.
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref ADV-1: Plasticity</td>
+       <td width="350px">\ref ADV-0: Plasticity</td>
        <td> Plasticity problem
        <br/> *Keywords:* 
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-2: Contact</td>
+       <td width="350px">\ref tutorial_contact_problem</td>
        <td> Contact problem
-       <br/> *Keywords:* 
+       <br/> *Keywords:* H-curl/H-div space, mix formulations
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-3: Fracture</td>
+       <td width="350px">\ref ADV-2: Fracture</td>
        <td> Fracture problem
        <br/> *Keywords:* 
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-4: Various fields and finite element spaces</td>
+       <td width="350px">\ref ADV-3: Various fields and finite element spaces</td>
        <td> Problem with various fields and finite element spaces
        <br/> *Keywords:* 
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-5: Elasticity with spring and rod elements</td>
+       <td width="350px">\ref ADV-4: Elasticity with spring and rod elements</td>
        <td> Problem with mixed dimension (1D, 2D, 3D)
        <br/> *Keywords:* 
        </td>
