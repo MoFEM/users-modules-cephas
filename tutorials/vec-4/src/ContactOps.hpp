@@ -35,15 +35,6 @@ FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 
-struct OpInternalBoundaryContactRhs : public BoundaryEleOp {
-  OpInternalBoundaryContactRhs(const std::string field_name,
-                               boost::shared_ptr<CommonData> common_data_ptr);
-  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-
-private:
-  boost::shared_ptr<CommonData> commonDataPtr;
-};
-
 struct OpConstrainBoundaryRhs : public BoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
@@ -128,54 +119,6 @@ inline double diff_constrains_dtraction(double &&g0, double &&g, double &&t) {
 
 inline double diff_constrains_dgap(double &&g0, double &&g, double &&t) {
   return (1 + sign(w(g - g0, t))) / 2;
-}
-
-OpInternalBoundaryContactRhs::OpInternalBoundaryContactRhs(
-    const std::string field_name, boost::shared_ptr<CommonData> common_data_ptr)
-    : BoundaryEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {}
-
-MoFEMErrorCode OpInternalBoundaryContactRhs::doWork(int side, EntityType type,
-                                                    EntData &data) {
-  MoFEMFunctionBegin;
-
-  const size_t nb_gauss_pts = getGaussPts().size2();
-  const size_t nb_dofs = data.getIndices().size();
-
-  if (nb_dofs) {
-
-    std::array<double, MAX_DOFS_ON_ENTITY> nf;
-    std::fill(&nf[0], &nf[nb_dofs], 0);
-
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_traction =
-        getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactTractionPtr));
-
-    size_t nb_base_functions = data.getN().size2();
-    auto t_base = data.getFTensor0N();
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-
-      auto t_nf = getFTensor1FromPtr<SPACE_DIM>(nf.data());
-
-      const double alpha = t_w * getMeasure();
-
-      size_t bb = 0;
-      for (; bb != nb_dofs / SPACE_DIM; ++bb) {
-        t_nf(i) -= alpha * t_base * t_traction(i);
-        ++t_nf;
-        ++t_base;
-      }
-      for (; bb != nb_base_functions; ++bb)
-        ++t_base;
-
-      ++t_traction;
-      ++t_w;
-    }
-
-    // CHKERR VecSetValues(getSNESf(), data, nf.data(), ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
 }
 
 

@@ -371,9 +371,6 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(
         new OpSpringRhs("U", commonDataPtr->contactDispPtr, spring_stiffness));
-    // for tests, comment OpInternalDomainContactRhs
-    // just for testing, does not assemble
-    // pipeline.push_back(new OpInternalBoundaryContactRhs("U", commonDataPtr));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
