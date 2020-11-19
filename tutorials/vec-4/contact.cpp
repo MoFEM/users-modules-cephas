@@ -88,6 +88,7 @@ constexpr double spring_stiffness = 1e-1;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
+#include <PostProcContact.hpp>
 using namespace OpContactTools;
 
 struct Example {
