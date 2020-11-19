@@ -515,6 +515,7 @@ private:
   MoFEM::Interface &mField;
   moab::Interface *moabDebug;
   boost::shared_ptr<CommonData> commonDataPtr;
+  ParallelComm *pComm;
 };
 
 OpPostProcDebug::OpPostProcDebug(MoFEM::Interface &m_field,
@@ -525,6 +526,9 @@ OpPostProcDebug::OpPostProcDebug(MoFEM::Interface &m_field,
       commonDataPtr(common_data_ptr), moabDebug(moab_debug) {
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   doEntities[boundary_ent] = true;
+  pComm = ParallelComm::get_pcomm(moabDebug, MYPCOMM_INDEX);
+  if (pComm == NULL)
+    pComm = new ParallelComm(moabDebug, PETSC_COMM_WORLD);
 }
 
 MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
@@ -542,8 +546,6 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def.data());
     return th;
   };
-
-  // if (nb_dofs) {
 
   auto t_coords = getFTensor1CoordsAtGaussPts();
   auto t_disp = getFTensor1FromMat<SPACE_DIM>(*(commonDataPtr->contactDispPtr));
@@ -571,12 +573,12 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
     FTensor::Tensor1<double, 3> disp(t_disp(0), t_disp(1), 0.);
 
     auto t_contact_normal = normal(t_coords, t_disp);
-    double _gap0 = gap0(t_coords, t_contact_normal);
-    double _gap = gap(t_disp, t_contact_normal);
-    double gap_tot = _gap - _gap0;
-    double constra = constrian(gap0(t_coords, t_contact_normal),
-                               gap(t_disp, t_contact_normal),
-                               normal_traction(t_traction, t_contact_normal));
+    const double g0 = gap0(t_coords, t_contact_normal);
+    const double g = gap(t_disp, t_contact_normal);
+    const double gap_tot = g - g0;
+    const double constra = constrian(
+        gap0(t_coords, t_contact_normal), gap(t_disp, t_contact_normal),
+        normal_traction(t_traction, t_contact_normal));
     CHKERR moabDebug->tag_set_data(th_gap, &new_vertex, 1, &gap_tot);
     CHKERR moabDebug->tag_set_data(th_cons, &new_vertex, 1, &constra);
 
@@ -594,11 +596,20 @@ MoFEMErrorCode OpPostProcDebug::doWork(int side, EntityType type,
     CHKERR moabDebug->tag_set_data(th_disp, &new_vertex, 1, &disp(0));
     auto t_normal = getFTensor1Normal();
     CHKERR moabDebug->tag_set_data(th_normal, &new_vertex, 1, &t_normal(0));
+
+    auto set_part = [&](const auto vert) {
+      MoFEMFunctionBegin;
+      const int rank = mField.get_comm_rank();
+      CHKERR moabDebug->tag_set_data(pComm->part_tag(), &vert, 1, &rank);
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR set_part(new_vertex);
+
     ++t_traction;
     ++t_coords;
     ++t_disp;
   }
-  // }
 
   MoFEMFunctionReturn(0);
 }
@@ -629,9 +640,10 @@ struct Monitor : public FEMethod {
     { // for debugging
 
       std::ostringstream ostrm;
-      ostrm << "out_debug_" << ts_step << ".vtk";
+      ostrm << "out_debug_" << ts_step << ".h5m";
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", debug_post_proc);
-      CHKERR moab_debug.write_file(ostrm.str().c_str(), "VTK", "");
+      CHKERR moab_debug.write_file(ostrm.str().c_str(), "MOAB",
+                                   "PARALLEL=WRITE_PART");
       mb_post_debug.delete_mesh();
     }
 
