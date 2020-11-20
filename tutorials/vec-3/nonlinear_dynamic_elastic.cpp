@@ -38,7 +38,8 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-constexpr int SPACE_DIM = EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -110,16 +111,6 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
     FTensor::Index<'o', DIM> o;
     FTensor::Index<'p', DIM> p;
 
-    // auto get_tensor4_from_ddg = [](auto &ddg) {
-    //   FTensor::Tensor4<double, DIM, DIM, DIM, DIM> tens4;
-    //   for (int ii = 0; ii != DIM; ++ii)
-    //     for (int jj = 0; jj != DIM; ++jj)
-    //       for (int kk = 0; kk != DIM; ++kk)
-    //         for (int ll = 0; ll != DIM; ++ll)
-    //           tens4(ii, jj, kk, ll) = ddg(ii, jj, kk, ll);
-    //   return tens4;
-    // };
-
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     // const size_t nb_gauss_pts = matGradPtr->size2();
     const size_t nb_gauss_pts = getGaussPts().size2();
@@ -131,6 +122,11 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
     auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*matDPtr);
     auto t_grad = getFTensor2FromMat<DIM, DIM>(*matGradPtr);
     auto t_stress = getFTensor2FromMat<DIM, DIM>(*matStressPtr);
+
+    constexpr double eps = 1e-8;
+    auto is_eq = [&](const double &a, const double &b) {
+      return abs(a - b) < eps;
+    };
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -150,19 +146,22 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       C(i, j) = F(k, i) ^ F(k, j);
 
       CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
-
-      auto it = unique(&eig(0), &eig(0) + DIM,
-                       [](double a, double b) { return abs(a - b) < 1e-8; });
-
+      auto it = unique(&eig(0), &eig(0) + DIM, is_eq);
       int nb_uniq = std::distance(&eig(0), it);
-      if(nb_uniq == 2)
-        string wait2; //here you have to sort eigen values and vectors //FIXME:
+      // rare case when first two eigen values are equal
+      if (DIM == 3 && nb_uniq == 2 && is_eq(eig(0), eig(1))) {
+        eig(1) = eig(2);
+        eig(2) = eig(0);
+        for (size_t dd = 0; dd != 3; ++dd) {
+          eigen_vec(1, dd) = eigen_vec(2, dd);
+          eigen_vec(2, dd) = eigen_vec(0, dd);
+        }
+      }
       auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
 
       T(i, j) = t_D(i, j, k, l) * logC(k, l);
 
-      auto dlogC_dC =
-          EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
+      auto dlogC_dC = EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
       dlogC_dC(i, j, k, l) *= 2;
 
       S(k, l) = T(i, j) * dlogC_dC(i, j, k, l);
@@ -172,8 +171,8 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
         FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
         dC_dF(i, j, k, l) = (t_kd(i, l) * F(k, j)) + (t_kd(j, l) * F(k, i));
 
-        auto TL =
-            EigenMatrix::getDiffDiffMat(eig, eigen_vec, f, d_f, dd_f, T, nb_uniq);
+        auto TL = EigenMatrix::getDiffDiffMat(eig, eigen_vec, f, d_f, dd_f, T,
+                                              nb_uniq);
 
         TL(i, j, k, l) *= 4;
         FTensor::Ddg<double, DIM, DIM> P_D_P_plus_TL;
@@ -451,6 +450,7 @@ struct Monitor : public FEMethod {
     MoFEMFunctionBegin;
     constexpr int save_every_nth_step = 1;
     if (ts_step % save_every_nth_step == 0) {
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProc);
       CHKERR postProc->writeFile(
           "out_step_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
     }
