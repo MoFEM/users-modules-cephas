@@ -80,11 +80,18 @@ using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
-constexpr int order = 3;
-constexpr double young_modulus = 10;
+// Only used for dynamics
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMass<1, SPACE_DIM>;
+using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+
+constexpr int order = 5;
+constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
-constexpr double cn = 0.1;
-constexpr double spring_stiffness = 1e-1;
+constexpr double rho = 1;
+constexpr double cn = 0.01;
+constexpr double spring_stiffness = 0;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
@@ -298,6 +305,19 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpK("U", "U", commonDataPtr->mDPtr));
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
+
+    if (rho > 0) {
+      // Get pointer to U_tt shift in domain element
+      auto get_rho = [this](const double, const double, const double) {
+        auto *pipeline_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+        return rho * fe_domain_lhs->ts_aa;
+      };
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpMass("U", "U", get_rho));
+    }
+
+
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -309,7 +329,7 @@ MoFEMErrorCode Example::OPs() {
       const auto time = fe_domain_rhs->ts_t;
       // hardcoded gravity load
       t_source(i) = 0;
-      t_source(1) = 1.0 * time;
+      t_source(1) = 1.0;
       return t_source;
     };
     pipeline.push_back(new OpBodyForce("U", get_body_force));
@@ -341,7 +361,16 @@ MoFEMErrorCode Example::OPs() {
         "U", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(
         new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr));
-    // pipeline.push_back(new OpInternalDomainContactRhs("U", commonDataPtr));
+
+    // only in case of dynamics
+    if (rho > 0) {
+      auto mat_acceleration = boost::make_shared<MatrixDouble>();
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+                                                            mat_acceleration));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInertiaForce("U", mat_acceleration, rho));
+    }
 
   };
 
@@ -403,16 +432,7 @@ MoFEMErrorCode Example::tsSolve() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
-  auto solver = pipeline_mng->createTS();
-
-  auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
-
-  CHKERR TSSetSolution(solver, D);
-  CHKERR TSSetFromOptions(solver);
-  CHKERR TSSetUp(solver);
-
-  auto set_section_monitor = [&]() {
+  auto set_section_monitor = [&](auto solver) {
     MoFEMFunctionBegin;
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
@@ -426,7 +446,7 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto scatter_create = [&](auto coeff) {
+  auto scatter_create = [&](auto D, auto coeff) {
     SmartPetscObj<IS> is;
     CHKERR is_manager->isCreateProblemFieldAndRank(simple->getProblemName(),
                                                    ROW, "U", coeff, coeff, is);
@@ -440,7 +460,7 @@ MoFEMErrorCode Example::tsSolve() {
                            SmartPetscObj<VecScatter>(scatter));
   };
 
-  auto set_time_monitor = [&]() {
+  auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(
         new Monitor(dm, commonDataPtr, uXScatter, uYScatter, uZScatter));
@@ -450,14 +470,33 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR set_section_monitor();
-  uXScatter = scatter_create(0);
-  uYScatter = scatter_create(1);
+  auto dm = simple->getDM();
+  auto D = smartCreateDMVector(dm);
+  uXScatter = scatter_create(D, 0);
+  uYScatter = scatter_create(D, 1);
   if (SPACE_DIM == 3)
-    uZScatter = scatter_create(2);
-  CHKERR set_time_monitor();
+    uZScatter = scatter_create(D, 2);
 
-  CHKERR TSSolve(solver, D);
+  if (rho == 0) {
+    auto solver = pipeline_mng->createTS();
+    CHKERR TSSetSolution(solver, D);
+    CHKERR TSSetFromOptions(solver);
+    CHKERR TSSetUp(solver);
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
+    CHKERR TSSolve(solver, D);
+  } else {
+    auto solver = pipeline_mng->createTS2();
+    auto dm = simple->getDM();
+    auto D = smartCreateDMVector(dm);
+    auto DD = smartVectorDuplicate(D);
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
+    CHKERR TS2SetSolution(solver, D, DD);
+    CHKERR TSSetFromOptions(solver);
+    CHKERR TSSetUp(solver);
+    CHKERR TSSolve(solver, NULL);
+  }
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
