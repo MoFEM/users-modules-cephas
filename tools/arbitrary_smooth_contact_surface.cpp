@@ -35,13 +35,15 @@ using VolumeEleOp = VolumeEle::UserDataOperator;
 
 struct ArbitrarySmoothingProblem {
 
+Vec volumeVec;
+
   struct SurfaceSmoothingElement : public FaceEle {
     MoFEM::Interface &mField;
 
     SurfaceSmoothingElement(MoFEM::Interface &m_field)
         : FaceEle(m_field), mField(m_field) {}
 
-  int getRule(int order) { return 2 * order + 1; };
+  int getRule(int order) { return 5 * order + 1; };
 
     // Destructor
     ~SurfaceSmoothingElement() {}
@@ -59,30 +61,41 @@ struct ArbitrarySmoothingProblem {
 
   struct CommonSurfaceSmoothingElement {
 
+    boost::shared_ptr<MatrixDouble> nOrmal;
     boost::shared_ptr<MatrixDouble> tAngent1;
     boost::shared_ptr<MatrixDouble> tAngent2;
-    boost::shared_ptr<MatrixDouble> nOrmal;
-
-    boost::shared_ptr<MatrixDouble> nOrmalHdiv;
+    boost::shared_ptr<MatrixDouble> nOrmalField;
     boost::shared_ptr<MatrixDouble> tanHdiv1;
     boost::shared_ptr<MatrixDouble> tanHdiv2;
-    
-    boost::shared_ptr<VectorDouble> divNormalHdiv;
 
-    boost::shared_ptr<MatrixDouble> matForDivTan1;
+    boost::shared_ptr<MatrixDouble> nOrmalHdiv;
+    boost::shared_ptr<VectorDouble> divNormalHdiv;
+    
+    boost::shared_ptr<VectorDouble> divNormalField;
     boost::shared_ptr<MatrixDouble> matForDivTan2;
+    
+    boost::shared_ptr<MatrixDouble> matForDivTan1;
+    boost::shared_ptr<MatrixDouble> lagMult;
+
+    boost::shared_ptr<VectorDouble> areaNL;
 
     CommonSurfaceSmoothingElement(MoFEM::Interface &m_field) : mField(m_field) {
-      tAngent1 = boost::make_shared<MatrixDouble>();
-      tAngent2 = boost::make_shared<MatrixDouble>();
       nOrmal = boost::make_shared<MatrixDouble>();
       nOrmalHdiv = boost::make_shared<MatrixDouble>();
       tanHdiv1 = boost::make_shared<MatrixDouble>();
       tanHdiv2 = boost::make_shared<MatrixDouble>();
-      matForDivTan1 = boost::make_shared<MatrixDouble>();
-      matForDivTan2 = boost::make_shared<MatrixDouble>();
-
+      
       divNormalHdiv = boost::make_shared<VectorDouble>();
+      lagMult = boost::make_shared<MatrixDouble>();
+
+      tAngent1 = boost::make_shared<MatrixDouble>();
+      tAngent2 = boost::make_shared<MatrixDouble>();
+      matForDivTan1 = boost::make_shared<MatrixDouble>();;
+      matForDivTan2 = boost::make_shared<MatrixDouble>();;
+
+      nOrmalField = boost::make_shared<MatrixDouble>();
+      divNormalField = boost::make_shared<VectorDouble>();
+      areaNL = boost::make_shared<VectorDouble>();
     }
 
   private:
@@ -91,7 +104,8 @@ struct ArbitrarySmoothingProblem {
 
   MoFEMErrorCode addSurfaceSmoothingElement(const string element_name,
                                             const string field_name_position,
-                                            const string field_name_normal_hdiv,
+                                            const string field_name_normal_field,
+                                            const string field_lagrange,
                                             Range &range_smoothing_elements) {
     MoFEMFunctionBegin;
 
@@ -107,13 +121,22 @@ struct ArbitrarySmoothingProblem {
                                                        field_name_position);
 
     CHKERR mField.modify_finite_element_add_field_col(element_name,
-                                                      field_name_normal_hdiv);
+                                                      field_name_normal_field);
 
     CHKERR mField.modify_finite_element_add_field_row(element_name,
-                                                      field_name_normal_hdiv);
+                                                      field_name_normal_field);
 
     CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                       field_name_normal_hdiv);
+                                                       field_name_normal_field);
+
+    CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                      field_lagrange);
+
+    CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                      field_lagrange);
+
+    CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                       field_lagrange);
 
     mField.add_ents_to_finite_element_by_type(range_smoothing_elements, MBTRI,
                                               element_name);
@@ -222,20 +245,185 @@ struct ArbitrarySmoothingProblem {
       FTensor::Index<'k', 3> k;
       commonSurfaceSmoothingElement->nOrmal->resize(3, ngp, false);
       commonSurfaceSmoothingElement->nOrmal->clear();
+      commonSurfaceSmoothingElement->areaNL->resize(ngp, false);
+      commonSurfaceSmoothingElement->areaNL->clear();
 
       auto t_1 =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
       auto t_2 =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2);
       auto t_n = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmal);
-
+      auto t_area =
+      getFTensor0FromVec(*commonSurfaceSmoothingElement->areaNL);
       for (unsigned int gg = 0; gg != ngp; ++gg) {
         t_n(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
         const double n_mag = sqrt(t_n(i) * t_n(i));
         t_n(i) /= n_mag;
+        t_area = 0.5 * n_mag;
+        ++t_area;
         ++t_n;
         ++t_1;
         ++t_2;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+  
+
+    /// \brief Computes, for reference configuration, normal to slave face that is
+  /// common to all gauss points
+  struct OpGetNormalField : public FaceEleOp {
+
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    OpGetNormalField(
+        const string normal_field_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(normal_field_name, UserDataOperator::OPCOL),
+          commonSurfaceSmoothingElement(common_data_smoothing) {
+          }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
+
+      int ngp = data.getN().size1();
+
+      unsigned int nb_dofs = data.getFieldData().size() / 3;
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 2> k;
+
+
+        auto t_1 = getFTensor1Tangent1();        
+        auto t_2 = getFTensor1Tangent2();        
+
+        const double size_1 =  sqrt(t_1(i) * t_1(i));
+        const double size_2 =  sqrt(t_2(i) * t_2(i));
+        t_1(i) /= size_1;
+        t_2(i) /= size_2;
+
+        FTensor::Tensor1<double, 3> t_normal;
+
+        t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
+
+      // FTensor::Tensor2<const double *, 3, 3> t_m(
+      //     &t_1(0), &t_2(0), &t_normal(0),
+
+      //     &t_1(1), &t_2(1), &t_normal(1),
+
+      //     &t_1(2), &t_2(2), &t_normal(2),
+
+      //     3);
+
+      FTensor::Tensor2<const double *, 3, 3> t_m(
+          &t_1(0), &t_1(1), &t_1(2),
+
+          &t_2(0), &t_2(1), &t_2(2),
+
+          &t_normal(0), &t_normal(1), &t_normal(2),
+
+          3);
+
+      double det;
+      FTensor::Tensor2<double, 3, 3> t_inv_m;
+      CHKERR determinantTensor3by3(t_m, det);
+      CHKERR invertTensor3by3(t_m, det, t_inv_m);
+
+      if (type == MBVERTEX) {
+        commonSurfaceSmoothingElement->nOrmalField->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->nOrmalField->clear();
+
+        commonSurfaceSmoothingElement->divNormalField->resize(ngp, false);
+        commonSurfaceSmoothingElement->divNormalField->clear();
+      }
+
+      auto t_n_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+
+      auto t_div_normal =
+      getFTensor0FromVec(*commonSurfaceSmoothingElement->divNormalField);
+      FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 2> t_container_N(
+          &t_inv_m(0, 0), &t_inv_m(0, 1), &t_inv_m(1, 0),
+
+          &t_inv_m(1, 1), &t_inv_m(2, 0), &t_inv_m(2, 1));
+
+      FTensor::Tensor1<double, 3> t_transformed_N;
+
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+        auto t_N = data.getFTensor1DiffN<2>(gg, 0);
+        // auto t_dof = data.getFTensor1FieldData<3>();
+        FTensor::Tensor1<double *, 3> t_dof(
+              &data.getFieldData()[0], &data.getFieldData()[1], &data.getFieldData()[2], 3);
+        FTensor::Tensor0<double *> t_base_normal_field(&data.getN()(gg, 0));
+
+        for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
+          // t_container_N(0,0) = t_container_N(1,0) = t_container_N(2,0) = t_N(0);
+          // t_container_N(2,0) = t_container_N(2,1) = t_container_N(2,1) = t_N(1);
+          t_transformed_N(i) = t_N(k) * t_container_N(i, k);
+
+          t_n_field(i) += t_dof(i) * t_base_normal_field;
+          t_div_normal += t_dof(i) * t_transformed_N(i);
+          ++t_dof;
+          ++t_N;
+          ++t_base_normal_field;
+        }
+        ++t_n_field;
+        ++t_div_normal;
+
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+    /// \brief Computes, for reference configuration, normal to slave face that is
+  /// common to all gauss points
+  struct OpGetLagrangeField : public FaceEleOp {
+
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    OpGetLagrangeField(
+        const string lagrange_field,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(lagrange_field, UserDataOperator::OPCOL),
+          commonSurfaceSmoothingElement(common_data_smoothing) {
+          }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
+
+      int ngp = data.getN().size1();
+
+      unsigned int nb_dofs = data.getFieldData().size() / 3;
+      FTensor::Index<'i', 3> i;
+      if (type == MBVERTEX) {
+        commonSurfaceSmoothingElement->lagMult->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->lagMult->clear();
+      }
+
+      auto t_lag_mult =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->lagMult);
+
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+        // auto t_dof = data.getFTensor1FieldData<3>();
+        FTensor::Tensor1<double *, 3> t_dof(
+              &data.getFieldData()[0], &data.getFieldData()[1], &data.getFieldData()[2], 3);
+        FTensor::Tensor0<double *> t_base_lagrange_field(&data.getN()(gg, 0));
+
+        for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
+          t_lag_mult(i) += t_dof(i) * t_base_lagrange_field;
+          ++t_dof;
+          ++t_base_lagrange_field;
+        }
+        ++t_lag_mult;
       }
 
       MoFEMFunctionReturn(0);
@@ -303,6 +491,168 @@ struct ArbitrarySmoothingProblem {
         commonSurfaceSmoothingElement;
     VectorDouble vecF;
   };
+
+
+  struct OpCalLagMultRhs : public FaceEleOp {
+
+    OpCalLagMultRhs(
+        const string lagrange_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(lagrange_name, UserDataOperator::OPROW),
+          commonSurfaceSmoothingElement(common_data_smoothing) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      const int nb_dofs = data.getIndices().size();
+      if (nb_dofs) {
+
+        const int nb_gauss_pts = data.getN().size1();
+        int nb_base_fun_col = nb_dofs / 3;
+
+        vecF.resize(nb_dofs, false);
+        vecF.clear();
+
+        const double area_m = getMeasure(); // same area in master and slave
+
+        FTensor::Index<'i', 3> i;
+
+        auto t_n =
+            getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmal);
+        auto t_n_field =
+            getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+
+        auto t_w = getFTensor0IntegrationWeight();
+      auto t_area =
+      getFTensor0FromVec(*commonSurfaceSmoothingElement->areaNL);
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+          // double val_m = t_w * area_m;
+        double val_m = t_w * t_area;
+          FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
+              &vecF[0], &vecF[1], &vecF[2]};
+          auto t_base = data.getFTensor0N(gg, 0);          
+          for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+            t_assemble_m(i) += (t_n(i) - t_n_field(i)) * t_base * val_m;
+            
+            // cerr <<"Vec 2   " << t_n << "\n";
+
+            ++t_assemble_m;
+            ++t_base;
+          }
+          ++t_n;
+          ++t_n_field;
+          ++t_w;
+          ++t_area;
+        } // for gauss points
+
+        CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
+      }
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    VectorDouble vecF;
+  };
+
+struct OpCalPositionsRhs : public FaceEleOp {
+
+    OpCalPositionsRhs(
+        const string field_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(field_name, UserDataOperator::OPROW),
+          commonSurfaceSmoothingElement(common_data_smoothing) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      const int nb_dofs = data.getIndices().size();
+      if (nb_dofs) {
+
+        const int nb_gauss_pts = data.getN().size1();
+        int nb_base_fun_col = nb_dofs / 3;
+
+        vecF.resize(nb_dofs, false);
+        vecF.clear();
+
+        const double area_m = getMeasure(); // same area in master and slave
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+
+        auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
+                                FTensor::Tensor1<double *, 3> t_1,
+                                FTensor::Tensor1<double *, 3> t_2,
+                                FTensor::Tensor1<double *, 3> t_normal) {
+          FTensor::Tensor2<double, 3, 3> t_n;
+          FTensor::Tensor2<double, 3, 3> t_n_container;
+          const double n_norm = sqrt(t_normal(i) * t_normal(i));
+          t_n(i, j) = 0;
+          t_n_container(i, j) = 0;
+          t_n_container(i, j) +=
+              FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+          t_n_container(i, j) -=
+              FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+          t_n(i, k) = t_n_container(i, k) / n_norm - t_normal(i) * t_normal(j) *
+                                                         t_n_container(j, k) /
+                                                         pow(n_norm, 3);
+          return t_n;
+        };
+
+        auto t_1 =
+            getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
+        auto t_2 =
+            getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2);
+        auto t_normal =
+            getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmal);
+
+        auto t_lag_mult =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->lagMult);
+
+        auto t_w = getFTensor0IntegrationWeight();
+      auto t_area =
+      getFTensor0FromVec(*commonSurfaceSmoothingElement->areaNL);
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+          // double val_m = t_w * area_m;
+          double val_m = t_w * t_area;
+
+          FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
+              &vecF[0], &vecF[1], &vecF[2]};
+          auto t_base = data.getFTensor0N(gg, 0); 
+          auto t_N = data.getFTensor1DiffN<2>(gg, 0);
+         
+          for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+            auto t_d_n = make_vec_der(t_N, t_1, t_2, t_normal);
+
+            t_assemble_m(j) += t_lag_mult(i) * t_d_n(i, j) * val_m;
+            
+            ++t_assemble_m;
+            ++t_base;
+            ++t_N;
+          }
+          ++t_normal;
+          ++t_w;
+          ++t_1;
+          ++t_2;
+          ++t_lag_mult;
+          ++t_area;
+        } // for gauss points
+
+        CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
+      }
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    VectorDouble vecF;
+  };
+
 
   /// \brief Computes, for reference configuration, normal to slave face that is
   /// common to all gauss points
@@ -573,6 +923,148 @@ struct ArbitrarySmoothingProblem {
           ++t_div_tan_2;
           // ++t_1;
           // ++t_2;
+        } // for gauss points
+
+        CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
+      }
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    VectorDouble vecF;
+  };
+
+
+  struct OpCalNormalFieldRhs : public FaceEleOp {
+
+    OpCalNormalFieldRhs(
+        const string field_name_h_div,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(field_name_h_div, UserDataOperator::OPROW),
+          commonSurfaceSmoothingElement(common_data_smoothing) {
+            sYmm = false; // This will make sure to loop over all entities
+          }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      const int nb_dofs = data.getIndices().size();
+      if (nb_dofs) {
+
+        const int nb_gauss_pts = data.getN().size1();
+        int nb_base_fun_col = nb_dofs;
+
+        vecF.resize(nb_dofs, false);
+        vecF.clear();
+
+        const double area_m = getMeasure(); // same area in master and slave
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+
+         auto t_n_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+
+        auto t_div_normal =
+        getFTensor0FromVec(*commonSurfaceSmoothingElement->divNormalField);
+
+        auto t_lag_mult =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->lagMult);
+
+        auto t_w = getFTensor0IntegrationWeight();
+
+
+///
+      FTensor::Index<'k', 2> k;
+        auto t_1 = getFTensor1Tangent1();        
+        auto t_2 = getFTensor1Tangent2();        
+
+        const double size_1 =  sqrt(t_1(i) * t_1(i));
+        const double size_2 =  sqrt(t_2(i) * t_2(i));
+        t_1(i) /= size_1;
+        t_2(i) /= size_2;
+
+        FTensor::Tensor1<double, 3> t_normal;
+
+        t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
+
+      // FTensor::Tensor2<const double *, 3, 3> t_m(
+      //     &t_1(0), &t_2(0), &t_normal(0),
+
+      //     &t_1(1), &t_2(1), &t_normal(1),
+
+      //     &t_1(2), &t_2(2), &t_normal(2),
+
+      //     3);
+
+                FTensor::Tensor2<const double *, 3, 3> t_m(
+          &t_1(0), &t_1(1), &t_1(2),
+
+          &t_2(0), &t_2(1), &t_2(2),
+
+          &t_normal(0), &t_normal(1), &t_normal(2),
+
+          3);
+
+      double det;
+      FTensor::Tensor2<double, 3, 3> t_inv_m;
+      CHKERR determinantTensor3by3(t_m, det);
+      CHKERR invertTensor3by3(t_m, det, t_inv_m);
+      // FTensor::Tensor2<double, 3, 2> t_container_N;
+      // FTensor::Tensor2<double, 3, 2> t_transformed_N;
+
+
+      // auto t_1 =
+      //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
+      // auto t_2 =
+      //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2);
+      auto t_area =
+      getFTensor0FromVec(*commonSurfaceSmoothingElement->areaNL);
+          
+      FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 2> t_container_N(
+          &t_inv_m(0, 0), &t_inv_m(0, 1), &t_inv_m(1, 0),
+
+          &t_inv_m(1, 1), &t_inv_m(2, 0), &t_inv_m(2, 1));
+
+      FTensor::Tensor1<double, 3> t_transformed_N;
+
+        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+          // const double norm_1 = sqrt(t_1(i) * t_1(i));
+          // const double norm_2 = sqrt(t_2(i) * t_2(i));
+          // t_1(i) /= norm_1;
+          // t_2(i) /= norm_2;
+          auto t_N = data.getFTensor1DiffN<2>(gg, 0);
+          // double val_m = t_w * area_m;
+          double val_m = t_w * t_area;
+          auto t_base = data.getFTensor0N(gg, 0);          
+          
+          FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
+          &vecF[0], &vecF[1], &vecF[2]};
+
+          for (int bbc = 0; bbc != nb_base_fun_col / 3; ++bbc) {
+
+          // t_container_N(0,0) = t_container_N(1,0) = t_container_N(2,0) = t_N(0);
+          // t_container_N(2,0) = t_container_N(2,1) = t_container_N(2,1) = t_N(1);
+          t_transformed_N(i) = t_N(k) * t_container_N(i, k);
+          // t_transformed_N(i,k) = t_inv_m(j, i) * t_container_N(j, k);
+            // t_assemble_m(0) += t_transformed_N(0, 0) * t_div_normal * val_m;
+            // t_assemble_m(1) += t_transformed_N(1, 1) * t_div_normal * val_m;
+            t_assemble_m(i) += t_transformed_N(i) * t_div_normal * val_m;
+            t_assemble_m(i) -= t_lag_mult(i) * t_base * val_m;
+            ++t_assemble_m;
+            ++t_base;
+            ++t_N;
+          }
+
+        ++t_w;
+        ++t_n_field;
+        ++t_div_normal;
+        ++t_lag_mult;
+          // ++t_1;
+          // ++t_2;
+          ++t_area;
         } // for gauss points
 
         CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
@@ -996,7 +1488,7 @@ private:
       boost::shared_ptr<SurfaceSmoothingElement> fe_rhs_smooth_element,
       boost::shared_ptr<CommonSurfaceSmoothingElement>
           common_data_smooth_element,
-      string field_name_position, string field_name_normal_hdiv) {
+      string field_name_position, string field_name_normal_field, string lagrange_field_name) {
     MoFEMFunctionBegin;
     fe_rhs_smooth_element->getOpPtrVector().push_back(
         new OpGetTangentForSmoothSurf(field_name_position,
@@ -1004,53 +1496,46 @@ private:
     fe_rhs_smooth_element->getOpPtrVector().push_back(
         new OpGetNormalForSmoothSurf(field_name_position,
                                      common_data_smooth_element));
-    fe_rhs_smooth_element->getOpPtrVector().push_back(
-        new OpGetTangentHdivAtGaussPoints(field_name_normal_hdiv,
-                                         common_data_smooth_element));
+    fe_rhs_smooth_element->getOpPtrVector().push_back(new OpGetLagrangeField(
+        lagrange_field_name, common_data_smooth_element));
+    fe_rhs_smooth_element->getOpPtrVector().push_back(new OpGetNormalField(
+        field_name_normal_field, common_data_smooth_element));
+
+    fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalNormalFieldRhs(
+        field_name_normal_field, common_data_smooth_element));
 
     fe_rhs_smooth_element->getOpPtrVector().push_back(
-        new OpGetNormalHdivAtGaussPoints(field_name_normal_hdiv,
-                                         common_data_smooth_element));
+        new OpCalLagMultRhs(lagrange_field_name, common_data_smooth_element));
+
+    fe_rhs_smooth_element->getOpPtrVector().push_back(
+        new OpCalPositionsRhs(field_name_position, common_data_smooth_element));
+    /////
+    // fe_rhs_smooth_element->getOpPtrVector().push_back(
+    //     new OpGetTangentHdivAtGaussPoints(field_name_normal_hdiv,
+    //                                      common_data_smooth_element));
+
+    // fe_rhs_smooth_element->getOpPtrVector().push_back(
+    //     new OpGetNormalHdivAtGaussPoints(field_name_normal_hdiv,
+    //                                      common_data_smooth_element));
 
 
     // Rhs
-    fe_rhs_smooth_element->getOpPtrVector().push_back(
-        new OpCalSmoothingNormalHdivRhs(field_name_normal_hdiv,
-                                        common_data_smooth_element));
-    fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalSmoothingXRhs(
-        field_name_position, common_data_smooth_element));
+    // fe_rhs_smooth_element->getOpPtrVector().push_back(
+    //     new OpCalSmoothingNormalHdivRhs(field_name_normal_hdiv,
+    //                                     common_data_smooth_element));
+    // fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalSmoothingXRhs(
+    //     field_name_position, common_data_smooth_element));
 
     MoFEMFunctionReturn(0);
   }
 
-  MoFEMErrorCode setSmoothFaceOperatorsLhs(
-      boost::shared_ptr<SurfaceSmoothingElement> fe_lhs_smooth_element,
-      boost::shared_ptr<CommonSurfaceSmoothingElement>
-          common_data_smooth_element,
-      string field_name_position, string field_name_normal_hdiv) {
+  MoFEMErrorCode setGlobalVolumeEvaluator(
+      boost::shared_ptr<VolumeSmoothingElement> fe_smooth_volume_element,
+      string field_name_position) {
     MoFEMFunctionBegin;
 
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpGetTangentForSmoothSurf(field_name_position, common_data_smooth_element));
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpGetNormalForSmoothSurf(field_name_position, common_data_smooth_element));
-    
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpGetTangentHdivAtGaussPoints(field_name_normal_hdiv,
-                                         common_data_smooth_element));
-
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpGetNormalHdivAtGaussPoints(field_name_normal_hdiv,
-                                         common_data_smooth_element));
-
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpCalSmoothingNormalHdivHdivLhs(field_name_normal_hdiv, common_data_smooth_element));
-
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpCalSmoothingX_dnLhs(field_name_position, field_name_normal_hdiv, common_data_smooth_element));
-
-    fe_lhs_smooth_element->getOpPtrVector().push_back(
-        new OpCalSmoothingX_dXLhs(field_name_position, common_data_smooth_element));
+    fe_smooth_volume_element->getOpPtrVector().push_back(
+        new VolumeCalculation(field_name_position, volumeVec));
 
     MoFEMFunctionReturn(0);
   }
@@ -1197,11 +1682,14 @@ int main(int argc, char *argv[]) {
     EntityHandle meshset_tri_slave;
     CHKERR m_field.get_moab().create_meshset(MESHSET_SET, meshset_tri_slave);
 
-    CHKERR m_field.add_field("CONTACT_MESH_NODE_POSITIONS", H1,
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1,
                              AINSWORTH_LEGENDRE_BASE, 3, MB_TAG_SPARSE,
                              MF_ZERO);
 
-    CHKERR m_field.add_field("NORMAL_HDIV", HCURL, AINSWORTH_LEGENDRE_BASE, 2,
+    CHKERR m_field.add_field("NORMAL_FIELD", H1, AINSWORTH_LEGENDRE_BASE, 3,
+                             MB_TAG_SPARSE, MF_ZERO);
+
+    CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 3,
                              MB_TAG_SPARSE, MF_ZERO);
 
     Range fixed_vertex;
@@ -1209,62 +1697,71 @@ int main(int argc, char *argv[]) {
                                                fixed_vertex);
 
     // Declare problem add entities (by tets) to the field
-    // CHKERR m_field.add_ents_to_field_by_type(0, MBTET,
-    //                                          "CONTACT_MESH_NODE_POSITIONS");
-    // CHKERR m_field.set_field_order(0, MBTET, "CONTACT_MESH_NODE_POSITIONS", 1);
-    // CHKERR m_field.set_field_order(0, MBTRI, "CONTACT_MESH_NODE_POSITIONS", 1);
-    // CHKERR m_field.set_field_order(0, MBEDGE, "CONTACT_MESH_NODE_POSITIONS", 1);
-    // CHKERR m_field.set_field_order(0, MBVERTEX, "CONTACT_MESH_NODE_POSITIONS",
-    //                                1);
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET,
+                                             "MESH_NODE_POSITIONS");
+    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS",
+                                   1);
 
     if (!slave_tris.empty()) {
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
-                                               "CONTACT_MESH_NODE_POSITIONS");
-      CHKERR m_field.set_field_order(slave_tris, "CONTACT_MESH_NODE_POSITIONS", order);
+                                               "MESH_NODE_POSITIONS");
+      CHKERR m_field.set_field_order(slave_tris, "MESH_NODE_POSITIONS", order);
       Range edges_smoothed;
       CHKERR moab.get_adjacencies(slave_tris, 1, false, edges_smoothed,
                               moab::Interface::UNION);
-      CHKERR m_field.set_field_order(edges_smoothed, "CONTACT_MESH_NODE_POSITIONS", order);
+      CHKERR m_field.set_field_order(edges_smoothed, "MESH_NODE_POSITIONS", order);
       Range vertices_smoothed;
       CHKERR m_field.get_moab().get_connectivity(slave_tris,
                                                vertices_smoothed);
-      CHKERR m_field.set_field_order(vertices_smoothed, "CONTACT_MESH_NODE_POSITIONS", order);
+      CHKERR m_field.set_field_order(vertices_smoothed, "MESH_NODE_POSITIONS", order);
+
+      //Normal
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+                                               "NORMAL_FIELD");
+      CHKERR m_field.set_field_order(slave_tris, "NORMAL_FIELD", order);
+      CHKERR m_field.set_field_order(edges_smoothed, "NORMAL_FIELD", order);
+      CHKERR m_field.set_field_order(vertices_smoothed, "NORMAL_FIELD", order);
+
+      //Lagmult
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
+                                               "LAGMULT");
+      CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order);
+      CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", order);
+      CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", order);
 
     }
     if (!master_tris.empty()) {
       CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
-                                               "CONTACT_MESH_NODE_POSITIONS");
-      CHKERR m_field.set_field_order(master_tris, "CONTACT_MESH_NODE_POSITIONS", order);
+                                               "MESH_NODE_POSITIONS");
+      CHKERR m_field.set_field_order(master_tris, "MESH_NODE_POSITIONS", order);
       Range edges_smoothed;
       CHKERR moab.get_adjacencies(master_tris, 1, false, edges_smoothed,
                               moab::Interface::UNION);
-      CHKERR m_field.set_field_order(edges_smoothed, "CONTACT_MESH_NODE_POSITIONS", order);
+      CHKERR m_field.set_field_order(edges_smoothed, "MESH_NODE_POSITIONS", order);
       Range vertices_smoothed;
       CHKERR m_field.get_moab().get_connectivity(master_tris,
                                                vertices_smoothed);
-      CHKERR m_field.set_field_order(vertices_smoothed, "CONTACT_MESH_NODE_POSITIONS", order);
-    }
+      CHKERR m_field.set_field_order(vertices_smoothed, "MESH_NODE_POSITIONS", order);
 
-    if (!slave_tris.empty()) {
-      Range edges_hcurl_slave;
-      CHKERR moab.get_adjacencies(slave_tris, 1, false, edges_hcurl_slave,
-                              moab::Interface::UNION);
-      CHKERR m_field.set_field_order(edges_hcurl_slave, "NORMAL_HDIV", order - 1);
-
-      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
-                                               "NORMAL_HDIV");
-      CHKERR m_field.set_field_order(slave_tris, "NORMAL_HDIV", order - 1);
-    }
-    if (!master_tris.empty()) {
-      Range edges_hcurl_master;
-      CHKERR moab.get_adjacencies(master_tris, 1, false, edges_hcurl_master,
-                              moab::Interface::UNION);
-      CHKERR m_field.set_field_order(edges_hcurl_master, "NORMAL_HDIV", order - 1);
-
+      //Normal
       CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
-                                               "NORMAL_HDIV");
-      CHKERR m_field.set_field_order(master_tris, "NORMAL_HDIV", order - 1);
+                                               "NORMAL_FIELD");
+      CHKERR m_field.set_field_order(master_tris, "NORMAL_FIELD", order);
+      CHKERR m_field.set_field_order(edges_smoothed, "NORMAL_FIELD", order);
+      CHKERR m_field.set_field_order(vertices_smoothed, "NORMAL_FIELD", order);
+
+      //Lagmult
+      CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
+                                               "LAGMULT");
+      CHKERR m_field.set_field_order(master_tris, "LAGMULT", order);
+      CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", order);
+      CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", order);
     }
+
+    
 
     // build field
     CHKERR m_field.build_fields();
@@ -1272,8 +1769,8 @@ int main(int argc, char *argv[]) {
     // Projection on "X" field
     {
       Projection10NodeCoordsOnField ent_method(m_field,
-                                               "CONTACT_MESH_NODE_POSITIONS");
-      CHKERR m_field.loop_dofs("CONTACT_MESH_NODE_POSITIONS", ent_method);
+                                               "MESH_NODE_POSITIONS");
+      CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method);
     }
 
     auto make_arbitrary_smooth_element_face = [&]() {
@@ -1296,26 +1793,24 @@ int main(int argc, char *argv[]) {
       auto common_data_smooth_elements = make_smooth_element_common_data();
       smooth_problem->setSmoothFaceOperatorsRhs(
           fe_rhs_smooth_face, common_data_smooth_elements,
-          "CONTACT_MESH_NODE_POSITIONS", "NORMAL_HDIV");
+          "MESH_NODE_POSITIONS", "NORMAL_FIELD", "LAGMULT");
       return fe_rhs_smooth_face;
     };
 
     auto get_smooth_volume_element_operators = [&](auto smooth_problem,
                                                    auto make_element) {
       auto fe_smooth_volumes = make_element();
-      auto common_data_smooth_elements = make_smooth_element_common_data();
       smooth_problem->setGlobalVolumeEvaluator(fe_smooth_volumes,
-                                               common_data_smooth_elements,
-                                               "CONTACT_MESH_NODE_POSITIONS");
+                                               "MESH_NODE_POSITIONS");
       return fe_smooth_volumes;
     };
 
     auto get_smooth_face_lhs = [&](auto smooth_problem, auto make_element) {
       auto fe_lhs_smooth_face = make_element();
       auto common_data_smooth_elements = make_smooth_element_common_data();
-      smooth_problem->setSmoothFaceOperatorsLhs(fe_lhs_smooth_face,
-                                                common_data_smooth_elements,
-                                                "CONTACT_MESH_NODE_POSITIONS", "NORMAL_HDIV");
+      // smooth_problem->setSmoothFaceOperatorsLhs(fe_lhs_smooth_face,
+      //                                           common_data_smooth_elements,
+      //                                           "MESH_NODE_POSITIONS", "NORMAL_HDIV");
       return fe_lhs_smooth_face;
     };
 
@@ -1325,12 +1820,12 @@ int main(int argc, char *argv[]) {
     // add fields to the global matrix by adding the element
 
     smooth_problem->addSurfaceSmoothingElement(
-        "SURFACE_SMOOTHING_ELEM", "CONTACT_MESH_NODE_POSITIONS", "NORMAL_HDIV",
+        "SURFACE_SMOOTHING_ELEM", "MESH_NODE_POSITIONS", "NORMAL_FIELD", "LAGMULT",
         all_tris_for_smoothing);
 
-    // addVolumeElement
-    // smooth_problem->addVolumeElement("VOLUME_SMOOTHING_ELEM",
-    //                                  "CONTACT_MESH_NODE_POSITIONS", all_tets);
+    //addVolumeElement
+    smooth_problem->addVolumeElement("VOLUME_SMOOTHING_ELEM",
+                                     "MESH_NODE_POSITIONS", all_tets);
 
     // build finite elemnts
     CHKERR m_field.build_finite_elements();
@@ -1361,7 +1856,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSetIsPartitioned(dm, is_partitioned);
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "SURFACE_SMOOTHING_ELEM");
-    // CHKERR DMMoFEMAddElement(dm, "VOLUME_SMOOTHING_ELEM");
+    CHKERR DMMoFEMAddElement(dm, "VOLUME_SMOOTHING_ELEM");
     CHKERR DMSetUp(dm);
 
     // Vector of DOFs and the RHS
@@ -1386,12 +1881,21 @@ int main(int argc, char *argv[]) {
     // Dirichlet BC
     // boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
     //     boost::shared_ptr<FEMethod>(new DirichletSpatialPositionsBc(
-    //         m_field, "CONTACT_MESH_NODE_POSITIONS", Aij, D, F));
+    //         m_field, "MESH_NODE_POSITIONS", Aij, D, F));
+
+    Range fixed_boundary;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      if (it->getName().compare(0, 15, "CONSTRAIN_SHAPE") == 0) {
+        CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBVERTEX,
+                                                       fixed_boundary, true);
+      }
+    }
+
 
     boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
         boost::shared_ptr<DirichletFixFieldAtEntitiesBc>(
             new DirichletFixFieldAtEntitiesBc(
-                m_field, "CONTACT_MESH_NODE_POSITIONS", fixed_vertex));
+                m_field, "MESH_NODE_POSITIONS", fixed_boundary));
 
     dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
@@ -1455,8 +1959,6 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
       CHKERR SNESSetFromOptions(snes);
     }
-  // CHKERR DMoFEMLoopFiniteElements(dm, "SURFACE_SMOOTHING_ELEM",
-  //                                     get_smooth_face_rhs(smooth_problem, make_arbitrary_smooth_element_face));
       
     CHKERR SNESSolve(snes, PETSC_NULL, D);
 
@@ -1474,6 +1976,19 @@ int main(int argc, char *argv[]) {
 
     PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
     PetscPrintf(PETSC_COMM_WORLD, "Loop Volume\n");
+    VecCreate(PETSC_COMM_WORLD,&smooth_problem->volumeVec);
+    PetscInt n = 1;
+    VecSetSizes(smooth_problem->volumeVec,PETSC_DECIDE,n);
+    VecSetUp(smooth_problem->volumeVec);
+    CHKERR DMoFEMLoopFiniteElements(dm, "VOLUME_SMOOTHING_ELEM",
+                                      get_smooth_volume_element_operators(smooth_problem, make_arbitrary_smooth_element_volume));
+    // PetscInt nloc;
+    // VecGetLocalSize(smooth_problem->volumeVec,&nloc);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total Volume: ");
+
+    // cerr << smooth_problem->volumeVec;
+    CHKERR VecView(smooth_problem->volumeVec,PETSC_VIEWER_STDOUT_WORLD);
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "\n");
     
     // moab_instance
     moab::Core mb_post;                   // create database

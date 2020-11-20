@@ -47,6 +47,7 @@ struct VolumeCalculation: public MoFEM::VolumeElementForcesAndSourcesCore::UserD
 
       double vol = getVolume()*getGaussPts()(3,gg);
       if(getHoGaussPtsDetJac().size()>0) {
+        // cerr << "asdasdasdas\n";
         vol *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
       }
 
