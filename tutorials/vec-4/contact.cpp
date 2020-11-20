@@ -78,7 +78,7 @@ using OpMixUTimesLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
 using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
 using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM>;
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
 constexpr int order = 3;
 constexpr double young_modulus = 10;
@@ -369,8 +369,8 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    pipeline.push_back(
-        new OpSpringRhs("U", commonDataPtr->contactDispPtr, spring_stiffness));
+    pipeline.push_back(new OpSpringRhs("U", commonDataPtr->contactDispPtr,
+                                           spring_stiffness));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());

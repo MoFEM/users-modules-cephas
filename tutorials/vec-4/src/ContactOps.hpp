@@ -380,9 +380,4 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
   MoFEMFunctionReturn(0);
 }
 
-
-
-
-
-
 }; // namespace OpContactTools
