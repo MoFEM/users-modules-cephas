@@ -474,7 +474,7 @@ MoFEMErrorCode Example::solveSystem() {
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  if (SPACE_DIM) {
+  if (SPACE_DIM == 2) {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
