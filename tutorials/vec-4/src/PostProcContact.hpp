@@ -243,18 +243,19 @@ struct Monitor : public FEMethod {
       return 2 * order + 1;
     };
 
-    MatrixDouble inv_jac, jac;
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
     postProcFe->generateReferenceElementMesh();
     if (SPACE_DIM == 2) {
-      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
+      jAC.resize(2, 2, false);
+      invJac.resize(2, 2, false);
+      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAC));
       postProcFe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(inv_jac));
+          new OpCalculateInvJacForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
       postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       postProcFe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformFace(jac));
-      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(inv_jac));
+          new OpSetContravariantPiolaTransformFace(jAC));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
     }
 
     postProcFe->getOpPtrVector().push_back(
@@ -344,6 +345,9 @@ private:
   boost::shared_ptr<BoundaryEle> vertexPostProc;
   moab::Core mbVertexPostproc;
   moab::Interface &moabVertex;
+
+  MatrixDouble invJac;
+  MatrixDouble jAC;
 };
 
 } // namespace OpContactTools
