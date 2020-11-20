@@ -296,7 +296,8 @@ Vec volumeVec;
 
       FTensor::Index<'i', 3> i;
       FTensor::Index<'j', 3> j;
-      FTensor::Index<'k', 2> k;
+      FTensor::Index<'k', 3> k;
+      FTensor::Index<'q', 2> q;
 
 
         auto t_1 = getFTensor1Tangent1();        
@@ -364,7 +365,7 @@ Vec volumeVec;
         for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
           // t_container_N(0,0) = t_container_N(1,0) = t_container_N(2,0) = t_N(0);
           // t_container_N(2,0) = t_container_N(2,1) = t_container_N(2,1) = t_N(1);
-          t_transformed_N(i) = t_N(k) * t_container_N(i, k);
+          t_transformed_N(i) = t_N(q) * t_container_N(i, q);
 
           t_n_field(i) += t_dof(i) * t_base_normal_field;
           t_div_normal += t_dof(i) * t_transformed_N(i);
@@ -977,7 +978,9 @@ struct OpCalPositionsRhs : public FaceEleOp {
 
 
 ///
-      FTensor::Index<'k', 2> k;
+      FTensor::Index<'k', 3> k;
+            FTensor::Index<'q', 2> q;
+
         auto t_1 = getFTensor1Tangent1();        
         auto t_2 = getFTensor1Tangent2();        
 
@@ -1047,7 +1050,7 @@ struct OpCalPositionsRhs : public FaceEleOp {
 
           // t_container_N(0,0) = t_container_N(1,0) = t_container_N(2,0) = t_N(0);
           // t_container_N(2,0) = t_container_N(2,1) = t_container_N(2,1) = t_N(1);
-          t_transformed_N(i) = t_N(k) * t_container_N(i, k);
+          t_transformed_N(i) = t_N(q) * t_container_N(i, q);
           // t_transformed_N(i,k) = t_inv_m(j, i) * t_container_N(j, k);
             // t_assemble_m(0) += t_transformed_N(0, 0) * t_div_normal * val_m;
             // t_assemble_m(1) += t_transformed_N(1, 1) * t_div_normal * val_m;
@@ -1721,16 +1724,16 @@ int main(int argc, char *argv[]) {
       //Normal
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
                                                "NORMAL_FIELD");
-      CHKERR m_field.set_field_order(slave_tris, "NORMAL_FIELD", order);
-      CHKERR m_field.set_field_order(edges_smoothed, "NORMAL_FIELD", order);
-      CHKERR m_field.set_field_order(vertices_smoothed, "NORMAL_FIELD", order);
+      CHKERR m_field.set_field_order(slave_tris, "NORMAL_FIELD", order - 1);
+      CHKERR m_field.set_field_order(edges_smoothed, "NORMAL_FIELD", order - 1);
+      CHKERR m_field.set_field_order(vertices_smoothed, "NORMAL_FIELD", order - 1);
 
       //Lagmult
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
                                                "LAGMULT");
-      CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order);
-      CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", order);
-      CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", order);
+      CHKERR m_field.set_field_order(slave_tris, "LAGMULT", order - 1);
+      CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", order - 1);
+      CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", order - 1);
 
     }
     if (!master_tris.empty()) {
@@ -1749,16 +1752,16 @@ int main(int argc, char *argv[]) {
       //Normal
       CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
                                                "NORMAL_FIELD");
-      CHKERR m_field.set_field_order(master_tris, "NORMAL_FIELD", order);
-      CHKERR m_field.set_field_order(edges_smoothed, "NORMAL_FIELD", order);
-      CHKERR m_field.set_field_order(vertices_smoothed, "NORMAL_FIELD", order);
+      CHKERR m_field.set_field_order(master_tris, "NORMAL_FIELD", order - 1);
+      CHKERR m_field.set_field_order(edges_smoothed, "NORMAL_FIELD", order - 1);
+      CHKERR m_field.set_field_order(vertices_smoothed, "NORMAL_FIELD", order - 1);
 
       //Lagmult
       CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
                                                "LAGMULT");
-      CHKERR m_field.set_field_order(master_tris, "LAGMULT", order);
-      CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", order);
-      CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", order);
+      CHKERR m_field.set_field_order(master_tris, "LAGMULT", order - 1);
+      CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", order - 1);
+      CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", order - 1);
     }
 
     
