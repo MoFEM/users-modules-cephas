@@ -93,15 +93,15 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr bool is_quasi_static = true;
-constexpr bool is_hencky = false;
+constexpr bool is_quasi_static = false;
+constexpr bool is_hencky = true;
 
 constexpr int order = 1;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
 constexpr double rho = 1;
 constexpr double cn = 0.01;
-constexpr double spring_stiffness = 0;
+constexpr double spring_stiffness = 0.0;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
@@ -365,10 +365,11 @@ MoFEMErrorCode Example::OPs() {
         "U", commonDataPtr->mGradPtr));
 
     if (is_hencky) {
+      auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpHenckyStressAndTangent<SPACE_DIM, false>(
               "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
-              commonDataPtr->mStressPtr, nullptr));
+              commonDataPtr->mStressPtr, mat_pangent_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpInternalForcePiola("U", commonDataPtr->mStressPtr));
     } else {
@@ -513,7 +514,7 @@ MoFEMErrorCode Example::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  if (!is_quasi_static) {
+  if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();
     CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
