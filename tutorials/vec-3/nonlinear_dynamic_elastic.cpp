@@ -127,6 +127,29 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
     auto is_eq = [&](const double &a, const double &b) {
       return abs(a - b) < eps;
     };
+    auto get_uniq_nb = [&](auto ec) {
+      return distance(&ec(0), unique(&ec(0), &ec(0) + DIM, is_eq));
+    };
+    
+    auto sort_eigen_vals = [&](auto &eig, auto &eigen_vec) {
+      // aab -> aba
+      if (is_eq(eig(0), eig(1))) {
+        eig(1) = eig(2);
+        eig(2) = eig(0);
+        for (size_t dd = 0; dd != 3; ++dd) {
+          eigen_vec(1, dd) = eigen_vec(2, dd);
+          eigen_vec(2, dd) = eigen_vec(0, dd);
+        }
+      } else {
+        // baa -> aba
+        eig(1) = eig(0);
+        eig(0) = eig(2);
+        for (size_t dd = 0; dd != 3; ++dd) {
+          eigen_vec(1, dd) = eigen_vec(0, dd);
+          eigen_vec(0, dd) = eigen_vec(2, dd);
+        }
+      }
+    };
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -143,20 +166,14 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       auto dd_f = [](double v) { return -0.5 / (v * v); };
 
       F(i, j) = t_grad(i, j) + t_kd(i, j);
+
       C(i, j) = F(k, i) ^ F(k, j);
 
       CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
-      auto it = unique(&eig(0), &eig(0) + DIM, is_eq);
-      int nb_uniq = std::distance(&eig(0), it);
-      // rare case when first two eigen values are equal
-      if (DIM == 3 && nb_uniq == 2 && is_eq(eig(0), eig(1))) {
-        eig(1) = eig(2);
-        eig(2) = eig(0);
-        for (size_t dd = 0; dd != 3; ++dd) {
-          eigen_vec(1, dd) = eigen_vec(2, dd);
-          eigen_vec(2, dd) = eigen_vec(0, dd);
-        }
-      }
+      // rare case when two eigen values are equal
+      auto nb_uniq = get_uniq_nb(eig);
+      if (DIM == 3 && nb_uniq == 2)
+          sort_eigen_vals(eig, eigen_vec);
       auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
 
       T(i, j) = t_D(i, j, k, l) * logC(k, l);
