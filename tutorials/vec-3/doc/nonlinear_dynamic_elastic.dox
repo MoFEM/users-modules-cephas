@@ -16,6 +16,6 @@
 \tableofcontents
 
 \include nonlinear_dynamic_elastic.cpp
-\include HenckyOps.hpp
+\include HenkyOps.hpp
 
 */

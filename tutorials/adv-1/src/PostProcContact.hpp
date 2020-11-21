@@ -223,7 +223,7 @@ struct Monitor : public FEMethod {
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
       : dM(dm), commonDataPtr(common_data_ptr), uXScatter(ux_scatter),
         uYScatter(uy_scatter), uZScatter(uz_scatter),
-        moabVertex(mbVertexPostproc) {
+        moabVertex(mbVertexPostproc), lastTime(0), deltaTime(0.05), sTEP(0) {
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
@@ -295,14 +295,14 @@ struct Monitor : public FEMethod {
       MoFEMFunctionBegin;
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
       CHKERR postProcFe->writeFile(
-          "out_contact_" + boost::lexical_cast<std::string>(ts_step) + ".h5m");
+          "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
       MoFEMFunctionReturn(0);
     };
 
     auto post_proc_boundary = [&] {
       MoFEMFunctionBegin;
       std::ostringstream ostrm;
-      ostrm << "out_boundary_contact_" << ts_step << ".h5m";
+      ostrm << "out_boundary_contact_" << sTEP << ".h5m";
       CHKERR DMoFEMLoopFiniteElements(dM, "bFE", vertexPostProc);
       CHKERR moabVertex.write_file(ostrm.str().c_str(), "MOAB",
                                    "PARALLEL=WRITE_PART");
@@ -324,8 +324,15 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR post_proc_volume();
-    CHKERR post_proc_boundary();
+    if (lastTime + deltaTime >= ts_t) {
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Write file at time " << ts_t << " write step " << sTEP;
+      lastTime += deltaTime;
+      ++sTEP;
+      CHKERR post_proc_volume();
+      CHKERR post_proc_boundary();
+    }
+
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
     if (SPACE_DIM == 3)
@@ -348,6 +355,10 @@ private:
 
   MatrixDouble invJac;
   MatrixDouble jAC;
+
+  double lastTime;
+  double deltaTime;
+  int sTEP;
 };
 
 } // namespace ContactOps

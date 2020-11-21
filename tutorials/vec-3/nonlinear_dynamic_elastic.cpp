@@ -65,10 +65,10 @@ constexpr double poisson_ratio = 0.25;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-#include <HenckyOps.hpp>
+#include <HenkyOps.hpp>
 #include <OpPostProcElastic.hpp>
 using namespace Tutorial;
-using namespace HenckyOps;
+using namespace HenkyOps;
 
 static double *ts_time_ptr;
 static double *ts_aa_ptr;
@@ -267,7 +267,7 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpHenckyStressAndTangent<SPACE_DIM, true>(
+      new OpHenkyStressAndTangent<SPACE_DIM, true>(
           "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpK("U", "U", matTangentPtr));
@@ -281,7 +281,7 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpHenckyStressAndTangent<SPACE_DIM, false>(
+      new OpHenkyStressAndTangent<SPACE_DIM, false>(
           "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));

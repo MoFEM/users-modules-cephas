@@ -12,7 +12,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-namespace HenckyOps {
+namespace HenkyOps {
 
 template <int DIM>
 inline MoFEMErrorCode
@@ -37,8 +37,8 @@ get_eigen_val_and_proj_lapack(const FTensor::Tensor2_symmetric<double, DIM> &X,
 }
 
 template <int DIM, bool IS_LHS>
-struct OpHenckyStressAndTangent : public DomainEleOp {
-  OpHenckyStressAndTangent(const std::string field_name,
+struct OpHenkyStressAndTangent : public DomainEleOp {
+  OpHenkyStressAndTangent(const std::string field_name,
                            boost::shared_ptr<MatrixDouble> mat_grad_ptr,
                            boost::shared_ptr<MatrixDouble> mat_d_ptr,
                            boost::shared_ptr<MatrixDouble> mat_stress_ptr,

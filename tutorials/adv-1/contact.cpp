@@ -87,14 +87,14 @@ using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
-// Only used with Hencky/nonlinear material
+// Only used with Henky/nonlinear material
 using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr bool is_quasi_static = false;
-constexpr bool is_hencky = true;
+constexpr bool is_Henky = true;
 
 constexpr int order = 1;
 constexpr double young_modulus = 100;
@@ -105,10 +105,10 @@ constexpr double spring_stiffness = 0.0;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
-#include <HenckyOps.hpp>
+#include <HenkyOps.hpp>
 #include <PostProcContact.hpp>
 using namespace ContactOps;
-using namespace HenckyOps;
+using namespace HenkyOps;
 
 struct Example {
 
@@ -317,13 +317,13 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (is_hencky) {
+    if (is_Henky) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
               "U", commonDataPtr->mGradPtr));
       auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpHenckyStressAndTangent<SPACE_DIM, true>(
+          new OpHenkyStressAndTangent<SPACE_DIM, true>(
               "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
               commonDataPtr->mStressPtr, mat_pangent_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -364,10 +364,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
-    if (is_hencky) {
+    if (is_Henky) {
       auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpHenckyStressAndTangent<SPACE_DIM, false>(
+          new OpHenkyStressAndTangent<SPACE_DIM, false>(
               "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
               commonDataPtr->mStressPtr, mat_pangent_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
