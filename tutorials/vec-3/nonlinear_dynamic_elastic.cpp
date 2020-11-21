@@ -57,6 +57,7 @@ using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
+constexpr bool is_quasi_static = true;
 constexpr double rho = 1;
 constexpr double omega = 2.4;
 constexpr double young_modulus = 1;
@@ -130,26 +131,26 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
     auto get_uniq_nb = [&](auto ec) {
       return distance(&ec(0), unique(&ec(0), &ec(0) + DIM, is_eq));
     };
-    
-  auto sort_eigen_vals = [&](auto &eig, auto &eigen_vec) {
-    if (is_eq(eig(0), eig(1))) {
-      FTensor::Tensor2<double, 3, 3> eigen_vec_c{
-          eigen_vec(0, 0), eigen_vec(0, 1), eigen_vec(0, 2),
-          eigen_vec(2, 0), eigen_vec(2, 1), eigen_vec(2, 2),
-          eigen_vec(1, 0), eigen_vec(1, 1), eigen_vec(1, 2)};
-      FTensor::Tensor1<double, 3> eig_c{eig(0), eig(2), eig(1)};
-      eig(i) = eig_c(i);
-      eigen_vec(i, j) = eigen_vec_c(i, j);
-    } else {
-      FTensor::Tensor2<double, 3, 3> eigen_vec_c{
-          eigen_vec(1, 0), eigen_vec(1, 1), eigen_vec(1, 2),
-          eigen_vec(0, 0), eigen_vec(0, 1), eigen_vec(0, 2),
-          eigen_vec(2, 0), eigen_vec(2, 1), eigen_vec(2, 2)};
-      FTensor::Tensor1<double, 3> eig_c{eig(1), eig(0), eig(2)};
-      eig(i) = eig_c(i);
-      eigen_vec(i, j) = eigen_vec_c(i, j);
-    }
-  };
+
+    auto sort_eigen_vals = [&](auto &eig, auto &eigen_vec) {
+      if (is_eq(eig(0), eig(1))) {
+        FTensor::Tensor2<double, 3, 3> eigen_vec_c{
+            eigen_vec(0, 0), eigen_vec(0, 1), eigen_vec(0, 2),
+            eigen_vec(2, 0), eigen_vec(2, 1), eigen_vec(2, 2),
+            eigen_vec(1, 0), eigen_vec(1, 1), eigen_vec(1, 2)};
+        FTensor::Tensor1<double, 3> eig_c{eig(0), eig(2), eig(1)};
+        eig(i) = eig_c(i);
+        eigen_vec(i, j) = eigen_vec_c(i, j);
+      } else {
+        FTensor::Tensor2<double, 3, 3> eigen_vec_c{
+            eigen_vec(1, 0), eigen_vec(1, 1), eigen_vec(1, 2),
+            eigen_vec(0, 0), eigen_vec(0, 1), eigen_vec(0, 2),
+            eigen_vec(2, 0), eigen_vec(2, 1), eigen_vec(2, 2)};
+        FTensor::Tensor1<double, 3> eig_c{eig(1), eig(0), eig(2)};
+        eig(i) = eig_c(i);
+        eigen_vec(i, j) = eigen_vec_c(i, j);
+      }
+    };
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -172,7 +173,7 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       // rare case when two eigen values are equal
       auto nb_uniq = get_uniq_nb(eig);
       if (DIM == 3 && nb_uniq == 2)
-          sort_eigen_vals(eig, eigen_vec);
+        sort_eigen_vals(eig, eigen_vec);
       auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
 
       T(i, j) = t_D(i, j, k, l) * logC(k, l);
@@ -422,8 +423,9 @@ MoFEMErrorCode Example::assembleSystem() {
           "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpK("U", "U", matTangentPtr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpMass("U", "U", get_rho));
+  if (!is_quasi_static)
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpMass("U", "U", get_rho));
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", get_body_force));
@@ -435,13 +437,15 @@ MoFEMErrorCode Example::assembleSystem() {
           "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
-                                                        matAccelerationPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInertiaForce("U", matInertiaPtr));
+  if (!is_quasi_static) {
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+                                                          matAccelerationPtr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpInertiaForce("U", matInertiaPtr));
+  }
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -485,7 +489,11 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
-  auto ts = pipeline_mng->createTS2();
+  MoFEM::SmartPetscObj<TS> ts;
+  if (is_quasi_static)
+    ts = pipeline_mng->createTS();
+  else
+    ts = pipeline_mng->createTS2();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
@@ -519,12 +527,16 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
   auto T = smartCreateDMVector(simple->getDM());
-  auto TT = smartVectorDuplicate(T);
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
-
-  CHKERR TS2SetSolution(ts, T, TT);
-  CHKERR TSSetFromOptions(ts);
+  if (is_quasi_static) {
+    CHKERR TSSetSolution(ts, T);
+    CHKERR TSSetFromOptions(ts);
+  } else {
+    auto TT = smartVectorDuplicate(T);
+    CHKERR TS2SetSolution(ts, T, TT);
+    CHKERR TSSetFromOptions(ts);
+  }
 
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
