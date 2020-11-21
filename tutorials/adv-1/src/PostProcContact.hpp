@@ -12,7 +12,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-namespace OpContactTools {
+namespace ContactOps {
 
 struct OpPostProcVertex : public BoundaryEleOp {
   OpPostProcVertex(MoFEM::Interface &m_field, const std::string field_name,
@@ -350,4 +350,4 @@ private:
   MatrixDouble jAC;
 };
 
-} // namespace OpContactTools
+} // namespace ContactOps
