@@ -131,25 +131,25 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       return distance(&ec(0), unique(&ec(0), &ec(0) + DIM, is_eq));
     };
     
-    auto sort_eigen_vals = [&](auto &eig, auto &eigen_vec) {
-      // aab -> aba
-      if (is_eq(eig(0), eig(1))) {
-        eig(1) = eig(2);
-        eig(2) = eig(0);
-        for (size_t dd = 0; dd != 3; ++dd) {
-          eigen_vec(1, dd) = eigen_vec(2, dd);
-          eigen_vec(2, dd) = eigen_vec(0, dd);
-        }
-      } else {
-        // baa -> aba
-        eig(1) = eig(0);
-        eig(0) = eig(2);
-        for (size_t dd = 0; dd != 3; ++dd) {
-          eigen_vec(1, dd) = eigen_vec(0, dd);
-          eigen_vec(0, dd) = eigen_vec(2, dd);
-        }
-      }
-    };
+  auto sort_eigen_vals = [&](auto &eig, auto &eigen_vec) {
+    if (is_eq(eig(0), eig(1))) {
+      FTensor::Tensor2<double, 3, 3> eigen_vec_c{
+          eigen_vec(0, 0), eigen_vec(0, 1), eigen_vec(0, 2),
+          eigen_vec(2, 0), eigen_vec(2, 1), eigen_vec(2, 2),
+          eigen_vec(1, 0), eigen_vec(1, 1), eigen_vec(1, 2)};
+      FTensor::Tensor1<double, 3> eig_c{eig(0), eig(2), eig(1)};
+      eig(i) = eig_c(i);
+      eigen_vec(i, j) = eigen_vec_c(i, j);
+    } else {
+      FTensor::Tensor2<double, 3, 3> eigen_vec_c{
+          eigen_vec(1, 0), eigen_vec(1, 1), eigen_vec(1, 2),
+          eigen_vec(0, 0), eigen_vec(0, 1), eigen_vec(0, 2),
+          eigen_vec(2, 0), eigen_vec(2, 1), eigen_vec(2, 2)};
+      FTensor::Tensor1<double, 3> eig_c{eig(1), eig(0), eig(2)};
+      eig(i) = eig_c(i);
+      eigen_vec(i, j) = eigen_vec_c(i, j);
+    }
+  };
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -166,7 +166,6 @@ struct OpHenckyStressAndTangent : public DomainEleOp {
       auto dd_f = [](double v) { return -0.5 / (v * v); };
 
       F(i, j) = t_grad(i, j) + t_kd(i, j);
-
       C(i, j) = F(k, i) ^ F(k, j);
 
       CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
