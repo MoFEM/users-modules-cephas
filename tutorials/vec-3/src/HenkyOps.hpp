@@ -25,14 +25,15 @@ get_eigen_val_and_proj_lapack(const FTensor::Tensor2_symmetric<double, DIM> &X,
     for (int jj = 0; jj != DIM; jj++)
       eig_vec(ii, jj) = X(ii, jj);
 
-  int n = DIM, lda = DIM, info, lwork = -1;
-  double wkopt;
-  info =
-      lapack_dsyev('V', 'U', n, &(eig_vec(0, 0)), lda, &eig(0), &wkopt, lwork);
-  lwork = (int)wkopt;
-  double work[lwork];
-  info = lapack_dsyev('V', 'U', n, &(eig_vec(0, 0)), lda, &eig(0), work, lwork);
+  int n  = DIM;
+  int lda = DIM;
+  int lwork = (DIM + 2) * DIM;
+  std::array<double, (DIM + 2) * DIM> work;
 
+  if (lapack_dsyev('V', 'U', n, &(eig_vec(0, 0)), lda, &eig(0), work.data(),
+                   lwork) > 0)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+            "The algorithm failed to compute eigenvalues.");
   MoFEMFunctionReturnHot(0);
 }
 
