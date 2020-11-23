@@ -103,15 +103,15 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr bool is_quasi_static = false;
-constexpr bool is_Henky = true;
+constexpr bool is_quasi_static = true;
+constexpr bool is_Henky = false;
 
-constexpr int order = 1;
+constexpr int order = 2;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
 constexpr double rho = 1;
 constexpr double cn = 0.01;
-constexpr double spring_stiffness = 0.0;
+constexpr double spring_stiffness = 0.1;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
@@ -193,12 +193,12 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
                                PSTATUS_NOT, -1, &boundary_ents);
 
-  CHKERR simple->setFieldOrder("SIGMA", order, &boundary_ents);
-  Range adj_edges;
-  CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false, adj_edges,
-                                           moab::Interface::UNION);
-  adj_edges.merge(boundary_ents);
-  CHKERR simple->setFieldOrder("U", order + 1, &adj_edges);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
+  // Range adj_edges;
+  // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false, adj_edges,
+  //                                          moab::Interface::UNION);
+  // adj_edges.merge(boundary_ents);
+  // CHKERR simple->setFieldOrder("U", order, &adj_edges);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -364,9 +364,10 @@ MoFEMErrorCode Example::OPs() {
       FTensor::Tensor1<double, SPACE_DIM> t_source;
       auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
       const auto time = fe_domain_rhs->ts_t;
+      
       // hardcoded gravity load
       t_source(i) = 0;
-      t_source(1) = 1.0;
+      t_source(1) = 1.0 * time;
       return t_source;
     };
 
@@ -411,7 +412,7 @@ MoFEMErrorCode Example::OPs() {
         new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr));
 
     // only in case of dynamics
-    if (rho > 0) {
+    if (!is_quasi_static) {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
@@ -526,12 +527,13 @@ MoFEMErrorCode Example::tsSolve() {
 
   if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();
+    auto D = smartCreateDMVector(dm);
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
     CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
-    CHKERR set_section_monitor(solver);
-    CHKERR set_time_monitor(dm, solver);
-    CHKERR TSSolve(solver, D);
+    CHKERR TSSolve(solver, NULL);
   } else {
     auto solver = pipeline_mng->createTS2();
     auto dm = simple->getDM();
