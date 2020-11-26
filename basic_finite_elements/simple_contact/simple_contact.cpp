@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
                                  "-my_cn_value 1. \n"
                                  "-my_r_value 1. \n"
                                  "-my_alm_flag 0 \n";
-                                 
+
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
     std::ofstream file(param_file.c_str(), std::ios::ate);
@@ -161,8 +161,9 @@ int main(int argc, char *argv[]) {
                             wave_length, &wave_length, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
                             &wave_ampl, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh ",
-                            "", mesh_height, &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_mesh_height",
+                            "vertical dimension of the mesh ", "", mesh_height,
+                            &mesh_height, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -180,7 +181,7 @@ int main(int argc, char *argv[]) {
     const char *option;
     option = "";
     CHKERR moab.load_file(mesh_file_name, 0, option);
-    
+
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -421,9 +422,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-    
+
     auto make_contact_element = [&]() {
-      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -495,9 +495,8 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT",
-                                       contact_prisms);
-                                       
+                                       "LAGMULT", contact_prisms);
+
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);
@@ -762,8 +761,7 @@ int main(int argc, char *argv[]) {
 
     contact_problem->setContactOperatorsForPostProc(
         fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag, true,
-        SimpleContactProblem::MASTER_SIDE);
+        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag, true);
 
     mb_post.delete_mesh();
 
@@ -772,8 +770,6 @@ int main(int argc, char *argv[]) {
 
     CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                     fe_post_proc_simple_contact);
-
-    CHKERR moab.write_file("mesh.h5m", "MOAB", "PARALLEL=WRITE_PART");                                
 
     std::array<double, 2> nb_gauss_pts;
     std::array<double, 2> contact_area;
