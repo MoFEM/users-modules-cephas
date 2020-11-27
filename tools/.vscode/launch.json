@@ -5,9 +5,6 @@
     "version": "0.2.0",
     "configurations": [
 
-
-
-        
   
       {
         "type": "lldb",
@@ -16,9 +13,9 @@
         "program": "/Users/ignatiosathanasiadis/mofem_install/users_modules_debug/tools/arbitrary_smooth_contact_surface",
         "args": [
           "-my_file",
-          "sphere_1.cub",
+          "surface_smooth.cub",
           "-my_order",
-          "3"
+          "2"
         ],
         "cwd": "/Users/ignatiosathanasiadis/jobs/testsNonMatching/smoothing_sphere",
         "stopOnEntry": true,
