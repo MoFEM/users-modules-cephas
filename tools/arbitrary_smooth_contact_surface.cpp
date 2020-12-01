@@ -73,9 +73,18 @@ double cnVaule;
 
     boost::shared_ptr<MatrixDouble> tAngentOneField;
     boost::shared_ptr<MatrixDouble> tAngentTwoField;
+    
+    boost::shared_ptr<MatrixDouble> tAnTanOneOneField;
+    boost::shared_ptr<MatrixDouble> tAnTanOneTwoField;
+    boost::shared_ptr<MatrixDouble> tAnTanTwoOneField;
+    boost::shared_ptr<MatrixDouble> tAnTanTwoTwoField;
+
+    boost::shared_ptr<MatrixDouble> curvatuersField;
 
     boost::shared_ptr<MatrixDouble> tAngentOneGradField;
     boost::shared_ptr<MatrixDouble> tAngentTwoGradField;
+    boost::shared_ptr<MatrixDouble> metricTensorForField;
+    boost::shared_ptr<VectorDouble> detOfMetricTensorForField;
 
     boost::shared_ptr<MatrixDouble> tanHdiv1;
     boost::shared_ptr<MatrixDouble> tanHdiv2;
@@ -126,7 +135,18 @@ double cnVaule;
       divTangentTwoField = boost::make_shared<VectorDouble>();
       tAngentOneGradField = boost::make_shared<MatrixDouble>();
       tAngentTwoGradField = boost::make_shared<MatrixDouble>();
+
+      tAnTanOneOneField = boost::make_shared<MatrixDouble>();
+      tAnTanOneTwoField = boost::make_shared<MatrixDouble>();
+      tAnTanTwoOneField = boost::make_shared<MatrixDouble>();
+      tAnTanTwoTwoField = boost::make_shared<MatrixDouble>();
+      
+      
+      curvatuersField = boost::make_shared<MatrixDouble>();
+
       rotTangentOneField =  boost::make_shared<MatrixDouble>();
+      metricTensorForField = boost::make_shared<MatrixDouble>();
+      detOfMetricTensorForField = boost::make_shared<VectorDouble>();
     }
 
   private:
@@ -161,14 +181,14 @@ double cnVaule;
     CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                        field_name_tangent_one_field);
 
-    // CHKERR mField.modify_finite_element_add_field_col(element_name,
-    //                                                   field_name_tangent_two_field);
+    CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                      field_name_tangent_two_field);
 
-    // CHKERR mField.modify_finite_element_add_field_row(element_name,
-    //                                                   field_name_tangent_two_field);
+    CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                      field_name_tangent_two_field);
 
-    // CHKERR mField.modify_finite_element_add_field_data(element_name,
-    //                                                    field_name_tangent_two_field);
+    CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                       field_name_tangent_two_field);
 
     // CHKERR mField.modify_finite_element_add_field_col(element_name,
     //                                                   field_lagrange);
@@ -364,10 +384,156 @@ double cnVaule;
       auto t_n = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
       for (unsigned int gg = 0; gg != ngp; ++gg) {
         t_n(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
-        // const double n_mag = sqrt(t_n(i) * t_n(i));
-        // t_n(i) /= n_mag;
+        const double n_mag = sqrt(t_n(i) * t_n(i));
+        t_n(i) /= n_mag;
         // t_area = 0.5 * n_mag;
         ++t_n;
+        ++t_1;
+        ++t_2;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+
+    struct OpCalPrincipalCurvatures : public FaceEleOp {
+
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    OpCalPrincipalCurvatures(
+        const string field_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(field_name, UserDataOperator::OPCOL),
+          commonSurfaceSmoothingElement(common_data_smoothing) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
+
+      if (type != MBVERTEX)
+        PetscFunctionReturn(0);
+
+      int ngp = data.getN().size1();
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      commonSurfaceSmoothingElement->curvatuersField->resize(2, ngp, false);
+      commonSurfaceSmoothingElement->curvatuersField->clear();
+
+      auto t_1 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
+      auto t_2 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
+
+      auto t_tan_tan_one_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneOneField);
+
+      auto t_tan_tan_one_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneTwoField);
+
+
+      auto t_tan_tan_two_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoOneField);
+
+      auto t_tan_tan_two_two =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAnTanTwoTwoField);
+
+      auto t_curvature =
+          getFTensor1FromMat<2>(*commonSurfaceSmoothingElement->curvatuersField);
+      auto t_n = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+
+
+        const double fund_e = t_1(i) * t_1(i);
+        const double fund_f = t_1(i) * t_2(i);
+        const double fund_g = t_2(i) * t_2(i);
+        const double fund_l = t_tan_tan_one_one(i) * t_n(i);
+        
+        const double fund_m_1 = t_tan_tan_one_two(i)* t_n(i);
+        const double fund_m_2 = t_tan_tan_two_one(i)* t_n(i);
+        
+        const double fund_n = t_tan_tan_two_two(i) * t_n(i);
+
+        double value_k = (fund_l * fund_n - fund_m_1 * fund_m_2)/(fund_e * fund_g - fund_f * fund_f);
+        double value_h = 0.5 *
+                         (fund_e * fund_n + fund_g * fund_l -
+                          fund_f * fund_m_1 - fund_f * fund_m_2) /
+                         (fund_e * fund_g - fund_f * fund_f);
+        double val_discriminant = value_h * value_h - value_k;
+        t_curvature(0) = value_h + sqrt(val_discriminant);
+        t_curvature(1) = value_h - sqrt(val_discriminant);
+
+        ++t_tan_tan_two_one;
+        ++t_tan_tan_one_one;
+        ++t_tan_tan_two_two;
+        ++t_tan_tan_one_two;
+        ++t_curvature;
+        ++t_1;
+        ++t_2;
+        ++t_n;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
+  struct OpCalMetricTensorAndDeterminant : public FaceEleOp {
+
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    OpCalMetricTensorAndDeterminant(
+        const string field_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(field_name, UserDataOperator::OPCOL),
+          commonSurfaceSmoothingElement(common_data_smoothing) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
+
+      if (type != MBVERTEX)
+        PetscFunctionReturn(0);
+
+      int ngp = data.getN().size1();
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+      
+      commonSurfaceSmoothingElement->metricTensorForField->resize(4, ngp, false);
+      commonSurfaceSmoothingElement->metricTensorForField->clear();
+
+      commonSurfaceSmoothingElement->detOfMetricTensorForField->resize(ngp, false);
+      commonSurfaceSmoothingElement->detOfMetricTensorForField->clear();
+
+      auto t_1 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
+      auto t_2 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
+
+      auto t_metric_tensor = getFTensor2FromMat<2, 2>(
+          *commonSurfaceSmoothingElement->metricTensorForField);
+      auto t_det =
+      getFTensor0FromVec(*commonSurfaceSmoothingElement->detOfMetricTensorForField);
+
+
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+        t_metric_tensor(0, 0) = t_1(i) * t_1(i);
+        t_metric_tensor(1, 1) = t_2(i) * t_2(i);
+        t_metric_tensor(0, 1) = t_1(i) * t_2(i);
+        t_metric_tensor(1, 0) = t_2(i) * t_1(i);
+        t_det = t_metric_tensor(0, 0) * t_metric_tensor(1, 1) -
+                t_metric_tensor(0, 1) * t_metric_tensor(1, 0);
+        ++t_metric_tensor;
+        ++t_det;
         ++t_1;
         ++t_2;
       }
@@ -614,10 +780,23 @@ double cnVaule;
       if (type == MBVERTEX) {
         commonSurfaceSmoothingElement->tAngentOneField->resize(3, ngp, false);
         commonSurfaceSmoothingElement->tAngentOneField->clear();
+        
+        commonSurfaceSmoothingElement->tAnTanOneOneField->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAnTanOneOneField->clear();
+
+        commonSurfaceSmoothingElement->tAnTanOneTwoField->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAnTanOneTwoField->clear();
         }
 
       auto t_tan_1_field =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
+
+      auto t_tan_tan_one_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneOneField);
+
+      auto t_tan_tan_one_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneTwoField);
+
 
       FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 2> t_container_N(
           &t_inv_m(0, 0), &t_inv_m(0, 1), &t_inv_m(1, 0),
@@ -625,6 +804,9 @@ double cnVaule;
           &t_inv_m(1, 1), &t_inv_m(2, 0), &t_inv_m(2, 1));
 
       FTensor::Tensor1<double, 3> t_transformed_N;
+
+      auto t_tan_1 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
 
       for (unsigned int gg = 0; gg != ngp; ++gg) {
         auto t_N = data.getFTensor1DiffN<2>(gg, 0);
@@ -640,12 +822,26 @@ double cnVaule;
 //FTensor::levi_civita(i, j, k)
           t_tan_1_field(i) += t_dof(i) * t_base_normal_field;
           // t_div_tan_1 += FTensor::levi_civita(i, j, k) * t_dof(j) * t_transformed_N(i) * ;
+          t_tan_tan_one_one(i) += t_N(0) * t_dof(i);
+          t_tan_tan_one_two(i) += t_N(1) * t_dof(i);
           ++t_dof;
           ++t_N;
           ++t_base_normal_field;
         }
-        ++t_tan_1_field;
+        if(t_tan_1_field(i) * t_tan_1_field(i) < 1.e-8){
+        // t_tan_1_field(i) =  1.e-3;
+        // t_tan_tan_one_one(i) = 1.e-3;
+        // t_tan_tan_one_two(i) = 1.e-3;
+        } else {
+        // cerr << "t_tan_1_field   " << t_tan_1_field << "\n"; 
+        // cerr << "t_tan_tan_one_one   " << t_tan_tan_one_one << "\n"; 
+        // cerr << "t_tan_tan_one_two   " << t_tan_tan_one_two << "\n"; 
+        }
 
+        ++t_tan_tan_one_two;
+        ++t_tan_tan_one_one;  
+        ++t_tan_1_field;
+        ++t_tan_1;
       }
 
       MoFEMFunctionReturn(0);
@@ -718,10 +914,25 @@ double cnVaule;
       if (type == MBVERTEX) {
         commonSurfaceSmoothingElement->tAngentTwoField->resize(3, ngp, false);
         commonSurfaceSmoothingElement->tAngentTwoField->clear();
+        
+        commonSurfaceSmoothingElement->tAnTanTwoOneField->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAnTanTwoOneField->clear();
+
+        commonSurfaceSmoothingElement->tAnTanTwoTwoField->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAnTanTwoTwoField->clear();
+
+
       }
 
       auto t_n_field =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
+
+      auto t_tan_tan_two_one =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAnTanTwoOneField);
+
+      auto t_tan_tan_two_two =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAnTanTwoTwoField);
+
 
       FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 2> t_container_N(
           &t_inv_m(0, 0), &t_inv_m(0, 1), &t_inv_m(1, 0),
@@ -729,6 +940,8 @@ double cnVaule;
           &t_inv_m(1, 1), &t_inv_m(2, 0), &t_inv_m(2, 1));
 
       FTensor::Tensor1<double, 3> t_transformed_N;
+      auto t_tan_2 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2);
 
       for (unsigned int gg = 0; gg != ngp; ++gg) {
         auto t_N = data.getFTensor1DiffN<2>(gg, 0);
@@ -743,11 +956,26 @@ double cnVaule;
           t_transformed_N(i) = t_N(q) * t_container_N(i, q);
 
           t_n_field(i) += t_dof(i) * t_base_normal_field;
+
+          t_tan_tan_two_one(i) += t_N(0) * t_dof(i);
+          t_tan_tan_two_two(i) += t_N(1) * t_dof(i);
+
           ++t_dof;
           ++t_N;
           ++t_base_normal_field;
         }
+      if(t_n_field(i)* t_n_field(i) < 1.e-8){
+        // t_n_field(0) = 1.e-3;
+        // t_n_field(1) = 1.e-4;
+        // t_n_field(2) = 1.e-5;
+        
+        // t_tan_tan_two_one(i) = t_n_field(i);
+        // t_tan_tan_two_two(i) = t_n_field(i);
+      }
+        ++t_tan_tan_two_one;
+        ++t_tan_tan_two_two;
         ++t_n_field;
+        ++t_tan_2;
         
       }
 
@@ -1354,8 +1582,8 @@ struct OpCalPositionsForTanRhs : public FaceEleOp {
         auto t_tan_1_field =
             getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
 
-        // auto t_tan_2_field =
-        //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
+        auto t_tan_2_field =
+            getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
 
         // auto t_normal_field =
         //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
@@ -1402,9 +1630,15 @@ struct OpCalPositionsForTanRhs : public FaceEleOp {
             // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) * FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
             
             
-            t_assemble_m(j) += cnValue * ( t_normal(i) - t_tan_1_field(i) ) * t_d_n(i, j) * val_m;
-            t_assemble_m(i) += cnValue * (t_tan_1_field(j) * (t_1(j) + t_2(j) )  ) * t_tan_1_field(i) * (t_N(0) + t_N(1)) * val_m;
-            t_assemble_m(k) += cnValue * (t_normal(j) * t_tan_1_field(j)  - 1. ) * t_tan_1_field(i) * t_d_n(i, k) * val_m;
+            // t_assemble_m(j) += cnValue * ( t_normal(i) - t_tan_1_field(i) ) * t_d_n(i, j) * val_m;
+            // t_assemble_m(i) += cnValue * (t_tan_1_field(j) * (t_1(j) + t_2(j) )  ) * t_tan_1_field(i) * (t_N(0) + t_N(1)) * val_m;
+            // t_assemble_m(k) += cnValue * (t_normal(j) * t_tan_1_field(j)  - 1. ) * t_tan_1_field(i) * t_d_n(i, k) * val_m;
+
+            t_assemble_m(j) += cnValue * (t_1(j) - t_tan_1_field(j)) * t_N(0);
+            t_assemble_m(j) += cnValue * (t_2(j) - t_tan_2_field(j)) * t_N(1);
+// cerr <<"t_assemble_m " << t_assemble_m << "\n";
+            // t_assemble_m(j) += cnValue * t_1(j);
+            // t_assemble_m(j) += cnValue * t_N(1);
 
             // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) * FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1 - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
             // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) * FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
@@ -1425,12 +1659,12 @@ struct OpCalPositionsForTanRhs : public FaceEleOp {
           // ++t_lag_mult;
           ++t_area;
           ++t_tan_1_field;
-          // ++t_tan_2_field;
+          ++t_tan_2_field;
           // ++t_normal_field;
           // ++t_1_unit;
           // ++t_2_unit;
         } // for gauss points
-
+        
         CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
       }
       MoFEMFunctionReturn(0);
@@ -2018,81 +2252,435 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
       getFTensor0FromVec(*commonSurfaceSmoothingElement->divTangentOneField);
       auto t_rot_normal = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->rotTangentOneField);
 
-         for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-           // const double norm_1 = sqrt(t_1(i) * t_1(i));
-           // const double norm_2 = sqrt(t_2(i) * t_2(i));
-           // t_1(i) /= norm_1;
-           // t_2(i) /= norm_2;
-           auto t_N = data.getFTensor1DiffN<2>(gg, 0);
-           double val_m = t_w * area_m;
-          //  double val_m = t_w * t_area;
-           auto t_base = data.getFTensor0N(gg, 0);
 
-           FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
-               &vecF[0], &vecF[1], &vecF[2]};
+      auto t_1_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
+      auto t_2_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
 
-           for (int bbc = 0; bbc != nb_base_fun_col / 3; ++bbc) {
+      auto t_tan_tan_one_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneOneField);
 
-             // t_container_N(0,0) = t_container_N(1,0) = t_container_N(2,0) =
-             // t_N(0); t_container_N(2,0) = t_container_N(2,1) =
-             // t_container_N(2,1) = t_N(1);
-             t_transformed_N(i) = t_N(q) * t_container_N(i, q);
-             // t_transformed_N(i,k) = t_inv_m(j, i) * t_container_N(j, k);
-             // t_assemble_m(0) += t_transformed_N(0, 0) * t_div_normal * val_m;
-             // t_assemble_m(1) += t_transformed_N(1, 1) * t_div_normal * val_m;
-           
-           //t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
-           //Divergencez
-            //  t_assemble_m(j) +=  FTensor::levi_civita(i, j, k) * (t_transformed_N(i) *t_tan_2_field(k) + t_tangent_one_grad(k,i) * t_N(0)) * (t_div_tan_1 + t_div_tan_2) * val_m;
-           
-          t_assemble_m(i) +=  t_transformed_N(i) * t_div_tan_1 * val_m ;
-          //t_rot_normal
-          // t_assemble_m(i) +=   cnValue * t_base * (t_tan_1_field(j) *  t_rot_normal(j)) * t_rot_normal(i) * val_m;
-          // t_assemble_m(k) +=   cnValue * (t_tan_1_field(j) *  t_rot_normal(j)) * t_tan_1_field(i) * FTensor::levi_civita(i, j, k) * t_transformed_N(j) * val_m;
+      auto t_tan_tan_one_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneTwoField);
 
-          //  cerr << cnValue <<"\n";
-          // auto t_d_n = make_vec_der_1(t_base, t_tan_1_field, t_tan_2_field, t_n_field);
-          double mag_tan_1 = sqrt(t_tan_1(i) * t_tan_1(i));
-          t_assemble_m(i) -= cnValue * (t_n(i) - t_tan_1_field(i)) * t_base * val_m;
-          t_assemble_m(i) += cnValue *  (t_tan_1_field(j) * (t_tan_1(j) + t_tan_2(j))) * (t_tan_1(i) + t_tan_2(i)) * t_base * val_m;
+      auto t_tan_tan_two_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoOneField);
 
-          t_assemble_m(i) += cnValue *  (t_n(j) * t_tan_1_field(j) - 1. ) * t_n(i) * t_base * val_m;
+      auto t_tan_tan_two_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoTwoField);
+
+      auto t_curvature =
+          getFTensor1FromMat<2>(*commonSurfaceSmoothingElement->curvatuersField);
+      auto t_n_field = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+      
+      for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+        // const double norm_1 = sqrt(t_1(i) * t_1(i));
+        // const double norm_2 = sqrt(t_2(i) * t_2(i));
+        // t_1(i) /= norm_1;
+        // t_2(i) /= norm_2;
+        auto t_N = data.getFTensor1DiffN<2>(gg, 0);
+        double val_m = t_w * area_m;
+        //  double val_m = t_w * t_area;
+        auto t_base = data.getFTensor0N(gg, 0);
+
+        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
+            &vecF[0], &vecF[1], &vecF[2]};
+
+        const double fund_e = t_1_field(i) * t_1_field(i);
+        const double fund_f = t_1_field(i) * t_2_field(i);
+        const double fund_g = t_2_field(i) * t_2_field(i);
+        const double fund_l = t_tan_tan_one_one(i) * t_n_field(i);
+        const double fund_m_1 = t_tan_tan_one_two(i) * t_n_field(i);
+        const double fund_m_2 = t_tan_tan_two_one(i) * t_n_field(i);
+        
+        const double fund_n = t_tan_tan_two_two(i) * t_n_field(i);
+
+// cerr << "~~~~~~~~~~~~~~~~~~~~~" << "\n";
+// cerr << "l " << fund_l << "\n";
+// cerr << "n " << fund_n << "\n";
+// cerr << "m1 " << fund_m_1 << "\n";
+// cerr << "m2 " << fund_m_2 << "\n";
+// cerr << "e " << fund_e << "\n";
+// cerr << "g " << fund_g << "\n";
+// cerr << "f " << fund_f << "\n";
+// cerr << "~~~~~~~~~~~~~~~~~~~~~" << "\n";
 
 
-            //  t_assemble_m(i) -= cnValue * (t_1_unit(i) - t_tan_1_field(i)) * t_base * val_m;
-            //  t_assemble_m(i) += t_tan_2_field(i) * t_base * val_m;
-            //  t_assemble_m(j) -= cnValue * (t_n(i) - t_n_field(i)) * t_d_n(i, j) * val_m;
-            // t_assemble_m(i) -= cnValue * (t_2_unit(i) - t_tan_2_field(i)) * t_base * val_m;
-            //  cerr << "t_n   " << t_n << "\n";
-            //  cerr << "t_d_n   " << t_d_n << "\n";
+        const double minor_k_l =
+            (0.5 * fund_g) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (-(fund_n / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_g *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
 
-            //  t_assemble_m(i) += (t_tan_1_field(i) - t_tan_1(i) )* t_base * val_m;
+        const double minor_k_n =
+            (0.5 * fund_e) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (-(fund_l / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_e *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
 
-             
+        const double minor_k_m1 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (fund_m_2 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
 
-             ++t_assemble_m;
-             ++t_base;
-             ++t_N;
-           }
+        const double minor_k_m2 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (fund_m_1 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
 
-           ++t_w;
-           ++t_tan_1_field;
-          //  ++t_tan_2_field;
-          //  ++t_div_tan_1;
-          //  ++t_div_tan_2;
-          //  ++t_lag_mult;
-           // ++t_1;
-           // ++t_2;
-           ++t_tan_1;
-           ++t_tan_2;
-           ++t_area;
-          //  ++t_tangent_one_grad;
-          //  ++t_n_field;
-           ++t_n;
-          //  ++t_1_unit;
-          //  ++t_2_unit;
-          ++t_div_tan_1;
-          ++t_rot_normal;
+        const double minor_k_e =
+            (0.5 * fund_n) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_g *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+            ((0.5 * fund_n *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_g *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_g * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_g =
+            (0.5 * fund_l) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_e *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+            ((0.5 * fund_l *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_e *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_e * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_f =
+            (0.5 * (-fund_m_1 - fund_m_2)) /
+                (-pow(fund_f, 2) + fund_e * fund_g) +
+            (1. * fund_f *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+            ((0.5 * (-fund_m_1 - fund_m_2) *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+             (1. * fund_f *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) -
+             (2 * fund_f * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_l =
+            (0.5 * fund_g) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (-(fund_n / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_g *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_n =
+            (0.5 * fund_e) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (-(fund_l / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_e *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_m1 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (fund_m_2 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_m2 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (fund_m_1 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_e =
+            (0.5 * fund_n) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_g *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+            ((0.5 * fund_n *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_g *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_g * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_g =
+            (0.5 * fund_l) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_e *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+            ((0.5 * fund_l *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_e *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_e * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_f =
+            (0.5 * (-fund_m_1 - fund_m_2)) /
+                (-pow(fund_f, 2) + fund_e * fund_g) +
+            (1. * fund_f *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+            ((0.5 * (-fund_m_1 - fund_m_2) *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+             (1. * fund_f *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) -
+             (2 * fund_f * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+
+// cerr << "l " << minor_k_l<< "\n";
+// cerr << "n " << minor_k_n<< "\n";
+// cerr << "m1 " << minor_k_m1<< "\n";
+// cerr << "m2 " << minor_k_m2<< "\n";
+// cerr << "e " << minor_k_e<< "\n";
+// cerr << "g " << minor_k_g<< "\n";
+// cerr << "f " << minor_k_f<< "\n";
+
+        for (int bbc = 0; bbc != nb_base_fun_col / 3; ++bbc) {
+
+          // double mag_tan_1 = sqrt(t_tan_1(i) * t_tan_1(i));
+          // t_assemble_m(i) -=
+          //     cnValue * (t_n_field(i) - t_tan_1_field(i)) * t_base * val_m;
+          // t_assemble_m(i) += cnValue *
+          //                    (t_tan_1_field(j) * (t_tan_1(j) + t_tan_2(j))) *
+          //                    (t_tan_1(i) + t_tan_2(i)) * t_base * val_m;
+
+          // t_assemble_m(i) += cnValue * (t_n_field(j) * t_tan_1_field(j) - 1.) *
+          //                    t_n_field(i) * t_base * val_m;
+
+          //tangent
+          t_assemble_m(i) -= cnValue * (t_tan_1(i) - t_1_field(i)) *
+                              t_base * val_m;
+
+          //curvature
+          if(t_1_field(i) * t_1_field(i) > 1.e-8){
+
+
+//             cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
+// cerr << "l " << fund_l << "\n";
+// cerr << "n " << fund_n << "\n";
+// cerr << "m1 " << fund_m_1 << "\n";
+// cerr << "m2 " << fund_m_2 << "\n";
+// cerr << "e " << fund_e << "\n";
+// cerr << "g " << fund_g << "\n";
+// cerr << "f " << fund_f << "\n";
+// cerr << "~~~~~~~~~~~~~~~~~~~~~" << "\n";
+
+          t_assemble_m(i) += ( major_k_l * t_curvature(0) + minor_k_l * t_curvature(1) ) * (
+              t_N(0) * t_n_field(i) + t_base * t_tan_tan_one_one(l) *
+                                          FTensor::levi_civita(l, i, k) *
+                                          t_2_field(k)) * val_m;
+
+          t_assemble_m(i) +=
+              (major_k_m1 * t_curvature(0) + minor_k_m1 * t_curvature(1)) *
+              (t_N(1) * t_n_field(i) + t_base * t_tan_tan_two_one(l) *
+                                           FTensor::levi_civita(l, i, k) *
+                                           t_2_field(k)) * val_m;
+
+          t_assemble_m(i) +=
+              (major_k_m2 * t_curvature(0) + minor_k_m2 * t_curvature(1)) *
+              t_base * t_tan_tan_one_two(l) * FTensor::levi_civita(l, i, k) *
+              t_2_field(k) * val_m;
+
+          t_assemble_m(i) +=
+              (major_k_n * t_curvature(0) + minor_k_n * t_curvature(1)) *
+              t_base * t_tan_tan_two_two(l) * FTensor::levi_civita(l, i, k) *
+              t_2_field(k) * val_m;
+
+          t_assemble_m(i) +=
+              2 * (major_k_e * t_curvature(0) + minor_k_e * t_curvature(1)) *
+              t_base *
+              t_1_field(i)* val_m;
+
+          t_assemble_m(i) +=
+              (major_k_e * t_curvature(0) + minor_k_e * t_curvature(1)) *
+              t_base *
+              t_2_field(i)* val_m;
+          }
+
+          //  t_assemble_m(i) -= cnValue * (t_1_unit(i) - t_tan_1_field(i)) *
+          //  t_base * val_m; t_assemble_m(i) += t_tan_2_field(i) * t_base *
+          //  val_m; t_assemble_m(j) -= cnValue * (t_n(i) - t_n_field(i)) *
+          //  t_d_n(i, j) * val_m;
+          // t_assemble_m(i) -= cnValue * (t_2_unit(i) - t_tan_2_field(i)) *
+          // t_base * val_m;
+          //  cerr << "t_n   " << t_n << "\n";
+          //  cerr << "t_d_n   " << t_d_n << "\n";
+
+          //  t_assemble_m(i) += (t_tan_1_field(i) - t_tan_1(i) )* t_base *
+          //  val_m;
+
+          ++t_assemble_m;
+          ++t_base;
+          ++t_N;
+        }
+
+        ++t_w;
+        ++t_tan_1_field;
+        //  ++t_tan_2_field;
+        //  ++t_div_tan_1;
+        //  ++t_div_tan_2;
+        //  ++t_lag_mult;
+        // ++t_1;
+        // ++t_2;
+        ++t_tan_1;
+        ++t_tan_2;
+        ++t_area;
+        //  ++t_tangent_one_grad;
+        //  ++t_n_field;
+        ++t_n;
+        //  ++t_1_unit;
+        //  ++t_2_unit;
+        ++t_div_tan_1;
+        ++t_rot_normal;
+
+        ++t_tan_tan_one_one;
+        ++t_tan_tan_two_one;
+        ++t_tan_tan_one_two;
+        ++t_n_field;
+        ++t_tan_tan_two_two;
+        ++t_curvature;
+        ++t_1_field;
+        ++t_2_field;
+
         } // for gauss points
 
         CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
@@ -2135,6 +2723,7 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
         FTensor::Index<'i', 3> i;
         FTensor::Index<'j', 3> j;
         FTensor::Index<'k', 3> k;
+        FTensor::Index<'l', 3> l;
 
          auto t_tan_2_field =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
@@ -2150,9 +2739,6 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
 
         //  auto t_div_tan_2 =
         //      getFTensor0FromVec(*commonSurfaceSmoothingElement->divTangentTwoField);
-
-         auto t_n_field =
-             getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
 
           auto t_n =
              getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmal);
@@ -2234,19 +2820,311 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
 
              &t_inv_m(1, 1), &t_inv_m(2, 0), &t_inv_m(2, 1));
 
-         FTensor::Tensor1<double, 3> t_transformed_N;
-        auto t_tangent_two_grad = getFTensor2FromMat<3, 3>(*commonSurfaceSmoothingElement->tAngentTwoGradField);
+        //  FTensor::Tensor1<double, 3> t_transformed_N;
+        // auto t_tangent_two_grad = getFTensor2FromMat<3, 3>(*commonSurfaceSmoothingElement->tAngentTwoGradField);
 
         auto t_2_unit =
             getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2Unit);
         auto t_1_unit =
             getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1Unit);
 
+
+
+
+      auto t_1_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
+      auto t_2_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
+
+      auto t_tan_tan_one_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneOneField);
+
+      auto t_tan_tan_one_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneTwoField);
+
+      auto t_tan_tan_two_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoOneField);
+
+      auto t_tan_tan_two_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoTwoField);
+
+      auto t_curvature =
+          getFTensor1FromMat<2>(*commonSurfaceSmoothingElement->curvatuersField);
+      auto t_n_field = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+
+      FTensor::Tensor1<double, 3> t_tan_tan_2_1;
+
         for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-          // const double norm_1 = sqrt(t_1(i) * t_1(i));
-          // const double norm_2 = sqrt(t_2(i) * t_2(i));
-          // t_1(i) /= norm_1;
-          // t_2(i) /= norm_2;
+
+        const double fund_e = t_1_field(i) * t_1_field(i);
+        const double fund_f = t_1_field(i) * t_2_field(i);
+        const double fund_g = t_2_field(i) * t_2_field(i);
+        const double fund_l = t_tan_tan_one_one(i) * t_n_field(i);
+        const double fund_m_1 = t_tan_tan_one_two(i) * t_n_field(i);
+        const double fund_m_2 = t_tan_tan_two_one(i) * t_n_field(i);
+        
+        const double fund_n = t_tan_tan_two_two(i) * t_n_field(i);
+
+        const double minor_k_l =
+            (0.5 * fund_g) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (-(fund_n / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_g *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_n =
+            (0.5 * fund_e) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (-(fund_l / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_e *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_m1 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (fund_m_2 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_m2 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (fund_m_1 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_e =
+            (0.5 * fund_n) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_g *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+            ((0.5 * fund_n *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_g *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_g * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_g =
+            (0.5 * fund_l) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_e *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+            ((0.5 * fund_l *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_e *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_e * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double minor_k_f =
+            (0.5 * (-fund_m_1 - fund_m_2)) /
+                (-pow(fund_f, 2) + fund_e * fund_g) +
+            (1. * fund_f *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+            ((0.5 * (-fund_m_1 - fund_m_2) *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+             (1. * fund_f *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) -
+             (2 * fund_f * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_l =
+            (0.5 * fund_g) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (-(fund_n / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_g *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_n =
+            (0.5 * fund_e) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (-(fund_l / (-pow(fund_f, 2) + fund_e * fund_g)) +
+             (0.5 * fund_e *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_m1 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (fund_m_2 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_m2 =
+            (-0.5 * fund_f) / (-pow(fund_f, 2) + fund_e * fund_g) +
+            (fund_m_1 / (-pow(fund_f, 2) + fund_e * fund_g) -
+             (0.5 * fund_f *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_e =
+            (0.5 * fund_n) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_g *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+            ((0.5 * fund_n *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_g *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_g * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_g =
+            (0.5 * fund_l) / (-pow(fund_f, 2) + fund_e * fund_g) -
+            (0.5 * fund_e *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+            ((0.5 * fund_l *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+             (0.5 * fund_e *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) +
+             (fund_e * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+        const double major_k_f =
+            (0.5 * (-fund_m_1 - fund_m_2)) /
+                (-pow(fund_f, 2) + fund_e * fund_g) +
+            (1. * fund_f *
+             (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+              fund_e * fund_n)) /
+                pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+            ((0.5 * (-fund_m_1 - fund_m_2) *
+              (fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+               fund_e * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2) +
+             (1. * fund_f *
+              pow(fund_g * fund_l - fund_f * fund_m_1 - fund_f * fund_m_2 +
+                      fund_e * fund_n,
+                  2)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 3) -
+             (2 * fund_f * (-(fund_m_1 * fund_m_2) + fund_l * fund_n)) /
+                 pow(-pow(fund_f, 2) + fund_e * fund_g, 2)) /
+                (2. * sqrt((0.25 * pow(fund_g * fund_l - fund_f * fund_m_1 -
+                                           fund_f * fund_m_2 + fund_e * fund_n,
+                                       2)) /
+                               pow(-pow(fund_f, 2) + fund_e * fund_g, 2) -
+                           (-(fund_m_1 * fund_m_2) + fund_l * fund_n) /
+                               (-pow(fund_f, 2) + fund_e * fund_g)));
+
+
+
           auto t_N = data.getFTensor1DiffN<2>(gg, 0);
           double val_m = t_w * area_m;
           // double val_m = t_w * t_area;
@@ -2260,7 +3138,11 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
             // t_container_N(0,0) = t_container_N(1,0) = t_container_N(2,0) =
             // t_N(0); t_container_N(2,0) = t_container_N(2,1) =
             // t_container_N(2,1) = t_N(1);
-            t_transformed_N(i) = t_N(q) * t_container_N(i, q);
+            
+            //for divergence
+            // t_transformed_N(i) = t_N(q) * t_container_N(i, q);
+            
+            
             // t_transformed_N(i,k) = t_inv_m(j, i) * t_container_N(j, k);
             // t_assemble_m(0) += t_transformed_N(0, 0) * t_div_normal * val_m;
             // t_assemble_m(1) += t_transformed_N(1, 1) * t_div_normal * val_m;
@@ -2271,16 +3153,14 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
             //  (t_transformed_N(i) *t_tan_1_field(j) + t_tangent_two_grad(j,i)
             //  * t_N(1)) * (t_div_tan_1 + t_div_tan_2) * val_m;
 
-            auto t_d_n =
-                make_vec_der_2(t_base, t_tan_1_field, t_tan_2_field, t_n_field);
+            // auto t_d_n =
+            //     make_vec_der_2(t_base, t_tan_1_field, t_tan_2_field, t_n_field);
             //  cerr << cnValue <<"\n";
-            double mag_tan_2 = sqrt(t_tan_2(i) * t_tan_2(i));
-            t_assemble_m(i) -=
-                cnValue * (t_2_unit(i) - t_tan_2_field(i)) * t_base * val_m;
-
+            // double mag_tan_2 = sqrt(t_tan_2(i) * t_tan_2(i));
+            
             // t_assemble_m(i) += t_tan_1_field(i) * t_base * val_m;
 
-             t_assemble_m(j) -= cnValue * (t_n(i) - t_n_field(i)) * t_d_n(i, j) * t_base * val_m;
+            //  t_assemble_m(j) -= cnValue * (t_n(i) - t_n_field(i)) * t_d_n(i, j) * t_base * val_m;
 
             // t_assemble_m(i) -=
             //     cnValue *
@@ -2289,11 +3169,65 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
 
 
             //  t_assemble_m(i) += (t_tan_2_field(i) - t_tan_2(i) )* t_base * val_m;
-             
+            
+            //Tangent comparisons
+            t_assemble_m(i) -=
+                cnValue * (t_tan_2(i) - t_tan_2_field(i)) * t_base * val_m;
 
-             ++t_assemble_m;
-             ++t_base;
-             ++t_N;
+            //curvature
+if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
+
+//               cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
+// cerr << "l " << fund_l << "\n";
+// cerr << "n " << fund_n << "\n";
+// cerr << "m1 " << fund_m_1 << "\n";
+// cerr << "m2 " << fund_m_2 << "\n";
+// cerr << "e " << fund_e << "\n";
+// cerr << "g " << fund_g << "\n";
+// cerr << "f " << fund_f << "\n";
+// cerr << "~~~~~~~~~~~~~~~~~~~~~" << "\n";
+
+
+            t_assemble_m(i) +=
+                (major_k_l * t_curvature(0) + minor_k_l * t_curvature(1)) *
+                t_base * t_tan_tan_one_one(l) * FTensor::levi_civita(l, k, i) *
+                                             t_1_field(k) *
+                val_m;
+
+            t_assemble_m(i) +=
+                (major_k_m1 * t_curvature(0) + minor_k_m1 * t_curvature(1)) *
+                t_base * t_tan_tan_one_two(l) * FTensor::levi_civita(l, k, i) *
+                t_1_field(k) * val_m;
+
+
+            t_assemble_m(i) +=
+                (major_k_m2 * t_curvature(0) + minor_k_m2 * t_curvature(1)) *
+                (t_N(0) * t_n_field(i) + t_base * t_tan_tan_two_one(l) *
+                                             FTensor::levi_civita(l, k, i) *
+                                             t_1_field(k)) *
+                val_m;
+
+
+            t_assemble_m(i) +=
+                (major_k_n * t_curvature(0) + minor_k_n * t_curvature(1)) *
+                (t_N(1) * t_n_field(i) + t_base * t_tan_tan_two_two(l) *
+                                             FTensor::levi_civita(l, i, k) *
+                                             t_1_field(k)) *
+                val_m;
+
+            t_assemble_m(i) +=
+                (major_k_f * t_curvature(0) + minor_k_f * t_curvature(1)) *
+                t_base * t_1_field(i) * val_m;
+
+            t_assemble_m(i) +=
+                2 * (major_k_g * t_curvature(0) + minor_k_g * t_curvature(1)) *
+                t_base * t_2_field(i) * val_m;
+
+          }
+
+            ++t_assemble_m;
+            ++t_base;
+            ++t_N;
            }
 
            ++t_w;
@@ -2306,11 +3240,20 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
            // ++t_2;
            ++t_tan_2;
            ++t_area;
-           ++t_tangent_two_grad;
-           ++t_n_field;
+          //  ++t_tangent_two_grad;
            ++t_n;
            ++t_2_unit;
            ++t_1_unit;
+
+        ++t_tan_tan_one_one;
+        ++t_tan_tan_two_one;
+
+        ++t_tan_tan_one_two;
+        ++t_n_field;
+        ++t_tan_tan_two_two;
+        ++t_curvature;
+        ++t_1_field;
+        ++t_2_field;
         } // for gauss points
 
         CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
@@ -2753,11 +3696,14 @@ private:
     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpGetTangentOneField(
         field_name_tangent_one_field, common_data_smooth_element));
 
-    // fe_rhs_smooth_element->getOpPtrVector().push_back(new OpGetTangentTwoField(
-    //     field_name_tangent_two_field, common_data_smooth_element));
+    fe_rhs_smooth_element->getOpPtrVector().push_back(new OpGetTangentTwoField(
+        field_name_tangent_two_field, common_data_smooth_element));
 
-    //  fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalNormalFieldTwo(
-    //      field_name_tangent_one_field, common_data_smooth_element));
+     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalNormalFieldTwo(
+         field_name_tangent_one_field, common_data_smooth_element));
+         
+     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalPrincipalCurvatures(
+         field_name_tangent_one_field, common_data_smooth_element));
 
 ///New
     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpGetDivOneField(
@@ -2774,8 +3720,8 @@ private:
     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalTangentOneFieldRhs(
         field_name_tangent_one_field, common_data_smooth_element, cnVaule));
 
-    // fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalTangentTwoFieldRhs(
-    //     field_name_tangent_two_field, common_data_smooth_element, cnVaule));
+    fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalTangentTwoFieldRhs(
+        field_name_tangent_two_field, common_data_smooth_element, cnVaule));
 
     // fe_rhs_smooth_element->getOpPtrVector().push_back(
     //     new OpGetNormalFT(field_name_tangent_one_field,
@@ -2787,6 +3733,9 @@ private:
 
     // fe_rhs_smooth_element->getOpPtrVector().push_back(
     //     new OpCalPositionsRhs(field_name_position, common_data_smooth_element, cnVaule));
+    
+
+
     
     fe_rhs_smooth_element->getOpPtrVector().push_back(
         new OpCalPositionsForTanRhs(field_name_position, common_data_smooth_element, cnVaule));
@@ -3254,10 +4203,12 @@ int main(int argc, char *argv[]) {
         m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "MESH_NODE_POSITIONS",
         "MESH_NODE_POSITIONS");
 
-    boost::shared_ptr<FEMethod> dirichlet_bc_ptr =
+    boost::shared_ptr<DirichletFixFieldAtEntitiesBc> dirichlet_bc_ptr =
         boost::shared_ptr<DirichletFixFieldAtEntitiesBc>(
             new DirichletFixFieldAtEntitiesBc(
                 m_field, "MESH_NODE_POSITIONS", fixed_vertex));
+dirichlet_bc_ptr->fieldNames.push_back("TANGENT_ONE_FIELD");
+dirichlet_bc_ptr->fieldNames.push_back("TANGENT_TWO_FIELD");
 
     dirichlet_bc_ptr->snes_ctx = SnesMethod::CTX_SNESNONE;
     dirichlet_bc_ptr->snes_x = D;
