@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_calculating_frequency = PETSC_FALSE;
-    PetscBool is_post_proc_volume  = PETSC_FALSE;
+    PetscBool is_post_proc_volume = PETSC_TRUE;
 
     // Select base
     enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
@@ -506,10 +506,18 @@ int main(int argc, char *argv[]) {
       Range skin_faces; // skin faces from 3d ents
       CHKERR skin.find_skin(0, elastic_element_ents, false, skin_faces);
       Range proc_skin;
-      CHKERR pcomm->filter_pstatus(skin_faces,
-                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                   PSTATUS_NOT, -1, &proc_skin);
+      if (is_partitioned) {
+        CHKERR pcomm->filter_pstatus(skin_faces,
+                                     PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                     PSTATUS_NOT, -1, &proc_skin);
+      } else {
+        proc_skin = skin_faces;
+      }
       CHKERR m_field.add_finite_element("POST_PROC_SKIN");
+      CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN",
+                                                          "DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN",
+                                                         "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
                                                           "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data(
@@ -1095,7 +1103,8 @@ int main(int argc, char *argv[]) {
           }
 
           MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
-          CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc_skin);
+          CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN",
+                                          &post_proc_skin);
           std::ostringstream o1_skin;
           o1_skin << "out_skin" << sit->step_number << ".h5m";
           CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
@@ -1159,7 +1168,7 @@ int main(int argc, char *argv[]) {
         }
 
         MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
-        CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc_skin);
+        CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN", &post_proc_skin);
         CHKERR post_proc_skin.writeFile("out_skin.h5m");
         MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done";
       }
