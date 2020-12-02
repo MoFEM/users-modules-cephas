@@ -572,6 +572,7 @@ double cnVaule;
       FTensor::Index<'j', 3> j;
       FTensor::Index<'k', 3> k;
       auto t_tangent_1 = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
+      auto t_tangent_2 = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
       auto t_tangent_1_tot =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
       auto t_tangent_2_tot =
@@ -588,11 +589,13 @@ double cnVaule;
         t_normal_field(i) = FTensor::levi_civita(i, j, k) * t_tangent_1_tot(j) * t_tangent_2_tot(k);
         CHKERR PetscPrintf(PETSC_COMM_WORLD, "X Normal = %e, %e, %e\n\n",
                        t_normal_field(0), t_normal_field(1), t_normal_field(2));
+        t_normal_field(i) = FTensor::levi_civita(i, j, k) * t_tangent_1(j) *
+                            t_tangent_2(k);
         CHKERR PetscPrintf(PETSC_COMM_WORLD, "Field Normal = %e, %e, %e\n\n",
-                       t_tangent_1(0), t_tangent_1(1), t_tangent_1(2));
+                           t_normal_field(0), t_normal_field(1), t_normal_field(2));
 
         ++t_tangent_1;
-        // ++t_tangent_2;
+        ++t_tangent_2;
         ++t_n;
         ++t_tangent_1_tot;
         ++t_tangent_2_tot;
@@ -1630,7 +1633,7 @@ struct OpCalPositionsForTanRhs : public FaceEleOp {
             // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) * FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
             
             
-            // t_assemble_m(j) += cnValue * ( t_normal(i) - t_tan_1_field(i) ) * t_d_n(i, j) * val_m;
+            // t_assemble_m(j) += cnValue * ( t_normal(i) /*- t_tan_1_field(i)*/ ) * t_d_n(i, j) * val_m;
             // t_assemble_m(i) += cnValue * (t_tan_1_field(j) * (t_1(j) + t_2(j) )  ) * t_tan_1_field(i) * (t_N(0) + t_N(1)) * val_m;
             // t_assemble_m(k) += cnValue * (t_normal(j) * t_tan_1_field(j)  - 1. ) * t_tan_1_field(i) * t_d_n(i, k) * val_m;
 
@@ -2592,9 +2595,9 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
 
           //curvature
           if(t_1_field(i) * t_1_field(i) > 1.e-8){
+// if(false){
 
-
-//             cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
+            // cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
 // cerr << "l " << fund_l << "\n";
 // cerr << "n " << fund_n << "\n";
 // cerr << "m1 " << fund_m_1 << "\n";
@@ -3176,7 +3179,7 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
 
             //curvature
 if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
-
+// if(false){
 //               cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
 // cerr << "l " << fund_l << "\n";
 // cerr << "n " << fund_n << "\n";
@@ -3716,12 +3719,13 @@ private:
     // fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalNormalFieldRhs(
     //     field_name_normal_field, common_data_smooth_element, cnVaule));
 
-
+//~~~~~~~~~~~~
     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalTangentOneFieldRhs(
         field_name_tangent_one_field, common_data_smooth_element, cnVaule));
 
     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalTangentTwoFieldRhs(
         field_name_tangent_two_field, common_data_smooth_element, cnVaule));
+//~~~~~~~~
 
     // fe_rhs_smooth_element->getOpPtrVector().push_back(
     //     new OpGetNormalFT(field_name_tangent_one_field,
@@ -3778,8 +3782,8 @@ private:
     fe_smooth_post_proc->getOpPtrVector().push_back(new OpGetTangentOneField(
         field_name_tangent_one_field, common_data_smooth_element));
 
-    // fe_smooth_post_proc->getOpPtrVector().push_back(new OpGetTangentTwoField(
-    //     field_name_tangent_two_field, common_data_smooth_element));
+    fe_smooth_post_proc->getOpPtrVector().push_back(new OpGetTangentTwoField(
+        field_name_tangent_two_field, common_data_smooth_element));
     // fe_smooth_post_proc->getOpPtrVector().push_back(new OpGetNormalField(
     //     field_name_normal_field, common_data_smooth_element));
 
