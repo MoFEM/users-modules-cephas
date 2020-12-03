@@ -2625,8 +2625,8 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
                               t_base * val_m;
 
           //curvature
-          if(t_1_field(i) * t_1_field(i) > 1.e-8){
-// if(true){
+          // if(t_1_field(i) * t_1_field(i) > 1.e-8){
+if(false){
 
 //             cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
 // cerr << "l " << fund_l << "\n";
@@ -3210,7 +3210,7 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
 
             //curvature
 // if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
-if(true){
+if(false){
 //               cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
 // cerr << "l " << fund_l << "\n";
 // cerr << "n " << fund_n << "\n";
