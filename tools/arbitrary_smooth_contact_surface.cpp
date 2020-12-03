@@ -65,6 +65,7 @@ double cnVaule;
     boost::shared_ptr<MatrixDouble> nOrmal;
     boost::shared_ptr<MatrixDouble> tAngent1;
     boost::shared_ptr<MatrixDouble> tAngent2;
+    boost::shared_ptr<MatrixDouble> hoGaussPointLocation;
 
     boost::shared_ptr<MatrixDouble> tAngent1Unit;
     boost::shared_ptr<MatrixDouble> tAngent2Unit;
@@ -120,6 +121,7 @@ double cnVaule;
       tAngent2 = boost::make_shared<MatrixDouble>();
       tAngent1Unit = boost::make_shared<MatrixDouble>();
       tAngent2Unit = boost::make_shared<MatrixDouble>();
+      hoGaussPointLocation = boost::make_shared<MatrixDouble>();
 
 
       matForDivTan1 = boost::make_shared<MatrixDouble>();;
@@ -250,6 +252,8 @@ double cnVaule;
 
         commonSurfaceSmoothingElement->tAngent2->resize(3, ngp, false);
         commonSurfaceSmoothingElement->tAngent2->clear();
+        commonSurfaceSmoothingElement->hoGaussPointLocation->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->hoGaussPointLocation->clear();
       }
 
       auto t_1 =
@@ -257,20 +261,28 @@ double cnVaule;
       auto t_2 =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2);
 
+      auto t_ho_pos =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->hoGaussPointLocation);
+
       for (unsigned int gg = 0; gg != ngp; ++gg) {
         auto t_N = data.getFTensor1DiffN<2>(gg, 0);
         // auto t_dof = data.getFTensor1FieldData<3>();
         FTensor::Tensor1<double *, 3> t_dof(
               &data.getFieldData()[0], &data.getFieldData()[1], &data.getFieldData()[2], 3);
-          
+        FTensor::Tensor0<double *> t_base(&data.getN()(gg, 0));
+
         for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
           t_1(i) += t_dof(i) * t_N(0);
           t_2(i) += t_dof(i) * t_N(1);
+          if(type != MBVERTEX)
+            t_ho_pos(i) += t_base * t_dof(i);
           ++t_dof;
           ++t_N;
+          ++t_base;
         }
         ++t_1;
         ++t_2;
+        ++t_ho_pos;
       }
 
       MoFEMFunctionReturn(0);
@@ -1604,68 +1616,87 @@ struct OpCalPositionsForTanRhs : public FaceEleOp {
       // auto t_2_unit =
       //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2Unit);
 
-        for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+      auto t_ho_pos = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->hoGaussPointLocation);
 
-          double val_m = t_w * area_m;
-          // double val_m = t_w * t_area;
+      for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-          FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
-              &vecF[0], &vecF[1], &vecF[2]};
-          auto t_base = data.getFTensor0N(gg, 0); 
-          auto t_N = data.getFTensor1DiffN<2>(gg, 0);
-         FTensor::Tensor1<double *, 3> t_dof(
-              &data.getFieldData()[0], &data.getFieldData()[1], &data.getFieldData()[2], 3);
-        
-          for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
-            auto t_d_n = make_vec_der(t_N, t_1, t_2, t_normal);
+        double val_m = t_w * area_m;
+        // double val_m = t_w * t_area;
 
-            // t_assemble_m(j) += (2 *(t_normal(i) - t_normal_field(i)) + t_lag_mult(i)) * t_d_n(i, j) * val_m;
-            double mag_tan_1 = sqrt(t_1(i) * t_1(i));
-            double mag_tan_2 = sqrt(t_2(i) * t_2(i));
-            double mag_t_1 = sqrt(t_1(i) * t_1(i));
-            constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-            
-            // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) * FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1 - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
-            // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) * FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
-            
-            
-            // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) * FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1 - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
-            // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) * FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
-            
-            
-            // t_assemble_m(j) += cnValue * ( t_normal(i) /*- t_tan_1_field(i)*/ ) * t_d_n(i, j) * val_m;
-            // t_assemble_m(i) += cnValue * (t_tan_1_field(j) * (t_1(j) + t_2(j) )  ) * t_tan_1_field(i) * (t_N(0) + t_N(1)) * val_m;
-            // t_assemble_m(k) += cnValue * (t_normal(j) * t_tan_1_field(j)  - 1. ) * t_tan_1_field(i) * t_d_n(i, k) * val_m;
+        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_assemble_m{
+            &vecF[0], &vecF[1], &vecF[2]};
+        auto t_base = data.getFTensor0N(gg, 0);
+        auto t_N = data.getFTensor1DiffN<2>(gg, 0);
+        FTensor::Tensor1<double *, 3> t_dof(&data.getFieldData()[0],
+                                            &data.getFieldData()[1],
+                                            &data.getFieldData()[2], 3);
 
-            t_assemble_m(j) += cnValue * (t_1(j) - t_tan_1_field(j)) * t_N(0);
-            t_assemble_m(j) += cnValue * (t_2(j) - t_tan_2_field(j)) * t_N(1);
-// cerr <<"t_assemble_m " << t_assemble_m << "\n";
-            // t_assemble_m(j) += cnValue * t_1(j);
-            // t_assemble_m(j) += cnValue * t_N(1);
+        for (int bbc = 0; bbc != nb_base_fun_col; ++bbc) {
+          auto t_d_n = make_vec_der(t_N, t_1, t_2, t_normal);
 
-            // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) * FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1 - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
-            // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) * FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
+          // t_assemble_m(j) += (2 *(t_normal(i) - t_normal_field(i)) +
+          // t_lag_mult(i)) * t_d_n(i, j) * val_m;
+          double mag_tan_1 = sqrt(t_1(i) * t_1(i));
+          double mag_tan_2 = sqrt(t_2(i) * t_2(i));
+          double mag_t_1 = sqrt(t_1(i) * t_1(i));
+          constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
+          // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) *
+          // FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1
+          // - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
+          // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) *
+          // FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
+
+          // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) *
+          // FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1
+          // - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
+          // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) *
+          // FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
+
+          // t_assemble_m(j) += cnValue * ( t_normal(i) /*- t_tan_1_field(i)*/ )
+          // * t_d_n(i, j) * val_m; t_assemble_m(i) += cnValue *
+          // (t_tan_1_field(j) * (t_1(j) + t_2(j) )  ) * t_tan_1_field(i) *
+          // (t_N(0) + t_N(1)) * val_m; t_assemble_m(k) += cnValue *
+          // (t_normal(j) * t_tan_1_field(j)  - 1. ) * t_tan_1_field(i) *
+          // t_d_n(i, k) * val_m;
+
+          t_assemble_m(j) += cnValue * (t_1(j) - t_tan_1_field(j)) * t_N(0);
+          t_assemble_m(j) += cnValue * (t_2(j) - t_tan_2_field(j)) * t_N(1);
+
+          // minimum change
+          t_assemble_m(j) += t_ho_pos(j) * t_base;
 
 
+          // cerr <<"t_assemble_m " << t_assemble_m << "\n";
+          // t_assemble_m(j) += cnValue * t_1(j);
+          // t_assemble_m(j) += cnValue * t_N(1);
 
+          // t_assemble_m(q) += ( cnValue * (t_2_unit(i) - t_tan_2_field(i)) ) *
+          // FTensor::levi_civita(i, j, k) * t_normal(j) * ( t_kd(k, q)/mag_t_1
+          // - t_1(k) * t_1(q)/pow(mag_t_1, 3) )  * t_N(0) * val_m;
+          // t_assemble_m(q) += ( cnValue * (t_1_unit(i) - t_tan_1_field(i)) ) *
+          // FTensor::levi_civita(i, j, k) * t_d_n(j, q) * t_1_unit(k) * val_m;
 
-            // t_assemble_m(i) += (t_normal_field(j) * t_normal(j) - 1. )* t_base * val_m;
-            ++t_assemble_m;
-            ++t_base;
-            ++t_N;
-            ++t_dof;
-          }
-          ++t_normal;
-          ++t_w;
-          ++t_1;
-          ++t_2;
-          // ++t_lag_mult;
-          ++t_area;
-          ++t_tan_1_field;
-          ++t_tan_2_field;
-          // ++t_normal_field;
-          // ++t_1_unit;
-          // ++t_2_unit;
+          // t_assemble_m(i) += (t_normal_field(j) * t_normal(j) - 1. )* t_base
+          // * val_m;
+          ++t_assemble_m;
+          ++t_base;
+          ++t_N;
+          ++t_dof;
+        }
+        ++t_normal;
+        ++t_w;
+        ++t_1;
+        ++t_2;
+        // ++t_lag_mult;
+        ++t_area;
+        ++t_tan_1_field;
+        ++t_tan_2_field;
+        // ++t_normal_field;
+        // ++t_1_unit;
+        // ++t_2_unit;
+        ++t_ho_pos;
         } // for gauss points
         
         CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
@@ -2595,9 +2626,9 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
 
           //curvature
           if(t_1_field(i) * t_1_field(i) > 1.e-8){
-// if(false){
+// if(true){
 
-            // cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
+//             cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
 // cerr << "l " << fund_l << "\n";
 // cerr << "n " << fund_n << "\n";
 // cerr << "m1 " << fund_m_1 << "\n";
@@ -2606,35 +2637,35 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
 // cerr << "g " << fund_g << "\n";
 // cerr << "f " << fund_f << "\n";
 // cerr << "~~~~~~~~~~~~~~~~~~~~~" << "\n";
-
-          t_assemble_m(i) += ( major_k_l * t_curvature(0) + minor_k_l * t_curvature(1) ) * (
+          const double  gaussian_curvature =  1.;//cnValue * t_curvature(0) *  t_curvature(1);
+          t_assemble_m(i) += gaussian_curvature * ( major_k_l * t_curvature(0) + minor_k_l * t_curvature(1) ) * (
               t_N(0) * t_n_field(i) + t_base * t_tan_tan_one_one(l) *
                                           FTensor::levi_civita(l, i, k) *
                                           t_2_field(k)) * val_m;
 
           t_assemble_m(i) +=
-              (major_k_m1 * t_curvature(0) + minor_k_m1 * t_curvature(1)) *
+              gaussian_curvature *  (major_k_m1 * t_curvature(0) + minor_k_m1 * t_curvature(1)) *
               (t_N(1) * t_n_field(i) + t_base * t_tan_tan_two_one(l) *
                                            FTensor::levi_civita(l, i, k) *
                                            t_2_field(k)) * val_m;
 
           t_assemble_m(i) +=
-              (major_k_m2 * t_curvature(0) + minor_k_m2 * t_curvature(1)) *
+              gaussian_curvature *  (major_k_m2 * t_curvature(0) + minor_k_m2 * t_curvature(1)) *
               t_base * t_tan_tan_one_two(l) * FTensor::levi_civita(l, i, k) *
               t_2_field(k) * val_m;
 
           t_assemble_m(i) +=
-              (major_k_n * t_curvature(0) + minor_k_n * t_curvature(1)) *
+              gaussian_curvature * (major_k_n * t_curvature(0) + minor_k_n * t_curvature(1)) *
               t_base * t_tan_tan_two_two(l) * FTensor::levi_civita(l, i, k) *
               t_2_field(k) * val_m;
 
           t_assemble_m(i) +=
-              2 * (major_k_e * t_curvature(0) + minor_k_e * t_curvature(1)) *
+              gaussian_curvature * 2. * (major_k_e * t_curvature(0) + minor_k_e * t_curvature(1)) *
               t_base *
               t_1_field(i)* val_m;
 
           t_assemble_m(i) +=
-              (major_k_e * t_curvature(0) + minor_k_e * t_curvature(1)) *
+              gaussian_curvature * (major_k_e * t_curvature(0) + minor_k_e * t_curvature(1)) *
               t_base *
               t_2_field(i)* val_m;
           }
@@ -3178,8 +3209,8 @@ struct OpCalTangentTwoFieldRhs : public FaceEleOp {
                 cnValue * (t_tan_2(i) - t_tan_2_field(i)) * t_base * val_m;
 
             //curvature
-if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
-// if(false){
+// if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
+if(true){
 //               cerr << "~~~~~~~~~~~~~~~~~~~~~   " << t_1_field(i) * t_1_field(i) << "\n";
 // cerr << "l " << fund_l << "\n";
 // cerr << "n " << fund_n << "\n";
@@ -3190,21 +3221,21 @@ if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
 // cerr << "f " << fund_f << "\n";
 // cerr << "~~~~~~~~~~~~~~~~~~~~~" << "\n";
 
-
+ const double  gaussian_curvature = 1.;//cnValue * t_curvature(0) *  t_curvature(1);
             t_assemble_m(i) +=
-                (major_k_l * t_curvature(0) + minor_k_l * t_curvature(1)) *
+                gaussian_curvature * (major_k_l * t_curvature(0) + minor_k_l * t_curvature(1)) *
                 t_base * t_tan_tan_one_one(l) * FTensor::levi_civita(l, k, i) *
                                              t_1_field(k) *
                 val_m;
 
             t_assemble_m(i) +=
-                (major_k_m1 * t_curvature(0) + minor_k_m1 * t_curvature(1)) *
+                gaussian_curvature * (major_k_m1 * t_curvature(0) + minor_k_m1 * t_curvature(1)) *
                 t_base * t_tan_tan_one_two(l) * FTensor::levi_civita(l, k, i) *
                 t_1_field(k) * val_m;
 
 
             t_assemble_m(i) +=
-                (major_k_m2 * t_curvature(0) + minor_k_m2 * t_curvature(1)) *
+                gaussian_curvature * (major_k_m2 * t_curvature(0) + minor_k_m2 * t_curvature(1)) *
                 (t_N(0) * t_n_field(i) + t_base * t_tan_tan_two_one(l) *
                                              FTensor::levi_civita(l, k, i) *
                                              t_1_field(k)) *
@@ -3212,18 +3243,18 @@ if(t_tan_2_field(i) * t_tan_2_field(i) > 1.e-8) {
 
 
             t_assemble_m(i) +=
-                (major_k_n * t_curvature(0) + minor_k_n * t_curvature(1)) *
+                gaussian_curvature * (major_k_n * t_curvature(0) + minor_k_n * t_curvature(1)) *
                 (t_N(1) * t_n_field(i) + t_base * t_tan_tan_two_two(l) *
                                              FTensor::levi_civita(l, i, k) *
                                              t_1_field(k)) *
                 val_m;
 
             t_assemble_m(i) +=
-                (major_k_f * t_curvature(0) + minor_k_f * t_curvature(1)) *
+                gaussian_curvature * (major_k_f * t_curvature(0) + minor_k_f * t_curvature(1)) *
                 t_base * t_1_field(i) * val_m;
 
             t_assemble_m(i) +=
-                2 * (major_k_g * t_curvature(0) + minor_k_g * t_curvature(1)) *
+                gaussian_curvature *  2. * (major_k_g * t_curvature(0) + minor_k_g * t_curvature(1)) *
                 t_base * t_2_field(i) * val_m;
 
           }
