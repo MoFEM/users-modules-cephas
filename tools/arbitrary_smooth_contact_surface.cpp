@@ -65,6 +65,20 @@ double cnVaule;
     boost::shared_ptr<MatrixDouble> nOrmal;
     boost::shared_ptr<MatrixDouble> tAngent1;
     boost::shared_ptr<MatrixDouble> tAngent2;
+
+    boost::shared_ptr<MatrixDouble> contravariantTangent1;
+    boost::shared_ptr<MatrixDouble> contravariantTangent2;
+    boost::shared_ptr<MatrixDouble> covariantDerrivativeOfNormal1;
+    boost::shared_ptr<MatrixDouble> covariantDerrivativeOfNormal2;
+
+    boost::shared_ptr<MatrixDouble> nonNormalisedCovariantDerNormal1;
+    boost::shared_ptr<MatrixDouble> nonNormalisedCovariantDerNormal2;
+
+    boost::shared_ptr<MatrixDouble> gradNormal1;
+    boost::shared_ptr<MatrixDouble> gradNormal2;
+
+    boost::shared_ptr<VectorDouble> meanCurvature;
+
     boost::shared_ptr<MatrixDouble> hoGaussPointLocation;
 
     boost::shared_ptr<MatrixDouble> tAngent1Unit;
@@ -85,6 +99,7 @@ double cnVaule;
     boost::shared_ptr<MatrixDouble> tAngentOneGradField;
     boost::shared_ptr<MatrixDouble> tAngentTwoGradField;
     boost::shared_ptr<MatrixDouble> metricTensorForField;
+    boost::shared_ptr<MatrixDouble> inverseMetricTensorForField;
     boost::shared_ptr<VectorDouble> detOfMetricTensorForField;
 
     boost::shared_ptr<MatrixDouble> tanHdiv1;
@@ -119,6 +134,17 @@ double cnVaule;
 
       tAngent1 = boost::make_shared<MatrixDouble>();
       tAngent2 = boost::make_shared<MatrixDouble>();
+      contravariantTangent1 = boost::make_shared<MatrixDouble>();
+      contravariantTangent2 = boost::make_shared<MatrixDouble>();
+      covariantDerrivativeOfNormal1 = boost::make_shared<MatrixDouble>();
+      covariantDerrivativeOfNormal2 = boost::make_shared<MatrixDouble>();
+      nonNormalisedCovariantDerNormal1 = boost::make_shared<MatrixDouble>();
+      nonNormalisedCovariantDerNormal2 = boost::make_shared<MatrixDouble>();
+
+
+      gradNormal1 = boost::make_shared<MatrixDouble>();
+      gradNormal2 = boost::make_shared<MatrixDouble>();
+      meanCurvature = boost::make_shared<VectorDouble>();
       tAngent1Unit = boost::make_shared<MatrixDouble>();
       tAngent2Unit = boost::make_shared<MatrixDouble>();
       hoGaussPointLocation = boost::make_shared<MatrixDouble>();
@@ -148,6 +174,7 @@ double cnVaule;
 
       rotTangentOneField =  boost::make_shared<MatrixDouble>();
       metricTensorForField = boost::make_shared<MatrixDouble>();
+      inverseMetricTensorForField = boost::make_shared<MatrixDouble>();
       detOfMetricTensorForField = boost::make_shared<VectorDouble>();
     }
 
@@ -397,7 +424,7 @@ double cnVaule;
       for (unsigned int gg = 0; gg != ngp; ++gg) {
         t_n(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
         const double n_mag = sqrt(t_n(i) * t_n(i));
-        t_n(i) /= n_mag;
+        // t_n(i) /= n_mag;
         // t_area = 0.5 * n_mag;
         ++t_n;
         ++t_1;
@@ -523,31 +550,124 @@ double cnVaule;
       commonSurfaceSmoothingElement->metricTensorForField->resize(4, ngp, false);
       commonSurfaceSmoothingElement->metricTensorForField->clear();
 
+      commonSurfaceSmoothingElement->inverseMetricTensorForField->resize(4, ngp, false);
+      commonSurfaceSmoothingElement->inverseMetricTensorForField->clear();
+
       commonSurfaceSmoothingElement->detOfMetricTensorForField->resize(ngp, false);
       commonSurfaceSmoothingElement->detOfMetricTensorForField->clear();
+
+      commonSurfaceSmoothingElement->contravariantTangent1->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->contravariantTangent1->clear();
+
+      commonSurfaceSmoothingElement->contravariantTangent2->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->contravariantTangent2->clear();
+
+      commonSurfaceSmoothingElement->gradNormal1->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->gradNormal1->clear();
+
+      commonSurfaceSmoothingElement->gradNormal2->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->gradNormal2->clear();
+
+      commonSurfaceSmoothingElement->covariantDerrivativeOfNormal1->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->covariantDerrivativeOfNormal1->clear();
+
+      commonSurfaceSmoothingElement->covariantDerrivativeOfNormal2->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->covariantDerrivativeOfNormal2->clear();
+
+      commonSurfaceSmoothingElement->meanCurvature->resize(ngp, false);
+      commonSurfaceSmoothingElement->meanCurvature->clear();
+
+      commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal1->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal1->clear();
+
+      commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal2->resize(3, ngp, false);
+      commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal2->clear();
 
       auto t_1 =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
       auto t_2 =
           getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
 
+      auto t_1_contravariant =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->contravariantTangent1);
+      auto t_2_contravariant =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->contravariantTangent2);
+
+      auto t_der_normal_1 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->covariantDerrivativeOfNormal1);
+      auto t_der_normal_2 =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->covariantDerrivativeOfNormal2);
+
       auto t_metric_tensor = getFTensor2FromMat<2, 2>(
           *commonSurfaceSmoothingElement->metricTensorForField);
+      auto t_inv_metric_tensor = getFTensor2FromMat<2, 2>(
+          *commonSurfaceSmoothingElement->inverseMetricTensorForField);
+      
       auto t_det =
       getFTensor0FromVec(*commonSurfaceSmoothingElement->detOfMetricTensorForField);
 
+      auto t_mean_curvature = getFTensor0FromVec(
+          *commonSurfaceSmoothingElement->meanCurvature);
 
+      auto t_tan_tan_one_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneOneField);
+
+      auto t_tan_tan_one_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanOneTwoField);
+
+      auto t_tan_tan_two_one = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoOneField);
+
+      auto t_tan_tan_two_two = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->tAnTanTwoTwoField);
+
+      auto t_n =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+
+      auto t_der_normal_field_for_one = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal1);;
+      auto t_der_normal_field_for_two = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal2);;
       for (unsigned int gg = 0; gg != ngp; ++gg) {
+        //Covariant Metric
         t_metric_tensor(0, 0) = t_1(i) * t_1(i);
         t_metric_tensor(1, 1) = t_2(i) * t_2(i);
-        t_metric_tensor(0, 1) = t_1(i) * t_2(i);
-        t_metric_tensor(1, 0) = t_2(i) * t_1(i);
+        t_metric_tensor(0, 1)  = t_metric_tensor(1, 0) = t_1(i) * t_2(i);
+        //det of Covariant Metric
         t_det = t_metric_tensor(0, 0) * t_metric_tensor(1, 1) -
                 t_metric_tensor(0, 1) * t_metric_tensor(1, 0);
+        //Contravariant Metric
+        t_inv_metric_tensor(0, 0) = t_metric_tensor(1, 1) / t_det;
+        t_inv_metric_tensor(1, 1) = t_metric_tensor(0, 0) / t_det;
+        t_inv_metric_tensor(0, 1) = t_inv_metric_tensor(1, 0) = -t_metric_tensor(0, 1) / t_det;
+        //Contravariant base vectors
+        t_1_contravariant(i) = t_1(i) * t_inv_metric_tensor(0, 0) + t_2(i) * t_inv_metric_tensor(1, 0);
+        t_2_contravariant(i) = t_1(i) * t_inv_metric_tensor(0, 1) + t_2(i) * t_inv_metric_tensor(1, 1);
+        //Covariant derrivative of unit normal
+        t_der_normal_field_for_one(i) = FTensor::levi_civita(i, j, k) * ( t_tan_tan_one_one(j) * t_2(k) + t_1(j) * t_tan_tan_two_one(k) );
+        t_der_normal_field_for_two(i) = FTensor::levi_civita(i, j, k) * ( t_tan_tan_one_two(j) * t_2(k) + t_1(j) * t_tan_tan_two_two(k) );
+        const double mag_normal = sqrt(t_n(i) * t_n(i));
+        const double mag_normal_3 = mag_normal * mag_normal * mag_normal;
+        t_der_normal_1(i) = t_der_normal_field_for_one(i) / mag_normal - t_n(i) * t_der_normal_field_for_one(j) * t_n(j) / mag_normal_3;
+        t_der_normal_2(i) = t_der_normal_field_for_two(i) / mag_normal - t_n(i) * t_der_normal_field_for_two(j) * t_n(j) / mag_normal_3;
+        //Mean curvature
+        t_mean_curvature -= t_der_normal_1(i) * t_1_contravariant(i) + t_der_normal_2(i) * t_2_contravariant(i);
+
         ++t_metric_tensor;
+        ++t_inv_metric_tensor;
         ++t_det;
         ++t_1;
         ++t_2;
+        ++t_n;
+        ++t_1_contravariant;
+        ++t_2_contravariant;
+        ++t_tan_tan_one_one;
+        ++t_tan_tan_one_two;
+        ++t_tan_tan_two_one;
+        ++t_tan_tan_two_two;
+        ++t_der_normal_1;
+        ++t_der_normal_2;
+        ++t_mean_curvature;
+        ++t_der_normal_field_for_one;
+        ++t_der_normal_field_for_two;
       }
 
       MoFEMFunctionReturn(0);
@@ -2180,12 +2300,6 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
         FTensor::Index<'k', 3> k;
         FTensor::Index<'l', 3> l;
 
-         auto t_tan_1_field =
-          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentOneField);
-
-        //  auto t_tan_2_field =
-        //   getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngentTwoField);
-
          auto t_tan_1 =
              getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
 
@@ -2232,15 +2346,6 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
 
         t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
 
-        // FTensor::Tensor2<const double *, 3, 3> t_m(
-        //     &t_1(0), &t_2(0), &t_normal(0),
-
-        //     &t_1(1), &t_2(1), &t_normal(1),
-
-        //     &t_1(2), &t_2(2), &t_normal(2),
-
-        //     3);
-
         FTensor::Tensor2<const double *, 3, 3> t_m(&t_1(0), &t_1(1), &t_1(2),
 
                                                    &t_2(0), &t_2(1), &t_2(2),
@@ -2254,13 +2359,7 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
         FTensor::Tensor2<double, 3, 3> t_inv_m;
         CHKERR determinantTensor3by3(t_m, det);
         CHKERR invertTensor3by3(t_m, det, t_inv_m);
-        // FTensor::Tensor2<double, 3, 2> t_container_N;
-        // FTensor::Tensor2<double, 3, 2> t_transformed_N;
-
-        // auto t_1 =
-        //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent1);
-        // auto t_2 =
-        //     getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->tAngent2);
+       
         auto t_area =
             getFTensor0FromVec(*commonSurfaceSmoothingElement->areaNL);
 
@@ -2308,6 +2407,33 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
           getFTensor1FromMat<2>(*commonSurfaceSmoothingElement->curvatuersField);
       auto t_n_field = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
       
+
+      auto t_mean_curvature = getFTensor0FromVec(
+          *commonSurfaceSmoothingElement->meanCurvature);
+
+      auto t_inv_metric_tensor = getFTensor2FromMat<2, 2>(
+          *commonSurfaceSmoothingElement->inverseMetricTensorForField);
+
+      auto t_1_contravariant = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->contravariantTangent1);
+      auto t_2_contravariant = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->contravariantTangent2);
+
+      auto t_der_normal_1 = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->covariantDerrivativeOfNormal1);
+      auto t_der_normal_2 = getFTensor1FromMat<3>(
+          *commonSurfaceSmoothingElement->covariantDerrivativeOfNormal2);
+
+      auto t_det = getFTensor0FromVec(
+          *commonSurfaceSmoothingElement->detOfMetricTensorForField);
+
+      auto t_metric_tensor = getFTensor2FromMat<2, 2>(
+          *commonSurfaceSmoothingElement->metricTensorForField);
+
+      auto t_der_normal_field_for_one = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal1);;
+      auto t_der_normal_field_for_two = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nonNormalisedCovariantDerNormal2);;
+
+
       for (int gg = 0; gg != nb_gauss_pts; ++gg) {
         // const double norm_1 = sqrt(t_1(i) * t_1(i));
         // const double norm_2 = sqrt(t_2(i) * t_2(i));
@@ -2624,6 +2750,23 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
           t_assemble_m(i) -= cnValue * (t_tan_1(i) - t_1_field(i)) *
                               t_base * val_m;
 
+          ///mean curvature: quite intense variation comming from Tensor calculus
+          //first kappa
+          t_assemble_m(j) -= val_m * t_mean_curvature *  t_der_normal_1(j) * t_base * t_inv_metric_tensor(0, 0);
+          FTensor::Tensor1<double, 3> help_der_det_inv;
+          FTensor::Tensor1<double, 3> help_der_2;
+          help_der_det_inv(i) = 2. * t_base  *
+                          (t_1_field(i) * t_metric_tensor(1, 1) -
+                           t_2_field(i)* t_metric_tensor(0, 1));
+          help_der_2(i) -= help_der_det_inv(i) * t_metric_tensor(1, 0)/pow(t_det, 2) + t_base * t_2_field(i)/t_det;
+          t_assemble_m(j) -=
+              val_m * t_mean_curvature * t_der_normal_1(i) *
+              ( t_1_field(i) * help_der_det_inv(j) * t_metric_tensor(1, 1) / pow(t_det, 2) + t_2_field(i) * help_der_2(j) );
+          
+          
+          t_der_normal_field_for_one;
+
+
           //curvature
           // if(t_1_field(i) * t_1_field(i) > 1.e-8){
 if(false){
@@ -2688,7 +2831,7 @@ if(false){
         }
 
         ++t_w;
-        ++t_tan_1_field;
+        // ++t_tan_1_field;
         //  ++t_tan_2_field;
         //  ++t_div_tan_1;
         //  ++t_div_tan_2;
@@ -2699,7 +2842,7 @@ if(false){
         ++t_tan_2;
         ++t_area;
         //  ++t_tangent_one_grad;
-        //  ++t_n_field;
+        
         ++t_n;
         //  ++t_1_unit;
         //  ++t_2_unit;
@@ -2714,8 +2857,17 @@ if(false){
         ++t_curvature;
         ++t_1_field;
         ++t_2_field;
-
-        } // for gauss points
+        ++t_mean_curvature;
+        ++t_inv_metric_tensor;
+	      ++t_1_contravariant;
+        ++t_2_contravariant;
+        ++t_der_normal_1;
+        ++t_der_normal_2;
+        ++t_det;
+        ++t_metric_tensor;
+        ++t_der_normal_field_for_one;
+        ++t_der_normal_field_for_two;
+      } // for gauss points
 
         CHKERR VecSetValues(getSNESf(), data, &*vecF.begin(), ADD_VALUES);
       }
@@ -3736,7 +3888,7 @@ private:
      fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalNormalFieldTwo(
          field_name_tangent_one_field, common_data_smooth_element));
          
-     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalPrincipalCurvatures(
+     fe_rhs_smooth_element->getOpPtrVector().push_back(new OpCalMetricTensorAndDeterminant(
          field_name_tangent_one_field, common_data_smooth_element));
 
 ///New
