@@ -13,5 +13,6 @@
 \tableofcontents
 
 \include magnetostatic.cpp
+\include MagneticElement.hpp
 
 */
