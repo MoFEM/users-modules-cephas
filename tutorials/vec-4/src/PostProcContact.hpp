@@ -230,7 +230,7 @@ struct Monitor : public FEMethod {
 
     if (SPACE_DIM == 2)
       vertexPostProc->getOpPtrVector().push_back(
-          new OpSetContrariantPiolaTransformOnEdge());
+          new OpSetContravariantPiolaTransformOnEdge());
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
             "U", commonDataPtr->contactDispPtr));

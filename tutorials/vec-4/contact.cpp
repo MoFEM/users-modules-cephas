@@ -347,7 +347,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
     if (SPACE_DIM == 2)
-      pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
+      pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
