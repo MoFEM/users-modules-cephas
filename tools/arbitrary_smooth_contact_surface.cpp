@@ -44,7 +44,7 @@ double cnVaule;
     SurfaceSmoothingElement(MoFEM::Interface &m_field)
         : FaceEle(m_field), mField(m_field) {}
 
-  int getRule(int order) { return 4 * (order - 1) ; };
+  int getRule(int order) { return 4 * (order + 1) ; };
 
     // Destructor
     ~SurfaceSmoothingElement() {}
@@ -1000,8 +1000,8 @@ double cnVaule;
           ++t_base_normal_field;
         }
         if(t_tan_1_field(i) * t_tan_1_field(i) < 1.e-8){
-        // t_tan_1_field(i) = 0.9 * t_tan_1(i);
-        t_tan_1_field(i) =  1.e-3;
+        t_tan_1_field(i) = 0.001 * t_tan_1(i);
+        // t_tan_1_field(i) =  1.e-3;
         // t_tan_tan_one_one(i) = 1.e-3;
         // t_tan_tan_one_two(i) = 1.e-3;
         } else {
@@ -1137,10 +1137,10 @@ double cnVaule;
           ++t_base_normal_field;
         }
       if(t_n_field(i)* t_n_field(i) < 1.e-8){
-        t_n_field(0) = 1.e-3;
-        t_n_field(1) = 1.e-4;
-        t_n_field(2) = 1.e-5;
-        t_n_field(i) =  0.9 * t_tan_2(i);
+        // t_n_field(0) = 1.e-3;
+        // t_n_field(1) = 1.e-4;
+        // t_n_field(2) = 1.e-5;
+        t_n_field(i) =  0.001 * t_tan_2(i);
         // t_tan_tan_two_one(i) = t_n_field(i);
         // t_tan_tan_two_two(i) = t_n_field(i);
       }
@@ -1929,7 +1929,7 @@ struct OpCalPositionsForTanRhs : public FaceEleOp {
           t_assemble_m(j) += cnValue * t_lag_mult_2 * (t_2(j) - t_tan_2_field(j)) * t_N(1) * val_m;
 
           // minimum change
-          // t_assemble_m(j) += cnValue * t_ho_pos(j) * t_base * val_m;
+          // t_assemble_m(j) -= cnValue * t_ho_pos(j) * t_base * val_m;
 
 
           // cerr <<"t_assemble_m " << t_assemble_m << "\n";
@@ -2907,10 +2907,10 @@ struct OpCalTangentOneFieldRhs : public FaceEleOp {
           help_der_det_inv(i) = 2. * t_base  *
                           (t_1_field(i) * t_metric_tensor(1, 1) -
                            t_2_field(i)* t_metric_tensor(0, 1));
-          help_der_2(i) -= help_der_det_inv(i) * t_metric_tensor(1, 0)/pow(t_det, 2) + t_base * t_2_field(i)/t_det;
+          help_der_2(i) = help_der_det_inv(i) * t_metric_tensor(1, 0)/pow(t_det, 2) - t_base * t_2_field(i)/t_det;
           t_assemble_m(j) -=
               val_m * t_mean_curvature * t_der_normal_1(i) *
-              ( t_1_field(i) * help_der_det_inv(j) * t_metric_tensor(1, 1) / pow(t_det, 2) + t_2_field(i) * help_der_2(j) );
+              ( -t_1_field(i) * help_der_det_inv(j) * t_metric_tensor(1, 1) / pow(t_det, 2) + t_2_field(i) * help_der_2(j) );
           
           const double mag_normal = sqrt(t_n_field(i) * t_n_field(i));
 
@@ -4896,7 +4896,7 @@ int main(int argc, char *argv[]) {
 
     auto prb_mng = m_field.getInterface<ProblemsManager>();
     const int lo_coeff = 0;
-    const int hi_coeff = 2;
+    const int hi_coeff = 3;
     CHKERR prb_mng->removeDofsOnEntities("SURFACE_SMOOTHING_PROB", "SMOOTHING_MESH_NODE_POSITIONS", fixed_vertex,
                                          lo_coeff, hi_coeff);
 
