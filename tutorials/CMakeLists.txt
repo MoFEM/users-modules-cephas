@@ -90,6 +90,7 @@ set(TUTORIALS_DIRS
   vec-2
   vec-3
   vec-4
+  mix-0
   max-0
   max-1
   other_tutorials/mix_transport

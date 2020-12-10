@@ -78,7 +78,7 @@ using OpMixUTimesLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
 using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
 using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM>;
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
 constexpr int order = 3;
 constexpr double young_modulus = 10;
