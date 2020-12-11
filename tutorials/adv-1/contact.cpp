@@ -87,14 +87,14 @@ using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
-// Only used with Henky/nonlinear material
+// Only used with Hencky/nonlinear material
 using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr bool is_quasi_static = false;
-constexpr bool is_Henky = true;
+constexpr bool is_Hencky = true;
 
 constexpr int order = 1;
 constexpr double young_modulus = 100;
@@ -105,10 +105,10 @@ constexpr double spring_stiffness = 0.0;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
-#include <HenkyOps.hpp>
+#include <HenckyOps.hpp>
 #include <PostProcContact.hpp>
 using namespace ContactOps;
-using namespace HenkyOps;
+using namespace HenckyOps;
 
 struct Example {
 
@@ -276,7 +276,7 @@ MoFEMErrorCode Example::bC() {
                                                moab::Interface::UNION);
       verts.merge(adj);
     };
-
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
                                          lo, hi);
     MoFEMFunctionReturn(0);
@@ -287,6 +287,7 @@ MoFEMErrorCode Example::bC() {
   boundary_ents.merge(fix_disp("FIX_Y"));
   boundary_ents.merge(fix_disp("FIX_Z"));
   boundary_ents.merge(fix_disp("FIX_ALL"));
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(boundary_ents);
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
       mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
       0, 2);
@@ -317,13 +318,13 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (is_Henky) {
+    if (is_Hencky) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
               "U", commonDataPtr->mGradPtr));
       auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpHenkyStressAndTangent<SPACE_DIM, true>(
+          new OpHenckyStressAndTangent<SPACE_DIM, true>(
               "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
               commonDataPtr->mStressPtr, mat_pangent_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -364,10 +365,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
-    if (is_Henky) {
+    if (is_Hencky) {
       auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpHenkyStressAndTangent<SPACE_DIM, false>(
+          new OpHenckyStressAndTangent<SPACE_DIM, false>(
               "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
               commonDataPtr->mStressPtr, mat_pangent_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
