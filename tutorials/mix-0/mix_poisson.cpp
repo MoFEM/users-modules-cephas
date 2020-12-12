@@ -113,7 +113,7 @@ MoFEMErrorCode Example::setupProblem() {
   // and tet is not yet implemented for L2 space. DEMKOWICZ_JACOBI_BASE and
   // AINSWORTH_LEGENDRE_BASE are construcreed in the same way on quad.
   CHKERR simpleInterface->addDomainField("U", L2, AINSWORTH_LEGENDRE_BASE, 1);
-  constexpr int order = 4;
+  constexpr int order = 6;
   CHKERR simpleInterface->setFieldOrder("FLUX", order);
   CHKERR simpleInterface->setFieldOrder("U", order - 1);
   CHKERR simpleInterface->setUp();
@@ -161,6 +161,8 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpSetContravariantPiolaTransformFace(jAC));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacHcurlFace(invJac));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpMakeHighOrderGeometryWeightsOnFace());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHdivHdiv("FLUX", "FLUX", beta));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
