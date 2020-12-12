@@ -199,14 +199,14 @@ continuing with the one you are most excited about.
 </table>
 
 
-\section tutorials_vector_complex_field_problems Complex and mixed field problems
+\section tutorials_vector_complex_field_problems Mixed field problems
 
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref MIX-2: Mixed problem</td>
+       <td width="350px">\ref tut_mix_poisson</td>
        <td> A mixed problem
-       <br/> *Keywords:* 
+       <br/> *Keywords:* H-div space
        </td>
   </tr>
 
