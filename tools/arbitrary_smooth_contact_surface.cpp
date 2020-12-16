@@ -640,7 +640,8 @@ for (int dd = 0; dd != 3; ++dd) {
         sin_v = 2. * area_m / denom_v;
         alpha_v = std::acos(t_edge_a(i) * t_edge_b(i) / denom_v);
         // cerr << "sin_v  " << sqrt(t_edge_c(i) * t_edge_c(i)) <<"\n";
-        weight_v = pow(sin_v / sqrt(t_edge_c(i) * t_edge_c(i)), 2) ;//* alpha_v;
+        // weight_v = pow(sin_v / sqrt(t_edge_c(i) * t_edge_c(i)), 2) ;//* alpha_v;
+        weight_v = sin_v / denom_v;
         return weight_v;
       };
 
