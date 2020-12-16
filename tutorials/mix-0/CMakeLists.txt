@@ -38,5 +38,5 @@ tutorials_build_and_install(
 add_test(
   mix_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/approximaton
+  ${CMAKE_CURRENT_BINARY_DIR}/mix_poisson
   -file_name ${CMAKE_CURRENT_BINARY_DIR}/mesh2d.h5m -log_no_color)
