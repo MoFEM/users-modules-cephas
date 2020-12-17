@@ -53,11 +53,13 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 
-constexpr double rho = 1;
-constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.25;
+constexpr double rho = 7829e-12;
+constexpr double young_modulus = 207e3;
+constexpr double poisson_ratio = 0.33;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+
+int order = 1;
 
 #include <OpPostProcElastic.hpp>
 using namespace Tutorial;
@@ -89,6 +91,8 @@ private:
   SmartPetscObj<Mat> M;
   SmartPetscObj<Mat> K;
   SmartPetscObj<EPS> ePS;
+
+  std::array<SmartPetscObj<Vec>, 6> rigidBodyMotion;
 };
 
 //! [Create common data]
@@ -102,14 +106,16 @@ MoFEMErrorCode Example::createCommonData() {
     FTensor::Index<'l', SPACE_DIM> l;
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
     MoFEMFunctionBegin;
+    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
+
     constexpr double A =
         (SPACE_DIM == 2) ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
     t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
                       A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
                           t_kd(i, j) * t_kd(k, l);
+
     MoFEMFunctionReturn(0);
   };
 
@@ -157,12 +163,10 @@ MoFEMErrorCode Example::readMesh() {
 
 //! [Set up problem]
 MoFEMErrorCode Example::setupProblem() {
+  auto *simple = mField.getInterface<Simple>();
   MoFEMFunctionBegin;
-  Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
-                                SPACE_DIM);
-  int order = 3;
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
@@ -172,43 +176,73 @@ MoFEMErrorCode Example::setupProblem() {
 
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
+  auto *simple = mField.getInterface<Simple>();
   MoFEMFunctionBegin;
 
-  auto fix_disp = [&](const std::string blockset_name) {
-    Range fix_ents;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
-                                                        true);
+  rigidBodyMotion[0] = smartCreateDMVector(simple->getDM());
+  for (int n = 1; n != 6; ++n)
+    rigidBodyMotion[n] = smartVectorDuplicate(rigidBodyMotion[0]);
+
+  // Create space of vectors or rigid motion
+  auto problem_ptr = mField.get_problem(simple->getProblemName());
+  auto dofs = problem_ptr->getNumeredRowDofsPtr();
+
+  // Get all vertices
+  const auto bit_number = mField.get_field_bit_number("U");
+  auto lo_uid =
+      DofEntity::getUniqueIdCalculate(0, get_id_for_min_type<MBVERTEX>());
+  auto hi_uid =
+      DofEntity::getUniqueIdCalculate(2, get_id_for_max_type<MBVERTEX>());
+
+  auto hi = dofs->upper_bound(lo_uid);
+  std::array<double, 3> coords;
+
+  for (auto lo = dofs->lower_bound(lo_uid); lo != hi; ++lo) {
+
+    if ((*lo)->getPart() == mField.get_comm_rank()) {
+
+      auto ent = (*lo)->getEnt();
+      CHKERR mField.get_moab().get_coords(&ent, 1, coords.data());
+
+      if ((*lo)->getDofCoeffIdx() == 0) {
+        CHKERR VecSetValue(rigidBodyMotion[0], (*lo)->getPetscGlobalDofIdx(), 1,
+                           INSERT_VALUES);
+        CHKERR VecSetValue(rigidBodyMotion[3], (*lo)->getPetscGlobalDofIdx(),
+                           -coords[1], INSERT_VALUES);
+        if (SPACE_DIM == 3)
+          CHKERR VecSetValue(rigidBodyMotion[4], (*lo)->getPetscGlobalDofIdx(),
+                             -coords[2], INSERT_VALUES);
+
+      } else if ((*lo)->getDofCoeffIdx() == 1) {
+        CHKERR VecSetValue(rigidBodyMotion[1], (*lo)->getPetscGlobalDofIdx(), 1,
+                           INSERT_VALUES);
+        CHKERR VecSetValue(rigidBodyMotion[3], (*lo)->getPetscGlobalDofIdx(),
+                           coords[0], INSERT_VALUES);
+        if (SPACE_DIM == 3)
+          CHKERR VecSetValue(rigidBodyMotion[5], (*lo)->getPetscGlobalDofIdx(),
+                             -coords[2], INSERT_VALUES);
+
+      } else if ((*lo)->getDofCoeffIdx() == 2) {
+        if (SPACE_DIM == 3) {
+          CHKERR VecSetValue(rigidBodyMotion[2], (*lo)->getPetscGlobalDofIdx(),
+                             1, INSERT_VALUES);
+          CHKERR VecSetValue(rigidBodyMotion[4], (*lo)->getPetscGlobalDofIdx(),
+                             coords[0], INSERT_VALUES);
+          CHKERR VecSetValue(rigidBodyMotion[5], (*lo)->getPetscGlobalDofIdx(),
+                             coords[1], INSERT_VALUES);
+        }
       }
     }
-    return fix_ents;
-  };
+  }
 
-  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
-    auto prb_mng = mField.getInterface<ProblemsManager>();
-    auto simple = mField.getInterface<Simple>();
-    MoFEMFunctionBegin;
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    verts.merge(ents);
-    if (SPACE_DIM == 3) {
-      Range adj;
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
-                                               moab::Interface::UNION);
-      verts.merge(adj);
-    };
-
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo, hi);
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
-  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
+  for (int n = 0; n != rigidBodyMotion.size(); ++n) {
+    CHKERR VecAssemblyBegin(rigidBodyMotion[n]);
+    CHKERR VecAssemblyEnd(rigidBodyMotion[n]);
+    CHKERR VecGhostUpdateBegin(rigidBodyMotion[n], INSERT_VALUES,
+                               SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(rigidBodyMotion[n], INSERT_VALUES,
+                             SCATTER_FORWARD);
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -243,6 +277,7 @@ MoFEMErrorCode Example::assembleSystem() {
 
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     pipeline_mng->getDomainLhsFE()->B = K;
+    CHKERR MatZeroEntries(K);
     CHKERR pipeline_mng->loopFiniteElements();
     CHKERR MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
     CHKERR MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
@@ -259,6 +294,7 @@ MoFEMErrorCode Example::assembleSystem() {
       return 2 * approx_order;
     };
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+    CHKERR MatZeroEntries(M);
     pipeline_mng->getDomainLhsFE()->B = M;
     CHKERR pipeline_mng->loopFiniteElements();
     CHKERR MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
@@ -275,47 +311,163 @@ MoFEMErrorCode Example::assembleSystem() {
 
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
+  auto simple = mField.getInterface<Simple>();
+  auto is_manager = mField.getInterface<ISManager>();
   MoFEMFunctionBegin;
 
-  auto createEPS = [](MPI_Comm comm) {
+  auto create_EPS = [](MPI_Comm comm) {
     EPS eps;
-    ierr = EPSCreate(comm, &eps);
-    CHKERRABORT(comm, ierr);
+    CHKERR EPSCreate(comm, &eps);
     return SmartPetscObj<EPS>(eps);
   };
 
-  // Create eigensolver context
-  ePS = createEPS(mField.get_comm());
+  auto get_is = [&](const auto order) {
+    SmartPetscObj<IS> is;
+    CHKERR is_manager->isCreateProblemOrder(simple->getProblemName(), ROW, 0,
+                                            order, is);
+    return is;
+  };
 
-  ST st;
-  EPSType type;
-  PetscReal tol;
-  PetscInt nev, maxit, its;
+  auto create_is_vec = [&](auto is) {
+    int size;
+    CHKERR ISGetLocalSize(is, &size);
+    return createSmartVectorMPI(mField.get_comm(), size, PETSC_DETERMINE);
+  };
 
-  // Set operators. In this case, it is a generalized eigenvalue problem
-  CHKERR EPSSetOperators(ePS, K, M);
-  CHKERR EPSSetProblemType(ePS, EPS_GHEP);
-  CHKERR EPSSetWhichEigenpairs(ePS, EPS_SMALLEST_MAGNITUDE);
+  auto scatter_create = [&](auto vec_in, auto vec_out, auto is) {
+    VecScatter raw_ctx;
+    CHKERR VecScatterCreate(vec_in, PETSC_NULL, vec_out, is, &raw_ctx);
+    return SmartPetscObj<VecScatter>(raw_ctx);
+  };
 
-  // Set solver parameters at runtime
-  CHKERR EPSSetFromOptions(ePS);
+  auto create_sub_matrix = [&](auto is, auto a) {
+    Mat raw_b;
+    CHKERR MatCreateSubMatrix(a, is, is, MAT_INITIAL_MATRIX, &raw_b);
+    SmartPetscObj<Mat> b(raw_b);
+    return b;
+  };
 
-  // Optional: Get some information from the solver and display it
-  CHKERR EPSSolve(ePS);
+  auto print_info = [&]() {
+    MoFEMFunctionBegin;
+    ST st;
+    EPSType type;
+    PetscReal tol;
+    PetscInt nev, maxit, its;
+    // Optional: Get some information from the solver and display it
+    CHKERR EPSGetIterationNumber(ePS, &its);
+    MOFEM_LOG_C("EXAMPLE", Sev::inform,
+                " Number of iterations of the method: %d", its);
+    CHKERR EPSGetST(ePS, &st);
+    CHKERR EPSGetType(ePS, &type);
+    MOFEM_LOG_C("EXAMPLE", Sev::inform, " Solution method: %s", type);
+    CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
+    MOFEM_LOG_C("EXAMPLE", Sev::inform, " Number of requested eigenvalues: %d",
+                nev);
+    CHKERR EPSGetTolerances(ePS, &tol, &maxit);
+    MOFEM_LOG_C("EXAMPLE", Sev::inform,
+                " Stopping condition: tol=%.4g, maxit=%d", (double)tol, maxit);
 
-  // Optional: Get some information from the solver and display it
-  CHKERR EPSGetIterationNumber(ePS, &its);
-  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Number of iterations of the method: %D",
-              its);
-  CHKERR EPSGetST(ePS, &st);
-  CHKERR EPSGetType(ePS, &type);
-  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Solution method: %s", type);
-  CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
-  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Number of requested eigenvalues: %D",
-              nev);
-  CHKERR EPSGetTolerances(ePS, &tol, &maxit);
-  MOFEM_LOG_C("EXAMPLE", Sev::inform, " Stopping condition: tol=%.4g, maxit=%D",
-              (double)tol, maxit);
+    PetscScalar eigr, eigi;
+    for (int nn = 0; nn < nev; nn++) {
+      CHKERR EPSGetEigenpair(ePS, nn, &eigr, &eigi, PETSC_NULL, PETSC_NULL);
+      MOFEM_LOG_C("EXAMPLE", Sev::inform,
+                  " ncov = %d eigr = %.4g eigi = %.4g (inv eigr = %.4g)", nn,
+                  eigr, eigi, 1. / eigr);
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto solve_get_results = [&](auto is) {
+    PetscInt nev;
+    CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
+    PetscScalar eigr, eigi;
+    std::vector<SmartPetscObj<Vec>> sol_vecs;
+    for (int nn = 0; nn < nev; nn++) {
+      auto vec = create_is_vec(is);
+      CHKERR EPSGetEigenpair(ePS, nn, &eigr, &eigi, vec, PETSC_NULL);
+      sol_vecs.push_back(vec);
+    }
+    return sol_vecs;
+  };
+
+  std::vector<SmartPetscObj<Vec>> sol_vecs;
+  auto d = smartCreateDMVector(simple->getDM());
+
+  for (int oo = 1; oo <= order; ++oo) {
+
+    auto is = get_is(oo);
+    auto vec_current = create_is_vec(is);
+    auto ctx_current = scatter_create(vec_current, d, is);
+
+    std::vector<Vec> inital_solutions;
+
+    if (oo > 1) {
+      auto is_previous = get_is(oo - 1);
+      auto vec_previous = create_is_vec(is_previous);
+      auto ctx_previous = scatter_create(vec_previous, d, is_previous);
+      auto sol_vecs = solve_get_results(is_previous);
+      inital_solutions.resize(sol_vecs.size());
+      int n = 0;
+      for (auto v : sol_vecs) {
+        CHKERR VecScatterBegin(ctx_previous, v, d, INSERT_VALUES,
+                               SCATTER_FORWARD);
+        CHKERR VecScatterEnd(ctx_previous, v, d, INSERT_VALUES,
+                             SCATTER_FORWARD);
+        CHKERR VecDuplicate(vec_current, &inital_solutions[n]);
+        CHKERR VecScatterBegin(ctx_current, d, inital_solutions[n],
+                               INSERT_VALUES, SCATTER_REVERSE);
+        CHKERR VecScatterEnd(ctx_current, d, inital_solutions[n], INSERT_VALUES,
+                             SCATTER_REVERSE);
+        ++n;
+      }
+    }
+
+    // Create eigensolver context
+    ePS = create_EPS(mField.get_comm());
+
+    auto sub_M = create_sub_matrix(is, M);
+    auto sub_K = create_sub_matrix(is, K);
+
+    // Set operators. In this case, it is a generalized eigenvalue problem
+    CHKERR EPSSetOperators(ePS, sub_K, sub_M);
+
+    CHKERR EPSSetProblemType(ePS, EPS_GHEP);
+    CHKERR EPSSetWhichEigenpairs(ePS, EPS_SMALLEST_MAGNITUDE);
+
+    // Set solver parameters at runtime
+    CHKERR EPSSetFromOptions(ePS);
+
+    if (oo > 1) {
+      MOFEM_LOG("EXAMPLE", Sev::noisy) << "Set initial solution";
+      CHKERR EPSSetInitialSpace(ePS, inital_solutions.size(),
+                                &inital_solutions[0]);
+    }
+    for (auto v : inital_solutions) {
+      CHKERR VecDestroy(&v);
+    }
+
+    // Deflate vectors
+    std::array<Vec, 6> deflate_vectors;
+    for (int n = 0; n != 6; ++n) {
+      CHKERR VecDuplicate(vec_current, &deflate_vectors[n]);
+      CHKERR VecScatterBegin(ctx_current, rigidBodyMotion[n],
+                             deflate_vectors[n], INSERT_VALUES,
+                             SCATTER_REVERSE);
+      CHKERR VecScatterEnd(ctx_current, rigidBodyMotion[n], deflate_vectors[n],
+                           INSERT_VALUES, SCATTER_REVERSE);
+    }
+    CHKERR EPSSetDeflationSpace(ePS, 6, &deflate_vectors[0]);
+    for (int n = 0; n != 6; ++n) {
+      CHKERR VecDestroy(&deflate_vectors[n]);
+    }
+
+    // Optional: Get some information from the solver and display it
+    CHKERR EPSSolve(ePS);
+
+    // Print info
+    CHKERR print_info();
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -363,10 +515,9 @@ MoFEMErrorCode Example::outputResults() {
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecNorm(D, NORM_2, &nrm2r);
-    MOFEM_LOG_C(
-        "EXAMPLE", Sev::inform,
-        " ncov = %d eigr = %.4g eigi = %.4g (inv eigr = %.4g) nrm2r = %.4g", nn,
-        eigr, eigi, 1. / eigr, nrm2r);
+    MOFEM_LOG_C("EXAMPLE", Sev::inform,
+                " ncov = %d omega2 = %.8g omega = %.8g frequency  = %.8g", nn,
+                eigr, sqrt(std::abs(eigr)), sqrt(std::abs(eigr)) / (2 * M_PI));
     CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
     CHKERR pipeline_mng->loopFiniteElements();
     post_proc_fe->writeFile("out_eig_" + boost::lexical_cast<std::string>(nn) +
@@ -385,8 +536,8 @@ MoFEMErrorCode Example::checkResults() {
   if (test_flg) {
     PetscScalar eigr, eigi;
     CHKERR EPSGetEigenpair(ePS, 0, &eigr, &eigi, PETSC_NULL, PETSC_NULL);
-    constexpr double regression_value = 0.2013;
-    if (fabs(eigr - regression_value) > 1e-2)
+    constexpr double regression_value = 12579658;
+    if (fabs(eigr - regression_value) > 1)
       SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
               "Regression test faileed; wrong eigen value.");
   }

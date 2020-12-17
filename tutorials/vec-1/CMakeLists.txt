@@ -48,9 +48,13 @@ if(SLEPC_LIBRARY)
     eigen_elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
   add_test(
-    eigen_elastic_2d
+    eigen_elastic_3d
     ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-    ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic_2d
-    -file_name part.h5m -order 1 -log_no_color -test)
+    ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic_3d
+    -eps_ncv 300 
+    -eps_krylovschur_restart 0.1
+    -file_name fork-2-0_2parts.h5m 
+    -order 1
+    -log_no_color -test)
 
 endif(SLEPC_LIBRARY)
