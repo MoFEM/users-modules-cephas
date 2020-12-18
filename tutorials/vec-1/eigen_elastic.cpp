@@ -166,7 +166,8 @@ MoFEMErrorCode Example::setupProblem() {
   auto *simple = mField.getInterface<Simple>();
   MoFEMFunctionBegin;
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
+                                SPACE_DIM);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
@@ -315,36 +316,21 @@ MoFEMErrorCode Example::solveSystem() {
   auto is_manager = mField.getInterface<ISManager>();
   MoFEMFunctionBegin;
 
-  auto create_EPS = [](MPI_Comm comm) {
+  auto create_eps = [](MPI_Comm comm) {
     EPS eps;
     CHKERR EPSCreate(comm, &eps);
     return SmartPetscObj<EPS>(eps);
   };
 
-  auto get_is = [&](const auto order) {
-    SmartPetscObj<IS> is;
-    CHKERR is_manager->isCreateProblemOrder(simple->getProblemName(), ROW, 0,
-                                            order, is);
-    return is;
-  };
-
-  auto create_is_vec = [&](auto is) {
-    int size;
-    CHKERR ISGetLocalSize(is, &size);
-    return createSmartVectorMPI(mField.get_comm(), size, PETSC_DETERMINE);
-  };
-
-  auto scatter_create = [&](auto vec_in, auto vec_out, auto is) {
-    VecScatter raw_ctx;
-    CHKERR VecScatterCreate(vec_in, PETSC_NULL, vec_out, is, &raw_ctx);
-    return SmartPetscObj<VecScatter>(raw_ctx);
-  };
-
-  auto create_sub_matrix = [&](auto is, auto a) {
-    Mat raw_b;
-    CHKERR MatCreateSubMatrix(a, is, is, MAT_INITIAL_MATRIX, &raw_b);
-    SmartPetscObj<Mat> b(raw_b);
-    return b;
+  auto deflate_vectors = [&]() {
+    MoFEMFunctionBegin;
+    // Deflate vectors
+    std::array<Vec, 6> deflate_vectors;
+    for (int n = 0; n != 6; ++n) {
+      deflate_vectors[n] = rigidBodyMotion[n];
+    }
+    CHKERR EPSSetDeflationSpace(ePS, 6, &deflate_vectors[0]);
+    MoFEMFunctionReturn(0);
   };
 
   auto print_info = [&]() {
@@ -378,96 +364,29 @@ MoFEMErrorCode Example::solveSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto solve_get_results = [&](auto is) {
-    PetscInt nev;
-    CHKERR EPSGetDimensions(ePS, &nev, NULL, NULL);
-    PetscScalar eigr, eigi;
-    std::vector<SmartPetscObj<Vec>> sol_vecs;
-    for (int nn = 0; nn < nev; nn++) {
-      auto vec = create_is_vec(is);
-      CHKERR EPSGetEigenpair(ePS, nn, &eigr, &eigi, vec, PETSC_NULL);
-      sol_vecs.push_back(vec);
-    }
-    return sol_vecs;
-  };
-
-  std::vector<SmartPetscObj<Vec>> sol_vecs;
-  auto d = smartCreateDMVector(simple->getDM());
-
-  for (int oo = 1; oo <= order; ++oo) {
-
-    auto is = get_is(oo);
-    auto vec_current = create_is_vec(is);
-    auto ctx_current = scatter_create(vec_current, d, is);
-
-    std::vector<Vec> inital_solutions;
-
-    if (oo > 1) {
-      auto is_previous = get_is(oo - 1);
-      auto vec_previous = create_is_vec(is_previous);
-      auto ctx_previous = scatter_create(vec_previous, d, is_previous);
-      auto sol_vecs = solve_get_results(is_previous);
-      inital_solutions.resize(sol_vecs.size());
-      int n = 0;
-      for (auto v : sol_vecs) {
-        CHKERR VecScatterBegin(ctx_previous, v, d, INSERT_VALUES,
-                               SCATTER_FORWARD);
-        CHKERR VecScatterEnd(ctx_previous, v, d, INSERT_VALUES,
-                             SCATTER_FORWARD);
-        CHKERR VecDuplicate(vec_current, &inital_solutions[n]);
-        CHKERR VecScatterBegin(ctx_current, d, inital_solutions[n],
-                               INSERT_VALUES, SCATTER_REVERSE);
-        CHKERR VecScatterEnd(ctx_current, d, inital_solutions[n], INSERT_VALUES,
-                             SCATTER_REVERSE);
-        ++n;
-      }
-    }
-
-    // Create eigensolver context
-    ePS = create_EPS(mField.get_comm());
-
-    auto sub_M = create_sub_matrix(is, M);
-    auto sub_K = create_sub_matrix(is, K);
-
-    // Set operators. In this case, it is a generalized eigenvalue problem
-    CHKERR EPSSetOperators(ePS, sub_K, sub_M);
-
+  auto setup_eps = [&]() {
+    MoFEMFunctionBegin;
     CHKERR EPSSetProblemType(ePS, EPS_GHEP);
     CHKERR EPSSetWhichEigenpairs(ePS, EPS_SMALLEST_MAGNITUDE);
-
-    // Set solver parameters at runtime
     CHKERR EPSSetFromOptions(ePS);
+    MoFEMFunctionReturn(0);
+  };
 
-    if (oo > 1) {
-      MOFEM_LOG("EXAMPLE", Sev::noisy) << "Set initial solution";
-      CHKERR EPSSetInitialSpace(ePS, inital_solutions.size(),
-                                &inital_solutions[0]);
-    }
-    for (auto v : inital_solutions) {
-      CHKERR VecDestroy(&v);
-    }
+  // Create eigensolver context
+  ePS = create_eps(mField.get_comm());
+  CHKERR EPSSetOperators(ePS, K, M);
 
-    // Deflate vectors
-    std::array<Vec, 6> deflate_vectors;
-    for (int n = 0; n != 6; ++n) {
-      CHKERR VecDuplicate(vec_current, &deflate_vectors[n]);
-      CHKERR VecScatterBegin(ctx_current, rigidBodyMotion[n],
-                             deflate_vectors[n], INSERT_VALUES,
-                             SCATTER_REVERSE);
-      CHKERR VecScatterEnd(ctx_current, rigidBodyMotion[n], deflate_vectors[n],
-                           INSERT_VALUES, SCATTER_REVERSE);
-    }
-    CHKERR EPSSetDeflationSpace(ePS, 6, &deflate_vectors[0]);
-    for (int n = 0; n != 6; ++n) {
-      CHKERR VecDestroy(&deflate_vectors[n]);
-    }
+  // Setup eps 
+  CHKERR setup_eps();
 
-    // Optional: Get some information from the solver and display it
-    CHKERR EPSSolve(ePS);
+  // Deflate vectors
+  CHKERR deflate_vectors(); 
 
-    // Print info
-    CHKERR print_info();
-  }
+  // Solve problem
+  CHKERR EPSSolve(ePS);
+
+  // Print info
+  CHKERR print_info();
 
   MoFEMFunctionReturn(0);
 }
