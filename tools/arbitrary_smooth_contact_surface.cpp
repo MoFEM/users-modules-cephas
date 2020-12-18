@@ -145,7 +145,7 @@ double cnVaule;
       double tag_val[rank];
       CHKERR mField.get_moab().tag_get_data(tHtAg, &ent, 1, tag_val);
       dofPtr->getFieldData() = tag_val[dofPtr->getDofCoeffIdx()];
-      cerr << "tag_passing!   " << dofPtr->getFieldData() <<"\n";
+      // cerr << "tag_passing!   " << dofPtr->getFieldData() <<"\n";
       MoFEMFunctionReturn(0);
     }
 
@@ -1028,19 +1028,15 @@ struct OpGetTangentForSmoothSurfSide : public FaceEleOnSideOp {
 
         switch (weightType) {
         case W_ALPHA_PHI_0:
-        cerr << "1\n";
           weight_v = sin_v * alpha_v / sqrt(t_edge_c(i) * t_edge_c(i));
           break;
         case W_1_A0:
-        cerr << "2\n";
           weight_v = pow(sin_v / sqrt(t_edge_c(i) * t_edge_c(i)), 2);
           break;
         case W_SINA_BC:
-        cerr << "3\n";
           weight_v = sin_v / denom_v;
           break;
         case W_1_A_DELTA:
-        cerr << "4\n";
           weight_v = 0.5 / area_m;
           break;
         case W_1_PHI_0:
@@ -3352,7 +3348,7 @@ Range edge_elements;
         int *error_jump_ptr;
         CHKERR m_field.get_moab().tag_get_by_ptr(
             th_nb_ver, &*vit, 1, (const void **)&error_jump_ptr);
-        cerr << tag_name.c_str()<<"  " << *error_jump_ptr << "\n";
+        // cerr << tag_name.c_str()<<"  " << *error_jump_ptr << "\n";
       }
       MoFEMFunctionReturn(0);
     };
@@ -3479,10 +3475,18 @@ auto normalise_vectors = [&](std::vector<EntityHandle> range_of_ents, std::strin
             }
             for (int ii = 0; ii != 3; ++ii){
               values_normals[ii] = container[ii]/sqrt(mag_squared);
-              cerr << tag_name.c_str() << "  "  << values_normals[ii] << "\n";
+              // cerr << tag_name.c_str() << "  "  << values_normals[ii] << "\n";
             }
-            // return m_field.get_moab().tag_set_data(th_nb_ver, &mapGaussPts[gg], 1,
-            //                          &*vec.data().begin());
+
+            // FTensor::Tensor1<double, 3> normalised_vec;
+            //    CHKERR m_field.get_moab().tag_get_by_ptr(
+            // th_nb_ver, &ent, 1, (const void **)&normalised_vec);
+            // // normalised_vec.normalize();
+            // cerr << tag_name.c_str() << "  "  << normalised_vec << "\n";
+          //  CHKERR m_field.get_moab().tag_set_data(th_nb_ver, &ent, 1,
+          //                            &normalised_vec(0));
+            CHKERR m_field.get_moab().tag_set_data(th_nb_ver, &ent, 1,
+                                                   &values_normals);
       }
       MoFEMFunctionReturn(0);
     };
@@ -3503,20 +3507,20 @@ auto normalise_vectors = [&](std::vector<EntityHandle> range_of_ents, std::strin
       //   CHKERR m_field.loop_dofs("NORMAL_FIELD", ent_method);
       // }
 
-      // {
-      //   string out_file_name;
-      //   std::ostringstream stm;
-      //   stm << "out_various_normals"
-      //       << ".h5m";
-      //   out_file_name = stm.str();
-      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
-      //                      out_file_name.c_str());
-      //   CHKERR m_field.get_moab().write_file(
-      //       out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
-      // }
+      {
+        string out_file_name;
+        std::ostringstream stm;
+        stm << "out_various_normals"
+            << ".h5m";
+        out_file_name = stm.str();
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                           out_file_name.c_str());
+        CHKERR m_field.get_moab().write_file(
+            out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+      }
 
-      CHKERR m_field.get_moab().write_mesh("various_normal_vecs.vtk", &meshset_fixed_vertices,
-                             1);
+      // CHKERR m_field.get_moab().write_mesh("various_normal_vecs.vtk", &meshset_fixed_vertices,
+      //                        1);
 
       // CHKERR m_field.loop_dofs("NORMAL_FIELD", edge_method);
 
