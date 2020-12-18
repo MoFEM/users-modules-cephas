@@ -26,12 +26,23 @@ using namespace MoFEM;
 static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
+// using FaceEleOnSide = MoFEM::FaceElementForcesAndSourcesCoreOnSideSwitch<
+//         FaceElementForcesAndSourcesCore::NO_HO_GEOMETRY>;
+
+using FaceEleOnSide = MoFEM::FaceElementForcesAndSourcesCoreOnSideSwitch<0>;
+
+// using FaceEleOnSide = MoFEM::FaceElementForcesAndSourcesCoreOnSideBase;
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using FaceEle = FaceElementForcesAndSourcesCore;
 using FaceEleOp = FaceEle::UserDataOperator;
 using VolumeEle = VolumeElementForcesAndSourcesCore;
 using VolumeEleOp = VolumeEle::UserDataOperator;
+using FaceEleOnSideOp = FaceEleOnSide::UserDataOperator;
+// using 	EdgeEle = MoFEM::EdgeElementForcesAndSourcesCoreSwitch< EdgeElementForcesAndSourcesCore::NO_HO_GEOMETRY >;
+using EdgeEle = MoFEM::EdgeElementForcesAndSourcesCore;
+
+using EdgeEleOp = EdgeEle::UserDataOperator;
 
 struct ArbitrarySmoothingProblem {
 
@@ -298,6 +309,10 @@ for (int dd = 0; dd != 3; ++dd) {
 
     boost::shared_ptr<VectorDouble> areaNL;
 
+    boost::shared_ptr<MatrixDouble> nOrmalOtherSide;
+    boost::shared_ptr<MatrixDouble> tAngent1OtherSide;
+    boost::shared_ptr<MatrixDouble> tAngent2OtherSide;
+
     CommonSurfaceSmoothingElement(MoFEM::Interface &m_field) : mField(m_field) {
       nOrmal = boost::make_shared<MatrixDouble>();
       tAngent1 = boost::make_shared<MatrixDouble>();
@@ -307,6 +322,9 @@ for (int dd = 0; dd != 3; ++dd) {
       hoGaussPointLocation = boost::make_shared<MatrixDouble>();
       nOrmalField = boost::make_shared<MatrixDouble>();
       areaNL = boost::make_shared<VectorDouble>();
+      nOrmalOtherSide = boost::make_shared<MatrixDouble>();
+      tAngent1OtherSide = boost::make_shared<MatrixDouble>();
+      tAngent2OtherSide = boost::make_shared<MatrixDouble>();
     }
 
   private:
@@ -372,6 +390,206 @@ for (int dd = 0; dd != 3; ++dd) {
     MoFEMFunctionReturn(0);
   }
 
+  enum WeightForNormals {
+    W_ALPHA_PHI_0 = 1,
+    W_1_A0 = 2,
+    W_SINA_BC = 3,
+    W_1_A_DELTA = 4,
+    W_1_PHI_0 = 5,
+    W_A = 6,
+    W_A_A0 = 7,
+    W_A_DELTA = 8,
+    W_1 = 9,
+    W_1_BC = 10,
+    W_1_SQRT_BC = 11,
+    LAST_WEIGHT
+  };
+
+
+struct OpPostProcForNormals : public FaceEleOp {
+
+  OpPostProcForNormals(
+    const std::string field_name, moab::Interface &post_proc_mesh,
+    std::vector<EntityHandle> &map_gauss_pts,
+    boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOp(field_name, UserDataOperator::OPCOL), postProcMesh(post_proc_mesh),
+        mapGaussPts(map_gauss_pts), commonSurfaceSmoothingElement(common_data_smoothing) {
+  // Opetor is only executed for vertices
+  // std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+}
+
+MoFEMErrorCode doWork(int side, EntityType type,
+                                              EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
+
+  auto get_tag = [&](const std::string name) {
+    std::array<double, 3> def;
+    std::fill(def.begin(), def.end(), 0);
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def.data());
+    return th;
+  };
+
+  VectorDouble3 vec(3);
+
+  auto set_vector_values = [&](auto &t) -> VectorDouble3 & {
+    vec.clear();
+      for (size_t c = 0; c != 3; ++c)
+        vec(c) = t(c);
+    return vec;
+  };
+
+  auto set_tag = [&](auto th, auto gg, VectorDouble3 &vec) {
+    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
+                                     &*vec.data().begin());
+  };
+
+  auto get_tag_scalar = [&](const std::string name) {
+    double def_VAL = 0;
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), 1, MB_TYPE_INTEGER, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE, &def_VAL);
+    return th;
+  };
+
+  auto th_on_mesh_nodes = get_tag("NORMAL_MESH_NODES");
+  auto th_normal_imposed = get_tag("NORMAL_IMPOSED");
+  auto th_diff = get_tag_scalar("DIFF_VECTOR_MAG");
+
+  size_t nb_gauss_pts = data.getN().size1();
+  auto t_n = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmal);
+  auto t_n_field =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalField);
+    FTensor::Index<'i', 3> i;
+    FTensor::Tensor1<double, 3> diff_vector;
+    
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      double mag = sqrt(t_n(i)*t_n(i));
+      t_n(i) /= mag;
+      mag = sqrt(t_n(i)*t_n(i));
+      diff_vector(i) = t_n(i) - t_n_field(i);
+      double diff_mag = sqrt(diff_vector(i) * diff_vector(i));
+
+    // CHKERR postProcMesh.tag_set_data(th_on_mesh_nodes, &mapGaussPts[gg], 1,
+    //                                  &t_n(0));
+    // CHKERR postProcMesh.tag_set_data(th_normal_imposed, &mapGaussPts[gg], 1,
+    //                                  &t_n_field(0));
+    CHKERR set_tag(th_on_mesh_nodes, gg, set_vector_values(t_n));
+    CHKERR set_tag(th_normal_imposed, gg, set_vector_values(t_n_field));
+    CHKERR postProcMesh.tag_set_data(th_diff, &mapGaussPts[gg], 1, &diff_mag);
+    
+    ++t_n;
+    ++t_n_field;
+    }
+   
+  MoFEMFunctionReturn(0);
+}
+private: 
+  moab::Interface &postProcMesh;
+  std::vector<EntityHandle> &mapGaussPts;
+  boost::shared_ptr<CommonSurfaceSmoothingElement>
+      commonSurfaceSmoothingElement;
+};
+
+struct OpPostProcForNormalsJumps : public EdgeEleOp {
+
+  OpPostProcForNormalsJumps(
+      const std::string field_name, moab::Interface &post_proc_mesh,
+      std::vector<EntityHandle> &map_gauss_pts,
+      boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing,
+      const std::string side_ele_name, boost::shared_ptr<FaceEleOnSide> dace_on_side_ele_ptr)
+      : EdgeEleOp(field_name, UserDataOperator::OPCOL),
+        postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
+        commonSurfaceSmoothingElement(common_data_smoothing),  sideFeName(side_ele_name), sideFe(dace_on_side_ele_ptr) {
+    // Opetor is only executed for vertices
+    // std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
+
+MoFEMErrorCode doWork(int side, EntityType type,
+                                              EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (type != MBVERTEX)
+    PetscFunctionReturn(0);
+
+  CHKERR loopSideFaces(sideFeName.c_str(), *sideFe);
+
+  auto get_tag = [&](const std::string name) {
+    std::array<double, 3> def;
+    std::fill(def.begin(), def.end(), 0);
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def.data());
+    return th;
+  };
+
+  VectorDouble3 vec(3);
+
+  auto set_vector_values = [&](auto &t) -> VectorDouble3 & {
+    vec.clear();
+      for (size_t c = 0; c != 3; ++c)
+        vec(c) = t(c);
+    return vec;
+  };
+
+  auto set_tag = [&](auto th, auto gg, VectorDouble3 &vec) {
+    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
+                                     &*vec.data().begin());
+  };
+
+  auto th_on_mesh_jump = get_tag("NORMAL_JUMP");
+  auto th_analytical= get_tag("ANALYTICAL_NORMAL");
+  
+  size_t nb_gauss_pts = data.getN().size1();
+  auto t_n = getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmal);
+  auto t_n_other_side =
+          getFTensor1FromMat<3>(*commonSurfaceSmoothingElement->nOrmalOtherSide);
+    FTensor::Index<'i', 3> i;
+    FTensor::Tensor1<double, 3> diff_vector;
+    FTensor::Tensor1<double, 3> t_theoretical_normal;
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      diff_vector(i) = t_n(i) - t_n_other_side(i);
+
+    double R1 = 1.618033989;
+    double x = getCoordsAtGaussPts()(gg, 0);
+    double y = getCoordsAtGaussPts()(gg, 1);
+    double z = getCoordsAtGaussPts()(gg, 2);
+    
+    const double prod1 = sqrt(pow(x, 2) + pow(y, 2));
+    t_theoretical_normal(0) = (2 * x * (-R1 + prod1)) / prod1;
+    t_theoretical_normal(1) = (2 * y * (-R1 + prod1)) / prod1;
+    t_theoretical_normal(2) =  2 * z;
+    double mag_2 = sqrt(t_theoretical_normal(i) * t_theoretical_normal(i));
+    t_theoretical_normal(i) /= mag_2;
+    
+    CHKERR postProcMesh.tag_set_data(th_analytical, &mapGaussPts[gg], 1,
+                                     &t_theoretical_normal);
+
+      CHKERR postProcMesh.tag_set_data(th_on_mesh_jump, &mapGaussPts[gg], 1,
+                                       &diff_vector(0));
+      ++t_n;
+      ++t_n_other_side;
+    }
+   
+  MoFEMFunctionReturn(0);
+}
+private: 
+  moab::Interface &postProcMesh;
+  std::vector<EntityHandle> &mapGaussPts;
+  boost::shared_ptr<CommonSurfaceSmoothingElement>
+      commonSurfaceSmoothingElement;
+  boost::shared_ptr<FaceEleOnSide>
+        sideFe;
+    std::string sideFeName;
+};
+
+
   /// \brief Computes, for reference configuration, normal to slave face that is
   /// common to all gauss points
   struct OpGetTangentForSmoothSurf : public FaceEleOp {
@@ -381,7 +599,7 @@ for (int dd = 0; dd != 3; ++dd) {
     OpGetTangentForSmoothSurf(
         const string field_name,
         boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing, bool check_dofs = false)
-        : FaceEleOp(field_name, UserDataOperator::OPCOL),
+        : FaceEleOp(field_name, UserDataOperator::OPCOL), 
           commonSurfaceSmoothingElement(common_data_smoothing), checkDofs(check_dofs) {
           }
 
@@ -438,6 +656,91 @@ for (int dd = 0; dd != 3; ++dd) {
         ++t_1;
         ++t_2;
         ++t_ho_pos;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+    private:
+    bool checkDofs;
+  };
+
+
+
+struct OpGetTangentForSmoothSurfSide : public FaceEleOnSideOp {
+
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    OpGetTangentForSmoothSurfSide(
+        const string field_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing, bool check_dofs = false)
+        : FaceEleOnSideOp(field_name, UserDataOperator::OPCOL), 
+          commonSurfaceSmoothingElement(common_data_smoothing), checkDofs(check_dofs) {
+          }
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+      
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
+
+      int ngp = data.getN().size1();
+
+      unsigned int nb_dofs = data.getFieldData().size() / 3;
+      FTensor::Index<'i', 3> i;
+      if (type == MBVERTEX) {
+        if (getFEMethod()->nInTheLoop == 0){
+        commonSurfaceSmoothingElement->tAngent1->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAngent1->clear();
+        commonSurfaceSmoothingElement->tAngent2->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAngent2->clear();
+        }
+        else{
+        commonSurfaceSmoothingElement->tAngent1OtherSide->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAngent1OtherSide->clear();
+        commonSurfaceSmoothingElement->tAngent2OtherSide->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->tAngent2OtherSide->clear();
+        }
+      }
+
+      auto get_t_1 = [&]() {
+        if (getFEMethod()->nInTheLoop == 0)
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent1);
+        else
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent1OtherSide);
+      };
+
+      auto get_t_2 = [&]() {
+        if (getFEMethod()->nInTheLoop == 0)
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent2);
+        else
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent2OtherSide);
+      };
+      auto t_1 = get_t_1();
+      auto t_2 = get_t_2();
+     
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+        auto t_N = data.getFTensor1DiffN<2>(gg, 0);
+        // auto t_dof = data.getFTensor1FieldData<3>();
+        FTensor::Tensor1<double *, 3> t_dof(
+              &data.getFieldData()[0], &data.getFieldData()[1], &data.getFieldData()[2], 3);
+        FTensor::Tensor0<double *> t_base(&data.getN()(gg, 0));
+
+        for (unsigned int dd = 0; dd != nb_dofs; ++dd) {
+
+          t_1(i) += t_dof(i) * t_N(0);
+          t_2(i) += t_dof(i) * t_N(1);
+          
+      
+          ++t_dof;
+          ++t_N;
+          ++t_base;
+        }
+        ++t_1;
+        ++t_2;
       }
 
       MoFEMFunctionReturn(0);
@@ -545,15 +848,94 @@ for (int dd = 0; dd != 3; ++dd) {
     }
   };
 
+    struct OpGetNormalForSmoothSurfSide : public FaceEleOnSideOp {
+
+    boost::shared_ptr<CommonSurfaceSmoothingElement>
+        commonSurfaceSmoothingElement;
+    OpGetNormalForSmoothSurfSide(
+        const string field_name,
+        boost::shared_ptr<CommonSurfaceSmoothingElement> common_data_smoothing)
+        : FaceEleOnSideOp(field_name, UserDataOperator::OPCOL),
+          commonSurfaceSmoothingElement(common_data_smoothing) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+      MoFEMFunctionBegin;
+
+      if (data.getFieldData().size() == 0)
+        PetscFunctionReturn(0);
+
+      if (type != MBVERTEX)
+        PetscFunctionReturn(0);
+
+      int ngp = data.getN().size1();
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+
+      if (getFEMethod()->nInTheLoop == 0) {
+        commonSurfaceSmoothingElement->nOrmal->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->nOrmal->clear();
+      } else {
+        commonSurfaceSmoothingElement->nOrmalOtherSide->resize(3, ngp, false);
+        commonSurfaceSmoothingElement->nOrmalOtherSide->clear();
+      }
+
+      auto get_t_1 = [&]() {
+        if (getFEMethod()->nInTheLoop == 0)
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent1);
+        else
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent1OtherSide);
+      };
+
+      auto get_t_2 = [&]() {
+        if (getFEMethod()->nInTheLoop == 0)
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent2);
+        else
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->tAngent2OtherSide);
+      };
+
+      auto get_n = [&]() {
+        if (getFEMethod()->nInTheLoop == 0)
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->nOrmal);
+        else
+          return getFTensor1FromMat<3>(
+              *commonSurfaceSmoothingElement->nOrmalOtherSide);
+      };
+
+      auto t_1 = get_t_1();
+      auto t_2 = get_t_2();
+
+      auto t_n = get_n();
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+        t_n(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
+        double mag = sqrt(t_n(i) * t_n(i)); 
+        t_n(i)/= mag;
+        ++t_n;
+        ++t_1;
+        ++t_2;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
     struct OpCalcMeanNormal : public FaceEleOp {
 
     boost::shared_ptr<CommonSurfaceSmoothingElement>
         commonSurfaceSmoothingElement;
     OpCalcMeanNormal(const string field_name, const string tag_name_nb_tris,
-                     const string tag_name_ave_norm, EntityType ent_type, MoFEM::Interface &m_field)
+                     const string tag_name_ave_norm, EntityType ent_type,
+                     MoFEM::Interface &m_field,
+                     WeightForNormals weight_type = LAST_WEIGHT)
         : FaceEleOp(field_name, UserDataOperator::OPCOL),
-          tagNbTris(tag_name_nb_tris), tagAveNormal(tag_name_ave_norm), entType(ent_type),
-          mField(m_field) {}
+          tagNbTris(tag_name_nb_tris), tagAveNormal(tag_name_ave_norm),
+          entType(ent_type), mField(m_field), weightType(weight_type) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
       MoFEMFunctionBegin;
@@ -631,6 +1013,7 @@ for (int dd = 0; dd != 3; ++dd) {
       VectorDouble3 v_weights(3);
       
       double alpha_v, sin_v, denom_v, weight_v;
+      double weight_for_normals;
 
       auto get_weight = [&](FTensor::Tensor1<double, 3> t_edge_a,
                             FTensor::Tensor1<double, 3> t_edge_b,
@@ -641,7 +1024,54 @@ for (int dd = 0; dd != 3; ++dd) {
         alpha_v = std::acos(t_edge_a(i) * t_edge_b(i) / denom_v);
         // cerr << "sin_v  " << sqrt(t_edge_c(i) * t_edge_c(i)) <<"\n";
         // weight_v = pow(sin_v / sqrt(t_edge_c(i) * t_edge_c(i)), 2) ;//* alpha_v;
-        weight_v = sin_v / denom_v;
+        // weight_v = sin_v / denom_v;
+
+        switch (weightType) {
+        case W_ALPHA_PHI_0:
+        cerr << "1\n";
+          weight_v = sin_v * alpha_v / sqrt(t_edge_c(i) * t_edge_c(i));
+          break;
+        case W_1_A0:
+        cerr << "2\n";
+          weight_v = pow(sin_v / sqrt(t_edge_c(i) * t_edge_c(i)), 2);
+          break;
+        case W_SINA_BC:
+        cerr << "3\n";
+          weight_v = sin_v / denom_v;
+          break;
+        case W_1_A_DELTA:
+        cerr << "4\n";
+          weight_v = 0.5 / area_m;
+          break;
+        case W_1_PHI_0:
+          weight_v = sin_v / sqrt(t_edge_c(i) * t_edge_c(i));
+          break;
+        case W_A:
+          weight_v = alpha_v;
+          break;
+        case W_A_A0:
+          weight_v = pow(sin_v / sqrt(t_edge_c(i) * t_edge_c(i)), 2) * alpha_v;
+          break;
+        case W_A_DELTA:
+          weight_v = 2 * area_m;
+          break;
+        case W_1:
+          weight_v = 1.;
+          break;
+        case W_1_BC:
+          weight_v = 1. / denom_v;
+          break;
+        case W_1_SQRT_BC:
+          weight_v = 1. / sqrt(denom_v);
+          break;
+        case LAST_WEIGHT:
+          weight_v = 0.;
+          break;
+        default:
+          weight_v = -1.;
+          break;
+        }
+
         return weight_v;
       };
 
@@ -662,13 +1092,15 @@ for (int dd = 0; dd != 3; ++dd) {
       v_weights(2) = get_weight(t_edge_a, t_edge_b, t_edge_c);
 
       // cerr << "v_weights " << v_weights << "\n";
-
+      if (v_weights(0) < 0.)
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                 "Unknown weight type number %d", weightType);
 
       Tag th_nb_tri;
       CHKERR mField.get_moab().tag_get_handle(tagNbTris.c_str(), th_nb_tri);
       Tag th_ave_normal;
       CHKERR mField.get_moab().tag_get_handle(tagAveNormal.c_str(), th_ave_normal);
-
+      
       for (vector<EntityHandle>::iterator vit = ents_for_tags.begin();
            vit != ents_for_tags.end(); ++vit) {
         int *num_nodes;
@@ -681,9 +1113,10 @@ for (int dd = 0; dd != 3; ++dd) {
 
         for (int ii = 0; ii != 3; ++ii){
           
+          if(weightType == LAST_WEIGHT)
           ave_normal[ii] += n_unit[ii] / (double)(*num_nodes);
-
-          // ave_normal[ii] += n_unit[ii] * v_weights(ii);
+          else 
+          ave_normal[ii] += n_unit[ii] * v_weights(ii);
         }
 
         // cerr << "ave_normal  " << ave_normal[0] << "  " << ave_normal[1] << "  "
@@ -699,6 +1132,7 @@ for (int dd = 0; dd != 3; ++dd) {
     const string tagAveNormal;
     EntityType entType;
     MoFEM::Interface &mField;
+    WeightForNormals weightType;
   };
 
 
@@ -2572,6 +3006,8 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
                                    1);
 
 
+Range edge_elements;
+
     if (!slave_tris.empty()) {
       CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI,
                                                "MESH_NODE_POSITIONS");
@@ -2599,6 +3035,7 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
       CHKERR m_field.set_field_order(slave_tris, "LAGMULT",  1);
       CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT",  1);
       CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT",  1);
+      edge_elements.merge(edges_smoothed);
     }
     if (!master_tris.empty()) {
       CHKERR m_field.add_ents_to_field_by_type(master_tris, MBTRI,
@@ -2625,7 +3062,7 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
       CHKERR m_field.set_field_order(master_tris, "LAGMULT", 1);
       CHKERR m_field.set_field_order(edges_smoothed, "LAGMULT", 1);
       CHKERR m_field.set_field_order(vertices_smoothed, "LAGMULT", 1);
-
+      edge_elements.merge(edges_smoothed);
       // const EntityHandle *conn;
       // int num_nodes;
       // CHKERR m_field.get_moab().get_connectivity(vertices_smoothed[0], conn, num_nodes, true);
@@ -2634,6 +3071,18 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
 
     // build field
     CHKERR m_field.build_fields();
+
+      CHKERR m_field.add_finite_element("EDGE_JUMP_ELE", MF_ZERO);
+      CHKERR m_field.modify_finite_element_add_field_row("EDGE_JUMP_ELE",
+                                                         "MESH_NODE_POSITIONS");
+      CHKERR m_field.modify_finite_element_add_field_col("EDGE_JUMP_ELE",
+                                                         "MESH_NODE_POSITIONS");
+      CHKERR m_field.modify_finite_element_add_field_data("EDGE_JUMP_ELE",
+                                                          "MESH_NODE_POSITIONS");
+
+      CHKERR m_field.add_ents_to_finite_element_by_type(edge_elements, MBEDGE,
+                                                        "EDGE_JUMP_ELE");
+      CHKERR m_field.build_finite_elements("EDGE_JUMP_ELE", &edge_elements);
 
     // Projection on "X" field
     {
@@ -2738,6 +3187,7 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
     // add elements to dm
     CHKERR DMMoFEMAddElement(dm, "SURFACE_SMOOTHING_ELEM");
     CHKERR DMMoFEMAddElement(dm, "VOLUME_SMOOTHING_ELEM");
+    CHKERR DMMoFEMAddElement(dm, "EDGE_JUMP_ELE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
     CHKERR DMSetUp(dm);
 
@@ -2745,6 +3195,9 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
     const int lo_coeff = 0;
     const int hi_coeff = 3;
     CHKERR m_field.getInterface<CommInterface>()->synchroniseEntities(fixed_vertex);
+    CHKERR m_field.getInterface<CommInterface>()->synchroniseEntities(all_tris_for_smoothing);
+    CHKERR m_field.getInterface<CommInterface>()->synchroniseEntities(edge_elements);
+    
     CHKERR prb_mng->removeDofsOnEntities("SURFACE_SMOOTHING_PROB", "MESH_NODE_POSITIONS", fixed_vertex,
                                          lo_coeff, hi_coeff);
 
@@ -2865,6 +3318,16 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
           MoFEMFunctionReturn(0);
         };
 
+    auto get_tag = [&](const std::string name) {
+      std::array<double, 3> def;
+      std::fill(def.begin(), def.end(), 0);
+      Tag th;
+      CHKERR m_field.get_moab().tag_get_handle(name.c_str(), 3, MB_TYPE_DOUBLE, th,
+                                         MB_TAG_CREAT | MB_TAG_SPARSE,
+                                         def.data());
+      return th;
+    };
+
     double def_val_vec[] = {0, 0, 0};
     Tag th_normal_vec;
     CHKERR m_field.get_moab().tag_get_handle(
@@ -2939,6 +3402,58 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
         new ArbitrarySmoothingProblem::OpCalcMeanNormal("MESH_NODE_POSITIONS",
                                       "NB_TRIS", "AVE_N_VEC", MBVERTEX, m_field));
 
+
+    // auto th_w_alpha_phi_0 = get_tag("W_ALPHA_PHI_0");
+    // auto th_w_1_a0 = get_tag("W_1_A0");
+    // auto th_w_sina_bc = get_tag("W_SINA_BC");
+    // auto th_w_1_a_delta = get_tag("W_1_A_DELTA");
+    // auto th_w_1_phi_0 = get_tag("W_1_PHI_0");
+    // auto th_w_a = get_tag("W_A");
+    // auto th_w_a_a0 = get_tag("W_A_A0");
+    // auto th_w_a_delta = get_tag("W_A_DELTA");
+    // auto th_w_1 = get_tag("W_1");
+    // auto th_w_1_bc = get_tag("W_1_BC");
+    // auto th_w_1_sqrt_bc = get_tag("W_1_SQRT_BC");
+
+    std::vector<std::string> vetor_weighted_normals_strings;
+    vetor_weighted_normals_strings.push_back("W_ALPHA_PHI_0");
+    vetor_weighted_normals_strings.push_back("W_1_A0");
+    vetor_weighted_normals_strings.push_back("W_SINA_BC");
+    vetor_weighted_normals_strings.push_back("W_1_A_DELTA");
+    vetor_weighted_normals_strings.push_back("W_1_PHI_0");
+    vetor_weighted_normals_strings.push_back("W_A");
+    vetor_weighted_normals_strings.push_back("W_A_A0");
+    vetor_weighted_normals_strings.push_back("W_A_DELTA");
+    vetor_weighted_normals_strings.push_back("W_1");
+    vetor_weighted_normals_strings.push_back("W_1_BC");
+    vetor_weighted_normals_strings.push_back("W_1_SQRT_BC");
+
+    std::vector<ArbitrarySmoothingProblem::WeightForNormals> enum_for_weights;
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_ALPHA_PHI_0);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_1_A0);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_SINA_BC);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_1_A_DELTA);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_1_PHI_0);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_A);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_A_A0);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_A_DELTA);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_1);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_1_BC);
+    enum_for_weights.push_back(ArbitrarySmoothingProblem::W_1_SQRT_BC);
+
+    std::vector<Tag> tags_w_normals;
+    std::vector<ArbitrarySmoothingProblem::WeightForNormals>::iterator it_enum_weighted_normals = enum_for_weights.begin();
+    for (auto it_v : vetor_weighted_normals_strings) {
+      tags_w_normals.push_back(get_tag(it_v.c_str()));
+      // CHKERR pass_number_of_adjacent_tris(nodes_for_tags, get_tag(it_v.c_str()), it_v.c_str());
+
+      fe_pre_proc->getOpPtrVector().push_back(
+          new ArbitrarySmoothingProblem::OpCalcMeanNormal(
+              "MESH_NODE_POSITIONS", "NB_TRIS", it_v, MBVERTEX, m_field,
+              *it_enum_weighted_normals));
+              ++it_enum_weighted_normals;
+    }
+
       // fe_pre_proc->getOpPtrVector().push_back(
       //     new ArbitrarySmoothingProblem::OpCalcMeanNormal(
       //         "MESH_NODE_POSITIONS", "NB_TRIS_EDGES", "AVE_N_VEC_EDGES", MBEDGE,
@@ -2947,6 +3462,34 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
       CHKERR DMoFEMLoopFiniteElements(dm, "SURFACE_SMOOTHING_ELEM",
                                       fe_pre_proc);
 
+
+auto normalise_vectors = [&](std::vector<EntityHandle> range_of_ents, std::string tag_name) {
+      MoFEMFunctionBegin;
+      Tag th_nb_ver;
+        CHKERR m_field.get_moab().tag_get_handle(tag_name.c_str(), th_nb_ver);
+      for( auto &ent : range_of_ents) {
+        double *values_normals;
+        CHKERR m_field.get_moab().tag_get_by_ptr(
+            th_nb_ver, &ent, 1, (const void **)&values_normals);
+            double container[3];
+            double mag_squared = 0;
+            for (int ii = 0; ii != 3; ++ii){
+              container[ii] = values_normals[ii];
+              mag_squared += values_normals[ii] * values_normals[ii];
+            }
+            for (int ii = 0; ii != 3; ++ii){
+              values_normals[ii] = container[ii]/sqrt(mag_squared);
+              cerr << tag_name.c_str() << "  "  << values_normals[ii] << "\n";
+            }
+            // return m_field.get_moab().tag_set_data(th_nb_ver, &mapGaussPts[gg], 1,
+            //                          &*vec.data().begin());
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+  for (auto it_v : vetor_weighted_normals_strings) {
+    CHKERR normalise_vectors(nodes_for_tags, it_v);
+  }
       ArbitrarySmoothingProblem::SaveVertexDofOnTag ent_method(m_field,
                                                                "AVE_N_VEC");
       ArbitrarySmoothingProblem::ResolveAndSaveForEdges2  edge_method(
@@ -2954,6 +3497,27 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
           "AVE_N_VEC", "AVE_N_VEC_EDGES");
 
       CHKERR m_field.loop_dofs("NORMAL_FIELD", ent_method);
+      
+      // for (auto it_v : vetor_weighted_normals_strings) {
+      //   ArbitrarySmoothingProblem::SaveVertexDofOnTag ent_method(m_field, it_v);
+      //   CHKERR m_field.loop_dofs("NORMAL_FIELD", ent_method);
+      // }
+
+      // {
+      //   string out_file_name;
+      //   std::ostringstream stm;
+      //   stm << "out_various_normals"
+      //       << ".h5m";
+      //   out_file_name = stm.str();
+      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+      //                      out_file_name.c_str());
+      //   CHKERR m_field.get_moab().write_file(
+      //       out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+      // }
+
+      CHKERR m_field.get_moab().write_mesh("various_normal_vecs.vtk", &meshset_fixed_vertices,
+                             1);
+
       // CHKERR m_field.loop_dofs("NORMAL_FIELD", edge_method);
 
       CHKERR DMMoFEMSNESSetFunction(
@@ -3020,18 +3584,54 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
     PetscInt n = 1;
     VecSetSizes(smooth_problem->volumeVec,PETSC_DECIDE,n);
     VecSetUp(smooth_problem->volumeVec);
-    CHKERR DMoFEMLoopFiniteElements(dm, "VOLUME_SMOOTHING_ELEM",
-                                      get_smooth_volume_element_operators(smooth_problem, make_arbitrary_smooth_element_volume));
+    // CHKERR DMoFEMLoopFiniteElements(dm, "VOLUME_SMOOTHING_ELEM",
+    //                                   get_smooth_volume_element_operators(smooth_problem, make_arbitrary_smooth_element_volume));
 
-    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_contact_ptr(
+    boost::shared_ptr<PostProcFaceOnRefinedMesh> post_proc_smooth_surface_ptr(
         new PostProcFaceOnRefinedMesh(m_field));
-
-    CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
-    CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+    auto common_data_smooth_elements = make_smooth_element_common_data();
+    CHKERR post_proc_smooth_surface_ptr->generateReferenceElementMesh();
+    CHKERR post_proc_smooth_surface_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+    CHKERR post_proc_smooth_surface_ptr->addFieldValuesPostProc("NORMAL_FIELD");
+    post_proc_smooth_surface_ptr->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpGetTangentForSmoothSurf(
+            "MESH_NODE_POSITIONS", common_data_smooth_elements));
+    post_proc_smooth_surface_ptr->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpGetNormalForSmoothSurf(
+            "MESH_NODE_POSITIONS", common_data_smooth_elements));
+    post_proc_smooth_surface_ptr->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpGetNormalField(
+            "NORMAL_FIELD", common_data_smooth_elements));
+    post_proc_smooth_surface_ptr->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpPostProcForNormals(
+            "MESH_NODE_POSITIONS", post_proc_smooth_surface_ptr->postProcMesh,
+            post_proc_smooth_surface_ptr->mapGaussPts, common_data_smooth_elements));
 
     CHKERR DMoFEMLoopFiniteElements(dm, "SURFACE_SMOOTHING_ELEM",
-                                    post_proc_contact_ptr);
+                                    post_proc_smooth_surface_ptr);
 
+    boost::shared_ptr<PostProcEdgeOnRefinedMesh> post_proc_edge(
+        new PostProcEdgeOnRefinedMesh(m_field));
+    CHKERR post_proc_edge->generateReferenceElementMesh();
+    CHKERR post_proc_edge->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+
+    boost::shared_ptr<FaceEleOnSide> post_proc_smooth_surface_for_jump_ptr =
+        boost::make_shared<FaceEleOnSide>(m_field);
+
+    post_proc_smooth_surface_for_jump_ptr->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpGetTangentForSmoothSurfSide(
+            "MESH_NODE_POSITIONS", common_data_smooth_elements));
+    post_proc_smooth_surface_for_jump_ptr->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpGetNormalForSmoothSurfSide(
+            "MESH_NODE_POSITIONS", common_data_smooth_elements));
+    post_proc_edge->getOpPtrVector().push_back(
+        new ArbitrarySmoothingProblem::OpPostProcForNormalsJumps(
+            "MESH_NODE_POSITIONS", post_proc_edge->postProcMesh,
+            post_proc_edge->mapGaussPts, common_data_smooth_elements,
+            "SURFACE_SMOOTHING_ELEM", post_proc_smooth_surface_for_jump_ptr));
+    CHKERR DMoFEMLoopFiniteElements(dm, "EDGE_JUMP_ELE", post_proc_edge);
+
+      
     {
       string out_file_name;
       std::ostringstream stm;
@@ -3040,7 +3640,19 @@ CHKERR m_field.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
       out_file_name = stm.str();
       CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
                          out_file_name.c_str());
-      CHKERR post_proc_contact_ptr->postProcMesh.write_file(
+      CHKERR post_proc_smooth_surface_ptr->postProcMesh.write_file(
+          out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+    }     
+
+    {
+      string out_file_name;
+      std::ostringstream stm;
+      stm << "out_smooth_edge_jumps"
+          << ".h5m";
+      out_file_name = stm.str();
+      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                         out_file_name.c_str());
+      CHKERR post_proc_edge->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }                                      
     // PetscInt nloc;
