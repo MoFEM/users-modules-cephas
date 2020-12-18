@@ -285,7 +285,7 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
-  auto calculate_matrix = [&]() {
+  auto calculate_mass_matrix = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getDomainLhsFE().reset();
     auto get_rho = [](const double, const double, const double) { return rho; };
@@ -304,7 +304,7 @@ MoFEMErrorCode Example::assembleSystem() {
   };
 
   CHKERR calculate_stiffness_matrix();
-  CHKERR calculate_matrix();
+  CHKERR calculate_mass_matrix();
 
   MoFEMFunctionReturn(0);
 }
