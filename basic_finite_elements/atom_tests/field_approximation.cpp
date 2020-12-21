@@ -53,8 +53,16 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
                                  mesh_file_name, 255, &flg);
     if (flg != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+              "*** ERROR -my_file (MESH FILE NEEDED)");
     }
+
+    char petsc_options[] = {"-ksp_monitor"
+                            "-ksp_type fgmres"
+                            "-pc_type bjacobi"
+                            "-ksp_atol 0"
+                            "-ksp_rtol 1e-12"};
+    CHKERR PetscOptionsInsertString(NULL, petsc_options);
 
     const char *option;
     option = "";
