@@ -130,15 +130,15 @@ if(SLEPC_LIBRARY)
 endif(SLEPC_LIBRARY)
 
 if(TETGEN_DIR)
-  include(cmake/FindTetGen.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindTetGen.cmake)
 endif(TETGEN_DIR)
 
 if(ADOL-C_DIR)
-  include(cmake/FindADOL-C.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindADOL-C.cmake)
 endif(ADOL-C_DIR)
 
 if(MED_DIR)
-  include(cmake/FindMed.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindMed.cmake)
 endif(MED_DIR)
 
 set(OPTIONAL_PROJECT_LIBS
