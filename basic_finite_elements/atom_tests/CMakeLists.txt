@@ -256,7 +256,7 @@ add_test(
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
   -DMPI_NP=1
-  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/field_approximation
   -DFILE=elasticity_atom_test_01X_pressure.h5m
   -DLOG1=field_approximation.txt
   -DLOG2=field_approximation.txt

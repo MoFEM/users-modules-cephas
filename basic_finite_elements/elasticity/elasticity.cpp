@@ -1092,13 +1092,16 @@ int main(int argc, char *argv[]) {
 
           // Save data on mesh
           CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+
+
           // Post-process results
           if (is_post_proc_volume == PETSC_TRUE) {
             MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
             CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
             std::ostringstream o1;
             o1 << "out_" << sit->step_number << ".h5m";
-            CHKERR post_proc.writeFile(o1.str().c_str());
+            if (!test_nb)
+              CHKERR post_proc.writeFile(o1.str().c_str());
             MOFEM_LOG("ELASTIC", Sev::inform) << "done ...";
           }
 
@@ -1107,7 +1110,8 @@ int main(int argc, char *argv[]) {
                                           &post_proc_skin);
           std::ostringstream o1_skin;
           o1_skin << "out_skin" << sit->step_number << ".h5m";
-          CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
+          if (!test_nb)
+            CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
           MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done ...";
         }
       } else {
@@ -1163,13 +1167,15 @@ int main(int argc, char *argv[]) {
           MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
           CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
           // Save results to file
-          CHKERR post_proc.writeFile("out.h5m");
+          if (!test_nb)
+            CHKERR post_proc.writeFile("out.h5m");
           MOFEM_LOG("ELASTIC", Sev::inform) << "done";
         }
 
         MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
         CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN", &post_proc_skin);
-        CHKERR post_proc_skin.writeFile("out_skin.h5m");
+        if (!test_nb)
+          CHKERR post_proc_skin.writeFile("out_skin.h5m");
         MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done";
       }
 
@@ -1205,15 +1211,19 @@ int main(int argc, char *argv[]) {
       MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
       if (mesh_has_tets) {
         if (is_post_proc_volume == PETSC_TRUE) {
-          CHKERR post_proc.writeFile("out.h5m");
+          if (!test_nb)
+            CHKERR post_proc.writeFile("out.h5m");
         }
-        CHKERR post_proc_skin.writeFile("out_skin.h5m");
+        if (!test_nb)
+          CHKERR post_proc_skin.writeFile("out_skin.h5m");
       }
       if (mesh_has_prisms) {
-        CHKERR prism_post_proc.writeFile("prism_out.h5m");
+        if (!test_nb)
+          CHKERR prism_post_proc.writeFile("prism_out.h5m");
       }
       if (!edges_in_simple_rod.empty())
-        CHKERR post_proc_edge.writeFile("out_edge.h5m");
+        if (!test_nb)
+          CHKERR post_proc_edge.writeFile("out_edge.h5m");
       MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     }
 
