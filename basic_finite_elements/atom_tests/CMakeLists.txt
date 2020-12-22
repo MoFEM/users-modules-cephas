@@ -30,7 +30,6 @@ target_link_libraries(body_force_atom_test
   ${MoFEM_PROJECT_LIBS})
 add_test(
   basic_body_force_atom_test
-  COMMAND 
   ${CMAKE_COMMAND}
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
@@ -63,7 +62,6 @@ cm_export_file("sphere.h5m" export_atom_tests_basic_fe)
 
 add_test(
   basic_neumann_elasticity_atom_test_01X_pressure
-  COMMAND 
   ${CMAKE_COMMAND}
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
@@ -78,7 +76,6 @@ add_test(
 
 add_test(
   basic_neumann_elasticity_atom_test_01X_pressure
-  COMMAND 
   ${CMAKE_COMMAND}
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
@@ -93,7 +90,6 @@ add_test(
 
 add_test(
   basic_neumann_elasticity_atom_test_01X_pressure
-  COMMAND 
   ${CMAKE_COMMAND}
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
@@ -108,7 +104,6 @@ add_test(
 
 add_test(
   basic_neumann_elasticity_atom_test_01X_pressure
-  COMMAND 
   ${CMAKE_COMMAND}
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
@@ -251,7 +246,6 @@ target_link_libraries(field_approximation
 
 add_test(
   basic_field_approximation_test
-  COMMAND 
   ${CMAKE_COMMAND}
   -DMPI_RUN=${MoFEM_MPI_RUN}
   -DMPI_FLAGS=${MPI_RUN_FLAGS}
