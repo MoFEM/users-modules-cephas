@@ -137,14 +137,17 @@ endif()
 
 if(TETGEN_DIR)
   include(${MoFEM_INSTALL_DIR}/include/cmake/FindTetGen.cmake)
+  message(STATUS "With TetGen")
 endif(TETGEN_DIR)
 
 if(ADOL-C_DIR)
   include(${MoFEM_INSTALL_DIR}/include/cmake/FindADOL-C.cmake)
+  message(STATUS "With Adol-C")
 endif(ADOL-C_DIR)
 
 if(MED_DIR)
   include(${MoFEM_INSTALL_DIR}/include/cmake/FindMed.cmake)
+  message(STATUS "With Med")
 endif(MED_DIR)
 
 set(OPTIONAL_PROJECT_LIBS
