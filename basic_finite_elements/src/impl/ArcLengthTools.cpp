@@ -343,9 +343,11 @@ MoFEMErrorCode PCSetupArcLength(PC pc) {
   CHKERR PCSetOperators(ctx->pC, ctx->Aij, ctx->Aij);
   CHKERR PCSetFromOptions(ctx->pC);
   CHKERR PCSetUp(ctx->pC);
-  // SetUp PC KSP solver
-  // CHKERR KSPSetType(ctx->kSP, KSPPREONLY);
+#if PETSC_VERSION_LT(3, 12, 0)
   CHKERR KSPSetTabLevel(ctx->kSP, 3);
+#else
+  CHKERR PetscObjectSetTabLevel((PetscObject)ctx->kSP, 3);
+#endif
   CHKERR KSPSetFromOptions(ctx->kSP);
   CHKERR KSPSetOperators(ctx->kSP, ctx->Aij, ctx->Aij);
   CHKERR KSPSetPC(ctx->kSP, ctx->pC);
