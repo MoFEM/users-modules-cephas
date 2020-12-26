@@ -77,7 +77,7 @@ if(ADOL-C_LIBRARY)
     -my_max_post_proc_ref_level 0 -my_disp_order 3 -my_vel_order 3
   )
 
-  if(SLEPC_LIBRARY)
+  if(SLEPC_FOUND)
 
     bfe_build_and_install(stability ${CMAKE_CURRENT_SOURCE_DIR}/stability.cpp)
   
@@ -92,7 +92,7 @@ if(ADOL-C_LIBRARY)
       -eps_nev 2 -eps_ncv 10  -eps_smalest_real -eps_gen_no_hermitian
       -my_max_post_proc_ref_level 0 -st_ksp_atol 1e-12 -st_ksp_rtol 1e-12 -my_order 2)
 
-  endif(SLEPC_LIBRARY)
+  endif(SLEPC_FOUND)
 
 endif(ADOL-C_LIBRARY)
 

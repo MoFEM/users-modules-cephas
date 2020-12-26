@@ -89,7 +89,7 @@ include_directories(
   ${MoFEM_PETSC_DIR}/${PETSC_ARCH}/include
   ${MoFEM_PETSC_DIR}/${MoFEM_PETSC_ARCH}/include
   ${MoFEM_PETSCVAR_DIR}/include
-)
+  ${MOAB_INCLUDE_DIR})
 
 add_definitions(${MOAB_DEFINITIONS})
 
@@ -122,12 +122,18 @@ if(MOFEM_UM_BUILD_TESTS)
   include(CTest)
 endif(MOFEM_UM_BUILD_TESTS)
 
-if(SLEPC_LIBRARY)
+if(SLEPC_FOUND)
+  include_directories("${SLEPC_INCLUDE_DIRS}")
+  add_definitions(-DWITH_SLEPC)
+  message(STATUS "With SLEPC")
+elseif(SLEPC_LIBRARY OR SLEPC_LINK_LIBRARIES)
+  # This is depracated adde for back compatibility
   include_directories("${SLEPC_DIR}/${PETSC_ARCH}/include")
   include_directories("${SLEPC_DIR}/include")
-  add_definitions( -DWITH_SLEPC_DIR )
-  message(STATUS "WITH SLEPC")
-endif(SLEPC_LIBRARY)
+  set(SLEPC_FOUND TRUE)
+  add_definitions(-DWITH_SLEPC)
+  message(STATUS "With SLEPC")
+endif()
 
 if(TETGEN_DIR)
   include(${MoFEM_INSTALL_DIR}/include/cmake/FindTetGen.cmake)

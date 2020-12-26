@@ -35,7 +35,7 @@ tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
-if(SLEPC_LIBRARY)
+if(SLEPC_FOUND)
 
   tutorials_build_and_install(
     eigen_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp)
@@ -57,4 +57,4 @@ if(SLEPC_LIBRARY)
     -order 1
     -log_no_color -test)
 
-endif(SLEPC_LIBRARY)
+endif(SLEPC_FOUND)
