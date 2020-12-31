@@ -2,8 +2,8 @@
  * \file lesson6_radiation.cpp
  * \example lesson6_radiation.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions, and
- * integral of flux on the boundary. Since the h-div space is used, volume
+ * Using PipelineManager interface calculate the divergence of base functions,
+ * and integral of flux on the boundary. Since the h-div space is used, volume
  * integral and boundary integral should give the same result.
  */
 
@@ -29,24 +29,29 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
-using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
-using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using EdgeEle = PipelineManager::EdgeEle2D;
+using EdgeEleOp = EdgeEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
-#include <BaseOps.hpp>
+using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
+using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, 1, 2>;
+using OpBase = OpBaseImpl<PETSC, EdgeEleOp>;
 
-using OpDomainGradGrad = OpTools<DomainEleOp>::OpGradGrad<2>;
-using OpVolGradGradResidual = OpTools<DomainEleOp>::OpGradGradResidual<2>;
-using OpFaceBase = OpTools<BoundaryEleOp>::OpBase;
+// Units 
+// Temperature: Kelvins
+// Length: 1 km
+// Time: 1 s
 
 constexpr double emissivity = 1;
-constexpr double boltzmann_constant = 5.670367e-2;
+constexpr double boltzmann_constant = 5.670374419e-2;
 constexpr double Beta = emissivity * boltzmann_constant;
 
 constexpr double T_ambient = 3;
-constexpr double Flux = -1.0e6;
+constexpr double Flux = -0.873e6;
 
 struct Example {
 
@@ -71,20 +76,21 @@ private:
   boost::shared_ptr<VectorDouble> approxVals;
   boost::shared_ptr<MatrixDouble> approxGradVals;
 
-  struct OpRadiationLhs : public OpFaceBase {
+  struct OpRadiationLhs : public OpBase {
 
   private:
     boost::shared_ptr<VectorDouble> approxVals;
-    FTensor::Index<'i', 2> i; ///< summit Index
 
   public:
     OpRadiationLhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpFaceBase("U", "U", OpFaceBase::OPROWCOL), approxVals(approx_vals) {}
+        : OpBase("U", "U", OpBase::OPROWCOL), approxVals(approx_vals) {
+      this->sYmm = false;
+    }
 
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
-  struct OpRadiationRhs : public OpFaceBase {
+  struct OpRadiationRhs : public OpBase {
 
   private:
     boost::shared_ptr<VectorDouble> approxVals;
@@ -92,18 +98,18 @@ private:
 
   public:
     OpRadiationRhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpFaceBase("U", "U", OpFaceBase::OPROW), approxVals(approx_vals) {}
+        : OpBase("U", "U", OpBase::OPROW), approxVals(approx_vals) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
 
-  struct OpFluxRhs : public OpFaceBase {
+  struct OpFluxRhs : public OpBase {
 
   private:
     FTensor::Index<'i', 2> i; ///< summit Index
 
   public:
-    OpFluxRhs() : OpFaceBase("U", "U", OpFaceBase::OPROW) {}
+    OpFluxRhs() : OpBase("U", "U", OpBase::OPROW) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
@@ -165,33 +171,39 @@ MoFEMErrorCode Example::bC() {
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto beta = [](const double r, const double, const double) {
+    return 2 * M_PI * r;
+  };
+
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
-  auto beta = [](const double r, const double, const double) {
-    return 2e3 * 2 * M_PI * r;
-  };
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpDomainGradGrad("U", "U", beta));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpDomainGradGrad("U", "U", beta));
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateInvJacForFace(invJac));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpSetInvJacH1ForFace(invJac));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetInvJacH1ForFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldGradient<2>("U", approxGradVals));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpVolGradGradResidual("U", beta, approxGradVals));
+      new OpDomainGradTimesVec("U", approxGradVals, beta));
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", approxVals));
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpRadiationRhs(approxVals));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpRadiationRhs(approxVals));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpFluxRhs());
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", approxVals));
-  pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpRadiationLhs(approxVals));
+  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+      new OpRadiationLhs(approxVals));
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integrationRule);
   MoFEMFunctionReturn(0);
 }
@@ -222,7 +234,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR TSGetStepRejections(ts, &rejects);
   CHKERR TSGetSNESIterations(ts, &nonlinits);
   CHKERR TSGetKSPIterations(ts, &linits);
-  PetscPrintf(PETSC_COMM_WORLD,
+  MOFEM_LOG_C("EXAMPLE", Sev::inform,
               "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
               "%D, linits %D\n",
               steps, rejects, snesfails, ftime, nonlinits, linits);
@@ -254,7 +266,16 @@ MoFEMErrorCode Example::checkResults() { return 0; }
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+  // Initialisation of MoFEM/PETSc and MOAB data structures
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+  LogManager::setLog("EXAMPLE");
+  MOFEM_LOG_TAG("EXAMPLE", "example");
 
   try {
 
@@ -294,18 +315,18 @@ MoFEMErrorCode Example::OpRadiationLhs::iNtegrate(EntData &row_data,
                                                   EntData &col_data) {
   MoFEMFunctionBegin;
   // get element volume
-  const double vol = OpFaceBase::getMeasure();
+  const double vol = this->getMeasure();
   // get integration weights
-  auto t_w = OpFaceBase::getFTensor0IntegrationWeight();
+  auto t_w = getFTensor0IntegrationWeight();
   // get base function gradient on rows
   auto t_row_base = row_data.getFTensor0N();
   // gat temperature at integration points
   auto t_val = getFTensor0FromVec(*(approxVals));
   // get coordinate at integration points
-  auto t_coords = OpFaceBase::getFTensor1CoordsAtGaussPts();
+  auto t_coords = getFTensor1CoordsAtGaussPts();
 
   // loop over integration points
-  for (int gg = 0; gg != OpFaceBase::nbIntegrationPts; gg++) {
+  for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
     // Cylinder radius
     const double r_cylinder = t_coords(0);
@@ -313,10 +334,10 @@ MoFEMErrorCode Example::OpRadiationLhs::iNtegrate(EntData &row_data,
     // take into account Jacobean
     const double alpha = t_w * vol * Beta * (2 * M_PI * r_cylinder);
     // loop over rows base functions
-    for (int rr = 0; rr != OpFaceBase::nbRows; ++rr) {
+    for (int rr = 0; rr != nbRows; ++rr) {
       auto t_col_base = col_data.getFTensor0N(gg, 0);
       // loop over columns
-      for (int cc = 0; cc != OpFaceBase::nbCols; cc++) {
+      for (int cc = 0; cc != nbCols; cc++) {
         if (std::abs(t_coords(0)) > std::numeric_limits<double>::epsilon()) {
           locMat(rr, cc) += alpha * t_row_base * t_col_base * 4 * pow(t_val, 3);
         }
@@ -337,18 +358,18 @@ MoFEMErrorCode Example::OpRadiationLhs::iNtegrate(EntData &row_data,
 MoFEMErrorCode Example::OpRadiationRhs::iNtegrate(EntData &row_data) {
   MoFEMFunctionBegin;
   // get element volume
-  const double vol = OpFaceBase::getMeasure();
+  const double vol = getMeasure();
   // get integration weights
-  auto t_w = OpFaceBase::getFTensor0IntegrationWeight();
+  auto t_w = getFTensor0IntegrationWeight();
   // get base function gradient on rows
   auto t_row_base = row_data.getFTensor0N();
   // gat temperature at integration points
   auto t_val = getFTensor0FromVec(*(approxVals));
   // get coordinate at integration points
-  auto t_coords = OpFaceBase::getFTensor1CoordsAtGaussPts();
+  auto t_coords = getFTensor1CoordsAtGaussPts();
 
   // loop over integration points
-  for (int gg = 0; gg != OpFaceBase::nbIntegrationPts; gg++) {
+  for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
     // Cylinder radius
     const double r_cylinder = t_coords(0);
@@ -356,10 +377,9 @@ MoFEMErrorCode Example::OpRadiationRhs::iNtegrate(EntData &row_data) {
     // take into account Jacobean
     const double alpha = t_w * vol * Beta * (2 * M_PI * r_cylinder);
     // loop over rows base functions
-    for (int rr = 0; rr != OpFaceBase::nbRows; ++rr) {
+    for (int rr = 0; rr != nbRows; ++rr) {
       if (std::abs(t_coords(0)) > std::numeric_limits<double>::epsilon()) {
-        OpFaceBase::locF[rr] +=
-            alpha * t_row_base * (pow(t_val, 4) - pow(T_ambient, 4));
+        locF[rr] += alpha * t_row_base * (pow(t_val, 4) - pow(T_ambient, 4));
       }
       ++t_row_base;
     }
@@ -376,18 +396,18 @@ MoFEMErrorCode Example::OpRadiationRhs::iNtegrate(EntData &row_data) {
 MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
   MoFEMFunctionBegin;
   // get element volume
-  const double vol = OpFaceBase::getMeasure();
+  const double vol = getMeasure();
   // get integration weights
-  auto t_w = OpFaceBase::getFTensor0IntegrationWeight();
+  auto t_w = getFTensor0IntegrationWeight();
   // get base function gradient on rows
   auto t_row_base = row_data.getFTensor0N();
   // get coordinate at integration points
-  auto t_coords = OpFaceBase::getFTensor1CoordsAtGaussPts();
-  // get time
-  const double time = OpFaceBase::getFEMethod()->ts_t;
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+  // // get time
+  const double time = getFEMethod()->ts_t;
 
   // loop over integration points
-  for (int gg = 0; gg != OpFaceBase::nbIntegrationPts; gg++) {
+  for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
     // Cylinder radius
     const double r_cylinder = t_coords(0);
@@ -398,8 +418,8 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
     // take into account Jacobean
     const double alpha = t_w * vol * (2 * M_PI * r_cylinder);
     // loop over rows base functions
-    for (int rr = 0; rr != OpFaceBase::nbRows; ++rr) {
-      OpFaceBase::locF[rr] += alpha * t_row_base * c * Flux * time;
+    for (int rr = 0; rr != nbRows; ++rr) {
+      locF[rr] += alpha * t_row_base * c * Flux * time;
       ++t_row_base;
     }
     ++t_coords;

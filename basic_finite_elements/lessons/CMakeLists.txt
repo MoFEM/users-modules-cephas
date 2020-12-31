@@ -20,10 +20,6 @@ bfe_build_and_install(
     ${CMAKE_CURRENT_SOURCE_DIR}/lesson3_poisson.cpp)  
 
 bfe_build_and_install(
-      basic_radiation
-      ${CMAKE_CURRENT_SOURCE_DIR}/lesson6_radiation.cpp)    
-
-bfe_build_and_install(
   basic_plastic
   ${CMAKE_CURRENT_SOURCE_DIR}/lesson7_plastic.cpp)
 
