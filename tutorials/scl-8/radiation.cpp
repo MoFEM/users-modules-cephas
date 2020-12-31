@@ -46,6 +46,8 @@ using OpBase = OpBaseImpl<PETSC, EdgeEleOp>;
 // Length: 1 km
 // Time: 1 s
 
+constexpr double heat_conductivity = ((0.4+0.7)/2) * 1e3;
+
 constexpr double emissivity = 1;
 constexpr double boltzmann_constant = 5.670374419e-2;
 constexpr double Beta = emissivity * boltzmann_constant;
@@ -172,7 +174,7 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto beta = [](const double r, const double, const double) {
-    return 2 * M_PI * r;
+    return heat_conductivity * (2 * M_PI * r);
   };
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
