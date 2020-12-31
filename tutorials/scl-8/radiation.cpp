@@ -235,8 +235,8 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR TSGetSNESIterations(ts, &nonlinits);
   CHKERR TSGetKSPIterations(ts, &linits);
   MOFEM_LOG_C("EXAMPLE", Sev::inform,
-              "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
-              "%D, linits %D\n",
+              "steps %d (%d rejected, %d SNES fails), ftime %g, nonlinits "
+              "%d, linits %d\n",
               steps, rejects, snesfails, ftime, nonlinits, linits);
 
   MoFEMFunctionReturn(0);
