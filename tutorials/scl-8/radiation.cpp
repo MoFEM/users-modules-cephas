@@ -34,7 +34,6 @@ using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = PipelineManager::EdgeEle2D;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
-
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
 using OpDomainGradTimesVec = FormsIntegrators<DomainEleOp>::Assembly<
@@ -52,9 +51,7 @@ constexpr double emissivity = 1;
 constexpr double boltzmann_constant = 5.670374419e-2;
 constexpr double Beta = emissivity * boltzmann_constant;
 
-constexpr double T_ambient = 3;
-constexpr double Flux = -0.873e6;
-
+constexpr double T_ambient = 2.7;
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -85,7 +82,7 @@ private:
 
   public:
     OpRadiationLhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpBase("U", "U", OpBase::OPROWCOL), approxVals(approx_vals) {
+        : OpBase("T", "T", OpBase::OPROWCOL), approxVals(approx_vals) {
       this->sYmm = false;
     }
 
@@ -96,11 +93,10 @@ private:
 
   private:
     boost::shared_ptr<VectorDouble> approxVals;
-    FTensor::Index<'i', 2> i; ///< summit Index
 
   public:
     OpRadiationRhs(boost::shared_ptr<VectorDouble> &approx_vals)
-        : OpBase("U", "U", OpBase::OPROW), approxVals(approx_vals) {}
+        : OpBase("T", "T", OpBase::OPROW), approxVals(approx_vals) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
@@ -111,10 +107,33 @@ private:
     FTensor::Index<'i', 2> i; ///< summit Index
 
   public:
-    OpFluxRhs() : OpBase("U", "U", OpBase::OPROW) {}
+    OpFluxRhs() : OpBase("T", "T", OpBase::OPROW) {}
 
     MoFEMErrorCode iNtegrate(EntData &row_data);
   };
+
+  struct OpCalcSurfaceAverageTemperature : public EdgeEleOp {
+
+  private:
+    boost::shared_ptr<VectorDouble> approxVals;
+    double &sumTemperature;
+    double &surfaceArea;
+
+
+  public:
+    OpCalcSurfaceAverageTemperature(
+        boost::shared_ptr<VectorDouble> &approx_vals, double &sum_temp,
+        double &surf)
+        : EdgeEleOp("T", "T", OpBase::OPROW), approxVals(approx_vals),
+          sumTemperature(sum_temp), surfaceArea(surf) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+
+  };
+
+
 };
 
 MoFEMErrorCode Example::runProblem() {
@@ -134,10 +153,10 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addDomainField("T", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("T", H1, AINSWORTH_LEGENDRE_BASE, 1);
   constexpr int order = 3;
-  CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("T", order);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -164,7 +183,7 @@ MoFEMErrorCode Example::bC() {
   };
   FieldBlas *field_blas;
   CHKERR mField.getInterface(field_blas);
-  CHKERR field_blas->setVertexDofs(set_initial_temperature, "U");
+  CHKERR field_blas->setVertexDofs(set_initial_temperature, "T");
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -182,7 +201,7 @@ MoFEMErrorCode Example::OPs() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpDomainGradGrad("U", "U", beta));
+      new OpDomainGradGrad("T", "T", beta));
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -190,20 +209,20 @@ MoFEMErrorCode Example::OPs() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetInvJacH1ForFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateScalarFieldGradient<2>("U", approxGradVals));
+      new OpCalculateScalarFieldGradient<2>("T", approxGradVals));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpDomainGradTimesVec("U", approxGradVals, beta));
+      new OpDomainGradTimesVec("T", approxGradVals, beta));
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("U", approxVals));
+      new OpCalculateScalarFieldValues("T", approxVals));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
       new OpRadiationRhs(approxVals));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpFluxRhs());
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integrationRule);
 
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      new OpCalculateScalarFieldValues("U", approxVals));
+      new OpCalculateScalarFieldValues("T", approxVals));
   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
       new OpRadiationLhs(approxVals));
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integrationRule);
@@ -238,7 +257,7 @@ MoFEMErrorCode Example::kspSolve() {
   CHKERR TSGetKSPIterations(ts, &linits);
   MOFEM_LOG_C("EXAMPLE", Sev::inform,
               "steps %d (%d rejected, %d SNES fails), ftime %g, nonlinits "
-              "%d, linits %d\n",
+              "%d, linits %d",
               steps, rejects, snesfails, ftime, nonlinits, linits);
 
   MoFEMFunctionReturn(0);
@@ -254,10 +273,29 @@ MoFEMErrorCode Example::postProcess() {
   pipeline_mng->getBoundaryRhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("U");
+  post_proc_fe->addFieldValuesPostProc("T");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("T", approxVals));
+
+  double sum_temperature;
+  double surface_area;
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpCalcSurfaceAverageTemperature(approxVals, sum_temperature,
+                                          surface_area));
+  auto calc_surfcae_area_op = pipeline_mng->getOpBoundaryRhsPipeline().back();
+
+  sum_temperature = 0;
+  surface_area = 0;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_radiation.h5m");
+
+  MOFEM_LOG_C("EXAMPLE", Sev::inform, "Surface area %3.4e [km]", surface_area);
+  MOFEM_LOG_C("EXAMPLE", Sev::inform,
+              "Average subsurface temperatute %3.4e [K]",
+              sum_temperature / surface_area);
+
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
@@ -408,6 +446,9 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
   // // get time
   const double time = getFEMethod()->ts_t;
 
+  constexpr double flux_p = -0.03e6;
+  constexpr double flux_c = -0.23e6;
+
   // loop over integration points
   for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
@@ -415,13 +456,13 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
     const double r_cylinder = t_coords(0);
 
     const double r = sqrt(t_coords(i) * t_coords(i));
-    const double c = std::abs(t_coords(0)) / r;
+    const double s = std::abs(t_coords(1)) / r;
 
     // take into account Jacobean
     const double alpha = t_w * vol * (2 * M_PI * r_cylinder);
     // loop over rows base functions
     for (int rr = 0; rr != nbRows; ++rr) {
-      locF[rr] += alpha * t_row_base * c * Flux * time;
+      locF[rr] += alpha * t_row_base * (s * flux_p + flux_c) * time;
       ++t_row_base;
     }
     ++t_coords;
@@ -431,3 +472,42 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
   MoFEMFunctionReturn(0);
 }
 //! [Flux Rhs]
+
+//! [Ave Temp]
+MoFEMErrorCode Example::OpCalcSurfaceAverageTemperature::doWork(
+    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
+
+  MoFEMFunctionBegin;
+  if (type == MBVERTEX) {
+    // get element volume
+    const double vol = getMeasure();
+    // get integration weights
+    auto t_w = getFTensor0IntegrationWeight();
+    // gat temperature at integration points
+    auto t_val = getFTensor0FromVec(*(approxVals));
+    // get coordinate at integration points
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+    // number of integration pts
+    size_t nb_integration_pts = getGaussPts().size2();
+
+    // loop over integration points
+    for (auto gg = 0; gg != nb_integration_pts; ++gg) {
+
+      // Cylinder radius
+      const double r_cylinder = t_coords(0);
+
+      // take into account Jacobean
+      const double alpha = t_w * vol * (2 * M_PI * r_cylinder);
+
+      sumTemperature += alpha * t_val;
+      surfaceArea += alpha;
+
+      ++t_coords;
+      ++t_val;
+      ++t_w; // move to another integration weight
+    }
+  }
+  MoFEMFunctionReturn(0);
+}
+
+//! [Ave Temp]
