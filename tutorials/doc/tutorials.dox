@@ -149,6 +149,13 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td>\ref radiation_pluto</td>
+       <td> Nonlinear problem at the boundary
+       <br/> *Keywords:* axisymmetric problem, linearisation 
+       </td>
+  </tr>
+
 </table>
 
 \section tutorials_complex_field_problems Problems with complex variable fields

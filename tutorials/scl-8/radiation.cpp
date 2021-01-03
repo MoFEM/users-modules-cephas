@@ -446,6 +446,7 @@ MoFEMErrorCode Example::OpFluxRhs::iNtegrate(EntData &row_data) {
   // // get time
   const double time = getFEMethod()->ts_t;
 
+  // Look to https://doi.org/10.1016/j.icarus.2014.12.028s
   constexpr double flux_p = -0.03e6;
   constexpr double flux_c = -0.23e6;
 
