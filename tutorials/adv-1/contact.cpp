@@ -109,7 +109,7 @@ constexpr bool is_Henky = false;
 constexpr int order = 2;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
-constexpr double rho = 1;
+constexpr double rho = 0;
 constexpr double cn = 0.01;
 constexpr double spring_stiffness = 0.1;
 

@@ -93,6 +93,7 @@ set(TUTORIALS_DIRS
   mix-0
   max-0
   max-1
+  adv-0
   adv-1
   other_tutorials/mix_transport
   other_tutorials/poisson

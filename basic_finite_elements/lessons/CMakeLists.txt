@@ -19,10 +19,6 @@ bfe_build_and_install(
     basic_poisson
     ${CMAKE_CURRENT_SOURCE_DIR}/lesson3_poisson.cpp)  
 
-bfe_build_and_install(
-  basic_plastic
-  ${CMAKE_CURRENT_SOURCE_DIR}/lesson7_plastic.cpp)
-
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ

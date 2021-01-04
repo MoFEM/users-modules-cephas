@@ -47,10 +47,15 @@ u_i,b_i)_\Omega -(\delta u_i,\overline{t}_i)_{\partial\Omega_\sigma}=0 & \forall
 
 */
 
-namespace OpPlasticTools {
+namespace PlasticOps {
 
 //! [Common data]
-struct CommonData : public OpElasticTools::CommonData {
+struct CommonData {
+  boost::shared_ptr<MatrixDouble> mDPtr;
+  boost::shared_ptr<MatrixDouble> mGradPtr;
+  boost::shared_ptr<MatrixDouble> mStrainPtr;
+  boost::shared_ptr<MatrixDouble> mStressPtr;
+
   boost::shared_ptr<VectorDouble> plasticSurfacePtr;
   boost::shared_ptr<MatrixDouble> plasticFlowPtr;
   boost::shared_ptr<VectorDouble> plasticTauPtr;
@@ -60,12 +65,12 @@ struct CommonData : public OpElasticTools::CommonData {
 };
 //! [Common data]
 
-FTensor::Index<'i', 2> i;
-FTensor::Index<'j', 2> j;
-FTensor::Index<'k', 2> k;
-FTensor::Index<'l', 2> l;
-FTensor::Index<'m', 2> m;
-FTensor::Index<'n', 2> n;
+FTensor::Index<'j', SPACE_DIM> j;
+FTensor::Index<'k', SPACE_DIM> k;
+FTensor::Index<'l', SPACE_DIM> l;
+FTensor::Index<'m', SPACE_DIM> m;
+FTensor::Index<'i', SPACE_DIM> i;
+FTensor::Index<'n', SPACE_DIM> n;
 
 FTensor::Index<'I', 3> I;
 FTensor::Index<'J', 3> J;
@@ -389,10 +394,8 @@ diff_constrain_dstress(double &&diff_constrain_df,
   return t_diff_constrain_dstress;
 };
 
-template <typename T>
-inline auto diff_constrain_dstrain(
-    FTensor::Ddg<T, 2, 2> &t_D,
-    FTensor::Tensor2_symmetric<T, 2> &&t_diff_constrain_dstress) {
+template <typename T1, typename T2>
+inline auto diff_constrain_dstrain(T1 &t_D, T2 &&t_diff_constrain_dstress) {
   FTensor::Tensor2_symmetric<double, 2> t_diff_constrain_dstrain;
   t_diff_constrain_dstrain(k, l) =
       t_diff_constrain_dstress(i, j) * t_D(i, j, k, l);
@@ -451,7 +454,8 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
   commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
-  auto &t_D = commonDataPtr->tD;
+  auto t_D =
+      getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
   auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr));
   auto t_plastic_strain =
       getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainPtr));
@@ -484,7 +488,9 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
     auto t_plastic_strain_dot =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainDotPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
-    auto &t_D = commonDataPtr->tD;
+
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     const size_t nb_integration_pts = data.getN().size1();
     const size_t nb_base_functions = data.getN().size2();
@@ -596,7 +602,8 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
     auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
-    auto &t_D = commonDataPtr->tD;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
@@ -680,7 +687,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
     auto t_flow =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
-    auto &t_D = commonDataPtr->tD;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
     auto t_diff_symmetrize = diff_symmetrize();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -778,7 +786,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
     auto t_flow =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
 
-    auto &t_D = commonDataPtr->tD;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
     auto t_diff_plastic_strain = diff_tensor();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -865,8 +874,8 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
 
     auto t_row_base = row_data.getFTensor0N();
-
-    auto &t_D = commonDataPtr->tD;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w * getTSa();
@@ -934,7 +943,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
     auto t_stress =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
-    auto &t_D = commonDataPtr->tD;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
     auto t_diff_symmetrize = diff_symmetrize();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -1015,7 +1025,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
     auto t_flow =
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
-    auto &t_D = commonDataPtr->tD;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;

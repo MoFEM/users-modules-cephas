@@ -20,15 +20,80 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+#ifndef EXECUTABLE_DIMENSION
+#define EXECUTABLE_DIMENSION 3
+#endif
+
 #include <MoFEM.hpp>
+#include <MatrixFunction.hpp>
 
 using namespace MoFEM;
 
+template <int DIM> struct ElementsAndOps {};
+
+template <> struct ElementsAndOps<2> {
+  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+};
+
+template <> struct ElementsAndOps<3> {
+  using DomainEle = VolumeElementForcesAndSourcesCore;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = FaceElementForcesAndSourcesCore;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcVolumeOnRefinedMesh;
+};
+
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
+
+constexpr EntityType boundary_ent = SPACE_DIM == 3 ? MBTRI : MBEDGE;
 using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
-using DomainEleOp = DomainEle::UserDataOperator;
-using BoundaryEle = EdgeElementForcesAndSourcesCoreBase;
-using BoundaryEleOp = BoundaryEle::UserDataOperator;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+
+struct OpEdgeForceRhs : BoundaryEleOp {
+
+  Range forceEdges;
+  VectorDouble forceVec;
+
+  OpEdgeForceRhs(const std::string field_name, const Range &force_edges,
+                 const VectorDouble &force_vec);
+
+  MoFEMErrorCode doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data);
+};
+
+//! [Body force]
+using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpSource<1, SPACE_DIM>;
+//! [Body force]
+
+//! [Only used with Hooke equation (linear material model)]
+using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+//! [Only used with Hooke equation (linear material model)]
+
+//! [Only used for dynamics]
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMass<1, SPACE_DIM>;
+using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+//! [Only used for dynamics]
+
+// Only used with Henky/nonlinear material
+using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
+using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr double young_modulus = 1e1;
 constexpr double poisson_ratio = 0.25;
@@ -37,11 +102,12 @@ constexpr double H = 1e-2;
 constexpr double cn = H;
 constexpr int order = 2;
 
-#include <ElasticOps.hpp>
 #include <PlasticOps.hpp>
-using namespace OpElasticTools;
-using namespace OpPlasticTools;
+#include <OpPostProcElastic.hpp>
+#include <HenkyOps.hpp>
 
+using namespace PlasticOps;
+using namespace HenkyOps;
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -60,7 +126,7 @@ private:
   MoFEMErrorCode checkResults();
 
   MatrixDouble invJac;
-  boost::shared_ptr<OpPlasticTools::CommonData> commonDataPtr;
+  boost::shared_ptr<PlasticOps::CommonData> commonDataPtr;
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
@@ -90,8 +156,8 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addDomainField("EP", L2, AINSWORTH_LEGENDRE_BASE, 3);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
   CHKERR simple->setFieldOrder("U", order);
-  CHKERR simple->setFieldOrder("TAU", order-1);
-  CHKERR simple->setFieldOrder("EP", order-1);
+  CHKERR simple->setFieldOrder("TAU", order - 1);
+  CHKERR simple->setFieldOrder("EP", order - 1);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -101,40 +167,44 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto get_matrial_stiffens = [&](FTensor::Ddg<double, 2, 2> &t_D) {
+  auto set_matrial_stiffness = [&]() {
     MoFEMFunctionBegin;
-
-    FTensor::Index<'i', 2> i;
-    FTensor::Index<'j', 2> j;
-    FTensor::Index<'k', 2> k;
-    FTensor::Index<'l', 2> l;
-    t_D(i, j, k, l) = 0;
-
-    constexpr double c = young_modulus / (1 - poisson_ratio * poisson_ratio);
-    constexpr double o = poisson_ratio * c;
-
-    t_D(0, 0, 0, 0) = c;
-    t_D(0, 0, 1, 1) = o;
-
-    t_D(1, 1, 0, 0) = o;
-    t_D(1, 1, 1, 1) = c;
-
-    t_D(0, 1, 0, 1) = (1 - poisson_ratio) * c;
-
+    FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Index<'j', SPACE_DIM> j;
+    FTensor::Index<'k', SPACE_DIM> k;
+    FTensor::Index<'l', SPACE_DIM> l;
+    constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+    constexpr double bulk_modulus_K =
+        young_modulus / (3 * (1 - 2 * poisson_ratio));
+    constexpr double shear_modulus_G =
+        young_modulus / (2 * (1 + poisson_ratio));
+    constexpr double A =
+        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
+                               (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
+                         : 1;
+    auto t_D =
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+                      A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
+                          t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
 
-  commonDataPtr = boost::make_shared<OpPlasticTools::CommonData>();
-  CHKERR get_matrial_stiffens(commonDataPtr->tD);
+  commonDataPtr = boost::make_shared<PlasticOps::CommonData>();
+
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+
   commonDataPtr->plasticSurfacePtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticFlowPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticTauPtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticTauDotPtr = boost::make_shared<VectorDouble>();
   commonDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->plasticStrainDotPtr = boost::make_shared<MatrixDouble>();
+
+  CHKERR set_matrial_stiffness();
+
   MoFEMFunctionReturn(0);
 }
 //! [Create common data]
@@ -187,15 +257,15 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateInvJacForFace(invJac));
     pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
 
-    pipeline.push_back(
-        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-    pipeline.push_back(new OpStrain("U", commonDataPtr));
+    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr));
+    pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
 
     pipeline.push_back(new OpCalculateScalarFieldValues(
         "TAU", commonDataPtr->plasticTauPtr, MBTRI));
-    pipeline.push_back(
-        new OpCalculateScalarFieldValuesDot(
-            "TAU", commonDataPtr->plasticTauDotPtr, MBTRI));
+    pipeline.push_back(new OpCalculateScalarFieldValuesDot(
+        "TAU", commonDataPtr->plasticTauDotPtr, MBTRI));
 
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
         "EP", commonDataPtr->plasticStrainPtr, MBTRI));
@@ -207,7 +277,8 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpStiffnessMatrixLhs("U", "U", commonDataPtr));
+    pipeline.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
+
     pipeline.push_back(
         new OpCalculatePlasticInternalForceLhs_dEP("U", "EP", commonDataPtr));
 
@@ -227,13 +298,30 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
-    auto gravity = [](double x, double y) {
-      return FTensor::Tensor1<double, 2>{0., 1.};
+    auto get_body_force = [this](const double, const double, const double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Tensor1<double, SPACE_DIM> t_source;
+      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      const auto time = fe_domain_rhs->ts_t;
+
+      // hardcoded gravity load
+      t_source(i) = 0;
+      t_source(1) = 1.0 * time;
+      return t_source;
     };
-    pipeline.push_back(new OpForceRhs("U", commonDataPtr, gravity));
+
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
+
+    // Calculate internal forece
+    pipeline.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+        "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+        commonDataPtr->mDPtr));
+    pipeline.push_back(
+        new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
+
     pipeline.push_back(new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
     pipeline.push_back(new OpCalculateContrainsRhs("TAU", commonDataPtr));
-    pipeline.push_back(new OpInternalForceRhs("U", commonDataPtr));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
@@ -311,11 +399,13 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
-
+    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpStrain("U", commonDataPtr));
+        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+            commonDataPtr->mDPtr));
+
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "TAU", commonDataPtr->plasticTauPtr, MBTRI));
     postProcFe->getOpPtrVector().push_back(
@@ -326,8 +416,11 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonDataPtr));
 
-    postProcFe->getOpPtrVector().push_back(new OpPostProcElastic(
-        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new Tutorial::OpPostProcElastic<SPACE_DIM>(
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
+
     postProcFe->getOpPtrVector().push_back(new OpPostProcPlastic(
         "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
     postProcFe->addFieldValuesPostProc("U");
@@ -378,7 +471,6 @@ MoFEMErrorCode Example::tsSolve() {
 MoFEMErrorCode Example::postProcess() {
   MoFEMFunctionBegin;
 
-
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
@@ -427,4 +519,51 @@ int main(int argc, char *argv[]) {
   CATCH_ERRORS;
 
   CHKERR MoFEM::Core::Finalize();
+}
+
+OpEdgeForceRhs::OpEdgeForceRhs(const std::string field_name,
+                               const Range &force_edges,
+                               const VectorDouble &force_vec)
+    : BoundaryEleOp(field_name, OPROW), forceEdges(force_edges),
+      forceVec(force_vec) {}
+
+MoFEMErrorCode OpEdgeForceRhs::doWork(int side, EntityType type,
+                                      DataForcesAndSourcesCore::EntData &data) {
+
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getIndices().size();
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
+  if (forceEdges.find(ent) == forceEdges.end()) {
+    MoFEMFunctionReturnHot(0);
+  }
+
+  std::array<double, MAX_DOFS_ON_ENTITY> nF;
+  std::fill(&nF[0], &nF[nb_dofs], 0);
+
+  FTensor::Tensor1<double, 2> t_force(forceVec(0), forceVec(1));
+  const int nb_gauss_pts = data.getN().size1();
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_base = data.getFTensor0N();
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_nf(&nF[0], &nF[1]);
+    for (int bb = 0; bb != nb_dofs / 2; ++bb) {
+      t_nf(i) += (t_w * t_base * getMeasure()) * t_force(i);
+      ++t_nf;
+      ++t_base;
+    }
+    ++t_w;
+  }
+
+  if ((getDataCtx() & PetscData::CtxSetTime).any())
+    for (int dd = 0; dd != nb_dofs; ++dd)
+      nF[dd] *= getTStime();
+
+  CHKERR VecSetValues(getKSPf(), data, nF.data(), ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
 }
