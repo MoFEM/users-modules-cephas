@@ -34,6 +34,7 @@ tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
+tutorials_copy_and_install("README.md" "${permissions_execute}")
 
 if(SLEPC_FOUND)
 

@@ -53,11 +53,12 @@ using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 
-constexpr double rho = 7829e-12;
-constexpr double young_modulus = 207e3;
-constexpr double poisson_ratio = 0.33;
-constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
-constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
+double rho = 7829e-12;
+double young_modulus = 207e3;
+double poisson_ratio = 0.33;
+
+double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
 int order = 1;
 
@@ -99,6 +100,12 @@ private:
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus", &young_modulus,
+                               PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio", &poisson_ratio,
+                               PETSC_NULL);
+
   auto set_matrial_stiffens = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
@@ -108,8 +115,8 @@ MoFEMErrorCode Example::createCommonData() {
     MoFEMFunctionBegin;
     auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
 
-    constexpr double A =
-        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
+    const double A = (SPACE_DIM == 2)
+                         ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
     t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
