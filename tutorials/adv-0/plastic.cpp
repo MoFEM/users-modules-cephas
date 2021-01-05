@@ -192,6 +192,9 @@ MoFEMErrorCode Example::createCommonData() {
 
   commonDataPtr = boost::make_shared<PlasticOps::CommonData>();
 
+  commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
+  commonDataPtr->mDPtr->resize(9, 1);
+
   commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
@@ -486,7 +489,17 @@ static char help[] = "...\n\n";
 
 int main(int argc, char *argv[]) {
 
-  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
+
+   // Initialisation of MoFEM/PETSc and MOAB data structures
+  const char param_file[] = "param_file.petsc";
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+  LogManager::setLog("EXAMPLE");
+  MOFEM_LOG_TAG("EXAMPLE", "example"); 
 
   try {
 
