@@ -14321,7 +14321,7 @@ dP^S(\mathbf{x},t) = I * dA \quad [W]
 <p>*Pluto's insolation</p>
 <p>From <a href="https://doi.org/10.1016/j.icarus.2014.12.028">Pluto's insolation history</a>, Pluto's motion is complex in time due to its elliptical and eccentric orbit. To keep analysis simple, we arbitrary pick data for one full orbit (1767), where north and south pole have averaged isolation values $260$ $[W\cdot m^{-2}]$, and on the equator $260$ $[W\cdot m^{-2}]$. For simplicity, we will use</p>
 \begin{equation}
-I = -230 - 30 \sin{(\theta)}
+I = -0.23 - 0.3 \sin{(\theta)}
 \label{eq:solar_raddiation2} \tag{7}
 \end{equation}<p>where $\theta$ is altitude of point $\mathbf{x}$ on Pluto surface, see <a href="https://en.wikipedia.org/wiki/Horizontal_coordinate_system">Horizontal_coordinate_system</a>.</p>
 <h3 id="Body-and-space-radiation">Body and space radiation<a class="anchor-link" href="#Body-and-space-radiation">&#182;</a></h3><p>We will assume that surface of Pluto radiates energy in the space; it also receives energy from space, which has some relict temperature. We assume that outer space temperature is 3K degrees, following Wikipedia (<a href="https://en.wikipedia.org/wiki/Outer_space">https://en.wikipedia.org/wiki/Outer_space</a>). Balance of energy received by radiation be quantified by <a href="https://en.wikipedia.org/wiki/Planck%27s_law">Plank's law</a> integrated by all possible wave frequencies, see <a href="https://en.wikipedia.org/wiki/Thermal_radiation">https://en.wikipedia.org/wiki/Thermal_radiation</a>. Finally, you can express our ideas into the equation</p>
@@ -14376,7 +14376,7 @@ Note that we drop $\sum$ symbol in ($\ref{eq:conservation1}$), following <a href
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[6]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[1]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># Running code</span>
@@ -14422,8 +14422,8 @@ Note that we drop $\sum$ symbol in ($\ref{eq:conservation1}$), following <a href
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
 <pre>[0] &lt;inform&gt; MoFEM version 0.10.1 (MOAB 5.2.1 Petsc Release Version 3.11.4, Sep, 28, 2019 )
 [0] &lt;inform&gt; git commit id SHA1-NOT FOUND
-[0] &lt;inform&gt; Local time: 2021-1-4 12:40:47
-[0] &lt;inform&gt; UTC time: 2021-1-4 12:40:47
+[0] &lt;inform&gt; Local time: 2021-1-5 13:50:43
+[0] &lt;inform&gt; UTC time: 2021-1-5 13:50:43
 [0] &lt;inform&gt; [FieldCore] Add field T field_id 1 space H1 approximation base AINSWORTH_LEGENDRE_BASE rank 1 meshset 12682136550675316742
 [0] &lt;inform&gt; [FECore] Add finite element dFE
 [0] &lt;inform&gt; [FECore] Add finite element bFE
@@ -14624,7 +14624,7 @@ newton_log_file.txt  param_file.petsc	pluto.jou
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[5]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[4]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># Plot solution</span>
@@ -14673,12 +14673,12 @@ newton_log_file.txt  param_file.petsc	pluto.jou
 
 
 
-<div id="df63dd4e-63c9-4cb1-8785-fc548dc2886c" class="jupyter-widgets jp-OutputArea-output ">
+<div id="1fc18f40-c5c8-4636-9b1f-9b00e37f8ca4" class="jupyter-widgets jp-OutputArea-output ">
 <script type="text/javascript">
-var element = document.getElementById('df63dd4e-63c9-4cb1-8785-fc548dc2886c');
+var element = document.getElementById('1fc18f40-c5c8-4636-9b1f-9b00e37f8ca4');
 </script>
 <script type="application/vnd.jupyter.widget-view+json">
-{"model_id": "630262fe3e2b455bbf6e17a91ac77575", "version_major": 2, "version_minor": 0}
+{"model_id": "9922d0b959294d818acfd4e6d8539d04", "version_major": 2, "version_minor": 0}
 </script>
 </div>
 
