@@ -223,7 +223,7 @@ struct Monitor : public FEMethod {
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
       : dM(dm), commonDataPtr(common_data_ptr), uXScatter(ux_scatter),
         uYScatter(uy_scatter), uZScatter(uz_scatter),
-        moabVertex(mbVertexPostproc), lastTime(0), deltaTime(0.05), sTEP(0) {
+        moabVertex(mbVertexPostproc), sTEP(0) {
     MoFEM::Interface *m_field_ptr;
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
@@ -324,14 +324,12 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
-    if (lastTime + deltaTime >= ts_t) {
-      MOFEM_LOG("EXAMPLE", Sev::inform)
-          << "Write file at time " << ts_t << " write step " << sTEP;
-      lastTime += deltaTime;
-      ++sTEP;
-      CHKERR post_proc_volume();
-      CHKERR post_proc_boundary();
-    }
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Write file at time " << ts_t << " write step " << sTEP;
+
+    ++sTEP;
+    CHKERR post_proc_volume();
+    CHKERR post_proc_boundary();
 
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");

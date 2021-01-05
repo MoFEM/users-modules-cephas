@@ -104,7 +104,7 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr bool is_quasi_static = true;
-constexpr bool is_Henky = false;
+constexpr bool is_Henky = true;
 
 constexpr int order = 2;
 constexpr double young_modulus = 100;
