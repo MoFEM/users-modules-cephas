@@ -52,5 +52,5 @@ add_test(
   contact_2d
   -file_name ${CMAKE_CURRENT_BINARY_DIR}/sphere_2d.h5m
   -ts_type beuler
-  -ts_max_time 2 -ts_dt 0.2 -log_no_color)
+  -ts_max_time 1 -ts_dt 0.2 -log_no_color)
   
