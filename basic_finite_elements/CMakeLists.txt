@@ -15,7 +15,6 @@ set(BFE_DIRS
   nonlinear_elasticity
   thermal
   cohesive_interface
-  lessons
   simple_contact)
 
 function(bfe_install bfe_mod_dir)
