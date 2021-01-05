@@ -100,7 +100,7 @@ constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
 constexpr double H = 1e-2;
 constexpr double cn = H;
-constexpr int order = 2;
+constexpr int order = 1;
 
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>
@@ -301,25 +301,22 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
-    auto get_body_force = [this](const double, const double, const double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      FTensor::Index<'i', SPACE_DIM> i;
-      FTensor::Tensor1<double, SPACE_DIM> t_source;
-      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      const auto time = fe_domain_rhs->ts_t;
+    // auto get_body_force = [this](const double, const double, const double) {
+    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //   FTensor::Index<'i', SPACE_DIM> i;
+    //   FTensor::Tensor1<double, SPACE_DIM> t_source;
+    //   auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+    //   const auto time = fe_domain_rhs->ts_t;
 
-      // hardcoded gravity load
-      t_source(i) = 0;
-      t_source(1) = 1.0 * time;
-      return t_source;
-    };
+    //   // hardcoded gravity load
+    //   t_source(i) = 0;
+    //   t_source(1) = 1.0 * time;
+    //   return t_source;
+    // };
 
-    pipeline.push_back(new OpBodyForce("U", get_body_force));
+    // pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
-    pipeline.push_back(new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-        "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-        commonDataPtr->mDPtr));
     pipeline.push_back(
         new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
 
@@ -346,6 +343,7 @@ MoFEMErrorCode Example::OPs() {
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
+
   add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
   add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
   add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
@@ -404,10 +402,6 @@ MoFEMErrorCode Example::tsSolve() {
         new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
     postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
         "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-    postProcFe->getOpPtrVector().push_back(
-        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-            commonDataPtr->mDPtr));
 
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "TAU", commonDataPtr->plasticTauPtr, MBTRI));

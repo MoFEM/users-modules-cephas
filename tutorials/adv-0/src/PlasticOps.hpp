@@ -462,7 +462,8 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
   auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-    t_stress(i, j) = t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
+    t_stress(i, j) =
+        t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
     ++t_strain;
     ++t_plastic_strain;
     ++t_stress;
