@@ -100,7 +100,7 @@ constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
 constexpr double H = 1e-2;
 constexpr double cn = H;
-constexpr int order = 1;
+constexpr int order = 2;
 
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>
@@ -178,6 +178,8 @@ MoFEMErrorCode Example::createCommonData() {
         young_modulus / (3 * (1 - 2 * poisson_ratio));
     constexpr double shear_modulus_G =
         young_modulus / (2 * (1 + poisson_ratio));
+
+    // Plane stress or when 1, plane strain or 3d
     constexpr double A =
         (SPACE_DIM == 2) ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
