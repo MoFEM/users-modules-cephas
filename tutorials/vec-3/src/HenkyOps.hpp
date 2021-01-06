@@ -118,8 +118,14 @@ struct OpHenkyStressAndTangent : public DomainEleOp {
 
       F(i, j) = t_grad(i, j) + t_kd(i, j);
       C(i, j) = F(k, i) ^ F(k, j);
+      
+      for (int ii = 0; ii != DIM; ii++)
+        for (int jj = 0; jj != DIM; jj++)
+          eigen_vec(ii, jj) = C(ii, jj);
 
-      CHKERR get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
+      CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
+      // get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
+
       // rare case when two eigen values are equal
       auto nb_uniq = get_uniq_nb(eig);
       if (DIM == 3 && nb_uniq == 2)
