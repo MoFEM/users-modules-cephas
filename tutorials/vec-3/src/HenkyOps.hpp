@@ -14,29 +14,6 @@
 
 namespace HenkyOps {
 
-template <int DIM>
-inline MoFEMErrorCode
-get_eigen_val_and_proj_lapack(const FTensor::Tensor2_symmetric<double, DIM> &X,
-                              FTensor::Tensor1<double, DIM> &eig,
-                              FTensor::Tensor2<double, DIM, DIM> &eig_vec) {
-
-  MoFEMFunctionBeginHot;
-  for (int ii = 0; ii != DIM; ii++)
-    for (int jj = 0; jj != DIM; jj++)
-      eig_vec(ii, jj) = X(ii, jj);
-
-  int n  = DIM;
-  int lda = DIM;
-  int lwork = (DIM + 2) * DIM;
-  std::array<double, (DIM + 2) * DIM> work;
-
-  if (lapack_dsyev('V', 'U', n, &(eig_vec(0, 0)), lda, &eig(0), work.data(),
-                   lwork) > 0)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
-            "The algorithm failed to compute eigenvalues.");
-  MoFEMFunctionReturnHot(0);
-}
-
 template <int DIM, bool IS_LHS>
 struct OpHenkyStressAndTangent : public DomainEleOp {
   OpHenkyStressAndTangent(const std::string field_name,
@@ -124,7 +101,6 @@ struct OpHenkyStressAndTangent : public DomainEleOp {
           eigen_vec(ii, jj) = C(ii, jj);
 
       CHKERR computeEigenValuesSymmetric<DIM>(eigen_vec, eig);
-      // get_eigen_val_and_proj_lapack<DIM>(C, eig, eigen_vec);
 
       // rare case when two eigen values are equal
       auto nb_uniq = get_uniq_nb(eig);
