@@ -342,8 +342,8 @@ MoFEMErrorCode OpTools<EleOp>::OpBase::aSsemble(EntData &row_data,
   auto row_indices = row_data.getIndices();
   CHKERR OpBase::applyBoundaryMarker(row_data);
   // assemble local matrix
-  CHKERR MatSetValues(this->getKSPB(), row_data, col_data, &*locMat.data().begin(),
-                      ADD_VALUES);
+  CHKERR MatSetValues(this->getKSPB(), row_data, col_data,
+                      &*locMat.data().begin(), ADD_VALUES);
   row_data.getIndices().data().swap(row_indices.data());
   MoFEMFunctionReturn(0);
 }

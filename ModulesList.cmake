@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-# Load precompile headers to the speed-up compilation process.
+# Load precompiled headers to the speed-up compilation process.
 include(cmake/PrecompileHeaders.cmake)
 
 # Get user module commit id and pass to cpp for logging
@@ -24,13 +24,13 @@ if(EXTERNAL_MODULES_BUILD)
   find_package(
      UM REQUIRED HINTS ${MOFEM_DIR} ${PROJECT_BINARY_DIR} $ENV{MOFEM_DIR})  
 
-  if(UM_INSTALL_BREFIX)
+  if(UM_INSTALL_PREFIX)
     include(
-      ${UM_INSTALL_BREFIX}/lib/basic_finite_elements/users_modules_targets.cmake)
-  else(UM_INSTALL_BREFIX)
+      ${UM_INSTALL_PREFIX}/lib/basic_finite_elements/users_modules_targets.cmake)
+  else(UM_INSTALL_PREFIX)
     include(
       ${MoFEM_INSTALL_DIR}/lib/basic_finite_elements/users_modules_targets.cmake)
-  endif(UM_INSTALL_BREFIX)
+  endif(UM_INSTALL_PREFIX)
 
 else(EXTERNAL_MODULES_BUILD)
 
@@ -41,13 +41,9 @@ else(EXTERNAL_MODULES_BUILD)
 
   # Build basic finite element library
   include(${PROJECT_SOURCE_DIR}/basic_finite_elements/UMBuildLib.cmake)
-  # Download some known modules (Obsolete). It is used to resting on the
-  # developemnt server to automatically clone some modules from git repsitort
-  # to root source directory.
-  include(cmake/WithModules.cmake)
   # Find modules in a users modules source directory. If file
-  # InstalledAddModule.cmake if found in the directory, it is recognised that
-  # director is module and name of directory become module name.
+  # InstalledAddModule.cmake is found in the directory, it is recognised that
+  # directory is module and name of directory become module name.
   file(
     GLOB_RECURSE INSTLLED_MODULES
     FOLLOW_SYMLINKS
@@ -91,9 +87,6 @@ add_custom_target(
   update_users_modules
   COMMENT "Update all modules ..." VERBATIM)
 add_custom_target(
-  checkout_CDashTesting
-  COMMENT "Checkout CDashTesting branch ..." VERBATIM)
-add_custom_target(
   checkout_develop
   COMMENT "Checkout develop branch ..." VERBATIM)
 add_custom_target(
@@ -125,31 +118,33 @@ foreach(LOOP_MODULE ${INSTLLED_MODULES})
     ".*/+" ""
     MODULE_NAME ${MODULE_DIRECTORY}
   )
-  message(STATUS "Add custom targets for ${MODULE_NAME}")
-  add_custom_target(
-    update_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} pull
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Update module ... ${MODULE_NAME}" VERBATIM)
-  add_dependencies(update_users_modules update_${MODULE_NAME})
-  add_custom_target(
-    checkout_CDashTesting_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} checkout CDashTesting
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Checkout CDashTesting baranch for module ${MODULE_NAME}" VERBATIM)
-  add_dependencies(checkout_CDashTesting checkout_CDashTesting_${MODULE_NAME})
-  add_custom_target(
-    checkout_develop_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} checkout develop
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Checkout develop baranch for module ${MODULE_NAME}" VERBATIM)
-  add_dependencies(checkout_develop checkout_develop_${MODULE_NAME})
-  add_custom_target(
-    checkout_master_${MODULE_NAME}
-    COMMAND ${GIT_EXECUTABLE} checkout master
-    WORKING_DIRECTORY ${MODULE_DIRECTORY}
-    COMMENT "Checkout master baranch for module ${MODULE_NAME}" VERBATIM)
-  add_dependencies(checkout_master checkout_master_${MODULE_NAME})
+  if(
+    NOT ${MODULE_NAME} MATCHES "basic_finite_elements" 
+    AND 
+    NOT ${MODULE_NAME} MATCHES "tutorials")
+    #message(STATUS "Add custom targets for ${MODULE_NAME}")
+    add_custom_target(
+      update_${MODULE_NAME}
+      COMMAND ${GIT_EXECUTABLE} pull
+      WORKING_DIRECTORY ${MODULE_DIRECTORY}
+      COMMENT "Update module ... ${MODULE_NAME}" VERBATIM)
+    add_dependencies(update_users_modules update_${MODULE_NAME})
+    add_custom_target(
+      checkout_develop_${MODULE_NAME}
+      COMMAND ${GIT_EXECUTABLE} checkout develop
+      WORKING_DIRECTORY ${MODULE_DIRECTORY}
+      COMMENT "Checkout develop baranch for module ${MODULE_NAME}" VERBATIM)
+    add_dependencies(checkout_develop checkout_develop_${MODULE_NAME})
+    add_custom_target(
+      checkout_master_${MODULE_NAME}
+      COMMAND ${GIT_EXECUTABLE} checkout master
+      WORKING_DIRECTORY ${MODULE_DIRECTORY}
+      COMMENT "Checkout master baranch for module ${MODULE_NAME}" VERBATIM)
+    add_dependencies(checkout_master checkout_master_${MODULE_NAME})
+  endif(
+    NOT ${MODULE_NAME} MATCHES "basic_finite_elements" 
+    AND
+    NOT ${MODULE_NAME} MATCHES "tutorials")
   # include module
   include(${LOOP_MODULE})
 endforeach(LOOP_MODULE)

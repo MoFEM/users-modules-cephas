@@ -14,6 +14,9 @@ using EntData = DataForcesAndSourcesCore::EntData;
 
 namespace Poisson2DNonhomogeneousOperators {
 
+constexpr auto VecSetValues = MoFEM::VecSetValues<MoFEM::EssentialBcStorage>;
+constexpr auto MatSetValues = MoFEM::MatSetValues<MoFEM::EssentialBcStorage>;
+
 FTensor::Index<'i', 2> i;
 
 // const double body_source = 10;
@@ -22,10 +25,8 @@ typedef boost::function<double(const double, const double, const double)>
 
 struct OpDomainLhs : public OpFaceEle {
 public:
-  OpDomainLhs(std::string row_field_name, std::string col_field_name,
-              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
-      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
-        boundaryMarker(boundary_marker) {
+  OpDomainLhs(std::string row_field_name, std::string col_field_name)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL) {
     sYmm = true;
   }
 
@@ -80,32 +81,10 @@ public:
 
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
 
-      // store original row indices
-      auto row_indices = row_data.getIndices();
-      // mark indices of boundary DOFs as -1
-      if (boundaryMarker) {
-        for (int r = 0; r != row_data.getIndices().size(); ++r) {
-          if ((*boundaryMarker)[row_data.getLocalIndices()[r]]) {
-            row_data.getIndices()[r] = -1;
-          }
-        }
-      }
       // Fill value to local stiffness matrix ignoring boundary DOFs
       CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
                           ADD_VALUES);
-      // Revert back row indices to the original
-      row_data.getIndices().data().swap(row_indices.data());
 
-      // store original column row indices
-      auto col_indices = col_data.getIndices();
-      // mark indices of boundary DOFs as -1
-      if (boundaryMarker) {
-        for (int c = 0; c != col_data.getIndices().size(); ++c) {
-          if ((*boundaryMarker)[col_data.getLocalIndices()[c]]) {
-            col_data.getIndices()[c] = -1;
-          }
-        }
-      }
       // Fill values of symmetric local stiffness matrix
       if (row_side != col_side || row_type != col_type) {
         transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
@@ -113,8 +92,6 @@ public:
         CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
                             ADD_VALUES);
       }
-      // Revert back row indices to the original
-      col_data.getIndices().data().swap(col_indices.data());
     }
 
     MoFEMFunctionReturn(0);
@@ -127,10 +104,9 @@ private:
 
 struct OpDomainRhs : public OpFaceEle {
 public:
-  OpDomainRhs(std::string field_name, ScalarFunc source_term_function,
-              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+  OpDomainRhs(std::string field_name, ScalarFunc source_term_function)
       : OpFaceEle(field_name, OpFaceEle::OPROW),
-        sourceTermFunc(source_term_function), boundaryMarker(boundary_marker) {}
+        sourceTermFunc(source_term_function) {}
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -177,21 +153,7 @@ public:
       }
 
       // FILL VALUES OF THE GLOBAL VECTOR ENTRIES FROM THE LOCAL ONES
-
-      auto row_indices = data.getIndices();
-      // Mark the boundary DOFs and fill only domain DOFs
-      if (boundaryMarker) {
-        for (int r = 0; r != data.getIndices().size(); ++r) {
-          if ((*boundaryMarker)[data.getLocalIndices()[r]]) {
-            data.getIndices()[r] = -1;
-          }
-        }
-      }
-      CHKERR VecSetOption(getKSPf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
       CHKERR VecSetValues(getKSPf(), data, &*locRhs.begin(), ADD_VALUES);
-
-      // revert back the indices
-      data.getIndices().data().swap(row_indices.data());
     }
 
     MoFEMFunctionReturn(0);
@@ -199,7 +161,6 @@ public:
 
 private:
   ScalarFunc sourceTermFunc;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
   VectorDouble locRhs;
 };
 

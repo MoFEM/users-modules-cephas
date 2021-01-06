@@ -2005,6 +2005,12 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
 
   for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
+    if (isFieldDisp) {
+      t_h(0, 0) += 1;
+      t_h(1, 1) += 1;
+      t_h(2, 2) += 1;
+    }
+
     if (!isALE) {
       t_small_strain_symm(i, j) = (t_h(i, j) || t_h(j, i)) / 2.;
     } else {
@@ -2015,11 +2021,9 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
       ++t_H;
     }
 
-    if (isALE || !isFieldDisp) {
-      t_small_strain_symm(0, 0) -= 1;
-      t_small_strain_symm(1, 1) -= 1;
-      t_small_strain_symm(2, 2) -= 1;
-    }
+    t_small_strain_symm(0, 0) -= 1;
+    t_small_strain_symm(1, 1) -= 1;
+    t_small_strain_symm(2, 2) -= 1;
 
     // symmetric tensors need improvement
     t_stress_symm(i, j) = t_D(i, j, k, l) * t_small_strain_symm(k, l);
