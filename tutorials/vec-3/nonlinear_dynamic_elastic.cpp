@@ -284,11 +284,6 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpK("U", "U", henky_common_data_ptr->getMatTangent()));
 
-  // pipeline_mng->getOpDomainLhsPipeline().push_back(
-  //     new OpHenkyStressAndTangent<SPACE_DIM, true>(
-  //         "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
-  // pipeline_mng->getOpDomainLhsPipeline().push_back(
-  //     new OpK("U", "U", matTangentPtr));
   if (!is_quasi_static)
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpMass("U", "U", get_rho));
@@ -308,9 +303,6 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
 
-  // pipeline_mng->getOpDomainRhsPipeline().push_back(
-  //     new OpHenkyStressAndTangent<SPACE_DIM, false>(
-  //         "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", henky_common_data_ptr->getMatPiolaStress()));
   if (!is_quasi_static) {
