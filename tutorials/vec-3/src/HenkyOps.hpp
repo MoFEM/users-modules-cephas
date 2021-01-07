@@ -228,6 +228,8 @@ template <int DIM> struct OpCalculateLogC_dC : public DomainEleOp {
       t_logC_dC(i, j, k, l) = dlogC_dC(i, j, k, l);
 
       ++t_logC_dC;
+      ++t_eig_val;
+      ++t_eig_vec;
     }
 
     MoFEMFunctionReturn(0);
@@ -270,7 +272,6 @@ template <int DIM> struct OpCalculatePiolaStress : public DomainEleOp {
     auto t_S =
         getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
     auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
-
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       FTensor::Tensor2<double, DIM, DIM> t_F;
