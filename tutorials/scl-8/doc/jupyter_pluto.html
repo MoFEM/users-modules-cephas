@@ -14326,7 +14326,7 @@ I = -0.23 - 0.3 \sin{(\theta)}
 \end{equation}<p>where $\theta$ is altitude of point $\mathbf{x}$ on Pluto surface, see <a href="https://en.wikipedia.org/wiki/Horizontal_coordinate_system">Horizontal_coordinate_system</a>.</p>
 <h3 id="Body-and-space-radiation">Body and space radiation<a class="anchor-link" href="#Body-and-space-radiation">&#182;</a></h3><p>We will assume that surface of Pluto radiates energy in the space; it also receives energy from space, which has some relict temperature. We assume that outer space temperature is 3K degrees, following Wikipedia (<a href="https://en.wikipedia.org/wiki/Outer_space">https://en.wikipedia.org/wiki/Outer_space</a>). Balance of energy received by radiation be quantified by <a href="https://en.wikipedia.org/wiki/Planck%27s_law">Plank's law</a> integrated by all possible wave frequencies, see <a href="https://en.wikipedia.org/wiki/Thermal_radiation">https://en.wikipedia.org/wiki/Thermal_radiation</a>. Finally, you can express our ideas into the equation</p>
 \begin{equation}
-dP^r(\mathbf{x}) = \epsilon \sigma (T^4(\mathbf{x})-\overline{T}^4) dA \quad [W]
+dP^r(\mathbf{x}) = \epsilon \sigma (T^4(\mathbf{x})-T_S^4) dA \quad [W]
 \label{eq:solar_raddiation4} \tag{8}
 \end{equation}<p>where:</p>
 <ul>
@@ -14334,7 +14334,7 @@ dP^r(\mathbf{x}) = \epsilon \sigma (T^4(\mathbf{x})-\overline{T}^4) dA \quad [W]
 <li>$\epsilon$ is emissivity,</li>
 <li>$\sigma$ is <a href="https://en.wikipedia.org/wiki/Stefan–Boltzmann_law">Stefan–Boltzmann constant</a>,</li>
 <li>$T(\mathbf{x})$ is temperature on Pluto surface at position $\mathbf{x}$,</li>
-<li>$\overline{T}$ is temperature of space,</li>
+<li>$T_S$ is temperature of space,</li>
 <li>$d\mathbf{A}$ is surface area element.</li>
 <li>$\mathbf{x}$ is position.</li>
 </ul>
@@ -14624,7 +14624,7 @@ newton_log_file.txt  param_file.petsc	pluto.jou
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[4]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[6]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># Plot solution</span>
@@ -14673,12 +14673,12 @@ newton_log_file.txt  param_file.petsc	pluto.jou
 
 
 
-<div id="1fc18f40-c5c8-4636-9b1f-9b00e37f8ca4" class="jupyter-widgets jp-OutputArea-output ">
+<div id="c85226c8-72c7-4f9d-a541-c7792a14db23" class="jupyter-widgets jp-OutputArea-output ">
 <script type="text/javascript">
-var element = document.getElementById('1fc18f40-c5c8-4636-9b1f-9b00e37f8ca4');
+var element = document.getElementById('c85226c8-72c7-4f9d-a541-c7792a14db23');
 </script>
 <script type="application/vnd.jupyter.widget-view+json">
-{"model_id": "9922d0b959294d818acfd4e6d8539d04", "version_major": 2, "version_minor": 0}
+{"model_id": "32cc18545e5b4346b7e422d23bcad7e0", "version_major": 2, "version_minor": 0}
 </script>
 </div>
 
@@ -14713,7 +14713,7 @@ var element = document.getElementById('1fc18f40-c5c8-4636-9b1f-9b00e37f8ca4');
 \begin{equation}
 \int_\Omega  v \frac{\partial}{\partial x_i} \left( k \frac{\partial T}{\partial x_i} \right) \textrm{d}V = 0.
 \label{eq:weak1} \tag{11}
-\end{equation}<p>We call function $v$ testing function, since it test if we satisfy equation $(\ref{eq:weak1})$. Of coarse testing equation using one function $v$ is not enough, so we can take one by one many different $v$ functions and check if we fulfil equation (\ref{eq:weak1}) for each of them. In fact, we can have an infinite number of test functions $v$ against which we can test eq. (\ref{eq:weak1}). However,  that is impractical, since testing for an infinite number of functions will take forever. The solution is the discretisation of the problem, i.e. test functions and temperature can be approximately expressed by a finite number of base functions (e.g. shape functions in finite elements), multiplied by coefficients (e.g. degrees of freedom in finite elements).</p>
+\end{equation}<p>We call function $v$ testing function, since it test if we satisfy equation $(\ref{eq:weak1})$. Of curse testing equation using one function $v$ is not enough, so we can take one by one many different $v$ functions and check if we fulfil equation (\ref{eq:weak1}) for each of them. In fact, we can have an infinite number of test functions $v$ against which we can test eq. (\ref{eq:weak1}). However,  that is impractical, since testing for an infinite number of functions will take forever. The solution is the discretisation of the problem, i.e. test functions and temperature can be approximately expressed by a finite number of base functions (e.g. shape functions in finite elements), multiplied by coefficients (e.g. degrees of freedom in finite elements).</p>
 <p>In the next step, we can <a href="https://en.wikipedia.org/wiki/Integration_by_parts">integrate by parts</a> as follows</p>
 \begin{equation}
 -
@@ -14738,7 +14738,7 @@ r(T(\mathbf{x})) = -
 \int_\Gamma v dP^S
 +
 \int_\Gamma v \left[
-\epsilon \sigma (T^4_p(\mathbf{x})-T^4_s) 
+\epsilon \sigma (T^4(\mathbf{x})-T^4_S) 
 \right]
 dA
 = 0
@@ -14804,7 +14804,7 @@ v^h(\mathbf{x}) =
 \end{split}
 \label{eq:approx1} \tag{19}
 \end{equation}<p>where $N$ is a number of unknowns coefficients, e.g. $\overline{T}^a_{k+1}$, and in finite elements it is called number of degrees of freedom. In case of classical Lagrange finite elements, $N$ in this particular problem is equal to number of nodes, and $\phi_a$ in nodal function at node $a$. Nodal functions is picewise polynomial. Superscript $(\cdot)^h$, indicate that this is discretised solution, which depends on mesh which has some characteristic size of the element $h$. $N$ is intrinsically linked to size of mesh $h$, smaller elements in the mesh more nodes, bigger $N$.</p>
-<p>Not going into the details, by increasing $N$, i.e. a number of base functions $\phi_a$, we approximation function $T^h$ converge to function $T$, in some norm. Norm is used measure distance two functions from each other. It means that solution of our PDE can be approximated with an arbitrary error, i.e. that distance between $T$ and $T^h$ is arbitrary small, as small as which we choose to have, depending on the size of the problem, i.e. $N$. Bigger $N$ then functions are closer to each other. Of coarse big $N$, means bigger problem, and more equations to solve.</p>
+<p>Not going into the details, by increasing $N$, i.e. a number of base functions $\phi_a$, we approximation function $T^h$ converge to function $T$, in some norm. Norm is used measure distance two functions from each other. It means that solution of our PDE can be approximated with an arbitrary error, i.e. that distance between $T$ and $T^h$ is arbitrary small, as small as which we choose to have, depending on the size of the problem, i.e. $N$. Bigger $N$ then functions are closer to each other. Of course big $N$, means bigger problem, and more equations to solve.</p>
 <p>Replacing $T_k(\mathbf{x})$ and $\delta T_{k+1}(\mathbf{x})$, by $T^h_k(\mathbf{x})$ and $\delta T^h_{k+1}(\mathbf{x})$</p>
 \begin{equation}
 \mathbf{r}(T^h_k(\mathbf{x})) = 
