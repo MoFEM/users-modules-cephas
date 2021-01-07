@@ -128,7 +128,7 @@ private:
   MoFEMErrorCode checkResults();
 
   MatrixDouble invJac;
-  boost::shared_ptr<PlasticOps::CommonData> commonDataPtr;
+  boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
@@ -187,28 +187,28 @@ MoFEMErrorCode Example::createCommonData() {
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
     auto t_D =
-        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+        getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonPlasticDataPtr->mDPtr);
     t_D(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
                       A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
                           t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
 
-  commonDataPtr = boost::make_shared<PlasticOps::CommonData>();
+  commonPlasticDataPtr = boost::make_shared<PlasticOps::CommonData>();
 
-  commonDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mDPtr->resize(9, 1);
+  commonPlasticDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->mDPtr->resize(9, 1);
 
-  commonDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
 
-  commonDataPtr->plasticSurfacePtr = boost::make_shared<VectorDouble>();
-  commonDataPtr->plasticFlowPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->plasticTauPtr = boost::make_shared<VectorDouble>();
-  commonDataPtr->plasticTauDotPtr = boost::make_shared<VectorDouble>();
-  commonDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
-  commonDataPtr->plasticStrainDotPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->plasticSurfacePtr = boost::make_shared<VectorDouble>();
+  commonPlasticDataPtr->plasticFlowPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->plasticTauPtr = boost::make_shared<VectorDouble>();
+  commonPlasticDataPtr->plasticTauDotPtr = boost::make_shared<VectorDouble>();
+  commonPlasticDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
+  commonPlasticDataPtr->plasticStrainDotPtr = boost::make_shared<MatrixDouble>();
 
   CHKERR set_matrial_stiffness();
 
@@ -265,43 +265,43 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr));
+        "U", commonPlasticDataPtr->mGradPtr));
     pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
+        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
 
     pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+        "TAU", commonPlasticDataPtr->plasticTauPtr, MBTRI));
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
-        "TAU", commonDataPtr->plasticTauDotPtr, MBTRI));
+        "TAU", commonPlasticDataPtr->plasticTauDotPtr, MBTRI));
 
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
-        "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+        "EP", commonPlasticDataPtr->plasticStrainPtr, MBTRI));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<2>(
-        "EP", commonDataPtr->plasticStrainDotPtr, MBTRI));
+        "EP", commonPlasticDataPtr->plasticStrainDotPtr, MBTRI));
 
-    pipeline.push_back(new OpPlasticStress("U", commonDataPtr));
-    pipeline.push_back(new OpCalculatePlasticSurface("U", commonDataPtr));
+    pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr));
+    pipeline.push_back(new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
+    pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
 
     pipeline.push_back(
-        new OpCalculatePlasticInternalForceLhs_dEP("U", "EP", commonDataPtr));
+        new OpCalculatePlasticInternalForceLhs_dEP("U", "EP", commonPlasticDataPtr));
 
     pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dU("EP", "U", commonDataPtr));
+        new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
     pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonDataPtr));
+        new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonPlasticDataPtr));
     pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonDataPtr));
+        new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonPlasticDataPtr));
 
     pipeline.push_back(
-        new OpCalculateContrainsLhs_dU("TAU", "U", commonDataPtr));
+        new OpCalculateContrainsLhs_dU("TAU", "U", commonPlasticDataPtr));
     pipeline.push_back(
-        new OpCalculateContrainsLhs_dEP("TAU", "EP", commonDataPtr));
+        new OpCalculateContrainsLhs_dEP("TAU", "EP", commonPlasticDataPtr));
     pipeline.push_back(
-        new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonDataPtr));
+        new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -322,10 +322,10 @@ MoFEMErrorCode Example::OPs() {
 
     // Calculate internal forece
     pipeline.push_back(
-        new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
+        new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
 
-    pipeline.push_back(new OpCalculatePlasticFlowRhs("EP", commonDataPtr));
-    pipeline.push_back(new OpCalculateContrainsRhs("TAU", commonDataPtr));
+    pipeline.push_back(new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
+    pipeline.push_back(new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
@@ -403,27 +403,27 @@ MoFEMErrorCode Example::tsSolve() {
         new OpCalculateInvJacForFace(invJac));
     postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<2, 2>("U", commonDataPtr->mGradPtr));
+        new OpCalculateVectorFieldGradient<2, 2>("U", commonPlasticDataPtr->mGradPtr));
     postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
+        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
 
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonDataPtr->plasticTauPtr, MBTRI));
+        "TAU", commonPlasticDataPtr->plasticTauPtr, MBTRI));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateTensor2SymmetricFieldValues<2>(
-            "EP", commonDataPtr->plasticStrainPtr, MBTRI));
+            "EP", commonPlasticDataPtr->plasticStrainPtr, MBTRI));
     postProcFe->getOpPtrVector().push_back(
-        new OpPlasticStress("U", commonDataPtr));
+        new OpPlasticStress("U", commonPlasticDataPtr));
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculatePlasticSurface("U", commonDataPtr));
+        new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
 
     postProcFe->getOpPtrVector().push_back(
         new Tutorial::OpPostProcElastic<SPACE_DIM>(
             "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
+            commonPlasticDataPtr->mStrainPtr, commonPlasticDataPtr->mStressPtr));
 
     postProcFe->getOpPtrVector().push_back(new OpPostProcPlastic(
-        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonDataPtr));
+        "U", postProcFe->postProcMesh, postProcFe->mapGaussPts, commonPlasticDataPtr));
     postProcFe->addFieldValuesPostProc("U");
     MoFEMFunctionReturn(0);
   };
