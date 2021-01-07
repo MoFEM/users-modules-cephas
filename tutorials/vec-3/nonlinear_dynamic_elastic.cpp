@@ -270,11 +270,25 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
+
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpHenkyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpK("U", "U", henky_common_data_ptr->getMatTangent()));
+
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHenkyStressAndTangent<SPACE_DIM, true>(
           "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpK("U", "U", matTangentPtr));
+  // pipeline_mng->getOpDomainLhsPipeline().push_back(
+  //     new OpK("U", "U", matTangentPtr));
   if (!is_quasi_static)
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpMass("U", "U", get_rho));
