@@ -263,6 +263,10 @@ MoFEMErrorCode Example::assembleSystem() {
     return t_source;
   };
 
+  auto henky_common_data_ptr = boost::make_shared<HenkyOps::CommonData>();
+  henky_common_data_ptr->matGradPtr = matGradPtr;
+  henky_common_data_ptr->matDPtr = matDPtr;
+
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
@@ -280,11 +284,21 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpHenkyStressAndTangent<SPACE_DIM, false>(
-          "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
+      new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", matStressPtr));
+      new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+
+  // pipeline_mng->getOpDomainRhsPipeline().push_back(
+  //     new OpHenkyStressAndTangent<SPACE_DIM, false>(
+  //         "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpInternalForce("U", henky_common_data_ptr->getMatPiolaStress()));
   if (!is_quasi_static) {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",

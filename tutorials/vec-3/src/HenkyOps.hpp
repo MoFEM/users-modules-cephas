@@ -16,6 +16,10 @@ namespace HenkyOps {
 
 constexpr double eps = 1e-8;
 
+auto f = [](double v) { return 0.5 * log(v); };
+auto d_f = [](double v) { return 0.5 / v; };
+auto dd_f = [](double v) { return -0.5 / (v * v); };
+
 inline auto is_eq(const double &a, const double &b) {
   return std::abs(a - b) < eps;
 };
@@ -48,13 +52,31 @@ inline auto sort_eigen_vals(FTensor::Tensor1<double, DIM> &eig,
   }
 };
 
-template <int DIM> struct OpCalculateC : public DomainEleOp {
-  using SharedMat = boost::shared_ptr<MatrixDouble>;
+struct CommonData : public boost::enable_shared_from_this<CommonData> {
+  boost::shared_ptr<MatrixDouble> matGradPtr;
+  boost::shared_ptr<MatrixDouble> matDPtr;
 
-  OpCalculateC(const std::string field_name, SharedMat mat_grad_ptr,
-               SharedMat mat_c_ptr, SharedMat mat_c_dc_ptr)
-      : DomainEleOp(field_name, DomainEleOp::OPROW), matGradPtr(mat_grad_ptr),
-        matCPtr(mat_c_ptr), matCdCPtr(mat_c_dc_ptr) {}
+  MatrixDouble matEigVal;
+  MatrixDouble matEigVec;
+  MatrixDouble matLogC;
+  MatrixDouble matLogCdC;
+  MatrixDouble matPiolaStress;
+  MatrixDouble matHenkyStress;
+
+  inline auto getMatPiolaStress() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &matPiolaStress);
+  }
+};
+
+template <int DIM>
+struct OpCalculateEigenVals : public DomainEleOp {
+
+  OpCalculateEigenVals(const std::string field_name,
+                       boost::shared_ptr<CommonData> common_data)
+      : DomainEleOp(field_name, DomainEleOp::OPROW),
+        commonDataPtr(common_data) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
     MoFEMFunctionBegin;
@@ -62,22 +84,17 @@ template <int DIM> struct OpCalculateC : public DomainEleOp {
     FTensor::Index<'i', DIM> i;
     FTensor::Index<'j', DIM> j;
     FTensor::Index<'k', DIM> k;
-    FTensor::Index<'l', DIM> l;
-    FTensor::Index<'m', DIM> m;
-    FTensor::Index<'n', DIM> n;
-    FTensor::Index<'o', DIM> o;
-    FTensor::Index<'p', DIM> p;
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     // const size_t nb_gauss_pts = matGradPtr->size2();
     const size_t nb_gauss_pts = getGaussPts().size2();
-    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    matCPtr->resize(size_symm, nb_gauss_pts, false);
-    matCdCPtr->resize(size_symm * size_symm, nb_gauss_pts, false);
 
-    auto t_grad = getFTensor2FromMat<DIM, DIM>(*matGradPtr);
-    auto t_logC = getFTensor2SymmetricFromMat<DIM, DIM>(*matCPtr);
-    auto t_logC_dC = getFTensor4FromMat<DIM, DIM, DIM, DIM, 1>(*matCdCPtr);
+    auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
+
+    commonDataPtr->matEigVal.resize(DIM, nb_gauss_pts, false);
+    commonDataPtr->matEigVec.resize(DIM * DIM, nb_gauss_pts, false);
+    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -85,10 +102,6 @@ template <int DIM> struct OpCalculateC : public DomainEleOp {
       FTensor::Tensor2_symmetric<double, DIM> C;
       FTensor::Tensor1<double, DIM> eig;
       FTensor::Tensor2<double, DIM, DIM> eigen_vec;
-
-      auto f = [](double v) { return 0.5 * log(v); };
-      auto d_f = [](double v) { return 0.5 / v; };
-      auto dd_f = [](double v) { return -0.5 / (v * v); };
 
       F(i, j) = t_grad(i, j) + t_kd(i, j);
       C(i, j) = F(k, i) ^ F(k, j);
@@ -104,15 +117,110 @@ template <int DIM> struct OpCalculateC : public DomainEleOp {
       if (DIM == 3 && nb_uniq == 2)
         sort_eigen_vals<DIM>(eig, eigen_vec);
 
-      auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
-      auto dlogC_dC = EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
-      dlogC_dC(i, j, k, l) *= 2;
-
-      t_log_C(i, j) = logC(i, j);
-      t_lod_C_dC(i, j, k, l) = dlogC_dC(i, j, k, l);
+      t_eig_val(i) = eig(i);
+      t_eig_vec(i, j) = eigen_vec(i, j);
 
       ++t_grad;
+      ++t_eig_val;
+      ++t_eig_vec;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+template <int DIM> struct OpCalculateLogC : public DomainEleOp {
+
+  OpCalculateLogC(const std::string field_name,
+                  boost::shared_ptr<CommonData> common_data)
+      : DomainEleOp(field_name, DomainEleOp::OPROW),
+        commonDataPtr(common_data) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', DIM> i;
+    FTensor::Index<'j', DIM> j;
+
+    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+    // const size_t nb_gauss_pts = matGradPtr->size2();
+    const size_t nb_gauss_pts = getGaussPts().size2();
+    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+    commonDataPtr->matLogC.resize(size_symm, nb_gauss_pts, false);
+
+    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
+
+    auto c = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
+    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      // rare case when two eigen values are equal
+      auto nb_uniq = get_uniq_nb<DIM>(&(t_eig_val(0)));
+
+      FTensor::Tensor1<double, DIM> eig;
+      FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+      eig(i) = t_eig_val(i);
+      eigen_vec(i, j) = t_eig_vec(i, j);
+      auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
+      t_logC(i, j) = logC(i, j);
+
+      ++t_eig_val;
+      ++t_eig_vec;
       ++t_logC;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+template <int DIM> struct OpCalculateLogC_dC : public DomainEleOp {
+
+  OpCalculateLogC_dC(const std::string field_name,
+                     boost::shared_ptr<CommonData> common_data)
+      : DomainEleOp(field_name, DomainEleOp::OPROW), commonDataPtr(common_data) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', DIM> i;
+    FTensor::Index<'j', DIM> j;
+    FTensor::Index<'k', DIM> k;
+    FTensor::Index<'l', DIM> l;
+
+    // const size_t nb_gauss_pts = matGradPtr->size2();
+    const size_t nb_gauss_pts = getGaussPts().size2();
+    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+    commonDataPtr->matLogCdC.resize(size_symm * size_symm, nb_gauss_pts, false);
+    auto t_logC_dC = getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
+    auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
+    auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      FTensor::Tensor1<double, DIM> eig;
+      FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+      eig(i) = t_eig_val(i);
+      eigen_vec(i, j) = t_eig_vec(i, j);
+
+      // rare case when two eigen values are equal
+      auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
+      auto dlogC_dC = EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
+      dlogC_dC(i, j, k, l) *= 2;
+      
+      t_logC_dC(i, j, k, l) = dlogC_dC(i, j, k, l);
+
       ++t_logC_dC;
     }
 
@@ -120,9 +228,63 @@ template <int DIM> struct OpCalculateC : public DomainEleOp {
   }
 
 private:
-  SharedMat matGradPtr;
-  SharedMat matCPtr;
-  SharedMat matCdCPtr;
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+template <int DIM> struct OpCalculatePiolaStress : public DomainEleOp {
+
+  OpCalculatePiolaStress(const std::string field_name,
+                         boost::shared_ptr<CommonData> common_data)
+      : DomainEleOp(field_name, DomainEleOp::OPROW),
+        commonDataPtr(common_data) {
+    std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+  }
+
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
+    MoFEMFunctionBegin;
+
+    FTensor::Index<'i', DIM> i;
+    FTensor::Index<'j', DIM> j;
+    FTensor::Index<'k', DIM> k;
+    FTensor::Index<'l', DIM> l;
+
+    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+
+    // const size_t nb_gauss_pts = matGradPtr->size2();
+    const size_t nb_gauss_pts = getGaussPts().size2();
+    auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
+    auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
+    auto t_logC_dC = getFTensor4DdgFromMat<DIM, DIM>(commonDataPtr->matLogCdC);
+    constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
+    commonDataPtr->matPiolaStress.resize(DIM * DIM, nb_gauss_pts, false);
+    commonDataPtr->matHenkyStress.resize(size_symm, nb_gauss_pts, false);
+    auto t_P = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matPiolaStress);
+    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenkyStress);
+    auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
+
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      FTensor::Tensor2<double, DIM, DIM> t_F;
+      FTensor::Tensor2_symmetric<double, DIM> t_S;
+
+      t_F(i, j) = t_grad(i, j) + t_kd(i, j);
+
+      t_T(i, j) = t_D(i, j, k, l) * t_logC(k, l);
+      t_S(k, l) = t_T(i, j) * t_logC_dC(i, j, k, l);
+      t_P(i, l) = t_F(i, k) * t_S(k, l);
+
+      ++t_grad;
+      ++t_logC;
+      ++t_logC_dC;
+      ++t_P;
+      ++t_T;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
 };
 
 template <int DIM, bool IS_LHS>
