@@ -336,16 +336,15 @@ struct OpHenkyTangent : public DomainEleOp {
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      FTensor::Tensor2<double, DIM, DIM> F;
-      FTensor::Tensor2_symmetric<double, DIM> C; // right Cauchy Green
-      FTensor::Tensor2_symmetric<double, DIM> T; // stress measure
-      FTensor::Tensor2_symmetric<double, DIM> S; // 2nd Piola Stress
-      FTensor::Tensor2<double, DIM, DIM> P;      // 1st Piola Stress
+      FTensor::Tensor2<double, DIM, DIM> t_F;
+      // FTensor::Tensor2_symmetric<double, DIM> C; // right Cauchy Green
+      // FTensor::Tensor2_symmetric<double, DIM> T; // stress measure
+      // FTensor::Tensor2<double, DIM, DIM> P;      // 1st Piola Stress
       // FTensor::Tensor1<double, DIM> eig;
       // FTensor::Tensor2<double, DIM, DIM> eigen_vec;
 
 
-      F(i, j) = t_grad(i, j) + t_kd(i, j);
+      t_F(i, j) = t_grad(i, j) + t_kd(i, j);
       // C(i, j) = F(k, i) ^ F(k, j);
 
       // for (int ii = 0; ii != DIM; ii++)
@@ -356,26 +355,28 @@ struct OpHenkyTangent : public DomainEleOp {
 
       FTensor::Tensor1<double, DIM> eig;
       FTensor::Tensor2<double, DIM, DIM> eigen_vec;
+      FTensor::Tensor2_symmetric<double, DIM> T;
       eig(i) = t_eig_val(i);
       eigen_vec(i, j) = t_eig_vec(i, j);
+      T(i, j) = t_T(i, j);
 
       // rare case when two eigen values are equal
       auto nb_uniq = get_uniq_nb<DIM>(&eig(0));
-      if (DIM == 3 && nb_uniq == 2)
-        sort_eigen_vals<DIM>(eig, eigen_vec);
-      auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
+      // if (DIM == 3 && nb_uniq == 2)
+      //   sort_eigen_vals<DIM>(eig, eigen_vec);
+      // auto logC = EigenMatrix::getMat(eig, eigen_vec, f);
 
-      T(i, j) = t_D(i, j, k, l) * logC(k, l);
+      // T(i, j) = t_D(i, j, k, l) * logC(k, l);
 
       // auto dlogC_dC = EigenMatrix::getDiffMat(eig, eigen_vec, f, d_f, nb_uniq);
       // dlogC_dC(i, j, k, l) *= 2;
 
-      S(k, l) = T(i, j) * t_logC_dC(i, j, k, l);
-      P(i, l) = F(i, k) * S(k, l);
+      // S(k, l) = T(i, j) * t_logC_dC(i, j, k, l);
+      // P(i, l) = F(i, k) * S(k, l);
 
       if (1) {
         FTensor::Tensor4<double, DIM, DIM, DIM, DIM> dC_dF;
-        dC_dF(i, j, k, l) = (t_kd(i, l) * F(k, j)) + (t_kd(j, l) * F(k, i));
+        dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
 
         auto TL = EigenMatrix::getDiffDiffMat(eig, eigen_vec, f, d_f, dd_f, T,
                                               nb_uniq);
@@ -386,9 +387,9 @@ struct OpHenkyTangent : public DomainEleOp {
             TL(i, j, k, l) +
             (t_logC_dC(i, j, o, p) * t_D(o, p, m, n)) * t_logC_dC(m, n, k, l);
         P_D_P_plus_TL(i, j, k, l) *= 0.5;
-        dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * S(k, j));
+        dP_dF(i, j, m, n) = t_kd(i, m) * (t_kd(k, n) * t_S(k, j));
         dP_dF(i, j, m, n) +=
-            F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
+            t_F(i, k) * (P_D_P_plus_TL(k, j, o, p) * dC_dF(o, p, m, n));
 
         ++dP_dF;
       }
@@ -397,6 +398,8 @@ struct OpHenkyTangent : public DomainEleOp {
       ++t_eig_val;
       ++t_eig_vec;
       ++t_logC_dC;
+      ++t_S;
+      ++t_T;
     }
 
 
