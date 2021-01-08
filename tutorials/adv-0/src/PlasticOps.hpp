@@ -194,8 +194,8 @@ private:
   MatrixDouble locMat;
 };
 
-struct OpCalculateContrainsLhs_LogC_dU : public DomainEleOp {
-  OpCalculateContrainsLhs_LogC_dU(
+struct OpCalculateContrainsLhs_LogStrain_dU : public DomainEleOp {
+  OpCalculateContrainsLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
       boost::shared_ptr<HenkyOps::CommonData> comman_henky_data_ptr);
@@ -1152,7 +1152,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
   MoFEMFunctionReturn(0);
 }
 
-OpCalculateContrainsLhs_LogC_dU::OpCalculateContrainsLhs_LogC_dU(
+OpCalculateContrainsLhs_LogStrain_dU::OpCalculateContrainsLhs_LogStrain_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
     boost::shared_ptr<HenkyOps::CommonData> comman_henky_data_ptr)
@@ -1162,7 +1162,7 @@ OpCalculateContrainsLhs_LogC_dU::OpCalculateContrainsLhs_LogC_dU(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculateContrainsLhs_LogC_dU::doWork(
+MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;

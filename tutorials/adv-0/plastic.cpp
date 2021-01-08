@@ -329,15 +329,25 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
         "U", "EP", commonPlasticDataPtr));
 
-    pipeline.push_back(
-        new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
+    if (is_Henky) {
+      pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
+          "EP", "U", commonPlasticDataPtr, commonHenkyDataPtr));
+    } else {
+      pipeline.push_back(
+          new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
+    }
     pipeline.push_back(
         new OpCalculatePlasticFlowLhs_dEP("EP", "EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculatePlasticFlowLhs_dTAU("EP", "TAU", commonPlasticDataPtr));
 
-    pipeline.push_back(
-        new OpCalculateContrainsLhs_dU("TAU", "U", commonPlasticDataPtr));
+    if (is_Henky) {
+      pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
+          "TAU", "U", commonPlasticDataPtr, commonHenkyDataPtr));
+    } else {
+      pipeline.push_back(
+          new OpCalculateContrainsLhs_dU("TAU", "U", commonPlasticDataPtr));
+    }
     pipeline.push_back(
         new OpCalculateContrainsLhs_dEP("TAU", "EP", commonPlasticDataPtr));
     pipeline.push_back(
