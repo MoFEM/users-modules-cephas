@@ -278,6 +278,8 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCalculateHenkyStress<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHenkyTangent<SPACE_DIM>("U", henky_common_data_ptr));
@@ -301,10 +303,12 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHenkyStress<SPACE_DIM>("U", henky_common_data_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInternalForce("U", henky_common_data_ptr->getMatPiolaStress()));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForce(
+      "U", henky_common_data_ptr->getMatFirstPiolaStress()));
   if (!is_quasi_static) {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
