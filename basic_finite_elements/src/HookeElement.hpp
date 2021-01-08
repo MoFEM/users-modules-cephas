@@ -909,7 +909,6 @@ struct HookeElement {
       const int nb_integration_pts = row_data.getN().size1();
 
       const int val_num = 9 * nb_integration_pts;
-
       std::vector<double> def_vals(val_num, 0.0);
 
       Tag th_internal_stress;
@@ -921,6 +920,22 @@ struct HookeElement {
       CHKERR outputMesh.tag_get_handle(
           "STRESS_ACTUAL", val_num, MB_TYPE_DOUBLE, th_actual_stress,
           MB_TAG_CREAT | MB_TAG_SPARSE, &*def_vals.begin());
+
+
+      const int val_num_mean = 9;
+      std::vector<double> def_vals_mean(val_num, 0.0);
+
+      Tag th_internal_stress_mean;
+      CHKERR outputMesh.tag_get_handle("MED_INTERNAL_STRESS", val_num_mean,
+                                       MB_TYPE_DOUBLE, th_internal_stress_mean,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       &*def_vals_mean.begin());
+
+      Tag th_actual_stress_mean;
+      CHKERR outputMesh.tag_get_handle("MED_ACTUAL_STRESS", val_num_mean,
+                                       MB_TYPE_DOUBLE, th_actual_stress_mean,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       &*def_vals_mean.begin());
 
       FTensor::Index<'i', 3> i;
       FTensor::Index<'j', 3> j;
@@ -966,6 +981,14 @@ struct HookeElement {
       auto t_actual_stress =
           getFTensor2FromMat<3, 3>(*dataAtPts->actualStressMat);
 
+      VectorDouble vec_actual_stress_mean;
+      vec_actual_stress_mean.resize(9, false);
+      vec_actual_stress_mean.clear();
+
+      VectorDouble vec_internal_stress_mean;
+      vec_internal_stress_mean.resize(9, false);
+      vec_internal_stress_mean.clear();
+
       for (int gg = 0; gg != nb_integration_pts; ++gg) {
 
         if (!isALE) {
@@ -994,9 +1017,28 @@ struct HookeElement {
         t_actual_stress(i, j) *= scaleFactor;
         t_internal_stress(i, j) *= scaleFactor;
 
+        vec_actual_stress_mean[0] += t_actual_stress(0, 0);
+        vec_actual_stress_mean[1] += t_actual_stress(1, 1);
+        vec_actual_stress_mean[2] += t_actual_stress(2, 2);
+        vec_actual_stress_mean[3] += t_actual_stress(0, 1);
+        vec_actual_stress_mean[4] += t_actual_stress(0, 2);
+        vec_actual_stress_mean[5] += t_actual_stress(1, 2);
+
+        vec_internal_stress_mean[0] += t_internal_stress(0, 0);
+        vec_internal_stress_mean[1] += t_internal_stress(1, 1);
+        vec_internal_stress_mean[2] += t_internal_stress(2, 2);
+        vec_internal_stress_mean[3] += t_internal_stress(0, 1);
+        vec_internal_stress_mean[4] += t_internal_stress(0, 2);
+        vec_internal_stress_mean[5] += t_internal_stress(1, 2);
+
         ++t_h;
         ++t_actual_stress;
         ++t_internal_stress;
+      }
+
+      for (int ii = 0; ii < 9; ii++) {
+        vec_actual_stress_mean[ii] /= nb_integration_pts;
+        vec_internal_stress_mean[ii] /= nb_integration_pts;
       }
 
       CHKERR outputMesh.tag_set_data(
@@ -1005,6 +1047,14 @@ struct HookeElement {
       CHKERR outputMesh.tag_set_data(
           th_actual_stress, &ent, 1,
           &*(dataAtPts->actualStressMat->data().begin()));
+
+       CHKERR outputMesh.tag_set_data(
+          th_actual_stress_mean, &ent, 1,
+          &*(vec_actual_stress_mean.data().begin()));
+
+        CHKERR outputMesh.tag_set_data(
+          th_internal_stress_mean, &ent, 1,
+          &*(vec_internal_stress_mean.data().begin()));
 
       MoFEMFunctionReturn(0);
     };

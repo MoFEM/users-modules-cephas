@@ -29,6 +29,7 @@ using namespace MoFEM;
 static char help[] = "\n";
 double SimpleContactProblem::LoadScale::lAmbda = 1;
 using BlockData = NonlinearElasticElement::BlockData;
+using VolSideFe = VolumeElementForcesAndSourcesCoreOnSide;
 
 struct VolRule {
   int operator()(int, int, int order) const { return 2 * (order - 1); }
@@ -523,11 +524,27 @@ int main(int argc, char *argv[]) {
           FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
           FTensor::Index<'i', 3> i;
           FTensor::Index<'k', 3> j;
-          constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          // t_thermal_strain(i, j) = 0.0;
-          // t_thermal_strain(2, 2) = thermal_expansion_coef;
-          t_thermal_strain(i, j) = thermal_expansion_coef * t_kd(i, j);
+          // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+          // // t_thermal_strain(i, j) = 0.0;
+          // // t_thermal_strain(2, 2) = thermal_expansion_coef;
+          // t_thermal_strain(i, j) = thermal_expansion_coef * t_kd(i, j);
           // sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
+           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+           constexpr double alpha = 1.e-5;
+          // FIXME put here formula from test
+          double temp = 250.;
+          double z = t_coords(2);
+          if ((-10. < z && z < -1.) || std::abs(z + 1.) < 1e-15) {
+            temp = 10. / 3. * (35. - 4. * z);
+          }
+          if ((-1. < z && z < 2.) || std::abs(z - 2.) < 1e-15) {
+            temp = 10. / 3. * (34. - 5. * z);
+          }
+          if (2. < z && z < 10.) {
+            temp = 5. / 4. * (30. + 17. * z);
+          }
+
+          t_thermal_strain(i, j) = -alpha * (250. - temp) * t_kd(i, j);
           return t_thermal_strain;
         };
 
@@ -557,6 +574,30 @@ int main(int argc, char *argv[]) {
                                                data_hooke_element_at_pts, moab,
                                                use_internal_stress));
     }
+
+    Range all_tets;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+      if (bit->getName().compare(0, 11, "MAT_ELASTIC") == 0) {
+        Range tets;
+        CHKERR moab.get_entities_by_dimension(bit->getMeshset(), 3, tets, true);
+        all_tets.merge(tets);
+      }
+    }
+
+    Skinner skinner(&moab);
+    Range skin_tris;
+    CHKERR skinner.find_skin(0, all_tets, false, skin_tris);
+
+    CHKERR m_field.add_finite_element("SKIN", MF_ZERO);
+    CHKERR m_field.add_ents_to_finite_element_by_type(skin_tris, MBTRI, "SKIN");
+    CHKERR m_field.modify_finite_element_add_field_row("SKIN",
+                                                       "SPATIAL_POSITION");
+    CHKERR m_field.modify_finite_element_add_field_col("SKIN",
+                                                       "SPATIAL_POSITION");
+    CHKERR m_field.modify_finite_element_add_field_data("SKIN",
+                                                        "SPATIAL_POSITION");
+    CHKERR m_field.modify_finite_element_add_field_data("SKIN",
+                                                        "MESH_NODE_POSITIONS");
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -674,6 +715,7 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
     CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
+    CHKERR DMMoFEMAddElement(dm, "SKIN");
 
     CHKERR DMSetUp(dm);
 
@@ -854,6 +896,54 @@ int main(int argc, char *argv[]) {
             "SPATIAL_POSITION", data_hooke_element_at_pts,
             *block_sets_ptr.get(), post_proc.postProcMesh,
             post_proc.mapGaussPts, false, false));
+
+        /// Post proc on the skin
+    PostProcFaceOnRefinedMesh post_proc_skin(m_field);
+    CHKERR post_proc_skin.generateReferenceElementMesh();
+    CHKERR post_proc_skin.addFieldValuesPostProc("SPATIAL_POSITION");
+    CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+
+    struct OpGetFieldGradientValuesOnSkin
+        : public FaceElementForcesAndSourcesCore::UserDataOperator {
+
+      const std::string feVolName;
+      boost::shared_ptr<VolSideFe> sideOpFe;
+
+      OpGetFieldGradientValuesOnSkin(const std::string field_name,
+                                     const std::string vol_fe_name,
+                                     boost::shared_ptr<VolSideFe> side_fe)
+          : FaceElementForcesAndSourcesCore::UserDataOperator(
+                field_name, UserDataOperator::OPROW),
+            feVolName(vol_fe_name), sideOpFe(side_fe) {}
+
+      MoFEMErrorCode doWork(int side, EntityType type,
+                            DataForcesAndSourcesCore::EntData &data) {
+        MoFEMFunctionBegin;
+        if (type != MBVERTEX)
+          MoFEMFunctionReturnHot(0);
+        CHKERR loopSideVolumes(feVolName, *sideOpFe);
+        MoFEMFunctionReturn(0);
+      }
+    };
+
+    boost::shared_ptr<VolSideFe> my_vol_side_fe_ptr =
+        boost::make_shared<VolSideFe>(m_field);
+    my_vol_side_fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
+    my_vol_side_fe_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
+
+    post_proc_skin.getOpPtrVector().push_back(
+        new OpGetFieldGradientValuesOnSkin("SPATIAL_POSITION", "ELASTIC",
+                                           my_vol_side_fe_ptr));
+    post_proc_skin.getOpPtrVector().push_back(
+        new HookeElement::OpPostProcHookeElement<
+            FaceElementForcesAndSourcesCore>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts,
+            *block_sets_ptr.get(), post_proc_skin.postProcMesh,
+            post_proc_skin.mapGaussPts, false, false));
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {
       SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
@@ -1045,6 +1135,17 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
+
+    {
+        PetscPrintf(PETSC_COMM_WORLD, "Loop post proc on the skin\n");
+        CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
+        ostringstream stm;
+        string out_file_name;
+        stm << "out_skin.h5m";
+        out_file_name = stm.str();
+        PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
+        CHKERR post_proc_skin.writeFile(stm.str());
+      }
   }
   CATCH_ERRORS;
 
