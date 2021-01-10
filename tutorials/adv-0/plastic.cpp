@@ -95,14 +95,14 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr bool is_Henky = false;
+constexpr bool is_Henky = true;
 
 constexpr double young_modulus = 1e3;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
-constexpr double H = 1e1;
+constexpr double H = 1e2;
 constexpr double cn = H;
-constexpr int order = 1;
+constexpr int order = 2;
 
 #include <HenkyOps.hpp>
 #include <PlasticOps.hpp>
