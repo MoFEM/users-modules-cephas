@@ -219,6 +219,7 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenkyDataPtr->matGradPtr = commonPlasticDataPtr->mGradPtr;
     commonHenkyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
     commonHenkyDataPtr->matLogCPlastic = commonPlasticDataPtr->plasticStrainPtr;
+    commonPlasticDataPtr->mStressPtr = commonHenkyDataPtr->getMatLogC();
     commonPlasticDataPtr->mStressPtr = commonHenkyDataPtr->getMatHenkyStress();
   }
 
@@ -472,11 +473,11 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
 
-    // postProcFe->getOpPtrVector().push_back(
-    //     new Tutorial::OpPostProcElastic<SPACE_DIM>(
-    //         "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-    //         commonPlasticDataPtr->mStrainPtr,
-    //         commonPlasticDataPtr->mStressPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new Tutorial::OpPostProcElastic<SPACE_DIM>(
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+            commonPlasticDataPtr->mStrainPtr,
+            commonPlasticDataPtr->mStressPtr));
 
     postProcFe->getOpPtrVector().push_back(
         new OpPostProcPlastic("U", postProcFe->postProcMesh,
