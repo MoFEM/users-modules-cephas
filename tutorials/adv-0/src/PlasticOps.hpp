@@ -1035,12 +1035,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(int row_side, int 
 
       FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
           t_diff_plastic_flow_stress_dC;
-      // for (int ii = 0; ii != SPACE_DIM; ++ii)
-      //   for (int jj = 0; jj != SPACE_DIM; ++jj)
-      //     for (int kk = 0; kk != SPACE_DIM; ++kk)
-      //       for (int ll = 0; ll != SPACE_DIM; ++ll)
-      //         for (int mm = 0; mm != SPACE_DIM; ++mm)
-      //           for (int nn = 0; nn != SPACE_DIM; ++nn)
       t_diff_plastic_flow_stress_dC(i, j, k, l) =
           t_flow_stress_dlogC(i, j, m, n) * (t_logC_dC(m, n, k, l) / 2);
 
@@ -1056,7 +1050,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(int row_side, int 
                   t_diff_plastic_flow_stress_dgrad(ii, jj, kk, ll) +=
                       t_diff_plastic_flow_stress_dC(ii, jj, mm, nn) *
                       dC_dF(mm, nn, kk, ll);
-
       // t_diff_plastic_flow_stress_dgrad(i, j, k, l) =
       //     t_diff_plastic_flow_stress_dC(i, j, m, n) * dC_dF(m, n, k, l);
 
@@ -1454,13 +1447,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
           diff_constrain_dstress(
               diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)), t_flow));
 
-      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_diff_symm;
-      t_diff_constrain_diff_symm(k, l) =
-          t_diff_constrain_dstrain(i, j) * t_diff_symmetrize(i, j, k, l);
-
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
       t_diff_constrain_dlog_c(k, l) =
-          t_diff_constrain_diff_symm(i, j) * (t_logC_dC(i, j, k, l) / 2);
+          t_diff_constrain_dstrain(i, j) * (t_logC_dC(i, j, k, l) / 2);
 
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =

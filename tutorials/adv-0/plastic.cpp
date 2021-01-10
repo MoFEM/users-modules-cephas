@@ -100,7 +100,7 @@ constexpr bool is_Henky = true;
 constexpr double young_modulus = 1e3;
 constexpr double poisson_ratio = 0.25;
 constexpr double sigmaY = 1;
-constexpr double H = 1e2;
+constexpr double H = 2e1;
 constexpr double cn = H;
 constexpr int order = 2;
 
