@@ -301,7 +301,7 @@ inline auto diff_symmetrize() {
 
   t_diff(0, 1, 0, 1) = 0.5;
   t_diff(0, 1, 1, 0) = 0.5;
-  
+
   return t_diff;
 };
 
@@ -675,9 +675,21 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+    auto t_L = symm_L_tensor();
+
+    FTensor::Dg<double, SPACE_DIM, size_symm> t_DL;
+    t_DL(i, j, L) = 0;
+    for (int ii = 0; ii != SPACE_DIM; ++ii)
+      for (int jj = ii; jj != SPACE_DIM; ++jj)
+        for (int kk = 0; kk != SPACE_DIM; ++kk)
+          for (int ll = 0; ll != SPACE_DIM; ++ll)
+            for (int LL = 0; LL != size_symm; ++LL)
+              t_DL(ii, jj, LL) += t_D(ii, jj, kk, ll) * t_L(kk, ll, LL);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
@@ -685,31 +697,24 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
       size_t rr = 0;
       for (; rr != nb_row_dofs / 2; ++rr) {
 
-        FTensor::Christof<FTensor::PackPtr<double *, 3>, 2, 2> t_mat{
+        FTensor::Tensor2<FTensor::PackPtr<double *, size_symm>, 2, size_symm>
+            t_mat{
 
-            &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
-            &locMat(2 * rr + 0, 2),
+                &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
+                &locMat(2 * rr + 0, 2),
 
-            &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1),
-            &locMat(2 * rr + 1, 2)
+                &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1),
+                &locMat(2 * rr + 1, 2)
 
-        };
+            };
+
+        FTensor::Tensor2<double, 2, size_symm> t_tmp;
+        t_tmp(i, L) = (t_DL(i, j, L) * (alpha * t_row_diff_base(j)));
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
+        for (size_t cc = 0; cc != nb_col_dofs / size_symm; ++cc) {
 
-          // I mix up the indices here so that it behaves like a
-          // Dg.  That way I don't have to have a separate wrapper
-          // class Christof_Expr, which simplifies things.
-          // You cyclicly has to shift index, i, j, k -> l, i, j
-          FTensor::Christof<double, 2, 2> t_tmp;
-          t_tmp(l, i, k) =
-              (t_D(i, j, k, l) * ((alpha * t_col_base) * t_row_diff_base(j)));
-
-          for (int ii = 0; ii != 2; ++ii)
-            for (int kk = 0; kk != 2; ++kk)
-              for (int ll = 0; ll != 2; ++ll)
-                t_mat(ii, kk, ll) -= t_tmp(ii, kk, ll);
+          t_mat(i, L) -= (t_col_base * t_tmp(i, L));
 
           ++t_mat;
           ++t_col_base;
