@@ -350,6 +350,18 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateContrainsLhs_dEP("TAU", "EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
+
+    if (!is_quasi_static) {
+      // Get pointer to U_tt shift in domain element
+      auto get_rho = [this](const double, const double, const double) {
+        auto *pipeline_mng = mField.getInterface<PipelineManager>();
+        auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+        return rho * fe_domain_lhs->ts_aa;
+      };
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpMass("U", "U", get_rho));
+    }
+
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -381,6 +393,17 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
+
+    // only in case of dynamics
+    if (!is_quasi_static) {
+      auto mat_acceleration = boost::make_shared<MatrixDouble>();
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+                                                            mat_acceleration));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpInertiaForce("U", mat_acceleration, rho));
+    }
+    
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
@@ -426,16 +449,7 @@ MoFEMErrorCode Example::tsSolve() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   ISManager *is_manager = mField.getInterface<ISManager>();
 
-  auto solver = pipeline_mng->createTS();
-
-  auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
-
-  CHKERR TSSetSolution(solver, D);
-  CHKERR TSSetFromOptions(solver);
-  CHKERR TSSetUp(solver);
-
-  auto set_section_monitor = [&]() {
+  auto set_section_monitor = [&](auto solver) {
     MoFEMFunctionBegin;
     SNES snes;
     CHKERR TSGetSNES(solver, &snes);
@@ -486,7 +500,7 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto scatter_create = [&](auto coeff) {
+  auto scatter_create = [&](auto D, auto coeff) {
     SmartPetscObj<IS> is;
     CHKERR is_manager->isCreateProblemFieldAndRank(simple->getProblemName(),
                                                    ROW, "U", coeff, coeff, is);
@@ -500,7 +514,7 @@ MoFEMErrorCode Example::tsSolve() {
                            SmartPetscObj<VecScatter>(scatter));
   };
 
-  auto set_time_monitor = [&]() {
+  auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
     boost::shared_ptr<Monitor> monitor_ptr(
         new Monitor(dm, postProcFe, uXScatter, uYScatter));
@@ -510,13 +524,35 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR set_section_monitor();
+  auto dm = simple->getDM();
+  auto D = smartCreateDMVector(dm);
   CHKERR create_post_process_element();
-  uXScatter = scatter_create(0);
-  uYScatter = scatter_create(1);
-  CHKERR set_time_monitor();
+  uXScatter = scatter_create(D, 0);
+  uYScatter = scatter_create(D, 1);
+  // if (SPACE_DIM == 3)
+  //   uZScatter = scatter_create(D, 2);
 
-  CHKERR TSSolve(solver, D);
+  if (is_quasi_static) {
+    auto solver = pipeline_mng->createTS();
+    auto D = smartCreateDMVector(dm);
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
+    CHKERR TSSetSolution(solver, D);
+    CHKERR TSSetFromOptions(solver);
+    CHKERR TSSetUp(solver);
+    CHKERR TSSolve(solver, NULL);
+  } else {
+    auto solver = pipeline_mng->createTS2();
+    auto dm = simple->getDM();
+    auto D = smartCreateDMVector(dm);
+    auto DD = smartVectorDuplicate(D);
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
+    CHKERR TS2SetSolution(solver, D, DD);
+    CHKERR TSSetFromOptions(solver);
+    CHKERR TSSetUp(solver);
+    CHKERR TSSolve(solver, NULL);
+  }
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
