@@ -269,10 +269,6 @@ private:
 //! [Lambda functions]
 inline auto diff_tensor() {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_diff;
-  // t_diff(i, j, k, l) = 0;
-  // for (size_t ii = 0; ii != 2; ++ii)
-  //   for (size_t jj = ii; jj != 2; ++jj)
-  //     t_diff(ii, jj, ii, jj) = 1;
   constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
   t_diff(i, j, k, l) = (t_kd(i, k) ^ t_kd(j, l)) / 4.;
   return t_diff;
