@@ -95,10 +95,12 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
+constexpr bool is_quasi_static = false;
 constexpr bool is_Henky = true;
 
 constexpr double young_modulus = 1e3;
 constexpr double poisson_ratio = 0.25;
+constexpr double rho = 5;
 constexpr double sigmaY = 1;
 constexpr double H = 2e1;
 constexpr double cn = H;
