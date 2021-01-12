@@ -104,7 +104,7 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
 constexpr bool is_quasi_static = true;
-constexpr bool is_Henky = true;
+constexpr bool is_large_strains = true;
 
 constexpr int order = 2;
 constexpr double young_modulus = 100;
@@ -331,7 +331,7 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (is_Henky) {
+    if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
               "U", commonDataPtr->mGradPtr));
@@ -386,7 +386,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
-    if (is_Henky) {
+    if (is_large_strains) {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
