@@ -95,16 +95,16 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr bool is_quasi_static = false;
-constexpr bool is_Henky = true;
+PetscBool is_quasi_static = PETSC_FALSE;
+PetscBool is_large_strains = PETSC_TRUE;
 
-constexpr double young_modulus = 1e3;
-constexpr double poisson_ratio = 0.25;
-constexpr double rho = 5;
-constexpr double sigmaY = 1;
-constexpr double H = 2e1;
-constexpr double cn = H;
-constexpr int order = 2;
+double young_modulus = 1e3;
+double poisson_ratio = 0.25;
+double rho = 5;
+double sigmaY = 1;
+double H = 2e1;
+double cn = H;
+int order = 2;
 
 #include <HenkyOps.hpp>
 #include <PlasticOps.hpp>
@@ -172,6 +172,28 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
+  auto get_command_line_parameters = [&]() {
+    MoFEMFunctionBegin;
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
+                                 &young_modulus, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
+                                 &poisson_ratio, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-hardening", &H, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-yield_stress", &sigmaY,
+                                 PETSC_NULL);
+
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
+                               &is_large_strains, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
+                               &is_quasi_static, PETSC_NULL);
+
+    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+
+    cn = H;
+    MoFEMFunctionReturn(0);
+  };
+
   auto set_matrial_stiffness = [&]() {
     MoFEMFunctionBegin;
     FTensor::Index<'i', SPACE_DIM> i;
@@ -179,14 +201,12 @@ MoFEMErrorCode Example::createCommonData() {
     FTensor::Index<'k', SPACE_DIM> k;
     FTensor::Index<'l', SPACE_DIM> l;
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    constexpr double bulk_modulus_K =
-        young_modulus / (3 * (1 - 2 * poisson_ratio));
-    constexpr double shear_modulus_G =
-        young_modulus / (2 * (1 + poisson_ratio));
+    const double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
+    const double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
     // Plane stress or when 1, plane strain or 3d
-    constexpr double A =
-        (SPACE_DIM == 2) ? 2 * shear_modulus_G /
+    const double A = (SPACE_DIM == 2)
+                         ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
     auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
@@ -214,9 +234,10 @@ MoFEMErrorCode Example::createCommonData() {
   commonPlasticDataPtr->plasticStrainDotPtr =
       boost::make_shared<MatrixDouble>();
 
+  CHKERR get_command_line_parameters();
   CHKERR set_matrial_stiffness();
 
-  if (is_Henky) {
+  if (is_large_strains) {
     commonHenkyDataPtr = boost::make_shared<HenkyOps::CommonData>();
     commonHenkyDataPtr->matGradPtr = commonPlasticDataPtr->mGradPtr;
     commonHenkyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
@@ -290,7 +311,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<2>(
         "EP", commonPlasticDataPtr->plasticStrainDotPtr));
 
-    if (is_Henky) {
+    if (is_large_strains) {
 
       if (commonPlasticDataPtr->mGradPtr != commonHenkyDataPtr->matGradPtr)
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -321,7 +342,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (is_Henky) {
+    if (is_large_strains) {
       pipeline.push_back(
           new OpHenkyTangent<SPACE_DIM>("U", commonHenkyDataPtr));
       pipeline.push_back(
@@ -383,7 +404,7 @@ MoFEMErrorCode Example::OPs() {
     // pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
-    if (is_Henky) {
+    if (is_large_strains) {
       pipeline.push_back(new OpInternalForcePiola(
           "U", commonHenkyDataPtr->getMatFirstPiolaStress()));
     } else {
