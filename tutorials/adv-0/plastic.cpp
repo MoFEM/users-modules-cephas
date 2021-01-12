@@ -1,6 +1,6 @@
 /**
- * \file lesson7_plastic.cpp
- * \example lesson7_plastic.cpp
+ * \file plastic.cpp
+ * \example plastic.cpp
  *
  * Plane stress elastic problem
  *

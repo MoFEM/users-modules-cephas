@@ -13,6 +13,7 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 /** \file PlasticOps.hpp
+ * \example PlasticOps.hpp
 
 \f[
 \left\{
