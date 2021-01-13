@@ -5,8 +5,15 @@
  *
  * \brief Non-linear elastic dynamics.
 
- NOTE: For block solver is only for settings, some features are not implemented
+ \note For block solver is only for settings, some features are not implemented
  for this part.
+
+ \note This is implementation where first order ODE is solved, and displacements
+ and velocities are independently approximated. User can set lowe approximation
+ order to velocities. However this method is inefficient comparing to method
+ using Alpha method sor second order ODEs. Look into tutorials to see how to
+ implement dynamic problem for TS type alpha2
+
 
  */
 
@@ -125,9 +132,9 @@ struct MonitorPostProc : public FEMethod {
                                        feKineticEnergy);
     double E = feElasticEnergy.eNergy;
     double T = feKineticEnergy.eNergy;
-    PetscPrintf(
-        PETSC_COMM_WORLD,
-        "%D Time %3.2e Elastic energy %3.2e Kinetic Energy %3.2e Total %3.2e\n",
+    MOFEM_LOG_C(
+        "DYNAMIC", Sev::inform,
+        "%d Time %3.2e Elastic energy %3.2e Kinetic Energy %3.2e Total %3.2e\n",
         ts_step, ts_t, E, T, E + T);
 
     MoFEMFunctionReturn(0);
@@ -257,6 +264,13 @@ int main(int argc, char *argv[]) {
   }
 
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "DYNAMIC"));
+  LogManager::setLog("DYNAMIC");
+  MOFEM_LOG_TAG("DYNAMIC", "dynamic");
 
   try {
 
@@ -846,8 +860,8 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSolve(snes, PETSC_NULL, D);
       int its;
       CHKERR SNESGetIterationNumber(snes, &its);
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n",
-                         its);
+      MOFEM_LOG_C("DYNAMIC", Sev::inform, "number of Newton iterations = %d\n",
+                  its);
 
       // Set data on the mesh
       CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector(
@@ -878,9 +892,9 @@ int main(int argc, char *argv[]) {
     CHKERR TSGetStepRejections(ts, &rejects);
     CHKERR TSGetSNESIterations(ts, &nonlinits);
     CHKERR TSGetKSPIterations(ts, &linits);
-    PetscPrintf(PETSC_COMM_WORLD,
-                "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
-                "%D, linits %D\n",
+    MOFEM_LOG_C("DYNAMIC", Sev::inform,
+                "steps %d (%d rejected, %D SNES fails), ftime %g, nonlinits "
+                "%d, linits %D\n",
                 steps, rejects, snesfails, ftime, nonlinits, linits);
     CHKERR TSDestroy(&ts);
 
