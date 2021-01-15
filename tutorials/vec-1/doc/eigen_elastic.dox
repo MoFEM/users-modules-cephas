@@ -11,11 +11,13 @@
 - Use of form integators
 - How to **push** the developed UDOs to the *Pipeline*
 
-\section theory_pluto Jupyter notebook
+\tableofcontents
+
+\section jup_vec_1 Jupyter notebook
 
 \htmlinclude eigen_elastic.html
 
-\tableofcontents
+\section source_vec_1 Source code
 
 \include eigen_elastic.cpp
 
