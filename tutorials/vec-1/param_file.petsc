@@ -29,4 +29,4 @@
 -eps_nev 5
 -eps_ncv 400
 -eps_max_it 500
--eps_krylovschur_restart 0.
+-eps_krylovschur_restart 0.9
