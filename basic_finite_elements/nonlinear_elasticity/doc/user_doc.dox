@@ -14,6 +14,9 @@ and mass matrix is implemented in \ref ConvectiveMassElement.
 
 \section dynamic_elastic_bar Dynamic analysis of prismatic 3d bar
 
+You can run this analysis in Jupyter notebook. First follow instruction here \ref docker_jupyter. Then select file in 
+\em um_view/linear_elasticity/dam_example.ipynb
+
 \subsection dynamic_elastic_bar_input_file Input files
 
 Following description and line commands are in presumption that user parent
