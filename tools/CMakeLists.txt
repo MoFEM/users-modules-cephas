@@ -144,6 +144,19 @@ target_link_libraries(extrude_prisms
 )
 install(TARGETS extrude_prisms DESTINATION bin)
 
+add_executable(reduce_med_field_comp ${CMAKE_CURRENT_SOURCE_DIR}/reduce_med_field_comp.cpp)
+target_link_libraries(reduce_med_field_comp
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS reduce_med_field_comp DESTINATION bin)
+
 cm_export_file("convert.py" export_tools)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/convert.py
   DESTINATION bin
