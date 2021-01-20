@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
                                  "-my_cn_value 1. \n"
                                  "-my_r_value 1. \n"
                                  "-my_alm_flag 0 \n";
-                                 
+
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
     std::ofstream file(param_file.c_str(), std::ios::ate);
@@ -101,10 +101,13 @@ int main(int argc, char *argv[]) {
     PetscBool alm_flag = PETSC_FALSE;
     PetscBool wave_surf_flag = PETSC_FALSE;
     PetscInt wave_dim = 2;
-    PetscInt wave_surf_block_id = 1;
+    PetscInt wave_surf_lower_block_id = 1;
+    PetscInt wave_surf_upper_block_id = 2;
     PetscReal wave_length = 1.0;
     PetscReal wave_ampl = 0.01;
     PetscReal mesh_height = 1.0;
+
+    PetscReal load_scale = 1.0;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -152,17 +155,28 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_wave_surf",
                             "if set true, make one of the surfaces wavy", "",
                             PETSC_FALSE, &wave_surf_flag, PETSC_NULL);
-    CHKERR PetscOptionsInt("-my_wave_surf_block_id",
-                           "make wavy surface of the block with this id", "",
-                           wave_surf_block_id, &wave_surf_block_id, PETSC_NULL);
+    CHKERR PetscOptionsInt(
+        "-my_wave_surf_block_id", "make wavy surface of the block with this id",
+        "", wave_surf_upper_block_id, &wave_surf_upper_block_id, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_wave_surf_lower_block_id",
+                           "make wavy surface of the lower block with this id",
+                           "", wave_surf_lower_block_id,
+                           &wave_surf_lower_block_id, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_wave_surf_upper_block_id",
+                           "make wavy surface of the upper block with this id",
+                           "", wave_surf_upper_block_id,
+                           &wave_surf_upper_block_id, PETSC_NULL);
     CHKERR PetscOptionsInt("-my_wave_dim", "dimension (2 or 3)", "", wave_dim,
                            &wave_dim, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_length", "profile wavelength", "",
                             wave_length, &wave_length, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
                             &wave_ampl, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh ",
-                            "", mesh_height, &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_mesh_height",
+                            "vertical dimension of the mesh ", "", mesh_height,
+                            &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_load_scale", "load scale ", "", load_scale,
+                            &load_scale, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -180,7 +194,7 @@ int main(int argc, char *argv[]) {
     const char *option;
     option = "";
     CHKERR moab.load_file(mesh_file_name, 0, option);
-    
+
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     if (pcomm == NULL)
       pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
@@ -306,9 +320,15 @@ int main(int argc, char *argv[]) {
           coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
           break;
         case 3:
-          coords[2] -=
-              coef * delta *
-              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda));
+          // coords[2] -=
+          //     coef * delta *
+          //     (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y /
+          //     lambda));
+          if (delta > 0) {
+            coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
+          } else {
+            coords[2] -= coef * delta * (1. - sin(2. * M_PI * x / lambda));
+          }
           break;
         default:
           SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -363,8 +383,10 @@ int main(int argc, char *argv[]) {
                                bit_levels);
 
     if (wave_surf_flag) {
-      CHKERR make_wavy_surface(wave_surf_block_id, wave_dim, wave_length,
+      CHKERR make_wavy_surface(wave_surf_lower_block_id, wave_dim, wave_length,
                                wave_ampl, mesh_height);
+      CHKERR make_wavy_surface(wave_surf_upper_block_id, wave_dim, wave_length,
+                               -wave_ampl, mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -421,9 +443,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-    
+
     auto make_contact_element = [&]() {
-      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -495,9 +516,8 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT",
-                                       contact_prisms);
-                                       
+                                       "LAGMULT", contact_prisms);
+
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);
@@ -701,7 +721,8 @@ int main(int argc, char *argv[]) {
     }
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {
-      SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
+      SimpleContactProblem::LoadScale::lAmbda =
+          load_scale * (ss + 1.0) / nb_sub_steps;
       CHKERR PetscPrintf(PETSC_COMM_WORLD, "Load scale: %6.4e\n",
                          SimpleContactProblem::LoadScale::lAmbda);
 
