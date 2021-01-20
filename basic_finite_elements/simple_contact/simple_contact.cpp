@@ -320,14 +320,11 @@ int main(int argc, char *argv[]) {
           coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
           break;
         case 3:
-          // coords[2] -=
-          //     coef * delta *
-          //     (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y /
-          //     lambda));
           if (delta > 0) {
-            coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
+            coords[2] -= coef * delta * (1. + cos(2. * M_PI * x / lambda));
           } else {
-            coords[2] -= coef * delta * (1. - sin(2. * M_PI * x / lambda));
+            coef = (height - z) / height;
+            coords[2] -= coef * delta * (1. + cos(2. * M_PI * y / lambda));
           }
           break;
         default:
@@ -744,29 +741,6 @@ int main(int argc, char *argv[]) {
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
-
-    elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
-    elastic.getLoopFeEnergy().eNergy = 0;
-    PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
-    // Print elastic energy
-    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %9.9f\n",
-                elastic.getLoopFeEnergy().eNergy);
-
-    {
-      string out_file_name;
-      std::ostringstream stm;
-      stm << "out"
-          << ".h5m";
-      out_file_name = stm.str();
-      CHKERR
-      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
-      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                               "PARALLEL=WRITE_PART");
-    }
-
     // moab_instance
     moab::Core mb_post;                   // create database
     moab::Interface &moab_proc = mb_post; // create interface to database
@@ -939,6 +913,29 @@ int main(int argc, char *argv[]) {
                          out_file_name.c_str());
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+    }
+
+    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
+
+    elastic.getLoopFeEnergy().snes_ctx = SnesMethod::CTX_SNESNONE;
+    elastic.getLoopFeEnergy().eNergy = 0;
+    PetscPrintf(PETSC_COMM_WORLD, "Loop energy\n");
+    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &elastic.getLoopFeEnergy());
+    // Print elastic energy
+    PetscPrintf(PETSC_COMM_WORLD, "Elastic energy %9.9f\n",
+                elastic.getLoopFeEnergy().eNergy);
+
+    {
+      string out_file_name;
+      std::ostringstream stm;
+      stm << "out"
+          << ".h5m";
+      out_file_name = stm.str();
+      CHKERR
+      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
+      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                               "PARALLEL=WRITE_PART");
     }
   }
   CATCH_ERRORS;
