@@ -91,6 +91,7 @@ set(TUTORIALS_DIRS
   vec-2
   vec-3
   mix-0
+  mix-1
   max-0
   max-1
   adv-0
