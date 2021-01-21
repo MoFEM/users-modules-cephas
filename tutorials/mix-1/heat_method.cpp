@@ -61,22 +61,37 @@ private:
   MatrixDouble invJac;
   MatrixDouble jAC;
 
-  //! [Approximated function]
-  static double approxFunction(const double x, const double y, const double z) {
-    return sin(x * 10.) * cos(y * 10.);
-  }
-  //! [Approximated function]
-
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode createCommonData();
   MoFEMErrorCode boundaryCondition();
-  MoFEMErrorCode assembleSystem();
-  MoFEMErrorCode solveSystem();
+  MoFEMErrorCode assembleSystem(bool first);
+  MoFEMErrorCode solveSystem(bool first);
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
+  struct OpGrad : public DomainEleOp {
+    OpGrad(boost::shared_ptr<MatrixDouble> grad_ptr);
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    boost::shared_ptr<MatrixDouble> gradPtr;
+  };
+
+  struct OpRhs : public DomainEleOp {
+
+    OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
+          boost::shared_ptr<MatrixDouble> grad_ptr);
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data);
+
+  private:
+    boost::shared_ptr<MatrixDouble> qPtr;
+    boost::shared_ptr<MatrixDouble> gradPtr;
+  };
 };
 
 //! [Run programme]
@@ -87,8 +102,10 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR setIntegrationRules();
   CHKERR createCommonData();
   CHKERR boundaryCondition();
-  CHKERR assembleSystem();
-  CHKERR solveSystem();
+  CHKERR assembleSystem(true);
+  CHKERR solveSystem(true);
+  CHKERR assembleSystem(false);
+  CHKERR solveSystem(false);
   CHKERR outputResults();
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
@@ -117,7 +134,7 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simpleInterface->addDomainField("FLUX", HCURL, DEMKOWICZ_JACOBI_BASE,
                                          1);
-  constexpr int order = 2;
+  constexpr int order = 1;
   CHKERR simpleInterface->setFieldOrder("FLUX", order);
   CHKERR simpleInterface->setFieldOrder("U", order - 1);
   CHKERR simpleInterface->setUp();
@@ -151,10 +168,13 @@ MoFEMErrorCode Example::boundaryCondition() { return 0; }
 //! [Boundary condition]
 
 //! [Push operators to pipeline]
-MoFEMErrorCode Example::assembleSystem() {
+MoFEMErrorCode Example::assembleSystem(bool first) {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto beta = [](const double, const double, const double) { return 1; };
+
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateJacForFaceEmbeddedIn3DSpace(jAC));
@@ -165,25 +185,44 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jAC));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacHcurlFaceEmbeddedIn3DSpace(invJac));
-  // pipeline_mng->getOpDomainLhsPipeline().push_back(
-  //     new OpMakeHighOrderGeometryWeightsOnFace());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHdivHdiv("FLUX", "FLUX", beta));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHdivU("FLUX", "U", -1, true));
 
-  auto rho = [](const double, const double, const double) { return -1. / dt; };
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMass("U", "U", rho));
+  if (first) {
+    auto rho = [](const double, const double, const double) {
+      return -1. / dt;
+    };
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMass("U", "U", rho));
 
-  // pipeline_mng->getOpDomainRhsPipeline().push_back(
-  //     new OpDomainSource("U", Example::approxFunction));
+  } else {
+
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateJacForFaceEmbeddedIn3DSpace(jAC));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(invJac));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jAC));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpSetInvJacHcurlFaceEmbeddedIn3DSpace(invJac));
+
+    auto q_ptr = boost::make_shared<MatrixDouble>();
+    auto grad_ptr = boost::make_shared<MatrixDouble>();
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpGrad(grad_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpRhs(q_ptr, grad_ptr));
+  }
 
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
 
 //! [Solve]
-MoFEMErrorCode Example::solveSystem() {
+MoFEMErrorCode Example::solveSystem(bool first) {
   MoFEMFunctionBegin;
 
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -192,21 +231,30 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR KSPSetUp(solver);
 
   auto dm = simpleInterface->getDM();
-  CHKERR DMKSPSetComputeRHS(dm, PETSC_NULL, PETSC_NULL);
-
   auto D = smartCreateDMVector(dm);
   auto F = smartVectorDuplicate(D);
   CHKERR VecZeroEntries(D);
   CHKERR VecZeroEntries(F);
 
-  CHKERR VecSetValue(F, 0, -1, INSERT_VALUES);
-  CHKERR VecAssemblyBegin(F);
-  CHKERR VecAssemblyBegin(F);
+  if (first) {
+    CHKERR DMKSPSetComputeRHS(dm, PETSC_NULL, PETSC_NULL);
+    // Here set value to first element, that depends on node numeration, and
+    // other things. Smarter way would be apply some source term which
+    // approximate singularity on some point on the surface.
+    CHKERR VecSetValue(F, 0, -1, INSERT_VALUES);
+    CHKERR VecAssemblyBegin(F);
+    CHKERR VecAssemblyEnd(F);
 
-  CHKERR KSPSolve(solver, F, D);
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    CHKERR KSPSolve(solver, F, D);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  } else {
+    CHKERR KSPSolve(solver, F, D);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  }
 
   double d_nrm;
   CHKERR VecNorm(D, NORM_2, &d_nrm);
@@ -214,8 +262,9 @@ MoFEMErrorCode Example::solveSystem() {
 
   MoFEMFunctionReturn(0);
 }
-
 //! [Solve]
+
+//! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -257,7 +306,7 @@ int main(int argc, char *argv[]) {
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
   LogManager::setLog("EXAMPLE");
-  MOFEM_LOG_TAG("EXAMPLE", "example"); 
+  MOFEM_LOG_TAG("EXAMPLE", "example");
 
   try {
 
@@ -286,3 +335,90 @@ int main(int argc, char *argv[]) {
   CHKERR MoFEM::Core::Finalize();
 }
 
+Example::OpGrad::OpGrad(boost::shared_ptr<MatrixDouble> grad_ptr)
+    : DomainEleOp("FLUX", DomainEleOp::OPROW), gradPtr(grad_ptr) {}
+
+MoFEMErrorCode
+Example::OpGrad::doWork(int side, EntityType type,
+                        DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  const auto nb_gauss_pts = getGaussPts().size2();
+  if (side == 0 && type == MBEDGE) {
+    gradPtr->resize(9, nb_gauss_pts, false);
+    gradPtr->clear();
+  }
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  const auto nb_dofs = data.getFieldData().size();
+  if (nb_dofs) {
+
+    auto t_grad = getFTensor2FromMat<3, 3>(*gradPtr);
+    auto t_diff_base = data.getFTensor2DiffN<3, 3>();
+    auto t_w = getFTensor0IntegrationWeight();
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      auto t_data = data.getFTensor0FieldData();
+      for (size_t bb = 0; bb != nb_dofs; ++bb) {
+        t_grad(i, j) += t_data * t_diff_base(i, j);
+        ++t_data;
+        ++t_diff_base;
+      }
+      ++t_grad;
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
+                      boost::shared_ptr<MatrixDouble> grad_ptr)
+    : DomainEleOp("U", DomainEleOp::OPROW), qPtr(q_ptr), gradPtr(grad_ptr) {}
+
+MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
+                                      DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+
+  auto nb_dofs = data.getFieldData().size();
+  if (nb_dofs) {
+
+    auto t_q = getFTensor1FromMat<3>(*qPtr);
+    auto t_grad = getFTensor2FromMat<3, 3>(*gradPtr);
+
+    auto nb_gauss_pts = getGaussPts().size2();
+    std::array<double, MAX_DOFS_ON_ENTITY> nf;
+    std::fill(nf.begin(), nf.end(), 0);
+
+    auto t_base = data.getFTensor0N();
+    auto t_w = getFTensor0IntegrationWeight();
+    auto a = getMeasure();
+
+    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
+      double alpha = t_w * a;
+
+      const double l2 = t_q(i) * t_q(i);
+      const double l = sqrt(l2);
+
+      const double div =
+          t_grad(i, i) / l - (t_q(i) * (t_grad(j, i) * t_q(j)) / pow(l, 3));
+
+      for (size_t bb = 0; bb != nb_dofs; ++bb) {
+        nf[bb] += alpha * div;
+        ++t_base;
+      }
+
+      ++t_w;
+      ++t_q;
+      ++t_grad;
+    }
+
+    CHKERR VecSetValues(getKSPf(), data, &nf[0], ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
