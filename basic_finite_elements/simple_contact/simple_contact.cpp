@@ -104,7 +104,8 @@ int main(int argc, char *argv[]) {
     PetscInt wave_surf_lower_block_id = 1;
     PetscInt wave_surf_upper_block_id = 2;
     PetscReal wave_length = 1.0;
-    PetscReal wave_ampl = 0.01;
+    PetscReal wave_ampl_lower = 0.01;
+    PetscReal wave_ampl_upper = 0.01;
     PetscReal mesh_height = 1.0;
 
     PetscReal load_scale = 1.0;
@@ -170,8 +171,10 @@ int main(int argc, char *argv[]) {
                            &wave_dim, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_length", "profile wavelength", "",
                             wave_length, &wave_length, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
-                            &wave_ampl, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_wave_ampl_lower", "lower profile amplitude", "", wave_ampl_lower,
+                            &wave_ampl_lower, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_wave_ampl_upper", "upper profile amplitude", "", wave_ampl_apper,
+                            &wave_ampl_apper, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_mesh_height",
                             "vertical dimension of the mesh ", "", mesh_height,
                             &mesh_height, PETSC_NULL);
@@ -381,9 +384,9 @@ int main(int argc, char *argv[]) {
 
     if (wave_surf_flag) {
       CHKERR make_wavy_surface(wave_surf_lower_block_id, wave_dim, wave_length,
-                               wave_ampl, mesh_height);
+                               wave_ampl_lower, mesh_height);
       CHKERR make_wavy_surface(wave_surf_upper_block_id, wave_dim, wave_length,
-                               -wave_ampl, mesh_height);
+                               -wave_ampl_upper, mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
