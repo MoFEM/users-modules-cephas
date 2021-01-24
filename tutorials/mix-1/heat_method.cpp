@@ -1,6 +1,6 @@
 /**
- * \file mix-poisson.cpp
- * \example mix-poisson.cpp
+ * \file heat_method.cpp
+ * \example heat_method.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
@@ -30,11 +30,9 @@ static char help[] = "...\n\n";
 #include <BasicFiniteElements.hpp>
 
 constexpr double dt = 1e-1;
+constexpr double reg = 1e-3;
 
-using DomainEle = MoFEM::FaceElementForcesAndSourcesCoreSwitch<
-    FaceElementForcesAndSourcesCore::NO_HO_GEOMETRY |
-    FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
-    FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>;
+using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
@@ -81,13 +79,17 @@ private:
 
   struct OpRhs : public DomainEleOp {
 
-    OpRhs(boost::shared_ptr<MatrixDouble> q_ptr);
+    OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
+          boost::shared_ptr<VectorDouble> div_ptr,
+          boost::shared_ptr<VectorDouble> dot_div_ptr);
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
 
   private:
     boost::shared_ptr<MatrixDouble> qPtr;
+    boost::shared_ptr<VectorDouble> divPtr;
+    boost::shared_ptr<VectorDouble> dotDivPtr;
   };
 
   struct OpLhs : public DomainEleOp {
@@ -144,7 +146,7 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simpleInterface->addDomainField("FLUX", HCURL, AINSWORTH_LEGENDRE_BASE,
                                          1);
-  constexpr int order = 2;
+  constexpr int order = 1;
   CHKERR simpleInterface->setFieldOrder("FLUX", order);
   CHKERR simpleInterface->setFieldOrder("U", order - 1);
   CHKERR simpleInterface->setUp();
@@ -228,14 +230,16 @@ MoFEMErrorCode Example::assembleSystem(bool first) {
   } else {
 
     auto q_ptr = boost::make_shared<MatrixDouble>();
+    auto div_ptr = boost::make_shared<VectorDouble>();
+    auto u_ptr = boost::make_shared<VectorDouble>();
     auto dot_q_ptr = boost::make_shared<MatrixDouble>();
     auto dot_div_ptr = boost::make_shared<VectorDouble>();
-    auto dot_u_ptr = boost::make_shared<VectorDouble>();
+    // auto dot_u_ptr = boost::make_shared<VectorDouble>();
 
     auto beta = [&](const double, const double, const double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-      return 1 * fe_domain_lhs->ts_a;
+      return 1;// * fe_domain_lhs->ts_a;
     };
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpHdivHdiv("FLUX", "FLUX", beta));
@@ -243,10 +247,18 @@ MoFEMErrorCode Example::assembleSystem(bool first) {
     auto minus_one_dot = [&]() {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-      return -1 * fe_domain_lhs->ts_a;
+      return -1;// * fe_domain_lhs->ts_a;
     };
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpHdivU("FLUX", "U", minus_one_dot, true));
+        new OpHdivU("FLUX", "U", minus_one_dot, false));
+
+    // auto rho = [&](const double, const double, const double) {
+    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //   auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+    //   return -1 * fe_domain_lhs->ts_a;
+    // };
+    // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMass("U", "U", rho));
+
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
@@ -265,21 +277,26 @@ MoFEMErrorCode Example::assembleSystem(bool first) {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateHdivVectorDivergence<3, 3>("FLUX", div_ptr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateScalarFieldValues("U", u_ptr));
+
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateHdivVectorFieldDot<3>("FLUX", dot_q_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateHdivVectorDivergenceDot<3, 3>("FLUX", dot_div_ptr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateScalarFieldValuesDot("U", dot_u_ptr));
+    // pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //     new OpCalculateScalarFieldValuesDot("U", dot_u_ptr));
 
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpQQ("FLUX", dot_q_ptr));
+        new OpQQ("FLUX", q_ptr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDivQU("FLUX", dot_u_ptr, -1));
+        new OpDivQU("FLUX", u_ptr, -1));
+    // pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //     new OpUDivQ("U", dot_u_ptr, -1));
+
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpUDivQ("U", dot_div_ptr, -1));
-
-    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpRhs(q_ptr));
-
+        new OpRhs(q_ptr, div_ptr, dot_div_ptr));
   }
 
   MoFEMFunctionReturn(0);
@@ -412,8 +429,9 @@ int main(int argc, char *argv[]) {
   CHKERR MoFEM::Core::Finalize();
 }
 
-Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> q_ptr)
-    : DomainEleOp("U", DomainEleOp::OPROW), qPtr(q_ptr) {}
+Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
+                      boost::shared_ptr<VectorDouble> div_ptr,boost::shared_ptr<VectorDouble> dot_div_ptr)
+    : DomainEleOp("U", DomainEleOp::OPROW), qPtr(q_ptr), divPtr(div_ptr), dotDivPtr(dot_div_ptr) {}
 
 MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
                                       DataForcesAndSourcesCore::EntData &data) {
@@ -425,6 +443,8 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
   if (nb_dofs) {
 
     auto t_q = getFTensor1FromMat<3>(*qPtr);
+    auto t_div = getFTensor0FromVec(*divPtr);
+    auto t_dot_div = getFTensor0FromVec(*dotDivPtr);
 
     auto nb_gauss_pts = getGaussPts().size2();
     std::array<double, MAX_DOFS_ON_ENTITY> nf;
@@ -438,12 +458,15 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
       double alpha = t_w * a;
 
       for (size_t bb = 0; bb != nb_dofs; ++bb) {
-        nf[bb] -= alpha * t_base * (t_q(i) * t_q(i) - 1);
+        nf[bb] -=
+            alpha * t_base * (t_q(i) * t_q(i) + reg * t_div + t_dot_div - 1);
         ++t_base;
       }
 
       ++t_w;
       ++t_q;
+      ++t_div;
+      ++t_dot_div;
     }
 
     CHKERR VecSetValues(getKSPf(), data, &nf[0], ADD_VALUES);
@@ -479,15 +502,22 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
     auto t_w = getFTensor0IntegrationWeight();
     auto a = getMeasure();
 
+    auto ts_a = getFEMethod()->ts_a;
+
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       double alpha = t_w * a;
 
       for (size_t rr = 0; rr != row_nb_dofs; ++rr) {
 
         auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor2DiffN<3, 3>(gg, 0);
+
         for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
-          loc_mat(rr, cc) -= alpha * t_row_base * 2 * (t_q(i) * t_col_base(i));
+          loc_mat(rr, cc) -= alpha * t_row_base *
+                             (2 * (t_q(i) * t_col_base(i)) +
+                              (reg + ts_a) * t_col_diff_base(i, i));
           ++t_col_base;
+          ++t_col_diff_base;
         }
 
         ++t_row_base;
