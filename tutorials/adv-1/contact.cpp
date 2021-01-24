@@ -64,7 +64,7 @@ using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
 using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMixTensorTimesGrad<SPACE_DIM>;
 using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpMixDivTimesU<SPACE_DIM>;
+    GAUSS>::OpMixDivTimesU<SPACE_DIM, SPACE_DIM>;
 using OpMixLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpMixTensorTimesGradU<SPACE_DIM>;
 using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
@@ -419,7 +419,7 @@ MoFEMErrorCode Example::OPs() {
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
 
     pipeline.push_back(
-        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr));
+        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr, 1));
     pipeline.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
     pipeline.push_back(new OpMixUTimesDivLambdaRhs(

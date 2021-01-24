@@ -29,10 +29,7 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = MoFEM::FaceElementForcesAndSourcesCoreSwitch<
-    FaceElementForcesAndSourcesCore::NO_HO_GEOMETRY |
-    FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
-    FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>;
+using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 
@@ -40,6 +37,13 @@ using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<3, 3>;
 using OpHdivU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMixDivTimesScalar<2>;
+
+using OpQQ = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<3, 3, 1>;
+using OpDivQU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpMixDivTimesU<1, 2>;
+using OpUDivQ = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesScalarField<1>;
 
 using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
@@ -150,7 +154,6 @@ MoFEMErrorCode Example::boundaryCondition() { return 0; }
 MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-  auto beta = [](const double, const double, const double) { return 1; };
 
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateJacForFace(jAC));
@@ -163,10 +166,15 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpSetInvJacHcurlFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpMakeHighOrderGeometryWeightsOnFace());
+
+  auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpHdivHdiv("FLUX", "FLUX", beta));
+
+  auto minus_one = []() { return -1; };
+
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpHdivU("FLUX", "U", -1, true));
+      new OpHdivU("FLUX", "U", minus_one, true));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDomainSource("U", Example::approxFunction));
 
@@ -223,6 +231,68 @@ MoFEMErrorCode Example::outputResults() {
 //! [Check results]
 MoFEMErrorCode Example::checkResults() {
   MoFEMFunctionBegin;
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto *simple = mField.getInterface<Simple>();
+
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE() = boost::make_shared<DomainEle>(mField);
+
+  auto dm = simple->getDM();
+  auto F = smartCreateDMVector(dm);
+  pipeline_mng->getDomainRhsFE()->f = F;
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateJacForFace(jAC));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateInvJacForFace(invJac));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetContravariantPiolaTransformFace(jAC));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpSetInvJacHcurlFace(invJac));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpMakeHighOrderGeometryWeightsOnFace());
+
+  auto res_source = [&](const double x, const double y, const double z) {
+    return -approxFunction(x, y, z);
+  };
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpDomainSource("U", res_source));
+
+  auto q_ptr = boost::make_shared<MatrixDouble>();
+  auto div_ptr = boost::make_shared<VectorDouble>();
+  auto u_ptr = boost::make_shared<VectorDouble>();
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateScalarFieldValues("U", u_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpCalculateHdivVectorDivergence<3, 2>("FLUX", div_ptr));
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpQQ("FLUX", q_ptr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpDivQU("FLUX", u_ptr, -1));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpUDivQ("U", div_ptr, -1));
+
+  CHKERR setIntegrationRules();
+  CHKERR pipeline_mng->loopFiniteElements();
+  CHKERR VecAssemblyBegin(F);
+  CHKERR VecAssemblyEnd(F);
+
+  double nrm2;
+  CHKERR VecNorm(F, NORM_2, &nrm2);
+
+  MOFEM_LOG("WORLD", Sev::inform) << "Residual norm " << nrm2;
+
+  constexpr double eps = 1e-8;
+  if(std::abs(nrm2) < eps)
+    nrm2 = 0;
+
+  if (nrm2 != 0)
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Nonzero residual");
+
   MoFEMFunctionReturn(0);
 }
 //! [Check results]
@@ -232,6 +302,13 @@ int main(int argc, char *argv[]) {
   // Initialisation of MoFEM/PETSc and MOAB data structures
   const char param_file[] = "param_file.petsc";
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
+  LogManager::setLog("EXAMPLE");
+  MOFEM_LOG_TAG("EXAMPLE", "example");
 
   try {
 
