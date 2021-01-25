@@ -33,7 +33,7 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
-  heat_method ${CMAKE_CURRENT_SOURCE_DIR}/heat_method.cpp)
+  geodetic_distance ${CMAKE_CURRENT_SOURCE_DIR}/geodetic_distance.cpp)
 
 # add_test(
 #   heat_method
