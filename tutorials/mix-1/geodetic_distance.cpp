@@ -30,7 +30,6 @@ static char help[] = "...\n\n";
 #include <BasicFiniteElements.hpp>
 
 constexpr double reg = 1e-1;
-constexpr double eps = 1e-1;
 
 using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
@@ -106,27 +105,6 @@ private:
     boost::shared_ptr<MatrixDouble> dotQPtr;
   };
 
-  struct OpRhsConsistency : public OpRhs {
-    OpRhsConsistency(boost::shared_ptr<MatrixDouble> q_ptr,
-                     boost::shared_ptr<VectorDouble> div_ptr,
-                     boost::shared_ptr<VectorDouble> u_ptr,
-                     boost::shared_ptr<MatrixDouble> dot_q_ptr,
-                     boost::shared_ptr<VectorDouble> dot_div_ptr,
-                     boost::shared_ptr<VectorDouble> dot_u_ptr);
-
-    MoFEMErrorCode doWork(int side, EntityType type,
-                          DataForcesAndSourcesCore::EntData &data);
-  };
-
-  struct OpLhsConsistency : public OpLhs {
-
-    OpLhsConsistency(boost::shared_ptr<MatrixDouble> q_ptr,
-                     boost::shared_ptr<MatrixDouble> dot_q_ptr);
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data);
-  };
 };
 
 //! [Run programme]
@@ -253,6 +231,8 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateHdivVectorFieldDot<3>("FLUX", dot_q_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpLhs(q_ptr, dot_q_ptr));
+  // pipeline_mng->getOpDomainLhsPipeline().push_back(
+      // new OpLhsConsistency(q_ptr, dot_q_ptr));
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateJacForFaceEmbeddedIn3DSpace(jAC));
@@ -283,6 +263,8 @@ MoFEMErrorCode Example::assembleSystem() {
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpRhs(q_ptr, div_ptr, u_ptr, dot_q_ptr, dot_div_ptr, dot_u_ptr));
+  // pipeline_mng->getOpDomainRhsPipeline().push_back(new OpRhsConsistency(
+      // q_ptr, div_ptr, u_ptr, dot_q_ptr, dot_div_ptr, dot_u_ptr));
 
   MoFEMFunctionReturn(0);
 }
@@ -500,124 +482,6 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
               );
           ++t_col_base;
           ++t_col_diff_base;
-        }
-
-        ++t_row_base;
-      }
-
-      ++t_w;
-      ++t_q;
-      ++t_dot_q;
-    }
-
-    CHKERR MatSetValues(getKSPB(), row_data, col_data, &loc_mat(0, 0),
-                        ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-Example::OpRhsConsistency::OpRhsConsistency(
-    boost::shared_ptr<MatrixDouble> q_ptr,
-    boost::shared_ptr<VectorDouble> div_ptr,
-    boost::shared_ptr<VectorDouble> u_ptr,
-    boost::shared_ptr<MatrixDouble> dot_q_ptr,
-    boost::shared_ptr<VectorDouble> dot_div_ptr,
-    boost::shared_ptr<VectorDouble> dot_u_ptr)
-    : OpRhs(q_ptr, div_ptr, u_ptr, dot_q_ptr, dot_div_ptr, dot_u_ptr) {}
-
-MoFEMErrorCode
-Example::OpRhsConsistency::doWork(int side, EntityType type,
-                                  DataForcesAndSourcesCore::EntData &data) {
-  MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 3> i;
-
-  auto nb_dofs = data.getIndices().size();
-  if (nb_dofs) {
-
-    auto t_q = getFTensor1FromMat<3>(*qPtr);
-
-    auto nb_gauss_pts = getGaussPts().size2();
-    std::array<double, MAX_DOFS_ON_ENTITY> nf;
-    std::fill(nf.begin(), &nf[nb_dofs], 0);
-
-    auto t_base = data.getFTensor1N<3>();
-    auto t_diff_base = data.getFTensor1N<3>();
-
-    auto t_w = getFTensor0IntegrationWeight();
-    auto a = getMeasure();
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      double alpha = t_w * a;
-
-      const double dot = t_q(i) * t_q(i);
-      const double A = 1 / (dot + eps);
-
-      for (size_t bb = 0; bb != nb_dofs; ++bb) {
-        nf[bb] += alpha * t_base(i) * A * t_q(i);
-        ++t_diff_base;
-      }
-
-      ++t_w;
-      ++t_q;
-    }
-
-    CHKERR VecSetValues(getKSPf(), data, &nf[0], ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-Example::OpLhsConsistency::OpLhsConsistency(
-    boost::shared_ptr<MatrixDouble> q_ptr,
-    boost::shared_ptr<MatrixDouble> dot_q_ptr)
-    : OpLhs(q_ptr, dot_q_ptr) {
-  sYmm = false;
-}
-
-MoFEMErrorCode Example::OpLhsConsistency::doWork(int row_side, int col_side,
-                                                 EntityType row_type,
-                                                 EntityType col_type,
-                                                 EntData &row_data,
-                                                 EntData &col_data) {
-  MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 3> i;
-
-  auto row_nb_dofs = row_data.getIndices().size();
-  auto col_nb_dofs = col_data.getIndices().size();
-
-  if (row_nb_dofs && col_nb_dofs) {
-
-    auto t_q = getFTensor1FromMat<3>(*qPtr);
-    auto t_dot_q = getFTensor1FromMat<3>(*dotQPtr);
-
-    auto nb_gauss_pts = getGaussPts().size2();
-    MatrixDouble loc_mat(row_nb_dofs, col_nb_dofs);
-    loc_mat.clear();
-
-    auto t_row_base = row_data.getFTensor1N<3>();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto a = getMeasure();
-
-    auto ts_a = getFEMethod()->ts_a;
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      double alpha = t_w * a;
-
-      const double dot = t_q(i) * t_q(i);
-      const double A = 1 / (dot + eps);
-
-      for (size_t rr = 0; rr != row_nb_dofs; ++rr) {
-
-        auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
-
-        for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
-          loc_mat(rr, cc) +=
-              alpha * t_row_base(i) * (A - 2 * dot * A * A) * t_col_base(i);
-
-          ++t_col_base;
         }
 
         ++t_row_base;
