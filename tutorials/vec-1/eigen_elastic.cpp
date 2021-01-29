@@ -2,7 +2,7 @@
  * \file eigen_elastic.cpp
  * \example eigen_elastic.cpp
  *
- * Plane stress elastic problem
+ * Calculate natural frequencies in 2d and 3d problems.
  *
  */
 

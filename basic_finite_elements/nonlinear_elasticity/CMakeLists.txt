@@ -26,6 +26,7 @@ if(ADOL-C_LIBRARY)
   bfe_copy_and_install("README" "${permissions_default}")
   bfe_copy_and_install("*.h5m" "${permissions_default}")
   bfe_copy_and_install("*.txt" "${permissions_default}")
+  bfe_copy_and_install("*.ipynb" "${permissions_execute}")
 
   file(
     COPY ${CMAKE_CURRENT_SOURCE_DIR}/do_vtk.sh.in

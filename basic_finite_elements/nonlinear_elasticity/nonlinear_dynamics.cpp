@@ -1,10 +1,19 @@
-/** \file nonlinear_gs.cpp
- * \ingroup nonlinear_elastic_elem
+/** 
+ * \file nonlinear_dynamics.cpp
+ * \example nonlinear_dynamics.cpp
+ * \ingroup nonlinear_elastic_ele
  *
  * \brief Non-linear elastic dynamics.
 
- NOTE: For block solver is only for settings, some features are not implemented
+ \note For block solver is only for settings, some features are not implemented
  for this part.
+
+ \note This is implementation where first order ODE is solved, and displacements
+ and velocities are independently approximated. User can set lowe approximation
+ order to velocities. However this method is inefficient comparing to method
+ using Alpha method sor second order ODEs. Look into tutorials to see how to
+ implement dynamic problem for TS type alpha2
+
 
  */
 
@@ -123,9 +132,9 @@ struct MonitorPostProc : public FEMethod {
                                        feKineticEnergy);
     double E = feElasticEnergy.eNergy;
     double T = feKineticEnergy.eNergy;
-    PetscPrintf(
-        PETSC_COMM_WORLD,
-        "%D Time %3.2e Elastic energy %3.2e Kinetic Energy %3.2e Total %3.2e\n",
+    MOFEM_LOG_C(
+        "DYNAMIC", Sev::inform,
+        "%d Time %3.2e Elastic energy %3.2e Kinetic Energy %3.2e Total %3.2e\n",
         ts_step, ts_t, E, T, E + T);
 
     MoFEMFunctionReturn(0);
@@ -255,6 +264,13 @@ int main(int argc, char *argv[]) {
   }
 
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
+
+  // Add logging channel for example
+  auto core_log = logging::core::get();
+  core_log->add_sink(
+      LogManager::createSink(LogManager::getStrmWorld(), "DYNAMIC"));
+  LogManager::setLog("DYNAMIC");
+  MOFEM_LOG_TAG("DYNAMIC", "dynamic");
 
   try {
 
@@ -708,32 +724,40 @@ int main(int argc, char *argv[]) {
     // fe looops
     TsCtx::FEMethodsSequence &loops_to_do_Rhs =
         ts_ctx.get_loops_to_do_IFunction();
+
+    auto add_static_rhs = [&](auto &loops_to_do_Rhs) {
+      MoFEMFunctionBegin;
+      loops_to_do_Rhs.push_back(
+          PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
+      for (auto fit = surface_forces.begin(); fit != surface_forces.end();
+           fit++) {
+        loops_to_do_Rhs.push_back(
+            PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+      }
+      for (auto fit = surface_pressure.begin(); fit != surface_pressure.end();
+           fit++) {
+        loops_to_do_Rhs.push_back(
+            PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+      }
+      for (auto fit = edge_forces.begin(); fit != edge_forces.end(); fit++) {
+        loops_to_do_Rhs.push_back(
+            PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+      }
+      for (auto fit = nodal_forces.begin(); fit != nodal_forces.end(); fit++) {
+        loops_to_do_Rhs.push_back(
+            PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
+      }
+      loops_to_do_Rhs.push_back(PairNameFEMethodPtr(
+          "FLUID_PRESSURE_FE", &fluid_pressure_fe.getLoopFe()));
+      MoFEMFunctionReturn(0);
+    };
+
+    CHKERR add_static_rhs(loops_to_do_Rhs);
+
+    loops_to_do_Rhs.push_back(PairNameFEMethodPtr("DAMPER", &damper.feRhs));
     loops_to_do_Rhs.push_back(
-        TsCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
-    loops_to_do_Rhs.push_back(
-        TsCtx::PairNameFEMethodPtr("DAMPER", &damper.feRhs));
-    for (auto fit = surface_forces.begin(); fit != surface_forces.end();
-         fit++) {
-      loops_to_do_Rhs.push_back(
-          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
-    }
-    for (auto fit = surface_pressure.begin(); fit != surface_pressure.end();
-         fit++) {
-      loops_to_do_Rhs.push_back(
-          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
-    }
-    for (auto fit = edge_forces.begin(); fit != edge_forces.end(); fit++) {
-      loops_to_do_Rhs.push_back(
-          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
-    }
-    for (auto fit = nodal_forces.begin(); fit != nodal_forces.end(); fit++) {
-      loops_to_do_Rhs.push_back(
-          TsCtx::PairNameFEMethodPtr(fit->first, &fit->second->getLoopFe()));
-    }
-    loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr(
-        "FLUID_PRESSURE_FE", &fluid_pressure_fe.getLoopFe()));
-    loops_to_do_Rhs.push_back(TsCtx::PairNameFEMethodPtr(
-        "MASS_ELEMENT", &inertia.getLoopFeMassRhs()));
+        PairNameFEMethodPtr("MASS_ELEMENT", &inertia.getLoopFeMassRhs()));
+
     ts_ctx.get_preProcess_to_do_IFunction().push_back(&shell_matrix_residual);
 
     // postproc
@@ -778,10 +802,11 @@ int main(int argc, char *argv[]) {
     CHKERR PCShellSetSetUp(pc, ConvectiveMassElement::PCShellSetUpOp);
     CHKERR PCShellSetDestroy(pc, ConvectiveMassElement::PCShellDestroy);
 
-    CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
-        "DYNAMICS", COL, D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecZeroEntries(D);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector(
+        "DYNAMICS", COL, D, INSERT_VALUES, SCATTER_REVERSE);
 
     // Solve problem at time Zero
     if (is_solve_at_time_zero) {
@@ -791,6 +816,12 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("Kuu", COL, &F);
       Vec D;
       CHKERR VecDuplicate(F, &D);
+      
+      // Set vector for Kuu problem from the mesh data
+      CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
+          "Kuu", COL, D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
 
       SnesCtx snes_ctx(m_field, "Kuu");
 
@@ -801,42 +832,14 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, &snes_ctx);
       CHKERR SNESSetFromOptions(snes);
 
-      DirichletSpatialPositionsBc my_dirichlet_bc(m_field, "DISPLACEMENT",
-                                                  PETSC_NULL, D, F);
+      DirichletDisplacementBc my_dirichlet_bc(m_field, "DISPLACEMENT",
+                                              PETSC_NULL, D, F);
 
       SnesCtx::FEMethodsSequence &loops_to_do_Rhs =
           snes_ctx.get_loops_to_do_Rhs();
       snes_ctx.get_preProcess_to_do_Rhs().push_back(&my_dirichlet_bc);
-      loops_to_do_Rhs.push_back(
-          SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeRhs()));
       fluid_pressure_fe.getLoopFe().ts_t = 0;
-      loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
-          "FLUID_PRESSURE_FE", &fluid_pressure_fe.getLoopFe()));
-      for (auto fit = surface_forces.begin(); fit != surface_forces.end();
-           fit++) {
-        fit->second->getLoopFe().ts_t = 0;
-        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
-            fit->first, &fit->second->getLoopFe()));
-      }
-      for (auto fit = surface_pressure.begin(); fit != surface_pressure.end();
-           fit++) {
-        fit->second->getLoopFe().ts_t = 0;
-        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
-            fit->first, &fit->second->getLoopFe()));
-      }
-      for (auto fit = edge_forces.begin(); fit != edge_forces.end(); fit++) {
-        fit->second->getLoopFe().ts_t = 0;
-        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
-            fit->first, &fit->second->getLoopFe()));
-      }
-      for (auto fit = nodal_forces.begin(); fit != nodal_forces.end(); fit++) {
-        fit->second->getLoopFe().ts_t = 0;
-        loops_to_do_Rhs.push_back(SnesCtx::PairNameFEMethodPtr(
-            fit->first, &fit->second->getLoopFe()));
-      }
-      inertia.getLoopFeMassRhs().ts_t = 0;
-      loops_to_do_Rhs.push_back(
-          SnesCtx::PairNameFEMethodPtr("ELASTIC", &inertia.getLoopFeMassRhs()));
+      CHKERR add_static_rhs(loops_to_do_Rhs);
       snes_ctx.get_postProcess_to_do_Rhs().push_back(&my_dirichlet_bc);
 
       SnesCtx::FEMethodsSequence &loops_to_do_Mat =
@@ -844,10 +847,6 @@ int main(int argc, char *argv[]) {
       snes_ctx.get_preProcess_to_do_Mat().push_back(&my_dirichlet_bc);
       loops_to_do_Mat.push_back(
           SnesCtx::PairNameFEMethodPtr("ELASTIC", &elastic.getLoopFeLhs()));
-      inertia.getLoopFeMassAuxLhs().ts_t = 0;
-      inertia.getLoopFeMassAuxLhs().ts_a = 0;
-      loops_to_do_Mat.push_back(SnesCtx::PairNameFEMethodPtr(
-          "ELASTIC", &inertia.getLoopFeMassAuxLhs()));
       snes_ctx.get_postProcess_to_do_Mat().push_back(&my_dirichlet_bc);
 
       CHKERR m_field.getInterface<FieldBlas>()->fieldScale(0, "VELOCITY");
@@ -861,9 +860,10 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSolve(snes, PETSC_NULL, D);
       int its;
       CHKERR SNESGetIterationNumber(snes, &its);
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "number of Newton iterations = %D\n",
-                         its);
+      MOFEM_LOG_C("DYNAMIC", Sev::inform, "number of Newton iterations = %d\n",
+                  its);
 
+      // Set data on the mesh
       CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector(
           "Kuu", COL, D, INSERT_VALUES, SCATTER_REVERSE);
 
@@ -875,6 +875,9 @@ int main(int argc, char *argv[]) {
     if (is_solve_at_time_zero) {
       CHKERR m_field.getInterface<VecManager>()->setLocalGhostVector(
           "DYNAMICS", COL, D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR TSSetSolution(ts, D);
     }
 
 #if PETSC_VERSION_GE(3, 7, 0)
@@ -889,9 +892,9 @@ int main(int argc, char *argv[]) {
     CHKERR TSGetStepRejections(ts, &rejects);
     CHKERR TSGetSNESIterations(ts, &nonlinits);
     CHKERR TSGetKSPIterations(ts, &linits);
-    PetscPrintf(PETSC_COMM_WORLD,
-                "steps %D (%D rejected, %D SNES fails), ftime %g, nonlinits "
-                "%D, linits %D\n",
+    MOFEM_LOG_C("DYNAMIC", Sev::inform,
+                "steps %d (%d rejected, %D SNES fails), ftime %g, nonlinits "
+                "%d, linits %D\n",
                 steps, rejects, snesfails, ftime, nonlinits, linits);
     CHKERR TSDestroy(&ts);
 

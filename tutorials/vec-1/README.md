@@ -25,19 +25,18 @@ read_med \
 Partitioning mesh
 ```
 mofem_part \
--my_file fork-2-0.h5m \P
+-my_file fork-2-0.h5m \
 -output_file fork-2-0_4parts.h5m \
--nparts 3 -dim 4 -adj_dim 1
+-nparts 4 -dim 3 -adj_dim 1
 ```
 
 ## Running code
 
 ```
 mpirun -np 4 ./eigen_elastic_3d \
--file_name fork-2-0_4parts.h5m -eps_monitor -order 1 \
-
+-file_name fork-2-0_4parts.h5m -eps_monitor -order 2 \
 -eps_pos_gen_non_hermitian -eps_ncv 200 \
--eps_tol 1e-3 -eps_nev 10
+-eps_tol 1e-3 -eps_nev 1
 ```
 
 ## Results for tuning fork
