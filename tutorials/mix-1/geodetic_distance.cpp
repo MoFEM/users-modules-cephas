@@ -203,8 +203,8 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule = [](int, int, int p) -> int { return 2 * p; };
-  auto one_rule = [](int, int, int p) -> int { return 3; };
+  auto rule = [](int, int, int p) -> int { return 2 * p + 2; };
+  auto one_rule = [](int, int, int p) -> int { return 2 * p; };
 
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
@@ -319,34 +319,34 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline.push_back(new OpRhs(q_ptr, div_q_ptr, u_ptr, dot_q_ptr,
                                  dot_div_q_ptr, dot_u_ptr));
 
-    // auto f = [](const double x, const double y, const double z) { return 1; };
-    // pipeline.push_back(new OpDomainSource("U", f));
+    // auto f = [](const double x, const double y, const double z) { return 1;
+    // }; pipeline.push_back(new OpDomainSource("U", f));
 
     pipeline.push_back(new OpUnSetBc("FLUX"));
   };
 
   auto add_boundary_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
+    // pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
     auto beta = [&](const double, const double, const double) { return 1; };
-    pipeline.push_back(new OpSetBc("FLUX", false, boundaryMarker));
+    // pipeline.push_back(new OpSetBc("FLUX", false, boundaryMarker));
     pipeline.push_back(new OpLhsBc());
-    pipeline.push_back(new OpUnSetBc("FLUX"));
+    // pipeline.push_back(new OpUnSetBc("FLUX"));
   };
 
   auto add_boundary_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
+    // pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
     pipeline.push_back(new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
-    pipeline.push_back(new OpSetBc("FLUX", false, boundaryMarker));
+    // pipeline.push_back(new OpSetBc("FLUX", false, boundaryMarker));
     pipeline.push_back(new OpRhsBc(q_ptr));
-    pipeline.push_back(new OpUnSetBc("FLUX"));
+    // pipeline.push_back(new OpUnSetBc("FLUX"));
   };
 
   set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
   set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
   set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
   set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
-  add_boundary_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  add_boundary_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
   MoFEMFunctionReturn(0);
 };
@@ -631,33 +631,14 @@ Example::OpRhsBc::doWork(int side, EntityType type,
 
     auto t_base = data.getFTensor1N<3>();
     auto t_w = getFTensor0IntegrationWeight();
-    auto a = getMeasure();
-
     auto t_q = getFTensor1FromMat<3>(*qPtr);
 
-    cerr << *qPtr << endl;
-    cerr << getGaussPts() << endl;
-
-    auto t_direction = getFTensor1Direction();
-    auto l = sqrt(t_direction(j) * t_direction(j));
-
-    // auto t_direction = FTensor::Tensor1<double, 3>{1., 0., 0.};
-
-    // auto t = getFEMethod()->ts_t;
-
-    // cerr << "Rhs" << endl;
-
-
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      double alpha = t_w * a;
+      double alpha = t_w;
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
-
-        // cerr << "gg " << gg << " bb " << bb << " : ";
-        // cerr << t_base(0) << " " << t_base(1) << " " << t_base(2) << endl;
-
-        nf[bb] += alpha * t_base(i) * (t_q(i) - t_direction(i) / l);
+        nf[bb] += alpha * t_base(0) * (t_q(0) - 1);
         ++t_base;
       }
 
@@ -665,15 +646,12 @@ Example::OpRhsBc::doWork(int side, EntityType type,
         ++t_base;
 
       ++t_q;
+      ++t_w;
     }
-
-    // for (size_t bb = 0; bb != nb_dofs; ++bb)
-    //   cerr << nf[bb] << " ";
-    // cerr << endl;
 
     CHKERR VecSetValues<MoFEM::EssentialBcStorage>(getKSPf(), data, &nf[0],
                                                    ADD_VALUES);
-    }
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -703,27 +681,17 @@ MoFEMErrorCode Example::OpLhsBc::doWork(int row_side, int col_side,
 
     auto t_row_base = row_data.getFTensor1N<3>();
     auto t_w = getFTensor0IntegrationWeight();
-    auto a = getMeasure();
-
-    // cerr << "Lhs" << endl;
-    // cerr << row_data.getN() << endl;
-    // cerr << col_data.getN() << endl;
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      double alpha = t_w * a;
+      double alpha = t_w;
 
       size_t rr = 0;
       for (; rr != row_nb_dofs; ++rr) {
 
-        // cerr << "gg " << gg << " rr " << rr << " : ";
-        // cerr << t_row_base(0) << " " << t_row_base(1) << " " << t_row_base(2)
-        //      << endl;
-
         auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
 
-
         for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
-          loc_mat(rr, cc) += alpha * t_row_base(i) * t_col_base(i);
+          loc_mat(rr, cc) += alpha * t_row_base(0) * t_col_base(0);
           ++t_col_base;
         }
 
@@ -735,8 +703,6 @@ MoFEMErrorCode Example::OpLhsBc::doWork(int row_side, int col_side,
 
       ++t_w;
     }
-
-    // cerr << loc_mat << endl;
 
     CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
         getKSPB(), row_data, col_data, &loc_mat(0, 0), ADD_VALUES);
