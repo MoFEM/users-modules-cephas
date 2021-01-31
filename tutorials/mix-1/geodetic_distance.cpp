@@ -28,7 +28,7 @@ using namespace MoFEM;
 static char help[] = "...\n\n";
 
 constexpr double tol = 1e-6;
-constexpr double l2 = 2e-1;
+constexpr double l2 = 5e-3;
 
 #include <BasicFiniteElements.hpp>
 
@@ -164,7 +164,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simpleInterface->addDomainField("FLUX", HCURL, AINSWORTH_LEGENDRE_BASE,
                                          1);
 
-  constexpr int order = 3;
+  constexpr int order = 2;
   CHKERR simpleInterface->setFieldOrder("U", order - 1);
   CHKERR simpleInterface->setFieldOrder("FLUX", order);
   CHKERR simpleInterface->setUp();
@@ -414,7 +414,7 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
   auto nb_dofs = data.getIndices().size();
   if (nb_dofs) {
-
+    
     auto t_q = getFTensor1FromMat<3>(*qPtr);
     auto t_div = getFTensor0FromVec(*divPtr);
 
