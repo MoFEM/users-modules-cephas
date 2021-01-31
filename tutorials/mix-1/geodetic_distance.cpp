@@ -27,8 +27,8 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-constexpr double tol = 1e-6;
-constexpr double l2 = 5e-3;
+constexpr double tol = 1e-6; ///< small number preventing logarith to blowup
+constexpr double l2 = 5e-3;  ///< characteristic size of mesh edge
 
 #include <BasicFiniteElements.hpp>
 
@@ -414,7 +414,7 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
   auto nb_dofs = data.getIndices().size();
   if (nb_dofs) {
-    
+
     auto t_q = getFTensor1FromMat<3>(*qPtr);
     auto t_div = getFTensor0FromVec(*divPtr);
 
