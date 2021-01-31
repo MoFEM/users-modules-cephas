@@ -27,7 +27,19 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-constexpr double l2 = 1e-1;
+constexpr double tol = 1e-6;
+constexpr double l2 = 1e-2;
+constexpr double eps = 1e-2;
+
+inline double sign(double x) {
+  if (x == 0)
+    return 0;
+  else if (x > 0)
+    return 1;
+  else
+    return -1;
+};
+
 
 #include <BasicFiniteElements.hpp>
 
@@ -431,8 +443,8 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       double alpha = t_w * a;
 
-      const double dot = t_q(i) * t_q(i) + l2 * t_div;
-      const double res_log = dot - 1;
+      const double dot = t_q(i) * t_q(i) + l2 * t_div + tol;
+      const double res_log = log(pow(std::abs(dot), 1 + eps));
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
@@ -501,8 +513,9 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
         auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
         auto t_col_diff_base = col_data.getFTensor2DiffN<3, 3>(gg, 0);
 
-        const double dot = t_q(i) * t_q(i) + l2 * t_div;
-        double d_res_dot = 1.;
+        const double dot = t_q(i) * t_q(i) + l2 * t_div + tol;
+        double d_res_dot = (1. / pow(std::abs(dot), 1 + eps)) * (1 + eps) *
+                           pow(std::abs(dot), eps) * sign(dot);
 
         for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
           loc_mat(rr, cc) +=
