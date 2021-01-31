@@ -21,7 +21,7 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
 #include <MoFEM.hpp>
-
+#include <MatrixFunction.hpp>
 using namespace MoFEM;
 
 template <int DIM> struct ElementsAndOps {};
@@ -38,7 +38,8 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM =
+    EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -46,16 +47,17 @@ using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+    GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+    PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 
+constexpr bool is_quasi_static = true;
 constexpr double rho = 1;
 constexpr double omega = 2.4;
 constexpr double young_modulus = 1;
@@ -63,8 +65,10 @@ constexpr double poisson_ratio = 0.25;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
+#include <HenckyOps.hpp>
 #include <OpPostProcElastic.hpp>
 using namespace Tutorial;
+using namespace HenckyOps;
 
 static double *ts_time_ptr;
 static double *ts_aa_ptr;
@@ -94,13 +98,15 @@ private:
   boost::shared_ptr<MatrixDouble> matAccelerationPtr;
   boost::shared_ptr<MatrixDouble> matInertiaPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
+
+  boost::shared_ptr<MatrixDouble> matTangentPtr;
 };
 
 //! [Create common data]
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto set_matrial_stiffens = [&]() {
+  auto set_matrial_stiffness = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
@@ -125,10 +131,12 @@ MoFEMErrorCode Example::createCommonData() {
   matInertiaPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
 
+  matTangentPtr = boost::make_shared<MatrixDouble>();
+
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
 
-  CHKERR set_matrial_stiffens();
+  CHKERR set_matrial_stiffness();
 
   MoFEMFunctionReturn(0);
 }
@@ -166,7 +174,7 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE,
                                 SPACE_DIM);
-  int order = 3;
+  int order = 2;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setUp();
@@ -245,16 +253,27 @@ MoFEMErrorCode Example::assembleSystem() {
   auto get_body_force = [this](const double, const double, const double) {
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
     auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    auto t_source = FTensor::Tensor1<double, SPACE_DIM>{0.1, 1.};
     FTensor::Index<'i', SPACE_DIM> i;
+    FTensor::Tensor1<double, SPACE_DIM> t_source;
+    t_source(i) = 0.;
+    t_source(0) = 0.1;
+    t_source(1) = 1.;
     const auto time = fe_domain_rhs->ts_t;
     t_source(i) *= sin(time * omega * M_PI);
     return t_source;
   };
 
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpMass("U", "U", get_rho));
+      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+                                                               matGradPtr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpHenckyStressAndTangent<SPACE_DIM, true>(
+          "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpK("U", "U", matTangentPtr));
+  if (!is_quasi_static)
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpMass("U", "U", get_rho));
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", get_body_force));
@@ -262,19 +281,19 @@ MoFEMErrorCode Example::assembleSystem() {
       new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
                                                                matGradPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
+      new OpHenckyStressAndTangent<SPACE_DIM, false>(
+          "U", matGradPtr, matDPtr, matStressPtr, matTangentPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
-                                                        matAccelerationPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpInertiaForce("U", matInertiaPtr));
+  if (!is_quasi_static) {
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+                                                          matAccelerationPtr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpInertiaForce("U", matInertiaPtr));
+  }
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -318,12 +337,16 @@ MoFEMErrorCode Example::solveSystem() {
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto dm = simple->getDM();
-  auto ts = pipeline_mng->createTS2();
+  MoFEM::SmartPetscObj<TS> ts;
+  if (is_quasi_static)
+    ts = pipeline_mng->createTS();
+  else
+    ts = pipeline_mng->createTS2();
 
   // Setup postprocessing
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  if (SPACE_DIM) {
+  if (SPACE_DIM == 2) {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
@@ -348,22 +371,26 @@ MoFEMErrorCode Example::solveSystem() {
                              null_fe, monitor_ptr);
 
   double ftime = 1;
-  CHKERR TSSetDuration(ts, PETSC_DEFAULT, ftime);
+  CHKERR TSSetMaxTime(ts, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
   auto T = smartCreateDMVector(simple->getDM());
-  auto TT = smartVectorDuplicate(T);
   CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
                                  SCATTER_FORWARD);
-
-  CHKERR TS2SetSolution(ts, T, TT);
-  CHKERR TSSetFromOptions(ts);
+  if (is_quasi_static) {
+    CHKERR TSSetSolution(ts, T);
+    CHKERR TSSetFromOptions(ts);
+  } else {
+    auto TT = smartVectorDuplicate(T);
+    CHKERR TS2SetSolution(ts, T, TT);
+    CHKERR TSSetFromOptions(ts);
+  }
 
   CHKERR TSSolve(ts, NULL);
   CHKERR TSGetTime(ts, &ftime);
 
   PetscInt steps, snesfails, rejects, nonlinits, linits;
-  CHKERR TSGetTimeStepNumber(ts, &steps);
+  CHKERR TSGetStepNumber(ts, &steps);
   CHKERR TSGetSNESFailures(ts, &snesfails);
   CHKERR TSGetStepRejections(ts, &rejects);
   CHKERR TSGetSNESIterations(ts, &nonlinits);
@@ -386,7 +413,7 @@ MoFEMErrorCode Example::outputResults() {
     auto *simple = mField.getInterface<Simple>();
     auto T = smartCreateDMVector(simple->getDM());
     CHKERR DMoFEMMeshToLocalVector(simple->getDM(), T, INSERT_VALUES,
-                                      SCATTER_FORWARD);
+                                   SCATTER_FORWARD);
     double nrm2;
     CHKERR VecNorm(T, NORM_2, &nrm2);
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Regression norm " << nrm2;

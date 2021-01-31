@@ -208,13 +208,19 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // boundary elements
     boundaryPipelineLhs->getOpPtrVector().push_back(
+        new OpSetBc(domainField, false, boundaryMarker));
+    boundaryPipelineLhs->getOpPtrVector().push_back(
         new OpBoundaryLhs(domainField, domainField));
+    boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // boundary elements
     boundaryPipelineRhs->getOpPtrVector().push_back(
+        new OpSetBc(domainField, false, boundaryMarker));
+    boundaryPipelineRhs->getOpPtrVector().push_back(
         new OpBoundaryRhs(domainField, boundaryFunction));
+    boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
   }
 
   // get Discrete Manager (SmartPetscObj)

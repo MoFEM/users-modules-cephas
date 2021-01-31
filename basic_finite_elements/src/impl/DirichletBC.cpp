@@ -185,8 +185,8 @@ MoFEMErrorCode DirichletDisplacementBc::iNitalize() {
   if (mapZeroRows.empty() || !methodsOp.empty()) {
 
     std::vector<DataFromBc> bcData;
-    CHKERR getBcDataFromSetsAndBlocks(bcData);
     CHKERR getRotationBcFromBlock(bcData);
+    CHKERR getBcDataFromSetsAndBlocks(bcData);
 
     for (auto &bc_it : bcData) {
 
