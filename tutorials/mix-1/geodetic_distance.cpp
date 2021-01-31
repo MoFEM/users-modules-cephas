@@ -29,8 +29,6 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-constexpr double reg = 1e-1;
-
 using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
@@ -190,7 +188,7 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simpleInterface->addBoundaryField("LAMBDA", HCURL,
                                            DEMKOWICZ_JACOBI_BASE, 1);
 
-  constexpr int order = 2;
+  constexpr int order = 1;
   CHKERR simpleInterface->setFieldOrder("U", order - 1);
   CHKERR simpleInterface->setFieldOrder("FLUX", order);
   CHKERR simpleInterface->setFieldOrder("LAMBDA", order);
@@ -203,14 +201,13 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule = [](int, int, int p) -> int { return 2 * p + 2; };
-  auto one_rule = [](int, int, int p) -> int { return 2 * p; };
+  auto rule = [](int, int, int p) -> int { return 2 * p + 1; };
 
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(rule);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(one_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(rule);
 
   MoFEMFunctionReturn(0);
 }
@@ -300,22 +297,25 @@ MoFEMErrorCode Example::assembleSystem() {
 
   auto beta = [](const double, const double, const double) { return 1; };
   auto minus_one_dot = []() { return -1; };
+  auto plus_one_dot = []() { return +1; };
 
   auto set_domain_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("FLUX", true, boundaryMarker));
     pipeline.push_back(new OpHdivHdiv("FLUX", "LAMBDA", beta));
     pipeline.push_back(new OpHdivHdiv("LAMBDA", "FLUX", beta));
     pipeline.push_back(new OpHdivU("LAMBDA", "U", minus_one_dot, true));
+    // pipeline.push_back(new OpHdivU("FLUX", "U", minus_one_dot, true, true));
     pipeline.push_back(new OpLhs(q_ptr, dot_q_ptr));
     pipeline.push_back(new OpUnSetBc("FLUX"));
   };
 
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("FLUX", true, boundaryMarker));
-    pipeline.push_back(new OpQQ("FLUX", lambda_ptr));
+    Pipeline.push_back(new OpQQ("FLUX", lambda_ptr));
     pipeline.push_back(new OpQQ("LAMBDA", q_ptr));
     pipeline.push_back(new OpDivQU("LAMBDA", u_ptr, -1));
     pipeline.push_back(new OpUDivQ("U", div_lambda_ptr, -1));
+    // pipeline.push_back(new OpUDivQ("U", div_q_ptr, -1));
     pipeline.push_back(new OpRhs(q_ptr, div_q_ptr, u_ptr, dot_q_ptr,
                                  dot_div_q_ptr, dot_u_ptr));
 
@@ -492,8 +492,6 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
     auto t_q = getFTensor1FromMat<3>(*qPtr);
     auto t_dot_q = getFTensor1FromMat<3>(*dotQPtr);
-    auto t_div = getFTensor0FromVec(*divPtr);
-    auto t_dot_div = getFTensor0FromVec(*dotDivPtr);
 
     auto nb_base_functions = data.getN().size2() / 3;
     auto nb_gauss_pts = getGaussPts().size2();
@@ -508,11 +506,12 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
       double alpha = t_w * a;
 
       const double dot = t_q(i) * t_q(i);
-      const double A = 2 * (dot - 1);
+      const double A = dot - 1;
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
-        nf[bb] += alpha * t_base(i) * t_q(i);
+        nf[bb] -= alpha * t_base(i) * A * t_q(i);
+        nf[bb] -= alpha * t_base(i) * t_dot_q(i);
         ++t_base;
       }
 
@@ -521,9 +520,7 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
       ++t_w;
       ++t_q;
-      ++t_div;
       ++t_dot_q;
-      ++t_dot_div;
     }
 
     CHKERR VecSetValues<MoFEM::EssentialBcStorage>(getKSPf(), data, &nf[0],
@@ -576,19 +573,22 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
         auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
 
         const double dot = t_q(i) * t_q(i);
-        const double A = 2 * (dot - 1);
-        const double dA = 4;
+        const double A = dot - 1;
+        const double dA = 2;
 
         for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
-          loc_mat(rr, cc) +=
-              alpha *
-              (
+          loc_mat(rr, cc) -=
+              alpha * (
 
-                  t_row_base(i) * t_col_base(i)
-                  // t_row_base(i) * A * t_col_base(i) +
-                  // t_row_base(i) * t_q(i) * dA * t_q(j) * t_col_base(j)
+                          t_row_base(i) * A * t_col_base(i) +
+                          t_row_base(i) * t_q(i) * dA * t_q(j) * t_col_base(j)
 
-              );
+                      );
+          loc_mat(rr, cc) -= alpha * (
+
+                                         t_row_base(i) * ts_a * t_col_base(i)
+
+                                     );
           ++t_col_base;
         }
 
@@ -633,12 +633,16 @@ Example::OpRhsBc::doWork(int side, EntityType type,
     auto t_w = getFTensor0IntegrationWeight();
     auto t_q = getFTensor1FromMat<3>(*qPtr);
 
+    auto t_direction = getFTensor1Direction();
+    const auto l2 = t_direction(i) * t_direction(i);
+    const auto l = sqrt(l2);
+
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       double alpha = t_w;
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
-        nf[bb] += alpha * t_base(0) * (t_q(0) - 1);
+        nf[bb] += alpha * t_base(0) * (t_q(0) + l);
         ++t_base;
       }
 
