@@ -1,6 +1,6 @@
 /**
- * \file heat_method.cpp
- * \example heat_method.cpp
+ * \file geodetic_distance.cpp
+ * \example geodetic_distance.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
