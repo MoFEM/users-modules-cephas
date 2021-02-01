@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
 
 set(permissions_default 
@@ -35,22 +35,21 @@ tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
-if(SLEPC_LIBRARY)
+tutorials_build_and_install(
+  nonlinear_dynamic_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
+tutorials_build_and_install(
+    nonlinear_dynamic_elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/nonlinear_dynamic_elastic.cpp)
+    
+set_target_properties(
+  nonlinear_dynamic_elastic_3d 
+  PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
 
-  tutorials_build_and_install(
-    eigen_elastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp)
-  set_target_properties(
-    eigen_elastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+set_target_properties(
+  nonlinear_dynamic_elastic_2d 
+  PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-  tutorials_build_and_install(
-    eigen_elastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/eigen_elastic.cpp) 
-  set_target_properties(
-    eigen_elastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
-
-  add_test(
-    eigen_elastic_2d
-    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-    ${CMAKE_CURRENT_BINARY_DIR}/eigen_elastic_2d
-    -file_name part.h5m -order 1 -log_no_color -test)
-
-endif(SLEPC_LIBRARY)
+add_test(
+  nonlinear_dynamic_elastic
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+  ${CMAKE_CURRENT_BINARY_DIR}/nonlinear_dynamic_elastic_2d
+  -file_name part.h5m -order 1 -ts_max_time 0.3 -ts_dt 0.1 -log_no_color -test)
