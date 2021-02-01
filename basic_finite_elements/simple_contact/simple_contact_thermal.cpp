@@ -98,7 +98,8 @@ int main(int argc, char *argv[]) {
     PetscReal wave_ampl = 0.01;
     PetscReal mesh_height = 1.0;
 
-    PetscReal thermal_expansion_coef = 1.0;
+    PetscReal thermal_expansion_coef = 1e-5;
+    PetscReal init_temp = 250.0;
 
     PetscReal scale_factor = 1.0;
 
@@ -188,6 +189,8 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsReal(
         "-my_thermal_expansion_coef", "thermal expansion coef ", "",
         thermal_expansion_coef, &thermal_expansion_coef, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_init_temp", "init_temp ", "", init_temp,
+                            &init_temp, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -519,7 +522,7 @@ int main(int argc, char *argv[]) {
                                       "MESH_NODE_POSITIONS", false, false,
                                       MBTET, data_hooke_element_at_pts);
     auto thermal_strain =
-        [&thermal_expansion_coef](
+        [&thermal_expansion_coef, &init_temp](
             FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
           FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
           FTensor::Index<'i', 3> i;
@@ -530,7 +533,7 @@ int main(int argc, char *argv[]) {
           // t_thermal_strain(i, j) = thermal_expansion_coef * t_kd(i, j);
           // sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
            constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-           constexpr double alpha = 1.e-5;
+          //  constexpr double alpha = 1.e-5;
           // FIXME put here formula from test
           double temp = 250.;
           double z = t_coords(2);
@@ -544,7 +547,7 @@ int main(int argc, char *argv[]) {
             temp = 5. / 4. * (30. + 17. * z);
           }
 
-          t_thermal_strain(i, j) = -alpha * (250. - temp) * t_kd(i, j);
+          t_thermal_strain(i, j) = -thermal_expansion_coef * (init_temp - temp) * t_kd(i, j);
           return t_thermal_strain;
         };
 
@@ -1136,16 +1139,16 @@ int main(int argc, char *argv[]) {
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
 
-    {
-        PetscPrintf(PETSC_COMM_WORLD, "Loop post proc on the skin\n");
-        CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
-        ostringstream stm;
-        string out_file_name;
-        stm << "out_skin.h5m";
-        out_file_name = stm.str();
-        PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
-        CHKERR post_proc_skin.writeFile(stm.str());
-      }
+    // {
+    //     PetscPrintf(PETSC_COMM_WORLD, "Loop post proc on the skin\n");
+    //     CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
+    //     ostringstream stm;
+    //     string out_file_name;
+    //     stm << "out_skin.h5m";
+    //     out_file_name = stm.str();
+    //     PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
+    //     CHKERR post_proc_skin.writeFile(stm.str());
+    //   }
   }
   CATCH_ERRORS;
 
