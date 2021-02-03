@@ -157,6 +157,46 @@ target_link_libraries(reduce_med_field_comp
 )
 install(TARGETS reduce_med_field_comp DESTINATION bin)
 
+
+add_executable(evaluate_eigen_stresses ${CMAKE_CURRENT_SOURCE_DIR}/evaluate_eigen_stresses.cpp)
+target_link_libraries(evaluate_eigen_stresses
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS evaluate_eigen_stresses DESTINATION bin)
+
+add_executable(change_format_of_stress ${CMAKE_CURRENT_SOURCE_DIR}/change_format_of_stress.cpp)
+target_link_libraries(change_format_of_stress
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS change_format_of_stress DESTINATION bin)
+
+add_executable(apply_pressure_on_bore ${CMAKE_CURRENT_SOURCE_DIR}/apply_pressure_on_bore.cpp)
+target_link_libraries(apply_pressure_on_bore
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS apply_pressure_on_bore DESTINATION bin)
+
 cm_export_file("convert.py" export_tools)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/convert.py
   DESTINATION bin
