@@ -76,8 +76,10 @@ int main(int argc, char *argv[]) {
 
   try {
     PetscBool flg_file;
+    PetscBool flg_file_out;
 
     char mesh_file_name[255];
+    char output_mesh_name[255];
     PetscInt order = 1;
     PetscInt order_contact = 1;
     PetscInt nb_ho_levels = 0;
@@ -107,13 +109,23 @@ int main(int argc, char *argv[]) {
     PetscReal flat_shift = 1.0;
 
     PetscBool ignore_contact = PETSC_FALSE;
-    PetscBool analytical = PETSC_TRUE;
-    PetscBool use_internal_stress = PETSC_TRUE;
+    PetscBool ignore_pressure = PETSC_FALSE;
+
+    PetscBool analytical_input = PETSC_FALSE;
+    PetscBool mesh_input = PETSC_FALSE;
+    // PetscBool use_internal_stress = PETSC_TRUE;
+    char stress_tag_name[255];
+    PetscBool flg_tag_name;
+
+    PetscBool save_mean_stress = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
+    CHKERR PetscOptionsString("-my_output_mesh_file", "output mesh file name",
+                              "", "mesh.h5m", output_mesh_name, 255,
+                              &flg_file_out);
 
     CHKERR PetscOptionsInt("-my_order",
                            "approximation order of spatial positions", "", 1,
@@ -174,12 +186,26 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-my_ignore_contact", "if set true, ignore contact",
                             "", PETSC_FALSE, &ignore_contact, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_analytical",
-                            "if set true, use analytical internal strain", "",
-                            PETSC_TRUE, &analytical, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_use_internal_stress",
-                            "if set true, use internal stress", "", PETSC_TRUE,
-                            &use_internal_stress, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_ignore_pressure",
+                            "if set true, ignore pressure", "", PETSC_FALSE,
+                            &ignore_pressure, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_analytical_input",
+                            "if set true, use analytical strain", "",
+                            PETSC_FALSE, &analytical_input, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_mesh_input",
+                            "if set true, use stress saved on the mesh", "",
+                            PETSC_FALSE, &mesh_input, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_save_mean_stress",
+                            "if set true, save mean stress", "", PETSC_FALSE,
+                            &save_mean_stress, PETSC_NULL);
+    // CHKERR PetscOptionsBool("-my_use_internal_stress",
+    //                         "if set true, use internal stress", "",
+    //                         PETSC_TRUE, &use_internal_stress, PETSC_NULL);
+
+    CHKERR PetscOptionsString("-my_stress_tag_name",
+                              "stress tag name file name", "", "STRESS",
+                              stress_tag_name, 255, &flg_tag_name);
 
     CHKERR PetscOptionsBool("-my_deform_flat", "if set true, deform flat", "",
                             PETSC_FALSE, &deform_flat_flag, PETSC_NULL);
@@ -337,12 +363,14 @@ int main(int argc, char *argv[]) {
         double coef = (height + z * (-dir)) / height;
         switch (dim) {
         case 2:
-          coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda)) * (-dir);
+          coords[2] -=
+              coef * delta * (1. - cos(2. * M_PI * x / lambda)) * (-dir);
           break;
         case 3:
           coords[2] -=
               coef * delta *
-              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda)) * (-dir);
+              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda)) *
+              (-dir);
           break;
         default:
           SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -430,21 +458,21 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_levels.back());
 
-    if (!ignore_contact && analytical) {
+    if (!ignore_contact && analytical_input) {
       CHKERR add_prism_interface(bit_levels);
     }
 
     CHKERR find_contact_prisms(bit_levels, contact_prisms, master_tris,
                                slave_tris);
 
-    if (wave_surf_flag && analytical) {
-      CHKERR make_wavy_surface(1, wave_dim, wave_length,
-                               wave_ampl, mesh_height, -1);
-       CHKERR make_wavy_surface(2, wave_dim, wave_length,
-                               wave_ampl, mesh_height, 1);                         
+    if (wave_surf_flag && analytical_input) {
+      CHKERR make_wavy_surface(1, wave_dim, wave_length, wave_ampl, mesh_height,
+                               -1);
+      CHKERR make_wavy_surface(2, wave_dim, wave_length, wave_ampl, mesh_height,
+                               1);
     }
 
-    if (deform_flat_flag && analytical) {
+    if (deform_flat_flag && analytical_input) {
       CHKERR deform_flat_surface(1, flat_shift, -1, mesh_height);
       CHKERR deform_flat_surface(2, flat_shift, 1, mesh_height);
     }
@@ -532,7 +560,7 @@ int main(int argc, char *argv[]) {
           // // t_thermal_strain(2, 2) = thermal_expansion_coef;
           // t_thermal_strain(i, j) = thermal_expansion_coef * t_kd(i, j);
           // sqrt(t_coords(0) * t_coords(0) + t_coords(2) * t_coords(2));
-           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+          constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
           //  constexpr double alpha = 1.e-5;
           // FIXME put here formula from test
 
@@ -540,10 +568,10 @@ int main(int argc, char *argv[]) {
           double y = t_coords(1);
           double z = t_coords(2);
 
-          double r = sqrt(x*x + y*y);
+          double r = sqrt(x * x + y * y);
 
           double temp = init_temp - r;
-        
+
           // if ((-10. < z && z < -1.) || std::abs(z + 1.) < 1e-15) {
           //   temp = 10. / 3. * (35. - 4. * z);
           // }
@@ -554,36 +582,47 @@ int main(int argc, char *argv[]) {
           //   temp = 5. / 4. * (30. + 17. * z);
           // }
 
-          t_thermal_strain(i, j) = -thermal_expansion_coef * (init_temp - temp) * t_kd(i, j);
+          t_thermal_strain(i, j) =
+              -thermal_expansion_coef * (init_temp - temp) * t_kd(i, j);
           return t_thermal_strain;
         };
 
-    if (analytical) {
-
+    if (analytical_input) {
       fe_elastic_rhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpAnalyticalInternalStain_dx<0>(
               "SPATIAL_POSITION", data_hooke_element_at_pts, thermal_strain));
-
-      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(
-              "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
-      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(
-              "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
       fe_elastic_rhs_ptr->getOpPtrVector().push_back(
           new HookeElement::OpGetAnalyticalInternalStress<0>(
               "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
               thermal_strain));
-      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpSaveStress(
-              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
-              *block_sets_ptr.get(), moab, scale_factor, false, false));
     } else {
-      fe_elastic_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpInternalStain_dx("SPATIAL_POSITION",
-                                               data_hooke_element_at_pts, moab,
-                                               use_internal_stress));
+      if (mesh_input) {
+        fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+            new HookeElement::OpGetInternalStress(
+                "SPATIAL_POSITION", "SPATIAL_POSITION",
+                data_hooke_element_at_pts, moab, stress_tag_name));
+        fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+            new HookeElement::OpInternalStain_dx("SPATIAL_POSITION",
+                                                 data_hooke_element_at_pts));
+      } else {
+        fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+            new HookeElement::OpClearInternalStress("SPATIAL_POSITION",
+                                                    "SPATIAL_POSITION",
+                                                    data_hooke_element_at_pts));
+      }
     }
+
+    fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
+    fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(
+            "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
+    fe_elastic_rhs_ptr->getOpPtrVector().push_back(
+        new HookeElement::OpSaveStress(
+            "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
+            *block_sets_ptr.get(), moab, scale_factor, save_mean_stress, false,
+            false));
 
     Range all_tets;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
@@ -593,7 +632,6 @@ int main(int argc, char *argv[]) {
         all_tets.merge(tets);
       }
     }
-
     Skinner skinner(&moab);
     Range skin_tris;
     CHKERR skinner.find_skin(0, all_tets, false, skin_tris);
@@ -875,39 +913,7 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetFromOptions(snes);
     }
 
-    PostProcVolumeOnRefinedMesh post_proc(m_field);
-    // Add operators to the elements, starting with some generic
-    CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR post_proc.addFieldValuesPostProc("SPATIAL_POSITION");
-    CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-    CHKERR post_proc.addFieldValuesGradientPostProc("SPATIAL_POSITION");
-
-    post_proc.getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<3, 3>(
-            "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
-    post_proc.getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<3, 3>(
-            "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
-
-    if (analytical) {
-      post_proc.getOpPtrVector().push_back(
-          new HookeElement::OpGetAnalyticalInternalStress<0>(
-              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
-              thermal_strain));
-    }
-
-    post_proc.getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
-        "SPATIAL_POSITION", data_hooke_element_at_pts->spatPosMat));
-    post_proc.getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
-        "MESH_NODE_POSITIONS", data_hooke_element_at_pts->meshNodePosMat));
-    post_proc.getOpPtrVector().push_back(
-        new HookeElement::OpPostProcHookeElement<
-            VolumeElementForcesAndSourcesCore>(
-            "SPATIAL_POSITION", data_hooke_element_at_pts,
-            *block_sets_ptr.get(), post_proc.postProcMesh,
-            post_proc.mapGaussPts, false, false));
-
-        /// Post proc on the skin
+    /// Post proc on the skin
     PostProcFaceOnRefinedMesh post_proc_skin(m_field);
     CHKERR post_proc_skin.generateReferenceElementMesh();
     CHKERR post_proc_skin.addFieldValuesPostProc("SPATIAL_POSITION");
@@ -949,6 +955,13 @@ int main(int argc, char *argv[]) {
         new OpGetFieldGradientValuesOnSkin("SPATIAL_POSITION", "ELASTIC",
                                            my_vol_side_fe_ptr));
     post_proc_skin.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(
+            "SPATIAL_POSITION", data_hooke_element_at_pts->spatPosMat));
+    post_proc_skin.getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(
+            "MESH_NODE_POSITIONS", data_hooke_element_at_pts->meshNodePosMat));
+
+    post_proc_skin.getOpPtrVector().push_back(
         new HookeElement::OpPostProcHookeElement<
             FaceElementForcesAndSourcesCore>(
             "SPATIAL_POSITION", data_hooke_element_at_pts,
@@ -956,7 +969,12 @@ int main(int argc, char *argv[]) {
             post_proc_skin.mapGaussPts, false, false));
 
     for (int ss = 0; ss != nb_sub_steps; ++ss) {
-      SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
+      if (!ignore_pressure) {
+        SimpleContactProblem::LoadScale::lAmbda = (ss + 1.0) / nb_sub_steps;
+      } else {
+        SimpleContactProblem::LoadScale::lAmbda = 0;
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Ignoring pressure...\n");
+      }
       CHKERR PetscPrintf(PETSC_COMM_WORLD, "Load scale: %6.4e\n",
                          SimpleContactProblem::LoadScale::lAmbda);
 
@@ -973,66 +991,13 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
 
-    if (analytical) {
-      CHKERR moab.write_file("test.h5m", "MOAB", "PARALLEL=WRITE_PART");
-    }
+    PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
+    CHKERR moab.write_file(output_mesh_name, "MOAB", "PARALLEL=WRITE_PART");
 
     // save on mesh
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-    if (!analytical) {
-
-      // moab_instance
-      moab::Core mb_post;                   // create database
-      moab::Interface &moab_proc = mb_post; // create interface to database
-
-      boost::shared_ptr<ForcesAndSourcesCore> fe_elastic_post_proc_ptr(
-          new VolumeElementForcesAndSourcesCore(m_field));
-      fe_elastic_post_proc_ptr->getRuleHook = VolRule();
-
-      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(
-              "SPATIAL_POSITION", data_hooke_element_at_pts->hMat));
-      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>(
-              "MESH_NODE_POSITIONS", data_hooke_element_at_pts->HMat));
-      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpGetInternalStress(
-              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
-              moab));
-      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldValues<3>(
-              "SPATIAL_POSITION", data_hooke_element_at_pts->spatPosMat));
-      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldValues<3>(
-              "MESH_NODE_POSITIONS",
-              data_hooke_element_at_pts->meshNodePosMat));
-      fe_elastic_post_proc_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpPostProcIntegPts(
-              "SPATIAL_POSITION", "SPATIAL_POSITION", data_hooke_element_at_pts,
-              *block_sets_ptr.get(), mb_post, use_internal_stress, false,
-              false));
-
-      mb_post.delete_mesh();
-
-      CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", fe_elastic_post_proc_ptr);
-
-      {
-        string out_file_name;
-        std::ostringstream strm;
-        strm << "out_integ_pts.h5m";
-        out_file_name = strm.str();
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
-                           out_file_name.c_str());
-        CHKERR mb_post.write_file(out_file_name.c_str(), "MOAB",
-                                  "PARALLEL=WRITE_PART");
-      }
-    }
-
-    PetscPrintf(PETSC_COMM_WORLD, "Loop post proc\n");
-    CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
 
     Vec v_energy;
     CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "SPATIAL_POSITION",
@@ -1044,15 +1009,14 @@ int main(int argc, char *argv[]) {
     PetscPrintf(PETSC_COMM_WORLD, "Elastic energy: %8.8e\n", *eng_ptr);
 
     {
+      PetscPrintf(PETSC_COMM_WORLD, "Loop post proc on the skin\n");
+      CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
+      ostringstream stm;
       string out_file_name;
-      std::ostringstream stm;
-      stm << "out"
-          << ".h5m";
+      stm << "out_skin.h5m";
       out_file_name = stm.str();
-      CHKERR
       PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
-      CHKERR post_proc.postProcMesh.write_file(out_file_name.c_str(), "MOAB",
-                                               "PARALLEL=WRITE_PART");
+      CHKERR post_proc_skin.writeFile(stm.str());
     }
 
     // moab_instance
@@ -1069,49 +1033,51 @@ int main(int argc, char *argv[]) {
       fe_post_proc_simple_contact = make_contact_element();
     }
 
-    contact_problem->setContactOperatorsForPostProc(
-        fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-        "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
+    if (!ignore_contact) {
 
-    mb_post.delete_mesh();
+      contact_problem->setContactOperatorsForPostProc(
+          fe_post_proc_simple_contact, common_data_simple_contact, m_field,
+          "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
 
-    CHKERR VecZeroEntries(common_data_simple_contact->gaussPtsStateVec);
-    CHKERR VecZeroEntries(common_data_simple_contact->contactAreaVec);
+      mb_post.delete_mesh();
 
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
-                                    fe_post_proc_simple_contact);
+      CHKERR VecZeroEntries(common_data_simple_contact->gaussPtsStateVec);
+      CHKERR VecZeroEntries(common_data_simple_contact->contactAreaVec);
 
-    std::array<double, 2> nb_gauss_pts;
-    std::array<double, 2> contact_area;
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
+                                      fe_post_proc_simple_contact);
 
-    auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
-      MoFEMFunctionBegin;
-      CHKERR VecAssemblyBegin(vec);
-      CHKERR VecAssemblyEnd(vec);
-      const double *array;
-      CHKERR VecGetArrayRead(vec, &array);
+      std::array<double, 2> nb_gauss_pts;
+      std::array<double, 2> contact_area;
+
+      auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
+        MoFEMFunctionBegin;
+        CHKERR VecAssemblyBegin(vec);
+        CHKERR VecAssemblyEnd(vec);
+        const double *array;
+        CHKERR VecGetArrayRead(vec, &array);
+        if (m_field.get_comm_rank() == 0) {
+          for (int i : {0, 1})
+            data[i] = array[i];
+        }
+        CHKERR VecRestoreArrayRead(vec, &array);
+        MoFEMFunctionReturn(0);
+      };
+
+      CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
+                              nb_gauss_pts);
+      CHKERR get_contact_data(common_data_simple_contact->contactAreaVec,
+                              contact_area);
+
       if (m_field.get_comm_rank() == 0) {
-        for (int i : {0, 1})
-          data[i] = array[i];
+        PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
+                    (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
+
+        PetscPrintf(PETSC_COMM_SELF,
+                    "Active contact area: %9.9f out of %9.9f\n",
+                    contact_area[0], contact_area[1]);
       }
-      CHKERR VecRestoreArrayRead(vec, &array);
-      MoFEMFunctionReturn(0);
-    };
 
-    CHKERR get_contact_data(common_data_simple_contact->gaussPtsStateVec,
-                            nb_gauss_pts);
-    CHKERR get_contact_data(common_data_simple_contact->contactAreaVec,
-                            contact_area);
-
-    if (m_field.get_comm_rank() == 0) {
-      PetscPrintf(PETSC_COMM_SELF, "Active gauss pts: %d out of %d\n",
-                  (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
-
-      PetscPrintf(PETSC_COMM_SELF, "Active contact area: %9.9f out of %9.9f\n",
-                  contact_area[0], contact_area[1]);
-    }
-
-    {
       string out_file_name;
       std::ostringstream strm;
       strm << "out_contact_integ_pts"
@@ -1131,10 +1097,9 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
 
-    CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
-                                    post_proc_contact_ptr);
-
-    {
+    if (!ignore_contact) {
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_POST_PROC",
+                                      post_proc_contact_ptr);
       string out_file_name;
       std::ostringstream stm;
       stm << "out_contact"
@@ -1145,17 +1110,6 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
-
-    {
-        PetscPrintf(PETSC_COMM_WORLD, "Loop post proc on the skin\n");
-        CHKERR DMoFEMLoopFiniteElements(dm, "SKIN", &post_proc_skin);
-        ostringstream stm;
-        string out_file_name;
-        stm << "out_skin.h5m";
-        out_file_name = stm.str();
-        PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", out_file_name.c_str());
-        CHKERR post_proc_skin.writeFile(stm.str());
-      }
   }
   CATCH_ERRORS;
 
