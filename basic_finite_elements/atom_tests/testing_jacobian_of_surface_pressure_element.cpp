@@ -63,10 +63,16 @@ int main(int argc, char *argv[]) {
     CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
     CHKERR si->setFieldOrder("x", order_x);
 
-    CHKERR si->addDomainField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->addBoundaryField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->setFieldOrder("X", order_X);
+    CHKERR si->addDomainField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->addBoundaryField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->setFieldOrder("MESH_NODE_POSITIONS", order_X);
 
+    // Add spring boundary condition applied on surfaces.
+    CHKERR MetaSpringBC::addSpringElements(m_field, "x",
+                                           "MESH_NODE_POSITIONS");
+    CHKERR MetaSpringBC::addSpringElementsALE(m_field, "x", "MESH_NODE_POSITIONS");
+    si->getOtherFiniteElements().push_back("SPRING");
+    si->getOtherFiniteElements().push_back("SPRING_ALE");
     CHKERR si->setUp();
 
     // create DM
@@ -91,7 +97,7 @@ int main(int argc, char *argv[]) {
     };
 
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "X");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "MESH_NODE_POSITIONS");
 
     PetscRandomDestroy(&rctx);
 
@@ -107,10 +113,10 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NeumannForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeMatLhs()));
 
-    fe_rhs_ptr->meshPositionsFieldName = "X";
-    fe_lhs_ptr->meshPositionsFieldName = "X";
-    fe_mat_rhs_ptr->meshPositionsFieldName = "X";
-    fe_mat_lhs_ptr->meshPositionsFieldName = "X";
+    fe_rhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    fe_lhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    fe_mat_rhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    fe_mat_lhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
 
     Range nodes;
     CHKERR moab.get_entities_by_type(0, MBVERTEX, nodes, false);
@@ -128,10 +134,43 @@ int main(int argc, char *argv[]) {
         CHKERR surfacePressure->addPressure("x", PETSC_NULL,
                                             bit->getMeshsetId(), true, true);
         CHKERR surfacePressure->addPressureAle(
-            "x", "X", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
+            "x", "MESH_NODE_POSITIONS", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
             bit->getMeshsetId(), true, true);
       }
     }
+
+
+
+    // Implementation of spring element
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    CHKERR MetaSpringBC::setSpringOperators(
+        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "x",
+        "MESH_NODE_POSITIONS");
+
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ale_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+
+  CHKERR MetaSpringBC::setSpringOperatorsMaterial(
+        m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, "x",
+        "MESH_NODE_POSITIONS", "SIDE_FE");
+
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr, PETSC_NULL,
+                                  PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING_ALE", fe_spring_rhs_ale_ptr, PETSC_NULL,
+                                  PETSC_NULL);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
                                   nullptr, nullptr);

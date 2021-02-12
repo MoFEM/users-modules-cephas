@@ -43,6 +43,26 @@ struct MetaSpringBC {
       MoFEM::Interface &m_field, const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
+
+  /**
+   * \brief Declare spring element
+   *
+   * Search cubit sidesets and blocksets with spring bc and declare surface
+   * element
+
+   * Blockset has to have name “SPRING_BC”. The first three attributes of the
+   * blockset are spring stiffness value.
+
+   *
+   * @param  m_field               Interface insurance
+   * @param  field_name            Field name (e.g. SPATIAL_POSITION)
+   * @param  mesh_nodals_positions Name of field on which ho-geometry is defined
+   * @return                       Error code
+   */
+  static MoFEMErrorCode addSpringElementsALE(
+      MoFEM::Interface &m_field, const std::string field_name,
+      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
+
   /**
    * \brief Implementation of spring element. Set operators to calculate LHS and
    * RHS
@@ -60,6 +80,24 @@ struct MetaSpringBC {
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
       const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
+
+  /**
+   * \brief Implementation of spring element. Set operators to calculate LHS and
+   * RHS
+   *
+   * @param m_field               Interface insurance
+   * @param fe_spring_lhs_ptr     Pointer to the FE instance for LHS
+   * @param fe_spring_rhs_ptr     Pointer to the FE instance for RHS
+   * @param field_name            Field name (e.g. SPATIAL_POSITION)
+   * @param mesh_nodals_positions Name of field on which ho-geometry is defined
+   * @return                      Error code
+   */
+  static MoFEMErrorCode setSpringOperatorsMaterial(
+      MoFEM::Interface &m_field,
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
+      const std::string field_name,
+      const std::string mesh_nodals_positions, std::string side_fe_name);
 
   /**
    * \brief Implementation of spring element. Set operators to calculate LHS and
