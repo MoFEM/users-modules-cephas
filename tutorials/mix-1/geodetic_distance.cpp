@@ -80,6 +80,7 @@ private:
   struct OpRhs : public DomainEleOp {
 
     OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
+          boost::shared_ptr<MatrixDouble> q_grad_ptr,
           boost::shared_ptr<VectorDouble> div_ptr,
           boost::shared_ptr<VectorDouble> u_ptr,
           boost::shared_ptr<MatrixDouble> dot_q_ptr,
@@ -91,6 +92,7 @@ private:
 
   protected:
     boost::shared_ptr<MatrixDouble> qPtr;
+    boost::shared_ptr<MatrixDouble> qGradPtr;
     boost::shared_ptr<VectorDouble> divPtr;
     boost::shared_ptr<VectorDouble> uPtr;
     boost::shared_ptr<MatrixDouble> dotQPtr;
@@ -101,6 +103,7 @@ private:
   struct OpLhs : public DomainEleOp {
 
     OpLhs(boost::shared_ptr<MatrixDouble> q_ptr,
+          boost::shared_ptr<MatrixDouble> q_grad_ptr,
           boost::shared_ptr<VectorDouble> div_ptr,
           boost::shared_ptr<MatrixDouble> dot_q_ptr);
 
@@ -110,6 +113,7 @@ private:
 
   protected:
     boost::shared_ptr<MatrixDouble> qPtr;
+    boost::shared_ptr<MatrixDouble> qGradPtr;
     boost::shared_ptr<VectorDouble> divPtr;
     boost::shared_ptr<MatrixDouble> dotQPtr;
   };
@@ -224,6 +228,7 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getBoundaryRhsFE().reset();
 
   auto q_ptr = boost::make_shared<MatrixDouble>();
+  auto q_grad_ptr = boost::make_shared<MatrixDouble>();
   auto div_q_ptr = boost::make_shared<VectorDouble>();
   auto u_ptr = boost::make_shared<VectorDouble>();
   auto dot_q_ptr = boost::make_shared<MatrixDouble>();
@@ -241,6 +246,9 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline.push_back(new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
     pipeline.push_back(
         new OpCalculateHdivVectorDivergence<3, 3>("FLUX", div_q_ptr));
+    pipeline.push_back(
+        new OpCalculateHVecVectorGradient<3, 3>("FLUX", q_grad_ptr));
+
     pipeline.push_back(new OpCalculateScalarFieldValues("U", u_ptr));
     pipeline.push_back(new OpCalculateHdivVectorFieldDot<3>("FLUX", dot_q_ptr));
     pipeline.push_back(
@@ -253,13 +261,13 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", beta));
     auto minus_one = []() { return -1; };
     pipeline.push_back(new OpHdivU("FLUX", "U", minus_one, false));
-    pipeline.push_back(new OpLhs(q_ptr, div_q_ptr, dot_q_ptr));
+    pipeline.push_back(new OpLhs(q_ptr, q_grad_ptr, div_q_ptr, dot_q_ptr));
   };
 
   auto set_domain_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpQQ("FLUX", q_ptr));
     pipeline.push_back(new OpDivQU("FLUX", u_ptr, -1));
-    pipeline.push_back(new OpRhs(q_ptr, div_q_ptr, u_ptr, dot_q_ptr,
+    pipeline.push_back(new OpRhs(q_ptr, q_grad_ptr, div_q_ptr, u_ptr, dot_q_ptr,
                                  dot_div_q_ptr, dot_u_ptr));
 
     // auto f = [](const double x, const double y, const double z) {
@@ -397,13 +405,14 @@ int main(int argc, char *argv[]) {
 }
 
 Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
+                      boost::shared_ptr<MatrixDouble> q_grad_ptr,
                       boost::shared_ptr<VectorDouble> div_ptr,
                       boost::shared_ptr<VectorDouble> u_ptr,
                       boost::shared_ptr<MatrixDouble> dot_q_ptr,
                       boost::shared_ptr<VectorDouble> dot_div_ptr,
                       boost::shared_ptr<VectorDouble> dot_u_ptr)
-    : DomainEleOp("U", DomainEleOp::OPROW), qPtr(q_ptr), divPtr(div_ptr),
-      uPtr(u_ptr), dotQPtr(dot_q_ptr), dotDivPtr(dot_div_ptr),
+    : DomainEleOp("U", DomainEleOp::OPROW), qPtr(q_ptr), qGradPtr(q_grad_ptr),
+      divPtr(div_ptr), uPtr(u_ptr), dotQPtr(dot_q_ptr), dotDivPtr(dot_div_ptr),
       dotUPtr(dot_u_ptr) {}
 
 MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
@@ -411,11 +420,13 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
 
   auto nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
     auto t_q = getFTensor1FromMat<3>(*qPtr);
+    auto t_grad = getFTensor2FromMat<3, 3>(*qGradPtr);
     auto t_div = getFTensor0FromVec(*divPtr);
 
     auto t_dot_div = getFTensor0FromVec(*dotDivPtr);
@@ -435,10 +446,17 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
       const double dot = t_q(i) * t_q(i) + tol;
       const double res_log = log(dot);
 
+      auto &dofs = data.getFieldDofs();
+      auto check_order = [&](const auto bb) {
+        return dofs[bb]->getDofOrder() == 0;
+      };
+
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
         nf[bb] += alpha * t_base * res_log;
-        nf[bb] += alpha * t_base * (l2 * t_div + t_dot_div);
+        // nf[bb] += alpha * t_base * ((t_grad(i, j) * t_q(i)) * t_q(j));
+        nf[bb] += alpha * t_base * (t_dot_div);
+
         ++t_base;
       }
 
@@ -447,6 +465,7 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 
       ++t_w;
       ++t_q;
+      ++t_grad;
       ++t_div;
       ++t_dot_div;
     }
@@ -459,10 +478,11 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
 }
 
 Example::OpLhs::OpLhs(boost::shared_ptr<MatrixDouble> q_ptr,
+                      boost::shared_ptr<MatrixDouble> q_grad_ptr,
                       boost::shared_ptr<VectorDouble> div_ptr,
                       boost::shared_ptr<MatrixDouble> dot_q_ptr)
     : DomainEleOp("U", "FLUX", DomainEleOp::OPROWCOL), qPtr(q_ptr),
-      divPtr(div_ptr), dotQPtr(dot_q_ptr) {
+      qGradPtr(q_grad_ptr), divPtr(div_ptr), dotQPtr(dot_q_ptr) {
   sYmm = false;
 }
 
@@ -480,6 +500,7 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
   if (row_nb_dofs && col_nb_dofs) {
 
     auto t_q = getFTensor1FromMat<3>(*qPtr);
+    auto t_grad = getFTensor2FromMat<3, 3>(*qGradPtr);
     auto t_div = getFTensor0FromVec(*divPtr);
 
     auto nb_gauss_pts = getGaussPts().size2();
@@ -496,6 +517,11 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       double alpha = t_w * a;
 
+      auto &dofs = row_data.getFieldDofs();
+      auto check_order = [&](const auto bb) {
+        return dofs[bb]->getDofOrder() == 0;
+      };
+
       size_t rr = 0;
       for (; rr != row_nb_dofs; ++rr) {
 
@@ -508,8 +534,15 @@ MoFEMErrorCode Example::OpLhs::doWork(int row_side, int col_side,
         for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
           loc_mat(rr, cc) +=
               alpha * t_row_base * d_res_dot * (2 * t_q(i) * t_col_base(i));
+
+          // loc_mat(rr, cc) += alpha * t_row_base *
+          //                    (t_grad(i, j) * t_q(i) + t_grad(j, i) * t_q(i)) *
+          //                    t_col_base(j);
+          // loc_mat(rr, cc) +=
+          //     alpha * t_row_base * (t_q(i) * t_q(j)) * t_col_diff_base(i, j)
+
           loc_mat(rr, cc) +=
-              alpha * t_row_base * (l2 + ts_a) * t_col_diff_base(i, i);
+              alpha * t_row_base * (ts_a) * t_col_diff_base(i, i);
 
           ++t_col_base;
           ++t_col_diff_base;
