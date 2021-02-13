@@ -56,6 +56,7 @@ struct DataAtIntegrationPtsSprings : public boost::enable_shared_from_this<DataA
 
   MatrixDouble tangent1;
   MatrixDouble tangent2;
+  MatrixDouble normalVector;
 
   double springStiffnessNormal;
   double springStiffnessTangent;
@@ -151,8 +152,8 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             field_name.c_str(), OPROW),
         commonDataPtr(common_data_ptr), dAta(data) {
-    // if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
-    //   is_spatial_position = false;
+    if (field_name.compare(0, 16, "SPATIAL_POSITION") != 0)
+      is_spatial_position = false;
   }
 
   MoFEMErrorCode doWork(int side, EntityType type,
@@ -185,26 +186,10 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     FTensor::Index<'j', 3> j;
     FTensor::Index<'k', 3> k;
 
-    // FTensor::Tensor2<double, 3, 3> t_spring_local(
-    //     commonDataPtr->springStiffnessNormal, 0., 0., 0., 0., 0., 0., 0., 0.);
-        //     FTensor::Tensor2<double, 3, 3> t_spring_local(
-        // 1., 0., 0., 0., 0., 0., 0., 0., 0.);
-    // FTensor::Tensor2<double, 3, 3> t_spring_local(
-    //     commonDataPtr->springStiffnessNormal, 0., 0., 0.,
-    //     commonDataPtr->springStiffnessTangent, 0., 0., 0.,
-    //     commonDataPtr->springStiffnessTangent);
-
-  FTensor::Tensor2<double, 3, 3> t_spring_local(
-        0., 0., 0., 0.,
-        commonDataPtr->springStiffnessTangent, 0., 0., 0.,
-        0.);
-
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    auto t_normal_ptr = getFTensor1Normal();
     FTensor::Tensor1<double, 3> t_normal;
-    t_normal(i) = t_normal_ptr(i);
-
+    
     // First tangent vector
     auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
     FTensor::Tensor1<double, 3> t_tangent1;
@@ -215,35 +200,35 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
     t_tangent2_help(i) = t_tangent2_ptr(i);
 
     t_normal(i) = FTensor::levi_civita(i, j, k) * t_tangent1(j) * t_tangent2_help(k);
-    const double area_h = sqrt(t_normal(k)* t_normal(k));
-    t_normal(i) = t_normal(i) / area_h;
-    // t_normal(i) *= 0.5;
+    // const double area_h = sqrt(t_normal(k)* t_normal(k));
+    // t_normal(i) = t_normal(i) / area_h;
 
     // Second tangent vector, such that t_n = t_t1 x t_t2 | t_t2 = t_n x t_t1
     FTensor::Tensor1<double, 3> t_tangent2;
     t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
-// t_tangent2(i) = t_tangent2_help(i);
-    // Spring stiffness in global coordinate
-    FTensor::Tensor2<double, 3, 3> t_spring_global;
-    t_spring_global = MetaSpringBC::transformLocalToGlobal(
-        t_normal, t_tangent1, t_tangent2, t_spring_local);
+
     FTensor::Tensor2<double, 3, 3> t_normal_projection;
     FTensor::Tensor2<double, 3, 3> t_tangent_projection;
-    t_normal_projection(i, j) = t_normal(i) * t_normal(j);
-    t_tangent_projection(i, j) = t_normal_projection(i, j);
-    t_tangent_projection(0, 0) -= 1;
-    t_tangent_projection(1, 1) -= 1;
-    t_tangent_projection(2, 2) -= 1;
+
     // Extract solution at Gauss points
     auto t_solution_at_gauss_point =
         getFTensor1FromMat<3>(*commonDataPtr->xAtPts);
     auto t_init_solution_at_gauss_point =
         getFTensor1FromMat<3>(*commonDataPtr->xInitAtPts);
     FTensor::Tensor1<double, 3> t_displacement_at_gauss_point;
-
+      
+      auto t_normal_1 =
+          getFTensor1FromMat<3>(commonDataPtr->normalVector);
     // loop over all Gauss points of the face
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-
+      t_normal(i) = t_normal_1(i);
+    t_normal_projection(i, j) = t_normal(i) * t_normal(j);
+    t_tangent_projection(i, j) = t_normal_projection(i, j);
+    t_tangent_projection(0, 0) -= 1;
+    t_tangent_projection(1, 1) -= 1;
+    t_tangent_projection(2, 2) -= 1;
+    const double area_h = sqrt(t_normal(k)* t_normal(k));
+    t_normal(i) = t_normal(i) / area_h;
       // Calculate the displacement at the Gauss point
       if (is_spatial_position) { // "SPATIAL_POSITION"
         t_displacement_at_gauss_point(i) =
@@ -262,19 +247,14 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
                                                               &nF[2]);
 
       for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
-        // t_nf(i) += w * 0.5 * area_h * t_base_func * t_spring_global(i, j) *
-        //            t_displacement_at_gauss_point(j);
 
-        t_nf(i) += w * 0.5 * area_h * t_base_func * commonDataPtr->springStiffnessNormal * t_normal_projection(i, j) *
+        t_nf(i) += w * 0.5 * area_h * t_base_func *
+                   commonDataPtr->springStiffnessNormal *
+                   t_normal_projection(i, j) * t_displacement_at_gauss_point(j);
+        t_nf(i) -= w * 0.5 * area_h * t_base_func *
+                   commonDataPtr->springStiffnessTangent *
+                   t_tangent_projection(i, j) *
                    t_displacement_at_gauss_point(j);
-        t_nf(i) -= w * 0.5 * area_h * t_base_func * commonDataPtr->springStiffnessTangent * t_tangent_projection(i, j) *
-                   t_displacement_at_gauss_point(j);
-
-
-        // t_normal_projection
-        // t_tangent_projection
-        //  t_nf(i) += w * t_base_func * t_normal(i) * t_normal(j) *
-        //  t_displacement_at_gauss_point(j)/sqrt(t_normal(k)* t_normal(k));
 
         // move to next base function
         ++t_base_func;
@@ -286,6 +266,7 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
       // move to the solutions at the next Gauss point
       ++t_solution_at_gauss_point;
       ++t_init_solution_at_gauss_point;
+      ++t_normal_1;
     }
     // add computed values of spring in the global right hand side vector
     Vec f = getFEMethod()->ksp_f != PETSC_NULL ? getFEMethod()->ksp_f
@@ -360,22 +341,9 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
           &m(3 * r + 2, 3 * c + 2));
     };
 
-    // FTensor::Tensor2<double, 3, 3> t_spring_local(
-    //     commonDataPtr->springStiffnessNormal, 0., 0., 0., 0., 0., 0., 0., 0.);
-
-    // FTensor::Tensor2<double, 3, 3> t_spring_local(
-    //     commonDataPtr->springStiffnessNormal, 0., 0., 0.,
-    //     commonDataPtr->springStiffnessTangent, 0., 0., 0.,
-    //     commonDataPtr->springStiffnessTangent);
-
-    FTensor::Tensor2<double, 3, 3> t_spring_local(
-        0., 0., 0., 0., commonDataPtr->springStiffnessTangent, 0., 0., 0., 0.);
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    auto t_normal_ptr = getFTensor1Normal();
-
     FTensor::Tensor1<double, 3> t_normal;
-    t_normal(i) = t_normal_ptr(i);
 
     // First tangent vector
     auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
@@ -388,26 +356,28 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
     auto t_tangent2_ptr = getFTensor1Tangent2AtGaussPts();
     t_normal(i) = FTensor::levi_civita(i, j, k) * t_tangent1(j) * t_tangent2_ptr(k);
-    const double area_h = sqrt(t_normal(k)* t_normal(k));
-    t_normal(i) = t_normal(i) / area_h;
-    // t_normal(i) *= 0.5;
+    // const double area_h = sqrt(t_normal(k)* t_normal(k));
+    // t_normal(i) = t_normal(i) / area_h;
 
-    // Spring stiffness in global coordinate
-    FTensor::Tensor2<double, 3, 3> t_spring_global;
-    t_spring_global = MetaSpringBC::transformLocalToGlobal(
-        t_normal, t_tangent1, t_tangent2, t_spring_local);
 
-      FTensor::Tensor2<double, 3, 3> t_normal_projection;
+      auto normal_original_slave =
+          getFTensor1FromMat<3>(commonDataPtr->normalVector);
+
+    FTensor::Tensor2<double, 3, 3> t_normal_projection;
     FTensor::Tensor2<double, 3, 3> t_tangent_projection;
-    t_normal_projection(i, j) = t_normal(i) * t_normal(j);
-    t_tangent_projection(i, j) = t_normal_projection(i, j);
-    t_tangent_projection(0, 0) -= 1;
-    t_tangent_projection(1, 1) -= 1;
-    t_tangent_projection(2, 2) -= 1;
     // loop over the Gauss points
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
+      t_normal(i) = normal_original_slave(i);
+      cerr << "t_normal " << t_normal << "\n";
+      t_normal_projection(i, j) = t_normal(i) * t_normal(j);
+      t_tangent_projection(i, j) = t_normal_projection(i, j);
+      t_tangent_projection(0, 0) -= 1;
+      t_tangent_projection(1, 1) -= 1;
+      t_tangent_projection(2, 2) -= 1;
+      const double area_h = sqrt(t_normal(k) * t_normal(k));
+      t_normal(i) = t_normal(i) / area_h;
       // get area and integration weight
-      double w = 0.5 *  t_w * area_h;// * getArea();
+      double w = 0.5 * t_w * area_h;
 
       auto t_row_base_func = row_data.getFTensor0N(gg, 0);
 
@@ -415,18 +385,19 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
         auto t_col_base_func = col_data.getFTensor0N(gg, 0);
         for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
           auto assemble_m = get_tensor2(locKs, rr, cc);
-          // assemble_m(i, j) +=
-          //     w * t_row_base_func * t_col_base_func * t_spring_global(i, j);
-               assemble_m(i, j) +=
-              w * t_row_base_func * t_col_base_func * commonDataPtr->springStiffnessNormal * t_normal_projection(i, j);
-               assemble_m(i, j) -=
-              w * t_row_base_func * t_col_base_func * commonDataPtr->springStiffnessTangent * t_tangent_projection(i, j);
+          assemble_m(i, j) += w * t_row_base_func * t_col_base_func *
+                              commonDataPtr->springStiffnessNormal *
+                              t_normal_projection(i, j);
+          assemble_m(i, j) -= w * t_row_base_func * t_col_base_func *
+                              commonDataPtr->springStiffnessTangent *
+                              t_tangent_projection(i, j);
           ++t_col_base_func;
         }
         ++t_row_base_func;
       }
       // move to next integration weight
       ++t_w;
+      ++normal_original_slave;
     }
 
     // Add computed values of spring stiffness to the global LHS matrix
@@ -540,21 +511,12 @@ struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator 
     return t_result;
   };
 
-
-    FTensor::Tensor2<double, 3, 3> t_spring_local(
-        commonDataPtr->springStiffnessNormal, 0., 0., 0.,
-        commonDataPtr->springStiffnessTangent, 0., 0., 0.,
-        commonDataPtr->springStiffnessTangent);
-
     const double normal_stiffness = commonDataPtr->springStiffnessNormal; 
     const double tangent_stiffness = commonDataPtr->springStiffnessTangent; 
 
     // create a 3d vector to be used as the normal to the face with length equal
     // to the face area
-    auto t_normal_ptr = getFTensor1Normal();
-
     FTensor::Tensor1<double, 3> t_normal;
-    t_normal(i) = t_normal_ptr(i);
 
     // First tangent vector
     auto t_tangent1_ptr = getFTensor1Tangent1AtGaussPts();
@@ -564,13 +526,7 @@ struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator 
     // Second tangent vector, such that t_n = t_t1 x t_t2 | t_t2 = t_n x t_t1
     auto t_tangent2_ptr = getFTensor1Tangent2AtGaussPts();
     FTensor::Tensor1<double, 3> t_tangent2;
-    // t_tangent2(i) = FTensor::levi_civita(i, j, k) * t_normal(j) * t_tangent1(k);
     t_tangent2(i) = t_tangent2_ptr(i);
-
-    // Spring stiffness in global coordinate
-    FTensor::Tensor2<double, 3, 3> t_spring_global;
-    t_spring_global = MetaSpringBC::transformLocalToGlobal(
-        t_normal, t_tangent1, t_tangent2, t_spring_local);
 
     // Extract solution at Gauss points
     auto t_solution_at_gauss_point =
@@ -583,11 +539,10 @@ struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator 
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
 
-
     // loop over the Gauss points
     for (int gg = 0; gg != row_nb_gauss_pts; gg++) {
       // get area and integration weight
-      t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
+    t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
     
     const double material_area = sqrt(t_normal(k)* t_normal(k));
     t_normal(i) = t_normal(i) / material_area;
@@ -600,7 +555,7 @@ struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator 
     t_tangent_projection(1, 1) -= 1;
     t_tangent_projection(2, 2) -= 1;
     
-      double w = t_w;
+      double w = 0.5 * t_w;
 
       t_displacement_at_gauss_point(i) =
           t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
@@ -614,54 +569,28 @@ struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator 
           auto t_d_n = make_vec_der(t_N, t_1, t_2);
           auto t_d_n_2 = make_vec_der_2(t_N, t_1, t_2);
           auto assemble_m = get_tensor2(locKs, rr, cc);
-          // assemble_m(i, j) = 1.;
-          // const double normal_norm =  sqrt(t_normal(i) * t_normal(i));
 
-          // assemble_m(i, j) +=
-          //     w * 0.5 * t_row_base_func * normal_stiffness *
-          //     (t_d_n(i, j) * t_normal(k) + t_d_n(k, j) * t_normal(i)) *
-          //     t_displacement_at_gauss_point(k) / normal_norm;
+          assemble_m(i, j) -= w * material_area * t_col_base_func *
+                              normal_stiffness * t_row_base_func *
+                              t_normal_projection(i, j);
 
-          // assemble_m(i, j) -= w * 0.5 * t_normal(i) *  t_row_base_func * normal_stiffness *
-          //                     (t_normal(l) * t_d_n(l, j)) *
-          //                     (t_normal(k) * t_displacement_at_gauss_point(k)) /
-          //                     (normal_norm * normal_norm * normal_norm);
+          assemble_m(i, j) += w * material_area * t_col_base_func *
+                              tangent_stiffness * t_row_base_func *
+                              t_tangent_projection(i, j);
 
-          // assemble_m(i, j) -=
-          //     w * t_col_base_func *  normal_stiffness * t_row_base_func * t_normal(i) * t_normal(j) / normal_norm;
+          assemble_m(i, j) +=
+              w * (normal_stiffness - tangent_stiffness) *
+              t_row_base_func *
+              (t_d_n(i, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
+               material_area * t_normal(i) *
+                   (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
+          constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+          assemble_m(i, j) += w * (t_d_n(l, j) * t_normal(l)) *
+                              tangent_stiffness * t_row_base_func * t_kd(i, k) *
+                              t_displacement_at_gauss_point(k);
 
-        const double length_tang_1 = sqrt(t_tangent1(k)*t_tangent1(k));
-
-          // assemble_m(i, j) +=
-          //     normal_norm * w *  tangent_stiffness *
-          //     t_row_base_func * t_N(0) * ( t_kd(i, j) * t_tangent1(k)* t_displacement_at_gauss_point(k) + t_tangent1(i) * t_displacement_at_gauss_point(j) ) ;
-
-          // assemble_m(i, j) -=
-          //     normal_norm * w * t_col_base_func *  tangent_stiffness *
-          //     t_row_base_func * t_tangent1(i) * t_tangent1(j) ;
-
-          assemble_m(i, j) -=
-              0.5 * w * material_area * t_col_base_func *  normal_stiffness * t_row_base_func * t_normal_projection(i, j);
-
-
-              assemble_m(i, j) +=
-              0.5 * w * material_area * t_col_base_func *  tangent_stiffness * t_row_base_func * t_tangent_projection(i, j);
-
-              assemble_m(i, j) +=
-                  0.5 * w * (normal_stiffness - tangent_stiffness) *
-                  t_row_base_func *
-                  (t_d_n(i, j) *
-                       (t_normal(k) * t_displacement_at_gauss_point(k)) +
-                   material_area * t_normal(i) *
-                       (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
-constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-              assemble_m(i, j) += 0.5 * w * (t_d_n(l, j) * t_normal(l) )
-                                  * tangent_stiffness *
-                                  t_row_base_func * t_kd(i, k) *
-                                  t_displacement_at_gauss_point(k);
-                                  
-              ++t_col_base_func;
-              ++t_N;
+          ++t_col_base_func;
+          ++t_N;
         }
         ++t_row_base_func;
       }
@@ -1068,6 +997,56 @@ MoFEMErrorCode doWork(
 }
   };
 
+  struct OpGetNormalSpEle
+      : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+    boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtIntegrationPts;
+    OpGetNormalSpEle(
+        const string field_name,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtIntegrationPts)
+        : UserDataOperator(field_name, UserDataOperator::OPCOL),
+          dataAtIntegrationPts(dataAtIntegrationPts) {}
+
+    int ngp;
+
+    MoFEMErrorCode doWork(int side, EntityType type,
+                          DataForcesAndSourcesCore::EntData &data) {
+      MoFEMFunctionBegin;
+
+      if (data.getFieldData().size() == 0)
+        MoFEMFunctionReturnHot(0);
+
+      ngp = data.getN().size1();
+
+      FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
+
+      if (type == MBVERTEX) {
+        dataAtIntegrationPts->normalVector.resize(3, ngp, false);
+        dataAtIntegrationPts->normalVector.clear();
+      }
+
+      auto normal_original_slave =
+          getFTensor1FromMat<3>(dataAtIntegrationPts->normalVector);
+
+      auto tangent_1 =
+          getFTensor1FromMat<3>(dataAtIntegrationPts->tangent1);
+      auto tangent_2 =
+          getFTensor1FromMat<3>(dataAtIntegrationPts->tangent2);
+
+      for (unsigned int gg = 0; gg != ngp; ++gg) {
+        normal_original_slave(i) = FTensor::levi_civita(i, j, k) *
+                                   tangent_1(j) * tangent_2(k);
+        ++normal_original_slave;
+        ++tangent_1;
+        ++tangent_2;
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+  };
+
 MoFEMErrorCode
 MetaSpringBC::addSpringElements(MoFEM::Interface &m_field,
                                 const std::string field_name,
@@ -1147,6 +1126,11 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
   CHKERR commonDataPtr->getParameters();
 
   for (auto &sitSpring : commonDataPtr->mapSpring) {
+
+    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+        new OpGetTangentSpEle(mesh_nodals_positions, commonDataPtr));
+    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+        new OpGetNormalSpEle(mesh_nodals_positions, commonDataPtr));
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
         new OpSpringKs(commonDataPtr, sitSpring.second, field_name));
 
@@ -1155,6 +1139,10 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
                                             commonDataPtr->xInitAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(new OpGetTangentSpEle(
+        mesh_nodals_positions, commonDataPtr));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(new OpGetNormalSpEle(
+        mesh_nodals_positions, commonDataPtr));                                           
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
         new OpSpringFs(commonDataPtr, sitSpring.second, field_name));
   }

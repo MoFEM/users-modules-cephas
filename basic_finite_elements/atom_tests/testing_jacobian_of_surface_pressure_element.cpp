@@ -59,18 +59,18 @@ int main(int argc, char *argv[]) {
 
     CHKERR si->getOptions();
     CHKERR si->loadFile();
-    CHKERR si->addDomainField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->setFieldOrder("x", order_x);
+    CHKERR si->addDomainField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE, 3);
+    CHKERR si->addBoundaryField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE, 3);
+    CHKERR si->setFieldOrder("SPATIAL_POSITION", order_x);
 
     CHKERR si->addDomainField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->addBoundaryField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->setFieldOrder("MESH_NODE_POSITIONS", order_X);
 
     // Add spring boundary condition applied on surfaces.
-    CHKERR MetaSpringBC::addSpringElements(m_field, "x",
+    CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
                                            "MESH_NODE_POSITIONS");
-    CHKERR MetaSpringBC::addSpringElementsALE(m_field, "x", "MESH_NODE_POSITIONS");
+    CHKERR MetaSpringBC::addSpringElementsALE(m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
     si->getOtherFiniteElements().push_back("SPRING");
     si->getOtherFiniteElements().push_back("SPRING_ALE");
     CHKERR si->setUp();
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "SPATIAL_POSITION");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "MESH_NODE_POSITIONS");
 
     PetscRandomDestroy(&rctx);
@@ -131,10 +131,10 @@ int main(int argc, char *argv[]) {
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        CHKERR surfacePressure->addPressure("x", PETSC_NULL,
+        CHKERR surfacePressure->addPressure("SPATIAL_POSITION", PETSC_NULL,
                                             bit->getMeshsetId(), true, true);
         CHKERR surfacePressure->addPressureAle(
-            "x", "MESH_NODE_POSITIONS", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
             bit->getMeshsetId(), true, true);
       }
     }
@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
     CHKERR MetaSpringBC::setSpringOperators(
-        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "x",
+        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
         "MESH_NODE_POSITIONS");
 
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr(
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
 
 
   CHKERR MetaSpringBC::setSpringOperatorsMaterial(
-        m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, "x",
+        m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, "SPATIAL_POSITION",
         "MESH_NODE_POSITIONS", "SIDE_FE");
 
 
