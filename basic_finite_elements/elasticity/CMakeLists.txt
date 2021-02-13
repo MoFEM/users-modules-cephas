@@ -112,7 +112,7 @@ add_test(Spring
   -ksp_monitor -is_atom_test 5
 )
 
-add_test(NormalSpringForDismplacements
+add_test(ShearSpringForDismplacements
 ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
 ${CMAKE_CURRENT_BINARY_DIR}/elasticity
 -my_file ${CMAKE_CURRENT_SOURCE_DIR}/test_for_springs_tangent.cub 
