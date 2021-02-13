@@ -286,7 +286,7 @@ MoFEMErrorCode Example::bC() {
                                                moab::Interface::UNION);
       verts.merge(adj);
     };
-
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
                                          lo, hi);
     MoFEMFunctionReturn(0);
@@ -297,6 +297,7 @@ MoFEMErrorCode Example::bC() {
   boundary_ents.merge(fix_disp("FIX_Y"));
   boundary_ents.merge(fix_disp("FIX_Z"));
   boundary_ents.merge(fix_disp("FIX_ALL"));
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(boundary_ents);
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
       mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
       0, 2);

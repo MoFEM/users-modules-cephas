@@ -203,7 +203,7 @@ MoFEMErrorCode Example::boundaryCondition() {
                                                moab::Interface::UNION);
       verts.merge(adj);
     };
-
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
                                          lo, hi);
     MoFEMFunctionReturn(0);
