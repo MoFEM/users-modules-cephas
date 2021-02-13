@@ -1307,7 +1307,7 @@ int main(int argc, char *argv[]) {
       }
       break;
       case 6: {
-        if (fabs(*eng_ptr - 4.9871e-04) > 1e-8)
+        if (fabs(*eng_ptr - 4.7416e-04) > 1e-8)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
       }
