@@ -1268,7 +1268,7 @@ int main(int argc, char *argv[]) {
                   "atom test diverged!");
         break;
       case 5: {
-        double max, ;
+        double min;
         CHKERR VecMin(D, PETSC_NULL, &min);
         if (fabs(min + 0.10001) > 1e-10)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
