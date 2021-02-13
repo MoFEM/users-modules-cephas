@@ -156,10 +156,14 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ale_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
 
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> data_at_spring_gp =
+        boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
 
-  CHKERR MetaSpringBC::setSpringOperatorsMaterial(
-        m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, "SPATIAL_POSITION",
-        "MESH_NODE_POSITIONS", "SIDE_FE");
+    data_at_spring_gp->forcesOnlyOnEntitiesRow = nodes;
+
+    CHKERR MetaSpringBC::setSpringOperatorsMaterial(
+        m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, data_at_spring_gp,
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "SIDE_FE");
 
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL,

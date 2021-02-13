@@ -24,6 +24,116 @@
  */
 struct MetaSpringBC {
 
+  struct BlockOptionDataSprings {
+    int iD;
+
+    double springStiffnessNormal;
+    double springStiffnessTangent;
+
+    Range tRis;
+
+    BlockOptionDataSprings()
+        : springStiffnessNormal(-1), springStiffnessTangent(-1) {}
+  };
+
+  struct DataAtIntegrationPtsSprings
+      : public boost::enable_shared_from_this<DataAtIntegrationPtsSprings> {
+
+    boost::shared_ptr<MatrixDouble> gradDispPtr =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<MatrixDouble> xAtPts =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<MatrixDouble> xInitAtPts =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+
+    boost::shared_ptr<MatrixDouble> hMat =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<MatrixDouble> FMat =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<MatrixDouble> HMat =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<MatrixDouble> invHMat =
+        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<VectorDouble> detHVec =
+        boost::shared_ptr<VectorDouble>(new VectorDouble());
+
+    MatrixDouble tangent1;
+    MatrixDouble tangent2;
+    MatrixDouble normalVector;
+
+    double springStiffnessNormal;
+    double springStiffnessTangent;
+
+    Range forcesOnlyOnEntitiesRow;
+    Range forcesOnlyOnEntitiesCol;
+
+    DataForcesAndSourcesCore::EntData *faceRowData;
+
+    std::map<int, BlockOptionDataSprings> mapSpring;
+    //   ~DataAtIntegrationPtsSprings() {}
+    DataAtIntegrationPtsSprings(MoFEM::Interface &m_field)
+        : mField(m_field), faceRowData(nullptr) {
+
+      ierr = setBlocks();
+      CHKERRABORT(PETSC_COMM_WORLD, ierr);
+    }
+
+    MoFEMErrorCode getParameters() {
+      MoFEMFunctionBegin; // They will be overwritten by BlockData
+      CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
+
+      ierr = PetscOptionsEnd();
+      CHKERRQ(ierr);
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
+      MoFEMFunctionBegin;
+
+      springStiffnessNormal = data.springStiffnessNormal;
+      springStiffnessTangent = data.springStiffnessTangent;
+
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode setBlocks() {
+      MoFEMFunctionBegin;
+
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
+
+          const int id = bit->getMeshsetId();
+          mapSpring[id].tRis.clear();
+          CHKERR mField.get_moab().get_entities_by_type(
+              bit->getMeshset(), MBTRI, mapSpring[id].tRis, true);
+
+          std::vector<double> attributes;
+          bit->getAttributes(attributes);
+          if (attributes.size() < 2) {
+            SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                     "Springs should have 2 attributes but there is %d",
+                     attributes.size());
+          }
+          mapSpring[id].iD = id;
+          mapSpring[id].springStiffnessNormal = attributes[0];
+          mapSpring[id].springStiffnessTangent = attributes[1];
+
+          // Print spring blocks after being read
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
+                             attributes[0]);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
+                             attributes[1]);
+        }
+      }
+
+      MoFEMFunctionReturn(0);
+    }
+
+  private:
+    MoFEM::Interface &mField;
+  };
+
   /**
    * \brief Declare spring element
    *
@@ -96,6 +206,7 @@ struct MetaSpringBC {
       MoFEM::Interface &m_field,
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
+      boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_integration_pts,
       const std::string field_name,
       const std::string mesh_nodals_positions, std::string side_fe_name);
 

@@ -22,114 +22,6 @@ using namespace MoFEM;
 #include <SpringElement.hpp>
 using namespace boost::numeric;
 
-struct BlockOptionDataSprings {
-  int iD;
-
-  double springStiffnessNormal;
-  double springStiffnessTangent;
-
-  Range tRis;
-
-  BlockOptionDataSprings()
-      : springStiffnessNormal(-1), springStiffnessTangent(-1) {}
-};
-
-struct DataAtIntegrationPtsSprings : public boost::enable_shared_from_this<DataAtIntegrationPtsSprings> {
-
-  boost::shared_ptr<MatrixDouble> gradDispPtr =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-  boost::shared_ptr<MatrixDouble> xAtPts =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-  boost::shared_ptr<MatrixDouble> xInitAtPts =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-
-  boost::shared_ptr<MatrixDouble> hMat =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-  boost::shared_ptr<MatrixDouble> FMat =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-  boost::shared_ptr<MatrixDouble> HMat =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-  boost::shared_ptr<MatrixDouble> invHMat =
-      boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-  boost::shared_ptr<VectorDouble> detHVec =
-      boost::shared_ptr<VectorDouble>(new VectorDouble());
-
-  MatrixDouble tangent1;
-  MatrixDouble tangent2;
-  MatrixDouble normalVector;
-
-  double springStiffnessNormal;
-  double springStiffnessTangent;
-
-    Range forcesOnlyOnEntitiesRow;
-    Range forcesOnlyOnEntitiesCol;
-
-  DataForcesAndSourcesCore::EntData *faceRowData;
-
-  std::map<int, BlockOptionDataSprings> mapSpring;
-  //   ~DataAtIntegrationPtsSprings() {}
-  DataAtIntegrationPtsSprings(MoFEM::Interface &m_field) : mField(m_field), faceRowData(nullptr) {
-
-    ierr = setBlocks();
-    CHKERRABORT(PETSC_COMM_WORLD, ierr);
-  }
-
-  MoFEMErrorCode getParameters() {
-    MoFEMFunctionBegin; // They will be overwritten by BlockData
-    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Problem", "none");
-
-    ierr = PetscOptionsEnd();
-    CHKERRQ(ierr);
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode getBlockData(BlockOptionDataSprings &data) {
-    MoFEMFunctionBegin;
-
-    springStiffnessNormal = data.springStiffnessNormal;
-    springStiffnessTangent = data.springStiffnessTangent;
-
-    MoFEMFunctionReturn(0);
-  }
-
-  MoFEMErrorCode setBlocks() {
-    MoFEMFunctionBegin;
-
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
-
-        const int id = bit->getMeshsetId();
-        mapSpring[id].tRis.clear();
-        CHKERR mField.get_moab().get_entities_by_type(bit->getMeshset(), MBTRI,
-                                                      mapSpring[id].tRis, true);
-
-        std::vector<double> attributes;
-        bit->getAttributes(attributes);
-        if (attributes.size() < 2) {
-          SETERRQ1(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-                   "Springs should have 2 attributes but there is %d",
-                   attributes.size());
-        }
-        mapSpring[id].iD = id;
-        mapSpring[id].springStiffnessNormal = attributes[0];
-        mapSpring[id].springStiffnessTangent = attributes[1];
-
-        // Print spring blocks after being read
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\nSpring block %d\n", id);
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tNormal stiffness %3.4g\n",
-                           attributes[0]);
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "\tTangent stiffness %3.4g\n",
-                           attributes[1]);
-      }
-    }
-
-    MoFEMFunctionReturn(0);
-  }
-
-private:
-  MoFEM::Interface &mField;
-};
-
 /** * @brief Assemble contribution of springs to RHS *
  * \f[
  * f_s =  \int\limits_{\partial \Omega }^{} {{\psi ^T}{F^s}\left( u
@@ -143,12 +35,12 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
   // vector used to store force vector for each degree of freedom
   VectorDouble nF;
 
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-  BlockOptionDataSprings &dAta;
+  boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr;
+  MetaSpringBC::BlockOptionDataSprings &dAta;
   bool is_spatial_position = true;
 
-  OpSpringFs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             BlockOptionDataSprings &data, const std::string field_name)
+  OpSpringFs(boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> &common_data_ptr,
+             MetaSpringBC::BlockOptionDataSprings &data, const std::string field_name)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             field_name.c_str(), OPROW),
         commonDataPtr(common_data_ptr), dAta(data) {
@@ -285,14 +177,14 @@ struct OpSpringFs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
  */
 struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-  BlockOptionDataSprings &dAta;
+  boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr;
+  MetaSpringBC::BlockOptionDataSprings &dAta;
 
   MatrixDouble locKs;
   MatrixDouble transLocKs;
 
-  OpSpringKs(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             BlockOptionDataSprings &data, const std::string field_name)
+  OpSpringKs(boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> &common_data_ptr,
+             MetaSpringBC::BlockOptionDataSprings &data, const std::string field_name)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             field_name.c_str(), field_name.c_str(), OPROWCOL),
         commonDataPtr(common_data_ptr), dAta(data) {
@@ -427,14 +319,14 @@ struct OpSpringKs : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
  */
 struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
-  BlockOptionDataSprings &dAta;
+  boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr;
+  MetaSpringBC::BlockOptionDataSprings &dAta;
 
   MatrixDouble locKs;
   MatrixDouble transLocKs;
 
-  OpSpringKs_dX(boost::shared_ptr<DataAtIntegrationPtsSprings> &common_data_ptr,
-             BlockOptionDataSprings &data, const std::string field_name_1, const std::string field_name_2)
+  OpSpringKs_dX(boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> &common_data_ptr,
+             MetaSpringBC::BlockOptionDataSprings &data, const std::string field_name_1, const std::string field_name_2)
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
             field_name_1.c_str(), field_name_2.c_str(), OPROWCOL),
         commonDataPtr(common_data_ptr), dAta(data) {
@@ -634,12 +526,12 @@ struct OpCalculateDeformation
     : public VolumeElementForcesAndSourcesCoreOnContactPrismSide::
           UserDataOperator {
 
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr;
+  boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr;
 
   bool hoGeometry;
   OpCalculateDeformation(
       const string field_name,
-      boost::shared_ptr<DataAtIntegrationPtsSprings> common_data_ptr,
+      boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> common_data_ptr,
       bool ho_geometry = false)
       : VolumeElementForcesAndSourcesCoreOnContactPrismSide::UserDataOperator(
             field_name, UserDataOperator::OPROW),
@@ -701,11 +593,11 @@ struct OpCalculateDeformation
    */
   struct OpSpringFsMaterial : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-    boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtPts;
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> dataAtPts;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
     std::string sideFeName;
     Vec F;
-    BlockOptionDataSprings &dAta;
+    MetaSpringBC::BlockOptionDataSprings &dAta;
     bool hoGeometry;
 
     VectorDouble nF;
@@ -751,9 +643,9 @@ struct OpCalculateDeformation
 
     OpSpringFsMaterial(
         const string material_field,
-        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_pts,
+        boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> data_at_pts,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
-        std::string &side_fe_name, BlockOptionDataSprings &data)
+        std::string &side_fe_name, MetaSpringBC::BlockOptionDataSprings &data)
         : UserDataOperator(material_field, UserDataOperator::OPROW),
           dataAtPts(data_at_pts), sideFe(side_fe), sideFeName(side_fe_name),
           dAta(data){};
@@ -955,9 +847,9 @@ MoFEMErrorCode aSsemble(
 //    */
   struct OpGetTangentSpEle : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-    boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtIntegrationPts;
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> dataAtIntegrationPts;
     OpGetTangentSpEle(const string field_name,
-                 boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtIntegrationPts)
+                 boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> dataAtIntegrationPts)
         : UserDataOperator(field_name, UserDataOperator::OPCOL),
           dataAtIntegrationPts(dataAtIntegrationPts) {}
 
@@ -1006,10 +898,10 @@ MoFEMErrorCode doWork(
   struct OpGetNormalSpEle
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-    boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtIntegrationPts;
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> dataAtIntegrationPts;
     OpGetNormalSpEle(
         const string field_name,
-        boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtIntegrationPts)
+        boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> dataAtIntegrationPts)
         : UserDataOperator(field_name, UserDataOperator::OPCOL),
           dataAtIntegrationPts(dataAtIntegrationPts) {}
 
@@ -1127,8 +1019,8 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
 
   // Push operators to instances for springs
   // loop over blocks
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr =
-      boost::make_shared<DataAtIntegrationPtsSprings>(m_field);
+  boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr =
+      boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
   CHKERR commonDataPtr->getParameters();
 
   for (auto &sitSpring : commonDataPtr->mapSpring) {
@@ -1161,63 +1053,69 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
     MoFEM::Interface &m_field,
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> data_at_integration_pts,
     const std::string field_name, const std::string mesh_nodals_positions, std::string side_fe_name) {
   MoFEMFunctionBegin;
 
   // Push operators to instances for springs
   // loop over blocks
-  boost::shared_ptr<DataAtIntegrationPtsSprings> commonDataPtr =
-      boost::make_shared<DataAtIntegrationPtsSprings>(m_field);
-  CHKERR commonDataPtr->getParameters();
+  // boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr =
+  //     boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
+  CHKERR data_at_integration_pts->getParameters();
 
-  for (auto &sitSpring : commonDataPtr->mapSpring) {
+  for (auto &sitSpring : data_at_integration_pts->mapSpring) {
 
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideRhs =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(m_field);
 
-  // feMatSideRhs->getOpPtrVector().push_back(
-  //     new OpCalculateVectorFieldGradient<3, 3>(mesh_nodals_positions,
-  //                                              commonDataPtr->HMat));
-  // feMatSideRhs->getOpPtrVector().push_back(
-  //     new OpCalculateVectorFieldGradient<3, 3>(field_name,
-  //                                              commonDataPtr->hMat));
+  feMatSideRhs->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<3, 3>(mesh_nodals_positions,
+                                               data_at_integration_pts->HMat));
+  feMatSideRhs->getOpPtrVector().push_back(
+      new OpCalculateVectorFieldGradient<3, 3>(field_name,
+                                               data_at_integration_pts->hMat));
 
-  // feMatSideRhs->getOpPtrVector().push_back(
-  //     new OpCalculateDeformation(mesh_nodals_positions, commonDataPtr));
+  feMatSideRhs->getOpPtrVector().push_back(
+      new OpCalculateDeformation(mesh_nodals_positions, data_at_integration_pts));
 
-  //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldValues<3>(field_name, commonDataPtr->xAtPts));
-  //   fe_spring_rhs_ptr->getOpPtrVector().push_back(
-  //       new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
-  //                                           commonDataPtr->xInitAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(new OpGetTangentSpEle(
+        mesh_nodals_positions, data_at_integration_pts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpGetNormalSpEle(mesh_nodals_positions, data_at_integration_pts));
 
-  // fe_spring_rhs_ptr->getOpPtrVector().push_back(new OpSpringFsMaterial(
-  //     mesh_nodals_positions, commonDataPtr, feMatSideRhs, side_fe_name, sitSpring.second));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(field_name, data_at_integration_pts->xAtPts));
+    fe_spring_rhs_ptr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
+                                            data_at_integration_pts->xInitAtPts));
+
+  fe_spring_rhs_ptr->getOpPtrVector().push_back(new OpSpringFsMaterial(
+      mesh_nodals_positions, data_at_integration_pts, feMatSideRhs, side_fe_name, sitSpring.second));
 
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(field_name,
-        commonDataPtr->xAtPts));
+        data_at_integration_pts->xAtPts));
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
-                                            commonDataPtr->xInitAtPts));
+                                            data_at_integration_pts->xInitAtPts));
     fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpGetTangentSpEle(
-        mesh_nodals_positions, commonDataPtr));
+        mesh_nodals_positions, data_at_integration_pts));
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
-        new OpGetNormalSpEle(mesh_nodals_positions, commonDataPtr));
+        new OpGetNormalSpEle(mesh_nodals_positions, data_at_integration_pts));
     feMatSideRhs->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(mesh_nodals_positions,
-                                                 commonDataPtr->HMat));
+                                                 data_at_integration_pts->HMat));
     feMatSideRhs->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(field_name,
-                                                 commonDataPtr->hMat));
+                                                 data_at_integration_pts->hMat));
     
     fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpSpringKs_dX(
-        commonDataPtr, sitSpring.second, field_name, mesh_nodals_positions));
+        data_at_integration_pts, sitSpring.second, field_name, mesh_nodals_positions));
 
     // fe_spring_rhs_ptr->getOpPtrVector().push_back(
-    //     new OpSpringFs(commonDataPtr, sitSpring.second, field_name));
+    //     new OpSpringFs(data_at_integration_pts, sitSpring.second, field_name));
   }
-  //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
+  //   cerr << "data_at_integration_pts has been used!!! " << data_at_integration_pts.use_count() <<
   //   " times" << endl;
   MoFEMFunctionReturn(0);
 }
