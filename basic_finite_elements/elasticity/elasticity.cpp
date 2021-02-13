@@ -1246,6 +1246,35 @@ int main(int argc, char *argv[]) {
       CHKERR VecGetArrayRead(v_energy, &eng_ptr);
       MOFEM_LOG_C("ELASTIC", Sev::inform, "Elastic energy %6.4e", *eng_ptr);
 
+      auto scatter_create = [&](auto D, auto coeff) {
+        ISManager *is_manager = m_field.getInterface<ISManager>();
+        SmartPetscObj<IS> is;
+        CHKERR is_manager->isCreateProblemFieldAndRank(
+            "ELASTIC_PROB", ROW, "DISPLACEMENT", coeff, coeff, is);
+        int loc_size;
+        CHKERR ISGetLocalSize(is, &loc_size);
+        Vec v;
+        CHKERR VecCreateMPI(m_field.get_comm(), loc_size, PETSC_DETERMINE, &v);
+        VecScatter scatter;
+        CHKERR VecScatterCreate(D, is, v, PETSC_NULL, &scatter);
+        return std::make_tuple(SmartPetscObj<Vec>(v),
+                               SmartPetscObj<VecScatter>(scatter));
+      };
+
+      auto print_max_min = [&](auto &tuple, const std::string msg, double &max, double &min) {
+        MoFEMFunctionBegin;
+        CHKERR VecScatterBegin(std::get<1>(tuple), D, std::get<0>(tuple),
+                               INSERT_VALUES, SCATTER_FORWARD);
+        CHKERR VecScatterEnd(std::get<1>(tuple), D, std::get<0>(tuple),
+                             INSERT_VALUES, SCATTER_FORWARD);
+         
+         CHKERR VecView(std::get<0>(tuple),PETSC_VIEWER_STDOUT_WORLD);
+        CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
+        CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
+        MoFEMFunctionReturn(0);
+      };
+
+      
       switch (test_nb) {
       case 1:
         if (fabs(*eng_ptr - 17.129) > 1e-3)
@@ -1267,6 +1296,21 @@ int main(int argc, char *argv[]) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
+      case 5: {
+        std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+        uZScatter = scatter_create(D, 2);
+        double max, min;
+        CHKERR print_max_min(uZScatter, "Uz", max, min);
+        if (fabs(min + 0.10001) > 1e-10 || fabs(max + 1e-05) > 1.e-13)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+      }
+      break;
+      case 6: {
+        if (fabs(*eng_ptr - 4.9871e-04) > 1e-8)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+      }
       default:
         break;
       }
