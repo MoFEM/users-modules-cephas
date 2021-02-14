@@ -111,11 +111,11 @@ add_test(NormalSpringForDisplacements
   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
   -my_file ${CMAKE_CURRENT_SOURCE_DIR}/test_for_springs_normal.cub 
   -my_order 1 -ksp_type cg -pc_type lu 
-  -ksp_monitor -is_atom_test 5)
+  -ksp_monitor -is_atom_test 8)
 
 add_test(ShearSpringForDisplacements
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
   -my_file ${CMAKE_CURRENT_SOURCE_DIR}/test_for_springs_tangent.cub 
   -my_order 2 -ksp_type cg -pc_type lu 
-  -ksp_monitor -is_atom_test 6)
+  -ksp_monitor -is_atom_test 9)

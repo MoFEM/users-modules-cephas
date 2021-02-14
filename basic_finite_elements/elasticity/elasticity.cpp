@@ -1286,14 +1286,15 @@ int main(int argc, char *argv[]) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
-      case 5: {
+      // FIXME: Here are missng regersion tetst
+      case 8: {
         double min;
         CHKERR VecMin(D, PETSC_NULL, &min);
         if (fabs(min + 0.10001) > 1e-10)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
       } break;
-      case 6: {
+      case 9: {
         if (fabs(*eng_ptr - 4.7416e-04) > 1e-8)
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
