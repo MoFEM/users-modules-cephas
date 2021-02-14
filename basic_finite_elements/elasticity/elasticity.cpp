@@ -1264,7 +1264,7 @@ int main(int argc, char *argv[]) {
       const double *eng_ptr;
       CHKERR VecGetArrayRead(v_energy, &eng_ptr);
       MOFEM_LOG_C("ELASTIC", Sev::inform, "Elastic energy %6.4e", *eng_ptr);
-
+      
       switch (test_nb) {
       case 1:
         if (fabs(*eng_ptr - 17.129) > 1e-3)
@@ -1286,6 +1286,18 @@ int main(int argc, char *argv[]) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
+      case 5: {
+        double min;
+        CHKERR VecMin(D, PETSC_NULL, &min);
+        if (fabs(min + 0.10001) > 1e-10)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+      } break;
+      case 6: {
+        if (fabs(*eng_ptr - 4.7416e-04) > 1e-8)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+      }
       default:
         break;
       }
