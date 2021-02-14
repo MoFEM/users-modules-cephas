@@ -19,11 +19,16 @@
 #ifndef __SPRINGELEMENT_HPP__
 #define __SPRINGELEMENT_HPP__
 
+using VolOnSideUserDataOperator =
+      MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator;
+using EntData = DataForcesAndSourcesCore::EntData;
+using FaceDataOperator =
+      MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
 /** \brief Set of functions declaring elements and setting operators
  * to apply spring boundary condition
  */
 struct MetaSpringBC {
-
+  
   struct BlockOptionDataSprings {
     int iD;
 
@@ -134,6 +139,182 @@ struct MetaSpringBC {
     MoFEM::Interface &mField;
   };
 
+/**
+   * @brief Base class for LHS-operators (material) on side volumes
+   *
+   */
+  struct SpringALEMaterialVolOnSideLhs
+      : public VolOnSideUserDataOperator {
+
+    MatrixDouble NN;
+
+    boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtSpringPts;
+    
+    VectorInt rowIndices;
+    VectorInt colIndices;
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+    virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+    MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+
+    SpringALEMaterialVolOnSideLhs(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_spring_pts)
+        : VolOnSideUserDataOperator(field_name_1, field_name_2,
+                                    UserDataOperator::OPROWCOL),
+          dataAtSpringPts(data_at_spring_pts) {
+      sYmm = false; // This will make sure to loop over all entities
+    }
+  };
+
+/**
+   * @brief LHS-operator (material configuration) on the side volume
+   *
+   * Computes the linearisation of the material component
+   * with respect to a variation of spatial coordinates on the side volume.
+   */
+  struct SpringALEMaterialVolOnSideLhs_dX_dx
+      : public SpringALEMaterialVolOnSideLhs {
+
+    /**
+     * @brief Integrates over a face contribution from a side volume
+     *
+     * Computes linearisation of the material component
+     * with respect to a variation of spatial coordinates:
+     *
+     * \f[
+     * \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{x})
+     * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}} p
+     * \left\{\left[
+     * \frac{\partial\Delta\mathbf{x}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
+     * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
+     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
+     * \f]
+     *
+     */
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+
+    SpringALEMaterialVolOnSideLhs_dX_dx(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_spring_pts)
+        : SpringALEMaterialVolOnSideLhs(
+              field_name_1, field_name_2, data_at_spring_pts) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  /**
+   * @brief Base class for LHS-operators for pressure element (material
+   * configuration)
+   *
+   * Linearisation of the material component with respect to
+   * spatial and material coordinates consists of three parts, computed
+   * by operators working on the face and on the side volume:
+   *
+   * \f[
+   * \textrm{D} \delta W^\text{material}_p(\mathbf{x}, \mathbf{X},
+   * \delta\mathbf{x})
+   * [\Delta\mathbf{x}, \Delta\mathbf{X}] = \textrm{D} \delta
+   * W^\text{(face)}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{x})
+   * [\Delta\mathbf{X}] + \textrm{D} \delta
+   * W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X}, \delta\mathbf{x})
+   * [\Delta\mathbf{x}] + \textrm{D} \delta W^\text{(side volume)}_p
+   * (\mathbf{x}, \mathbf{X}, \delta\mathbf{x}) [\Delta\mathbf{X}]
+   * \f]
+   *
+   */
+  struct OpSpringALEMaterialLhs : public FaceDataOperator {
+
+    boost::shared_ptr<DataAtIntegrationPtsSprings> dataAtSpringPts;
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideFe;
+    std::string sideFeName;
+
+    MatrixDouble NN;
+    VectorInt rowIndices;
+    VectorInt colIndices;
+
+    int row_nb_dofs;
+    int col_nb_dofs;
+    int nb_gauss_pts;
+
+    int nb_base_fun_row;
+    int nb_base_fun_col;
+
+    bool diagonal_block;
+
+    virtual MoFEMErrorCode doWork(int row_side, int col_side,
+                                  EntityType row_type, EntityType col_type,
+                                  DataForcesAndSourcesCore::EntData &row_data,
+                                  DataForcesAndSourcesCore::EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+
+    virtual MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data) {
+      MoFEMFunctionBegin;
+      MoFEMFunctionReturn(0);
+    }
+
+    MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
+
+    OpSpringALEMaterialLhs(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_spring_pts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        std::string &side_fe_name)
+        : FaceDataOperator(field_name_1, field_name_2,
+                           FaceDataOperator::OPROWCOL),
+          dataAtSpringPts(data_at_spring_pts), sideFe(side_fe), sideFeName(side_fe_name) {
+      sYmm = false; // This will make sure to loop over all entities
+    }
+  };
+
+    /**
+   * @brief LHS-operator for the pressure element (material configuration)
+   *
+   * Triggers loop over operators from the side volume
+   *
+   */
+  struct OpSpringALEMaterialLhs_dX_dx
+      : public OpSpringALEMaterialLhs {
+
+    /*
+     * Triggers loop over operators from the side volume
+     *
+     */
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    OpSpringALEMaterialLhs_dX_dx(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_pts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        std::string &side_fe_name)
+        : OpSpringALEMaterialLhs(field_name_1, field_name_2, data_at_pts,
+                                       side_fe, side_fe_name) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
   /**
    * \brief Declare spring element
    *
@@ -153,7 +334,6 @@ struct MetaSpringBC {
       MoFEM::Interface &m_field, const std::string field_name,
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
-
   /**
    * \brief Declare spring element
    *
@@ -171,7 +351,7 @@ struct MetaSpringBC {
    */
   static MoFEMErrorCode addSpringElementsALE(
       MoFEM::Interface &m_field, const std::string field_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
+      const std::string mesh_nodals_positions, Range &spring_triangles);
 
   /**
    * \brief Implementation of spring element. Set operators to calculate LHS and

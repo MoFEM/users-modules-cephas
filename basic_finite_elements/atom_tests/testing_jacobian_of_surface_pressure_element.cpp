@@ -67,10 +67,19 @@ int main(int argc, char *argv[]) {
     CHKERR si->addBoundaryField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->setFieldOrder("MESH_NODE_POSITIONS", order_X);
 
+    Range triangle_springs;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+       if (it->getName().compare(0, 9, "SPRING_BC") == 0) {
+        CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI,
+                                                       triangle_springs, true);
+      }
+    }
+
     // Add spring boundary condition applied on surfaces.
     CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
                                            "MESH_NODE_POSITIONS");
-    CHKERR MetaSpringBC::addSpringElementsALE(m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS");
+    CHKERR MetaSpringBC::addSpringElementsALE(
+        m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS", triangle_springs);
     si->getOtherFiniteElements().push_back("SPRING");
     si->getOtherFiniteElements().push_back("SPRING_ALE");
     CHKERR si->setUp();
@@ -139,8 +148,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-
-
     // Implementation of spring element
     // Create new instances of face elements for springs
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
@@ -159,11 +166,14 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> data_at_spring_gp =
         boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
 
-    data_at_spring_gp->forcesOnlyOnEntitiesRow = nodes;
+    Range spring_ale_nodes;
+    CHKERR moab.get_connectivity(triangle_springs, spring_ale_nodes, true);
+    
+    data_at_spring_gp->forcesOnlyOnEntitiesRow = spring_ale_nodes;
 
     CHKERR MetaSpringBC::setSpringOperatorsMaterial(
         m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, data_at_spring_gp,
-        "SPATIAL_POSITION", "MESH_NODE_POSITIONS", "SIDE_FE");
+        "SPATIAL_POSITION", "MESH_NODE_POSITIONS",  si->getDomainFEName());
 
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL,
