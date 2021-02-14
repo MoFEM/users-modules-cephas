@@ -12,7 +12,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
-namespace HenkyOps {
+namespace HenckyOps {
 
 constexpr double eps = 1e-8;
 
@@ -63,7 +63,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble matLogCdC;
   MatrixDouble matFirstPiolaStress;
   MatrixDouble matSecondPiolaStress;
-  MatrixDouble matHenkyStress;
+  MatrixDouble matHenckyStress;
   MatrixDouble matTangent;
 
   inline auto getMatFirstPiolaStress() {
@@ -71,8 +71,8 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
                                            &matFirstPiolaStress);
   }
 
-  inline auto getMatHenkyStress() {
-    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &matHenkyStress);
+  inline auto getMatHenckyStress() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &matHenckyStress);
   }
 
   inline auto getMatLogC() {
@@ -249,9 +249,9 @@ private:
 };
 
 template <int DIM>
-struct OpCalculateHenkyStress : public DomainEleOp {
+struct OpCalculateHenckyStress : public DomainEleOp {
 
-  OpCalculateHenkyStress(const std::string field_name,
+  OpCalculateHenckyStress(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
@@ -273,8 +273,8 @@ struct OpCalculateHenkyStress : public DomainEleOp {
     auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
     auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
     constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matHenkyStress.resize(size_symm, nb_gauss_pts, false);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenkyStress);
+    commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
+    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       t_T(i, j) = t_D(i, j, k, l) * t_logC(k, l);
@@ -291,9 +291,9 @@ private:
 };
 
 template <int DIM>
-struct OpCalculateHenkyPlasticStress : public DomainEleOp {
+struct OpCalculateHenckyPlasticStress : public DomainEleOp {
 
-  OpCalculateHenkyPlasticStress(const std::string field_name,
+  OpCalculateHenckyPlasticStress(const std::string field_name,
                                 boost::shared_ptr<CommonData> common_data)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
@@ -317,8 +317,8 @@ struct OpCalculateHenkyPlasticStress : public DomainEleOp {
     auto t_logCPlastic =
         getFTensor2SymmetricFromMat<DIM>(*commonDataPtr->matLogCPlastic);
     constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
-    commonDataPtr->matHenkyStress.resize(size_symm, nb_gauss_pts, false);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenkyStress);
+    commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
+    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
 
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       t_T(i, j) = t_D(i, j, k, l) * (t_logC(k, l) - t_logCPlastic(k, l));
@@ -364,7 +364,7 @@ struct OpCalculatePiolaStress : public DomainEleOp {
     commonDataPtr->matFirstPiolaStress.resize(DIM * DIM, nb_gauss_pts, false);
     commonDataPtr->matSecondPiolaStress.resize(size_symm, nb_gauss_pts, false);
     auto t_P = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matFirstPiolaStress);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenkyStress);
+    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
     auto t_S =
         getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
     auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
@@ -392,8 +392,8 @@ private:
 };
 
 template <int DIM>
-struct OpHenkyTangent : public DomainEleOp {
-  OpHenkyTangent(const std::string field_name,
+struct OpHenckyTangent : public DomainEleOp {
+  OpHenckyTangent(const std::string field_name,
                  boost::shared_ptr<CommonData> common_data)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
@@ -423,7 +423,7 @@ struct OpHenkyTangent : public DomainEleOp {
     auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
     auto t_eig_val = getFTensor1FromMat<DIM>(commonDataPtr->matEigVal);
     auto t_eig_vec = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matEigVec);
-    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenkyStress);
+    auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
     auto t_S =
         getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matSecondPiolaStress);
     auto t_grad = getFTensor2FromMat<DIM, DIM>(*(commonDataPtr->matGradPtr));
@@ -478,4 +478,4 @@ private:
  boost::shared_ptr<CommonData> commonDataPtr;
 };
 
-} // namespace HenkyOps
+} // namespace HenckyOps

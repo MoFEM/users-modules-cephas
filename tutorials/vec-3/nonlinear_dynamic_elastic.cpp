@@ -65,10 +65,10 @@ constexpr double poisson_ratio = 0.25;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
-#include <HenkyOps.hpp>
+#include <HenckyOps.hpp>
 #include <OpPostProcElastic.hpp>
 using namespace Tutorial;
-using namespace HenkyOps;
+using namespace HenckyOps;
 
 static double *ts_time_ptr;
 static double *ts_aa_ptr;
@@ -263,7 +263,7 @@ MoFEMErrorCode Example::assembleSystem() {
     return t_source;
   };
 
-  auto henky_common_data_ptr = boost::make_shared<HenkyOps::CommonData>();
+  auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
   henky_common_data_ptr->matGradPtr = matGradPtr;
   henky_common_data_ptr->matDPtr = matDPtr;
 
@@ -278,11 +278,11 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpCalculateHenkyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpHenkyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+      new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpK("U", "U", henky_common_data_ptr->getMatTangent()));
 
@@ -303,7 +303,7 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpCalculateHenkyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
 

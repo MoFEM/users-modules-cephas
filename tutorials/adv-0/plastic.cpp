@@ -89,7 +89,7 @@ using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Only used for dynamics]
 
-// Only used with Henky/nonlinear material
+// Only used with Hencky/nonlinear material
 using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
@@ -106,12 +106,12 @@ double H = 2e1;
 double cn = H;
 int order = 2;
 
-#include <HenkyOps.hpp>
+#include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>
 
 using namespace PlasticOps;
-using namespace HenkyOps;
+using namespace HenckyOps;
 struct Example {
 
   Example(MoFEM::Interface &m_field) : mField(m_field) {}
@@ -131,7 +131,7 @@ private:
 
   MatrixDouble invJac;
   boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
-  boost::shared_ptr<HenkyOps::CommonData> commonHenkyDataPtr;
+  boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
@@ -238,12 +238,12 @@ MoFEMErrorCode Example::createCommonData() {
   CHKERR set_matrial_stiffness();
 
   if (is_large_strains) {
-    commonHenkyDataPtr = boost::make_shared<HenkyOps::CommonData>();
-    commonHenkyDataPtr->matGradPtr = commonPlasticDataPtr->mGradPtr;
-    commonHenkyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
-    commonHenkyDataPtr->matLogCPlastic = commonPlasticDataPtr->plasticStrainPtr;
-    commonPlasticDataPtr->mStressPtr = commonHenkyDataPtr->getMatLogC();
-    commonPlasticDataPtr->mStressPtr = commonHenkyDataPtr->getMatHenkyStress();
+    commonHenckyDataPtr = boost::make_shared<HenckyOps::CommonData>();
+    commonHenckyDataPtr->matGradPtr = commonPlasticDataPtr->mGradPtr;
+    commonHenckyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
+    commonHenckyDataPtr->matLogCPlastic = commonPlasticDataPtr->plasticStrainPtr;
+    commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatLogC();
+    commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatHenckyStress();
   }
 
   MoFEMFunctionReturn(0);
@@ -313,22 +313,22 @@ MoFEMErrorCode Example::OPs() {
 
     if (is_large_strains) {
 
-      if (commonPlasticDataPtr->mGradPtr != commonHenkyDataPtr->matGradPtr)
+      if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
                 "Wrong pointer for grad");
 
       pipeline.push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenkyDataPtr));
+          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", commonHenkyDataPtr));
+          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenkyDataPtr));
+          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(
-          new OpCalculateHenkyPlasticStress<SPACE_DIM>("U",
-                                                       commonHenkyDataPtr));
+          new OpCalculateHenckyPlasticStress<SPACE_DIM>("U",
+                                                       commonHenckyDataPtr));
       pipeline.push_back(
           new OpCalculatePiolaStress<SPACE_DIM>(
-              "U", commonHenkyDataPtr));
+              "U", commonHenckyDataPtr));
 
     } else {
       pipeline.push_back(
@@ -344,15 +344,15 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     if (is_large_strains) {
       pipeline.push_back(
-          new OpHenkyTangent<SPACE_DIM>("U", commonHenkyDataPtr));
+          new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(
-          new OpKPiola("U", "U", commonHenkyDataPtr->getMatTangent()));
+          new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
-          "U", "EP", commonPlasticDataPtr, commonHenkyDataPtr));
+          "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr));
       pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
-          "EP", "U", commonPlasticDataPtr, commonHenkyDataPtr));
+          "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr));
       pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
-          "TAU", "U", commonPlasticDataPtr, commonHenkyDataPtr));
+          "TAU", "U", commonPlasticDataPtr, commonHenckyDataPtr));
 
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
@@ -406,7 +406,7 @@ MoFEMErrorCode Example::OPs() {
     // Calculate internal forece
     if (is_large_strains) {
       pipeline.push_back(new OpInternalForcePiola(
-          "U", commonHenkyDataPtr->getMatFirstPiolaStress()));
+          "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
     } else {
       pipeline.push_back(
           new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));

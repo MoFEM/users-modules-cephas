@@ -134,14 +134,14 @@ struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP : public DomainEleOp {
   OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenkyOps::CommonData> common_henky_data_ptr);
+      boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<HenkyOps::CommonData> commonHenkyDataPtr;
+  boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   MatrixDouble locMat;
 };
 
@@ -162,14 +162,14 @@ struct OpCalculatePlasticFlowLhs_LogStrain_dU : public DomainEleOp {
   OpCalculatePlasticFlowLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenkyOps::CommonData> comman_henky_data_ptr);
+      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<HenkyOps::CommonData> commonHenkyDataPtr;
+  boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   MatrixDouble locMat;
 };
 
@@ -216,14 +216,14 @@ struct OpCalculateContrainsLhs_LogStrain_dU : public DomainEleOp {
   OpCalculateContrainsLhs_LogStrain_dU(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenkyOps::CommonData> comman_henky_data_ptr);
+      boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
-  boost::shared_ptr<HenkyOps::CommonData> commonHenkyDataPtr;
+  boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   MatrixDouble locMat;
 };
 
@@ -737,10 +737,10 @@ OpCalculatePlasticInternalForceLhs_LogStrain_dEP::
     OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
         const std::string row_field_name, const std::string col_field_name,
         boost::shared_ptr<CommonData> common_data_ptr,
-        boost::shared_ptr<HenkyOps::CommonData> common_henky_data_ptr)
+        boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr),
-      commonHenkyDataPtr(common_henky_data_ptr) {
+      commonHenckyDataPtr(common_henky_data_ptr) {
   sYmm = false;
 }
 
@@ -765,9 +765,9 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::doWork(
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
     auto t_logC_dC = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM>(
-        commonHenkyDataPtr->matLogCdC);
+        commonHenckyDataPtr->matLogCdC);
     auto t_grad = getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(
-        *(commonHenkyDataPtr->matGradPtr));
+        *(commonHenckyDataPtr->matGradPtr));
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
@@ -960,10 +960,10 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
 OpCalculatePlasticFlowLhs_LogStrain_dU::OpCalculatePlasticFlowLhs_LogStrain_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<HenkyOps::CommonData> comman_henky_data_ptr)
+    boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr),
-      commonHenkyDataPtr(comman_henky_data_ptr) {
+      commonHenckyDataPtr(comman_henky_data_ptr) {
   sYmm = false;
 }
 
@@ -1004,7 +1004,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(int row_side, int 
     auto t_grad =
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
     auto t_logC_dC = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM>(
-        commonHenkyDataPtr->matLogCdC);
+        commonHenckyDataPtr->matLogCdC);
 
     auto t_diff_symmetrize = diff_symmetrize();
 
@@ -1383,10 +1383,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
 OpCalculateContrainsLhs_LogStrain_dU::OpCalculateContrainsLhs_LogStrain_dU(
     const std::string row_field_name, const std::string col_field_name,
     boost::shared_ptr<CommonData> common_data_ptr,
-    boost::shared_ptr<HenkyOps::CommonData> comman_henky_data_ptr)
+    boost::shared_ptr<HenckyOps::CommonData> comman_henky_data_ptr)
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr),
-      commonHenkyDataPtr(comman_henky_data_ptr) {
+      commonHenckyDataPtr(comman_henky_data_ptr) {
   sYmm = false;
 }
 
@@ -1427,7 +1427,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
     auto t_grad =
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
     auto t_logC_dC = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM>(
-        commonHenkyDataPtr->matLogCdC);
+        commonHenckyDataPtr->matLogCdC);
     auto t_diff_symmetrize = diff_symmetrize();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {

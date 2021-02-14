@@ -97,7 +97,7 @@ using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Only used for dynamics]
 
-// Only used with Henky/nonlinear material
+// Only used with Hencky/nonlinear material
 using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
@@ -115,10 +115,10 @@ constexpr double spring_stiffness = 0.1;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
-#include <HenkyOps.hpp>
+#include <HenckyOps.hpp>
 #include <PostProcContact.hpp>
 using namespace ContactOps;
-using namespace HenkyOps;
+using namespace HenckyOps;
 
 struct Example {
 
@@ -327,7 +327,7 @@ MoFEMErrorCode Example::OPs() {
     }
   };
 
-  auto henky_common_data_ptr = boost::make_shared<HenkyOps::CommonData>();
+  auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
   henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr;
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
@@ -343,11 +343,11 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpCalculateHenkyStress<SPACE_DIM>("U", henky_common_data_ptr));
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpHenkyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+          new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
     } else {
@@ -395,7 +395,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateHenkyStress<SPACE_DIM>("U", henky_common_data_ptr));
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
