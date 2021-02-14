@@ -315,6 +315,100 @@ struct MetaSpringBC {
     };
   };
 
+
+/**
+   * @brief LHS-operator for the pressure element (material configuration)
+   *
+   * Computes linearisation of the material component with respect to
+   * material coordinates (also triggers a loop over operators
+   * from the side volume).
+   *
+   */
+  struct OpSpringALEMaterialLhs_dX_dX
+      : public OpSpringALEMaterialLhs {
+
+    /**
+     * Integrates a contribution to the left-hand side and triggers a loop
+     * over side volume operators.
+     *
+     */
+    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                          EntityType col_type,
+                          DataForcesAndSourcesCore::EntData &row_data,
+                          DataForcesAndSourcesCore::EntData &col_data);
+
+    /**
+     * @brief Compute part of the left-hand side
+     *
+     * Computes the linearisation of the material component
+     * with respect to a variation of material coordinates
+     * \f$(\Delta\mathbf{X})\f$:
+     *
+     * \f[
+     * \textrm{D} \delta W^\text{(face)}_p(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{x})
+     * [\Delta\mathbf{X}] = -\int\limits_{\mathcal{T}_{\xi}} p \,
+     * \mathbf{F}^{\intercal}\cdot \left[ \frac{\partial\mathbf{X}}
+     * {\partial\xi} \cdot \left(\frac{\partial\Delta
+     *  \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right)
+     * -\frac{\partial\mathbf{X}}
+     *  {\partial\eta} \cdot \left(\frac{\partial\Delta
+     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right]
+     * \textrm{d}\xi\textrm{d}\eta
+     * \f]
+     *
+     */
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+
+    OpSpringALEMaterialLhs_dX_dX(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_spring_pts,
+        boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
+        std::string &side_fe_name)
+        : OpSpringALEMaterialLhs(field_name_1, field_name_2, data_at_spring_pts,
+                                       side_fe, side_fe_name) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
+
+  /**
+   * @brief LHS-operator (material configuration) on the side volume
+   *
+   * Computes the linearisation of the material component
+   * with respect to a variation of material coordinates on the side volume.
+   *
+   */
+  struct SpringALEMaterialVolOnSideLhs_dX_dX
+      : public SpringALEMaterialVolOnSideLhs {
+
+    /**
+     * @brief Integrates over a face contribution from a side volume
+     *
+     * Computes linearisation of the material component
+     * with respect to a variation of material coordinates:
+     *
+     * \f[
+     * \textrm{D} \delta W^\text{(side volume)}_p(\mathbf{x}, \mathbf{X},
+     * \delta\mathbf{x})
+     * [\Delta\mathbf{X}] = \int\limits_{\mathcal{T}_{\xi}} p
+     * \left\{\left[
+     * \mathbf{h}\,\mathbf{H}^{-1}\,\frac{\partial\Delta\mathbf{X}}
+     * {\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
+     * \right]^{\intercal}\cdot\left(\frac{\partial\mathbf{X}}{\partial\xi}
+     * \times\frac{\partial\mathbf{X}}{\partial\eta}\right)\right\}
+     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
+     * \f]
+     */
+    MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
+
+    SpringALEMaterialVolOnSideLhs_dX_dX(
+        const string field_name_1, const string field_name_2,
+        boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_spring_pts)
+        : SpringALEMaterialVolOnSideLhs(
+              field_name_1, field_name_2, data_at_spring_pts) {
+      sYmm = false; // This will make sure to loop over all entities
+    };
+  };
   /**
    * \brief Declare spring element
    *

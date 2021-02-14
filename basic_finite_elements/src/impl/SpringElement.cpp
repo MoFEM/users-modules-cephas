@@ -463,7 +463,7 @@ struct OpSpringKs_dX : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator 
               (t_d_n(i, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
                normal_length * t_normal(i) *
                    (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
-          constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+          // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
           assemble_m(i, j) += w * (t_d_n(l, j) * t_normal(l)) *
                               tangent_stiffness * t_row_base_func * t_kd(i, k) *
                               t_displacement_at_gauss_point(k);
@@ -676,6 +676,343 @@ MetaSpringBC::SpringALEMaterialVolOnSideLhs_dX_dx::iNtegrate(
       ++t_normal_1;
       ++t_inv_H;
       ++t_F;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode MetaSpringBC::OpSpringALEMaterialLhs::aSsemble(
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  // get pointer to first global index on row
+  const int *row_indices = &*row_data.getIndices().data().begin();
+  // get pointer to first global index on column
+  const int *col_indices = &*col_data.getIndices().data().begin();
+
+  auto &data = *dataAtSpringPts;
+  if (!data.forcesOnlyOnEntitiesRow.empty()) {
+    rowIndices.resize(row_nb_dofs, false);
+    noalias(rowIndices) = row_data.getIndices();
+    row_indices = &rowIndices[0];
+    VectorDofs &dofs = row_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesRow.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesRow.end()) {
+        rowIndices[ii] = -1;
+      }
+    }
+  }
+
+  if (!data.forcesOnlyOnEntitiesCol.empty()) {
+    colIndices.resize(col_nb_dofs, false);
+    noalias(colIndices) = col_data.getIndices();
+    col_indices = &colIndices[0];
+    VectorDofs &dofs = col_data.getFieldDofs();
+    VectorDofs::iterator dit = dofs.begin();
+    for (int ii = 0; dit != dofs.end(); ++dit, ++ii) {
+      if (data.forcesOnlyOnEntitiesCol.find((*dit)->getEnt()) ==
+          data.forcesOnlyOnEntitiesCol.end()) {
+        colIndices[ii] = -1;
+      }
+    }
+  }
+
+  Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
+                                             : getFEMethod()->snes_B;
+  // assemble local matrix
+  CHKERR MatSetValues(B, row_nb_dofs, row_indices, col_nb_dofs, col_indices,
+                      &*NN.data().begin(), ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  // if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
+  //     dAta.tRis.end()) {
+  //   MoFEMFunctionReturnHot(0);
+  // }
+
+  row_nb_dofs = row_data.getIndices().size();
+  if (!row_nb_dofs)
+    MoFEMFunctionReturnHot(0);
+  col_nb_dofs = col_data.getIndices().size();
+  if (!col_nb_dofs)
+    MoFEMFunctionReturnHot(0);
+  nb_gauss_pts = row_data.getN().size1();
+
+  nb_base_fun_row = row_data.getFieldData().size() / 3;
+  nb_base_fun_col = col_data.getFieldData().size() / 3;
+
+  NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
+  NN.clear();
+
+  diagonal_block = (row_type == col_type) && (row_side == col_side);
+
+  if (col_type == MBVERTEX) {
+    dataAtSpringPts->faceRowData = &row_data;
+    CHKERR loopSideVolumes(sideFeName, *sideFe);
+  }
+
+  // integrate local matrix for entity block
+  CHKERR iNtegrate(row_data, col_data);
+
+  // assemble local matrix
+  CHKERR aSsemble(row_data, col_data);
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
+                         FTensor::Tensor1<double *, 3> t_1,
+                         FTensor::Tensor1<double *, 3> t_2) {
+    FTensor::Tensor2<double, 3, 3> t_n;
+    t_n(i, j) = 0;
+    t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+    t_n(i, j) -= FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+    return t_n;
+  };
+
+  auto make_vec_der_2 = [&](FTensor::Tensor1<double *, 2> t_N,
+                            FTensor::Tensor1<double *, 3> t_1,
+                            FTensor::Tensor1<double *, 3> t_2) {
+    FTensor::Tensor1<double, 3> t_normal;
+    t_normal(i) = FTensor::levi_civita(i, j, k) * t_1(j) * t_2(k);
+    const double normal_norm = sqrt(t_normal(i) * t_normal(i));
+    FTensor::Tensor2<double, 3, 3> t_n;
+    t_n(i, j) = 0;
+    t_n(i, j) += FTensor::levi_civita(i, j, k) * t_2(k) * t_N(0);
+    t_n(i, j) -= FTensor::levi_civita(i, j, k) * t_1(k) * t_N(1);
+    FTensor::Tensor2<double, 3, 3> t_result;
+    t_result(i, j) = 0;
+    t_result(i, j) =
+        t_n(i, j) / normal_norm - t_normal(i) * t_n(k, j) * t_normal(k) /
+                                      (normal_norm * normal_norm * normal_norm);
+    return t_result;
+  };
+
+  dataAtSpringPts->faceRowData = nullptr;
+  CHKERR loopSideVolumes(sideFeName, *sideFe);
+
+  auto t_F = getFTensor2FromMat<3, 3>(*dataAtSpringPts->FMat);
+
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_1 = getFTensor1FromMat<3>(dataAtSpringPts->tangent1);
+  auto t_2 = getFTensor1FromMat<3>(dataAtSpringPts->tangent2);
+
+  const double normal_stiffness = dataAtSpringPts->springStiffnessNormal;
+  const double tangent_stiffness = dataAtSpringPts->springStiffnessTangent;
+
+  // create a 3d vector to be used as the normal to the face with length equal
+  // to the face area
+  FTensor::Tensor1<double, 3> t_normal;
+  FTensor::Tensor2<double, 3, 3> t_normal_projection;
+  FTensor::Tensor2<double, 3, 3> t_tangent_projection;
+
+  // Extract solution at Gauss points
+  auto t_solution_at_gauss_point = getFTensor1FromMat<3>(*dataAtSpringPts->xAtPts);
+  auto t_init_solution_at_gauss_point =
+      getFTensor1FromMat<3>(*dataAtSpringPts->xInitAtPts);
+  FTensor::Tensor1<double, 3> t_displacement_at_gauss_point;
+
+  auto t_normal_1 = getFTensor1FromMat<3>(dataAtSpringPts->normalVector);
+  constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+  
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    t_normal(i) = t_normal_1(i);
+
+    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    t_normal(i) = t_normal(i) / normal_length;
+    t_normal_projection(i, j) = t_normal(i) * t_normal(j);
+    t_tangent_projection(i, j) = t_normal_projection(i, j);
+    t_tangent_projection(0, 0) -= 1;
+    t_tangent_projection(1, 1) -= 1;
+    t_tangent_projection(2, 2) -= 1;
+    // Calculate the displacement at the Gauss point
+    t_displacement_at_gauss_point(i) =
+        t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
+
+    double val = 0.5 * t_w;
+
+    auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
+    auto t_col_base_func = col_data.getFTensor0N(gg, 0);
+    int bbc = 0;
+    for (; bbc != nb_base_fun_col; ++bbc) {
+
+      auto t_row_base_func = row_data.getFTensor0N(gg, 0);
+
+      int bbr = 0;
+      for (; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_d_n = make_vec_der(t_N, t_1, t_2);
+
+        auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
+        // TODO: handle hoGeometry
+
+        // t_assemble(i, k) -=
+        //     val * dAta.data.data.value1 * t_base * t_F(j, i) * t_d_n(j, k);
+
+          auto t_d_n_2 = make_vec_der_2(t_N, t_1, t_2);
+
+          t_assemble(i, j) += val * normal_length * t_col_base_func *
+                              normal_stiffness * t_row_base_func *
+                              t_F(k, i) * t_normal_projection(k, j);
+
+          t_assemble(i, j) -= val * normal_length * t_col_base_func *
+                              tangent_stiffness * t_row_base_func *
+                              t_F(k, i) * t_tangent_projection(k, j);
+
+          t_assemble(i, j) -=
+              val * (normal_stiffness - tangent_stiffness) *
+              t_row_base_func *  t_F(l, i) *
+              (t_d_n(l, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
+               normal_length * t_normal(l) *
+                   (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
+          // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+          t_assemble(i, j) -= val * (t_d_n(l, j) * t_normal(l)) *
+                              tangent_stiffness * t_row_base_func * t_F(k, i) *
+                              t_displacement_at_gauss_point(k);
+
+
+        ++t_row_base_func;
+      }
+      ++t_N;
+      ++t_col_base_func;
+    }
+    ++t_F;
+    ++t_w;
+    ++t_1;
+    ++t_2;
+    ++t_normal_1;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+MetaSpringBC::SpringALEMaterialVolOnSideLhs_dX_dX::iNtegrate(
+    EntData &row_data, EntData &col_data) {
+
+  MoFEMFunctionBegin;
+
+  FTensor::Index<'i', 3> i;
+  FTensor::Index<'j', 3> j;
+  FTensor::Index<'k', 3> k;
+  FTensor::Index<'l', 3> l;
+  FTensor::Index<'m', 3> m;
+  FTensor::Index<'q', 3> q;
+
+  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+    return FTensor::Tensor2<double *, 3, 3>(
+        &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2), &m(r + 1, c + 0),
+        &m(r + 1, c + 1), &m(r + 1, c + 2), &m(r + 2, c + 0), &m(r + 2, c + 1),
+        &m(r + 2, c + 2));
+  };
+
+  const double normal_stiffness = dataAtSpringPts->springStiffnessNormal;
+  const double tangent_stiffness = dataAtSpringPts->springStiffnessTangent;
+
+  // create a 3d vector to be used as the normal to the face with length equal
+  // to the face area
+  FTensor::Tensor1<double, 3> t_normal;
+  FTensor::Tensor2<double, 3, 3> t_normal_projection;
+  FTensor::Tensor2<double, 3, 3> t_tangent_projection;
+
+  // Extract solution at Gauss points
+  auto t_solution_at_gauss_point = getFTensor1FromMat<3>(*dataAtSpringPts->xAtPts);
+  auto t_init_solution_at_gauss_point =
+      getFTensor1FromMat<3>(*dataAtSpringPts->xInitAtPts);
+  FTensor::Tensor1<double, 3> t_displacement_at_gauss_point;
+
+  auto t_normal_1 = getFTensor1FromMat<3>(dataAtSpringPts->normalVector);
+
+  auto t_w = getFTensor0IntegrationWeight();
+  
+  auto t_h = getFTensor2FromMat<3, 3>(*dataAtSpringPts->hMat);
+  auto t_inv_H = getFTensor2FromMat<3, 3>(*dataAtSpringPts->invHMat);
+
+  FTensor::Tensor2<double, 3, 3> t_d;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    t_normal(i) = t_normal_1(i);
+
+    const double normal_length = sqrt(t_normal(k) * t_normal(k));
+    t_normal(i) = t_normal(i) / normal_length;
+    t_normal_projection(i, j) = t_normal(i) * t_normal(j);
+    t_tangent_projection(i, j) = t_normal_projection(i, j);
+    t_tangent_projection(0, 0) -= 1;
+    t_tangent_projection(1, 1) -= 1;
+    t_tangent_projection(2, 2) -= 1;
+    // Calculate the displacement at the Gauss point
+    t_displacement_at_gauss_point(i) =
+        t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
+
+    double val = 0.5 * t_w * normal_length;
+
+    auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+    int bbc = 0;
+    for (; bbc != nb_base_fun_col; ++bbc) {
+
+      FTensor::Tensor0<double *> t_row_base(&row_data.getN()(gg, 0));
+
+      int bbr = 0;
+      for (; bbr != nb_base_fun_row; ++bbr) {
+
+        auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
+
+        // TODO: handle hoGeometry
+
+        // t_assemble(i, j) -= a * t_row_base * t_inv_H(l, j) *
+        //                     t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
+        //                     t_normal(k);
+
+        t_assemble(i, j) +=
+            val * t_row_base * normal_stiffness * t_inv_H(l, j) *
+            t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
+            (t_normal_projection(k, q) * t_displacement_at_gauss_point(q));
+
+        t_assemble(i, j) -=
+            val * t_row_base * tangent_stiffness * t_inv_H(l, j) *
+            t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
+            (t_tangent_projection(k, q) * t_displacement_at_gauss_point(q));
+
+        ++t_row_base;
+      }
+      ++t_col_diff_base;
+    }
+    ++t_w;
+    ++t_h;
+    ++t_inv_H;
+    ++t_solution_at_gauss_point;
+    ++t_init_solution_at_gauss_point;
+    ++t_normal_1;
   }
 
   MoFEMFunctionReturn(0);
@@ -1295,27 +1632,46 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
     fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpSpringKs_dX(
         data_at_integration_pts, sitSpring.second, field_name, mesh_nodals_positions));
 
-    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs =
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dx =
         boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(m_field);
 
-    feMatSideLhs->getOpPtrVector().push_back(
+    feMatSideLhs_dx->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(mesh_nodals_positions,
                                                  data_at_integration_pts->HMat));
-    feMatSideLhs->getOpPtrVector().push_back(
+    feMatSideLhs_dx->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(field_name,
                                                  data_at_integration_pts->hMat));
 
-    feMatSideLhs->getOpPtrVector().push_back(
+    feMatSideLhs_dx->getOpPtrVector().push_back(
       new OpCalculateDeformation(mesh_nodals_positions, data_at_integration_pts));
 
-    feMatSideLhs->getOpPtrVector().push_back(new SpringALEMaterialVolOnSideLhs_dX_dx(
+    feMatSideLhs_dx->getOpPtrVector().push_back(new SpringALEMaterialVolOnSideLhs_dX_dx(
       mesh_nodals_positions, field_name, data_at_integration_pts));
 
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
         new OpSpringALEMaterialLhs_dX_dx(
-            mesh_nodals_positions, field_name, data_at_integration_pts, feMatSideLhs, side_fe_name));
-            
-            
+            mesh_nodals_positions, field_name, data_at_integration_pts, feMatSideLhs_dx, side_fe_name));
+
+    boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dX =
+        boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(m_field);
+
+    feMatSideLhs_dX->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(mesh_nodals_positions,
+                                                 data_at_integration_pts->HMat));
+    feMatSideLhs_dX->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>(field_name,
+                                                 data_at_integration_pts->hMat));
+
+    feMatSideLhs_dX->getOpPtrVector().push_back(
+      new OpCalculateDeformation(mesh_nodals_positions, data_at_integration_pts));
+
+    feMatSideLhs_dX->getOpPtrVector().push_back(
+        new SpringALEMaterialVolOnSideLhs_dX_dX(
+            mesh_nodals_positions, mesh_nodals_positions, data_at_integration_pts));
+
+    fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpSpringALEMaterialLhs_dX_dX(
+      mesh_nodals_positions, mesh_nodals_positions, data_at_integration_pts, feMatSideLhs_dX, side_fe_name));
+
     // fe_spring_rhs_ptr->getOpPtrVector().push_back(
     //     new OpSpringFs(data_at_integration_pts, sitSpring.second, field_name));
   }
