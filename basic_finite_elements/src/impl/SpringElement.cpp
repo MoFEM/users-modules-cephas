@@ -1580,7 +1580,8 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
 
 MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
     MoFEM::Interface &m_field,
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr_dx,
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr_dX,
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
     boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> data_at_integration_pts,
     const std::string field_name, const std::string mesh_nodals_positions, std::string side_fe_name) {
@@ -1621,19 +1622,19 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
     fe_spring_rhs_ptr->getOpPtrVector().push_back(new OpSpringFsMaterial(
       mesh_nodals_positions, data_at_integration_pts, feMatSideRhs, side_fe_name, sitSpring.second));
 
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+    fe_spring_lhs_ptr_dx->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(field_name,
         data_at_integration_pts->xAtPts));
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+    fe_spring_lhs_ptr_dx->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
                                             data_at_integration_pts->xInitAtPts));
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpGetTangentSpEle(
+    fe_spring_lhs_ptr_dx->getOpPtrVector().push_back(new OpGetTangentSpEle(
         mesh_nodals_positions, data_at_integration_pts));
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+    fe_spring_lhs_ptr_dx->getOpPtrVector().push_back(
         new OpGetNormalSpEle(mesh_nodals_positions, data_at_integration_pts));
 
     
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpSpringKs_dX(
+    fe_spring_lhs_ptr_dx->getOpPtrVector().push_back(new OpSpringKs_dX(
         data_at_integration_pts, sitSpring.second, field_name, mesh_nodals_positions));
 
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feMatSideLhs_dx =
@@ -1652,7 +1653,18 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
     feMatSideLhs_dx->getOpPtrVector().push_back(new SpringALEMaterialVolOnSideLhs_dX_dx(
       mesh_nodals_positions, field_name, data_at_integration_pts));
 
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(
+    fe_spring_lhs_ptr_dX->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(field_name,
+        data_at_integration_pts->xAtPts));
+    fe_spring_lhs_ptr_dX->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(mesh_nodals_positions,
+                                            data_at_integration_pts->xInitAtPts));
+    fe_spring_lhs_ptr_dX->getOpPtrVector().push_back(new OpGetTangentSpEle(
+        mesh_nodals_positions, data_at_integration_pts));
+    fe_spring_lhs_ptr_dX->getOpPtrVector().push_back(
+        new OpGetNormalSpEle(mesh_nodals_positions, data_at_integration_pts));
+
+    fe_spring_lhs_ptr_dX->getOpPtrVector().push_back(
         new OpSpringALEMaterialLhs_dX_dx(
             mesh_nodals_positions, field_name, data_at_integration_pts, feMatSideLhs_dx, side_fe_name));
 
@@ -1673,7 +1685,7 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
         new SpringALEMaterialVolOnSideLhs_dX_dX(
             mesh_nodals_positions, mesh_nodals_positions, data_at_integration_pts));
 
-    fe_spring_lhs_ptr->getOpPtrVector().push_back(new OpSpringALEMaterialLhs_dX_dX(
+    fe_spring_lhs_ptr_dX->getOpPtrVector().push_back(new OpSpringALEMaterialLhs_dX_dX(
       mesh_nodals_positions, mesh_nodals_positions, data_at_integration_pts, feMatSideLhs_dX, side_fe_name));
 
     // fe_spring_rhs_ptr->getOpPtrVector().push_back(

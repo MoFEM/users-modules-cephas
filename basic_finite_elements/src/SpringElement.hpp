@@ -478,7 +478,8 @@ struct MetaSpringBC {
    */
   static MoFEMErrorCode setSpringOperatorsMaterial(
       MoFEM::Interface &m_field,
-      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr,
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr_dx,
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr_dX,
       boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr,
       boost::shared_ptr<DataAtIntegrationPtsSprings> data_at_integration_pts,
       const std::string field_name,

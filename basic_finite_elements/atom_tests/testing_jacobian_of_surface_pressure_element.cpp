@@ -158,8 +158,11 @@ int main(int argc, char *argv[]) {
         m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
         "MESH_NODE_POSITIONS");
 
-    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr(
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr_dx(
         new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr_dX(
+        new FaceElementForcesAndSourcesCore(m_field));
+
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ale_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
 
@@ -172,7 +175,7 @@ int main(int argc, char *argv[]) {
     data_at_spring_gp->forcesOnlyOnEntitiesRow = spring_ale_nodes;
 
     CHKERR MetaSpringBC::setSpringOperatorsMaterial(
-        m_field, fe_spring_lhs_ale_ptr, fe_spring_rhs_ale_ptr, data_at_spring_gp,
+        m_field, fe_spring_lhs_ale_ptr_dx, fe_spring_lhs_ale_ptr_dX, fe_spring_rhs_ale_ptr, data_at_spring_gp,
         "SPATIAL_POSITION", "MESH_NODE_POSITIONS",  si->getDomainFEName());
 
 
@@ -181,10 +184,12 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
                                   PETSC_NULL);
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr, PETSC_NULL,
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dx, PETSC_NULL,
                                   PETSC_NULL);
-    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING_ALE", fe_spring_rhs_ale_ptr, PETSC_NULL,
-                                  PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dX,
+                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING_ALE", fe_spring_rhs_ale_ptr,
+                                  PETSC_NULL, PETSC_NULL);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
                                   nullptr, nullptr);
