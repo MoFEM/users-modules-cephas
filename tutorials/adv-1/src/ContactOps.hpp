@@ -12,6 +12,11 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>. */
 
+/** 
+ * \file ContactOps.hpp
+ * \example ContactOps.hpp
+ */
+
 namespace ContactOps {
 
 //! [Common data]
@@ -83,7 +88,7 @@ normal(FTensor::Tensor1<T1, 3> &t_coords,
 template <typename T>
 inline double gap0(FTensor::Tensor1<T, 3> &t_coords,
                    FTensor::Tensor1<double, SPACE_DIM> &t_normal) {
-  return (-0.25 - t_coords(1)) * t_normal(1);
+  return (-0.5 - t_coords(1)) * t_normal(1);
 }
 
 template <typename T>

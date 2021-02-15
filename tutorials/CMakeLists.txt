@@ -84,13 +84,17 @@ set(TUTORIALS_DIRS
   scl-5
   scl-6
   scl-7
+  scl-8
   clx-0
   vec-0
   vec-1
   vec-2
   vec-3
+  mix-0
+  mix-1
   max-0
   max-1
+  adv-0
   adv-1
   other_tutorials/mix_transport
   other_tutorials/poisson

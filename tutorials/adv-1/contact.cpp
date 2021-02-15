@@ -58,18 +58,13 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
-using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+//! [Operators used for contact]
 using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMixDivTimesVec<SPACE_DIM>;
 using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMixTensorTimesGrad<SPACE_DIM>;
-using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
-using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpSource<1, SPACE_DIM>;
 using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpMixDivTimesU<SPACE_DIM>;
+    GAUSS>::OpMixDivTimesU<SPACE_DIM, SPACE_DIM>;
 using OpMixLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpMixTensorTimesGradU<SPACE_DIM>;
 using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
@@ -80,12 +75,27 @@ using OpSpringLhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
 using OpSpringRhs = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+//! [Operators used for contact]
 
-// Only used for dynamics
+//! [Body force]
+using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpSource<1, SPACE_DIM>;
+//! [Body force]
+
+//! [Only used with Hooke equation (linear material model)]
+using OpKCauchy = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+//! [Only used with Hooke equation (linear material model)]
+
+
+//! [Only used for dynamics]
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
 using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+//! [Only used for dynamics]
 
 // Only used with Hencky/nonlinear material
 using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
@@ -93,15 +103,15 @@ using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr bool is_quasi_static = false;
-constexpr bool is_Hencky = true;
+constexpr bool is_quasi_static = true;
+constexpr bool is_large_strains = true;
 
-constexpr int order = 1;
+constexpr int order = 2;
 constexpr double young_modulus = 100;
 constexpr double poisson_ratio = 0.25;
-constexpr double rho = 1;
+constexpr double rho = 0;
 constexpr double cn = 0.01;
-constexpr double spring_stiffness = 0.0;
+constexpr double spring_stiffness = 0.1;
 
 #include <OpPostProcElastic.hpp>
 #include <ContactOps.hpp>
@@ -183,12 +193,12 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,
                                PSTATUS_NOT, -1, &boundary_ents);
 
-  CHKERR simple->setFieldOrder("SIGMA", order, &boundary_ents);
-  Range adj_edges;
-  CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false, adj_edges,
-                                           moab::Interface::UNION);
-  adj_edges.merge(boundary_ents);
-  CHKERR simple->setFieldOrder("U", order + 1, &adj_edges);
+  CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
+  // Range adj_edges;
+  // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false, adj_edges,
+  //                                          moab::Interface::UNION);
+  // adj_edges.merge(boundary_ents);
+  // CHKERR simple->setFieldOrder("U", order, &adj_edges);
 
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -317,18 +327,29 @@ MoFEMErrorCode Example::OPs() {
     }
   };
 
+  auto henky_common_data_ptr = boost::make_shared<HenckyOps::CommonData>();
+  henky_common_data_ptr->matGradPtr = commonDataPtr->mGradPtr;
+  henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
+
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    if (is_Hencky) {
+    if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
               "U", commonDataPtr->mGradPtr));
-      auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpHenckyStressAndTangent<SPACE_DIM, true>(
-              "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
-              commonDataPtr->mStressPtr, mat_pangent_ptr));
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpKPiola("U", "U", mat_pangent_ptr));
+          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpHenckyTangent<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainLhsPipeline().push_back(
+          new OpKPiola("U", "U", henky_common_data_ptr->getMatTangent()));
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", commonDataPtr->mDPtr));
     }
@@ -355,9 +376,10 @@ MoFEMErrorCode Example::OPs() {
       FTensor::Tensor1<double, SPACE_DIM> t_source;
       auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
       const auto time = fe_domain_rhs->ts_t;
+      
       // hardcoded gravity load
       t_source(i) = 0;
-      t_source(1) = 1.0;
+      t_source(1) = 1.0 * time;
       return t_source;
     };
 
@@ -365,14 +387,19 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonDataPtr->mGradPtr));
 
-    if (is_Hencky) {
-      auto mat_pangent_ptr = boost::make_shared<MatrixDouble>();
+    if (is_large_strains) {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpHenckyStressAndTangent<SPACE_DIM, false>(
-              "U", commonDataPtr->mGradPtr, commonDataPtr->mDPtr,
-              commonDataPtr->mStressPtr, mat_pangent_ptr));
+          new OpCalculateEigenVals<SPACE_DIM>("U", henky_common_data_ptr));
       pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpInternalForcePiola("U", commonDataPtr->mStressPtr));
+          new OpCalculateLogC<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateHenckyStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", henky_common_data_ptr));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInternalForcePiola(
+          "U", henky_common_data_ptr->getMatFirstPiolaStress()));
     } else {
       pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
           "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
@@ -393,7 +420,7 @@ MoFEMErrorCode Example::OPs() {
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
 
     pipeline.push_back(
-        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr));
+        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr, 1));
     pipeline.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
     pipeline.push_back(new OpMixUTimesDivLambdaRhs(
@@ -402,7 +429,7 @@ MoFEMErrorCode Example::OPs() {
         new OpMixUTimesLambdaRhs("U", commonDataPtr->contactStressPtr));
 
     // only in case of dynamics
-    if (rho > 0) {
+    if (!is_quasi_static) {
       auto mat_acceleration = boost::make_shared<MatrixDouble>();
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
@@ -414,7 +441,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
     if (SPACE_DIM == 2)
-      pipeline.push_back(new OpSetContrariantPiolaTransformOnEdge());
+      pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
@@ -517,12 +544,13 @@ MoFEMErrorCode Example::tsSolve() {
 
   if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();
+    auto D = smartCreateDMVector(dm);
+    CHKERR set_section_monitor(solver);
+    CHKERR set_time_monitor(dm, solver);
     CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
-    CHKERR set_section_monitor(solver);
-    CHKERR set_time_monitor(dm, solver);
-    CHKERR TSSolve(solver, D);
+    CHKERR TSSolve(solver, NULL);
   } else {
     auto solver = pipeline_mng->createTS2();
     auto dm = simple->getDM();

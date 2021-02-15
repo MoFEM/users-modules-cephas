@@ -3,23 +3,26 @@
 
 # Arbitrary order of approx. for blockset
 [block_1]
-displacemet_order = 2
+displacemet_order = 1
 
 # Elastic material
 [block_1]
 # Elastic material properties. Possible materials are NEOHOOKEAN, HOOKE,
 # KIRCHHOFF or any other added by user.
 material = HOOKE
+# Unit N/cm^2
 young_modulus = 2.6e+4
 poisson_ratio = 0.2
 
 # Damper
 [block_3]
 # eta = 0.04, value eta*G=eta*E/2*(1+nu)
+# Unit N/(cm^3 * s)
 dashG = 312
 # Only shear damping, damping bulk modulus = 0 when dashpot poison ratio is -1
 dashPoisson = -1
 
 # Body forces
 [block_6]
+# Unit kg/cm^3 
 density = 0.0023
