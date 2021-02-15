@@ -652,24 +652,24 @@ MetaSpringBC::SpringALEMaterialVolOnSideLhs_dX_dx::iNtegrate(
 
           auto t_assemble = get_tensor2(NN, 3 * bbr, 3 * bbc);
 
-          t_assemble(i, j) -= w * t_row_base * t_col_base * normal_stiffness *
-                               t_normal_projection(i, j);
+          // t_assemble(i, j) -= w * t_row_base * t_col_base * normal_stiffness *
+          //                      t_normal_projection(i, j);
           // t_assemble(i, j) += w * t_row_base * t_col_base * tangent_stiffness *
           //                      t_tangent_projection(i, j);
 
 
-          // t_assemble(i, j) -= w * t_row_base * t_col_base * normal_stiffness *
-          //                     t_F(k, i) * t_normal_projection(k, j);
-          // t_assemble(i, j) += w * t_row_base * t_col_base * tangent_stiffness *
-          //                     t_F(k, i) * t_tangent_projection(k, j);
+          t_assemble(i, j) -= w * t_row_base * t_col_base * normal_stiffness *
+                              t_F(k, i) * t_normal_projection(k, j);
+          t_assemble(i, j) += w * t_row_base * t_col_base * tangent_stiffness *
+                              t_F(k, i) * t_tangent_projection(k, j);
 
-          // t_assemble(i, j) -= w * normal_stiffness * t_row_base *
-          //                     t_inv_H(k, i) * t_col_diff_base(k) *
-          //                     t_normal_projection(j, l) *
-          //                     t_displacement_at_gauss_point(l);
-          // t_assemble(i, j) += w * tangent_stiffness * t_row_base * t_inv_H(k, i) *
-          //                     t_col_diff_base(k) * t_tangent_projection(j, l) *
-          //                     t_displacement_at_gauss_point(l);
+          t_assemble(i, j) -= w * normal_stiffness * t_row_base *
+                              t_inv_H(k, i) * t_col_diff_base(k) *
+                              t_normal_projection(j, l) *
+                              t_displacement_at_gauss_point(l);
+          t_assemble(i, j) += w * tangent_stiffness * t_row_base * t_inv_H(k, i) *
+                              t_col_diff_base(k) * t_tangent_projection(j, l) *
+                              t_displacement_at_gauss_point(l);
 
           ++t_row_base;
         }
@@ -861,9 +861,8 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(
     t_tangent_projection(1, 1) -= 1;
     t_tangent_projection(2, 2) -= 1;
     // Calculate the displacement at the Gauss point
-    t_displacement_at_gauss_point(i) =
+    t_displacement_at_gauss_point(i) = 
         t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
-
     double val = 0.5 * t_w;
 
     auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
@@ -886,67 +885,24 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(
 
           auto t_d_n_2 = make_vec_der_2(t_N, t_1, t_2);
 
-          // t_assemble(i, j) += val * normal_length * t_col_base_func *
-          //                     normal_stiffness * t_row_base_func *
-          //                     t_F(k, i) * t_normal_projection(k, j);
-
-          // t_assemble(i, j) -= val * normal_length * t_col_base_func *
-          //                     tangent_stiffness * t_row_base_func *
-          //                     t_F(k, i) * t_tangent_projection(k, j);
-
-          // t_assemble(i, j) -=
-          //     val * (normal_stiffness - tangent_stiffness) *
-          //     t_row_base_func *  t_F(l, i) *
-          //     (t_d_n(l, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
-          //      normal_length * t_normal(l) *
-          //          (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
-          // // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          // t_assemble(i, j) -= val * (t_d_n(l, j) * t_normal(l)) *
-          //                     tangent_stiffness * t_row_base_func * t_F(k, i) *
-          //                     t_displacement_at_gauss_point(k);
-
-
-///////
-          // t_assemble(i, j) += val * normal_length * t_col_base_func *
-          //                     normal_stiffness * t_row_base_func *
-          //                     t_normal_projection(i, j);
-
-          // t_assemble(i, j) -= val * normal_length * t_col_base_func *
-          //                     tangent_stiffness * t_row_base_func *
-          //                     t_tangent_projection(i, j);
-
-          // t_assemble(i, j) -=
-          //     val * (normal_stiffness - tangent_stiffness) * t_row_base_func *
-          //     (t_d_n(i, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
-          //      normal_length * t_normal(i) *
-          //          (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
-          // // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          // t_assemble(i, j) -= val * (t_d_n(l, j) * t_normal(l)) *
-          //                     tangent_stiffness * t_row_base_func *
-          //                     t_displacement_at_gauss_point(i);
-
-
-                              /////////
           t_assemble(i, j) += val * normal_length * t_col_base_func *
                               normal_stiffness * t_row_base_func *
-                              t_normal_projection(i, j);
+                              t_F(k, i) * t_normal_projection(k, j);
 
-          
-          // t_assemble(i, j) -= val * normal_length * t_col_base_func *
-          //                     tangent_stiffness * t_row_base_func *
-          //                     t_tangent_projection(i, j);
+          t_assemble(i, j) -= val * normal_length * t_col_base_func *
+                              tangent_stiffness * t_row_base_func *
+                              t_F(k, i) * t_tangent_projection(k, j);
 
-          FTensor::Tensor1<double, 3> t_check;
-          t_check(0) = t_check(1) = t_check(2) = 1.;
           t_assemble(i, j) -=
-              val * (normal_stiffness /*- tangent_stiffness*/) * t_row_base_func *
-              (t_d_n(i, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
-               normal_length * t_normal(i) *
+              val * (normal_stiffness - tangent_stiffness) *
+              t_row_base_func *  t_F(l, i) *
+              (t_d_n(l, j) * (t_normal(k) * t_displacement_at_gauss_point(k)) +
+               normal_length * t_normal(l) *
                    (t_d_n_2(k, j) * t_displacement_at_gauss_point(k)));
           // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-          // t_assemble(i, j) -= val * (t_d_n(l, j) * t_normal(l)) *
-          //                     tangent_stiffness * t_row_base_func * t_kd(i, k) *
-          //                     t_displacement_at_gauss_point(k);
+          t_assemble(i, j) -= val * (t_d_n(l, j) * t_normal(l)) *
+                              tangent_stiffness * t_row_base_func * t_F(k, i) *
+                              t_displacement_at_gauss_point(k);
 
           ++t_row_base_func;
       }
@@ -958,6 +914,8 @@ MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::iNtegrate(
     ++t_1;
     ++t_2;
     ++t_normal_1;
+    ++t_solution_at_gauss_point;
+    ++t_init_solution_at_gauss_point;
   }
 
   MoFEMFunctionReturn(0);
@@ -1043,15 +1001,15 @@ MetaSpringBC::SpringALEMaterialVolOnSideLhs_dX_dX::iNtegrate(
 
 
 ///
-        // t_assemble(i, j) +=
-        //     val * t_row_base * normal_stiffness * t_inv_H(l, j) *
-        //     t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
-        //     (t_normal_projection(k, q) * t_displacement_at_gauss_point(q));
+        t_assemble(i, j) +=
+            val * t_row_base * normal_stiffness * t_inv_H(l, j) *
+            t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
+            (t_normal_projection(k, q) * t_displacement_at_gauss_point(q));
 
-        // t_assemble(i, j) -=
-        //     val * t_row_base * tangent_stiffness * t_inv_H(l, j) *
-        //     t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
-        //     (t_tangent_projection(k, q) * t_displacement_at_gauss_point(q));
+        t_assemble(i, j) -=
+            val * t_row_base * tangent_stiffness * t_inv_H(l, j) *
+            t_col_diff_base(m) * t_inv_H(m, i) * t_h(k, l) *
+            (t_tangent_projection(k, q) * t_displacement_at_gauss_point(q));
 
         ++t_row_base;
       }
@@ -1236,11 +1194,6 @@ MoFEMErrorCode iNtegrate(
     DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
-  auto get_tensor1 = [](VectorDouble &v, const int r) {
-    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(
-        &v(r + 0), &v(r + 1), &v(r + 2));
-  };
-
   CHKERR loopSideVolumes(sideFeName, *sideFe);
 
    // check that the faces have associated degrees of freedom
@@ -1248,20 +1201,20 @@ MoFEMErrorCode iNtegrate(
     if (nb_dofs == 0)
       MoFEMFunctionReturnHot(0);
 
-    if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
-      MoFEMFunctionReturnHot(0);
-    }
+    // if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
+    //   MoFEMFunctionReturnHot(0);
+    // }
 
     CHKERR dataAtPts->getBlockData(dAta);
 
     // size of force vector associated to the entity
     // set equal to the number of degrees of freedom of associated with the
     // entity
-    nF.resize(nb_dofs, false);
-    nF.clear();
+    // nF.resize(nb_dofs, false);
+    // nF.clear();
 
     // get number of Gauss points
-    const int nb_gauss_pts = data.getN().size1();
+    // const int nb_gauss_pts = data.getN().size1();
 
     // get integration weights
     auto t_w = getFTensor0IntegrationWeight();
@@ -1293,7 +1246,7 @@ MoFEMErrorCode iNtegrate(
       auto t_F = getFTensor2FromMat<3, 3>(*dataAtPts->FMat);
 
     // loop over all Gauss points of the face
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
       t_normal(i) = t_normal_1(i);
 
     const double normal_length = sqrt(t_normal(k)* t_normal(k));
@@ -1304,7 +1257,7 @@ MoFEMErrorCode iNtegrate(
     t_tangent_projection(1, 1) -= 1;
     t_tangent_projection(2, 2) -= 1;
     // Calculate the displacement at the Gauss point
-      t_displacement_at_gauss_point(i) =
+      t_displacement_at_gauss_point(i) = 
           t_solution_at_gauss_point(i) - t_init_solution_at_gauss_point(i);
 
       double w = t_w * 0.5 * normal_length;//area was constant
@@ -1318,21 +1271,12 @@ MoFEMErrorCode iNtegrate(
 
       for (int rr = 0; rr != nb_dofs / 3; ++rr) { // loop over the nodes
 
-        // t_nf(i) -= w * t_base_func * normal_stiffness *
-        //           t_F(k, i) * t_normal_projection(k, j) * t_displacement_at_gauss_point(j);
-        // t_nf(i) += w * t_base_func * tangent_stiffness *
-        //            t_F(k, i) * t_tangent_projection(k, j) *
-        //            t_displacement_at_gauss_point(j);
-
-        FTensor::Tensor1<double, 3> t_check;
-        t_check(0) = t_check(1) = t_check(2) = 1.;
-        // t_nf(i) -= w * t_base_func * normal_stiffness *
-        //            t_normal_projection(i, j) * t_check(j);
         t_nf(i) -= w * t_base_func * normal_stiffness *
-                   t_normal_projection(i, j) * t_displacement_at_gauss_point(j);
-        // t_nf(i) += w * t_base_func * tangent_stiffness *
-        //            t_tangent_projection(i, j) *
-        //            t_displacement_at_gauss_point(j);
+                  t_F(k, i) * t_normal_projection(k, j) *
+                  t_displacement_at_gauss_point(j);
+        t_nf(i) += w * t_base_func * tangent_stiffness *
+                   t_F(k, i) * t_tangent_projection(k, j) *
+                   t_displacement_at_gauss_point(j);
 
         // move to next base function
         ++t_base_func;
