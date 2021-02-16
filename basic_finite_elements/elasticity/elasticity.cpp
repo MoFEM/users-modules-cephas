@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
     PetscInt order = 2;
     PetscBool is_partitioned = PETSC_FALSE;
     PetscBool is_calculating_frequency = PETSC_FALSE;
-    PetscBool is_post_proc_volume  = PETSC_FALSE;
+    PetscBool is_post_proc_volume = PETSC_TRUE;
 
     // Select base
     enum bases { LEGENDRE, LOBATTO, BERNSTEIN_BEZIER, LASBASETOP };
@@ -506,10 +506,18 @@ int main(int argc, char *argv[]) {
       Range skin_faces; // skin faces from 3d ents
       CHKERR skin.find_skin(0, elastic_element_ents, false, skin_faces);
       Range proc_skin;
-      CHKERR pcomm->filter_pstatus(skin_faces,
-                                   PSTATUS_SHARED | PSTATUS_MULTISHARED,
-                                   PSTATUS_NOT, -1, &proc_skin);
+      if (is_partitioned) {
+        CHKERR pcomm->filter_pstatus(skin_faces,
+                                     PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                     PSTATUS_NOT, -1, &proc_skin);
+      } else {
+        proc_skin = skin_faces;
+      }
       CHKERR m_field.add_finite_element("POST_PROC_SKIN");
+      CHKERR m_field.modify_finite_element_add_field_row("POST_PROC_SKIN",
+                                                          "DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_col("POST_PROC_SKIN",
+                                                         "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data("POST_PROC_SKIN",
                                                           "DISPLACEMENT");
       CHKERR m_field.modify_finite_element_add_field_data(
@@ -1084,21 +1092,26 @@ int main(int argc, char *argv[]) {
 
           // Save data on mesh
           CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
+
+
           // Post-process results
           if (is_post_proc_volume == PETSC_TRUE) {
             MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
             CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
             std::ostringstream o1;
             o1 << "out_" << sit->step_number << ".h5m";
-            CHKERR post_proc.writeFile(o1.str().c_str());
+            if (!test_nb)
+              CHKERR post_proc.writeFile(o1.str().c_str());
             MOFEM_LOG("ELASTIC", Sev::inform) << "done ...";
           }
 
           MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
-          CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc_skin);
+          CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN",
+                                          &post_proc_skin);
           std::ostringstream o1_skin;
           o1_skin << "out_skin" << sit->step_number << ".h5m";
-          CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
+          if (!test_nb)
+            CHKERR post_proc_skin.writeFile(o1_skin.str().c_str());
           MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done ...";
         }
       } else {
@@ -1154,13 +1167,15 @@ int main(int argc, char *argv[]) {
           MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
           CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc);
           // Save results to file
-          CHKERR post_proc.writeFile("out.h5m");
+          if (!test_nb)
+            CHKERR post_proc.writeFile("out.h5m");
           MOFEM_LOG("ELASTIC", Sev::inform) << "done";
         }
 
         MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file skin ...";
-        CHKERR DMoFEMLoopFiniteElements(dm, "ELASTIC", &post_proc_skin);
-        CHKERR post_proc_skin.writeFile("out_skin.h5m");
+        CHKERR DMoFEMLoopFiniteElements(dm, "POST_PROC_SKIN", &post_proc_skin);
+        if (!test_nb)
+          CHKERR post_proc_skin.writeFile("out_skin.h5m");
         MOFEM_LOG("POST_PROC_SKIN", Sev::inform) << "done";
       }
 
@@ -1196,15 +1211,19 @@ int main(int argc, char *argv[]) {
       MOFEM_LOG("ELASTIC", Sev::inform) << "Write output file ...";
       if (mesh_has_tets) {
         if (is_post_proc_volume == PETSC_TRUE) {
-          CHKERR post_proc.writeFile("out.h5m");
+          if (!test_nb)
+            CHKERR post_proc.writeFile("out.h5m");
         }
-        CHKERR post_proc_skin.writeFile("out_skin.h5m");
+        if (!test_nb)
+          CHKERR post_proc_skin.writeFile("out_skin.h5m");
       }
       if (mesh_has_prisms) {
-        CHKERR prism_post_proc.writeFile("prism_out.h5m");
+        if (!test_nb)
+          CHKERR prism_post_proc.writeFile("prism_out.h5m");
       }
       if (!edges_in_simple_rod.empty())
-        CHKERR post_proc_edge.writeFile("out_edge.h5m");
+        if (!test_nb)
+          CHKERR post_proc_edge.writeFile("out_edge.h5m");
       MOFEM_LOG("ELASTIC", Sev::inform) << "done";
     }
 
@@ -1245,7 +1264,7 @@ int main(int argc, char *argv[]) {
       const double *eng_ptr;
       CHKERR VecGetArrayRead(v_energy, &eng_ptr);
       MOFEM_LOG_C("ELASTIC", Sev::inform, "Elastic energy %6.4e", *eng_ptr);
-
+      
       switch (test_nb) {
       case 1:
         if (fabs(*eng_ptr - 17.129) > 1e-3)
@@ -1267,6 +1286,19 @@ int main(int argc, char *argv[]) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
+      // FIXME: Here are missng regersion tetst
+      case 8: {
+        double min;
+        CHKERR VecMin(D, PETSC_NULL, &min);
+        if (fabs(min + 0.10001) > 1e-10)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+      } break;
+      case 9: {
+        if (fabs(*eng_ptr - 4.7416e-04) > 1e-8)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "atom test diverged!");
+      }
       default:
         break;
       }
