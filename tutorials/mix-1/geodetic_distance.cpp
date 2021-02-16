@@ -27,32 +27,17 @@ using namespace MoFEM;
 
 static char help[] = "...\n\n";
 
-constexpr double tol = 1e-6; ///< small number preventing logarith to blowup
-constexpr double l2 = 1e-2;  ///< characteristic size of mesh edge
+double dt = 2; // relative to edge length
 
 #include <BasicFiniteElements.hpp>
 
 using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
-
-using OpHdivHdiv = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMass<3, 3>;
-using OpHdivU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-    GAUSS>::OpMixDivTimesScalar<3>;
-
-using OpQQ = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesVector<3, 3, 1>;
-using OpDivQU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpMixDivTimesU<1, 3>;
-using OpUDivQ = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpBaseTimesScalarField<1>;
-
-using EdgeEle = PipelineManager::EdgeEle2D;
-using EdgeEleOp = EdgeEle::UserDataOperator;
-
-using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
-    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 3>;
+using OpMass = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 
 struct Example {
 
@@ -64,8 +49,8 @@ private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
 
+  Range pinchNodes;
   MatrixDouble invJac;
-  MatrixDouble jAC;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -79,66 +64,15 @@ private:
 
   struct OpRhs : public DomainEleOp {
 
-    OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
-          boost::shared_ptr<MatrixDouble> q_grad_ptr,
-          boost::shared_ptr<VectorDouble> div_ptr,
-          boost::shared_ptr<VectorDouble> u_ptr,
-          boost::shared_ptr<MatrixDouble> dot_q_ptr,
-          boost::shared_ptr<VectorDouble> dot_div_ptr,
-          boost::shared_ptr<VectorDouble> dot_u_ptr);
+    OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr);
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
 
   protected:
-    boost::shared_ptr<MatrixDouble> qPtr;
-    boost::shared_ptr<MatrixDouble> qGradPtr;
-    boost::shared_ptr<VectorDouble> divPtr;
-    boost::shared_ptr<VectorDouble> uPtr;
-    boost::shared_ptr<MatrixDouble> dotQPtr;
-    boost::shared_ptr<VectorDouble> dotDivPtr;
-    boost::shared_ptr<VectorDouble> dotUPtr;
+    boost::shared_ptr<MatrixDouble> uGradPtr;
   };
 
-  struct OpLhs_dq : public DomainEleOp {
-
-    OpLhs_dq(boost::shared_ptr<MatrixDouble> q_ptr,
-             boost::shared_ptr<MatrixDouble> q_grad_ptr,
-             boost::shared_ptr<VectorDouble> div_ptr,
-             boost::shared_ptr<MatrixDouble> dot_q_ptr,
-             boost::shared_ptr<VectorDouble> u_ptr);
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data);
-
-  protected:
-    boost::shared_ptr<MatrixDouble> qPtr;
-    boost::shared_ptr<MatrixDouble> qGradPtr;
-    boost::shared_ptr<VectorDouble> divPtr;
-    boost::shared_ptr<MatrixDouble> dotQPtr;
-    boost::shared_ptr<VectorDouble> uPtr;
-  };
-
-  struct OpLhs_du : public DomainEleOp {
-
-    OpLhs_du(boost::shared_ptr<MatrixDouble> q_ptr,
-             boost::shared_ptr<MatrixDouble> q_grad_ptr,
-             boost::shared_ptr<VectorDouble> div_ptr,
-             boost::shared_ptr<MatrixDouble> dot_q_ptr,
-             boost::shared_ptr<VectorDouble> u_ptr);
-
-    MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
-                          EntityType col_type, EntData &row_data,
-                          EntData &col_data);
-
-  protected:
-    boost::shared_ptr<MatrixDouble> qPtr;
-    boost::shared_ptr<MatrixDouble> qGradPtr;
-    boost::shared_ptr<VectorDouble> divPtr;
-    boost::shared_ptr<MatrixDouble> dotQPtr;
-    boost::shared_ptr<VectorDouble> uPtr;
-  };
 };
 
 //! [Run programme]
@@ -165,16 +99,30 @@ MoFEMErrorCode Example::readMesh() {
   CHKERR simpleInterface->getOptions();
   CHKERR simpleInterface->loadFile();
 
-  Range tris;
-  CHKERR mField.get_moab().get_entities_by_type(0, MBTRI, tris);
-  Range one_tri(tris[0], tris[0]);
+  // FIXME: THis part of algorithm is not working in parallel. 
 
-  Range adj_edges;
-  CHKERR mField.get_moab().get_adjacencies(one_tri, 1, false, adj_edges);
-  EntityHandle boundary_meshset;
-  CHKERR mField.get_moab().create_meshset(MESHSET_SET, boundary_meshset);
-  CHKERR mField.get_moab().add_entities(boundary_meshset, adj_edges);
-  simpleInterface->getBoundaryMeshSet() = boundary_meshset;
+  Range nodes;
+  CHKERR mField.get_moab().get_entities_by_type(0, MBVERTEX, nodes);
+  // pinchNodes could be get from BLOCKSET
+  pinchNodes.insert(nodes[0]);
+
+  Range edges;
+  CHKERR mField.get_moab().get_adjacencies(pinchNodes, 1, false, edges,
+                                           moab::Interface::UNION);
+  double l2;
+  for(auto e : edges) {
+    Range nodes;
+    CHKERR mField.get_moab().get_connectivity(Range(e, e), nodes, false);
+    MatrixDouble coords(nodes.size(), 3);
+    CHKERR mField.get_moab().get_coords(nodes, &coords(0, 0));
+    double l2e = 0;
+    for (int j = 0; j != 3; ++j) {
+      l2e += pow(coords(0, j) - coords(1, j), 2);
+    }
+    l2 = std::max(l2, l2e);    
+  }
+  
+  dt *= sqrt(l2);
 
   MoFEMFunctionReturn(0);
 }
@@ -183,16 +131,9 @@ MoFEMErrorCode Example::readMesh() {
 //! [Set up problem]
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
-  // We using AINSWORTH_LEGENDRE_BASE because DEMKOWICZ_JACOBI_BASE for triangle
-  // and tet is not yet implemented for L2 space. DEMKOWICZ_JACOBI_BASE and
-  // AINSWORTH_LEGENDRE_BASE are construcreed in the same way on quad.
   CHKERR simpleInterface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simpleInterface->addDomainField("FLUX", HCURL, AINSWORTH_LEGENDRE_BASE,
-                                         1);
-
-  constexpr int order = 2;
-  CHKERR simpleInterface->setFieldOrder("U", order - 1);
-  CHKERR simpleInterface->setFieldOrder("FLUX", order);
+  constexpr int order = 1;
+  CHKERR simpleInterface->setFieldOrder("U", order);
   CHKERR simpleInterface->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -202,8 +143,7 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::setIntegrationRules() {
   MoFEMFunctionBegin;
 
-  auto rule = [](int, int, int p) -> int { return 2 * p + 1; };
-
+  auto rule = [](int, int, int p) -> int { return 2 * p; };
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
@@ -222,19 +162,6 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
-  auto prb_mng = mField.getInterface<ProblemsManager>();
-
-  Range tris;
-  CHKERR mField.get_moab().get_entities_by_type(0, MBTRI, tris);
-  Range one_tri(tris[0], tris[0]);
-  one_tri.insert(tris[0]);
-  CHKERR prb_mng->removeDofsOnEntities(simpleInterface->getProblemName(), "U",
-                                       one_tri, 0, 1);
-  Range adj_edges;
-  CHKERR mField.get_moab().get_adjacencies(one_tri, 1, false, adj_edges);
-  CHKERR prb_mng->removeDofsOnEntities(simpleInterface->getProblemName(),
-                                       "FLUX", one_tri, 0, 1);
-
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -249,65 +176,136 @@ MoFEMErrorCode Example::assembleSystem() {
   pipeline_mng->getBoundaryLhsFE().reset();
   pipeline_mng->getBoundaryRhsFE().reset();
 
-  auto q_ptr = boost::make_shared<MatrixDouble>();
-  auto q_grad_ptr = boost::make_shared<MatrixDouble>();
-  auto div_q_ptr = boost::make_shared<VectorDouble>();
-  auto u_ptr = boost::make_shared<VectorDouble>();
-  auto dot_q_ptr = boost::make_shared<MatrixDouble>();
-  auto dot_div_q_ptr = boost::make_shared<VectorDouble>();
-  auto dot_u_ptr = boost::make_shared<VectorDouble>();
+  auto grad_u_ptr = boost::make_shared<MatrixDouble>();
 
   auto set_domain_general = [&](auto &pipeline) {
-    pipeline.push_back(new OpCalculateJacForFaceEmbeddedIn3DSpace(jAC));
     pipeline.push_back(new OpCalculateInvJacForFaceEmbeddedIn3DSpace(invJac));
-    pipeline.push_back(new OpMakeHdivFromHcurl());
-    pipeline.push_back(
-        new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jAC));
-    pipeline.push_back(new OpSetInvJacHcurlFaceEmbeddedIn3DSpace(invJac));
     pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(invJac));
-
-    pipeline.push_back(new OpCalculateHdivVectorField<3>("FLUX", q_ptr));
-    pipeline.push_back(
-        new OpCalculateHdivVectorDivergence<3, 3>("FLUX", div_q_ptr));
-    pipeline.push_back(
-        new OpCalculateHVecVectorGradient<3, 3>("FLUX", q_grad_ptr));
-
-    pipeline.push_back(new OpCalculateScalarFieldValues("U", u_ptr));
-
-    pipeline.push_back(new OpCalculateHdivVectorFieldDot<3>("FLUX", dot_q_ptr));
-    pipeline.push_back(
-        new OpCalculateHdivVectorDivergenceDot<3, 3>("FLUX", dot_div_q_ptr));
-    pipeline.push_back(new OpCalculateScalarFieldValuesDot("U", dot_u_ptr));
   };
 
-  auto set_domain_lhs = [&](auto &pipeline) {
-    auto beta = [](double,double,double) { return 1; };
-    pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", beta));
-    auto minus_one = []() { return -1; };
-    pipeline.push_back(new OpHdivU("FLUX", "U", minus_one, false));
-    pipeline.push_back(
-        new OpLhs_dq(q_ptr, q_grad_ptr, div_q_ptr, dot_q_ptr, u_ptr));
-    pipeline.push_back(
-        new OpLhs_du(q_ptr, q_grad_ptr, div_q_ptr, dot_q_ptr, u_ptr));
-
+  auto set_domain_lhs_first = [&](auto &pipeline) {
+    auto one = [](double, double, double) -> double { return 1.; };
+    pipeline.push_back(new OpGradGrad("U", "U", one));
+    auto rho = [](double, double, double) -> double { return 1. / dt; };
+    pipeline.push_back(new OpMass("U", "U", rho));
   };
 
-  auto set_domain_rhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpQQ("FLUX", q_ptr));
-    pipeline.push_back(new OpDivQU("FLUX", u_ptr, -1));
-    pipeline.push_back(new OpRhs(q_ptr, q_grad_ptr, div_q_ptr, u_ptr, dot_q_ptr,
-                                 dot_div_q_ptr, dot_u_ptr));
+  auto set_domain_rhs_first = [&](auto &pipeline) {};
 
-    // auto f = [](const double x, const double y, const double z) {
-    //   return 1;
-    // };
-    // pipeline.push_back(new OpDomainSource("U", f));
+  auto set_domain_lhs_second = [&](auto &pipeline) {
+    auto one = [](double, double, double) { return 1.; };
+    pipeline.push_back(new OpGradGrad("U", "U", one));
+  };
+
+  auto set_domain_rhs_second = [&](auto &pipeline) {
+    pipeline.push_back(new OpCalculateScalarFieldGradient<3>("U", grad_u_ptr));
+    pipeline.push_back(new OpRhs(grad_u_ptr));
+  };
+
+  auto solve_first = [&]() {
+    MoFEMFunctionBegin;
+    auto simple = mField.getInterface<Simple>();
+    auto pipeline_mng = mField.getInterface<PipelineManager>();
+
+    auto solver = pipeline_mng->createKSP();
+    CHKERR KSPSetFromOptions(solver);
+    CHKERR KSPSetUp(solver);
+
+    auto dm = simpleInterface->getDM();
+    auto D = smartCreateDMVector(dm);
+    auto F = smartVectorDuplicate(D);
+
+    // Create space of vectors or rigid motion
+    CHKERR VecZeroEntries(F);
+    auto problem_ptr = mField.get_problem(simple->getProblemName());
+    auto bit_number = mField.get_field_bit_number("U");
+    auto dofs_ptr = problem_ptr->getNumeredRowDofsPtr();
+    for (auto v : pinchNodes) {
+      const auto uid = DofEntity::getUniqueIdCalculate(
+          0, FieldEntity::getLocalUniqueIdCalculate(bit_number, v));
+      auto dof = dofs_ptr->get<Unique_mi_tag>().find(uid);
+      if (dof != dofs_ptr->end())
+        VecSetValue(F, (*dof)->getPetscGlobalDofIdx(), 1, INSERT_VALUES);
+    }
+    CHKERR VecAssemblyBegin(F);
+    CHKERR VecAssemblyEnd(F);
+
+    CHKERR KSPSolve(solver, F, D);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto solve_second = [&]() {
+    MoFEMFunctionBegin;
+    auto simple = mField.getInterface<Simple>();
+
+    // Create space of vectors or rigid motion
+    auto prb_mng = mField.getInterface<ProblemsManager>();
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U",
+                                         pinchNodes, 0, 1);
+
+
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+
+    auto solver = pipeline_mng->createKSP();
+    CHKERR KSPSetFromOptions(solver);
+    CHKERR KSPSetUp(solver);
+
+    auto dm = simpleInterface->getDM();
+    auto D = smartCreateDMVector(dm);
+    auto F = smartVectorDuplicate(D);
+
+    CHKERR KSPSolve(solver, F, D);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto post_proc = [&](const std::string out_name) {
+    PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+    MoFEMFunctionBegin;
+    auto tmp_lhs_fe =  pipeline_mng->getDomainLhsFE();
+    auto tmp_rhs_fe =  pipeline_mng->getDomainRhsFE();
+    pipeline_mng->getDomainLhsFE().reset();
+    pipeline_mng->getDomainRhsFE().reset();
+    auto post_proc_fe =
+        boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
+    post_proc_fe->generateReferenceElementMesh();
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpCalculateInvJacForFaceEmbeddedIn3DSpace(invJac));
+    post_proc_fe->getOpPtrVector().push_back(
+        new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(invJac));
+    post_proc_fe->addFieldValuesPostProc("U");
+    post_proc_fe->addFieldValuesGradientPostProc("U");
+    pipeline_mng->getDomainRhsFE() = post_proc_fe;
+    CHKERR pipeline_mng->loopFiniteElements();
+    CHKERR post_proc_fe->writeFile(out_name);
+    tmp_lhs_fe = pipeline_mng->getDomainLhsFE() = tmp_lhs_fe;
+    tmp_rhs_fe = pipeline_mng->getDomainRhsFE() = tmp_rhs_fe;
+    MoFEMFunctionReturn(0);
   };
 
   set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
   set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
-  set_domain_lhs(pipeline_mng->getOpDomainLhsPipeline());
-  set_domain_rhs(pipeline_mng->getOpDomainRhsPipeline());
+  set_domain_lhs_first(pipeline_mng->getOpDomainLhsPipeline());
+  set_domain_rhs_first(pipeline_mng->getOpDomainRhsPipeline());
+
+  CHKERR solve_first();
+  CHKERR post_proc("out_heat_method_first.h5m");
+
+  pipeline_mng->getOpDomainLhsPipeline().clear();
+  pipeline_mng->getOpDomainRhsPipeline().clear();
+
+  set_domain_general(pipeline_mng->getOpDomainLhsPipeline());
+  set_domain_general(pipeline_mng->getOpDomainRhsPipeline());
+  set_domain_lhs_second(pipeline_mng->getOpDomainLhsPipeline());
+  set_domain_rhs_second(pipeline_mng->getOpDomainRhsPipeline());
+
+  CHKERR solve_second();
+  CHKERR post_proc("out_heat_method_second.h5m");
 
   MoFEMFunctionReturn(0);
 };
@@ -316,44 +314,6 @@ MoFEMErrorCode Example::assembleSystem() {
 //! [Solve]
 MoFEMErrorCode Example::solveSystem() {
   MoFEMFunctionBegin;
-
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
-  auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
-
-  auto solver = pipeline_mng->createTS();
-
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR TSSetSolution(solver, D);
-
-  // CHKERR TSPseudoSetTimeStep(solver, PETSC_NULL, PETSC_NULL);
-
-  auto set_section_monitor = [&](auto solver) {
-    MoFEMFunctionBegin;
-    SNES snes;
-    CHKERR TSGetSNES(solver, &snes);
-    PetscViewerAndFormat *vf;
-    CHKERR PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_WORLD,
-                                      PETSC_VIEWER_DEFAULT, &vf);
-    CHKERR SNESMonitorSet(
-        snes,
-        (MoFEMErrorCode(*)(SNES, PetscInt, PetscReal, void *))SNESMonitorFields,
-        vf, (MoFEMErrorCode(*)(void **))PetscViewerAndFormatDestroy);
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR TSSetFromOptions(solver);
-  CHKERR TSSetUp(solver);
-  CHKERR set_section_monitor(solver);
-  CHKERR TSSolve(solver, NULL);
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-  double d_nrm;
-  CHKERR VecNorm(D, NORM_2, &d_nrm);
-  MOFEM_LOG("EXAMPLE", Sev::inform) << "Solution norm " << d_nrm;
-
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
@@ -361,26 +321,6 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-  pipeline_mng->getDomainLhsFE().reset();
-  pipeline_mng->getBoundaryLhsFE().reset();
-  pipeline_mng->getBoundaryRhsFE().reset();
-
-  auto post_proc_fe =
-      boost::make_shared<PostProcFaceOnRefinedMeshFor2D>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateJacForFaceEmbeddedIn3DSpace(jAC));
-  post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jAC));
-
-  post_proc_fe->addFieldValuesPostProc("FLUX");
-  post_proc_fe->addFieldValuesPostProc("U");
-  pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_heat_method.h5m");
   MoFEMFunctionReturn(0);
 }
 //! [Postprocess results]
@@ -432,38 +372,25 @@ int main(int argc, char *argv[]) {
   CHKERR MoFEM::Core::Finalize();
 }
 
-Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> q_ptr,
-                      boost::shared_ptr<MatrixDouble> q_grad_ptr,
-                      boost::shared_ptr<VectorDouble> div_ptr,
-                      boost::shared_ptr<VectorDouble> u_ptr,
-                      boost::shared_ptr<MatrixDouble> dot_q_ptr,
-                      boost::shared_ptr<VectorDouble> dot_div_ptr,
-                      boost::shared_ptr<VectorDouble> dot_u_ptr)
-    : DomainEleOp("U", DomainEleOp::OPROW), qPtr(q_ptr), qGradPtr(q_grad_ptr),
-      divPtr(div_ptr), uPtr(u_ptr), dotQPtr(dot_q_ptr), dotDivPtr(dot_div_ptr),
-      dotUPtr(dot_u_ptr) {}
+Example::OpRhs::OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr)
+    : DomainEleOp("U", DomainEleOp::OPROW), uGradPtr(u_grad_ptr) {}
 
 MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
                                       DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
 
   auto nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
-    auto t_q = getFTensor1FromMat<3>(*qPtr);
-    auto t_div = getFTensor0FromVec(*divPtr);
-    auto t_u = getFTensor0FromVec(*uPtr);
-    auto t_dot_div = getFTensor0FromVec(*dotDivPtr);
+    auto t_grad = getFTensor1FromMat<3>(*uGradPtr);
 
     auto nb_base_functions = data.getN().size2();
     auto nb_gauss_pts = getGaussPts().size2();
     std::array<double, MAX_DOFS_ON_ENTITY> nf;
     std::fill(nf.begin(), &nf[nb_dofs], 0);
 
-    auto t_base = data.getFTensor0N();
     auto t_diff_base = data.getFTensor1DiffN<3>();
     auto t_w = getFTensor0IntegrationWeight();
     auto a = getMeasure();
@@ -471,30 +398,24 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
     for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
       double alpha = t_w * a;
 
-      auto &dofs = data.getFieldDofs();
-      auto check_order = [&](const auto bb) {
-        return dofs[bb]->getDofOrder() == 0;
-      };
+      const auto l2 = t_grad(i) * t_grad(i);
+      FTensor::Tensor1<double, 3> t_one;
+      if(l2 > std::numeric_limits<double>::epsilon())
+        t_one(i) = t_grad(i) / sqrt(l2);
+      else
+        t_one(i) = 0;
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
-        nf[bb] -= alpha * t_base * (t_u * t_div - 1);
-        nf[bb] -= alpha * t_diff_base(i) * (t_u * t_q(i));
-        nf[bb] -= alpha * t_base * (l2 * t_div + t_dot_div);
-        ++t_base;
+        nf[bb] -= alpha * t_diff_base(i) * t_one(i);
         ++t_diff_base;
       }
 
       for (; bb < nb_base_functions; ++bb) {
-        ++t_base;
         ++t_diff_base;
       }
 
-      ++t_w;
-      ++t_q;
-      ++t_div;
-      ++t_dot_div;
-      ++t_u;
+      ++t_grad;
     }
 
     CHKERR VecSetValues<MoFEM::EssentialBcStorage>(getKSPf(), data, &nf[0],
@@ -504,171 +425,5 @@ MoFEMErrorCode Example::OpRhs::doWork(int side, EntityType type,
   MoFEMFunctionReturn(0);
 }
 
-Example::OpLhs_dq::OpLhs_dq(boost::shared_ptr<MatrixDouble> q_ptr,
-                            boost::shared_ptr<MatrixDouble> q_grad_ptr,
-                            boost::shared_ptr<VectorDouble> div_ptr,
-                            boost::shared_ptr<MatrixDouble> dot_q_ptr,
-                            boost::shared_ptr<VectorDouble> u_ptr)
-    : DomainEleOp("U", "FLUX", DomainEleOp::OPROWCOL), qPtr(q_ptr),
-      qGradPtr(q_grad_ptr), divPtr(div_ptr), dotQPtr(dot_q_ptr), uPtr(u_ptr) {
-  sYmm = false;
-}
 
-MoFEMErrorCode Example::OpLhs_dq::doWork(int row_side, int col_side,
-                                      EntityType row_type, EntityType col_type,
-                                      EntData &row_data, EntData &col_data) {
-  MoFEMFunctionBegin;
 
-  FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
-
-  auto row_nb_dofs = row_data.getIndices().size();
-  auto col_nb_dofs = col_data.getIndices().size();
-
-  if (row_nb_dofs && col_nb_dofs) {
-
-    auto t_q = getFTensor1FromMat<3>(*qPtr);
-    auto t_grad = getFTensor2FromMat<3, 3>(*qGradPtr);
-    auto t_div = getFTensor0FromVec(*divPtr);
-    auto t_u = getFTensor0FromVec(*uPtr);
-
-    auto nb_gauss_pts = getGaussPts().size2();
-    MatrixDouble loc_mat(row_nb_dofs, col_nb_dofs);
-    loc_mat.clear();
-
-    auto nb_base_functions = row_data.getN().size2();
-    auto t_row_base = row_data.getFTensor0N();
-    auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-
-    auto t_w = getFTensor0IntegrationWeight();
-    auto a = getMeasure();
-
-    auto ts_a = getFEMethod()->ts_a;
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      double alpha = t_w * a;
-
-      auto &dofs = row_data.getFieldDofs();
-      auto check_order = [&](const auto bb) {
-        return dofs[bb]->getDofOrder() == 0;
-      };
-
-      size_t rr = 0;
-      for (; rr != row_nb_dofs; ++rr) {
-
-        auto t_col_base = col_data.getFTensor1N<3>(gg, 0);
-        auto t_col_diff_base = col_data.getFTensor2DiffN<3, 3>(gg, 0);
-
-        for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
-          loc_mat(rr, cc) -= alpha * t_row_base * t_u * t_col_diff_base(i, i);
-          loc_mat(rr, cc) -= alpha * t_row_diff_base(i) * t_u * t_col_base(i);
-          loc_mat(rr, cc) -=
-              alpha * t_row_base * (ts_a + l2) * t_col_diff_base(i, i);
-
-          ++t_col_base;
-          ++t_col_diff_base;
-        }
-
-        ++t_row_base;
-        ++t_row_diff_base;
-      }
-
-      for (; rr < nb_base_functions; ++rr) {
-        ++t_row_base;
-        ++t_row_diff_base;
-      }
-
-      ++t_w;
-      ++t_q;
-      ++t_div;
-      ++t_u;
-    }
-
-    CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
-        getKSPB(), row_data, col_data, &loc_mat(0, 0), ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
-
-Example::OpLhs_du::OpLhs_du(boost::shared_ptr<MatrixDouble> q_ptr,
-                            boost::shared_ptr<MatrixDouble> q_grad_ptr,
-                            boost::shared_ptr<VectorDouble> div_ptr,
-                            boost::shared_ptr<MatrixDouble> dot_q_ptr,
-                            boost::shared_ptr<VectorDouble> u_ptr)
-    : DomainEleOp("U", "U", DomainEleOp::OPROWCOL), qPtr(q_ptr),
-      qGradPtr(q_grad_ptr), divPtr(div_ptr), dotQPtr(dot_q_ptr), uPtr(u_ptr) {
-  sYmm = false;
-}
-
-MoFEMErrorCode Example::OpLhs_du::doWork(int row_side, int col_side,
-                                      EntityType row_type, EntityType col_type,
-                                      EntData &row_data, EntData &col_data) {
-  MoFEMFunctionBegin;
-
-  FTensor::Index<'i', 3> i;
-  FTensor::Index<'j', 3> j;
-
-  auto row_nb_dofs = row_data.getIndices().size();
-  auto col_nb_dofs = col_data.getIndices().size();
-
-  if (row_nb_dofs && col_nb_dofs) {
-
-    auto t_q = getFTensor1FromMat<3>(*qPtr);
-    auto t_grad = getFTensor2FromMat<3, 3>(*qGradPtr);
-    auto t_div = getFTensor0FromVec(*divPtr);
-    auto t_u = getFTensor0FromVec(*uPtr);
-
-    auto nb_gauss_pts = getGaussPts().size2();
-    MatrixDouble loc_mat(row_nb_dofs, col_nb_dofs);
-    loc_mat.clear();
-
-    auto nb_base_functions = row_data.getN().size2();
-    auto t_row_base = row_data.getFTensor0N();
-    auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
-
-    auto t_w = getFTensor0IntegrationWeight();
-    auto a = getMeasure();
-
-    auto ts_a = getFEMethod()->ts_a;
-
-    for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
-      double alpha = t_w * a;
-
-      auto &dofs = row_data.getFieldDofs();
-      auto check_order = [&](const auto bb) {
-        return dofs[bb]->getDofOrder() == 0;
-      };
-
-      size_t rr = 0;
-      for (; rr != row_nb_dofs; ++rr) {
-
-        auto t_col_base = col_data.getFTensor0N(gg, 0);
-
-        for (size_t cc = 0; cc != col_nb_dofs; ++cc) {
-          loc_mat(rr, cc) -= alpha * t_row_base * t_div * t_col_base;
-          loc_mat(rr, cc) -= alpha * t_row_diff_base(i) * t_q(i) * t_col_base;
-          ++t_col_base;
-        }
-
-        ++t_row_base;
-        ++t_row_diff_base;
-      }
-
-      for (; rr < nb_base_functions; ++rr) {
-        ++t_row_base;
-        ++t_row_diff_base;
-      }
-
-      ++t_w;
-      ++t_q;
-      ++t_div;
-      ++t_u;
-    }
-
-    CHKERR MatSetValues<MoFEM::EssentialBcStorage>(
-        getKSPB(), row_data, col_data, &loc_mat(0, 0), ADD_VALUES);
-  }
-
-  MoFEMFunctionReturn(0);
-}
