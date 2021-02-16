@@ -156,6 +156,13 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td>\ref tutorial_heat_method</td>
+       <td> Finding distance geodetic using heat method
+       <br/> *Keywords:*  Face elements embedded in 3d space
+       </td>
+  </tr>
+
 </table>
 
 \section tutorials_complex_field_problems Problems with complex variable fields
