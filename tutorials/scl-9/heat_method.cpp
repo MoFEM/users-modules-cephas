@@ -1,6 +1,6 @@
 /**
- * \file geodetic_distance.cpp
- * \example geodetic_distance.cpp
+ * \file heat_method.cpp
+ * \example heat_method.cpp
  *
  * Using PipelineManager interface calculate the divergence of base functions,
  * and integral of flux on the boundary. Since the h-div space is used, volume
@@ -34,8 +34,12 @@ double dt = 2; // relative to edge length
 using DomainEle = PipelineManager::FaceEle2D;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
+
+// Use forms iterators for Grad-Grad term
 using OpGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 3>;
+
+// Use forms for Mass term
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
 
@@ -62,6 +66,10 @@ private:
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
 
+  
+  /**
+   * Use problem specific implementation for second stage of heat methid
+   */
   struct OpRhs : public DomainEleOp {
 
     OpRhs(boost::shared_ptr<MatrixDouble> u_grad_ptr);
@@ -99,7 +107,8 @@ MoFEMErrorCode Example::readMesh() {
   CHKERR simpleInterface->getOptions();
   CHKERR simpleInterface->loadFile();
 
-  // FIXME: THis part of algorithm is not working in parallel. 
+  // FIXME: THis part of algorithm is not working in parallel. If you have bit
+  // of free time, feel free to generalise code below.
 
   Range nodes;
   CHKERR mField.get_moab().get_entities_by_type(0, MBVERTEX, nodes);
@@ -131,10 +140,13 @@ MoFEMErrorCode Example::readMesh() {
 //! [Set up problem]
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
+  
+  // Only one field
   CHKERR simpleInterface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 1);
   constexpr int order = 1;
   CHKERR simpleInterface->setFieldOrder("U", order);
   CHKERR simpleInterface->setUp();
+
   MoFEMFunctionReturn(0);
 }
 //! [Set up problem]
@@ -143,7 +155,12 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::setIntegrationRules() {
   MoFEMFunctionBegin;
 
+  // Set integration order. To 2p is enough to integrate mass matrix exactly.
   auto rule = [](int, int, int p) -> int { return 2 * p; };
+
+  // Set integration rule for elements assembling matrix and vector. Note that
+  // rule for vector could be 2p-1, but that not change computation time
+  // significantly. So shorter code is better.
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule);
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
@@ -171,18 +188,16 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
-  pipeline_mng->getDomainLhsFE().reset();
-  pipeline_mng->getDomainRhsFE().reset();
-  pipeline_mng->getBoundaryLhsFE().reset();
-  pipeline_mng->getBoundaryRhsFE().reset();
-
+  // This will store gradients at integration points on element
   auto grad_u_ptr = boost::make_shared<MatrixDouble>();
 
+  // Push element from reference configuration to current configuration in 3d space
   auto set_domain_general = [&](auto &pipeline) {
     pipeline.push_back(new OpCalculateInvJacForFaceEmbeddedIn3DSpace(invJac));
     pipeline.push_back(new OpSetInvJacH1ForFaceEmbeddedIn3DSpace(invJac));
   };
 
+  // Operators for assembling matrix for first stage
   auto set_domain_lhs_first = [&](auto &pipeline) {
     auto one = [](double, double, double) -> double { return 1.; };
     pipeline.push_back(new OpGradGrad("U", "U", one));
@@ -190,18 +205,24 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline.push_back(new OpMass("U", "U", rho));
   };
 
+  // Nothing is assembled for vector for first stage of heat method. Later
+  // simply value of one is set to elements of right hand side vector at pinch
+  // nodes.
   auto set_domain_rhs_first = [&](auto &pipeline) {};
 
+  // Operators for assembly of left hand side. This time only Grad-Grad operator.
   auto set_domain_lhs_second = [&](auto &pipeline) {
     auto one = [](double, double, double) { return 1.; };
     pipeline.push_back(new OpGradGrad("U", "U", one));
   };
 
+  // Now apply on the right hand side vector X = Grad/||Grad||
   auto set_domain_rhs_second = [&](auto &pipeline) {
     pipeline.push_back(new OpCalculateScalarFieldGradient<3>("U", grad_u_ptr));
     pipeline.push_back(new OpRhs(grad_u_ptr));
   };
 
+  // Solver first problem
   auto solve_first = [&]() {
     MoFEMFunctionBegin;
     auto simple = mField.getInterface<Simple>();
@@ -215,7 +236,7 @@ MoFEMErrorCode Example::assembleSystem() {
     auto D = smartCreateDMVector(dm);
     auto F = smartVectorDuplicate(D);
 
-    // Create space of vectors or rigid motion
+    // Note add one at nodes which are pinch nodes
     CHKERR VecZeroEntries(F);
     auto problem_ptr = mField.get_problem(simple->getProblemName());
     auto bit_number = mField.get_field_bit_number("U");
@@ -230,6 +251,7 @@ MoFEMErrorCode Example::assembleSystem() {
     CHKERR VecAssemblyBegin(F);
     CHKERR VecAssemblyEnd(F);
 
+    // Solve problem
     CHKERR KSPSolve(solver, F, D);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -237,11 +259,12 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
+  // Solve second problem
   auto solve_second = [&]() {
     MoFEMFunctionBegin;
     auto simple = mField.getInterface<Simple>();
 
-    // Create space of vectors or rigid motion
+    // Note that DOFs on pinch nodes are removed from the problem
     auto prb_mng = mField.getInterface<ProblemsManager>();
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U",
                                          pinchNodes, 0, 1);
@@ -264,6 +287,7 @@ MoFEMErrorCode Example::assembleSystem() {
     MoFEMFunctionReturn(0);
   };
 
+  // Post-process results
   auto post_proc = [&](const std::string out_name) {
     PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
     MoFEMFunctionBegin;
