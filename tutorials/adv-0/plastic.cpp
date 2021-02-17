@@ -98,11 +98,13 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
 PetscBool is_quasi_static = PETSC_FALSE;
 PetscBool is_large_strains = PETSC_TRUE;
 
-double young_modulus = 1e3;
+double scale = 1e3;
+
+double young_modulus = 1e3 * scale;
 double poisson_ratio = 0.25;
 double rho = 5;
 double sigmaY = 1;
-double H = 2e1;
+double H = 1e-2 * scale;
 double cn = H;
 int order = 2;
 
@@ -135,6 +137,7 @@ private:
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 };
 
 //! [Run problem]
@@ -284,6 +287,19 @@ MoFEMErrorCode Example::bC() {
   CHKERR remove_ents(fix_disp("FIX_X"), true, false);
   CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
   CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
+
+  // boundaryMarker = boost::make_shared<std::vector<unsigned char>>();
+
+  // auto mark_boundary_dofs = [&](Range &&ents, const bool fix_x, const bool fix_y) {
+  //   MoFEMFunctionBegin;
+  //   auto problem_manager = mField.getInterface<ProblemsManager>();
+  //   std::vector<unsigned char> tmp_mark_dofs;
+  //   CHKERR problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+  //                                    ents, tmp_mark_dofs);
+  //   if(!fix_x)
+  //     for(int i = 0; i!=)
+  //   MoFEMFunctionReturn(0);
+  // };
 
   MoFEMFunctionReturn(0);
 }
