@@ -157,14 +157,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs::doWork(int row_side, int col_side,
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
-  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-    return FTensor::Tensor2<double *, 3, 3>(
-        &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1),
-        &m(3 * r + 0, 3 * c + 2), &m(3 * r + 1, 3 * c + 0),
-        &m(3 * r + 1, 3 * c + 1), &m(3 * r + 1, 3 * c + 2),
-        &m(3 * r + 2, 3 * c + 0), &m(3 * r + 2, 3 * c + 1),
-        &m(3 * r + 2, 3 * c + 2));
-  };
 
   // create a 3d vector to be used as the normal to the face with length equal
   // to the face area
@@ -205,9 +197,9 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs::doWork(int row_side, int col_side,
     auto t_row_base_func = row_data.getFTensor0N(gg, 0);
 
     for (int rr = 0; rr != row_nb_dofs / 3; rr++) {
+      auto assemble_m = getFTensor2FromArray<3, 3, 3>(locKs, 3 * rr);
       auto t_col_base_func = col_data.getFTensor0N(gg, 0);
       for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
-        auto assemble_m = get_tensor2(locKs, rr, cc);
         assemble_m(i, j) += w * t_row_base_func * t_col_base_func *
                             commonDataPtr->springStiffnessNormal *
                             t_normal_projection(i, j);
@@ -215,6 +207,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs::doWork(int row_side, int col_side,
                             commonDataPtr->springStiffnessTangent *
                             t_tangent_projection(i, j);
         ++t_col_base_func;
+        ++assemble_m;
       }
       ++t_row_base_func;
     }
@@ -275,14 +268,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
   FTensor::Index<'l', 3> l;
-  auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
-    return FTensor::Tensor2<double *, 3, 3>(
-        &m(3 * r + 0, 3 * c + 0), &m(3 * r + 0, 3 * c + 1),
-        &m(3 * r + 0, 3 * c + 2), &m(3 * r + 1, 3 * c + 0),
-        &m(3 * r + 1, 3 * c + 1), &m(3 * r + 1, 3 * c + 2),
-        &m(3 * r + 2, 3 * c + 0), &m(3 * r + 2, 3 * c + 1),
-        &m(3 * r + 2, 3 * c + 2));
-  };
 
   auto make_vec_der = [&](FTensor::Tensor1<double *, 2> t_N,
                           FTensor::Tensor1<double *, 3> t_1,
@@ -358,10 +343,10 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
     for (int rr = 0; rr != row_nb_dofs / 3; rr++) {
       auto t_col_base_func = col_data.getFTensor0N(gg, 0);
       auto t_N = col_data.getFTensor1DiffN<2>(gg, 0);
+      auto assemble_m = getFTensor2FromArray<3, 3, 3>(locKs, 3 * rr);
       for (int cc = 0; cc != col_nb_dofs / 3; cc++) {
         auto t_d_n = make_vec_der(t_N, t_1, t_2);
         auto t_d_n_2 = make_vec_der_2(t_N, t_1, t_2);
-        auto assemble_m = get_tensor2(locKs, rr, cc);
 
         assemble_m(i, j) -= w * normal_length * t_col_base_func *
                             normal_stiffness * t_row_base_func *
@@ -383,6 +368,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
 
         ++t_col_base_func;
         ++t_N;
+        ++assemble_m;
       }
       ++t_row_base_func;
     }
@@ -1248,14 +1234,6 @@ MoFEMErrorCode MetaSpringBC::addSpringElementsALE(
     const std::string mesh_nodals_positions, Range &spring_triangles) {
   MoFEMFunctionBegin;
 
-  // if (field_name != "SPATIAL_POSITONS" &&
-  //     mesh_nodals_positions != "MESH_NODE_POSITIONS") {
-  //   SETERRQ2(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-  //            "Input fields for ALE spring elements has to be SPATIAL_POSITONS
-  //            " "and MESH_NODE_POSITIONS, but instead they are %s and %s",
-  //            field_name.c_str(), mesh_nodals_positions.c_str());
-  // }
-
   // Define boundary element that operates on rows, columns and data of a
   // given field
   CHKERR m_field.add_finite_element("SPRING_ALE", MF_ZERO);
@@ -1271,14 +1249,6 @@ MoFEMErrorCode MetaSpringBC::addSpringElementsALE(
 
   CHKERR m_field.add_ents_to_finite_element_by_type(spring_triangles, MBTRI,
                                                     "SPRING_ALE");
-  // Add entities to that element, here we add all triangles with SPRING_BC
-  // from cubit
-  // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-  //   if (bit->getName().compare(0, 9, "SPRING_BC") == 0) {
-  //     CHKERR m_field.add_ents_to_finite_element_by_type(bit->getMeshset(),
-  //                                                       MBTRI, "SPRING_ALE");
-  //   }
-  // }
 
   MoFEMFunctionReturn(0);
 }
@@ -1335,9 +1305,6 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
 
   // Push operators to instances for springs
   // loop over blocks
-  // boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> commonDataPtr
-  // =
-  //     boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
   CHKERR data_at_integration_pts->getParameters();
 
   for (auto &sitSpring : data_at_integration_pts->mapSpring) {

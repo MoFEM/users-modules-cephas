@@ -45,22 +45,18 @@ struct MetaSpringBC {
       : public boost::enable_shared_from_this<DataAtIntegrationPtsSprings> {
 
     boost::shared_ptr<MatrixDouble> gradDispPtr =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    boost::shared_ptr<MatrixDouble> xAtPts =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+        boost::make_shared<MatrixDouble>();
+    boost::shared_ptr<MatrixDouble> xAtPts = boost::make_shared<MatrixDouble>();
     boost::shared_ptr<MatrixDouble> xInitAtPts =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+        boost::make_shared<MatrixDouble>();
 
-    boost::shared_ptr<MatrixDouble> hMat =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    boost::shared_ptr<MatrixDouble> FMat =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-    boost::shared_ptr<MatrixDouble> HMat =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+    boost::shared_ptr<MatrixDouble> hMat = boost::make_shared<MatrixDouble>();
+    boost::shared_ptr<MatrixDouble> FMat = boost::make_shared<MatrixDouble>();
+    boost::shared_ptr<MatrixDouble> HMat = boost::make_shared<MatrixDouble>();
     boost::shared_ptr<MatrixDouble> invHMat =
-        boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+        boost::make_shared<MatrixDouble>();
     boost::shared_ptr<VectorDouble> detHVec =
-        boost::shared_ptr<VectorDouble>(new VectorDouble());
+        boost::make_shared<VectorDouble>();
 
     MatrixDouble tangent1;
     MatrixDouble tangent2;
