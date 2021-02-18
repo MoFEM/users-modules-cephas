@@ -98,13 +98,13 @@ using OpInternalForcePiola = FormsIntegrators<DomainEleOp>::Assembly<
 PetscBool is_quasi_static = PETSC_FALSE;
 PetscBool is_large_strains = PETSC_TRUE;
 
-double scale = 1e3;
+double scale = 1;
 
 double young_modulus = 1e3 * scale;
 double poisson_ratio = 0.25;
 double rho = 5;
 double sigmaY = 1;
-double H = 1e-2 * scale;
+double H = 2e1 * scale;
 double cn = H;
 int order = 2;
 
@@ -137,7 +137,15 @@ private:
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
+
+  struct BCs {
+    Range bcEdges;
+    std::vector<double> bcAttributes;
+  };
+
+  std::vector<BCs> bcVec;
 };
 
 //! [Run problem]
@@ -259,24 +267,26 @@ MoFEMErrorCode Example::bC() {
 
   auto fix_disp = [&](const std::string blockset_name) {
     Range fix_ents;
+    std::vector<double> attr;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
           0) {
         CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
                                                         true);
+        CHKERR it->getAttributes(attr);
       }
     }
-    return fix_ents;
+    return std::make_pair(fix_ents, attr);
   };
 
-  auto remove_ents = [&](const Range &&ents, const bool fix_x,
+  auto remove_ents = [&](const auto &&ents, const bool fix_x,
                          const bool fix_y) {
     auto prb_mng = mField.getInterface<ProblemsManager>();
     auto simple = mField.getInterface<Simple>();
     MoFEMFunctionBegin;
     Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    verts.merge(ents);
+    CHKERR mField.get_moab().get_connectivity(ents.first, verts, true);
+    verts.merge(ents.first);
     const int lo_coeff = fix_x ? 0 : 1;
     const int hi_coeff = fix_y ? 1 : 0;
     CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
@@ -288,18 +298,52 @@ MoFEMErrorCode Example::bC() {
   CHKERR remove_ents(fix_disp("FIX_Y"), false, true);
   CHKERR remove_ents(fix_disp("FIX_ALL"), true, true);
 
-  // boundaryMarker = boost::make_shared<std::vector<unsigned char>>();
+  boundaryMarker = boost::make_shared<std::vector<unsigned char>>();
 
-  // auto mark_boundary_dofs = [&](Range &&ents, const bool fix_x, const bool fix_y) {
-  //   MoFEMFunctionBegin;
-  //   auto problem_manager = mField.getInterface<ProblemsManager>();
-  //   std::vector<unsigned char> tmp_mark_dofs;
-  //   CHKERR problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-  //                                    ents, tmp_mark_dofs);
-  //   if(!fix_x)
-  //     for(int i = 0; i!=)
-  //   MoFEMFunctionReturn(0);
-  // };
+  auto mark_boundary_dofs = [&](const auto &&ents, const bool fix_x,
+                                const bool fix_y) {
+    MoFEMFunctionBegin;
+
+    auto simple = mField.getInterface<Simple>();
+
+    bcVec.emplace_back();
+    bcVec.back().bcEdges = ents.first;
+    bcVec.back().bcAttributes = ents.second;
+
+    Range verts;
+    CHKERR mField.get_moab().get_connectivity(ents.first, verts, true);
+    verts.merge(ents.first);
+
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+
+    std::vector<unsigned char> mark_ents;
+    CHKERR problem_manager->markDofs(simple->getProblemName(), ROW, verts,
+                                     mark_ents);
+
+    std::vector<unsigned char> mark_dofs;
+
+    if (fix_x)
+      problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 0, 0,
+                                      ProblemsManager::MarkOP::OR, 0,
+                                      mark_dofs);
+
+    if (fix_y)
+      problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 1, 1,
+                                      ProblemsManager::MarkOP::OR, 0,
+                                      mark_dofs);
+
+    boundaryMarker->resize(mark_ents.size(), 0);
+    for (auto i = 0; i != mark_ents.size(); ++i)
+      (*boundaryMarker)[i] |= mark_dofs[i] & mark_dofs[i];
+
+    MoFEMFunctionReturn(0);
+  };
+
+
+  CHKERR mark_boundary_dofs(fix_disp("FIX_X"), true, false);
+  CHKERR mark_boundary_dofs(fix_disp("FIX_Y"), false, true);
+  CHKERR mark_boundary_dofs(fix_disp("FIX_ALL"), true, true);
+
 
   MoFEMFunctionReturn(0);
 }
@@ -358,6 +402,8 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
     if (is_large_strains) {
       pipeline.push_back(
           new OpHenckyTangent<SPACE_DIM>("U", commonHenckyDataPtr));
@@ -401,9 +447,12 @@ MoFEMErrorCode Example::OPs() {
           new OpMass("U", "U", get_rho));
     }
 
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
     // auto get_body_force = [this](const double, const double, const double) {
     //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
     //   FTensor::Index<'i', SPACE_DIM> i;
@@ -442,11 +491,15 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpInertiaForce("U", mat_acceleration, rho));
     }
-    
+
+
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     MoFEMFunctionBeginHot;
+
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, 5, "FORCE") == 0) {
@@ -458,6 +511,11 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(new OpEdgeForceRhs("U", my_edges, force_vec));
       }
     }
+
+    pipeline.push_back(new OpUnSetBc("U"));
+    pipeline.push_back(new OpSetBc("U", false, boundaryMarker));
+
+    pipeline.push_back(new OpUnSetBc("U"));
 
     MoFEMFunctionReturnHot(0);
   };
