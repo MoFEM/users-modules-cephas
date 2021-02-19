@@ -270,7 +270,9 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateHdivVectorDivergence<3, 2>("FLUX", div_ptr));
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpQQ("FLUX", q_ptr));
+  auto one = [](double, double, double) { return 1.; };
+  pipeline_mng->getOpDomainRhsPipeline().push_back(
+      new OpQQ("FLUX", q_ptr, one));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpDivQU("FLUX", u_ptr, -1));
   pipeline_mng->getOpDomainRhsPipeline().push_back(

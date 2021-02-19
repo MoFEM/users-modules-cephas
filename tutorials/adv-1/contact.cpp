@@ -434,8 +434,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(
           new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
                                                             mat_acceleration));
-      pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpInertiaForce("U", mat_acceleration, rho));
+      pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+          "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
   };
 
@@ -463,8 +463,9 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
-    pipeline.push_back(
-        new OpSpringRhs("U", commonDataPtr->contactDispPtr, spring_stiffness));
+    pipeline.push_back(new OpSpringRhs(
+        "U", commonDataPtr->contactDispPtr,
+        [](double, double, double) { return spring_stiffness; }));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());

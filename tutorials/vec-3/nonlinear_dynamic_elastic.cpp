@@ -315,8 +315,8 @@ MoFEMErrorCode Example::assembleSystem() {
                                                           matAccelerationPtr));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpScaleMatrix("U", rho, matAccelerationPtr, matInertiaPtr));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpInertiaForce("U", matInertiaPtr));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+        "U", matInertiaPtr, [](double, double, double) { return 1.; }));
   }
 
   auto integration_rule = [](int, int, int approx_order) {
