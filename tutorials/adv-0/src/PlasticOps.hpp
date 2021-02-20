@@ -589,7 +589,8 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
       ++t_w;
     }
 
-    CHKERR VecSetValues(getTSf(), data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues<EssentialBcStorage>(getTSf(), data, nf.data(),
+                                            ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -643,7 +644,8 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
       ++t_w;
     }
 
-    CHKERR VecSetValues(getTSf(), data, nf.data(), ADD_VALUES);
+    CHKERR VecSetValues<EssentialBcStorage>(getTSf(), data, nf.data(),
+                                            ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -726,8 +728,8 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
       ++t_w;
     }
 
-    MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                 ADD_VALUES);
+    MatSetValues<EssentialBcStorage>(getSNESB(), row_data, col_data,
+                                     &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -843,8 +845,8 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::doWork(
       ++t_grad;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -950,8 +952,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
       ++t_tau_dot;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1098,8 +1100,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(int row_side, int 
       ++t_grad;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1211,8 +1213,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
       ++t_tau_dot;
     }
 
-    CHKERR MatSetValues(getTSB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getTSB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1281,8 +1283,8 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
       ++t_flow;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1373,8 +1375,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       ++t_w;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1483,8 +1485,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       ++t_logC_dC;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1571,8 +1573,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
       ++t_w;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
@@ -1646,8 +1648,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
       ++t_tau_dot;
     }
 
-    CHKERR MatSetValues(getSNESB(), row_data, col_data, &*locMat.data().begin(),
-                        ADD_VALUES);
+    CHKERR MatSetValues<EssentialBcStorage>(
+        getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);
