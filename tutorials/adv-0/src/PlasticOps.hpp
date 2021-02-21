@@ -418,12 +418,15 @@ inline auto diff_plastic_flow_dstrain(
 
 \f[
 \dot{\tau} - \frac{1}{2}\left\{\dot{\tau} + (f(\pmb\sigma) - \sigma_y) +
-\| \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0
+\| \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0 \\
+c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} + (f(\pmb\sigma) - \sigma_y) +
+\| c_n \sigma_y \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0 
 \f]
 
  */
-inline double contrains(double tau, double f){
-  return (cn * tau - f) - std::abs(cn * tau + f);
+inline double contrains(double dot_tau, double f, double sigma_y) {
+  return (cn * dot_tau - (f - sigma_y)) -
+         std::abs(cn * dot_tau + (f - sigma_y));
 };
 
 inline double sign(double x) {
@@ -435,12 +438,12 @@ inline double sign(double x) {
     return -1;
 };
 
-inline double diff_constrain_dtau(double tau, double f) {
-  return (cn - cn * sign(f + cn * tau));
+inline double diff_constrain_ddot_tau(double dot_dot, double f, double sigma_y) {
+  return (cn - cn * sign((f - sigma_y) + cn * dot_dot));
 };
 
-inline auto diff_constrain_df(double tau, double f) {
-  return (-1 - sign(f + cn * tau));
+inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
+  return (-1 - sign((f-sigma_y) + cn * dot_dot));
 };
 
 template <typename T>
@@ -628,7 +631,7 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
     const size_t nb_base_functions = data.getN().size2();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = dt * getMeasure() * t_w;
-      const double beta = alpha * contrains(t_tau_dot, t_f - hardening(t_tau));
+      const double beta = alpha * contrains(t_tau_dot, t_f, hardening(t_tau));
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
@@ -1341,7 +1344,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
       FTensor::Tensor2<double, 2, 2> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dstrain(i, j) * t_diff_symmetrize(i, j, k, l);
@@ -1444,7 +1447,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
       t_diff_constrain_dlog_c(k, l) =
@@ -1541,7 +1544,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
 
       constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
       auto t_L = symm_L_tensor();
@@ -1621,9 +1624,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = dt * getMeasure() * t_w;
       const double c0 = alpha * getTSa() *
-                        diff_constrain_dtau(t_tau_dot, t_f - hardening(t_tau));
+                        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
       const double c1 = alpha *
-                        diff_constrain_df(t_tau_dot, t_f - hardening(t_tau)) *
+                        diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)) *
                         hardening_dtau();
 
       auto mat_ptr = locMat.data().begin();
