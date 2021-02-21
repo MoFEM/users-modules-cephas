@@ -425,8 +425,8 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} + (f(\pmb\sig
 
  */
 inline double contrains(double dot_tau, double f, double sigma_y) {
-  return (cn * dot_tau - (f - sigma_y)) -
-         std::abs(cn * dot_tau + (f - sigma_y));
+  return sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
+              std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
 };
 
 inline double sign(double x) {
@@ -439,15 +439,15 @@ inline double sign(double x) {
 };
 
 inline double diff_constrain_ddot_tau(double dot_dot, double f, double sigma_y) {
-  return (cn - cn * sign((f - sigma_y) + cn * dot_dot));
+  return sigmaY * (cn - cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
 };
 
 inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
-  return (-1 - sign((f - sigma_y) + cn * dot_dot));
+  return sigmaY * (-1 / sigmaY - sign((f - sigma_y) / sigmaY + cn * dot_dot));
 };
 
 inline auto diff_constrain_dsigma_y(double dot_dot, double f, double sigma_y) {
-  return (1 + sign((f - sigma_y) + cn * dot_dot));
+  return sigmaY * (1 / sigmaY + sign((f - sigma_y) / sigmaY + cn * dot_dot));
 };
 
 template <typename T>
