@@ -96,15 +96,14 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 PetscBool is_quasi_static = PETSC_FALSE;
 PetscBool is_large_strains = PETSC_TRUE;
 
-double scale = 1;
-double young_modulus = 1e3 * scale;
-double poisson_ratio = 0.25;
-double rho = 1e-1 * scale;
+double scale = 1./206913;
+double young_modulus = 206913 * scale;
+double poisson_ratio = 0.29;
+double rho = 0 * scale;
 double vis = 0 * scale;
-double sigmaY = 1 * scale;
-double H = 10 * scale;
+double sigmaY = 450 * scale;
+double H = 129 * scale;
 double cn = 1;
-double r = 0;
 int order = 2;
 
 #include <HenckyOps.hpp>
