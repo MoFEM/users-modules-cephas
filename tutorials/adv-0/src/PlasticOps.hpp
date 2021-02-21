@@ -443,7 +443,11 @@ inline double diff_constrain_ddot_tau(double dot_dot, double f, double sigma_y) 
 };
 
 inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
-  return (-1 - sign((f-sigma_y) + cn * dot_dot));
+  return (-1 - sign((f - sigma_y) + cn * dot_dot));
+};
+
+inline auto diff_constrain_dsigma_y(double dot_dot, double f, double sigma_y) {
+  return (1 + sign((f - sigma_y) + cn * dot_dot));
 };
 
 template <typename T>
@@ -1625,9 +1629,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
       const double alpha = dt * getMeasure() * t_w;
       const double c0 = alpha * getTSa() *
                         diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
-      const double c1 = alpha *
-                        diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)) *
-                        hardening_dtau();
+      const double c1 =
+          alpha * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
+          hardening_dtau();
 
       auto mat_ptr = locMat.data().begin();
 
@@ -1636,7 +1640,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs; ++cc) {
-          *mat_ptr += (c0 - c1) * t_row_base * t_col_base;
+          *mat_ptr += (c0 + c1) * t_row_base * t_col_base;
           ++mat_ptr;
           ++t_col_base;
         }
