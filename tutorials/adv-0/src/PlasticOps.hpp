@@ -44,7 +44,8 @@ u_i,b_i)_\Omega -(\delta u_i,\overline{t}_i)_{\partial\Omega_\sigma}=0 & \forall
 \left(\delta\tau,c_n\dot{\tau} - \frac{1}{2}\left\{c_n \dot{\tau} +
 (f(\pmb\sigma,\tau) - \sigma_y) +
 \| c_n \dot{\tau} + (f(\pmb\sigma,\tau) - \sigma_y) \|\right\}\right) = 0 &
-\forall \delta\tau \in L^2(\Omega) \end{array} \right. \f]
+\forall \delta\tau \in L^2(\Omega) \end{array} \right. 
+\f]
 
 */
 
@@ -292,7 +293,7 @@ inline auto diff_symmetrize() {
   t_diff(i, j, k, l) = 0;
   t_diff(0, 0, 0, 0) = 1;
   t_diff(1, 1, 1, 1) = 1;
-  
+
   t_diff(1, 0, 1, 0) = 0.5;
   t_diff(1, 0, 0, 1) = 0.5;
 
@@ -419,14 +420,15 @@ inline auto diff_plastic_flow_dstrain(
 \f[
 \dot{\tau} - \frac{1}{2}\left\{\dot{\tau} + (f(\pmb\sigma) - \sigma_y) +
 \| \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0 \\
-c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} + (f(\pmb\sigma) - \sigma_y) +
-\| c_n \sigma_y \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0 
+c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
+(f(\pmb\sigma) - \sigma_y) +
+\| c_n \sigma_y \dot{\tau} + (f(\pmb\sigma) - \sigma_y) \|\right\} = 0
 \f]
 
  */
 inline double contrains(double dot_tau, double f, double sigma_y) {
   return sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
-              std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
+                   std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
 };
 
 inline double sign(double x) {
@@ -438,7 +440,8 @@ inline double sign(double x) {
     return -1;
 };
 
-inline double diff_constrain_ddot_tau(double dot_dot, double f, double sigma_y) {
+inline double diff_constrain_ddot_tau(double dot_dot, double f,
+                                      double sigma_y) {
   return sigmaY * (cn - cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
 };
 
@@ -813,7 +816,6 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::doWork(
                 t_DL(ii, jj, LL) +=
                     t_FDLogC_dC(ii, jj, kk, ll) * t_L(kk, ll, LL);
 
-
       size_t rr = 0;
       for (; rr != nb_row_dofs / 2; ++rr) {
 
@@ -830,7 +832,6 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::doWork(
 
         FTensor::Tensor2<double, 2, size_symm> t_tmp;
         t_tmp(i, L) = (t_DL(i, j, L) * (alpha * t_row_diff_base(j)));
-
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
@@ -918,7 +919,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
       for (; rr != nb_row_dofs / 3; ++rr) {
 
         // Tensor3(T * d000, T * d001, T * d010, T * d011, T * d100, T * d101,
-                // T * d110, T * d111)
+        // T * d110, T * d111)
 
         FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2> t_mat{
             &locMat(3 * rr + 0, 0), // 000
@@ -976,11 +977,9 @@ OpCalculatePlasticFlowLhs_LogStrain_dU::OpCalculatePlasticFlowLhs_LogStrain_dU(
   sYmm = false;
 }
 
-MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(int row_side, int col_side,
-                                                    EntityType row_type,
-                                                    EntityType col_type,
-                                                    EntData &row_data,
-                                                    EntData &col_data) {
+MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
+    int row_side, int col_side, EntityType row_type, EntityType col_type,
+    EntData &row_data, EntData &col_data) {
   MoFEMFunctionBegin;
 
   constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
@@ -1062,9 +1061,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(int row_side, int 
       size_t rr = 0;
       for (; rr != nb_row_dofs / 3; ++rr) {
 
-        
         // Tensor3(T * d000, T * d001, T * d010, T * d011, T * d100, T * d101,
-                // T * d110, T * d111)
+        // T * d110, T * d111)
         FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2> t_mat{
             &locMat(3 * rr + 0, 0), // 000
             &locMat(3 * rr + 0, 1), // 001
@@ -1323,7 +1321,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
     };
     const auto dt = get_dt();
 
-
     locMat.resize(nb_row_dofs, nb_col_dofs, false);
     locMat.clear();
 
@@ -1525,7 +1522,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
     };
     const auto dt = get_dt();
 
-
     locMat.resize(nb_row_dofs, nb_col_dofs, false);
     locMat.clear();
 
@@ -1613,7 +1609,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
     };
     const auto dt = get_dt();
 
-
     locMat.resize(nb_row_dofs, nb_col_dofs, false);
     locMat.clear();
 
@@ -1627,8 +1622,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
     auto t_row_base = row_data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = dt * getMeasure() * t_w;
-      const double c0 = alpha * getTSa() *
-                        diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
+      const double c0 =
+          alpha * getTSa() *
+          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
       const double c1 =
           alpha * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
           hardening_dtau();
@@ -1803,4 +1799,4 @@ private:
 };
 
 //! [Postprocessing]
-}; // namespace OpPlasticTools
+}; // namespace PlasticOps
