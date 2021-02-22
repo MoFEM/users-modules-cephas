@@ -93,10 +93,12 @@ private:
 
 struct OpPlasticStress : public DomainEleOp {
   OpPlasticStress(const std::string field_name,
-                  boost::shared_ptr<CommonData> common_data_ptr);
+                  boost::shared_ptr<CommonData> common_data_ptr,
+                  const double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
+  const double scaleStress;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
 
@@ -427,8 +429,9 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 
  */
 inline double contrains(double dot_tau, double f, double sigma_y) {
-  return sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
-                   std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
+  return sigmaY *
+         ((visH / sigmaY) * dot_tau + (cn * dot_tau - (f - sigma_y) / sigmaY) -
+          std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
 };
 
 inline double sign(double x) {
@@ -442,7 +445,8 @@ inline double sign(double x) {
 
 inline double diff_constrain_ddot_tau(double dot_dot, double f,
                                       double sigma_y) {
-  return sigmaY * (cn - cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
+  return sigmaY * (visH / sigmaY + cn -
+                   cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
 };
 
 inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
@@ -507,9 +511,10 @@ MoFEMErrorCode OpCalculatePlasticSurface::doWork(int side, EntityType type,
 }
 
 OpPlasticStress::OpPlasticStress(const std::string field_name,
-                                 boost::shared_ptr<CommonData> common_data_ptr)
+                                 boost::shared_ptr<CommonData> common_data_ptr,
+                                 const double scale)
     : DomainEleOp(field_name, DomainEleOp::OPROW),
-      commonDataPtr(common_data_ptr) {
+      commonDataPtr(common_data_ptr), scaleStress(scale) {
   // Opetor is only executed for vertices
   std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
 }
@@ -530,6 +535,7 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
         t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
+    t_stress(i, j) *= scale;
     ++t_strain;
     ++t_plastic_strain;
     ++t_stress;
@@ -1552,8 +1558,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
     auto t_row_base = row_data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
+      const double t_a = getTSa();
       const double c0 =
-          alpha * getTSa() *
+          alpha * t_a *
           diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
       const double c1 =
           alpha * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
@@ -1664,7 +1671,8 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
   for (int gg = 0; gg != commonDataPtr->plasticSurfacePtr->size(); ++gg) {
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
-    CHKERR set_tag(th_plastic_surface, gg, set_scalar(f - hardening(tau)));
+    CHKERR set_tag(th_plastic_surface, gg,
+                   set_scalar(f - scale * hardening(tau)));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));

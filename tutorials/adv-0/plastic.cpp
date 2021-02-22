@@ -100,9 +100,9 @@ double scale = 1./206913;
 double young_modulus = 206913 * scale;
 double poisson_ratio = 0.29;
 double rho = 0 * scale;
-double vis = 0 * scale;
 double sigmaY = 450 * scale;
 double H = 129 * scale;
+double visH = 1e4 * scale;
 double cn = 1;
 int order = 2;
 
@@ -191,13 +191,15 @@ MoFEMErrorCode Example::createCommonData() {
 
   auto get_command_line_parameters = [&]() {
     MoFEMFunctionBegin;
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-scale", &scale, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &rho, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-vis", &vis, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-young_modulus",
                                  &young_modulus, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-poisson_ratio",
                                  &poisson_ratio, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-hardening", &H, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-hardening_viscous", &visH,
+                                 PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-yield_stress", &sigmaY,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
@@ -208,6 +210,7 @@ MoFEMErrorCode Example::createCommonData() {
                                &is_quasi_static, PETSC_NULL);
 
     CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+
     MoFEMFunctionReturn(0);
   };
 
@@ -441,15 +444,6 @@ MoFEMErrorCode Example::OPs() {
           new OpMass("U", "U", get_rho));
     }
 
-    // Get pointer to U_t shift in domain element
-    auto get_vis = [this](const double, const double, const double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-      return vis * fe_domain_lhs->ts_a;
-    };
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpMass("U", "U", get_vis));
-
     pipeline.push_back(new OpUnSetBc("U"));
   };
 
@@ -494,12 +488,6 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
-
-    auto mat_velocity = boost::make_shared<MatrixDouble>();
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpCalculateVectorFieldValuesDot<SPACE_DIM>("U", mat_velocity));
-    pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
-        "U", mat_velocity, [](double, double, double) { return vis; }));
 
     pipeline.push_back(new OpUnSetBc("U"));
   };
@@ -639,7 +627,7 @@ MoFEMErrorCode Example::tsSolve() {
         new OpCalculateTensor2SymmetricFieldValues<2>(
             "EP", commonPlasticDataPtr->plasticStrainPtr, MBTRI));
     postProcFe->getOpPtrVector().push_back(
-        new OpPlasticStress("U", commonPlasticDataPtr));
+        new OpPlasticStress("U", commonPlasticDataPtr, scale));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
 
