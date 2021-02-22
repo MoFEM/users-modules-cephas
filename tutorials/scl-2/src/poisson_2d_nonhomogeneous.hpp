@@ -98,7 +98,7 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   MatrixDouble locLhs, transLocLhs;
 };
 

@@ -1,10 +1,20 @@
 /**
- * \file heat_method.cpp
- * \example heat_method.cpp
+ * \file heat_method.cpp \example heat_method.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions,
- * and integral of flux on the boundary. Since the h-div space is used, volume
- * integral and boundary integral should give the same result.
+ * Calculating geodetic distances using heat method. For details see,
+ *
+ * K. Crane, C. Weischedel, M. Wardetzky, Geodesics in heat: A new approach to
+ * computing distance based on heat flow, ACM Transactions on Graphics , vol.
+ * 32, no. 5, pp. 152:1-152:11, 2013.
+ *
+ * Interent resources:
+ * http://www.cs.cmu.edu/~kmcrane/Projects/HeatMethod/
+ * http://www.numerical-tours.com/matlab/meshproc_7_geodesic_poisson/
+ *
+ *
+ * Solving two problems in sequence. Show hot to use form integrators and how to
+ * implement user data operator.
+ *
  */
 
 /* This file is part of MoFEM.

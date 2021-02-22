@@ -23,7 +23,7 @@ typedef boost::function<double(const double, const double, const double)>
 struct OpDomainLhsK : public OpFaceEle {
 public:
   OpDomainLhsK(std::string row_field_name, std::string col_field_name,
-              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+              boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
         boundaryMarker(boundary_marker) {
     sYmm = true;
@@ -97,14 +97,14 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   MatrixDouble locLhs, transLocLhs;
 };
 
 struct OpDomainRhsF : public OpFaceEle {
 public:
   OpDomainRhsF(std::string field_name, ScalarFunc source_term_function,
-              boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+              boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(field_name, OpFaceEle::OPROW),
         sourceTermFunc(source_term_function), boundaryMarker(boundary_marker) {}
 
@@ -162,7 +162,7 @@ public:
 
 private:
   ScalarFunc sourceTermFunc;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   VectorDouble locRhs;
 };
 
