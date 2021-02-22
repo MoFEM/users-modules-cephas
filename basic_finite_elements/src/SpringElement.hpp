@@ -203,7 +203,7 @@ struct MetaSpringBC {
    * @brief LHS-operator for the springs element
    *
    * Integrates Springs virtual work on spatial positions or displacements
-   * \f$ f_s \f$ derivative with respect to spatial postions or dirplacements
+   * \f$ f_s \f$ derivative with respect to spatial postions or displacements
    * on surface with springs side and assembles components of the LHS vector.
    *
    */

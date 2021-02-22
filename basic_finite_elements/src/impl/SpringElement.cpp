@@ -384,15 +384,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringKs_dX::doWork(int row_side, int col_side,
   // Add computed values of spring stiffness to the global LHS matrix
   CHKERR MatSetValues(getKSPB(), row_data, col_data, &locKs(0, 0), ADD_VALUES);
 
-  // // is symmetric
-  // if (row_side != col_side || row_type != col_type) {
-  //   transLocKs.resize(col_nb_dofs, row_nb_dofs, false);
-  //   noalias(transLocKs) = trans(locKs);
-
-  //   CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocKs(0, 0),
-  //                       ADD_VALUES);
-  // }
-
   MoFEMFunctionReturn(0);
 }
 
@@ -627,11 +618,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringALEMaterialLhs_dX_dX::doWork(
     EntData &row_data, EntData &col_data) {
 
   MoFEMFunctionBegin;
-
-  // if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-  //     dAta.tRis.end()) {
-  //   MoFEMFunctionReturnHot(0);
-  // }
 
   row_nb_dofs = row_data.getIndices().size();
   if (!row_nb_dofs)
@@ -984,10 +970,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringFsMaterial::iNtegrate(EntData &data) {
   if (nb_dofs == 0)
     MoFEMFunctionReturnHot(0);
 
-  // if (dAta.tRis.find(getFEEntityHandle()) == dAta.tRis.end()) {
-  //   MoFEMFunctionReturnHot(0);
-  // }
-
   CHKERR dataAtPts->getBlockData(dAta);
 
   // get integration weights
@@ -1092,17 +1074,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringFsMaterial::aSsemble(EntData &row_data) {
   CHKERR VecSetValues(getSNESf(), nbRows, row_indices, &*nF.data().begin(),
                       ADD_VALUES);
 
-  // auto get_f = [&]() {
-  //   if (F == PETSC_NULL)
-  //     return getKSPf();
-  //   return F;
-  // };
-
-  // auto vec_assemble = [&](Vec my_f) {
-  //   MoFEMFunctionBegin;
-  //   CHKERR VecSetOption(my_f, VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
-  //   CHKERR VecSetValues(my_f, nbRows, row_indices, &*nF.data().begin(),
-  //                       ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 
@@ -1186,11 +1157,6 @@ MoFEMErrorCode MetaSpringBC::OpSpringALEMaterialLhs_dX_dx::doWork(
     EntData &row_data, EntData &col_data) {
 
   MoFEMFunctionBegin;
-
-  // if (dAta.tRis.find(getNumeredEntFiniteElementPtr()->getEnt()) ==
-  //     dAta.tRis.end()) {
-  //   MoFEMFunctionReturnHot(0);
-  // }
 
   if (col_type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
@@ -1287,8 +1253,7 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
     fe_spring_rhs_ptr->getOpPtrVector().push_back(
         new OpSpringFs(commonDataPtr, sitSpring.second, field_name));
   }
-  //   cerr << "commonDataPtr has been used!!! " << commonDataPtr.use_count() <<
-  //   " times" << endl;
+
   MoFEMFunctionReturn(0);
 }
 
@@ -1408,12 +1373,7 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
         new OpSpringALEMaterialLhs_dX_dX(
             mesh_nodals_positions, mesh_nodals_positions,
             data_at_integration_pts, feMatSideLhs_dX, side_fe_name));
-
-    // fe_spring_rhs_ptr->getOpPtrVector().push_back(
-    //     new OpSpringFs(data_at_integration_pts, sitSpring.second,
-    //     field_name));
   }
-  //   cerr << "data_at_integration_pts has been used!!! " <<
-  //   data_at_integration_pts.use_count() << " times" << endl;
+
   MoFEMFunctionReturn(0);
 }

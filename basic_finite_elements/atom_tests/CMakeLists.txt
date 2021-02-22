@@ -466,7 +466,7 @@ add_test(
   testing_jacobian_of_spring_element_ale
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
-  -file_name 2_tets_springs.cub -snes_test_jacobian_display -snes_test_jacobian_display
+  -file_name 2_tets_springs.cub -snes_test_jacobian_display
 )
 
 # SIMPLE CONTACT
