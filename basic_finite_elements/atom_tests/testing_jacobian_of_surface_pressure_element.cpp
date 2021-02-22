@@ -59,17 +59,21 @@ int main(int argc, char *argv[]) {
 
     CHKERR si->getOptions();
     CHKERR si->loadFile();
-    CHKERR si->addDomainField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->addBoundaryField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE, 3);
+    CHKERR si->addDomainField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE,
+                              3);
+    CHKERR si->addBoundaryField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE,
+                                3);
     CHKERR si->setFieldOrder("SPATIAL_POSITION", order_x);
 
-    CHKERR si->addDomainField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->addBoundaryField("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->addDomainField("MESH_NODE_POSITIONS", H1,
+                              AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->addBoundaryField("MESH_NODE_POSITIONS", H1,
+                                AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR si->setFieldOrder("MESH_NODE_POSITIONS", order_X);
 
     Range triangle_springs;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-       if (it->getName().compare(0, 9, "SPRING_BC") == 0) {
+      if (it->getName().compare(0, 9, "SPRING_BC") == 0) {
         CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI,
                                                        triangle_springs, true);
       }
@@ -105,8 +109,10 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "SPATIAL_POSITION");
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "MESH_NODE_POSITIONS");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
+                                                            "SPATIAL_POSITION");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+        set_coord, "MESH_NODE_POSITIONS");
 
     PetscRandomDestroy(&rctx);
 
@@ -143,8 +149,9 @@ int main(int argc, char *argv[]) {
         CHKERR surfacePressure->addPressure("SPATIAL_POSITION", PETSC_NULL,
                                             bit->getMeshsetId(), true, true);
         CHKERR surfacePressure->addPressureAle(
-            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), true, true);
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
+            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
+            true, true);
       }
     }
 
@@ -166,26 +173,28 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ale_ptr(
         new FaceElementForcesAndSourcesCore(m_field));
 
-    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings> data_at_spring_gp =
-        boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings>
+        data_at_spring_gp =
+            boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(
+                m_field);
 
     Range spring_ale_nodes;
     CHKERR moab.get_connectivity(triangle_springs, spring_ale_nodes, true);
-    
+
     data_at_spring_gp->forcesOnlyOnEntitiesRow = spring_ale_nodes;
 
     CHKERR MetaSpringBC::setSpringOperatorsMaterial(
-        m_field, fe_spring_lhs_ale_ptr_dx, fe_spring_lhs_ale_ptr_dX, fe_spring_rhs_ale_ptr, data_at_spring_gp,
-        "SPATIAL_POSITION", "MESH_NODE_POSITIONS",  si->getDomainFEName());
-
+        m_field, fe_spring_lhs_ale_ptr_dx, fe_spring_lhs_ale_ptr_dX,
+        fe_spring_rhs_ale_ptr, data_at_spring_gp, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS", si->getDomainFEName());
 
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL,
                                   PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
                                   PETSC_NULL);
 
-    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dx, PETSC_NULL,
-                                  PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dx,
+                                  PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dX,
                                   PETSC_NULL, PETSC_NULL);
     CHKERR DMMoFEMSNESSetFunction(dm, "SPRING_ALE", fe_spring_rhs_ale_ptr,

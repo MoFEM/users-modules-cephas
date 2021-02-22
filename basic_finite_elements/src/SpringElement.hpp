@@ -153,26 +153,29 @@ struct MetaSpringBC {
     bool is_spatial_position = true;
 
     /** * @brief Integrates and assembles to global RHS vector virtual work of
-     * springs 
-     * 
-     * Computes virtual work of springs on spatial positions or displacements for configurational changes:
-     * 
-     * \f[ 
+     * springs
+     *
+     * Computes virtual work of springs on spatial positions or displacements
+     * for configurational changes:
+     *
+     * \f[
      * f_s({\mathbf x}, {\mathbf X},
      * \delta \mathbf{x}) =  \int\limits_{\partial \Omega }^{} {{\delta
      * \mathbf{x}^T} \cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes  {\mathbf
      * N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes  {\mathbf
      * N}  \right) \right] \left( {\mathbf x} - {\mathbf X} \right) \partial
-     * \Omega } 
+     * \Omega }
      * \f]
      *
-     * where \f$ \delta \mathbf{x} \f$ is the vector of base functions for either displacements or spatial positions,
-     * \f$ k_{\rm n} \f$ is the stiffness of the springs normal to the surface,
-     * \f$ k_{\rm t} \f$ is the stiffness of the springs tangential to the surface,
-     * \f$ {\mathbf N} \f$ is the normal to the surface vector based on material positions,
-     * \f$ {\mathbf x} \f$ is the vector of spatial positions or displacements of the surface with springs and
-     * \f$ {\mathbf X} \f$ is the vector of material positions that is zero when displacements are considered
-     * 
+     * where \f$ \delta \mathbf{x} \f$ is the vector of base functions for
+     * either displacements or spatial positions, \f$ k_{\rm n} \f$ is the
+     * stiffness of the springs normal to the surface, \f$ k_{\rm t} \f$ is the
+     * stiffness of the springs tangential to the surface, \f$ {\mathbf N} \f$
+     * is the normal to the surface vector based on material positions, \f$
+     * {\mathbf x} \f$ is the vector of spatial positions or displacements of
+     * the surface with springs and \f$ {\mathbf X} \f$ is the vector of
+     * material positions that is zero when displacements are considered
+     *
      */
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
@@ -197,7 +200,6 @@ struct MetaSpringBC {
         is_spatial_position = false;
     }
   };
-
 
   /**
    * @brief LHS-operator for the springs element
@@ -286,9 +288,9 @@ struct MetaSpringBC {
      * \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right)
      * -\frac{\partial\mathbf{X}}
      * {\partial\eta} \cdot \left(\frac{\partial\Delta
-     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right] \otimes \dfrac{\mathbf{N}}{\|\mathbf{N}\|} +
-     * \dfrac{\mathbf{N}}{\|\mathbf{N}\|} \otimes \left[
-     * \frac{\partial\mathbf{X}}
+     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right] \otimes
+     * \dfrac{\mathbf{N}}{\|\mathbf{N}\|} + \dfrac{\mathbf{N}}{\|\mathbf{N}\|}
+     * \otimes \left[ \frac{\partial\mathbf{X}}
      * {\partial\xi} \cdot \left(\frac{\partial\Delta
      * \mathbf{X}}{\partial\eta}\times\delta\mathbf{x}\right)
      * -\frac{\partial\mathbf{X}}
@@ -302,7 +304,7 @@ struct MetaSpringBC {
      * {\partial\eta} \cdot \left(\frac{\partial\Delta
      * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right] \mathbf{N}
      * \right \}
-     * \textrm{d}\xi\textrm{d}\eta 
+     * \textrm{d}\xi\textrm{d}\eta
      * \\
      * +\int\limits_{\mathcal{T}_{\xi}}
      *  0.5 k_{\rm s} \left[
@@ -313,14 +315,14 @@ struct MetaSpringBC {
      * {\partial\eta} \cdot \left(\frac{\partial\Delta
      * \mathbf{X}}{\partial\xi}\times \delta\mathbf{x}\right)\right]
      *  {\mathbf N}^{\intercal} \cdot {\mathbf I} ( {\mathbf x} - {\mathbf X} )
-     * \textrm{d}\xi\textrm{d}\eta 
-     * -\int\limits_{\mathcal{T}_{\xi}} 
+     * \textrm{d}\xi\textrm{d}\eta
+     * -\int\limits_{\mathcal{T}_{\xi}}
      * {{\delta
      * \mathbf{x}^T} \cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes  {\mathbf
      * N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes  {\mathbf
-     * N}  \right) \right] \Delta {\mathbf X}   } 
-     * \textrm{d}\xi\textrm{d}\eta 
-     * 
+     * N}  \right) \right] \Delta {\mathbf X}   }
+     * \textrm{d}\xi\textrm{d}\eta
+     *
      * \f]
      *
      */
@@ -389,7 +391,8 @@ struct MetaSpringBC {
   };
 
   /**
-   * @brief LHS-operator (material configuration) on the side volume for spring element
+   * @brief LHS-operator (material configuration) on the side volume for spring
+   * element
    *
    * Computes the linearisation of the material component
    * with respect to a variation of spatial coordinates on the side volume.
@@ -408,23 +411,23 @@ struct MetaSpringBC {
      * [\Delta\mathbf{x}] = -\int\limits_{\mathcal{T}_{\xi}}
      * \left\{\left[
      * \frac{\partial\Delta\mathbf{x}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
-     * \right]^{\intercal}\cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes  {\mathbf
-     * N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes  {\mathbf
-     * N}  \right) \right] \left( {\mathbf x} - {\mathbf X} \right)\right\}
-     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
-     * \f]
-     * 
-     * 
-     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for material positions,
-     * \f$ k_{\rm n} \f$ is the stiffness of the springs normal to the surface,
-     * \f$ k_{\rm t} \f$ is the stiffness of the springs tangential to the surface,
-     * \f$ {\mathbf N} \f$ is the normal to the surface vector based on material positions,
-     * \f$ {\mathbf x} \f$ is the vector of spatial positions or displacements of the surface with springs,
+     * \right]^{\intercal}\cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes
+     * {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes
+     * {\mathbf N}  \right) \right] \left( {\mathbf x} - {\mathbf X}
+     * \right)\right\} \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta \f]
+     *
+     *
+     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for
+     * material positions, \f$ k_{\rm n} \f$ is the stiffness of the springs
+     * normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the springs
+     * tangential to the surface, \f$ {\mathbf N} \f$ is the normal to the
+     * surface vector based on material positions, \f$ {\mathbf x} \f$ is the
+     * vector of spatial positions or displacements of the surface with springs,
      * \f$ {\mathbf X} \f$ is the vector of material positions,
      * \f$\boldsymbol{\chi}\f$ are reference coordinated,
      * \f$\mathbf{H}\f$ is the gradient of the material map.
      *
-     * 
+     *
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
@@ -574,9 +577,9 @@ struct MetaSpringBC {
      * \mathbf{X}}{\partial\eta}\times\delta\mathbf{X}\right)
      * -\frac{\partial\mathbf{X}}
      * {\partial\eta} \cdot \left(\frac{\partial\Delta
-     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{X}\right)\right] \otimes \dfrac{\mathbf{N}}{\|\mathbf{N}\|} +
-     * \dfrac{\mathbf{N}}{\|\mathbf{N}\|} \otimes \left[
-     * \frac{\partial\mathbf{X}}
+     * \mathbf{X}}{\partial\xi}\times \delta\mathbf{X}\right)\right] \otimes
+     * \dfrac{\mathbf{N}}{\|\mathbf{N}\|} + \dfrac{\mathbf{N}}{\|\mathbf{N}\|}
+     * \otimes \left[ \frac{\partial\mathbf{X}}
      * {\partial\xi} \cdot \left(\frac{\partial\Delta
      * \mathbf{X}}{\partial\eta}\times\delta\mathbf{X}\right)
      * -\frac{\partial\mathbf{X}}
@@ -590,7 +593,7 @@ struct MetaSpringBC {
      * {\partial\eta} \cdot \left(\frac{\partial\Delta
      * \mathbf{X}}{\partial\xi}\times \delta\mathbf{X}\right)\right] \mathbf{N}
      * \right \}
-     * \textrm{d}\xi\textrm{d}\eta 
+     * \textrm{d}\xi\textrm{d}\eta
      * \\
      * +\int\limits_{\mathcal{T}_{\xi}}
      *  0.5 k_{\rm s} {\mathbf{F}^{\intercal}} \left[
@@ -601,14 +604,14 @@ struct MetaSpringBC {
      * {\partial\eta} \cdot \left(\frac{\partial\Delta
      * \mathbf{X}}{\partial\xi}\times \delta\mathbf{X}\right)\right]
      *  {\mathbf N}^{\intercal} \cdot {\mathbf I} ( {\mathbf x} - {\mathbf X} )
-     * \textrm{d}\xi\textrm{d}\eta 
-     * -\int\limits_{\mathcal{T}_{\xi}} 
+     * \textrm{d}\xi\textrm{d}\eta
+     * -\int\limits_{\mathcal{T}_{\xi}}
      * {{\delta
-     * \mathbf{X}^T} \cdot {\mathbf{F}^{\intercal}} \left[ k_{\rm n} \left( {\mathbf N} \otimes  {\mathbf
-     * N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes  {\mathbf
-     * N}  \right) \right] \Delta {\mathbf X}   } 
-     * \textrm{d}\xi\textrm{d}\eta 
-     * 
+     * \mathbf{X}^T} \cdot {\mathbf{F}^{\intercal}} \left[ k_{\rm n} \left(
+     * {\mathbf N} \otimes  {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} -
+     * {\mathbf N} \otimes  {\mathbf N}  \right) \right] \Delta {\mathbf X}   }
+     * \textrm{d}\xi\textrm{d}\eta
+     *
      * \f]
      *
      */
@@ -648,23 +651,23 @@ struct MetaSpringBC {
      * \left\{\left[
      * \mathbf{h}\,\mathbf{H}^{-1}\,\frac{\partial\Delta\mathbf{X}}
      * {\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
-     * \right]^{\intercal}\cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes  {\mathbf
-     * N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes  {\mathbf
-     * N}  \right) \right] \left( {\mathbf x} - {\mathbf X} \right) \right\}
-     * \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta
-     * \f]
-     * 
-     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for material positions,
-     * \f$ k_{\rm n} \f$ is the stiffness of the springs normal to the surface,
-     * \f$ k_{\rm t} \f$ is the stiffness of the springs tangential to the surface,
-     * \f$ {\mathbf N} \f$ is the normal to the surface vector based on material positions,
-     * \f$ {\mathbf x} \f$ is the vector of spatial positions or displacements of the surface with springs,
+     * \right]^{\intercal}\cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes
+     * {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes
+     * {\mathbf N}  \right) \right] \left( {\mathbf x} - {\mathbf X} \right)
+     * \right\} \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta \f]
+     *
+     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for
+     * material positions, \f$ k_{\rm n} \f$ is the stiffness of the springs
+     * normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the springs
+     * tangential to the surface, \f$ {\mathbf N} \f$ is the normal to the
+     * surface vector based on material positions, \f$ {\mathbf x} \f$ is the
+     * vector of spatial positions or displacements of the surface with springs,
      * \f$ {\mathbf X} \f$ is the vector of material positions,
      * \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
      * spatial and material maps, respectively, and \f$\boldsymbol{\chi}\f$ are
      * the reference coordinates.
-     * 
-     * 
+     *
+     *
      */
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
 
@@ -713,8 +716,8 @@ struct MetaSpringBC {
    * formulation
    *
    * Integrates  virtual
-   * work of springs on material positions involved in configurational changes and assembles
-   * components to RHS global vector.
+   * work of springs on material positions involved in configurational changes
+   * and assembles components to RHS global vector.
    *
    */
   struct OpSpringFsMaterial
@@ -736,30 +739,32 @@ struct MetaSpringBC {
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &row_data);
 
-    /** 
+    /**
      * @brief Integrates and assembles to global RHS vector virtual work of
-     * springs on material positions for configurational changes for ALE formulation
-     * 
-     * Computes virtual work of springs on material positions for configurational changes:
-     * 
-     * \f[ 
+     * springs on material positions for configurational changes for ALE
+     * formulation
+     *
+     * Computes virtual work of springs on material positions for
+     * configurational changes:
+     *
+     * \f[
      * f_s ({\mathbf x}, {\mathbf X},
      * \delta \mathbf{X}) =  \int\limits_{\partial \Omega }^{} {{\delta
-     * \mathbf{X}^T} \cdot {\mathbf{F}^{\intercal}} \left[ k_{\rm n} \left( {\mathbf N} \otimes  {\mathbf
-     * N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes  {\mathbf
-     * N}  \right) \right] \left( {\mathbf x} - {\mathbf X} \right) \partial
-     * \Omega } 
-     * \f]
+     * \mathbf{X}^T} \cdot {\mathbf{F}^{\intercal}} \left[ k_{\rm n} \left(
+     * {\mathbf N} \otimes  {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} -
+     * {\mathbf N} \otimes  {\mathbf N}  \right) \right] \left( {\mathbf x} -
+     * {\mathbf X} \right) \partial \Omega } \f]
      *
-     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for material positions,
-     * \f$ k_{\rm n} \f$ is the stiffness of the springs normal to the surface,
-     * \f$ k_{\rm t} \f$ is the stiffness of the springs tangential to the surface,
-     * \f$ {\mathbf N} \f$ is the normal to the surface vector based on material positions,
-     * \f$ {\mathbf x} \f$ is the vector of spatial positions or displacements of the surface with springs,
+     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for
+     * material positions, \f$ k_{\rm n} \f$ is the stiffness of the springs
+     * normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the springs
+     * tangential to the surface, \f$ {\mathbf N} \f$ is the normal to the
+     * surface vector based on material positions, \f$ {\mathbf x} \f$ is the
+     * vector of spatial positions or displacements of the surface with springs,
      * \f$ {\mathbf X} \f$ is the vector of material positions and finally
      * \f$\mathbf{F}\f$ is the deformation gradient
-     * 
-     * 
+     *
+     *
      * \f[
      * \mathbf{F} = \mathbf{h}(\mathbf{x})\,\mathbf{H}(\mathbf{X})^{-1} =
      * \frac{\partial\mathbf{x}}{\partial\boldsymbol{\chi}}
@@ -769,7 +774,7 @@ struct MetaSpringBC {
      * where \f$\mathbf{h}\f$ and \f$\mathbf{H}\f$ are the gradients of the
      * spatial and material maps, respectively, and \f$\boldsymbol{\chi}\f$ are
      * the reference coordinates.
-     * 
+     *
      */
     MoFEMErrorCode iNtegrate(EntData &row_data);
     MoFEMErrorCode aSsemble(EntData &row_data);
@@ -799,8 +804,8 @@ struct MetaSpringBC {
           dAta(data){};
   };
 
-  /// \brief Computes, for material configuration, tangent vectors to face that lie
-  /// on a surface with springs
+  /// \brief Computes, for material configuration, tangent vectors to face that
+  /// lie on a surface with springs
   struct OpGetTangentSpEle
       : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
@@ -826,9 +831,9 @@ struct MetaSpringBC {
      * @brief Evaluates the two tangent vector to the triangle on surface with
      * springs based on material base coordinates
      *
-     * Computes the two tangent vectors,\f$ {\mathbf T}^{(1)} \f$ and \f$ {\mathbf
-     * T}^{(2)}\f$, based on material base coordinates based on mesh (moab
-     * vertices) coordinates:
+     * Computes the two tangent vectors,\f$ {\mathbf T}^{(1)} \f$ and \f$
+     * {\mathbf T}^{(2)}\f$, based on material base coordinates based on mesh
+     * (moab vertices) coordinates:
      *
      * \f[
      * {\mathbf T}^{(1)}({\mathbf X}(\xi, \eta)) =
@@ -883,8 +888,8 @@ struct MetaSpringBC {
           dataAtIntegrationPts(data_at_integration_pts) {}
 
     /**
-     * @brief Evaluates normal vector to the triangle on surface with springs based on
-     * material base coordinates
+     * @brief Evaluates normal vector to the triangle on surface with springs
+     * based on material base coordinates
      *
      * Computes normal vector based on material base coordinates based on mesh
      * (moab vertices) coordinates:
@@ -897,8 +902,8 @@ struct MetaSpringBC {
      * \f]
      *
      * where \f${\mathbf X}(\xi, \eta)\f$ is the vector of material
-     * coordinates at the gauss point of surface with springs having parent coordinates
-     * \f$\xi\f$ and \f$\eta\f$ evaluated according to
+     * coordinates at the gauss point of surface with springs having parent
+     * coordinates \f$\xi\f$ and \f$\eta\f$ evaluated according to
      *
      * \f[
      * {\mathbf X}(\xi, \eta) =
