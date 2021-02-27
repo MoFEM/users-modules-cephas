@@ -290,7 +290,7 @@ inline auto symm_L_tensor() {
 }
 
 inline auto diff_symmetrize() {
-  FTensor::Tensor4<double, 2, 2, 2, 2> t_diff;
+  FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM> t_diff;
 
   t_diff(i, j, k, l) = 0;
   t_diff(0, 0, 0, 0) = 1;
@@ -302,21 +302,40 @@ inline auto diff_symmetrize() {
   t_diff(0, 1, 0, 1) = 0.5;
   t_diff(0, 1, 1, 0) = 0.5;
 
+  if(SPACE_DIM == 3) {
+    t_diff(2, 2, 2, 2) = 1;
+
+    t_diff(2, 0, 2, 0) = 0.5;
+    t_diff(2, 0, 0, 2) = 0.5;
+    t_diff(0, 2, 0, 2) = 0.5;
+    t_diff(0, 2, 2, 0) = 0.5;
+
+    t_diff(2, 1, 2, 1) = 0.5;
+    t_diff(2, 1, 1, 2) = 0.5;
+    t_diff(1, 2, 1, 2) = 0.5;
+    t_diff(1, 2, 2, 1) = 0.5;
+
+  }
+
   return t_diff;
 };
 
 template <typename T>
 inline double trace(FTensor::Tensor2_symmetric<T, 2> &t_stress) {
   constexpr double third = boost::math::constants::third<double>();
-  return (t_stress(0, 0) + t_stress(1, 1)) * third;
+  if(SPACE_DIM == 2)
+    return (t_stress(0, 0) + t_stress(1, 1)) * third;
+  else
+    return (t_stress(0, 0) + t_stress(1, 1) + t_stress(2, 2)) * third;
 };
 
 template <typename T>
-inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
+inline auto deviator(FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_stress,
+                     double trace) {
   FTensor::Tensor2_symmetric<double, 3> t_dev;
   t_dev(I, J) = 0;
-  for (int ii = 0; ii != 2; ++ii)
-    for (int jj = ii; jj != 2; ++jj)
+  for (int ii = 0; ii != SPACE_DIM; ++ii)
+    for (int jj = ii; jj != SPACE_DIM; ++jj)
       t_dev(ii, jj) = t_stress(ii, jj);
   t_dev(0, 0) -= trace;
   t_dev(1, 1) -= trace;
@@ -324,13 +343,13 @@ inline auto deviator(FTensor::Tensor2_symmetric<T, 2> &t_stress, double trace) {
   return t_dev;
 };
 
-inline auto diff_deviator(FTensor::Ddg<double, 2, 2> &&t_diff_stress) {
-  FTensor::Ddg<double, 3, 2> t_diff_deviator;
+inline auto diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
+  FTensor::Ddg<double, 3, SPACE_DIM> t_diff_deviator;
   t_diff_deviator(I, J, k, l) = 0;
-  for (int ii = 0; ii != 2; ++ii)
-    for (int jj = ii; jj != 2; ++jj)
-      for (int kk = 0; kk != 2; ++kk)
-        for (int ll = kk; ll != 2; ++ll)
+  for (int ii = 0; ii != SPACE_DIM; ++ii)
+    for (int jj = ii; jj != SPACE_DIM; ++jj)
+      for (int kk = 0; kk != SPACE_DIM; ++kk)
+        for (int ll = kk; ll != SPACE_DIM; ++ll)
           t_diff_deviator(ii, jj, kk, ll) = t_diff_stress(ii, jj, kk, ll);
 
   constexpr double third = boost::math::constants::third<double>();
@@ -408,9 +427,9 @@ diff_plastic_flow_dstress(double f, FTensor::Tensor2_symmetric<T, 2> &t_flow,
 
 template <typename T>
 inline auto diff_plastic_flow_dstrain(
-    FTensor::Ddg<T, 2, 2> &t_D,
-    FTensor::Ddg<double, 2, 2> &&t_diff_plastic_flow_dstress) {
-  FTensor::Ddg<double, 2, 2> t_diff_flow;
+    FTensor::Ddg<T, SPACE_DIM, SPACE_DIM> &t_D,
+    FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_plastic_flow_dstress) {
+  FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_diff_flow;
   t_diff_flow(i, j, k, l) =
       t_diff_plastic_flow_dstress(i, j, m, n) * t_D(m, n, k, l);
 
@@ -488,12 +507,13 @@ MoFEMErrorCode OpCalculatePlasticSurface::doWork(int side, EntityType type,
   MoFEMFunctionBegin;
 
   const size_t nb_gauss_pts = commonDataPtr->mStressPtr->size2();
-  auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
+  auto t_stress = getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStressPtr));
 
   commonDataPtr->plasticSurfacePtr->resize(nb_gauss_pts, false);
-  commonDataPtr->plasticFlowPtr->resize(3, nb_gauss_pts, false);
+  commonDataPtr->plasticFlowPtr->resize((SPACE_DIM * (SPACE_DIM + 1)) / 2,
+                                        nb_gauss_pts, false);
   auto t_flow =
-      getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
+      getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->plasticFlowPtr));
 
   for (auto &f : *(commonDataPtr->plasticSurfacePtr)) {
     f = platsic_surface(deviator(t_stress, trace(t_stress)));
@@ -524,13 +544,16 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
                                        EntData &data) {
   MoFEMFunctionBegin;
   const size_t nb_gauss_pts = commonDataPtr->mStrainPtr->size2();
-  commonDataPtr->mStressPtr->resize(3, nb_gauss_pts);
+  commonDataPtr->mStressPtr->resize((SPACE_DIM * (SPACE_DIM + 1)) / 2,
+                                    nb_gauss_pts);
   auto t_D =
       getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-  auto t_strain = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStrainPtr));
+  auto t_strain =
+      getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStrainPtr));
   auto t_plastic_strain =
       getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainPtr));
-  auto t_stress = getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
+  auto t_stress =
+      getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStressPtr));
 
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
@@ -557,9 +580,9 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
   if (nb_dofs) {
 
     auto t_flow =
-        getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticFlowPtr));
-    auto t_plastic_strain_dot =
-        getFTensor2SymmetricFromMat<2>(*(commonDataPtr->plasticStrainDotPtr));
+        getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->plasticFlowPtr));
+    auto t_plastic_strain_dot = getFTensor2SymmetricFromMat<SPACE_DIM>(
+        *(commonDataPtr->plasticStrainDotPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
 
     auto t_D =
@@ -579,7 +602,7 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
       FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 2> t_nf{
           &nf[0], &nf[1], &nf[1], &nf[2]};
 
-      FTensor::Tensor2_symmetric<double, 2> t_flow_stress_diff;
+      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_flow_stress_diff;
       t_flow_stress_diff(i, j) = t_D(i, j, k, l) * (t_plastic_strain_dot(k, l) -
                                                     t_tau_dot * t_flow(k, l));
 

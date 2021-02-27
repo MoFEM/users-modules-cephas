@@ -96,13 +96,14 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 PetscBool is_quasi_static = PETSC_FALSE;
 PetscBool is_large_strains = PETSC_TRUE;
 
-double scale = 1./206913;
-double young_modulus = 206913 * scale;
+double scale = 1.;
+
+double young_modulus = 206913;
 double poisson_ratio = 0.29;
-double rho = 0 * scale;
-double sigmaY = 450 * scale;
-double H = 129 * scale;
-double visH = 1e4 * scale;
+double rho = 0;
+double sigmaY = 450;
+double H = 129;
+double visH = 1e4;
 double cn = 1;
 int order = 2;
 
@@ -173,10 +174,11 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
-  CHKERR simple->addDomainField("TAU", L2, AINSWORTH_LEGENDRE_BASE, 1);
-  CHKERR simple->addDomainField("EP", L2, AINSWORTH_LEGENDRE_BASE, 3);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, 2);
+  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 2);
+  CHKERR simple->addDomainField("TAU", L2, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simple->addDomainField("EP", L2, AINSWORTH_BERNSTEIN_BEZIER_BASE, 3);
+  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 2);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("TAU", order - 1);
   CHKERR simple->setFieldOrder("EP", order - 1);
@@ -209,7 +211,17 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
                                &is_quasi_static, PETSC_NULL);
 
-    CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+    PetscBool is_scale = PETSC_TRUE;
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
+                               PETSC_NULL);
+    if(is_scale) {
+      scale = 1. / young_modulus;
+      young_modulus *= scale;
+      rho *= scale;
+      sigmaY *= scale;
+      H *= scale;
+      visH *= scale;
+    }
 
     MoFEMFunctionReturn(0);
   };
