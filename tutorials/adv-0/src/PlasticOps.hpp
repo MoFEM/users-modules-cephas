@@ -256,6 +256,27 @@ private:
   MatrixDouble locMat;
 };
 
+struct OpCalculateArcLengthRhs : public DomainEleOp {
+  OpCalculateArcLengthRhs(const std::string row_field_name,
+                          boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+struct OpCalculateArcLengthLhs_dTau : public DomainEleOp {
+  OpCalculateArcLengthLhs_dTau(const std::string row_field_name,
+                          const std::string col_field_name,
+                          boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data);
+
+private:
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
 struct OpPostProcPlastic : public DomainEleOp {
   OpPostProcPlastic(const std::string field_name,
                     moab::Interface &post_proc_mesh,
@@ -1613,6 +1634,92 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
 
     CHKERR MatSetValues<EssentialBcStorage>(
         getSNESB(), row_data, col_data, &*locMat.data().begin(), ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpCalculateArcLengthRhs::OpCalculateArcLengthRhs(
+    const std::string row_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(row_field_name, DomainEleOp::OPROW),
+      commonDataPtr(common_data_ptr) {}
+
+MoFEMErrorCode OpCalculateArcLengthRhs::doWork(int side, EntityType type,
+                                               EntData &data) {
+  MoFEMFunctionBegin;
+  const auto nb_dofs = data.getIndices().size();
+  if(nb_dofs) {
+
+    double res = 0;
+
+    const auto nb_integration_pts = getGaussPts().size2();
+    const auto in_the_loop = getNinTheLoop();
+    const auto rank = getPtrFE()->mField.get_comm_rank();
+    auto ts = getFEMethod()->ts;
+    double dt;
+    CHKERR TSGetTimeStep(ts, &dt);
+
+    if(in_the_loop == 0 && rank == 0) {
+      res = arc_beta * data.getFieldData()[0] - dt;
+    }
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
+    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+      const double alpha = getMeasure() * t_w;
+      res += alpha * t_tau_dot;
+      ++t_tau_dot;
+    }
+
+    const int dof = data.getIndices()[0];
+    CHKERR VecSetValue(getTSf(), dof, res, ADD_VALUES);
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+OpCalculateArcLengthLhs_dTau::OpCalculateArcLengthLhs_dTau(
+    const std::string row_field_name, const std::string col_field_name,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
+      commonDataPtr(common_data_ptr) {}
+
+MoFEMErrorCode OpCalculateArcLengthLhs_dTau::doWork(int row_side, int col_side,
+                                                    EntityType row_type,
+                                                    EntityType col_type,
+                                                    EntData &row_data,
+                                                    EntData &col_data) {
+  MoFEMFunctionBegin;
+  const auto nb_row_dofs = row_data.getIndices().size();
+  const auto nb_col_dofs = col_data.getIndices().size();
+  if (nb_row_dofs && nb_col_dofs) {
+
+    std::array<double, MAX_DOFS_ON_ENTITY> b;
+    std::fill(&b[0], &b[nb_col_dofs], 0);
+
+    const double t_a = getTSa();
+    const auto nb_integration_pts = getGaussPts().size2();
+    const auto nb_col_base_functions = col_data.getN().size2();
+
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_col_base = col_data.getFTensor0N();
+    for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
+      const double alpha = getMeasure() * t_a * t_w;
+
+      size_t cc = 0;
+      for (; cc != nb_col_dofs; ++cc) {
+        b[cc] += alpha * t_col_base;
+        ++t_col_base;
+      }
+
+      for (; cc < nb_col_base_functions; ++cc)
+        ++t_col_base;
+
+    }
+
+    CHKERR MatSetValues<EssentialBcStorage>(getSNESB(), row_data, col_data,
+                                            &b[0], ADD_VALUES);
   }
 
   MoFEMFunctionReturn(0);

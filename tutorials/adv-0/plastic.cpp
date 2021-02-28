@@ -107,6 +107,8 @@ double visH = 1e4;
 double cn = 1;
 int order = 2;
 
+const double arc_beta = 1;
+
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>
@@ -178,6 +180,8 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addDomainField("TAU", L2, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   CHKERR simple->addDomainField("EP", L2, AINSWORTH_BERNSTEIN_BEZIER_BASE, 3);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 2);
+  // This can be added for arc-length control
+  // CHKERR simple->addDomainField("L", NOFIELD, NOBASE, 1);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("TAU", order - 1);
