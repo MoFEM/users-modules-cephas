@@ -1286,7 +1286,7 @@ int main(int argc, char *argv[]) {
           SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
                   "atom test diverged!");
         break;
-      // FIXME: Here are missng regersion tetst
+      // FIXME: Here are missing regersion tests
       case 8: {
         double min;
         CHKERR VecMin(D, PETSC_NULL, &min);
