@@ -1290,9 +1290,10 @@ int main(int argc, char *argv[]) {
       case 8: {
         double min;
         CHKERR VecMin(D, PETSC_NULL, &min);
-        if (fabs(min + 0.10001) > 1e-10)
-          SETERRQ(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                  "atom test diverged!");
+        constexpr double expected_val = 0.10001;
+        if (fabs(min + expected_val) > 1e-10)
+          SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                   "atom test diverged! %3.4e != %3.4e", min, expected_val);
       } break;
       case 9: {
         if (fabs(*eng_ptr - 4.7416e-04) > 1e-8)
