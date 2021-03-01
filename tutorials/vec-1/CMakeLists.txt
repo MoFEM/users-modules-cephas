@@ -36,6 +36,7 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_copy_and_install("README.md" "${permissions_execute}")
 tutorials_copy_and_install("*.ipynb" "${permissions_execute}")
+tutorials_copy_and_install("*.md" "${permissions_execute}")
 
 if(SLEPC_FOUND)
 
