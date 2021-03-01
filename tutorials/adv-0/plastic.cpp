@@ -155,6 +155,7 @@ private:
   };
 
   std::vector<boost::shared_ptr<BCs>> bcVec;
+  boost::shared_ptr<DofEntity> arcDof;
 };
 
 //! [Run problem]
@@ -548,9 +549,29 @@ MoFEMErrorCode Example::OPs() {
         auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
         std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
                   force_vec_ptr->data().begin());
-        pipeline.push_back(
-            new OpBoundaryVec("U", force_vec_ptr, get_time,
-                              boost::make_shared<Range>(force_edges)));
+        auto is_arc_length = mField.check_field("L");
+        if (is_arc_length) {
+          auto dofs_ptr = mField.get_dofs();
+          auto lo = dofs_ptr->get<Unique_mi_tag>().lower_bound(
+              FieldEntity::getLoBitNumberUId(mField.get_field_bit_number("L")));
+          auto hi = dofs_ptr->get<Unique_mi_tag>().upper_bound(
+              FieldEntity::getHiBitNumberUId(mField.get_field_bit_number("L")));
+          if(std::distance(lo,hi)!=1) {
+            SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                     "Should be one DOF, but is %d", std::distance(lo, hi));
+          }
+          arcDof = *lo;
+          auto get_lambda = [&](double, double, double) {
+            return arcDof->getFieldData();
+          };
+          pipeline.push_back(
+              new OpBoundaryVec("U", force_vec_ptr, get_lambda,
+                                boost::make_shared<Range>(force_edges)));
+        } else {
+          pipeline.push_back(
+              new OpBoundaryVec("U", force_vec_ptr, get_time,
+                                boost::make_shared<Range>(force_edges)));
+        }
       }
     }
 
