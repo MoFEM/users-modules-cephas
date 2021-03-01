@@ -167,11 +167,11 @@ struct MetaSpringBC {
      * \Omega }
      * \f]
      *
-     * where \f$ \delta \mathbf{x} \f$ is the vector of base functions for
-     * either displacements or spatial positions, \f$ k_{\rm n} \f$ is the
-     * stiffness of the springs normal to the surface, \f$ k_{\rm t} \f$ is the
-     * stiffness of the springs tangential to the surface, \f$ {\mathbf N} \f$
-     * is the normal to the surface vector based on material positions, \f$
+     * where \f$ \delta \mathbf{x} \f$ is either virtual displacement or
+     * variation of spatial positions, \f$ k_{\rm n} \f$ is the stiffness of
+     * the springs normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of
+     * the springs tangential to the surface, \f$ {\mathbf N} \f$ is the normal
+     * to the surface vector based on material positions, \f$
      * {\mathbf x} \f$ is the vector of spatial positions or displacements of
      * the surface with springs and \f$ {\mathbf X} \f$ is the vector of
      * material positions that is zero when displacements are considered
@@ -230,11 +230,11 @@ struct MetaSpringBC {
      * {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes
      * {\mathbf N}  \right) \right] \Delta {\mathbf x} \partial \Omega } \f]
      *
-     * where \f$ \delta \mathbf{x} \f$ is the vector of base functions for
-     * either displacements or spatial positions, \f$ k_{\rm n} \f$ is the
-     * stiffness of the springs normal to the surface, \f$ k_{\rm t} \f$ is the
-     * stiffness of the springs tangential to the surface, \f$ {\mathbf N} \f$
-     * is the normal to the surface vector based on material positions, \f$
+     * where \f$ \delta \mathbf{x} \f$ is either virtual displacement or the
+     * variation of spatial positions, \f$ k_{\rm n} \f$ is the stiffness of the
+     * springs normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the
+     * springs tangential to the surface, \f$ {\mathbf N} \f$ is the normal to
+     * the surface vector based on material positions, \f$
      * {\mathbf x} \f$ is the vector of spatial positions or displacements of
      * the surface with springs and \f$ {\mathbf X} \f$ is the vector of
      * material positions that is zero when displacements are considered
@@ -417,7 +417,7 @@ struct MetaSpringBC {
      * \right)\right\} \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta \f]
      *
      *
-     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for
+     * where \f$ \delta \mathbf{X} \f$ is variation of
      * material positions, \f$ k_{\rm n} \f$ is the stiffness of the springs
      * normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the springs
      * tangential to the surface, \f$ {\mathbf N} \f$ is the normal to the
@@ -656,8 +656,8 @@ struct MetaSpringBC {
      * {\mathbf N}  \right) \right] \left( {\mathbf x} - {\mathbf X} \right)
      * \right\} \cdot \delta\mathbf{X}\, \textrm{d}\xi\textrm{d}\eta \f]
      *
-     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for
-     * material positions, \f$ k_{\rm n} \f$ is the stiffness of the springs
+     * where \f$ \delta \mathbf{X} \f$ is variation of
+     * material position, \f$ k_{\rm n} \f$ is the stiffness of the springs
      * normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the springs
      * tangential to the surface, \f$ {\mathbf N} \f$ is the normal to the
      * surface vector based on material positions, \f$ {\mathbf x} \f$ is the
@@ -749,20 +749,20 @@ struct MetaSpringBC {
      *
      * \f[
      * f_s ({\mathbf x}, {\mathbf X},
-     * \delta \mathbf{X}) =  \int\limits_{\partial \Omega }^{} {{\delta
+     * \delta \mathbf{X}) =  -\int\limits_{\partial \Omega }^{} {{\delta
      * \mathbf{X}^T} \cdot {\mathbf{F}^{\intercal}} \left[ k_{\rm n} \left(
      * {\mathbf N} \otimes  {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} -
      * {\mathbf N} \otimes  {\mathbf N}  \right) \right] \left( {\mathbf x} -
      * {\mathbf X} \right) \partial \Omega } \f]
      *
-     * where \f$ \delta \mathbf{X} \f$ is the vector of base functions for
-     * material positions, \f$ k_{\rm n} \f$ is the stiffness of the springs
-     * normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the springs
-     * tangential to the surface, \f$ {\mathbf N} \f$ is the normal to the
-     * surface vector based on material positions, \f$ {\mathbf x} \f$ is the
-     * vector of spatial positions or displacements of the surface with springs,
-     * \f$ {\mathbf X} \f$ is the vector of material positions and finally
-     * \f$\mathbf{F}\f$ is the deformation gradient
+     * where \f$ \delta \mathbf{X} \f$ is
+     * material position variation, \f$ k_{\rm n} \f$ is the stiffness of the
+     * springs normal to the surface, \f$ k_{\rm t} \f$ is the stiffness of the
+     * springs tangential to the surface, \f$ {\mathbf N} \f$ is the normal to
+     * the surface vector based on material positions, \f$ {\mathbf x} \f$ is
+     * the vector of spatial positions or displacements of the surface with
+     * springs, \f$ {\mathbf X} \f$ is the vector of material positions and
+     * finally \f$\mathbf{F}\f$ is the deformation gradient
      *
      *
      * \f[
@@ -927,11 +927,11 @@ struct MetaSpringBC {
    * Search cubit sidesets and blocksets with spring bc and declare surface
    * element
 
-   * Blockset has to have name “SPRING_BC”. The first three attributes of the
+   * Blockset has to have name “SPRING_BC”. The first two attributes of the
    * blockset are spring stiffness value.
 
    *
-   * @param  m_field               Interface insurance
+   * @param  m_field               Interface instance
    * @param  field_name            Field name (e.g. SPATIAL_POSITION)
    * @param  mesh_nodals_positions Name of field on which ho-geometry is defined
    * @return                       Error code
@@ -941,16 +941,16 @@ struct MetaSpringBC {
       const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS");
 
   /**
-   * \brief Declare spring element
+   * \brief Declare spring element in ALE
    *
    * Search cubit sidesets and blocksets with spring bc and declare surface
    * element
 
-   * Blockset has to have name “SPRING_BC”. The first three attributes of the
+   * Blockset has to have name “SPRING_BC”. The first two attributes of the
    * blockset are spring stiffness value.
 
    *
-   * @param  m_field               Interface insurance
+   * @param  m_field               Interface instance
    * @param  field_name            Field name (e.g. SPATIAL_POSITION)
    * @param  mesh_nodals_positions Name of field on which ho-geometry is defined
    * @return                       Error code
@@ -964,7 +964,7 @@ struct MetaSpringBC {
    * \brief Implementation of spring element. Set operators to calculate LHS and
    * RHS
    *
-   * @param m_field               Interface insurance
+   * @param m_field               Interface instance
    * @param fe_spring_lhs_ptr     Pointer to the FE instance for LHS
    * @param fe_spring_rhs_ptr     Pointer to the FE instance for RHS
    * @param field_name            Field name (e.g. SPATIAL_POSITION)
@@ -982,7 +982,7 @@ struct MetaSpringBC {
    * \brief Implementation of spring element. Set operators to calculate LHS and
    * RHS
    *
-   * @param m_field               Interface insurance
+   * @param m_field               Interface instance
    * @param fe_spring_lhs_ptr     Pointer to the FE instance for LHS
    * @param fe_spring_rhs_ptr     Pointer to the FE instance for RHS
    * @param field_name            Field name (e.g. SPATIAL_POSITION)
