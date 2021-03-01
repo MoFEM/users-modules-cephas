@@ -216,8 +216,9 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpSetInvJacH1ForFace(invJac));
   }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMatPtr));
+
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
@@ -307,9 +308,8 @@ MoFEMErrorCode Example::checkResults() {
           "U", matStrainPtr, matStressPtr, matDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));
-  (*bodyForceMatPtr) *= -1;
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMatPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+      "U", bodyForceMatPtr, [](double, double, double) { return -1.; }));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);

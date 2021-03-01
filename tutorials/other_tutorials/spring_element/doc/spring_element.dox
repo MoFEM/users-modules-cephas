@@ -581,7 +581,7 @@ linear elasticity module elasticity.cpp, the test using above rod model with
 springs is conducted. The displacement results using finite element analysis is
 presented in \ref figure_spring_result_linear "Figure 3". The command line that has been used to run this test is as follows
 \code
-./elasticity -my_file spring_rod.cub -my_order 2 -ksp_type cg -pc_type asm -sub_pc_type lu
+./elasticity -my_file spring_rod.cub -my_order 2 -ksp_type gmres -pc_type asm -sub_pc_type lu
 \endcode
 
 \anchor figure_spring_result_linear

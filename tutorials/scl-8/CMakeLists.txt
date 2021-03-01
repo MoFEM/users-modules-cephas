@@ -35,6 +35,7 @@ tutorials_copy_and_install("*.md" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_copy_and_install("*.ipynb" "${permissions_execute}")
+tutorials_copy_and_install("*.md" "${permissions_execute}")
 
 tutorials_build_and_install(
   radiation ${CMAKE_CURRENT_SOURCE_DIR}/radiation.cpp)
