@@ -469,9 +469,9 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 
  */
 inline double contrains(double dot_tau, double f, double sigma_y) {
-  return sigmaY *
-         ((visH / sigmaY) * dot_tau + (cn * dot_tau - (f - sigma_y) / sigmaY) -
-          std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
+  return visH * dot_tau +
+         sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
+                   std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
 };
 
 inline double sign(double x) {
