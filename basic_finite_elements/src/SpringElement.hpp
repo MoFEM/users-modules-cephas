@@ -411,7 +411,7 @@ struct MetaSpringBC {
      * [\Delta\mathbf{x}] =  \int\limits_{\partial \Omega }^{}
      * \mathbf{F}^{\intercal}\cdot \left( -{{\delta \mathbf{x}^T} \cdot \left[ k_{\rm n} \left( {\mathbf N} \otimes
      * {\mathbf N} \right) + k_{\rm t} \left( {\mathbf I} - {\mathbf N} \otimes
-     * {\mathbf N}  \right) \right] \Delta {\mathbf x} \partial \Omega } \right )
+     * {\mathbf N}  \right) \right]\right ) \Delta {\mathbf x} \partial \Omega } 
      * -\int\limits_{\mathcal{T}_{\xi}}
      * \left\{\left[
      * \frac{\partial\Delta\mathbf{x}}{\partial\boldsymbol{\chi}}\,\mathbf{H}^{-1}
