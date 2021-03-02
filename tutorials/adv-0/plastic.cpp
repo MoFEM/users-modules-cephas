@@ -369,6 +369,7 @@ MoFEMErrorCode Example::OPs() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto add_domain_base_ops = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     pipeline.push_back(new OpCalculateInvJacForFace(invJac));
     pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
 
@@ -413,9 +414,11 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+    MoFEMFunctionReturn(0);
   };
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     if (is_large_strains) {
@@ -462,9 +465,11 @@ MoFEMErrorCode Example::OPs() {
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
+    MoFEMFunctionReturn(0);
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     // auto get_body_force = [this](const double, const double, const double) {
@@ -507,9 +512,11 @@ MoFEMErrorCode Example::OPs() {
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
+    MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     for (auto &bc : bcVec) {
       pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
       pipeline.push_back(new OpBoundaryMass(
@@ -517,14 +524,22 @@ MoFEMErrorCode Example::OPs() {
           bc->getBcEdgesPtr()));
       pipeline.push_back(new OpUnSetBc("U"));
     }
+    MoFEMFunctionReturn(0);
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
 
     auto get_time = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
       return fe_domain_rhs->ts_t;
+    };
+
+    auto get_time_scaled = [&](double, double, double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      return fe_domain_rhs->ts_t/scale;
     };
 
     auto get_minus_time = [&](double, double, double) {
@@ -569,7 +584,7 @@ MoFEMErrorCode Example::OPs() {
         //                         boost::make_shared<Range>(force_edges)));
         // } else {
           pipeline.push_back(
-              new OpBoundaryVec("U", force_vec_ptr, get_time,
+              new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
                                 boost::make_shared<Range>(force_edges)));
         // }
       }
@@ -600,15 +615,16 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpUnSetBc("U"));
     }
 
+    MoFEMFunctionReturn(0);
   };
 
-  add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-  add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
-  add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
-  add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
-  add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * approx_order;
