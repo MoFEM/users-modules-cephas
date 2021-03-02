@@ -579,7 +579,7 @@ MoFEMErrorCode OpPlasticStress::doWork(int side, EntityType type,
   for (size_t gg = 0; gg != nb_gauss_pts; ++gg) {
     t_stress(i, j) =
         t_D(i, j, k, l) * (t_strain(k, l) - t_plastic_strain(k, l));
-    t_stress(i, j) *= scale;
+    t_stress(i, j) /= scaleStress;
     ++t_strain;
     ++t_plastic_strain;
     ++t_stress;
@@ -1802,7 +1802,7 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
     CHKERR set_tag(th_plastic_surface, gg,
-                   set_scalar(f - scale * hardening(tau)));
+                   set_scalar(f - hardening(tau)/scale));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
