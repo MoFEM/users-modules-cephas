@@ -600,8 +600,8 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
   const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
-    auto t_flow =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->plasticFlowPtr));
+    auto t_flow = getFTensor2SymmetricFromMat<SPACE_DIM>(
+        *(commonDataPtr->plasticFlowPtr));
     auto t_plastic_strain_dot = getFTensor2SymmetricFromMat<SPACE_DIM>(
         *(commonDataPtr->plasticStrainDotPtr));
     auto t_tau_dot = getFTensor0FromVec(*(commonDataPtr->plasticTauDotPtr));
