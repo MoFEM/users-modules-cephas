@@ -216,6 +216,12 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
                                &is_quasi_static, PETSC_NULL);
 
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " <<  young_modulus;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " <<  poisson_ratio;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " <<  sigmaY;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " <<  H;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
+
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
                                PETSC_NULL);
