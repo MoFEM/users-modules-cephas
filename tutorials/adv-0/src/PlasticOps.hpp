@@ -1801,8 +1801,8 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
   for (int gg = 0; gg != commonDataPtr->plasticSurfacePtr->size(); ++gg) {
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
-    CHKERR set_tag(th_plastic_surface, gg,
-                   set_scalar(f - hardening(tau)/scale));
+    // CHKERR set_tag(th_plastic_surface, gg,
+    //                set_scalar(f - hardening(tau)/scale));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
@@ -1817,12 +1817,13 @@ struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
           boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc_fe,
+          boost::shared_ptr<DomainEle> &reaction_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter
 
           )
-      : dM(dm), postProcFe(post_proc_fe), uXScatter(ux_scatter),
-        uYScatter(uy_scatter){};
+      : dM(dm), postProcFe(post_proc_fe), reactionFe(reaction_fe),
+        uXScatter(ux_scatter), uYScatter(uy_scatter){};
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
@@ -1838,6 +1839,21 @@ struct Monitor : public FEMethod {
       MoFEMFunctionReturn(0);
     };
 
+    auto calculate_reaction = [&]() {
+      MoFEMFunctionBegin;
+      auto r = smartCreateDMVector(dM);
+      reactionFe->f = r;
+      CHKERR VecZeroEntries(r);
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe);
+      CHKERR VecAssemblyBegin(r);
+      CHKERR VecAssemblyEnd(r);
+      double sum;
+      CHKERR VecSum(r, &sum);
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "reaction time %3.4e %3.4e", ts_t,
+                  sum);
+      MoFEMFunctionReturn(0);
+    };
+
     auto print_max_min = [&](auto &tuple, const std::string msg) {
       MoFEMFunctionBegin;
       CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
@@ -1847,12 +1863,13 @@ struct Monitor : public FEMethod {
       double max, min;
       CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
       CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-      PetscPrintf(PETSC_COMM_WORLD, "%s time %3.4e min %3.4e max %3.4e\n",
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
                   msg.c_str(), ts_t, min, max);
       MoFEMFunctionReturn(0);
     };
 
     CHKERR make_vtk();
+    CHKERR calculate_reaction();
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
 
@@ -1862,6 +1879,7 @@ struct Monitor : public FEMethod {
 private:
   SmartPetscObj<DM> dM;
   boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  boost::shared_ptr<DomainEle> reactionFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
 };
