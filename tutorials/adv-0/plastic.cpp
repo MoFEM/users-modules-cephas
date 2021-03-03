@@ -177,10 +177,11 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 2);
-  CHKERR simple->addDomainField("TAU", L2, AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simple->addDomainField("EP", L2, AINSWORTH_BERNSTEIN_BEZIER_BASE, 3);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_BERNSTEIN_BEZIER_BASE, 2);
+  constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
+  CHKERR simple->addDomainField("U", H1, base, 2);
+  CHKERR simple->addDomainField("TAU", L2, base, 1);
+  CHKERR simple->addDomainField("EP", L2, base, 3);
+  CHKERR simple->addBoundaryField("U", H1, base, 2);
   // This can be added for arc-length control
   // CHKERR simple->addDomainField("L", NOFIELD, NOBASE, 1);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
