@@ -42,7 +42,7 @@ mbconvert spring_LShape.cub spring_LShape.h5m
 mpirun -np 2 ./elasticity \
 -my_file spring_LShape.h5m \
 -my_order 2 \
--ksp_type cg \
+-ksp_type gmres \
 -pc_type asm \
 -sub_pc_type lu \
 -ksp_monitor
@@ -54,7 +54,7 @@ read_med -med_file spring_LShape_salome.med  -meshsets_config spring_LShape_salo
 mpirun -np 2 ./elasticity \
 -my_file spring_LShape_salome.h5m \
 -my_order 2 \
--ksp_type cg \
+-ksp_type gmres \
 -pc_type asm \
 -sub_pc_type lu \
 -ksp_monitor
@@ -66,7 +66,7 @@ mpirun -np 2 ./elasticity \
 -my_file simple_rod_beam.h5m \
 -my_order 1 \
 -my_is_calculating_frequency 1 \
--ksp_type cg \
+-ksp_type gmres \
 -pc_type asm \
 -sub_pc_type lu \ 
 -ksp_monitor

@@ -56,7 +56,7 @@ private:
   MatrixDouble invJac;
 
   // Object to mark boundary entities for the assembling of domain elements
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   // MoFEM working Pipelines for LHS and RHS of domain and boundary
   boost::shared_ptr<FaceEle> domainPipelineLhs;
@@ -164,7 +164,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
 
   auto mark_boundary_dofs = [&](Range &&skin_edges) {
     auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<bool>>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
     problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
                               skin_edges, *marker_ptr);
     return marker_ptr;

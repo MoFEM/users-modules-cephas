@@ -18,7 +18,7 @@ project(MoFEM-UserModules C CXX)
 # Set fallback version. Fallback version is version of users moudles which is used
 # as default version if version from the git tags can not be extracted. For example 
 # that is a case when someone install mofem from tarball.
-set(UM_FALLBACK_VERSION "0.10.1" CACHE STRING "Fallback version" FORCE)
+set(UM_FALLBACK_VERSION "0.11.0" CACHE STRING "Fallback version" FORCE)
 message(STATUS "Falback version v${UM_FALLBACK_VERSION}")
 
 #search include directories before system directories
@@ -89,7 +89,7 @@ include_directories(
   ${MoFEM_PETSC_DIR}/${PETSC_ARCH}/include
   ${MoFEM_PETSC_DIR}/${MoFEM_PETSC_ARCH}/include
   ${MoFEM_PETSCVAR_DIR}/include
-)
+  ${MOAB_INCLUDE_DIR})
 
 add_definitions(${MOAB_DEFINITIONS})
 
@@ -122,23 +122,32 @@ if(MOFEM_UM_BUILD_TESTS)
   include(CTest)
 endif(MOFEM_UM_BUILD_TESTS)
 
-if(SLEPC_LIBRARY)
+if(SLEPC_FOUND)
+  include_directories("${SLEPC_INCLUDE_DIRS}")
+  add_definitions(-DWITH_SLEPC)
+  message(STATUS "With SLEPC")
+elseif(SLEPC_LIBRARY OR SLEPC_LINK_LIBRARIES)
+  # This is depracated adde for back compatibility
   include_directories("${SLEPC_DIR}/${PETSC_ARCH}/include")
   include_directories("${SLEPC_DIR}/include")
-  add_definitions( -DWITH_SLEPC_DIR )
-  message(STATUS "WITH SLEPC")
-endif(SLEPC_LIBRARY)
+  set(SLEPC_FOUND TRUE)
+  add_definitions(-DWITH_SLEPC)
+  message(STATUS "With SLEPC")
+endif()
 
 if(TETGEN_DIR)
-  include(cmake/FindTetGen.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindTetGen.cmake)
+  message(STATUS "With TetGen")
 endif(TETGEN_DIR)
 
 if(ADOL-C_DIR)
-  include(cmake/FindADOL-C.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindADOL-C.cmake)
+  message(STATUS "With Adol-C")
 endif(ADOL-C_DIR)
 
 if(MED_DIR)
-  include(cmake/FindMed.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindMed.cmake)
+  message(STATUS "With Med")
 endif(MED_DIR)
 
 set(OPTIONAL_PROJECT_LIBS

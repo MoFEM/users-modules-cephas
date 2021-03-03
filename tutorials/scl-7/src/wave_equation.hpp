@@ -107,7 +107,7 @@ R^{(2)}
 struct OpTangentLhsUU : public OpFaceEle {
 public:
   OpTangentLhsUU(std::string row_field_name, std::string col_field_name,
-                 boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+                 boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
         boundaryMarker(boundary_marker) {
     sYmm = true;
@@ -221,7 +221,7 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<DataAtGaussPoints> commonData;
   MatrixDouble locLhs, transLocLhs;
 };
@@ -245,7 +245,7 @@ R^{(2)}
 struct OpTangentLhsUV : public OpFaceEle {
 public:
   OpTangentLhsUV(std::string row_field_name, std::string col_field_name,
-                 boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+                 boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
         boundaryMarker(boundary_marker) {
     sYmm = true;
@@ -359,7 +359,7 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<DataAtGaussPoints> commonData;
   MatrixDouble locLhs, transLocLhs;
 };
@@ -383,7 +383,7 @@ R^{(2)}
 struct OpTangentLhsVU : public OpFaceEle {
 public:
   OpTangentLhsVU(std::string row_field_name, std::string col_field_name,
-                 boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+                 boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
         boundaryMarker(boundary_marker) {
     sYmm = true;
@@ -500,7 +500,7 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   MatrixDouble locLhs, transLocLhs;
 };
 
@@ -523,7 +523,7 @@ R^{(2)}
 struct OpTangentLhsVV : public OpFaceEle {
 public:
   OpTangentLhsVV(std::string row_field_name, std::string col_field_name,
-                 boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+                 boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL),
         boundaryMarker(boundary_marker) {
     sYmm = true;
@@ -637,7 +637,7 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<DataAtGaussPoints> commonData;
   MatrixDouble locLhs, transLocLhs;
 };
@@ -663,7 +663,7 @@ public:
   OpResidualRhsU(std::string field_name, ScalarFunc source_term_function,
                  boost::shared_ptr<DataAtGaussPoints> &common_data_u,
                  boost::shared_ptr<DataAtGaussPoints> &common_data_v,
-                 boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+                 boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(field_name, OpFaceEle::OPROW),
         sourceTermFunc(source_term_function), commonDataU(common_data_u),
         commonDataV(common_data_v), boundaryMarker(boundary_marker) {}
@@ -755,7 +755,7 @@ public:
 
 private:
   ScalarFunc sourceTermFunc;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<DataAtGaussPoints> commonDataU;
   boost::shared_ptr<DataAtGaussPoints> commonDataV;
   VectorDouble locRhs;
@@ -782,7 +782,7 @@ public:
   OpResidualRhsV(std::string field_name, ScalarFunc source_term_function,
                  boost::shared_ptr<DataAtGaussPoints> &common_data_u,
                  boost::shared_ptr<DataAtGaussPoints> &common_data_v,
-                 boost::shared_ptr<std::vector<bool>> boundary_marker = nullptr)
+                 boost::shared_ptr<std::vector<unsigned char>> boundary_marker = nullptr)
       : OpFaceEle(field_name, OpFaceEle::OPROW),
         sourceTermFunc(source_term_function), commonDataU(common_data_u),
         commonDataV(common_data_v), boundaryMarker(boundary_marker) {}
@@ -875,7 +875,7 @@ public:
 
 private:
   ScalarFunc sourceTermFunc;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<DataAtGaussPoints> commonDataU;
   boost::shared_ptr<DataAtGaussPoints> commonDataV;
   VectorDouble locRhs;

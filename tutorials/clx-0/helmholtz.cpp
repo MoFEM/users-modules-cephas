@@ -51,7 +51,7 @@ struct Example {
 private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -133,7 +133,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   auto mark_boundary_dofs = [&](Range &&skin_edges) {
     auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<bool>>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
     problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
                               skin_edges, *marker_ptr);
     return marker_ptr;

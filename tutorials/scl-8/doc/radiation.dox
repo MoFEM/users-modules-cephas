@@ -1,0 +1,28 @@
+/*! \page radiation_pluto SCL-8: Radiation boundary conditions 
+
+\note Prerequisites of this tutorial include \ref basic_tutorials_poisson_homogeneous
+
+<br>
+
+\note Intended learning outcome:
+- implementation of nonlinear boundary conditions
+- implementation of time stepping
+- implementation nonlineaar problem
+- implementation of axisymmetric problem
+
+\tableofcontents
+
+\section running_pluto_jupyter Running Jupyter notebook
+
+First follow instruction here \ref docker_jupyter. Then select file in 
+\em um_views/tutorial/scl-8/pluto.ipynb
+
+\section theory_pluto Jupyter notebook
+
+\htmlinclude jupyter_pluto.html
+
+\section source_pluto Source code
+
+\include radiation.cpp
+
+*/

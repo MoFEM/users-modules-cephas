@@ -15,7 +15,7 @@
 include(cmake/PrecompileHeaders.cmake)
 
 # Get user module commit id and pass to cpp for logging
-include(cmake/GetGitRevisionSimple.cmake)
+include(${MoFEM_INSTALL_DIR}/include/cmake/GetGitRevisionSimple.cmake)
 
 # If the basic UMs are already loaded target to um library. Otherwise, build a
 # basic user modules library.

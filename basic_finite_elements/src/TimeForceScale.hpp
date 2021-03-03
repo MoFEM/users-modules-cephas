@@ -35,8 +35,8 @@ struct TimeForceScale : public MethodForForceScaling {
   bool errorIfFileNotGiven;
 
   TimeForceScale(string name = "-my_time_data_file",
-                 bool error_if_file_not_given = true)
-      : readFile(0), debug(1), nAme(name),
+                 bool error_if_file_not_given = false)
+      : readFile(0), debug(0), nAme(name),
         errorIfFileNotGiven(error_if_file_not_given) {
 
     ierr = timeData();
@@ -56,6 +56,9 @@ struct TimeForceScale : public MethodForForceScaling {
                "*** ERROR %s (time_data FILE NEEDED)", nAme.c_str());
     }
     if (!fLg) {
+      MOFEM_LOG_C("WORLD", Sev::warning,
+                  "The %s file not provided. Loading scaled with time.",
+                  nAme.c_str());
       MoFEMFunctionReturnHot(0);
     }
     FILE *time_data = fopen(time_file_name, "r");
@@ -98,7 +101,7 @@ struct TimeForceScale : public MethodForForceScaling {
   MoFEMErrorCode getForceScale(const double ts_t, double &scale) {
     MoFEMFunctionBeginHot;
     if (!fLg) {
-      scale = 1; // not scale at all, no history file
+      scale = ts_t; // scale with time, by default
       MoFEMFunctionReturnHot(0);
     }
     if (readFile == 0) {
@@ -146,7 +149,7 @@ struct TimeAccelerogram : public MethodForForceScaling {
   string nAme;
 
   TimeAccelerogram(string name = "-my_accelerogram")
-      : readFile(0), debug(1), nAme(name) {
+      : readFile(0), debug(0), nAme(name) {
 
     ierr = timeData();
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
