@@ -479,33 +479,33 @@ struct NavierStokesElement {
   };
 };
 
-struct DirichletVelocityBc : public DirichletDisplacementBc {
+// struct DirichletVelocityBc : public DirichletDisplacementBc {
 
-  DirichletVelocityBc(MoFEM::Interface &m_field, const std::string &field_name,
-                      Mat aij, Vec x, Vec f)
-      : DirichletDisplacementBc(m_field, field_name, aij, x, f){};
+//   DirichletVelocityBc(MoFEM::Interface &m_field, const std::string &field_name,
+//                       Mat aij, Vec x, Vec f)
+//       : DirichletDisplacementBc(m_field, field_name, aij, x, f){};
 
-  DirichletVelocityBc(MoFEM::Interface &m_field, const std::string &field_name)
-      : DirichletDisplacementBc(m_field, field_name){};
+//   DirichletVelocityBc(MoFEM::Interface &m_field, const std::string &field_name)
+//       : DirichletDisplacementBc(m_field, field_name){};
 
-  MoFEMErrorCode iNitalize();
+//   MoFEMErrorCode iNitalize();
 
-  // MoFEMErrorCode postProcess();
-};
+//   // MoFEMErrorCode postProcess();
+// };
 
-struct DirichletPressureBc : public DirichletDisplacementBc {
+// struct DirichletPressureBc : public DirichletDisplacementBc {
 
-  DirichletPressureBc(MoFEM::Interface &m_field, const std::string &field_name,
-                      Mat aij, Vec x, Vec f)
-      : DirichletDisplacementBc(m_field, field_name, aij, x, f){};
+//   DirichletPressureBc(MoFEM::Interface &m_field, const std::string &field_name,
+//                       Mat aij, Vec x, Vec f)
+//       : DirichletDisplacementBc(m_field, field_name, aij, x, f){};
 
-  DirichletPressureBc(MoFEM::Interface &m_field, const std::string &field_name)
-      : DirichletDisplacementBc(m_field, field_name){};
+//   DirichletPressureBc(MoFEM::Interface &m_field, const std::string &field_name)
+//       : DirichletDisplacementBc(m_field, field_name){};
 
-  MoFEMErrorCode iNitalize();
+//   MoFEMErrorCode iNitalize();
 
-  // MoFEMErrorCode postProcess();
-};
+//   // MoFEMErrorCode postProcess();
+// };
 
 #endif //__NAVIERSTOKESELEMENT_HPP__
 

@@ -34,7 +34,6 @@
 #include <SpringElement.cpp>
 #include <NavierStokesElement.cpp>
 #include <SimpleContact.cpp>
-#include <ThinFluidFlow.cpp>
 #include <SimpleRodElement.cpp>
 
 

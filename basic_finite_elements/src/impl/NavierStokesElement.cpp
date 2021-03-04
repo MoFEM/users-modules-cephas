@@ -4,9 +4,9 @@
  *
  * \brief Implementation of operators for fluid flow
  *
- * Implementation of operators for computations of the fluid flow, governed by
+ * Implementation of operators for simulation of the fluid flow governed by
  * for Stokes and Navier-Stokes equations, and computation of the viscous drag
- * force
+ * force on a fluid-solid inteface
  */
 
 /* This file is part of MoFEM.
@@ -1137,130 +1137,130 @@ VectorDouble3 stokes_flow_velocity(double x, double y, double z) {
   return res;
 }
 
-MoFEMErrorCode DirichletVelocityBc::iNitalize() {
-  MoFEMFunctionBegin;
-  if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+// MoFEMErrorCode DirichletVelocityBc::iNitalize() {
+//   MoFEMFunctionBegin;
+//   if (mapZeroRows.empty() || !methodsOp.empty()) {
+//     ParallelComm *pcomm =
+//         ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      string name = it->getName();
-      if (name.compare(0, 3, "EXT") == 0) {
-        // if (name.compare(0, 7, "fdsfdsfsd") == 0) {
+//     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+//       string name = it->getName();
+//       if (name.compare(0, 3, "EXT") == 0) {
+//         // if (name.compare(0, 7, "fdsfdsfsd") == 0) {
 
-        VectorDouble3 scaled_values(3);
-        // scaled_values[0] = 1.0;
-        // scaled_values[1] = 0.0;
-        // scaled_values[2] = 0.0;
+//         VectorDouble3 scaled_values(3);
+//         // scaled_values[0] = 1.0;
+//         // scaled_values[1] = 0.0;
+//         // scaled_values[2] = 0.0;
 
-        for (int dim = 0; dim < 3; dim++) {
-          Range ents;
-          CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim,
-                                                     ents, true);
-          if (dim > 1) {
-            Range _edges;
-            CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-                                                     moab::Interface::UNION);
-            ents.insert(_edges.begin(), _edges.end());
-          }
-          if (dim > 0) {
-            Range _nodes;
-            CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-            ents.insert(_nodes.begin(), _nodes.end());
-          }
-          for (Range::iterator eit = ents.begin(); eit != ents.end(); eit++) {
-            for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-                     problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr)) {
-              const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
-              std::bitset<8> pstatus(dof->getPStatus());
-              if (pstatus.test(0))
-                continue; // only local
-              if (dof->getEntType() == MBVERTEX) {
+//         for (int dim = 0; dim < 3; dim++) {
+//           Range ents;
+//           CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim,
+//                                                      ents, true);
+//           if (dim > 1) {
+//             Range _edges;
+//             CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
+//                                                      moab::Interface::UNION);
+//             ents.insert(_edges.begin(), _edges.end());
+//           }
+//           if (dim > 0) {
+//             Range _nodes;
+//             CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
+//             ents.insert(_nodes.begin(), _nodes.end());
+//           }
+//           for (Range::iterator eit = ents.begin(); eit != ents.end(); eit++) {
+//             for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
+//                      problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr)) {
+//               const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
+//               std::bitset<8> pstatus(dof->getPStatus());
+//               if (pstatus.test(0))
+//                 continue; // only local
+//               if (dof->getEntType() == MBVERTEX) {
 
-                EntityHandle ent = dof->getEnt();
-                double coords[3];
-                mField.get_moab().get_coords(&ent, 1,
-                                             coords); // get coordinates
+//                 EntityHandle ent = dof->getEnt();
+//                 double coords[3];
+//                 mField.get_moab().get_coords(&ent, 1,
+//                                              coords); // get coordinates
 
-                scaled_values =
-                    stokes_flow_velocity(coords[0], coords[1], coords[2]);
+//                 scaled_values =
+//                     stokes_flow_velocity(coords[0], coords[1], coords[2]);
 
-                if (dof->getDofCoeffIdx() == 0) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-                }
-                if (dof->getDofCoeffIdx() == 1) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[1];
-                }
-                if (dof->getDofCoeffIdx() == 2) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[2];
-                }
-              } else {
-                if (dof->getDofCoeffIdx() == 0) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-                }
-                if (dof->getDofCoeffIdx() == 1) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-                }
-                if (dof->getDofCoeffIdx() == 2) {
-                  mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-                }
-              }
-            }
-          }
-          // for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit)
-          // {
-          //   auto lo_dit =
-          //       problemPtr->getNumeredDofsRows()
-          //           ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-          //           .lower_bound(boost::make_tuple(fieldName, eit->first,
-          //           0));
-          //   auto hi_dit =
-          //       problemPtr->getNumeredDofsRows()
-          //           ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-          //           .upper_bound(boost::make_tuple(fieldName, eit->second,
-          //                                          MAX_DOFS_ON_ENTITY));
-          //   for (; lo_dit != hi_dit; ++lo_dit) {
-          //     auto &dof = *lo_dit;
-          //     if (dof->getEntType() == MBVERTEX) {
-          //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
-          //       scaled_values[0];
-          //     } else {
-          //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          //     }
-          //   }
-          // }
-          // for (Range::iterator eit = ents.begin(); eit != ents.end();
-          // eit++)
-          // {
-          //   for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-          //            problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr))
-          //            {
-          //     NumeredDofEntity *dof = dof_ptr->get();
-          //     if (dof->getEntType() == MBVERTEX) {
-          //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
-          //       scaled_values[0];
-          //       // dof->getFieldData() = scaled_values[0];
-          //     } else {
-          //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          //       // dof->getFieldData() = 0;
-          //     }
-          //   }
-          //  }
-          // }
-        }
-      }
-    }
-    dofsIndices.resize(mapZeroRows.size());
-    dofsValues.resize(mapZeroRows.size());
-    int ii = 0;
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-    for (; mit != mapZeroRows.end(); mit++, ii++) {
-      dofsIndices[ii] = mit->first;
-      dofsValues[ii] = mit->second;
-    }
-  }
-  MoFEMFunctionReturn(0);
-}
+//                 if (dof->getDofCoeffIdx() == 0) {
+//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
+//                 }
+//                 if (dof->getDofCoeffIdx() == 1) {
+//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[1];
+//                 }
+//                 if (dof->getDofCoeffIdx() == 2) {
+//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[2];
+//                 }
+//               } else {
+//                 if (dof->getDofCoeffIdx() == 0) {
+//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//                 }
+//                 if (dof->getDofCoeffIdx() == 1) {
+//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//                 }
+//                 if (dof->getDofCoeffIdx() == 2) {
+//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//                 }
+//               }
+//             }
+//           }
+//           // for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit)
+//           // {
+//           //   auto lo_dit =
+//           //       problemPtr->getNumeredDofsRows()
+//           //           ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
+//           //           .lower_bound(boost::make_tuple(fieldName, eit->first,
+//           //           0));
+//           //   auto hi_dit =
+//           //       problemPtr->getNumeredDofsRows()
+//           //           ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
+//           //           .upper_bound(boost::make_tuple(fieldName, eit->second,
+//           //                                          MAX_DOFS_ON_ENTITY));
+//           //   for (; lo_dit != hi_dit; ++lo_dit) {
+//           //     auto &dof = *lo_dit;
+//           //     if (dof->getEntType() == MBVERTEX) {
+//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
+//           //       scaled_values[0];
+//           //     } else {
+//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//           //     }
+//           //   }
+//           // }
+//           // for (Range::iterator eit = ents.begin(); eit != ents.end();
+//           // eit++)
+//           // {
+//           //   for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
+//           //            problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr))
+//           //            {
+//           //     NumeredDofEntity *dof = dof_ptr->get();
+//           //     if (dof->getEntType() == MBVERTEX) {
+//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
+//           //       scaled_values[0];
+//           //       // dof->getFieldData() = scaled_values[0];
+//           //     } else {
+//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//           //       // dof->getFieldData() = 0;
+//           //     }
+//           //   }
+//           //  }
+//           // }
+//         }
+//       }
+//     }
+//     dofsIndices.resize(mapZeroRows.size());
+//     dofsValues.resize(mapZeroRows.size());
+//     int ii = 0;
+//     std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
+//     for (; mit != mapZeroRows.end(); mit++, ii++) {
+//       dofsIndices[ii] = mit->first;
+//       dofsValues[ii] = mit->second;
+//     }
+//   }
+//   MoFEMFunctionReturn(0);
+// }
 
 // MoFEMErrorCode DirichletVelocityBc::postProcess() {
 //   MoFEMFunctionBegin;
@@ -1303,87 +1303,87 @@ MoFEMErrorCode DirichletVelocityBc::iNitalize() {
 //   MoFEMFunctionReturn(0);
 // }
 
-MoFEMErrorCode DirichletPressureBc::iNitalize() {
-  MoFEMFunctionBegin;
-  if (mapZeroRows.empty() || !methodsOp.empty()) {
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+// MoFEMErrorCode DirichletPressureBc::iNitalize() {
+//   MoFEMFunctionBegin;
+//   if (mapZeroRows.empty() || !methodsOp.empty()) {
+//     ParallelComm *pcomm =
+//         ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
 
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      string name = it->getName();
-      if (name.compare(0, 5, "PRESS") == 0) {
+//     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+//       string name = it->getName();
+//       if (name.compare(0, 5, "PRESS") == 0) {
 
-        VectorDouble scaled_values(1);
-        std::vector<double> attributes;
-        it->getAttributes(attributes);
-        scaled_values[0] = attributes[0];
+//         VectorDouble scaled_values(1);
+//         std::vector<double> attributes;
+//         it->getAttributes(attributes);
+//         scaled_values[0] = attributes[0];
 
-        for (int dim = 0; dim < 3; dim++) {
-          Range ents;
-          CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim,
-                                                     ents, true);
-          if (dim > 1) {
-            Range _edges;
-            CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-                                                     moab::Interface::UNION);
-            ents.insert(_edges.begin(), _edges.end());
-          }
-          if (dim > 0) {
-            Range _nodes;
-            CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-            ents.insert(_nodes.begin(), _nodes.end());
-          }
-          for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit) {
-            auto lo_dit =
-                problemPtr->getNumeredDofsRows()
-                    ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-                    .lower_bound(boost::make_tuple(fieldName, eit->first, 0));
-            auto hi_dit =
-                problemPtr->getNumeredDofsRows()
-                    ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-                    .upper_bound(boost::make_tuple(fieldName, eit->second,
-                                                   MAX_DOFS_ON_ENTITY));
-            for (; lo_dit != hi_dit; ++lo_dit) {
-              auto &dof = *lo_dit;
-              if (dof->getEntType() == MBVERTEX) {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-              } else {
-                mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-              }
-            }
-          }
-          // for (Range::iterator eit = ents.begin(); eit != ents.end();
-          // eit++)
-          // {
-          //   for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-          //            problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr))
-          //            {
-          //     NumeredDofEntity *dof = dof_ptr->get();
-          //     if (dof->getEntType() == MBVERTEX) {
-          //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
-          //       scaled_values[0];
-          //       // dof->getFieldData() = scaled_values[0];
-          //     } else {
-          //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-          //       // dof->getFieldData() = 0;
-          //     }
-          //   }
-          //  }
-          // }
-        }
-      }
-    }
-    dofsIndices.resize(mapZeroRows.size());
-    dofsValues.resize(mapZeroRows.size());
-    int ii = 0;
-    std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-    for (; mit != mapZeroRows.end(); mit++, ii++) {
-      dofsIndices[ii] = mit->first;
-      dofsValues[ii] = mit->second;
-    }
-  }
-  MoFEMFunctionReturn(0);
-}
+//         for (int dim = 0; dim < 3; dim++) {
+//           Range ents;
+//           CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim,
+//                                                      ents, true);
+//           if (dim > 1) {
+//             Range _edges;
+//             CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
+//                                                      moab::Interface::UNION);
+//             ents.insert(_edges.begin(), _edges.end());
+//           }
+//           if (dim > 0) {
+//             Range _nodes;
+//             CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
+//             ents.insert(_nodes.begin(), _nodes.end());
+//           }
+//           for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit) {
+//             auto lo_dit =
+//                 problemPtr->getNumeredDofsRows()
+//                     ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
+//                     .lower_bound(boost::make_tuple(fieldName, eit->first, 0));
+//             auto hi_dit =
+//                 problemPtr->getNumeredDofsRows()
+//                     ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
+//                     .upper_bound(boost::make_tuple(fieldName, eit->second,
+//                                                    MAX_DOFS_ON_ENTITY));
+//             for (; lo_dit != hi_dit; ++lo_dit) {
+//               auto &dof = *lo_dit;
+//               if (dof->getEntType() == MBVERTEX) {
+//                 mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
+//               } else {
+//                 mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//               }
+//             }
+//           }
+//           // for (Range::iterator eit = ents.begin(); eit != ents.end();
+//           // eit++)
+//           // {
+//           //   for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
+//           //            problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr))
+//           //            {
+//           //     NumeredDofEntity *dof = dof_ptr->get();
+//           //     if (dof->getEntType() == MBVERTEX) {
+//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
+//           //       scaled_values[0];
+//           //       // dof->getFieldData() = scaled_values[0];
+//           //     } else {
+//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
+//           //       // dof->getFieldData() = 0;
+//           //     }
+//           //   }
+//           //  }
+//           // }
+//         }
+//       }
+//     }
+//     dofsIndices.resize(mapZeroRows.size());
+//     dofsValues.resize(mapZeroRows.size());
+//     int ii = 0;
+//     std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
+//     for (; mit != mapZeroRows.end(); mit++, ii++) {
+//       dofsIndices[ii] = mit->first;
+//       dofsValues[ii] = mit->second;
+//     }
+//   }
+//   MoFEMFunctionReturn(0);
+// }
 
 // MoFEMErrorCode DirichletPressureBc::postProcess() {
 //   MoFEMFunctionBegin;

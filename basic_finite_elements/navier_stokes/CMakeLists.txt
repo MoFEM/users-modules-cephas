@@ -15,32 +15,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# bfe_build_and_install(stokes
-#   ${CMAKE_CURRENT_SOURCE_DIR}/stokes.cpp
-# )
 bfe_build_and_install(navier_stokes
   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes.cpp
 )
 
-bfe_build_and_install(reynolds
-  ${CMAKE_CURRENT_SOURCE_DIR}/reynolds.cpp
-)
-
-# bfe_build_and_install(navier_stokes_prisms
-#   ${CMAKE_CURRENT_SOURCE_DIR}/navier_stokes_prisms.cpp
-# )
-bfe_build_and_install(add_prisms_layer
-  ${CMAKE_CURRENT_SOURCE_DIR}/add_prisms_layer.cpp
-)
-# file(
-#   COPY ${CMAKE_CURRENT_SOURCE_DIR}/bc.cfg
-#   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-#   FILE_PERMISSIONS OWNER_READ OWNER_WRITE)
-
-#testing
-# add_test(elasticity_mixed_formulation
-#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 ${CMAKE_CURRENT_BINARY_DIR}/elasticity_mixed_formulation
-#   -my_file  ${CMAKE_CURRENT_SOURCE_DIR}/LShape_incompressible.cub
-#   -ksp_type gmres -pc_type lu 
-#   -pc_factor_mat_solver_package mumps
-#   )

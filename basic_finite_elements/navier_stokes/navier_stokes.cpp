@@ -560,16 +560,16 @@ int main(int argc, char *argv[]) {
     dirichlet_bc_ptr->snes_x = D;
 
     // VELOCITY DIRICHLET BC
-    boost::shared_ptr<DirichletVelocityBc> dirichlet_vel_bc_ptr(
-        new DirichletVelocityBc(m_field, "VELOCITY", Aij, D, F));
+    // boost::shared_ptr<DirichletVelocityBc> dirichlet_vel_bc_ptr(
+    //     new DirichletVelocityBc(m_field, "VELOCITY", Aij, D, F));
     // if (flg_load_file == PETSC_TRUE) {
     //   dirichlet_vel_bc_ptr->methodsOp.push_back(
     //       new TimeForceScale("-load_table", false));
     // }
-    dirichlet_vel_bc_ptr->methodsOp.push_back(
-        new NavierStokesElement::LoadScale());
+    // dirichlet_vel_bc_ptr->methodsOp.push_back(
+    //     new NavierStokesElement::LoadScale());
     // dirichlet_vel_bc_ptr->snes_ctx = FEMethod::CTX_SNESNONE;
-    dirichlet_vel_bc_ptr->snes_x = D;
+    // dirichlet_vel_bc_ptr->snes_x = D;
 
     // Assemble pressure and traction forces.
     boost::ptr_map<std::string, NeummanForcesSurface> neumann_forces;
@@ -589,22 +589,22 @@ int main(int argc, char *argv[]) {
                                   null_fe);
     CHKERR DMMoFEMSNESSetFunction(dm, "NAVIER_STOKES", prism_fe_rhs_ptr,
                                   null_fe, null_fe);
-    CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
-                                  dirichlet_vel_bc_ptr);
+    // CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
+    //                               dirichlet_vel_bc_ptr);
     CHKERR DMMoFEMSNESSetFunction(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_bc_ptr);
 
     // Set operators for SNES snes
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe,
-                                  dirichlet_vel_bc_ptr, null_fe);
+    // CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe,
+    //                               dirichlet_vel_bc_ptr, null_fe);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, dirichlet_bc_ptr,
                                   null_fe);
     CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", fe_lhs_ptr, null_fe,
                                   null_fe);
     CHKERR DMMoFEMSNESSetJacobian(dm, "NAVIER_STOKES", prism_fe_lhs_ptr,
                                   null_fe, null_fe);
-    CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
-                                  dirichlet_vel_bc_ptr);
+    // CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
+    //                               dirichlet_vel_bc_ptr);
     CHKERR DMMoFEMSNESSetJacobian(dm, DM_NO_ELEMENT, null_fe, null_fe,
                                   dirichlet_bc_ptr);
 
@@ -762,7 +762,7 @@ int main(int argc, char *argv[]) {
                          "Step: %d | Lambda: %6.4e | Inc: %6.4e | Re: %6.4e \n",
                          ss, lambda, lambda_step, re_number);
 
-      CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
+      // CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_vel_bc_ptr.get());
       CHKERR DMoFEMPreProcessFiniteElements(dm, dirichlet_bc_ptr.get());
 
       CHKERR VecAssemblyBegin(D);
