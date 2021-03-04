@@ -1,0 +1,302 @@
+/*! \page tutorials Tutorials
+
+The tutorials contain a number of basic programs that are built on top of each
+other. Those with the full source code has the following structure
+
+1. **Introduction**: Problem being solved,
+mathematical equations and derivations leading to finite element implementation
+2. **Implementation**: Detailed explanation of the source code where tasks are separated in different functions
+3. **Results**: How to run the program, output, visualisation, interpretation
+and comments, possible extensions.
+4. **Plain program**: Full source code without extended comments
+
+The source code and corresponding binary files of the tutorials are located at
+the following directories when you install MoFEM with developer version \ref installation
+
+- Source code:
+  `$HOME/mofem_install/mofem-cephas/mofem/users_modules/tutorials`
+- Binary files (build directory):
+  `$HOME/mofem_install/um/build_release/tutorials`
+
+Each tutorial in this page includes code name and keywords for quick reference
+and search within the browser. 
+
+\tableofcontents
+
+\note You do not need to go through all the tutorials in the order they are
+listed in this page before jumping into the topic in which you are
+interested. However, we do recommend you to have a look at the first few tutorials
+solving scalar-field problems to have a general idea how the finite element
+implementation is done in MoFEM. We also make a recommendation at the beginning
+of each tutorial regarding which tutorial(s) you should read (prerequisites) before
+continuing with the one you are most excited about.
+
+<br>
+
+\note The tutorials are under development. Send us your feedback on [Q&A](https://groups.google.com/forum/#!categories/mofem-group) regarding the tutorials that already done and the missing ones that you most prefer to see.
+
+\section tutorials_fundamentals Fundamentals
+
+<table style="width:100%">
+  <tr valign="top">
+       <td>\ref lessons_introduction</td>
+       <td> Brief introduction about MoFEM interfaces which enable users to implement the codes with different level of complexity.
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref hierarchical_approximation_1</td>
+       <td> Introduce elementary concepts of the Finite Element Method (FEM) with hierarchical shape functions and their implementation in MoFEM
+       <br/> *Keywords:* Hierarchical approximation
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref hello_world_tut1</td>
+       <td> Creating Simple problem, and pushing operators to pipelines
+       <br/> *Keywords:* UDOs, pipelines
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref integration</td>
+       <td> Numerical integration is essential for most of the numerical methods employed to solve partial differential equations (PDEs)
+       <br/> *Keywords:* UDOs and integration
+       </td>
+  </tr>
+
+</table>
+
+
+\section tutorials_mesh_creation Mesh creation
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref basic_tutorials_mesh_generation_2d</td>
+       <td> This document shows how to create a MoFEM-compatible 2D input mesh from [Gmsh](https://gmsh.info) 
+       <br/> *Keywords:* [Gmsh](https://gmsh.info), block definition, config file, [read_med](http://mofem.eng.gla.ac.uk/mofem/html/read__med_8cpp.html)
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_mesh_generation_3d</td>
+       <td> This document shows how to create a MoFEM-compatible 3D input mesh from [Gmsh](https://gmsh.info) 
+       <br/> *Keywords:* [Gmsh](https://gmsh.info), block definition, config file, [read_med](http://mofem.eng.gla.ac.uk/mofem/html/read__med_8cpp.html)
+       </td>
+  </tr>
+  
+</table>
+
+\section tutorials_scalar_field_problems Scalar-field problems
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref basic_tutorials_least_square_approximation</td>
+       <td> Solve the least square problem to approximate scalar function
+       <br/> *Keywords:* [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/group__mofem__simple__interface.html#details), [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) solver, [mofem_part](http://mofem.eng.gla.ac.uk/mofem/html/mofem__part_8cpp.html), [mbconvert](https://gitlab.kitware.com/third-party/moab/-/blob/17ddd284930a23d8e8e48efa4510ff6fe56ade4f/tools/mbconvert.man), 3D extension
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref basic_tutorials_poisson_homogeneous</td>
+       <td> Solve the %Poisson's equation with zero value boundary conditions
+       <br/> *Keywords:* [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/group__mofem__simple__interface.html#details), [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) solver, [mofem_part](http://mofem.eng.gla.ac.uk/mofem/html/mofem__part_8cpp.html), [mbconvert](https://gitlab.kitware.com/third-party/moab/-/blob/17ddd284930a23d8e8e48efa4510ff6fe56ade4f/tools/mbconvert.man), 3D extension
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_poisson_nonhomogeneous</td>
+       <td> An expansion of previous tutorial to cover non-homogeneous (non-zero value) boundary condition of %Poisson's equation
+       <br/> *Keywords:* Least square approximation
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_poisson_lagrange_multiplier</td>
+       <td> Solve the %Poisson's equation using Lagrange multiplier for the non-homogeneous boundary condition
+       <br/> *Keywords:* [PCFIELDSPLIT](http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html) block solver
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_poisson_nonlinear</td>
+       <td> Solve nonlinear %Poisson's equation using Newton iterative scheme
+       <br/> *Keywords:* [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html) solver
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_minimal_surface_equation</td>
+       <td> A variant of the nonlinear %Poisson's equation
+       <br/> *Keywords:* [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html) solver
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_heat_equation</td>
+       <td> This is the first tutorial to solve a time-dependent problem with first-order time derivative
+       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, implicit scheme
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref basic_tutorials_wave_equation</td>
+       <td> Time-dependent problem with second-order time derivative
+       <br/> *Keywords:* [TS](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/index.html) solver, implicit scheme
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref radiation_pluto</td>
+       <td> Nonlinear problem at the boundary
+       <br/> *Keywords:* axisymmetric problem, linearisation 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref tutorial_heat_method</td>
+       <td> Finding distance geodetic using heat method
+       <br/> *Keywords:*  Face elements embedded in 3d space
+       </td>
+  </tr>
+
+</table>
+
+\section tutorials_complex_field_problems Problems with complex variable fields
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_hemholtz_problem</td>
+       <td> Hemholtz problem for acoustics
+       <br/> *Keywords:* Complex variable, Linear Solver
+       </td>
+  </tr
+
+</table>
+
+\section tutorials_vector_field_problems Vector-field problems
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_elastic_problem</td>
+       <td> Linear elastic 
+       <br/> *Keywords:* Hooke equation
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_eigen_elastic</td>
+       <td> Eigen elastic
+       <br/> *Keywords:* Eigen values, SLEP
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_dynamic_elastic</td>
+       <td> Dynamic elastic
+       <br/> *Keywords:* Time dependent problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_nonlinear_dynamic_elastic</td>
+       <td> Nonlinear elastic
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+</table>
+
+
+\section tutorials_vector_complex_field_problems Mixed field problems
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tut_mix_poisson</td>
+       <td> A mixed problem
+       <br/> *Keywords:* H-div space
+       </td>
+  </tr>
+
+</table>
+
+\section tutorials_data_driven Data driven problems
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref DD-0: Tranport data driven</td>
+       <td> Data driven for transport or heat conduction problems
+       <br/> *Keywords:* Scalar problem
+       </td>
+  </tr>
+
+\section tutorials_magnetics Maxwell problems
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_magnetostatic</td>
+       <td> Magnetostatics
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_lorenz_force</td>
+       <td> Lorenz force
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+</table>
+
+\section tutorials_vector_complex_advanced_topics Advanced topics
+
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_plastic_problem</td>
+       <td> Plasticity problem
+       <br/> *Keywords:* Nonliera problem, linearisation
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref tutorial_contact_problem</td>
+       <td> Contact problem
+       <br/> *Keywords:* H-curl/H-div space, mix formulations
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref ADV-2: Fracture</td>
+       <td> Fracture problem
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref ADV-3: Various fields and finite element spaces</td>
+       <td> Problem with various fields and finite element spaces
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref ADV-4: Elasticity with spring and rod elements</td>
+       <td> Problem with mixed dimension (1D, 2D, 3D)
+       <br/> *Keywords:* 
+       </td>
+  </tr>
+
+</table>
+
+*/

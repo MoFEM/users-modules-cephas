@@ -112,23 +112,26 @@ struct ArcLengthCtx {
   ArcLengthCtx(MoFEM::Interface &m_field, const std::string &problem_name,
                const std::string &field_name = "LAMBDA");
 
-  NumeredDofEntityByFieldName::iterator dIt;
-
   /** \brief Get global index of load factor
    */
-  DofIdx getPetscGlobalDofIdx() { return (*dIt)->getPetscGlobalDofIdx(); };
+  DofIdx getPetscGlobalDofIdx() {
+    return arcDofRawPtr->getPetscGlobalDofIdx();
+  };
 
   /** \brief Get local index of load factor
    */
-  DofIdx getPetscLocalDofIdx() { return (*dIt)->getPetscLocalDofIdx(); };
+  DofIdx getPetscLocalDofIdx() { return arcDofRawPtr->getPetscLocalDofIdx(); };
 
   /** \brief Get value of load factor
    */
-  FieldData &getFieldData() { return (*dIt)->getFieldData(); }
+  FieldData &getFieldData() { return arcDofRawPtr->getFieldData(); }
 
   /** \brief Get proc owning lambda dof
    */
-  int getPart() { return (*dIt)->getPart(); };
+  int getPart() { return arcDofRawPtr->getPart(); };
+
+private:
+  NumeredDofEntity *arcDofRawPtr;
 };
 
 #ifdef __SNESCTX_HPP__

@@ -1,0 +1,13 @@
+reset
+
+create surface rectangle width 1 height 1 zplane 
+create surface circle radius 0.25 zplane 
+move Surface 2 location 0 -0.3 0 include_merged 
+unite volume all 
+
+surface all scheme triadvance 
+surface all size auto factor 1
+mesh surface all
+
+block 1 add curve 7
+block 1 name "BC" 

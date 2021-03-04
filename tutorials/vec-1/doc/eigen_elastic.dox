@@ -1,0 +1,29 @@
+/*! \page tutorial_eigen_elastic VEC-1: Eigen elastic
+
+\note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
+
+<br>
+
+\note Intended learning outcome:
+- general structure of a program developed using MoFEM
+- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
+- solving eigen problem
+- Use of form integators
+- How to **push** the developed UDOs to the *Pipeline*
+
+\tableofcontents
+
+\section running_eiegn_jupyter Running Jupyter notebook
+
+First follow instruction here \ref docker_jupyter. Then select file in 
+\em um_views/tutorial/vec-1/eigen_elastic.ipynb
+
+\section jup_vec_1 Jupyter notebook
+
+\htmlinclude eigen_elastic.html
+
+\section source_vec_1 Source code
+
+\include eigen_elastic.cpp
+
+*/

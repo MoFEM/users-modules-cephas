@@ -1,0 +1,16 @@
+/*! \page tutorial_lorenz_force MAX-1: Lorenz force 
+
+\note Prerequisites of this tutorial include \ref tutorial_magnetostatic
+
+<br>
+
+\note Intended learning outcome:
+- general structure of a program developed using MoFEM
+- working with vectorial base fields like fields for H-curl space
+- use of FieldEvaluatorInterface 
+
+\tableofcontents
+
+\include lorentz_force.cpp
+
+*/

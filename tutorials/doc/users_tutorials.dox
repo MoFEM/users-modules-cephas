@@ -1,0 +1,45 @@
+/*! \page runningprograms Programs
+
+\tableofcontents
+
+\section elasto_dynamics Solid mechanics 
+
+ - \subpage elastic_dynamics
+ - \subpage small_strain_plasticity_plate_with_hole
+
+ \section unsaturated_flow_2d Unsaturated flow 2d
+
+ - \subpage unsaturated_flow
+ - <a href="https://bitbucket.org/mebratu/um_softmech.git">Bitbucket repository </a></td> 
+
+\section gel_module_gt Gel
+
+  - \subpage gel_model_example
+  - \subpage gel_creep
+  - \subpage gel_sorption
+  - \subpage gel_layered
+  - \subpage gel_cell
+  - <a href="https://bitbucket.org/likask/mofem_um_gels">Bitbucket repository </a></td>
+
+\section homogenisation_gt Homogenisation 
+
+  - \subpage comp_homo
+  - \subpage convergence_studies
+  - \subpage nitsche_periodic
+  - <a href="https://bitbucket.org/likask/mofem_um_homogenisation">Bitbucket repository </a></td>
+
+\section bone_remodleing_gt Bone remodelling
+
+ - \subpage um_bone_remodelling_readnme
+ - \subpage density_map_example
+
+\section Pre-processors
+
+These tutorials provide a step-by-step procedure for the use of <a href="http://gmsh.info/">Gmsh</a>
+ and Salome as an alternative pre-processor for MoFEM.
+
+- \subpage using_Gmsh_tut
+- \subpage using_salome_tut_elasticity
+
+ 
+*/

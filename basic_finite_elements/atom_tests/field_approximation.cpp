@@ -53,7 +53,8 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetString(PETSC_NULL, PETSC_NULL, "-my_file",
                                  mesh_file_name, 255, &flg);
     if (flg != PETSC_TRUE) {
-      SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
+      SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+              "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
     const char *option;
@@ -191,9 +192,14 @@ int main(int argc, char *argv[]) {
     KSP solver;
     CHKERR KSPCreate(PETSC_COMM_WORLD, &solver);
     CHKERR KSPSetOperators(solver, A, A);
-    CHKERR KSPSetFromOptions(solver);
-    CHKERR KSPSetUp(solver);
 
+    CHKERR PetscOptionsInsertString(NULL,
+                                    "-ksp_monitor -ksp_type fgmres -pc_type "
+                                    "bjacobi -ksp_atol 0 -ksp_rtol 1e-12");
+
+    CHKERR KSPSetFromOptions(solver);
+    CHKERR PetscOptionsView(NULL, PETSC_VIEWER_STDOUT_WORLD);
+    CHKERR KSPSetUp(solver);
     CHKERR KSPSolve(solver, F, D);
     CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
@@ -224,14 +230,14 @@ int main(int argc, char *argv[]) {
     ent_method_field1_on_10nodeTet.setNodes = false;
     CHKERR m_field.loop_dofs("FIELD1", ent_method_field1_on_10nodeTet);
 
-    if (pcomm->rank() == 0) {
-      EntityHandle out_meshset;
-      CHKERR moab.create_meshset(MESHSET_SET, out_meshset);
-      CHKERR m_field.get_problem_finite_elements_entities(
-          "TEST_PROBLEM", "TEST_FE", out_meshset);
-      CHKERR moab.write_file("out.vtk", "VTK", "", &out_meshset, 1);
-      CHKERR moab.delete_entities(&out_meshset, 1);
-    }
+    // if (pcomm->rank() == 0) {
+    //   EntityHandle out_meshset;
+    //   CHKERR moab.create_meshset(MESHSET_SET, out_meshset);
+    //   CHKERR m_field.get_problem_finite_elements_entities(
+    //       "TEST_PROBLEM", "TEST_FE", out_meshset);
+    //   CHKERR moab.write_file("out.vtk", "VTK", "", &out_meshset, 1);
+    //   CHKERR moab.delete_entities(&out_meshset, 1);
+    // }
 
     typedef tee_device<std::ostream, std::ofstream> TeeDevice;
     typedef stream<TeeDevice> TeeStream;

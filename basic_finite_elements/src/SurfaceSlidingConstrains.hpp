@@ -27,6 +27,9 @@
  */
 struct GenericSliding {
 
+  GenericSliding() = default;
+  virtual ~GenericSliding() = default;
+
   struct OpGetActiveDofsLambda
       : public MoFEM::ForcesAndSourcesCore::UserDataOperator {
     boost::shared_ptr<VectorDouble> activeVariablesPtr;
@@ -351,6 +354,12 @@ struct SurfaceSlidingConstrains : public GenericSliding {
       elementOrientation = 1;
       MoFEMFunctionReturnHot(0);
     }
+    virtual MoFEMErrorCode getElementOrientation(MoFEM::Interface &m_field,
+                                                 const EntityHandle face) {
+      MoFEMFunctionBeginHot;
+      elementOrientation = 1;
+      MoFEMFunctionReturnHot(0);
+    }
   };
 
   MoFEM::Interface &mField;
@@ -414,6 +423,8 @@ struct SurfaceSlidingConstrains : public GenericSliding {
     ierr = getOptions();
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
   }
+
+  virtual ~SurfaceSlidingConstrains() = default;
 
   struct OpJacobian
       : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
@@ -536,27 +547,25 @@ struct SurfaceSlidingConstrains : public GenericSliding {
         ++t_coord_ref;
       }
 
-      for (int rr = 0; rr != 3; ++rr) 
+      for (int rr = 0; rr != 3; ++rr)
         c_vec[rr] >>= (*resultsPtr)[rr];
-      
-      for (int rr = 0; rr != 9; ++rr) 
+
+      for (int rr = 0; rr != 9; ++rr)
         f_vec(rr) >>= (*resultsPtr)[3 + rr];
-      
 
       trace_off();
 
       if (evaluateJacobian) {
         double *jac_ptr[3 + 9];
-        for (int rr = 0; rr != 3 + 9; ++rr) 
+        for (int rr = 0; rr != 3 + 9; ++rr)
           jac_ptr[rr] = &(*jacobianPtr)(rr, 0);
-        
+
         // play recorder for jacobians
         int r =
             ::jacobian(tAg, 3 + 9, 3 + 9, &(*activeVariablesPtr)[0], jac_ptr);
-        if (r < 0) 
+        if (r < 0)
           SETERRQ(PETSC_COMM_SELF, MOFEM_OPERATION_UNSUCCESSFUL,
                   "ADOL-C function evaluation with error");
-        
       }
 
       MoFEMFunctionReturn(0);
@@ -716,8 +725,12 @@ struct EdgeSlidingConstrains : public GenericSliding {
       MoFEMFunctionReturn(0);
     }
 
-    static MoFEMErrorCode setTags(moab::Interface &moab, Range edges,
-                                  Range tris, bool number_pathes = true) {
+    static MoFEMErrorCode setTags(
+        moab::Interface &moab, Range edges, Range tris,
+        bool number_pathes = true,
+        boost::shared_ptr<SurfaceSlidingConstrains::DriverElementOrientation>
+            surface_orientation = nullptr,
+        MoFEM::Interface *m_field_ptr = nullptr) {
       MoFEMFunctionBegin;
       Tag th0, th1, th2, th3;
       CHKERR createTag(moab, th0, th1, th2, th3);
@@ -755,9 +768,18 @@ struct EdgeSlidingConstrains : public GenericSliding {
             areas[ff] = sqrt(t_n(i) * t_n(i));
             t_n(i) /= areas[ff];
             int orientation;
+            // FIXME: this tag is empty
             CHKERR moab.tag_get_data(th3, &face, 1, &orientation);
             if (orientation == -1) {
               t_n(i) *= -1;
+            }
+            if (surface_orientation && m_field_ptr) {
+              CHKERR surface_orientation->getElementOrientation(*m_field_ptr,
+                                                                face);
+              int eo = surface_orientation->elementOrientation;
+              if (eo == -1) {
+                t_n(i) *= -1;
+              }
             }
             ++ff;
           }

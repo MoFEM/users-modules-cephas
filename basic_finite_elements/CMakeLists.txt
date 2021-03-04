@@ -12,20 +12,11 @@
 
 set(BFE_DIRS 
   elasticity
-  simple_elasticity
-  elasticity_mixed_formulation
-  navier_stokes
   nonlinear_elasticity
-  mix_transport
   thermal
   cohesive_interface
-  magnetostatic
-  poisson
-  lessons
-  hello_world
-  hierarchical_approximation
-  reaction_diffusion_equation
-  simple_contact)
+  simple_contact
+  navier_stokes)
 
 function(bfe_install bfe_mod_dir)
   install(

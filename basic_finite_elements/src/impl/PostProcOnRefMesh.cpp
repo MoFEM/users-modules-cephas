@@ -40,9 +40,9 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     VectorDofs::iterator it, hi_it;
     it = data.getFieldDofs().begin();
     hi_it = data.getFieldDofs().end();
+    auto row_dofs = getFEMethod()->getRowDofsPtr();
     for (int ii = 0; it != hi_it; it++, ii++) {
-      int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
+      int local_idx = row_dofs->find((*it)->getLocalUniqueId())
                           ->get()
                           ->getPetscLocalDofIdx();
       vAlues[ii] = a[local_idx];
@@ -53,7 +53,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
     vAluesPtr = &data.getFieldData();
   }
 
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0].get();
+  auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank;
@@ -92,6 +92,13 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
              "data inconsistency %d!=%d", mapGaussPts.size(), nb_gauss_pts);
   }
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   switch (space) {
   case H1:
     commonData.fieldMap[rowFieldName].resize(nb_gauss_pts);
@@ -110,7 +117,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
             cblas_ddot((vAluesPtr->size() / rank), &(data.getN(gg)[0]), 1,
                        &((*vAluesPtr)[rr]), rank);
         (commonData.fieldMap[rowFieldName])[gg][rr] =
-            ((double *)tags_ptr[gg])[rr] += val;
+            ((double *)tags_ptr[gg])[rr] += set_float_precision(val);
       }
     }
     break;
@@ -130,7 +137,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
             cblas_ddot((vAluesPtr->size() / rank), &(data.getN(gg)[0]), 1,
                        &((*vAluesPtr)[rr]), rank);
         (commonData.fieldMap[rowFieldName])[gg][rr] =
-            ((double *)tags_ptr[gg])[rr] = val;
+            ((double *)tags_ptr[gg])[rr] = set_float_precision(val);
       }
     }
     break;
@@ -153,7 +160,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           FTensor::Tensor1<double *, 3> t_tag_val(ptr, &ptr[1], &ptr[2], 3);
           for (int rr = 0; rr != rank; rr++) {
             const double dof_val = (*vAluesPtr)[ll * rank + rr];
-            t_tag_val(i) += dof_val * t_n_hcurl(i);
+            t_tag_val(i) += set_float_precision(dof_val) * t_n_hcurl(i);
             ++t_tag_val;
           }
           ++t_n_hcurl;
@@ -183,7 +190,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           FTensor::Tensor1<double *, 3> t_tag_val(ptr, &ptr[1], &ptr[2], 3);
           for (int rr = 0; rr != rank; rr++) {
             const double dof_val = (*vAluesPtr)[ll * rank + rr];
-            t_tag_val(i) += dof_val * t_n_hdiv(i);
+            t_tag_val(i) += set_float_precision(dof_val) * t_n_hdiv(i);
             ++t_tag_val;
           }
           ++t_n_hdiv;
@@ -215,9 +222,9 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     VectorDofs::iterator it, hi_it;
     it = data.getFieldDofs().begin();
     hi_it = data.getFieldDofs().end();
+    auto row_dofs = getFEMethod()->getRowDofsPtr();
     for (int ii = 0; it != hi_it; it++, ii++) {
-      int local_idx = getFEMethod()
-                          ->rowPtr->find((*it)->getGlobalUniqueId())
+      int local_idx = row_dofs->find((*it)->getLocalUniqueId())
                           ->get()
                           ->getPetscLocalDofIdx();
       vAlues[ii] = a[local_idx];
@@ -228,7 +235,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     vAluesPtr = &data.getFieldData();
   }
 
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0].get();
+  auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank * 3;
@@ -847,7 +854,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
-  const MoFEM::FEDofEntity *dof_ptr = data.getFieldDofs()[0].get();
+  auto dof_ptr = data.getFieldDofs()[0];
   int rank = dof_ptr->getNbOfCoeffs();
 
   int tag_length = rank * 3;

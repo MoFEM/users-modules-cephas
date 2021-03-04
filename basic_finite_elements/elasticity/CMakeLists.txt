@@ -44,15 +44,22 @@ add_test(ElasticityTest
  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape.h5m
- -ksp_type cg -pc_type asm -sub_pc_type lu
+ -ksp_type gmres -pc_type asm -sub_pc_type lu
  -ksp_monitor -log_view -is_atom_test 1)
 
 add_test(ElasticityDirichletOnPartition
  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShape2PartsDirich.h5m
- -ksp_type cg -pc_type asm -sub_pc_type lu
+ -ksp_type gmres -pc_type asm -sub_pc_type lu
  -ksp_monitor -log_view -my_is_partitioned -is_atom_test 2)
+
+add_test(ElasticityRotationTest
+ ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
+ ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+ -my_file ${CMAKE_CURRENT_SOURCE_DIR}/LShapeRot.cub
+ -ksp_type gmres -pc_type asm -sub_pc_type lu
+ -ksp_monitor -log_view -my_order 2 -is_atom_test 3)
 
 add_test(MultiGridViaOrderSolver
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
@@ -66,6 +73,7 @@ add_test(MultiGridViaOrderSolver
   -mg_coarse_ksp_type preonly -mg_coarse_pc_type bjacobi
   -pc_mg_smoothup 10 -pc_mg_smoothdown 10
   -pc_mg_type multiplicative
+  -is_atom_test 5
   -log_view)
 
 add_test(Spring
@@ -73,19 +81,41 @@ add_test(Spring
   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
   -my_file ${CMAKE_CURRENT_SOURCE_DIR}/spring_LShape.h5m
   -my_order 2 
-  -ksp_type cg 
+  -ksp_type gmres
   -pc_type asm 
-  -sub_pc_type lu 
+  -sub_pc_type lu
+  -is_atom_test 6
   -ksp_monitor)
 
-  add_test(SimpleRod
+add_test(SimpleRod
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
   ${CMAKE_CURRENT_BINARY_DIR}/elasticity
   -my_file ${CMAKE_CURRENT_SOURCE_DIR}/simple_rod_beam.h5m
   -my_order 1 
   -my_is_calculating_frequency 1
-  -ksp_type cg 
+  -ksp_type gmres
   -pc_type asm 
   -sub_pc_type lu 
+  -is_atom_test 7
   -ksp_monitor)
 
+add_test(AnaliticalStrain
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+    ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+    -my_file ${CMAKE_CURRENT_SOURCE_DIR}/free_beam.h5m 
+    -my_order 4 -ksp_type gmres -pc_type lu 
+    -ksp_monitor -is_atom_test 4)
+
+add_test(NormalSpringForDisplacements
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/test_for_springs_normal.cub 
+  -my_order 2 -ksp_type gmres -pc_type lu 
+  -ksp_monitor -is_atom_test 8)
+
+add_test(ShearSpringForDisplacements
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
+  ${CMAKE_CURRENT_BINARY_DIR}/elasticity
+  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/test_for_springs_tangent.cub 
+  -my_order 2 -ksp_type gmres -pc_type lu 
+  -ksp_monitor -is_atom_test 9)

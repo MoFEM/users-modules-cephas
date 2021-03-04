@@ -1,0 +1,32 @@
+-pc_type lu  
+-pc_factor_mat_solver_package mumps  
+#-ksp_monitor
+
+-snes_atol 1e-8
+-snes_rtol 1e-8
+-snes_max_linear_solve_fail -1
+#-snes_converged_reason
+-snes_linesearch_type bt
+-snes_linesearch_monitor 
+-snes_max_it 20
+
+-ts_max_time 2
+-ts_exact_final_time stepover
+-ts_dt 0.05
+-ts_max_snes_failures -1
+-ts_error_if_step_fails false
+-ts_adapt_type none
+
+-ts_monitor
+-ts_adapt_monitor
+
+-st_ksp_type preonly 
+-st_pc_type lu 
+-st_pc_factor_mat_solver_type mumps
+
+-eps_monitor 
+-eps_tol 1e-4
+-eps_nev 5
+-eps_ncv 400
+-eps_max_it 500
+-eps_krylovschur_restart 0.9
