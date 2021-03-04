@@ -554,7 +554,7 @@ int main(int argc, char *argv[]) {
             FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
           FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
           FTensor::Index<'i', 3> i;
-          FTensor::Index<'k', 3> j;
+          FTensor::Index<'j', 3> j;
           // constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
           // // t_thermal_strain(i, j) = 0.0;
           // // t_thermal_strain(2, 2) = thermal_expansion_coef;
@@ -564,13 +564,13 @@ int main(int argc, char *argv[]) {
           //  constexpr double alpha = 1.e-5;
           // FIXME put here formula from test
 
-          double x = t_coords(0);
-          double y = t_coords(1);
-          double z = t_coords(2);
+          // double x = t_coords(0);
+          // double y = t_coords(1);
+          // double z = t_coords(2);
 
-          double r = sqrt(x * x + y * y);
+          // double r = sqrt(x * x + y * y);
 
-          double temp = init_temp - r;
+          double temp = init_temp - 1.0;
 
           // if ((-10. < z && z < -1.) || std::abs(z + 1.) < 1e-15) {
           //   temp = 10. / 3. * (35. - 4. * z);
