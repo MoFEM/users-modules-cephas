@@ -1801,8 +1801,7 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
   for (int gg = 0; gg != commonDataPtr->plasticSurfacePtr->size(); ++gg) {
     const double f = (*(commonDataPtr->plasticSurfacePtr))[gg];
     const double tau = (*(commonDataPtr->plasticTauPtr))[gg];
-    // CHKERR set_tag(th_plastic_surface, gg,
-    //                set_scalar(f - hardening(tau)/scale));
+    CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
