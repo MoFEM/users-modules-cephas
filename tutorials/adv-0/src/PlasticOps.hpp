@@ -499,8 +499,8 @@ inline double sign(double x) {
 
 inline double diff_constrain_ddot_tau(double dot_dot, double f,
                                       double sigma_y) {
-  return sigmaY * (visH / sigmaY + cn -
-                   cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
+  return visH +
+         sigmaY * (cn - cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
 };
 
 inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
