@@ -272,14 +272,6 @@ MoFEMErrorCode Example::createCommonData() {
   commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
 
-  commonPlasticDataPtr->plasticSurfacePtr = boost::make_shared<VectorDouble>();
-  commonPlasticDataPtr->plasticFlowPtr = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->plasticTauPtr = boost::make_shared<VectorDouble>();
-  commonPlasticDataPtr->plasticTauDotPtr = boost::make_shared<VectorDouble>();
-  commonPlasticDataPtr->plasticStrainPtr = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->plasticStrainDotPtr =
-      boost::make_shared<MatrixDouble>();
-
   CHKERR get_command_line_parameters();
   CHKERR set_matrial_stiffness();
 
@@ -287,7 +279,8 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenckyDataPtr = boost::make_shared<HenckyOps::CommonData>();
     commonHenckyDataPtr->matGradPtr = commonPlasticDataPtr->mGradPtr;
     commonHenckyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
-    commonHenckyDataPtr->matLogCPlastic = commonPlasticDataPtr->plasticStrainPtr;
+    commonHenckyDataPtr->matLogCPlastic =
+        commonPlasticDataPtr->getPlasticStrainPtr();
     commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatLogC();
     commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatHenckyStress();
   }
@@ -398,14 +391,14 @@ MoFEMErrorCode Example::OPs() {
         "U", commonPlasticDataPtr->mGradPtr));
 
     pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->plasticTauPtr));
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
-        "TAU", commonPlasticDataPtr->plasticTauDotPtr));
+        "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
 
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
-        "EP", commonPlasticDataPtr->plasticStrainPtr));
+        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<2>(
-        "EP", commonPlasticDataPtr->plasticStrainDotPtr));
+        "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
 
     if (is_large_strains) {
 
@@ -663,7 +656,7 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
-        "EP", commonPlasticDataPtr->plasticStrainPtr));
+        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
 
     if (is_large_strains) {
 
@@ -747,10 +740,10 @@ MoFEMErrorCode Example::tsSolve() {
         "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
 
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->plasticTauPtr, MBTRI));
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateTensor2SymmetricFieldValues<2>(
-            "EP", commonPlasticDataPtr->plasticStrainPtr, MBTRI));
+            "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpPlasticStress("U", commonPlasticDataPtr, scale));
     postProcFe->getOpPtrVector().push_back(
