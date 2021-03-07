@@ -116,7 +116,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
 mesh = pv.read('plate_with_hole.vtk')
-mesh.plot(show_grid=True, show_edges=True, smooth_shading=False)  
+mesh.plot(show_grid=True, show_edges=True, cpos="xy", smooth_shading=False)  
 ```
 
 ```python
