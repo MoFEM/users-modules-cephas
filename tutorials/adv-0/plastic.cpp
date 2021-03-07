@@ -553,7 +553,7 @@ MoFEMErrorCode Example::OPs() {
     auto get_time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      return fe_domain_rhs->ts_t/scale;
+      return fe_domain_rhs->ts_t * scale;
     };
 
     auto get_minus_time = [&](double, double, double) {
