@@ -35,7 +35,9 @@ tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
-tutorials_copy_and_install("README.md" "${permissions_execute}")
+tutorials_copy_and_install("*.png" "${permissions_execute}")
+tutorials_copy_and_install("*.md" "${permissions_execute}")
+tutorials_copy_and_install("*.cfg" "${permissions_execute}")
 
 tutorials_build_and_install(
   plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
