@@ -504,11 +504,13 @@ inline double diff_constrain_ddot_tau(double dot_dot, double f,
 };
 
 inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
-  return sigmaY * (-1 / sigmaY - sign((f - sigma_y) / sigmaY + cn * dot_dot));
+  return sigmaY *
+         (-1 / sigmaY - sign((f - sigma_y) / sigmaY + cn * dot_dot) / sigmaY);
 };
 
 inline auto diff_constrain_dsigma_y(double dot_dot, double f, double sigma_y) {
-  return sigmaY * (1 / sigmaY + sign((f - sigma_y) / sigmaY + cn * dot_dot));
+  return sigmaY *
+         (1 / sigmaY + sign((f - sigma_y) / sigmaY + cn * dot_dot) / sigmaY);
 };
 
 template <typename T>
@@ -942,7 +944,10 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    auto t_diff_symmetrize = diff_symmetrize();
+
+    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+    FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_grad;
+    t_diff_grad(i, j, k, l) = t_kd(i, k) * t_kd(j, l);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -956,7 +961,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
 
       FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_plastic_flow_stress_dgrad;
       t_diff_plastic_flow_stress_dgrad(i, j, k, l) =
-          t_flow_stress_dstrain(i, j, m, n) * t_diff_symmetrize(m, n, k, l);
+          t_flow_stress_dstrain(i, j, m, n) * t_diff_grad(m, n, k, l);
 
       size_t rr = 0;
       for (; rr != nb_row_dofs / 3; ++rr) {
@@ -1352,7 +1357,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
-    auto t_diff_symmetrize = diff_symmetrize();
+
+    constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+    FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_grad;
+    t_diff_grad(i, j, k, l) = t_kd(i, k) * t_kd(j, l);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
@@ -1363,7 +1371,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
               diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
       FTensor::Tensor2<double, 2, 2> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
-          t_diff_constrain_dstrain(i, j) * t_diff_symmetrize(i, j, k, l);
+          t_diff_constrain_dstrain(i, j) * t_diff_grad(i, j, k, l);
 
       FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{&locMat(0, 0),
                                                                &locMat(0, 1)};
@@ -1442,7 +1450,6 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
     auto t_logC_dC = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM>(
         commonHenckyDataPtr->matLogCdC);
-    auto t_diff_symmetrize = diff_symmetrize();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
