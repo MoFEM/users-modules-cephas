@@ -62,7 +62,7 @@ poisson_ratio=0.3
 hardening=2
 yield_stress=200
 
-number_of_steps=100
+number_of_steps=75
 nb_elastic_steps=30
 max_von_misses_fisrt_elastic_step = 4.647031123
 
@@ -125,7 +125,7 @@ def extract_numner(s):
     return int(re.findall(r'\d+',s)[0])
 
 size=len(list_of_files)
-mod=int(size / 20)
+mod=int(size / 10)
 
 list_to_process=[]
 for f in list_of_files:
@@ -149,7 +149,7 @@ import re, os
 
 my_cmap = plt.cm.get_cmap("rainbow", 16)
 
-scale_displacements=1
+scale_displacements=0.5
 
 list_of_files=!ls -c1 out*.vtk
 list_of_files=sorted(list_of_files, key=extract_numner)
@@ -216,7 +216,7 @@ snapshots = []
 for p in sorted_list_of_pngs:
     img = mpimg.imread(p)
     snapshots.append(img)
-fps = 30
+fps = 1
 frame_num = len(sorted_list_of_pngs)
 nSeconds = frame_num / fps
 # First set up the figure, the axis, and the plot element we want to animate
