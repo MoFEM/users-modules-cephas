@@ -35,15 +35,20 @@ int main(int argc, char *argv[]) {
     PetscBool flg_file = PETSC_FALSE;
     char field_name_param[255] = "SPATIAL_POSITION";
     char mesh_out_file[255] = "deformed_mesh.h5m";
+    PetscBool flg_use_displ = PETSC_FALSE;
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Field to vertices options",
                              "none");
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
+                              mesh_file_name, 255, &flg_file);
+    CHKERR PetscOptionsString("-file_name", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsString("-my_field", "field name", "", "FIELD",
                               field_name_param, 255, PETSC_NULL);
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
                               "deformed_mesh.h5m", mesh_out_file, 255,
                               PETSC_NULL);
+    CHKERR PetscOptionsBool("-flg_use_displ", "true to squash bits at the end",
+                            "", flg_use_displ, &flg_use_displ, PETSC_NULL);
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
 
@@ -78,18 +83,23 @@ int main(int argc, char *argv[]) {
                                              th_spatial_positions);
 
     double tag_val[3];
+    double coords[3];
 
     for (Range::iterator nit = ents_vertices.begin();
          nit != ents_vertices.end(); nit++) {
       CHKERR m_field.get_moab().tag_get_data(th_spatial_positions, &*nit, 1,
                                              tag_val);
+      if (flg_use_displ) {
+        CHKERR moab.get_coords(&*nit, 1, coords);
+        for (int ii = 0; ii != 3; ++ii)
+          coords[ii] += tag_val[ii];
 
-      CHKERR moab.set_coords(&*nit, 1, tag_val);
+        CHKERR moab.set_coords(&*nit, 1, coords);
+      } else {
+        CHKERR moab.set_coords(&*nit, 1, tag_val);
+      }
     }
 
-    // TODO: Higher order field mapping
-    CHKERR m_field.getInterface<BitRefManager>()->writeBitLevelByType(
-        bit_level0, BitRefLevel().set(), MBTET, "out_mesh.vtk", "VTK", "");
     CHKERR moab.write_file(mesh_out_file);
   }
   CATCH_ERRORS;
