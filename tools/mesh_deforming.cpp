@@ -33,6 +33,7 @@ int main(int argc, char *argv[]) {
     // global variables
     char mesh_file_name[255];
     PetscBool flg_file = PETSC_FALSE;
+    PetscBool flg_file_2 = PETSC_FALSE;
     char field_name_param[255] = "SPATIAL_POSITION";
     char mesh_out_file[255] = "deformed_mesh.h5m";
     PetscBool flg_use_displ = PETSC_FALSE;
@@ -41,7 +42,7 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsString("-file_name", "mesh file name", "", "mesh.h5m",
-                              mesh_file_name, 255, &flg_file);
+                              mesh_file_name, 255, &flg_file_2);
     CHKERR PetscOptionsString("-my_field", "field name", "", "FIELD",
                               field_name_param, 255, PETSC_NULL);
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
-    if (flg_file != PETSC_TRUE) {
+    if (!flg_file && !flg_file_2) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
               "*** ERROR -my_file (MESH FILE NEEDED)");
     }
