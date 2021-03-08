@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     // global variables
     char mesh_file_name[255];
     PetscBool flg_file = PETSC_FALSE;
-    char field_name_param[255] = "RHO";
+    char field_name_param[255] = "SPATIAL_POSITION";
     char mesh_out_file[255] = "deformed_mesh.h5m";
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Field to vertices options",
                              "none");
@@ -69,7 +69,6 @@ int main(int argc, char *argv[]) {
     bit_level0.set(0);
     CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
         0, 3, bit_level0);
-    CHKERR m_field.build_fields();
 
     Range ents_vertices;
     rval = moab.get_entities_by_dimension(0, 0, ents_vertices, false);
