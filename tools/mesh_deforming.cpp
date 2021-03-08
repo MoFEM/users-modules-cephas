@@ -35,13 +35,15 @@ int main(int argc, char *argv[]) {
     PetscBool flg_file = PETSC_FALSE;
     char field_name_param[255] = "RHO";
     char mesh_out_file[255] = "deformed_mesh.h5m";
-    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Field to vertices options", "none");
+    CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Field to vertices options",
+                             "none");
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
                               mesh_file_name, 255, &flg_file);
     CHKERR PetscOptionsString("-my_field", "field name", "", "FIELD",
                               field_name_param, 255, PETSC_NULL);
     CHKERR PetscOptionsString("-output_file", "output mesh file name", "",
-                              "deformed_mesh.h5m", mesh_out_file, 255, PETSC_NULL);
+                              "deformed_mesh.h5m", mesh_out_file, 255,
+                              PETSC_NULL);
     ierr = PetscOptionsEnd();
     CHKERRG(ierr);
 
@@ -73,7 +75,8 @@ int main(int argc, char *argv[]) {
     rval = moab.get_entities_by_dimension(0, 0, ents_vertices, false);
 
     Tag th_spatial_positions;
-    CHKERR m_field.get_moab().tag_get_handle(field_name.c_str(), th_spatial_positions);
+    CHKERR m_field.get_moab().tag_get_handle(field_name.c_str(),
+                                             th_spatial_positions);
 
     double tag_val[3];
 
@@ -85,7 +88,7 @@ int main(int argc, char *argv[]) {
       CHKERR moab.set_coords(&*nit, 1, tag_val);
     }
 
-    //TODO: Higher order field mapping
+    // TODO: Higher order field mapping
     CHKERR m_field.getInterface<BitRefManager>()->writeBitLevelByType(
         bit_level0, BitRefLevel().set(), MBTET, "out_mesh.vtk", "VTK", "");
     CHKERR moab.write_file(mesh_out_file);
