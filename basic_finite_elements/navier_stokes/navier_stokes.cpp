@@ -369,7 +369,7 @@ int main(int argc, char *argv[]) {
 
     Range solid_faces;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "INT_SOLID") == 0) {
+      if (bit->getName().compare(0, 9, "INT_SOLID") == 0) {
         Range tets, tet;
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
@@ -622,26 +622,26 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetFromOptions(snes);
     }
 
-    // Vec G;
-    // CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
-    // VectorDouble3 vecGlobal = VectorDouble3(3);
+    Vec G;
+    CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
+    VectorDouble3 vecGlobal = VectorDouble3(3);
 
-    // auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
-    //   MoFEMFunctionBegin;
+    auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
+      MoFEMFunctionBegin;
 
-    //   CHKERR VecZeroEntries(G);
-    //   CHKERR VecAssemblyBegin(G);
-    //   CHKERR VecAssemblyEnd(G);
+      CHKERR VecZeroEntries(G);
+      CHKERR VecAssemblyBegin(G);
+      CHKERR VecAssemblyEnd(G);
 
-    //   int ind[3] = {0, 1, 2};
-    //   CHKERR VecSetValues(G, 3, ind, loc.data().begin(), ADD_VALUES);
-    //   CHKERR VecAssemblyBegin(G);
-    //   CHKERR VecAssemblyEnd(G);
+      int ind[3] = {0, 1, 2};
+      CHKERR VecSetValues(G, 3, ind, loc.data().begin(), ADD_VALUES);
+      CHKERR VecAssemblyBegin(G);
+      CHKERR VecAssemblyEnd(G);
 
-    //   CHKERR VecGetValues(G, 3, ind, res.data().begin());
+      CHKERR VecGetValues(G, 3, ind, res.data().begin());
 
-    //   MoFEMFunctionReturn(0);
-    // };
+      MoFEMFunctionReturn(0);
+    };
 
     SNESConvergedReason snes_reason;
     int number_of_diverges = 0;
@@ -888,19 +888,17 @@ int main(int argc, char *argv[]) {
           common_data->totalDragForce.clear();
           CHKERR DMoFEMLoopFiniteElements(dm, "DRAG", drag_fe_ptr);
 
-          // compute_global_vec(common_data->pressureDragForce, vecGlobal);
-          // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g,
-          // %g)\n",
-          //                    vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+          compute_global_vec(common_data->pressureDragForce, vecGlobal);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g, %g)\n",
+                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
-          // compute_global_vec(common_data->viscousDragForce, vecGlobal);
-          // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g,
-          // %g)\n",
-          //                    vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+          compute_global_vec(common_data->viscousDragForce, vecGlobal);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g, %g)\n",
+                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
 
-          // compute_global_vec(common_data->totalDragForce, vecGlobal);
-          // CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
-          //                    vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+          compute_global_vec(common_data->totalDragForce, vecGlobal);
+          CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
+                             vecGlobal[0], vecGlobal[1], vecGlobal[2]);
         }
       }
 
