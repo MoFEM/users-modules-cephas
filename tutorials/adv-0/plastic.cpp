@@ -679,7 +679,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, scale));
+      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
     }
 
     pipeline.push_back(new OpSetBc("U", false, reactionMarker));
