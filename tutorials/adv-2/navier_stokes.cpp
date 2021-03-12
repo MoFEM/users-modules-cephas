@@ -1,0 +1,706 @@
+/** \file navier_stokes.cpp
+ * \example navier_stokes.cpp
+ *
+ * Example of viscous fluid flow problem
+ *
+ */
+
+/* MoFEM is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * MoFEM is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ * License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>.
+ * */
+
+#include <BasicFiniteElements.hpp>
+
+using namespace boost::numeric;
+using namespace MoFEM;
+using namespace std;
+
+static char help[] = "Navier-Stokes Example\n"
+                     "\n";
+double NavierStokesElement::LoadScale::lambda = 1;
+
+struct NavierStokesExample {
+
+  NavierStokesExample(MoFEM::Interface &m_field) : mField(m_field) {
+    commonData = boost::make_shared<NavierStokesElement::CommonData>(m_field);
+  }
+  ~NavierStokesExample() {
+    CHKERR SNESDestroy(&snes);
+    CHKERR DMDestroy(&dM);
+  }
+
+  MoFEMErrorCode runProblem();
+
+private:
+  MoFEM::Interface &mField;
+
+  PetscBool isPartitioned = PETSC_FALSE;
+
+  int orderVelocity = 2; // default approximation orderVelocity
+  int orderPressure = 1; // default approximation orderPressure
+  int numHoLevels = 0;
+  PetscBool isDiscontPressure = PETSC_FALSE;
+  PetscBool isHoGeometry = PETSC_TRUE;
+
+  double pressureScale = 1.0;
+  double lengthScale = 1.0;
+  double velocityScale = 1.0;
+  double reNumber = 1.0;
+  PetscBool isStokesFlow = PETSC_FALSE;
+
+  int numSteps = 1; // default number of steps
+  double lambdaStep = 1.0;
+  double lambda = 0.0;
+
+  double rho, mu, Re;
+
+  Range solidFaces;
+
+  BitRefLevel bitLevel;
+  DM dM;
+  SNES snes;
+  boost::shared_ptr<NavierStokesElement::CommonData> commonData;
+
+  SmartPetscObj<Vec> D;
+  SmartPetscObj<Vec> F;
+  SmartPetscObj<Mat> Aij;
+
+  boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhsPtr;
+  boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhsPtr;
+
+  boost::shared_ptr<FaceElementForcesAndSourcesCore> feDragPtr;
+  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> feDragSidePtr;
+
+  boost::shared_ptr<DirichletDisplacementBc> dirichletBcPtr;
+  boost::ptr_map<std::string, NeumannForcesSurface> neumannForces;
+
+  boost::shared_ptr<PostProcVolumeOnRefinedMesh> fePostProcPtr;
+  boost::shared_ptr<PostProcFaceOnRefinedMesh> fePostProcDragPtr;
+
+  MoFEMErrorCode readInput();
+  MoFEMErrorCode findBlocks();
+  MoFEMErrorCode setupFields();
+  MoFEMErrorCode declareElements();
+  MoFEMErrorCode setupDiscreteManager();
+  MoFEMErrorCode setupAlgebraicStructures();
+  MoFEMErrorCode setupElements();
+  MoFEMErrorCode setupSNES();
+  MoFEMErrorCode solveProblem();
+  MoFEMErrorCode postProcess();
+};
+
+//! [Run problem]
+MoFEMErrorCode NavierStokesExample::runProblem() {
+  MoFEMFunctionBegin;
+  CHKERR readInput();
+  CHKERR findBlocks();
+  CHKERR setupFields();
+  CHKERR declareElements();
+  CHKERR setupDiscreteManager();
+  CHKERR setupAlgebraicStructures();
+  CHKERR setupElements();
+  CHKERR setupSNES();
+  CHKERR solveProblem();
+  MoFEMFunctionReturn(0);
+}
+//! [Run problem]
+
+//! [Read input]
+MoFEMErrorCode NavierStokesExample::readInput() {
+  MoFEMFunctionBegin;
+  char mesh_file_name[255];
+  PetscBool flg_mesh_file;
+
+  CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "NAVIER_STOKES problem",
+                           "none");
+
+  CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
+                            mesh_file_name, 255, &flg_mesh_file);
+  CHKERR PetscOptionsBool("-my_is_partitioned", "is partitioned?", "",
+                          isPartitioned, &isPartitioned, PETSC_NULL);
+
+  CHKERR PetscOptionsInt("-my_order_u", "approximation orderVelocity", "",
+                         orderVelocity, &orderVelocity, PETSC_NULL);
+  CHKERR PetscOptionsInt("-my_order_p", "approximation orderPressure", "",
+                         orderPressure, &orderPressure, PETSC_NULL);
+  CHKERR PetscOptionsInt("-my_num_ho_levels",
+                         "number of higher order boundary levels", "",
+                         numHoLevels, &numHoLevels, PETSC_NULL);
+  CHKERR PetscOptionsBool("-my_discont_pressure", "discontinuous pressure", "",
+                          isDiscontPressure, &isDiscontPressure, PETSC_NULL);
+  CHKERR PetscOptionsBool("-my_ho_geometry", "use second order geometry", "",
+                          isHoGeometry, &isHoGeometry, PETSC_NULL);
+
+  CHKERR PetscOptionsScalar("-my_length_scale", "length scale", "", lengthScale,
+                            &lengthScale, PETSC_NULL);
+  CHKERR PetscOptionsScalar("-my_velocity_scale", "velocity scale", "",
+                            velocityScale, &velocityScale, PETSC_NULL);
+  CHKERR PetscOptionsBool("-my_stokes_flow", "stokes flow", "", isStokesFlow,
+                          &isStokesFlow, PETSC_NULL);
+
+  CHKERR PetscOptionsInt("-my_step_num", "number of steps", "", numSteps,
+                         &numSteps, PETSC_NULL);
+
+  ierr = PetscOptionsEnd();
+
+  if (flg_mesh_file != PETSC_TRUE) {
+    SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
+  }
+
+  // Read whole mesh or part of it if partitioned
+  if (isPartitioned == PETSC_TRUE) {
+    // This is a case of distributed mesh and algebra. In that case each
+    // processor keeps only part of the problem.
+    const char *option;
+    option = "PARALLEL=READ_PART;"
+             "PARALLEL_RESOLVE_SHARED_ENTS;"
+             "PARTITION=PARALLEL_PARTITION;";
+    CHKERR mField.get_moab().load_file(mesh_file_name, 0, option);
+  } else {
+    // In this case, we have distributed algebra, i.e. assembly of vectors and
+    // matrices is in parallel, but whole mesh is stored on all processors.
+    // snes and matrix scales well, however problem set-up of problem is
+    // not fully parallel.
+    const char *option;
+    option = "";
+    CHKERR mField.get_moab().load_file(mesh_file_name, 0, option);
+  }
+  CHKERR mField.rebuild_database();
+
+  bitLevel.set(0);
+  CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(0, 3,
+                                                                   bitLevel);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Read input]
+
+//! [Find blocks]
+MoFEMErrorCode NavierStokesExample::findBlocks() {
+  MoFEMFunctionBegin;
+
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+    if (bit->getName().compare(0, 9, "MAT_FLUID") == 0) {
+      const int id = bit->getMeshsetId();
+      CHKERR mField.get_moab().get_entities_by_dimension(
+          bit->getMeshset(), 3, commonData->setOfBlocksData[id].eNts, true);
+
+      std::vector<double> attributes;
+      bit->getAttributes(attributes);
+      if (attributes.size() < 2) {
+        SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                 "should be at least 2 attributes but is %d",
+                 attributes.size());
+      }
+      commonData->setOfBlocksData[id].iD = id;
+      commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
+      commonData->setOfBlocksData[id].fluidDensity = attributes[1];
+
+      mu = commonData->setOfBlocksData[id].fluidViscosity;
+      rho = commonData->setOfBlocksData[id].fluidDensity;
+    }
+  }
+
+  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, bit)) {
+    if (bit->getName().compare(0, 9, "INT_SOLID") == 0) {
+      Range tets, tet;
+      const int id = bit->getMeshsetId();
+      CHKERR mField.get_moab().get_entities_by_type(
+          bit->getMeshset(), MBTRI, commonData->setOfFacesData[id].eNts, true);
+      solidFaces.merge(commonData->setOfFacesData[id].eNts);
+      CHKERR mField.get_moab().get_adjacencies(
+          commonData->setOfFacesData[id].eNts, 3, true, tets,
+          moab::Interface::UNION);
+      tet = Range(tets.front(), tets.front());
+      for (auto &bit : commonData->setOfBlocksData) {
+        if (bit.second.eNts.contains(tet)) {
+          commonData->setOfFacesData[id].fluidViscosity =
+              bit.second.fluidViscosity;
+          commonData->setOfFacesData[id].fluidDensity = bit.second.fluidDensity;
+          commonData->setOfFacesData[id].iD = id;
+          break;
+        }
+      }
+      if (commonData->setOfFacesData[id].fluidViscosity < 0) {
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                "Cannot find a fluid block adjacent to a given solid face");
+      }
+    }
+  }
+
+  MoFEMFunctionReturn(0);
+}
+//! [Find blocks]
+
+//! [Setup fields]
+MoFEMErrorCode NavierStokesExample::setupFields() {
+  MoFEMFunctionBegin;
+
+  CHKERR mField.add_field("VELOCITY", H1, AINSWORTH_LEGENDRE_BASE, 3);
+  if (isDiscontPressure) {
+    CHKERR mField.add_field("PRESSURE", L2, AINSWORTH_LEGENDRE_BASE, 1);
+  } else {
+    CHKERR mField.add_field("PRESSURE", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  }
+  CHKERR mField.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+                          3);
+
+  CHKERR mField.add_ents_to_field_by_dim(0, 3, "VELOCITY");
+  CHKERR mField.add_ents_to_field_by_dim(0, 3, "PRESSURE");
+  CHKERR mField.add_ents_to_field_by_dim(0, 3, "MESH_NODE_POSITIONS");
+
+  CHKERR mField.set_field_order(0, MBVERTEX, "VELOCITY", 1);
+  CHKERR mField.set_field_order(0, MBEDGE, "VELOCITY", orderVelocity);
+  CHKERR mField.set_field_order(0, MBTRI, "VELOCITY", orderVelocity);
+  CHKERR mField.set_field_order(0, MBTET, "VELOCITY", orderVelocity);
+
+  if (!isDiscontPressure) {
+    CHKERR mField.set_field_order(0, MBVERTEX, "PRESSURE", 1);
+    CHKERR mField.set_field_order(0, MBEDGE, "PRESSURE", orderPressure);
+    CHKERR mField.set_field_order(0, MBTRI, "PRESSURE", orderPressure);
+  }
+  CHKERR mField.set_field_order(0, MBTET, "PRESSURE", orderPressure);
+
+  if (numHoLevels > 0) {
+    std::vector<Range> levels(numHoLevels);
+    Range ents;
+    ents.merge(solidFaces);
+    for (int ll = 0; ll != numHoLevels; ll++) {
+      Range verts;
+      CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+      for (auto d : {1, 2, 3}) {
+        CHKERR mField.get_moab().get_adjacencies(verts, d, false, ents,
+                                                 moab::Interface::UNION);
+      }
+      levels[ll] = subtract(ents, ents.subset_by_type(MBVERTEX));
+    }
+    for (int ll = numHoLevels - 1; ll >= 1; ll--) {
+      levels[ll] = subtract(levels[ll], levels[ll - 1]);
+    }
+
+    int add_order = 1;
+    for (int ll = numHoLevels - 1; ll >= 0; ll--) {
+      if (isPartitioned)
+        CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+            levels[ll]);
+
+      CHKERR mField.set_field_order(levels[ll], "VELOCITY",
+                                    orderVelocity + add_order);
+      if (!isDiscontPressure)
+        CHKERR mField.set_field_order(levels[ll], "PRESSURE",
+                                      orderPressure + add_order);
+      else
+        CHKERR mField.set_field_order(levels[ll].subset_by_type(MBTET),
+                                      "PRESSURE", orderPressure + add_order);
+      ++add_order;
+    }
+  }
+
+  CHKERR mField.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+  // Set 2nd order of approximation of geometry
+  if (isHoGeometry) {
+    Range ents, edges;
+    CHKERR mField.get_moab().get_entities_by_dimension(0, 3, ents);
+    CHKERR mField.get_moab().get_adjacencies(ents, 1, false, edges,
+                                             moab::Interface::UNION);
+    if (isPartitioned)
+      CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(edges);
+    CHKERR mField.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
+  }
+
+  if (isPartitioned) {
+    CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities(
+        "VELOCITY");
+    CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities(
+        "PRESSURE");
+    CHKERR mField.getInterface<CommInterface>()->synchroniseFieldEntities(
+        "MESH_NODE_POSITIONS");
+  }
+
+  CHKERR mField.build_fields();
+
+  Projection10NodeCoordsOnField ent_method_material(mField,
+                                                    "MESH_NODE_POSITIONS");
+  CHKERR mField.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Setup fields]
+
+//! [Declare elements]
+MoFEMErrorCode NavierStokesExample::declareElements() {
+  MoFEMFunctionBegin;
+
+  // Add finite element (this defines element, declaration comes later)
+  CHKERR NavierStokesElement::addElement(mField, "NAVIER_STOKES", "VELOCITY",
+                                         "PRESSURE", "MESH_NODE_POSITIONS");
+
+  CHKERR NavierStokesElement::addElement(mField, "DRAG", "VELOCITY", "PRESSURE",
+                                         "MESH_NODE_POSITIONS", 2, &solidFaces);
+
+  // setup elements for loading
+  CHKERR MetaNeumannForces::addNeumannBCElements(mField, "VELOCITY");
+
+  // build finite elements
+  CHKERR mField.build_finite_elements();
+  // build adjacencies between elements and degrees of freedom
+  CHKERR mField.build_adjacencies(bitLevel);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Declare elements]
+
+//! [Setup discrete manager]
+MoFEMErrorCode NavierStokesExample::setupDiscreteManager() {
+  MoFEMFunctionBegin;
+  DMType dm_name = "DM_NAVIER_STOKES";
+  // Register DM problem
+  CHKERR DMRegister_MoFEM(dm_name);
+  CHKERR DMCreate(PETSC_COMM_WORLD, &dM);
+  CHKERR DMSetType(dM, dm_name);
+  // Create DM instance
+  CHKERR DMMoFEMCreateMoFEM(dM, &mField, dm_name, bitLevel);
+  // Configure DM form line command options s
+  CHKERR DMSetFromOptions(dM);
+  // Add elements to dM (only one here)
+  CHKERR DMMoFEMAddElement(dM, "NAVIER_STOKES");
+  CHKERR DMMoFEMAddElement(dM, "DRAG");
+  if (mField.check_finite_element("PRESSURE_FE"))
+    CHKERR DMMoFEMAddElement(dM, "PRESSURE_FE");
+  CHKERR DMMoFEMSetIsPartitioned(dM, isPartitioned);
+  // setup the DM
+  CHKERR DMSetUp(dM);
+  MoFEMFunctionReturn(0);
+}
+//! [Setup discrete manager]
+
+//! [Setup algebraic structures]
+MoFEMErrorCode NavierStokesExample::setupAlgebraicStructures() {
+  MoFEMFunctionBegin;
+
+  D = smartCreateDMVector(dM);
+  F = smartVectorDuplicate(D);
+  Aij = smartCreateDMMatrix(dM);
+
+  CHKERR VecZeroEntries(F);
+  CHKERR VecGhostUpdateBegin(F, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(F, INSERT_VALUES, SCATTER_FORWARD);
+
+  CHKERR VecZeroEntries(D);
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+  CHKERR MatSetOption(Aij, MAT_SPD, PETSC_TRUE);
+  CHKERR MatZeroEntries(Aij);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Setup algebraic structures]
+
+//! [Setup elements]
+MoFEMErrorCode NavierStokesExample::setupElements() {
+  MoFEMFunctionBegin;
+
+  feLhsPtr = boost::shared_ptr<VolumeElementForcesAndSourcesCore>(
+      new VolumeElementForcesAndSourcesCore(mField));
+  feRhsPtr = boost::shared_ptr<VolumeElementForcesAndSourcesCore>(
+      new VolumeElementForcesAndSourcesCore(mField));
+
+  feLhsPtr->getRuleHook = NavierStokesElement::VolRule();
+  feRhsPtr->getRuleHook = NavierStokesElement::VolRule();
+
+  feDragPtr = boost::shared_ptr<FaceElementForcesAndSourcesCore>(
+      new FaceElementForcesAndSourcesCore(mField));
+  feDragSidePtr = boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide>(
+      new VolumeElementForcesAndSourcesCoreOnSide(mField));
+
+  feDragPtr->getRuleHook = NavierStokesElement::FaceRule();
+  feDragSidePtr->getRuleHook = NavierStokesElement::FaceRule();
+
+  if (isStokesFlow) {
+    CHKERR NavierStokesElement::setStokesOperators(
+        feRhsPtr, feLhsPtr, "VELOCITY", "PRESSURE", commonData);
+  } else {
+    CHKERR NavierStokesElement::setNavierStokesOperators(
+        feRhsPtr, feLhsPtr, "VELOCITY", "PRESSURE", commonData);
+  }
+
+  NavierStokesElement::setCalcDragOperators(feDragPtr, feDragSidePtr,
+                                            "NAVIER_STOKES", "VELOCITY",
+                                            "PRESSURE", commonData);
+
+  dirichletBcPtr = boost::shared_ptr<DirichletDisplacementBc>(
+      new DirichletDisplacementBc(mField, "VELOCITY", Aij, D, F));
+  dirichletBcPtr->methodsOp.push_back(new NavierStokesElement::LoadScale());
+  // dirichletBcPtr->snes_ctx = FEMethod::CTX_SNESNONE;
+  dirichletBcPtr->snes_x = D;
+
+  // Assemble pressure and traction forces.
+  CHKERR MetaNeumannForces::setMomentumFluxOperators(mField, neumannForces,
+                                                     NULL, "VELOCITY");
+
+  // for postprocessing:
+  fePostProcPtr = boost::make_shared<PostProcVolumeOnRefinedMesh>(mField);
+  CHKERR fePostProcPtr->generateReferenceElementMesh();
+  CHKERR fePostProcPtr->addFieldValuesPostProc("VELOCITY");
+  CHKERR fePostProcPtr->addFieldValuesPostProc("PRESSURE");
+  CHKERR fePostProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
+  CHKERR fePostProcPtr->addFieldValuesGradientPostProc("VELOCITY");
+  // loop over blocks
+  for (auto &sit : commonData->setOfBlocksData) {
+    fePostProcPtr->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<3, 3>("VELOCITY",
+                                                 commonData->gradVelPtr));
+  }
+
+  fePostProcDragPtr = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  CHKERR fePostProcDragPtr->generateReferenceElementMesh();
+  CHKERR NavierStokesElement::setPostProcDragOperators(
+      fePostProcDragPtr, feDragSidePtr, "NAVIER_STOKES", "VELOCITY", "PRESSURE",
+      commonData);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Setup elements]
+
+//! [Setup SNES]
+MoFEMErrorCode NavierStokesExample::setupSNES() {
+  MoFEMFunctionBegin;
+
+  boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
+      neumannForces.begin();
+  for (; mit != neumannForces.end(); mit++) {
+    mit->second->methodsOp.push_back(new NavierStokesElement::LoadScale());
+    CHKERR DMMoFEMSNESSetFunction(dM, mit->first.c_str(),
+                                  &mit->second->getLoopFe(), NULL, NULL);
+  }
+
+  boost::shared_ptr<FEMethod> null_fe;
+  CHKERR DMMoFEMSNESSetFunction(dM, "NAVIER_STOKES", feRhsPtr, null_fe,
+                                null_fe);
+  CHKERR DMMoFEMSNESSetFunction(dM, DM_NO_ELEMENT, null_fe, null_fe,
+                                dirichletBcPtr);
+
+  CHKERR DMMoFEMSNESSetJacobian(dM, DM_NO_ELEMENT, null_fe, dirichletBcPtr,
+                                null_fe);
+  CHKERR DMMoFEMSNESSetJacobian(dM, "NAVIER_STOKES", feLhsPtr, null_fe,
+                                null_fe);
+  CHKERR DMMoFEMSNESSetJacobian(dM, DM_NO_ELEMENT, null_fe, null_fe,
+                                dirichletBcPtr);
+
+  SnesCtx *snes_ctx;
+  // create snes nonlinear solver
+  CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
+  CHKERR DMMoFEMGetSnesCtx(dM, &snes_ctx);
+  CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
+  CHKERR SNESSetJacobian(snes, Aij, Aij, SnesMat, snes_ctx);
+  CHKERR SNESSetFromOptions(snes);
+
+  MoFEMFunctionReturn(0);
+}
+//! [Setup SNES]
+
+//! [Solve problem]
+MoFEMErrorCode NavierStokesExample::solveProblem() {
+  MoFEMFunctionBegin;
+
+  // Vec G;
+  // CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
+  // VectorDouble3 vecGlobal = VectorDouble3(3);
+
+  // auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
+  //   MoFEMFunctionBegin;
+
+  //   CHKERR VecZeroEntries(G);
+  //   CHKERR VecAssemblyBegin(G);
+  //   CHKERR VecAssemblyEnd(G);
+
+  //   int ind[3] = {0, 1, 2};
+  //   CHKERR VecSetValues(G, 3, ind, loc.data().begin(), ADD_VALUES);
+  //   CHKERR VecAssemblyBegin(G);
+  //   CHKERR VecAssemblyEnd(G);
+
+  //   CHKERR VecGetValues(G, 3, ind, res.data().begin());
+
+  //   MoFEMFunctionReturn(0);
+  // };
+
+  auto scale_problem = [&](double U, double L, double P) {
+    MoFEMFunctionBegin;
+    CHKERR mField.getInterface<FieldBlas>()->fieldScale(L,
+                                                        "MESH_NODE_POSITIONS");
+
+    ProjectionFieldOn10NodeTet ent_method_on_10nodeTet(
+        mField, "MESH_NODE_POSITIONS", true, true);
+    CHKERR mField.loop_dofs("MESH_NODE_POSITIONS", ent_method_on_10nodeTet);
+    ent_method_on_10nodeTet.setNodes = false;
+    CHKERR mField.loop_dofs("MESH_NODE_POSITIONS", ent_method_on_10nodeTet);
+
+    CHKERR mField.getInterface<FieldBlas>()->fieldScale(U, "VELOCITY");
+    CHKERR mField.getInterface<FieldBlas>()->fieldScale(P, "PRESSURE");
+    MoFEMFunctionReturn(0);
+  };
+
+  pressureScale = mu * velocityScale / lengthScale;
+  NavierStokesElement::LoadScale::lambda = 1.0 / velocityScale;
+  CHKERR scale_problem(1.0 / velocityScale, 1.0 / lengthScale,
+                       1.0 / pressureScale);
+
+  int ss = 0;
+
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscosity: %6.4e\n", mu);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Density: %6.4e\n", rho);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Length scale: %6.4e\n", lengthScale);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Velocity scale: %6.4e\n",
+                     velocityScale);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure scale: %6.4e\n",
+                     pressureScale);
+  if (isStokesFlow) {
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Re number: 0 (Stokes flow)\n");
+  } else {
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Re number: %6.4e\n",
+                       rho / mu * velocityScale * lengthScale);
+  }
+
+  lambdaStep = 1.0 / numSteps;
+
+  while (lambda < 1.0 - 1e-12) {
+
+    lambda += lambdaStep;
+
+    if (isStokesFlow) {
+      reNumber = 0.0;
+      for (auto &bit : commonData->setOfBlocksData) {
+        bit.second.inertiaCoef = 0.0;
+        bit.second.viscousCoef = 1.0;
+      }
+    } else {
+      reNumber = rho / mu * velocityScale * lengthScale * lambda;
+      for (auto &bit : commonData->setOfBlocksData) {
+        bit.second.inertiaCoef = reNumber;
+        bit.second.viscousCoef = 1.0;
+      }
+    }
+
+    CHKERR PetscPrintf(PETSC_COMM_WORLD,
+                       "Step: %d | Lambda: %6.4e | Inc: %6.4e | Re: %6.4e \n",
+                       ss, lambda, lambdaStep, reNumber);
+
+    CHKERR DMoFEMPreProcessFiniteElements(dM, dirichletBcPtr.get());
+
+    CHKERR VecAssemblyBegin(D);
+    CHKERR VecAssemblyEnd(D);
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+
+    CHKERR SNESSolve(snes, PETSC_NULL, D);
+
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToGlobalVector(dM, D, INSERT_VALUES, SCATTER_REVERSE);
+
+    CHKERR scale_problem(velocityScale, lengthScale, pressureScale);
+
+    {
+
+      CHKERR DMoFEMLoopFiniteElements(dM, "NAVIER_STOKES", fePostProcPtr);
+
+      string out_file_name;
+
+      {
+        std::ostringstream stm;
+        stm << "out_" << ss << ".h5m";
+        out_file_name = stm.str();
+        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                           out_file_name.c_str());
+        CHKERR fePostProcPtr->postProcMesh.write_file(
+            out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+      }
+
+      // if (!solidFaces.empty()) {
+
+      //   CHKERR DMoFEMLoopFiniteElements(dM, "DRAG", fePostProcDragPtr);
+      //   std::ostringstream stm;
+      //   stm << "out_drag_" << ss << ".h5m";
+      //   out_file_name = stm.str();
+      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+      //                      out_file_name.c_str());
+      //   CHKERR fePostProcDragPtr->postProcMesh.write_file(
+      //       out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+
+      //   commonData->pressureDragForce.clear();
+      //   commonData->viscousDragForce.clear();
+      //   commonData->totalDragForce.clear();
+      //   CHKERR DMoFEMLoopFiniteElements(dM, "DRAG", feDragSidePtr);
+
+      //   compute_global_vec(commonData->pressureDragForce, vecGlobal);
+      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g,
+      //   %g)\n",
+      //                      vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+
+      //   compute_global_vec(commonData->viscousDragForce, vecGlobal);
+      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g,
+      //   %g)\n",
+      //                      vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+
+      //   compute_global_vec(commonData->totalDragForce, vecGlobal);
+      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
+      //                      vecGlobal[0], vecGlobal[1], vecGlobal[2]);
+      // }
+    }
+
+    CHKERR scale_problem(1.0 / velocityScale, 1.0 / lengthScale,
+                         1.0 / pressureScale);
+
+    ss++;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+//! [Solve problem]
+
+int main(int argc, char *argv[]) {
+
+  const char param_file[] = "param_file.petsc";
+  // Initialise MoFEM
+  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+
+  // Create mesh database
+  moab::Core mb_instance;              // create database
+  moab::Interface &moab = mb_instance; // create interface to database
+
+  // Create moab communicator
+  // Create separate MOAB communicator, it is duplicate of PETSc communicator.
+  // NOTE That this should eliminate potential communication problems between
+  // MOAB and PETSC functions.
+  MPI_Comm moab_comm_world;
+  MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
+  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  if (pcomm == NULL)
+    pcomm = new ParallelComm(&moab, moab_comm_world);
+
+  try {
+
+    // Create MoFEM database and link it to MoAB
+    MoFEM::Core core(moab);
+    MoFEM::Interface &m_field = core;
+
+    NavierStokesExample ex(m_field);
+    CHKERR ex.runProblem();
+  }
+  CATCH_ERRORS;
+
+  // finish work cleaning memory, getting statistics, etc
+  MoFEM::Core::Finalize();
+  return 0;
+}

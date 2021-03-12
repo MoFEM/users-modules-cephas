@@ -96,6 +96,7 @@ set(TUTORIALS_DIRS
   max-1
   adv-0
   adv-1
+  adv-2
   other_tutorials/mix_transport
   other_tutorials/poisson
   other_tutorials/simple_elasticity

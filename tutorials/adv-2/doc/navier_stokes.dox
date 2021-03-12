@@ -1,0 +1,70 @@
+/*! \page tutorial_navier_stokes ADV-2: Viscous fluid flow
+
+TODO: fix
+\note Prerequisites of this tutorial include \ref tutorial_elastic_problem
+
+<br>
+
+TODO: fix
+\note Intended learning outcome:
+- general structure of a program developed using MoFEM
+- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
+- idea of Domain element in MoFEM and how to use it
+- Use default Forms Integrals
+- how to **push** the developed UDOs to the *Pipeline*
+- utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
+
+\tableofcontents
+
+\section navier_stokes_introduction Introduction
+
+Navier-Stokes equations (NSE), governing the motion of a viscous fluid, are used in various applications: from simulations of the flow in blood vessels to studies of the air flow around aeroplane wings and rotor blades, scaling up to models of ocean and atmospheric currents. Even in the case of an incompressible steady flow, NSE are non-linear due to the effect of the inertia, which is more pronounced in case of a higher Reynolds number. In this tutorial we discuss the implementation of a viscous fluid model in MoFEM using hierarchical basis functions. This approach permits us to locally increase the order of approximation, enforcing conformity across finite element boundaries, without the need to change the implementation of an element. Moreover, the requirement of different approximation orders for primal (velocity) and dual (pressure) variables, necessary for a simulation of the flow using the mixed formulation, can be easily satisfied. 
+
+\section navier_stokes_problem_statement Problem statement
+
+An incompressible isoviscous steady-state flow in a domain \f$\Omega\f$ is governed by the following equations:
+\f[
+\begin{aligned}
+\rho \left(\mathbf{u}\cdot\nabla\right)\mathbf{u} - \mu\nabla^2\mathbf{u} + \nabla p &= \mathbf{f},\\
+\nabla\cdot\mathbf{u} &= 0,
+\end{aligned}
+\f]
+where the first line is the set of Navier-Stokes equations, representing the balance of the momentum, and the second line is the continuity equation; \f$\mathbf{u}=[u_1, u_2, u_3]^\intercal\f$ is the velocity field, \f$p\f$ is the hydrostatic pressure field, \f$\rho\f$ is the fluid mass density, \f$\mu\f$ is fluid viscosity and $\mathbf{f}$ is the density of external forces. The boundary value problem complements the above equations by the Dirichlet and Neumann conditions on the boundary \f$\partial\Omega\f$:
+\f[
+\begin{subnumcases}{\label{eq:bc}}
+\vec{u} = \vec{u}_D & on $\Gamma_D$,\\
+\vec{n}\cdot \left[-p\vec{I}+\mu\left(\nabla\vec{u} + \nabla\vec{u}^\intercal\right)\right] = \vec{g}_N & on $\Gamma_N$,
+\end{subnumcases}
+\f]
+where \f$\mathbf{u}_D\f$ is the prescribed velocity on the part of the boundary \f$\Gamma_D\subset\partial\Omega\f$, and \f$\mathbf{g}_N\f$ is the prescribed traction vector on the part of the boundary \f$\Gamma_N=\subset\partial\Omega\f$, \f$\mathbf{n}\f$ is an outward normal.
+
+The Reynolds number is introduced as the measure of the ratio of inertial forces to voscous forces. When viscoud force dominate over the inertia forces, Re << 1, the non-linear (convection) term can be dropped, simplifting NSE down to Stokes equation, for which the same boundary conditions as above can be used. 
+
+In order to verify the proposed formulation, we solved the problem of the fluid flow around a rigid sphere (see Fig.~\ref{fig:mesh}) of a radius $r$ positioned in the centre of a cubic domain, the side length $2l$  of which is considered sufficiently large compared to $r$, so that a uniform far-field velocity on the exterior boundaries is valid (note that the body forces are neglected).
+%On the inlet boundary we consider the same flow velocity and on the outlet boundary fluid pressure and assume flow perpendicular to the face. 
+Exploiting the symmetry of the problem, we used a quarter of the domain in our simulations.
+
+\section navier_stokes_scaling Non-dimensionalization and scaling
+
+\section navier_stokes_fe_formulation Finite-element formulation
+
+\subsection navier_stokes_fe_formulation_weak_form Weak form
+
+\subsection navier_stokes_fe_formulation_mixed_problem Note on the choice of spaces for the mixed problem
+
+\section navier_stokes_implementation Implementation
+
+\section navier_stokes_running Running the code
+
+\subsection navier_stokes_running_input_parameters Input parameters
+
+\subsection navier_stokes_running_stokes Stokes equation (low Reynolds number)
+
+\subsection navier_stokes_running_navier_stokes Navier-Stokes equation (higher Reynolds number)
+
+
+
+
+
+
+*/
