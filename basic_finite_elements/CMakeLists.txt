@@ -15,8 +15,7 @@ set(BFE_DIRS
   nonlinear_elasticity
   thermal
   cohesive_interface
-  simple_contact
-  navier_stokes)
+  simple_contact)
 
 function(bfe_install bfe_mod_dir)
   install(
