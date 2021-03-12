@@ -124,12 +124,12 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
     CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
-    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+    CHKERR m_field.add_field("MESH_TEST", H1, AINSWORTH_LEGENDRE_BASE,
                              3);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_TEST");
 
     CHKERR m_field.set_field_order(0, MBVERTEX, "U", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
@@ -142,25 +142,26 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "P", order_p);
 
     // Set 2nd order of approximation of geometry
-    auto setting_second_order_geometry = [&m_field]() {
-      MoFEMFunctionBegin;
-      // Setting geometry order everywhere
-      Range tets, edges;
-      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
-      CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
-                                                moab::Interface::UNION);
+    // auto setting_second_order_geometry = [&m_field]() {
+    //   MoFEMFunctionBegin;
+    //   // Setting geometry order everywhere
+    //   Range tets, edges;
+    //   CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+    //   CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
+    //                                             moab::Interface::UNION);
 
-      CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
-      CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
-      MoFEMFunctionReturn(0);
-    };
-    CHKERR setting_second_order_geometry();
+    //   CHKERR m_field.set_field_order(edges, "MESH_TEST", 2);
+    //   MoFEMFunctionReturn(0);
+    // };
+
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_TEST", 1);
+    //CHKERR setting_second_order_geometry();
 
     CHKERR m_field.build_fields();
 
     // Projection10NodeCoordsOnField ent_method_material(m_field,
-    //                                                   "MESH_NODE_POSITIONS");
-    // CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
+    //                                                   "MESH_TEST");
+    // CHKERR m_field.loop_dofs("MESH_TEST", ent_method_material);
 
     PetscRandom rctx;
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
@@ -206,7 +207,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_velocity, "U");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure, "P");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
-        set_coord, "MESH_NODE_POSITIONS");
+        set_coord, "MESH_TEST");
 
     PetscRandomDestroy(&rctx);
 
@@ -230,7 +231,7 @@ int main(int argc, char *argv[]) {
                                                         "P");
 
     CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES",
-                                                        "MESH_NODE_POSITIONS");
+                                                        "MESH_TEST");
 
     // Add entities to that element
     CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
@@ -272,42 +273,8 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NavierStokesElement::CommonData> commonData =
         boost::make_shared<NavierStokesElement::CommonData>(m_field);
 
-    // auto set_scales_for_block = [&](NavierStokesElement::BlockData &block) {
-    //   MoFEMFunctionBegin;
-    //   EntityHandle tree_root;
-    //   AdaptiveKDTree myTree(&moab);
-    //   CHKERR myTree.build_tree(block.eNts, &tree_root);
-
-    //   // get the overall bounding box corners
-    //   BoundBox box;
-    //   CHKERR myTree.get_bounding_box(box, &tree_root);
-    //   block.dimScales.length = box.diagonal_length();
-    //   block.dimScales.velocity = 1.0;
-    //   CHKERR m_field.getInterface<FieldBlas>()->fieldScale(
-    //       (1.0/block.dimScales.length), "MESH_NODE_POSITIONS");
-
-    //   block.dimScales.Re = block.fluidDensity * block.dimScales.velocity *
-    //                        block.dimScales.length / block.fluidViscosity;
-    //   if (only_stokes) {
-    //     block.dimScales.pressure = block.fluidViscosity *
-    //                                block.dimScales.velocity /
-    //                                block.dimScales.length;
-    //     block.inertiaCoef = 0.0;
-    //     block.viscousCoef = 1.0;
-
-    //   } 
-    //   else {
-    //     block.dimScales.pressure = block.fluidDensity *
-    //                                block.dimScales.velocity *
-    //                                block.dimScales.velocity;
-    //     block.inertiaCoef = 1.0;
-    //     block.viscousCoef = 1.0 / block.dimScales.Re;
-    //   }
-    //   MoFEMFunctionReturn(0);
-    // };
-
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
-      if (bit->getName().compare(0, 5, "FLUID") == 0) {
+      if (bit->getName().compare(0, 9, "MAT_FLUID") == 0) {
         const int id = bit->getMeshsetId();
         CHKERR m_field.get_moab().get_entities_by_type(
             bit->getMeshset(), MBTET, commonData->setOfBlocksData[id].eNts,
@@ -321,7 +288,10 @@ int main(int argc, char *argv[]) {
         commonData->setOfBlocksData[id].iD = id;
         commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
         commonData->setOfBlocksData[id].fluidDensity = attributes[1];
-        //set_scales_for_block(commonData->setOfBlocksData[id]);
+
+        double reNumber = attributes[1] / attributes[0];
+        commonData->setOfBlocksData[id].inertiaCoef = reNumber;
+        commonData->setOfBlocksData[id].viscousCoef = 1.0;
       }
     }
 
@@ -350,13 +320,13 @@ int main(int argc, char *argv[]) {
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it "
-          "1 "
-          "-pc_type none";
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
+        //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
       } else {
         char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
-                                 "-snes_rtol 0 -snes_max_it 1 -pc_type none";
+                                 "-snes_rtol 0 -snes_max_it 1";
+        //"-pc_type none";
         CHKERR PetscOptionsInsertString(NULL, testing_options);
       }
 
@@ -368,14 +338,7 @@ int main(int argc, char *argv[]) {
       CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
       CHKERR SNESSetFromOptions(snes);
 
-      CHKERR SNESSolve(snes, NULL, x);
-
-      // int ierr = VecView(f, PETSC_VIEWER_STDOUT_WORLD);
-      // CHKERRG(ierr);
-
-      PetscInt N;
-      VecGetSize(f, &N);
-      cout << "f size: " << N << endl;
+      CHKERR SNESSolve(snes, PETSC_NULL, x);
 
       if (test_jacobian == PETSC_FALSE) {
         double nrm_A0;
