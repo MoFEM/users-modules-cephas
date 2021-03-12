@@ -1,6 +1,6 @@
 /**
- * \file NavierStokesOperators.hpp
- * \example NavierStokesOperators.hpp
+ * \file NavierStokesElement.hpp
+ * \example NavierStokesElement.hpp
  *
  * \brief Implementation of operators for fluid flow
  *
@@ -36,19 +36,9 @@ struct NavierStokesElement {
 
   using UserDataOperator =
       MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator;
-
   using FaceUserDataOperator =
       MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator;
-
   using EntData = DataForcesAndSourcesCore::EntData;
-
-  struct DimScales {
-    double length;
-    double velocity;
-    double pressure;
-    double reNumber;
-    DimScales() : length(-1), velocity(-1), pressure(-1), reNumber(-1) {}
-  };
 
   struct BlockData {
     int iD;
@@ -57,7 +47,6 @@ struct NavierStokesElement {
     double fluidDensity;
     double inertiaCoef;
     double viscousCoef;
-    DimScales dimScales;
     Range eNts;
     BlockData()
         : iD(-1), fluidViscosity(-1), fluidDensity(-1), inertiaCoef(-1),
@@ -133,6 +122,56 @@ struct NavierStokesElement {
       MoFEMFunctionReturn(0);
     }
   };
+
+  /**
+   * @brief Function for setting up element for solving Navier-Stokes equations
+   *
+   * @param  m_field                    MoFEM interface
+   * @param  element_name               Name of the element
+   * @param  velocity_field_name        Name of the velocity field
+   * @param  pressure_field_name        Name of the pressure field
+   * @param  mesh_field_name            Name for mesh node positions field
+   * @param  ents                       Range of entities to be added to element
+   * @return                            Error code
+   *
+   */
+  static MoFEMErrorCode addElement(MoFEM::Interface &m_field,
+                                               const string element_name,
+                                               const string velocity_field_name,
+                                               const string pressure_field_name,
+                                               const string mesh_field_name,
+                                               const int dim = 3,
+                                               Range *ents = nullptr) {
+    MoFEMFunctionBegin;
+
+    CHKERR m_field.add_finite_element(element_name);
+
+    CHKERR m_field.modify_finite_element_add_field_row(element_name,
+                                                       velocity_field_name);
+    CHKERR m_field.modify_finite_element_add_field_col(element_name,
+                                                       velocity_field_name);
+    CHKERR m_field.modify_finite_element_add_field_data(element_name,
+                                                        velocity_field_name);
+
+    CHKERR m_field.modify_finite_element_add_field_row(element_name,
+                                                       pressure_field_name);
+    CHKERR m_field.modify_finite_element_add_field_col(element_name,
+                                                       pressure_field_name);
+    CHKERR m_field.modify_finite_element_add_field_data(element_name,
+                                                        pressure_field_name);
+
+    CHKERR m_field.modify_finite_element_add_field_data(element_name,
+                                                        mesh_field_name);
+
+    if (ents != nullptr) {
+      CHKERR m_field.add_ents_to_finite_element_by_dim(*ents, dim,
+                                                       element_name);
+    } else {
+      CHKERR m_field.add_ents_to_finite_element_by_dim(0, dim, element_name);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
 
   static MoFEMErrorCode setNavierStokesOperators(
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
@@ -364,31 +403,16 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &data);
   };
 
-  struct OpCalcVolumeFlux : public UserDataOperator {
-
-    boost::shared_ptr<CommonData> commonData;
-    BlockData &blockData;
-    int nbRows; ///< number of dofs on row
-    int nbIntegrationPts;
-
-    OpCalcVolumeFlux(const string field_name,
-                     boost::shared_ptr<CommonData> common_data,
-                     BlockData &block_data)
-        : UserDataOperator(field_name, UserDataOperator::OPROW),
-          commonData(common_data), blockData(block_data){};
-
-    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
-  };
-
   struct OpCalcDragForce : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
     BlockData &blockData;
 
-    OpCalcDragForce(boost::shared_ptr<CommonData> &common_data,
+    OpCalcDragForce(const string field_name,
+                    boost::shared_ptr<CommonData> &common_data,
                     BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
-              "P", UserDataOperator::OPROW),
+              field_name, UserDataOperator::OPROW),
           commonData(common_data), blockData(block_data) {
       doVertices = true;
       doEdges = false;
@@ -409,11 +433,12 @@ struct NavierStokesElement {
     std::string sideFeName;
 
     OpCalcDragTraction(
+        const string field_name,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> &side_fe,
         std::string side_fe_name, boost::shared_ptr<CommonData> &common_data,
         BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
-              "U", UserDataOperator::OPROW),
+              field_name, UserDataOperator::OPROW),
           sideFe(side_fe), sideFeName(side_fe_name), commonData(common_data),
           blockData(block_data) {
       doVertices = true;
@@ -434,12 +459,12 @@ struct NavierStokesElement {
     std::vector<EntityHandle> &mapGaussPts;
     BlockData &blockData;
 
-    OpPostProcDrag(moab::Interface &post_proc_mesh,
+    OpPostProcDrag(const string field_name, moab::Interface &post_proc_mesh,
                    std::vector<EntityHandle> &map_gauss_pts,
                    boost::shared_ptr<CommonData> &common_data,
                    BlockData &block_data)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
-              "U", UserDataOperator::OPROW),
+              field_name, UserDataOperator::OPROW),
           commonData(common_data), postProcMesh(post_proc_mesh),
           mapGaussPts(map_gauss_pts), blockData(block_data) {
       doVertices = true;
@@ -477,116 +502,22 @@ struct NavierStokesElement {
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
+
+    struct OpCalcVolumeFlux : public UserDataOperator {
+
+    boost::shared_ptr<CommonData> commonData;
+    BlockData &blockData;
+    int nbRows; ///< number of dofs on row
+    int nbIntegrationPts;
+
+    OpCalcVolumeFlux(const string field_name,
+                     boost::shared_ptr<CommonData> common_data,
+                     BlockData &block_data)
+        : UserDataOperator(field_name, UserDataOperator::OPROW),
+          commonData(common_data), blockData(block_data){};
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
 };
 
-// struct DirichletVelocityBc : public DirichletDisplacementBc {
-
-//   DirichletVelocityBc(MoFEM::Interface &m_field, const std::string &field_name,
-//                       Mat aij, Vec x, Vec f)
-//       : DirichletDisplacementBc(m_field, field_name, aij, x, f){};
-
-//   DirichletVelocityBc(MoFEM::Interface &m_field, const std::string &field_name)
-//       : DirichletDisplacementBc(m_field, field_name){};
-
-//   MoFEMErrorCode iNitalize();
-
-//   // MoFEMErrorCode postProcess();
-// };
-
-// struct DirichletPressureBc : public DirichletDisplacementBc {
-
-//   DirichletPressureBc(MoFEM::Interface &m_field, const std::string &field_name,
-//                       Mat aij, Vec x, Vec f)
-//       : DirichletDisplacementBc(m_field, field_name, aij, x, f){};
-
-//   DirichletPressureBc(MoFEM::Interface &m_field, const std::string &field_name)
-//       : DirichletDisplacementBc(m_field, field_name){};
-
-//   MoFEMErrorCode iNitalize();
-
-//   // MoFEMErrorCode postProcess();
-// };
-
 #endif //__NAVIERSTOKESELEMENT_HPP__
-
-// MoFEMErrorCode DirichletVelocityBc::postProcess() {
-//   MoFEMFunctionBegin;
-
-//   switch (ts_ctx) {
-//   case CTX_TSSETIFUNCTION: {
-//     snes_ctx = CTX_SNESSETFUNCTION;
-//     snes_x = ts_u;
-//     snes_f = ts_F;
-//     break;
-//   }
-//   case CTX_TSSETIJACOBIAN: {
-//     snes_ctx = CTX_SNESSETJACOBIAN;
-//     snes_B = ts_B;
-//     break;
-//   }
-//   default:
-//     break;
-//   }
-
-//   if (snes_B) {
-//     CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatZeroRowsColumns(snes_B, dofsIndices.size(),
-//                               dofsIndices.empty() ? PETSC_NULL
-//                                                   : &dofsIndices[0],
-//                               dIag, PETSC_NULL, PETSC_NULL);
-//   }
-//   if (snes_f) {
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//     for (std::vector<int>::iterator vit = dofsIndices.begin();
-//          vit != dofsIndices.end(); vit++) {
-//       CHKERR VecSetValue(snes_f, *vit, 0., INSERT_VALUES);
-//     }
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//   }
-
-//   MoFEMFunctionReturn(0);
-// }
-
-// MoFEMErrorCode DirichletPressureBc::postProcess() {
-//   MoFEMFunctionBegin;
-
-//   switch (ts_ctx) {
-//   case CTX_TSSETIFUNCTION: {
-//     snes_ctx = CTX_SNESSETFUNCTION;
-//     snes_x = ts_u;
-//     snes_f = ts_F;
-//     break;
-//   }
-//   case CTX_TSSETIJACOBIAN: {
-//     snes_ctx = CTX_SNESSETJACOBIAN;
-//     snes_B = ts_B;
-//     break;
-//   }
-//   default:
-//     break;
-//   }
-
-//   if (snes_B) {
-//     CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatZeroRowsColumns(snes_B, dofsIndices.size(),
-//                               dofsIndices.empty() ? PETSC_NULL
-//                                                   : &dofsIndices[0],
-//                               dIag, PETSC_NULL, PETSC_NULL);
-//   }
-//   if (snes_f) {
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//     for (std::vector<int>::iterator vit = dofsIndices.begin();
-//          vit != dofsIndices.end(); vit++) {
-//       CHKERR VecSetValue(snes_f, *vit, 0., INSERT_VALUES);
-//     }
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//   }
-
-//   MoFEMFunctionReturn(0);
-// }

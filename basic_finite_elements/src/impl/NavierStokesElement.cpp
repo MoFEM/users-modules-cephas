@@ -1,11 +1,11 @@
 /**
- * \file NavierStokesOperators.cpp
- * \example NavierStokesOperators.cpp
+ * \file NavierStokesElement.cpp
+ * \example NavierStokesElement.cpp
  *
  * \brief Implementation of operators for fluid flow
  *
  * Implementation of operators for simulation of the fluid flow governed by
- * for Stokes and Navier-Stokes equations, and computation of the viscous drag
+ * Stokes and Navier-Stokes equations, and computation of the viscous drag
  * force on a fluid-solid inteface
  */
 
@@ -145,9 +145,8 @@ MoFEMErrorCode NavierStokesElement::setCalcVolumeFluxOperators(
       fe_flux_ptr->getOpPtrVector().push_back(
           new OpSetInvJacH1ForFatPrism(inv_jac_ptr));
     }
-    fe_flux_ptr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<3>(velocity_field,
-                                            common_data->velPtr));
+    fe_flux_ptr->getOpPtrVector().push_back(new OpCalculateVectorFieldValues<3>(
+        velocity_field, common_data->velPtr));
     fe_flux_ptr->getOpPtrVector().push_back(
         new OpCalcVolumeFlux(velocity_field, common_data, sit.second));
   }
@@ -173,13 +172,15 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
         new OpCalculateInvJacForFace(common_data->invJac));
     dragFe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(common_data->invJac));
+    // dragFe->getOpPtrVector().push_back(
+    //     new OpMakeHighOrderGeometryWeightsOnFace());  
     dragFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
     dragFe->getOpPtrVector().push_back(
-        new NavierStokesElement::OpCalcDragTraction(sideDragFe, side_fe_name,
-                                                    common_data, sit.second));
-    dragFe->getOpPtrVector().push_back(
-        new NavierStokesElement::OpCalcDragForce(common_data, sit.second));
+        new NavierStokesElement::OpCalcDragTraction(
+            velocity_field, sideDragFe, side_fe_name, common_data, sit.second));
+    dragFe->getOpPtrVector().push_back(new NavierStokesElement::OpCalcDragForce(
+        velocity_field, common_data, sit.second));
   }
   MoFEMFunctionReturn(0);
 };
@@ -202,6 +203,8 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
         new OpCalculateInvJacForFace(common_data->invJac));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(common_data->invJac));
+    // postProcDragPtr->getOpPtrVector().push_back(
+    //     new OpMakeHighOrderGeometryWeightsOnFace());    
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(velocity_field,
                                             common_data->velPtr));
@@ -209,12 +212,12 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
         new OpCalculateScalarFieldValues(pressure_field,
                                          common_data->pressPtr));
     postProcDragPtr->getOpPtrVector().push_back(
-        new NavierStokesElement::OpCalcDragTraction(sideDragFe, side_fe_name,
-                                                    common_data, sit.second));
+        new NavierStokesElement::OpCalcDragTraction(
+            velocity_field, sideDragFe, side_fe_name, common_data, sit.second));
     postProcDragPtr->getOpPtrVector().push_back(
-        new NavierStokesElement::OpPostProcDrag(postProcDragPtr->postProcMesh,
-                                                postProcDragPtr->mapGaussPts,
-                                                common_data, sit.second));
+        new NavierStokesElement::OpPostProcDrag(
+            velocity_field, postProcDragPtr->postProcMesh,
+            postProcDragPtr->mapGaussPts, common_data, sit.second));
   }
   MoFEMFunctionReturn(0);
 };
@@ -749,8 +752,8 @@ MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(int side,
 
   auto t_u = getFTensor1FromMat<3>(*commonData->velPtr);
   auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
-  //const double vol = getVolume(); ///< Get Volume of element
-  
+  // const double vol = getVolume(); ///< Get Volume of element
+
   FTensor::Index<'i', 3> i;
 
   FTensor::Tensor1<double, 3> t_flux;
@@ -802,13 +805,18 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragForce::doWork(int side,
       getFTensor1FromMat<3>(*commonData->totalDragTract);
 
   FTensor::Index<'i', 3> i;
+  //auto t_w = getFTensor0IntegrationWeight();
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
     // double nrm2 = sqrt(t_normal(i) * t_normal(i));
     // t_normal(i) = t_normal(i) / nrm2;
 
-    double w = getArea() * getGaussPts()(2, gg);
+    //double w = getArea() * getGaussPts()(2, gg);
+    //double w = t_w * getArea();
+
+    double w = getGaussPts()(2, gg);
+    w *= cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1) / 2.;
 
     // if (getHoGaussPtsDetJac().size() > 0) {
     //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
@@ -819,7 +827,7 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragForce::doWork(int side,
       commonData->viscousDragForce[dd] += w * viscous_drag_at_gauss_pts(dd);
       commonData->totalDragForce[dd] += w * total_drag_at_gauss_pts(dd);
     }
-
+    //++t_w;
     ++pressure_drag_at_gauss_pts;
     ++viscous_drag_at_gauss_pts;
     ++total_drag_at_gauss_pts;
@@ -1136,292 +1144,3 @@ VectorDouble3 stokes_flow_velocity(double x, double y, double z) {
   res[2] = ur * sin(theta) * cos(phi) + ut * cos(theta) * cos(phi);
   return res;
 }
-
-// MoFEMErrorCode DirichletVelocityBc::iNitalize() {
-//   MoFEMFunctionBegin;
-//   if (mapZeroRows.empty() || !methodsOp.empty()) {
-//     ParallelComm *pcomm =
-//         ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-
-//     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-//       string name = it->getName();
-//       if (name.compare(0, 3, "EXT") == 0) {
-//         // if (name.compare(0, 7, "fdsfdsfsd") == 0) {
-
-//         VectorDouble3 scaled_values(3);
-//         // scaled_values[0] = 1.0;
-//         // scaled_values[1] = 0.0;
-//         // scaled_values[2] = 0.0;
-
-//         for (int dim = 0; dim < 3; dim++) {
-//           Range ents;
-//           CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim,
-//                                                      ents, true);
-//           if (dim > 1) {
-//             Range _edges;
-//             CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-//                                                      moab::Interface::UNION);
-//             ents.insert(_edges.begin(), _edges.end());
-//           }
-//           if (dim > 0) {
-//             Range _nodes;
-//             CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-//             ents.insert(_nodes.begin(), _nodes.end());
-//           }
-//           for (Range::iterator eit = ents.begin(); eit != ents.end(); eit++) {
-//             for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-//                      problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr)) {
-//               const boost::shared_ptr<NumeredDofEntity> &dof = *dof_ptr;
-//               std::bitset<8> pstatus(dof->getPStatus());
-//               if (pstatus.test(0))
-//                 continue; // only local
-//               if (dof->getEntType() == MBVERTEX) {
-
-//                 EntityHandle ent = dof->getEnt();
-//                 double coords[3];
-//                 mField.get_moab().get_coords(&ent, 1,
-//                                              coords); // get coordinates
-
-//                 scaled_values =
-//                     stokes_flow_velocity(coords[0], coords[1], coords[2]);
-
-//                 if (dof->getDofCoeffIdx() == 0) {
-//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-//                 }
-//                 if (dof->getDofCoeffIdx() == 1) {
-//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[1];
-//                 }
-//                 if (dof->getDofCoeffIdx() == 2) {
-//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[2];
-//                 }
-//               } else {
-//                 if (dof->getDofCoeffIdx() == 0) {
-//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//                 }
-//                 if (dof->getDofCoeffIdx() == 1) {
-//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//                 }
-//                 if (dof->getDofCoeffIdx() == 2) {
-//                   mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//                 }
-//               }
-//             }
-//           }
-//           // for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit)
-//           // {
-//           //   auto lo_dit =
-//           //       problemPtr->getNumeredDofsRows()
-//           //           ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-//           //           .lower_bound(boost::make_tuple(fieldName, eit->first,
-//           //           0));
-//           //   auto hi_dit =
-//           //       problemPtr->getNumeredDofsRows()
-//           //           ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-//           //           .upper_bound(boost::make_tuple(fieldName, eit->second,
-//           //                                          MAX_DOFS_ON_ENTITY));
-//           //   for (; lo_dit != hi_dit; ++lo_dit) {
-//           //     auto &dof = *lo_dit;
-//           //     if (dof->getEntType() == MBVERTEX) {
-//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
-//           //       scaled_values[0];
-//           //     } else {
-//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//           //     }
-//           //   }
-//           // }
-//           // for (Range::iterator eit = ents.begin(); eit != ents.end();
-//           // eit++)
-//           // {
-//           //   for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-//           //            problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr))
-//           //            {
-//           //     NumeredDofEntity *dof = dof_ptr->get();
-//           //     if (dof->getEntType() == MBVERTEX) {
-//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
-//           //       scaled_values[0];
-//           //       // dof->getFieldData() = scaled_values[0];
-//           //     } else {
-//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//           //       // dof->getFieldData() = 0;
-//           //     }
-//           //   }
-//           //  }
-//           // }
-//         }
-//       }
-//     }
-//     dofsIndices.resize(mapZeroRows.size());
-//     dofsValues.resize(mapZeroRows.size());
-//     int ii = 0;
-//     std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-//     for (; mit != mapZeroRows.end(); mit++, ii++) {
-//       dofsIndices[ii] = mit->first;
-//       dofsValues[ii] = mit->second;
-//     }
-//   }
-//   MoFEMFunctionReturn(0);
-// }
-
-// MoFEMErrorCode DirichletVelocityBc::postProcess() {
-//   MoFEMFunctionBegin;
-
-//   switch (ts_ctx) {
-//   case CTX_TSSETIFUNCTION: {
-//     snes_ctx = CTX_SNESSETFUNCTION;
-//     snes_x = ts_u;
-//     snes_f = ts_F;
-//     break;
-//   }
-//   case CTX_TSSETIJACOBIAN: {
-//     snes_ctx = CTX_SNESSETJACOBIAN;
-//     snes_B = ts_B;
-//     break;
-//   }
-//   default:
-//     break;
-//   }
-
-//   if (snes_B) {
-//     CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatZeroRowsColumns(snes_B, dofsIndices.size(),
-//                               dofsIndices.empty() ? PETSC_NULL
-//                                                   : &dofsIndices[0],
-//                               dIag, PETSC_NULL, PETSC_NULL);
-//   }
-//   if (snes_f) {
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//     for (std::vector<int>::iterator vit = dofsIndices.begin();
-//          vit != dofsIndices.end(); vit++) {
-//       CHKERR VecSetValue(snes_f, *vit, 0., INSERT_VALUES);
-//     }
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//   }
-
-//   MoFEMFunctionReturn(0);
-// }
-
-// MoFEMErrorCode DirichletPressureBc::iNitalize() {
-//   MoFEMFunctionBegin;
-//   if (mapZeroRows.empty() || !methodsOp.empty()) {
-//     ParallelComm *pcomm =
-//         ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-
-//     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-//       string name = it->getName();
-//       if (name.compare(0, 5, "PRESS") == 0) {
-
-//         VectorDouble scaled_values(1);
-//         std::vector<double> attributes;
-//         it->getAttributes(attributes);
-//         scaled_values[0] = attributes[0];
-
-//         for (int dim = 0; dim < 3; dim++) {
-//           Range ents;
-//           CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), dim,
-//                                                      ents, true);
-//           if (dim > 1) {
-//             Range _edges;
-//             CHKERR mField.get_moab().get_adjacencies(ents, 1, false, _edges,
-//                                                      moab::Interface::UNION);
-//             ents.insert(_edges.begin(), _edges.end());
-//           }
-//           if (dim > 0) {
-//             Range _nodes;
-//             CHKERR mField.get_moab().get_connectivity(ents, _nodes, true);
-//             ents.insert(_nodes.begin(), _nodes.end());
-//           }
-//           for (auto eit = ents.pair_begin(); eit != ents.pair_end(); ++eit) {
-//             auto lo_dit =
-//                 problemPtr->getNumeredDofsRows()
-//                     ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-//                     .lower_bound(boost::make_tuple(fieldName, eit->first, 0));
-//             auto hi_dit =
-//                 problemPtr->getNumeredDofsRows()
-//                     ->get<Composite_Name_And_Ent_And_EntDofIdx_mi_tag>()
-//                     .upper_bound(boost::make_tuple(fieldName, eit->second,
-//                                                    MAX_DOFS_ON_ENTITY));
-//             for (; lo_dit != hi_dit; ++lo_dit) {
-//               auto &dof = *lo_dit;
-//               if (dof->getEntType() == MBVERTEX) {
-//                 mapZeroRows[dof->getPetscGlobalDofIdx()] = scaled_values[0];
-//               } else {
-//                 mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//               }
-//             }
-//           }
-//           // for (Range::iterator eit = ents.begin(); eit != ents.end();
-//           // eit++)
-//           // {
-//           //   for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-//           //            problemPtr, fieldName, *eit, pcomm->rank(), dof_ptr))
-//           //            {
-//           //     NumeredDofEntity *dof = dof_ptr->get();
-//           //     if (dof->getEntType() == MBVERTEX) {
-//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] =
-//           //       scaled_values[0];
-//           //       // dof->getFieldData() = scaled_values[0];
-//           //     } else {
-//           //       mapZeroRows[dof->getPetscGlobalDofIdx()] = 0;
-//           //       // dof->getFieldData() = 0;
-//           //     }
-//           //   }
-//           //  }
-//           // }
-//         }
-//       }
-//     }
-//     dofsIndices.resize(mapZeroRows.size());
-//     dofsValues.resize(mapZeroRows.size());
-//     int ii = 0;
-//     std::map<DofIdx, FieldData>::iterator mit = mapZeroRows.begin();
-//     for (; mit != mapZeroRows.end(); mit++, ii++) {
-//       dofsIndices[ii] = mit->first;
-//       dofsValues[ii] = mit->second;
-//     }
-//   }
-//   MoFEMFunctionReturn(0);
-// }
-
-// MoFEMErrorCode DirichletPressureBc::postProcess() {
-//   MoFEMFunctionBegin;
-
-//   switch (ts_ctx) {
-//   case CTX_TSSETIFUNCTION: {
-//     snes_ctx = CTX_SNESSETFUNCTION;
-//     snes_x = ts_u;
-//     snes_f = ts_F;
-//     break;
-//   }
-//   case CTX_TSSETIJACOBIAN: {
-//     snes_ctx = CTX_SNESSETJACOBIAN;
-//     snes_B = ts_B;
-//     break;
-//   }
-//   default:
-//     break;
-//   }
-
-//   if (snes_B) {
-//     CHKERR MatAssemblyBegin(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatAssemblyEnd(snes_B, MAT_FINAL_ASSEMBLY);
-//     CHKERR MatZeroRowsColumns(snes_B, dofsIndices.size(),
-//                               dofsIndices.empty() ? PETSC_NULL
-//                                                   : &dofsIndices[0],
-//                               dIag, PETSC_NULL, PETSC_NULL);
-//   }
-//   if (snes_f) {
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//     for (std::vector<int>::iterator vit = dofsIndices.begin();
-//          vit != dofsIndices.end(); vit++) {
-//       CHKERR VecSetValue(snes_f, *vit, 0., INSERT_VALUES);
-//     }
-//     CHKERR VecAssemblyBegin(snes_f);
-//     CHKERR VecAssemblyEnd(snes_f);
-//   }
-
-//   MoFEMFunctionReturn(0);
-// }
