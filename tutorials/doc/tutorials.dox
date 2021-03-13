@@ -41,7 +41,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref lessons_introduction</td>
        <td> Brief introduction about MoFEM interfaces which enable users to implement the codes with different level of complexity.
-       <br/> *Keywords:* 
+       <br/> *Keywords:* Design
        </td>
   </tr>
 
@@ -172,7 +172,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_hemholtz_problem</td>
        <td> Hemholtz problem for acoustics
-       <br/> *Keywords:* Complex variable, Linear Solver
+       <br/> *Keywords:* Complex variable, Linear Solver, boundary markers
        </td>
   </tr
 
@@ -206,7 +206,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_nonlinear_dynamic_elastic</td>
        <td> Nonlinear elastic
-       <br/> *Keywords:* 
+       <br/> *Keywords:* Alpha2 method
        </td>
   </tr>
 
@@ -220,7 +220,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tut_mix_poisson</td>
        <td> A mixed problem
-       <br/> *Keywords:* H-div space
+       <br/> *Keywords:* H-div space, homogenous boundary condistions by DOFs removal 
        </td>
   </tr>
 
@@ -265,7 +265,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_plastic_problem</td>
        <td> Plasticity problem
-       <br/> *Keywords:* Nonliera problem, linearisation
+       <br/> *Keywords:* Nonliera problem, linearisation, L2 space, boundary markers, displacement control, force control
        </td>
   </tr>
 
