@@ -478,6 +478,22 @@ target_link_libraries(testing_jacobian_of_navier_stokes_element
 )
 cm_export_file("mesh_for_testing_navier_stokes_element.h5m" export_atom_tests_basic_fe)
 
+add_test(
+  testing_jacobian_of_navier_stokes_element
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_navier_stokes_element
+  -my_file mesh_for_testing_navier_stokes_element.h5m 
+  -my_order_u 4 -my_order_p 3
+)
+
+add_test(
+  testing_jacobian_of_navier_stokes_element_discont_pressure
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_navier_stokes_element
+  -my_file mesh_for_testing_navier_stokes_element.h5m 
+  -my_order_u 4 -my_order_p 2 -discont_pressure 1
+)
+
 cm_export_file("2_tets_springs.cub" export_atom_tests_basic_fe)
 add_test(
   testing_jacobian_of_spring_element_ale

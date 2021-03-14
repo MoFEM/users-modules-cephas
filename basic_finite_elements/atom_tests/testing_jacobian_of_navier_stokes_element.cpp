@@ -59,6 +59,7 @@ int main(int argc, char *argv[]) {
     PetscBool flg_test = PETSC_FALSE; // true check if error is numerical error
 
     PetscBool only_stokes = PETSC_FALSE;
+    PetscBool discont_pressure = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "TEST_NAVIER_STOKES problem",
                              "none");
@@ -76,6 +77,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR PetscOptionsBool("-only_stokes", "only stokes", "", only_stokes,
                             &only_stokes, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-discont_pressure", "discontinuous pressure", "",
+                            discont_pressure, &discont_pressure, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
@@ -110,10 +114,6 @@ int main(int argc, char *argv[]) {
 
     // Print boundary conditions and material parameters
     MeshsetsManager *meshsets_mng_ptr;
-    // CHKERR m_field.getInterface(meshsets_mng_ptr);
-    // CHKERR meshsets_mng_ptr->printDisplacementSet();
-    // CHKERR meshsets_mng_ptr->printForceSet();
-    // CHKERR meshsets_mng_ptr->printMaterialsSet();
 
     BitRefLevel bit_level0;
     bit_level0.set(0);
@@ -123,13 +123,17 @@ int main(int argc, char *argv[]) {
     // **** ADD FIELDS **** //
 
     CHKERR m_field.add_field("U", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
-    CHKERR m_field.add_field("MESH_TEST", H1, AINSWORTH_LEGENDRE_BASE,
+    if (discont_pressure) {
+      CHKERR m_field.add_field("P", L2, AINSWORTH_LEGENDRE_BASE, 1);
+    } else {
+      CHKERR m_field.add_field("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+    }
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3);
 
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "U");
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "P");
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_TEST");
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
 
     CHKERR m_field.set_field_order(0, MBVERTEX, "U", 1);
     CHKERR m_field.set_field_order(0, MBEDGE, "U", order_u);
@@ -142,26 +146,25 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTET, "P", order_p);
 
     // Set 2nd order of approximation of geometry
-    // auto setting_second_order_geometry = [&m_field]() {
-    //   MoFEMFunctionBegin;
-    //   // Setting geometry order everywhere
-    //   Range tets, edges;
-    //   CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
-    //   CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
-    //                                             moab::Interface::UNION);
+    auto setting_second_order_geometry = [&m_field]() {
+      MoFEMFunctionBegin;
+      Range tets, edges;
+      CHKERR m_field.get_moab().get_entities_by_type(0, MBTET, tets);
+      CHKERR m_field.get_moab().get_adjacencies(tets, 1, false, edges,
+                                                moab::Interface::UNION);
 
-    //   CHKERR m_field.set_field_order(edges, "MESH_TEST", 2);
-    //   MoFEMFunctionReturn(0);
-    // };
+      CHKERR m_field.set_field_order(edges, "MESH_NODE_POSITIONS", 2);
+      MoFEMFunctionReturn(0);
+    };
 
-    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_TEST", 1);
-    //CHKERR setting_second_order_geometry();
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+    CHKERR setting_second_order_geometry();
 
     CHKERR m_field.build_fields();
 
-    // Projection10NodeCoordsOnField ent_method_material(m_field,
-    //                                                   "MESH_TEST");
-    // CHKERR m_field.loop_dofs("MESH_TEST", ent_method_material);
+    Projection10NodeCoordsOnField ent_method_material(m_field,
+                                                      "MESH_NODE_POSITIONS");
+    CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS", ent_method_material);
 
     PetscRandom rctx;
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
@@ -190,24 +193,8 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
-                         double *z) {
-      MoFEMFunctionBegin;
-      double value;
-      double scale = 0.5;
-      PetscRandomGetValue(rctx, &value);
-      field_data[0] = (*x) + (value - 0.5) * scale;
-      PetscRandomGetValue(rctx, &value);
-      field_data[1] = (*y) + (value - 0.5) * scale;
-      PetscRandomGetValue(rctx, &value);
-      field_data[2] = (*z) + (value - 0.5) * scale;
-      MoFEMFunctionReturn(0);
-    };
-
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_velocity, "U");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure, "P");
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
-        set_coord, "MESH_TEST");
 
     PetscRandomDestroy(&rctx);
 
@@ -231,7 +218,7 @@ int main(int argc, char *argv[]) {
                                                         "P");
 
     CHKERR m_field.modify_finite_element_add_field_data("TEST_NAVIER_STOKES",
-                                                        "MESH_TEST");
+                                                        "MESH_NODE_POSITIONS");
 
     // Add entities to that element
     CHKERR m_field.add_ents_to_finite_element_by_type(0, MBTET,
@@ -308,75 +295,82 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMSNESSetFunction(dm, "TEST_NAVIER_STOKES", feRhs, nullFE,
                                   nullFE);
 
-    Vec x, f;
-    CHKERR DMCreateGlobalVector(dm, &x);
-    CHKERR VecDuplicate(x, &f);
-    CHKERR DMoFEMMeshToLocalVector(dm, x, INSERT_VALUES, SCATTER_FORWARD);
+    // Vector of DOFs and the RHS
+    auto D = smartCreateDMVector(dm);
+    auto F = smartVectorDuplicate(D);
 
-    Mat A, fdA;
-    CHKERR DMCreateMatrix(dm, &A);
-    CHKERR MatDuplicate(A, MAT_DO_NOT_COPY_VALUES, &fdA);
+    auto D2 = smartVectorDuplicate(D);
+    auto F2 = smartVectorDuplicate(D);
+
+    CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecZeroEntries(F);
+
+    CHKERR DMoFEMMeshToLocalVector(dm, D2, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecZeroEntries(F2);
+
+    // Stiffness matrix
+    auto A = smartCreateDMMatrix(dm);
+
+    CHKERR MatSetOption(A, MAT_SPD, PETSC_TRUE);
+    CHKERR MatZeroEntries(A);
+
+    auto fdA = smartMatDuplicate(A, MAT_COPY_VALUES);
 
     if (test_jacobian == PETSC_TRUE) {
       char testing_options[] =
-          "-snes_test_jacobian -snes_test_jacobian_display "
-          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
-        //"-pc_type none";
+          "-snes_test_jacobian 1e-7 -snes_test_jacobian_view "
+          "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 "
+          "-snes_max_it 1 ";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
-      } else {
-        char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
-                                 "-snes_rtol 0 -snes_max_it 1";
-        //"-pc_type none";
-        CHKERR PetscOptionsInsertString(NULL, testing_options);
-      }
+    } else {
+      char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
+                               "-snes_rtol 0 "
+                               "-snes_max_it 1 ";
+      CHKERR PetscOptionsInsertString(NULL, testing_options);
+    }
 
-      SNES snes;
-      CHKERR SNESCreate(PETSC_COMM_WORLD, &snes);
-      MoFEM::SnesCtx *snes_ctx;
+    auto snes = MoFEM::createSNES(m_field.get_comm());
+    SNESConvergedReason snes_reason;
+    SnesCtx *snes_ctx;
+
+    // create snes nonlinear solver
+    {
       CHKERR DMMoFEMGetSnesCtx(dm, &snes_ctx);
-      CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
+      CHKERR SNESSetFunction(snes, F, SnesRhs, snes_ctx);
       CHKERR SNESSetJacobian(snes, A, A, SnesMat, snes_ctx);
       CHKERR SNESSetFromOptions(snes);
+    }
 
-      CHKERR SNESSolve(snes, PETSC_NULL, x);
+    CHKERR SNESSolve(snes, PETSC_NULL, D);
 
-      if (test_jacobian == PETSC_FALSE) {
-        double nrm_A0;
-        CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
+    if (test_jacobian == PETSC_FALSE) {
+      double nrm_A0;
+      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A0);
 
-        char testing_options_fd[] = "-snes_fd";
-        CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
+      char testing_options_fd[] = "-snes_fd";
+      CHKERR PetscOptionsInsertString(NULL, testing_options_fd);
 
-        CHKERR SNESSetFunction(snes, f, SnesRhs, snes_ctx);
-        CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
-        CHKERR SNESSetFromOptions(snes);
+      CHKERR SNESSetFunction(snes, F2, SnesRhs, snes_ctx);
+      CHKERR SNESSetJacobian(snes, fdA, fdA, SnesMat, snes_ctx);
+      CHKERR SNESSetFromOptions(snes);
 
-        CHKERR SNESSolve(snes, NULL, x);
-        CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
+      CHKERR SNESSolve(snes, NULL, D2);
 
-        double nrm_A;
-        CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
-        PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
-                    nrm_A / nrm_A0);
-        nrm_A /= nrm_A0;
+      CHKERR MatAXPY(A, -1, fdA, SUBSET_NONZERO_PATTERN);
 
-        const double tol = 1e-5;
-        if (nrm_A > tol) {
-          SETERRQ(
-              PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
-              "Difference between hand-calculated tangent matrix and finite "
-              "difference matrix is too big");
-        }
+      double nrm_A;
+      CHKERR MatNorm(A, NORM_INFINITY, &nrm_A);
+      PetscPrintf(PETSC_COMM_WORLD, "Matrix norms %3.4e %3.4e\n", nrm_A,
+                  nrm_A / nrm_A0);
+      nrm_A /= nrm_A0;
+
+      constexpr double tol = 1e-6;
+      if (nrm_A > tol) {
+        SETERRQ(PETSC_COMM_WORLD, MOFEM_ATOM_TEST_INVALID,
+                "Difference between hand-calculated tangent matrix and finite "
+                "difference matrix is too big");
       }
-
-      CHKERR VecDestroy(&x);
-      CHKERR VecDestroy(&f);
-      CHKERR MatDestroy(&A);
-      CHKERR MatDestroy(&fdA);
-      CHKERR SNESDestroy(&snes);
-
-      // destroy DM
-      CHKERR DMDestroy(&dm);
+    }
   }
   CATCH_ERRORS;
 
