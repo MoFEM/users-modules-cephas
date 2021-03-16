@@ -1,0 +1,172 @@
+/*! \page tutorial_navier_stokes Navier-Stokes equation
+
+\tableofcontents
+
+\section navier_stokes_introduction Introduction
+
+Navier-Stokes equations (NSE), governing the motion of a viscous fluid, are used in various applications: from simulations of the flow in blood vessels to studies of the air flow around aeroplane wings and rotor blades, scaling up to models of ocean and atmospheric currents. Even in the case of an incompressible steady flow, NSE are non-linear due to the effect of the inertia, which is more pronounced in case of a higher Reynolds number. In this tutorial we discuss the implementation of a viscous fluid model in MoFEM using hierarchical basis functions. This approach permits us to locally increase the order of approximation, enforcing conformity across finite element boundaries, without the need to change the implementation of an element. Moreover, the requirement of different approximation orders for primal (velocity) and dual (pressure) variables, necessary for a simulation of the flow using the mixed formulation, can be easily satisfied. 
+
+\section navier_stokes_problem_statement Problem statement
+
+An incompressible isoviscous steady-state flow in a domain \f$\Omega\f$ is governed by the following equations:
+\f[
+\begin{align}
+\label{eq:balance_momentum} \rho \left(\mathbf{u}\cdot\nabla\right)\mathbf{u} - \mu\nabla^2\mathbf{u} + \nabla p &= \mathbf{f},\\
+\label{eq:cont} \nabla\cdot\mathbf{u} &= 0,
+\end{align}
+\f]
+where \eqref{eq:balance_momentum} is the set of Navier-Stokes equations, representing the balance of the momentum, and \eqref{eq:cont} is the continuity equation; \f$\mathbf{u}=[u_1, u_2, u_3]^\intercal\f$ is the velocity field, \f$p\f$ is the hydrostatic pressure field, \f$\rho\f$ is the fluid mass density, \f$\mu\f$ is fluid viscosity and $\mathbf{f}$ is the density of external forces. The boundary value problem complements the above equations by the Dirichlet and Neumann conditions on the boundary \f$\partial\Omega\f$:
+\f[
+\begin{align}{\label{eq:bc}}
+\mathbf{u} = \mathbf{u}_D & \;\text{on}\; \Gamma_D,\\
+\mathbf{n}\cdot \left[-p\mathbf{I}+\mu\left(\nabla\mathbf{u} + \nabla\mathbf{u}^\intercal\right)\right] = \mathbf{g}_N & \;\text{on} \;\Gamma_N,
+\end{align}
+\f]
+where \f$\mathbf{u}_D\f$ is the prescribed velocity on the part of the boundary \f$\Gamma_D\subset\partial\Omega\f$, and \f$\mathbf{g}_N\f$ is the prescribed traction vector on the part of the boundary \f$\Gamma_N=\subset\partial\Omega\f$, \f$\mathbf{n}\f$ is an outward normal.
+
+In this tutorial we will solve the problem of the fluid flow around a rigid sphere (see \ref navier_stokes_problem_statement "Figure 1") of a radius \f$r\f$ positioned in the centre of a cubic domain, the side length \f$2l\f$ of which is considered sufficiently large compared to \f$r\f$, so that a uniform far-field velocity on the exterior boundaries is valid (note that the body forces are neglected). Exploiting the symmetry of the problem, we will use a quarter of the domain in our simulations.
+
+\anchor navier_stokes_problem_statement
+\image html mesh.png "Figure 1: (a) Finite-element mesh used for simulation of fluid flow around a rigid sphere. (b) Sketch of the problem set-up on a section $z=0$ of the mesh." width=800px
+
+Note that due to the structure of differential operators in the Navier-Stokes equations, to have a unique solution the hydrostatic pressure has to be specified on a part of boundary. To achive that, here we combine Dirichlet and Neumann condition on the outlet side of the domain. In the case when the the flow is perpedicular to the boundary (uy = 0, uz = 0), straint, see Theorem 1 in cite, 
+
+\section navier_stokes_scaling Non-dimensionalization and scaling
+
+The Reynolds number is introduced for the problems governed by the Navier-Stokes equations as a measure of the ratio of inertial forces to viscous forces. When viscous force dominate over the inertia forces, Re << 1, the non-linear (convection) term can be dropped, simplifying NSE down to Stokes equation, for which the same boundary conditions as above can be used. for the considered problem L is the diameter of the sphere and U is the magnitude of far-field velocity. 
+
+However, in many cases this is not the case, and even more, the nonlinear term becomes dominant. In these cases non-dimensionalization (scaling) of Navier-Stokes equations is helpful, which permits to decrease the number of coefficients to only one -- Reynolds number \f$\mathcal{R}\f$. The following scales can be used for the case of flow with relatively low Reynolds number (e.g. less than 100).
+<table>
+<caption id="multi_row"> Non-dimensionalization of Navier-Stokes equations </caption>
+<tr><th> Physical quantity <th> Scale <th> Dimensionless variable 
+<tr><td style="text-align:center"> Length <td style="text-align:center"> \f$L\f$ <td style="text-align:center"> \f$\mathbf{x}^{*}=\mathbf{x}\:/\:L, \quad \nabla^{*}(\cdot) = L\nabla(\cdot)\f$
+<tr><td style="text-align:center"> Velocity <td style="text-align:center"> \f$U\f$ <td style="text-align:center"> \f$\mathbf{u}^{*}=\mathbf{u}\:/\:U\f$
+<tr><td style="text-align:center"> Pressure <td style="text-align:center"> \f$P=\frac{\mu U}{L}\f$ <td style="text-align:center"> \f$p^{*}=p\:/\:P\f$
+</table>
+Mote that the scale for pressure depends on the scales for the length and the velocity. Using these scales, Navier-stokes equations (1) - (2) can be written in the following dimensionless form (considering zero external forces):
+\f[
+\begin{align}
+\label{eq:balance_momentum_dim_less} \mathcal{R} \left(\mathbf{u}^{*}\cdot\nabla\right)\mathbf{u}^{*} - \nabla^2\mathbf{u}^{*} + \nabla p^{*} &= \mathbf{f},\\
+\label{eq:cont_dim_less} \nabla\cdot\mathbf{u} &= 0,
+\end{align}
+\f]
+
+Note that now the influence of the nonlinearity on the problem is fully controlled by the value of the Reynodls parameter. On the one hand, Re << 1, or if one simply wants too consider the Stokes equation, the nonlinear term can be dropped. On the other hand, if the Reynolds number is high enough such the nonlineary is sufficently strong to pose problems for convergnce (see below discussion of the linearisation of the problem for the Newton-Raphson method), then a certain iterative procedure can be used to obtain a solution. Indeed, to find the solution for a given Reynolds number, a number of intermediate problems can be solved for range of smaller \f$\mathcal{R}\f$, eventually reaching the original value. Such technique will also be used in this tutorial.
+
+\section navier_stokes_fe_formulation Finite-element formulation
+
+\subsection navier_stokes_fe_formulation_weak_form Weak form
+
+The weak statement of the problem~\eqref{eq:eq}-\eqref{eq:bc} reads: Find a vector field $\mathbf{u}  \in \mathbf{V}$ and a scalar field $p \in \mathcal{P}$, such that for any test functions $\mathbf{v} = [v_1, v_2, v_3]^\intercal\in \mathbf{V}$ and $q \in \mathcal{P}$:
+ \begin{align}
+\label{eq:weak}
+\int\limits_\Omega \rho \left(\mathbf{u}\cdot\nabla\right)\mathbf{u} \cdot\mathbf{v} \,d\Omega + \int\limits_{\Omega}\mu\,\nabla\mathbf{u}\mathbin{:}\nabla\mathbf{v}\, d\Omega - \int\limits_{\Omega}p\, \nabla\cdot\mathbf{v} \, d\Omega -  \int\limits_{\Omega}q\, \nabla\cdot\mathbf{u} \, d\Omega\nonumber =\\  \int\limits_{\Omega}\mathbf{f}\cdot\mathbf{v}\,d\Omega + \int\limits_{\Gamma_N}\mathbf{g}_N\cdot\mathbf{v}\,d\Gamma_N,
+%\rho\left( \left(\mathbf{u}\cdot\nabla\right)\mathbf{u}, \mathbf{v} \right)_{\Omega} + \mu\left(\nabla\mathbf{u},\nabla\mathbf{v}\right)_{\Omega} - \left(p, \nabla\cdot\mathbf{v} \right)_{\Omega} -  \left(\nabla\cdot\mathbf{u}, q \right)_{\Omega} = \left(\mathbf{f}, \mathbf{v}\right)_{\Omega} + \left(\mathbf{g}_N, \mathbf{v}\right)_{\Gamma_N},
+\end{align}
+while the particular choices for the spaces $\mathbf{V}$ and  $\mathcal{P}$ will be discussed below. Upon finite-element (FE) discretization of the domain $\Omega$, we consider interpolation of both unknown fields introducing  shape functions on each element:
+ \begin{equation}
+\label{eq:shape}
+u_i = \sum\limits_{\alpha=1}^{n_{\mathbf{u}}}  N_{\alpha}\, u_i^\alpha, \quad p = \sum\limits_{\beta=1}^{n_p}  \Phi_{\beta}\, p^\beta; \quad v_i = \sum\limits_{\alpha=1}^{n_{\mathbf{u}}}  N_{\alpha}\, v_i^\alpha, \quad q = \sum\limits_{\beta=1}^{n_p}  \Phi_{\beta}\, q^\beta,
+\end{equation}
+where $n_{\mathbf{u}}$ is the number of shape functions associated with the velocity field, and $n_p$ is the similar number for the pressure field. Using the hierarchical basis approximation, the vector of the shape functions can be decomposed into four sub-vectors, consisting of shape functions associated with element's entities: vertices, edges, faces and the volume of the element, e.g. for the velocity field:
+ \begin{equation}
+\label{eq:shape_hier}
+\mathbf{N}^\textit{el} = \left[N_1, \ldots N_\alpha, \ldots N_{n_{\mathbf{u}}}\right]^\intercal = \left[\mathbf{N}^\textit{ver},  \mathbf{N}^\textit{edge}, \mathbf{N}^\textit{face}, \mathbf{N}^\textit{vol}\right]^\intercal.
+\end{equation}
+%while shape functions for the pressure field on each element $\mathbf{\Phi}^\textit{el}$ can be represented similarly.
+ MoFEM~\cite{kaczmarczyk_lukasz_2018_1490890} incorporates hierarchical basis functions of arbitrary order for tetrahedral meshes, based on Legendre~\cite{ainsworth2003hierarchic}, Lobatto~\cite{beriot2016efficient} or Jacoby~\cite{fuentes2015orientation} polynomials, and approximations of $\mathbf{H}^1$, $\mathbf{H}$-$\textbf{div}$, $\mathbf{H}$-$\textbf{curl}$ and $\mathbf{L}^2$ spaces can be considered.  Furthermore, MoFEM provides functionality for iterating not only over all elements in the FE mesh, but also over shape functions associated with all entities of each element. Therefore, the resolution of a particular problem requires only the implementation of operators for computing the residual vector and the tangent matrix of each element, independent of the choice of the basis functions.
+% \begin{equation}
+%\mathbf{R}^\textit{el}_{\mathbf{u}} = \int\limits_{\Omega^\textit{el}} \sum\limits_{\alpha, \beta,  \gamma=1}^{n_{\mathbf{u}}}\sum\limits_{i, j=1}^3 u_j^\alpha u_i
+%\end{equation}
+%\textbf{Notation and Units} \\
+%Ensure that you explain all symbols and please stick with SI units, where possible.
+Finally, the Newton method can be used for solving the  non-linear problem.
+
+\subsection navier_stokes_fe_formulation_mixed_problem Note on the choice of spaces for the mixed problem
+
+Note that in the weak statement velocity and pressure fields belong to different fields, namely, H1 and L2. Two different approaches can be used for implementation of such combination of fields in the finite-element framewrork. One can use generalised Taylor-Hood elements, which feature continious (h1) approximation of both velocity and pressure, however, in order to enforce stability, the approximations functions should be one order lower than those for the velocity. Furthermore, Taylor-Hood elements impose certain constraints on the mes, see. Alternatively, a discontinuous approximation for pressure can be used, e.g. Croizeous raviart element can be sued.
+
+\section navier_stokes_implementation Implementation
+
+The example class has necessary fields to store input parameters and internal data structures, as well as a set of functions for setting up and solving the problem:
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Example Navier Stokes
+
+The set of functions used in this tutorials in the following:
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Run problem
+
+The function ExampleNavierStokes::runProblem is executed from the `main` function:
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Main function
+
+\subsection navier_stokes_running_input_parameters Reading mesh and input parameters
+
+The workflow of solving a problem using the finite-element method starts from reading the mesh and other input parameters:
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Read input
+
+Once the mesh is read, we find the set of tetrahedra correspoding to the computational domain Omega. Furthremioore, we identify the fluid-structure interface, i.e. the set of triangles correspoding to the surface of the sphere:
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Find blocks
+
+\subsection navier_stokes_running_setup Setting up fields, finite elements and the problem itself
+
+Once the domain and the fluid-structure interface are indetified, we can setup the problem. First, 
+we define the velocity and pressure fields. Note that for velocity we use space H1, while for pressure the user can choose between using also H1 space (continious approximation, Taylor-Hood element), or a discontinious approximation using L2 space. Note that in the former case, the approoximation functions for pressure has to be one order lower than that of the velocity (e.g. order 2 for velocity and order 1 for pressure), while the the latter case the difference between the two has to be 2 orders (e.g. order 3 for velocity and order 1 for pressure). 
+
+Furthemore, the properties of heiirarchical base functions can be used to locally increase the approximation order for the elements on the fluid-structure interface, where the gradients of the velocity can be expected to be the highest due to the no-slip boundary condition on the surface of the sphere. 
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup fields
+
+After that the finite elements which will operate on the set above fields can be defined. In particular, we define elements for solving Navier-Stokes equations, computation of the drag traction and force on the surface of the surface, and, finally, for computing the contribution of Neumann (natural) boundary conditions.
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Define finite elements
+
+Once the finite elements are defined, we will need to create element instances and push necessary operators to their pipelines. First, we setup in such way an element for solving Navier-Stokes (or if one prefers, Stokes) equations. Note that right-hand side and left-hand side elements are considered separately. In case of Navier-Stokes equations, operators are pushed to elements pipelines using function NavierStokesElement::setNavierStokesOperators. In particular, the following operators are pushed to right-hand side: 
+- NavierStokesElement::OpAssembleRhsVelocityLin, 
+- NavierStokesElement::OpAssembleRhsVelocityNonLin, 
+- NavierStokesElement::OpAssembleRhsPressure,
+
+while for the left-hand side we push these operators:
+- NavierStokesElement::OpAssembleLhsDiagLin, 
+- NavierStokesElement::OpAssembleLhsDiagNonLin, 
+- NavierStokesElement::OpAssembleLhsOffDiag.
+
+Upon that, we setup in the same way elements for computing the drag traction and the drag force acting on the sphere. The following operators are pushed to t
+
+Additionally, operators for the Neumann boundary conditions are set using the function MetaNeumannForces::setMomentumFluxOperators.
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup element instances
+
+
+In case of navier stokes, the following operators are pushed to the pipeline of the right-hand side element: NavierStokesElement::OpAssembleRhsVelocityLin, NavierStokesElement::OpAssembleRhsVelocityNonLin, NavierStokesElement::OpAssembleRhsPressure
+
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup algebraic structures
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup discrete manager
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup SNES
+
+\subsection navier_stokes_running_input_parameters Solving the problem and post-processing the results
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Solve problem
+
+\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Post process
+
+\section navier_stokes_running Running the example
+
+We will consider two cases: first, flow governed by Stokes equation, i.e. neglecting the nonlinear terms, and then we will solve full set Navier-Stokes equations. For both cases we will use the same mesh. We will start by partitioning this mesh:
+\code
+mofem_part -my_file sphere_test.cub -my_nparts 4 -output_file sphere_test_4.h5m
+\endcode
+while `mofem_part` can be found in `$HOME/mofem_install/um/build_release/tools/`. Here we partitioned the mesh in 4 parts in order to be executed on 4 cores in a distributed-memory parallel environment. Note that any number of parts less or equal to number of physically available cores can be used.
+
+\subsection navier_stokes_running_stokes Stokes equation 
+
+
+
+\subsection navier_stokes_running_navier_stokes Navier-Stokes equations
+
+*/
