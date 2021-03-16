@@ -25,10 +25,11 @@ using namespace boost::numeric;
 using namespace MoFEM;
 using namespace std;
 
-static char help[] = "Navier-Stokes Example\n"
-                     "\n";
+static char help[] = "Navier-Stokes Example\n";
+
 double NavierStokesElement::LoadScale::lambda = 1;
 
+//! [Example Navier Stokes]
 struct NavierStokesExample {
 
   NavierStokesExample(MoFEM::Interface &m_field) : mField(m_field) {
@@ -56,19 +57,21 @@ private:
   double lengthScale = 1.0;
   double velocityScale = 1.0;
   double reNumber = 1.0;
+  double density;
+  double viscosity;
   PetscBool isStokesFlow = PETSC_FALSE;
 
-  int numSteps = 1; // default number of steps
+  int numSteps = 1;
   double lambdaStep = 1.0;
   double lambda = 0.0;
-
-  double rho, mu, Re;
+  int step;
 
   Range solidFaces;
-
   BitRefLevel bitLevel;
+
   DM dM;
   SNES snes;
+
   boost::shared_ptr<NavierStokesElement::CommonData> commonData;
 
   SmartPetscObj<Vec> D;
@@ -90,14 +93,15 @@ private:
   MoFEMErrorCode readInput();
   MoFEMErrorCode findBlocks();
   MoFEMErrorCode setupFields();
-  MoFEMErrorCode declareElements();
+  MoFEMErrorCode defineFiniteElements();
   MoFEMErrorCode setupDiscreteManager();
   MoFEMErrorCode setupAlgebraicStructures();
-  MoFEMErrorCode setupElements();
+  MoFEMErrorCode setupElementInstances();
   MoFEMErrorCode setupSNES();
   MoFEMErrorCode solveProblem();
   MoFEMErrorCode postProcess();
 };
+//! [Example Navier Stokes]
 
 //! [Run problem]
 MoFEMErrorCode NavierStokesExample::runProblem() {
@@ -105,10 +109,10 @@ MoFEMErrorCode NavierStokesExample::runProblem() {
   CHKERR readInput();
   CHKERR findBlocks();
   CHKERR setupFields();
-  CHKERR declareElements();
+  CHKERR defineFiniteElements();
   CHKERR setupDiscreteManager();
   CHKERR setupAlgebraicStructures();
-  CHKERR setupElements();
+  CHKERR setupElementInstances();
   CHKERR setupSNES();
   CHKERR solveProblem();
   MoFEMFunctionReturn(0);
@@ -206,8 +210,8 @@ MoFEMErrorCode NavierStokesExample::findBlocks() {
       commonData->setOfBlocksData[id].fluidViscosity = attributes[0];
       commonData->setOfBlocksData[id].fluidDensity = attributes[1];
 
-      mu = commonData->setOfBlocksData[id].fluidViscosity;
-      rho = commonData->setOfBlocksData[id].fluidDensity;
+      viscosity = commonData->setOfBlocksData[id].fluidViscosity;
+      density = commonData->setOfBlocksData[id].fluidDensity;
     }
   }
 
@@ -337,8 +341,8 @@ MoFEMErrorCode NavierStokesExample::setupFields() {
 }
 //! [Setup fields]
 
-//! [Declare elements]
-MoFEMErrorCode NavierStokesExample::declareElements() {
+//! [Define finite elements]
+MoFEMErrorCode NavierStokesExample::defineFiniteElements() {
   MoFEMFunctionBegin;
 
   // Add finite element (this defines element, declaration comes later)
@@ -358,7 +362,7 @@ MoFEMErrorCode NavierStokesExample::declareElements() {
 
   MoFEMFunctionReturn(0);
 }
-//! [Declare elements]
+//! [Define finite elements]
 
 //! [Setup discrete manager]
 MoFEMErrorCode NavierStokesExample::setupDiscreteManager() {
@@ -407,8 +411,8 @@ MoFEMErrorCode NavierStokesExample::setupAlgebraicStructures() {
 }
 //! [Setup algebraic structures]
 
-//! [Setup elements]
-MoFEMErrorCode NavierStokesExample::setupElements() {
+//! [Setup element instances]
+MoFEMErrorCode NavierStokesExample::setupElementInstances() {
   MoFEMFunctionBegin;
 
   feLhsPtr = boost::shared_ptr<VolumeElementForcesAndSourcesCore>(
@@ -425,7 +429,6 @@ MoFEMErrorCode NavierStokesExample::setupElements() {
       new VolumeElementForcesAndSourcesCoreOnSide(mField));
 
   feDragPtr->getRuleHook = NavierStokesElement::FaceRule();
-  feDragSidePtr->getRuleHook = NavierStokesElement::FaceRule();
 
   if (isStokesFlow) {
     CHKERR NavierStokesElement::setStokesOperators(
@@ -445,7 +448,7 @@ MoFEMErrorCode NavierStokesExample::setupElements() {
   // dirichletBcPtr->snes_ctx = FEMethod::CTX_SNESNONE;
   dirichletBcPtr->snes_x = D;
 
-  // Assemble pressure and traction forces.
+  // Assemble pressure and traction forces
   CHKERR MetaNeumannForces::setMomentumFluxOperators(mField, neumannForces,
                                                      NULL, "VELOCITY");
 
@@ -456,22 +459,17 @@ MoFEMErrorCode NavierStokesExample::setupElements() {
   CHKERR fePostProcPtr->addFieldValuesPostProc("PRESSURE");
   CHKERR fePostProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
   CHKERR fePostProcPtr->addFieldValuesGradientPostProc("VELOCITY");
-  // loop over blocks
-  for (auto &sit : commonData->setOfBlocksData) {
-    fePostProcPtr->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<3, 3>("VELOCITY",
-                                                 commonData->gradVelPtr));
-  }
 
   fePostProcDragPtr = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   CHKERR fePostProcDragPtr->generateReferenceElementMesh();
+  CHKERR fePostProcDragPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
   CHKERR NavierStokesElement::setPostProcDragOperators(
       fePostProcDragPtr, feDragSidePtr, "NAVIER_STOKES", "VELOCITY", "PRESSURE",
       commonData);
 
   MoFEMFunctionReturn(0);
 }
-//! [Setup elements]
+//! [Setup element instances]
 
 //! [Setup SNES]
 MoFEMErrorCode NavierStokesExample::setupSNES() {
@@ -480,7 +478,6 @@ MoFEMErrorCode NavierStokesExample::setupSNES() {
   boost::ptr_map<std::string, NeumannForcesSurface>::iterator mit =
       neumannForces.begin();
   for (; mit != neumannForces.end(); mit++) {
-    mit->second->methodsOp.push_back(new NavierStokesElement::LoadScale());
     CHKERR DMMoFEMSNESSetFunction(dM, mit->first.c_str(),
                                   &mit->second->getLoopFe(), NULL, NULL);
   }
@@ -514,27 +511,6 @@ MoFEMErrorCode NavierStokesExample::setupSNES() {
 MoFEMErrorCode NavierStokesExample::solveProblem() {
   MoFEMFunctionBegin;
 
-  // Vec G;
-  // CHKERR VecCreateMPI(PETSC_COMM_WORLD, 3, 3, &G);
-  // VectorDouble3 vecGlobal = VectorDouble3(3);
-
-  // auto compute_global_vec = [&G](VectorDouble3 &loc, VectorDouble3 &res) {
-  //   MoFEMFunctionBegin;
-
-  //   CHKERR VecZeroEntries(G);
-  //   CHKERR VecAssemblyBegin(G);
-  //   CHKERR VecAssemblyEnd(G);
-
-  //   int ind[3] = {0, 1, 2};
-  //   CHKERR VecSetValues(G, 3, ind, loc.data().begin(), ADD_VALUES);
-  //   CHKERR VecAssemblyBegin(G);
-  //   CHKERR VecAssemblyEnd(G);
-
-  //   CHKERR VecGetValues(G, 3, ind, res.data().begin());
-
-  //   MoFEMFunctionReturn(0);
-  // };
-
   auto scale_problem = [&](double U, double L, double P) {
     MoFEMFunctionBegin;
     CHKERR mField.getInterface<FieldBlas>()->fieldScale(L,
@@ -551,15 +527,15 @@ MoFEMErrorCode NavierStokesExample::solveProblem() {
     MoFEMFunctionReturn(0);
   };
 
-  pressureScale = mu * velocityScale / lengthScale;
+  pressureScale = viscosity * velocityScale / lengthScale;
   NavierStokesElement::LoadScale::lambda = 1.0 / velocityScale;
   CHKERR scale_problem(1.0 / velocityScale, 1.0 / lengthScale,
                        1.0 / pressureScale);
 
-  int ss = 0;
+  step = 0;
 
-  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscosity: %6.4e\n", mu);
-  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Density: %6.4e\n", rho);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscosity: %6.4e\n", viscosity);
+  CHKERR PetscPrintf(PETSC_COMM_WORLD, "Density: %6.4e\n", density);
   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Length scale: %6.4e\n", lengthScale);
   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Velocity scale: %6.4e\n",
                      velocityScale);
@@ -569,7 +545,7 @@ MoFEMErrorCode NavierStokesExample::solveProblem() {
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "Re number: 0 (Stokes flow)\n");
   } else {
     CHKERR PetscPrintf(PETSC_COMM_WORLD, "Re number: %6.4e\n",
-                       rho / mu * velocityScale * lengthScale);
+                       density / viscosity * velocityScale * lengthScale);
   }
 
   lambdaStep = 1.0 / numSteps;
@@ -585,16 +561,17 @@ MoFEMErrorCode NavierStokesExample::solveProblem() {
         bit.second.viscousCoef = 1.0;
       }
     } else {
-      reNumber = rho / mu * velocityScale * lengthScale * lambda;
+      reNumber = density / viscosity * velocityScale * lengthScale * lambda;
       for (auto &bit : commonData->setOfBlocksData) {
         bit.second.inertiaCoef = reNumber;
         bit.second.viscousCoef = 1.0;
       }
     }
 
-    CHKERR PetscPrintf(PETSC_COMM_WORLD,
-                       "Step: %d | Lambda: %6.4e | Inc: %6.4e | Re: %6.4e \n",
-                       ss, lambda, lambdaStep, reNumber);
+    CHKERR PetscPrintf(
+        PETSC_COMM_WORLD,
+        "Step: %d | Lambda: %6.4e | Inc: %6.4e | Re number: %6.4e \n", step,
+        lambda, lambdaStep, reNumber);
 
     CHKERR DMoFEMPreProcessFiniteElements(dM, dirichletBcPtr.get());
 
@@ -611,64 +588,89 @@ MoFEMErrorCode NavierStokesExample::solveProblem() {
 
     CHKERR scale_problem(velocityScale, lengthScale, pressureScale);
 
-    {
-
-      CHKERR DMoFEMLoopFiniteElements(dM, "NAVIER_STOKES", fePostProcPtr);
-
-      string out_file_name;
-
-      {
-        std::ostringstream stm;
-        stm << "out_" << ss << ".h5m";
-        out_file_name = stm.str();
-        CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
-                           out_file_name.c_str());
-        CHKERR fePostProcPtr->postProcMesh.write_file(
-            out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
-      }
-
-      // if (!solidFaces.empty()) {
-
-      //   CHKERR DMoFEMLoopFiniteElements(dM, "DRAG", fePostProcDragPtr);
-      //   std::ostringstream stm;
-      //   stm << "out_drag_" << ss << ".h5m";
-      //   out_file_name = stm.str();
-      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
-      //                      out_file_name.c_str());
-      //   CHKERR fePostProcDragPtr->postProcMesh.write_file(
-      //       out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
-
-      //   commonData->pressureDragForce.clear();
-      //   commonData->viscousDragForce.clear();
-      //   commonData->totalDragForce.clear();
-      //   CHKERR DMoFEMLoopFiniteElements(dM, "DRAG", feDragSidePtr);
-
-      //   compute_global_vec(commonData->pressureDragForce, vecGlobal);
-      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Pressure drag: (%g, %g,
-      //   %g)\n",
-      //                      vecGlobal[0], vecGlobal[1], vecGlobal[2]);
-
-      //   compute_global_vec(commonData->viscousDragForce, vecGlobal);
-      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Viscous drag: (%g, %g,
-      //   %g)\n",
-      //                      vecGlobal[0], vecGlobal[1], vecGlobal[2]);
-
-      //   compute_global_vec(commonData->totalDragForce, vecGlobal);
-      //   CHKERR PetscPrintf(PETSC_COMM_WORLD, "Total drag: (%g, %g, %g)\n",
-      //                      vecGlobal[0], vecGlobal[1], vecGlobal[2]);
-      // }
-    }
+    CHKERR postProcess();
 
     CHKERR scale_problem(1.0 / velocityScale, 1.0 / lengthScale,
                          1.0 / pressureScale);
 
-    ss++;
+    step++;
   }
 
   MoFEMFunctionReturn(0);
 }
 //! [Solve problem]
 
+//! [Post process]
+MoFEMErrorCode NavierStokesExample::postProcess() {
+  MoFEMFunctionBegin;
+
+  string out_file_name;
+
+  CHKERR DMoFEMLoopFiniteElements(dM, "NAVIER_STOKES", fePostProcPtr);
+  {
+    std::ostringstream stm;
+    stm << "out_" << step << ".h5m";
+    out_file_name = stm.str();
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n",
+                       out_file_name.c_str());
+    CHKERR fePostProcPtr->postProcMesh.write_file(out_file_name.c_str(), "MOAB",
+                                                  "PARALLEL=WRITE_PART");
+  }
+
+  CHKERR VecZeroEntries(commonData->pressureDragForceVec);
+  CHKERR VecZeroEntries(commonData->shearDragForceVec);
+  CHKERR VecZeroEntries(commonData->totalDragForceVec);
+  CHKERR DMoFEMLoopFiniteElements(dM, "DRAG", feDragPtr);
+
+  auto get_vec_data = [&](auto vec, std::array<double, 3> &data) {
+    MoFEMFunctionBegin;
+    CHKERR VecAssemblyBegin(vec);
+    CHKERR VecAssemblyEnd(vec);
+    const double *array;
+    CHKERR VecGetArrayRead(vec, &array);
+    if (mField.get_comm_rank() == 0) {
+      for (int i : {0, 1, 2})
+        data[i] = array[i];
+    }
+    CHKERR VecRestoreArrayRead(vec, &array);
+    MoFEMFunctionReturn(0);
+  };
+
+  std::array<double, 3> pressure_drag;
+  std::array<double, 3> shear_drag;
+  std::array<double, 3> total_drag;
+
+  CHKERR get_vec_data(commonData->pressureDragForceVec, pressure_drag);
+  CHKERR get_vec_data(commonData->shearDragForceVec, shear_drag);
+  CHKERR get_vec_data(commonData->totalDragForceVec, total_drag);
+
+  if (mField.get_comm_rank() == 0) {
+    MOFEM_LOG_C("SELF", Sev::inform,
+                "Pressure drag force: [ %6.4e, %6.4e, %6.4e ]",
+                pressure_drag[0], pressure_drag[1], pressure_drag[2]);
+    MOFEM_LOG_C("SELF", Sev::inform,
+                "Shear drag force: [ %6.4e, %6.4e, %6.4e ]", shear_drag[0],
+                shear_drag[1], shear_drag[2]);
+    MOFEM_LOG_C("SELF", Sev::inform,
+                "Total drag force: [ %6.4e, %6.4e, %6.4e ]", total_drag[0],
+                total_drag[1], total_drag[2]);
+  }
+
+  CHKERR DMoFEMLoopFiniteElements(dM, "DRAG", fePostProcDragPtr);
+  {
+    std::ostringstream stm;
+    stm << "out_drag_" << step << ".h5m";
+    out_file_name = stm.str();
+    CHKERR PetscPrintf(PETSC_COMM_WORLD, "out file %s\n",
+                       out_file_name.c_str());
+    CHKERR fePostProcDragPtr->postProcMesh.write_file(
+        out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+  }
+  MoFEMFunctionReturn(0);
+}
+//! [Post process]
+
+//! [Main function]
 int main(int argc, char *argv[]) {
 
   const char param_file[] = "param_file.petsc";
@@ -680,8 +682,8 @@ int main(int argc, char *argv[]) {
   moab::Interface &moab = mb_instance; // create interface to database
 
   // Create moab communicator
-  // Create separate MOAB communicator, it is duplicate of PETSc communicator.
-  // NOTE That this should eliminate potential communication problems between
+  // Create separate MOAB communicator, it is duplicate of PETSc communicator
+  // This should eliminate potential communication problems between
   // MOAB and PETSC functions.
   MPI_Comm moab_comm_world;
   MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
@@ -704,3 +706,4 @@ int main(int argc, char *argv[]) {
   MoFEM::Core::Finalize();
   return 0;
 }
+//! [Main function]
