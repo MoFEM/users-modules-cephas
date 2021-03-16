@@ -5,7 +5,7 @@
  * \brief Implementation of operators for fluid flow
  *
  * Implementation of operators for simulation of the fluid flow governed by
- * Stokes and Navier-Stokes equations, and computation of the viscous drag
+ * Stokes and Navier-Stokes equations, and computation of the drag
  * force on a fluid-solid inteface
  */
 
@@ -59,6 +59,7 @@ MoFEMErrorCode NavierStokesElement::setNavierStokesOperators(
     fe_lhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
+
     fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsDiagLin(
         velocity_field, velocity_field, common_data, sit.second));
     fe_lhs_ptr->getOpPtrVector().push_back(new OpAssembleLhsDiagNonLin(
@@ -73,6 +74,7 @@ MoFEMErrorCode NavierStokesElement::setNavierStokesOperators(
                                                  common_data->gradVelPtr));
     fe_rhs_ptr->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
+
     fe_rhs_ptr->getOpPtrVector().push_back(
         new OpAssembleRhsVelocityLin(velocity_field, common_data, sit.second));
     fe_rhs_ptr->getOpPtrVector().push_back(new OpAssembleRhsVelocityNonLin(
@@ -117,6 +119,7 @@ MoFEMErrorCode NavierStokesElement::setStokesOperators(
     fe_rhs_ptr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
+
     fe_rhs_ptr->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
     fe_rhs_ptr->getOpPtrVector().push_back(
@@ -161,21 +164,17 @@ MoFEMErrorCode NavierStokesElement::setCalcDragOperators(
     const std::string pressure_field,
     boost::shared_ptr<CommonData> common_data) {
   MoFEMFunctionBegin;
-
   for (auto &sit : common_data->setOfFacesData) {
-    // if (sideDragFe->getOpPtrVector().empty()) {
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
-    //  }
     dragFe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(common_data->invJac));
     dragFe->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(common_data->invJac));
-    // dragFe->getOpPtrVector().push_back(
-    //     new OpMakeHighOrderGeometryWeightsOnFace());  
     dragFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         pressure_field, common_data->pressPtr));
+
     dragFe->getOpPtrVector().push_back(
         new NavierStokesElement::OpCalcDragTraction(
             velocity_field, sideDragFe, side_fe_name, common_data, sit.second));
@@ -194,23 +193,20 @@ MoFEMErrorCode NavierStokesElement::setPostProcDragOperators(
   MoFEMFunctionBegin;
 
   for (auto &sit : common_data->setOfFacesData) {
-    // if (sideDragFe->getOpPtrVector().empty()) {
     sideDragFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(velocity_field,
                                                  common_data->gradVelPtr));
-    // }
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(common_data->invJac));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(common_data->invJac));
-    // postProcDragPtr->getOpPtrVector().push_back(
-    //     new OpMakeHighOrderGeometryWeightsOnFace());    
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<3>(velocity_field,
                                             common_data->velPtr));
     postProcDragPtr->getOpPtrVector().push_back(
         new OpCalculateScalarFieldValues(pressure_field,
                                          common_data->pressPtr));
+
     postProcDragPtr->getOpPtrVector().push_back(
         new NavierStokesElement::OpCalcDragTraction(
             velocity_field, sideDragFe, side_fe_name, common_data, sit.second));
@@ -354,7 +350,6 @@ NavierStokesElement::OpAssembleLhsDiagLin::iNtegrate(EntData &row_data,
       w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    // double const alpha = w * blockData.fluidViscosity;
     double const alpha = w * blockData.viscousCoef;
 
     int row_bb = 0;
@@ -363,7 +358,7 @@ NavierStokesElement::OpAssembleLhsDiagLin::iNtegrate(EntData &row_data,
       auto col_diff_base_functions = col_data.getFTensor1DiffN<3>(gg, 0);
 
       const int final_bb = isOnDiagonal ? row_bb + 1 : col_nb_dofs / 3;
-      // const int final_bb = col_nb_dofs / 3;
+
       int col_bb = 0;
 
       for (; col_bb != final_bb; col_bb++) {
@@ -437,7 +432,6 @@ NavierStokesElement::OpAssembleLhsDiagNonLin::iNtegrate(EntData &row_data,
       w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
     }
 
-    // double const beta = w * blockData.fluidDensity;
     double const beta = w * blockData.inertiaCoef;
 
     int row_bb = 0;
@@ -455,14 +449,10 @@ NavierStokesElement::OpAssembleLhsDiagNonLin::iNtegrate(EntData &row_data,
 
         for (int i : {0, 1, 2}) {
           for (int j : {0, 1, 2}) {
-
             t_assemble(i, j) +=
                 beta * col_base_functions * t_u_grad(i, j) * row_base_functions;
             t_assemble(i, i) +=
                 beta * t_u(j) * col_diff_base_functions(j) * row_base_functions;
-            // t_assemble(j, i) += beta * col_base_functions * t_u_grad(i, j)
-            // * row_base_functions; t_assemble(i, i) += beta * t_u(j) *
-            // col_diff_base_functions(j) * row_base_functions;
           }
         }
 
@@ -508,12 +498,6 @@ MoFEMErrorCode NavierStokesElement::OpAssembleRhs::doWork(int row_side,
   MoFEMFunctionReturn(0);
 }
 
-/**
- * \brief assemble local entity vector to the global right hand side
- * @param  data entity data, i.e. global indices of local vector
- * @return      error code
- */
-
 MoFEMErrorCode NavierStokesElement::OpAssembleRhs::aSsemble(EntData &data) {
   MoFEMFunctionBegin;
   // get global indices of local vector
@@ -525,17 +509,9 @@ MoFEMErrorCode NavierStokesElement::OpAssembleRhs::aSsemble(EntData &data) {
   // assemble vector
   CHKERR VecSetValues(f, nbRows, indices, vals, ADD_VALUES);
 
-  // int ierr = VecView(getFEMethod()->snes_f, PETSC_VIEWER_STDOUT_WORLD);
-  // CHKERRG(ierr);
-
   MoFEMFunctionReturn(0);
 }
 
-/**
- * \brief Integrate local entity vector
- * @param  data entity data on element row
- * @return      error code
- */
 MoFEMErrorCode
 NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
   MoFEMFunctionBegin;
@@ -564,8 +540,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
   // loop over all integration points
   for (int gg = 0; gg != nbIntegrationPts; gg++) {
 
-    double d1 = getVolume();
-    double d2 = getGaussPts()(3, gg);
     double w = getVolume() * getGaussPts()(3, gg);
 
     if (getHoGaussPtsDetJac().size() > 0) {
@@ -573,7 +547,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
     }
 
     // evaluate constant term
-    // const double alpha = w * blockData.fluidViscosity;
     const double alpha = w * blockData.viscousCoef;
 
     auto t_a = get_tensor1(locVec, 0);
@@ -582,14 +555,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
     // loop over base functions
     for (; rr != nbRows / 3; rr++) {
       // add to local vector source term
-
-      // for (int i : {0, 1, 2}) {
-      //   for (int j : {0, 1, 2}) {
-      //     t_a(i) += alpha * t_u_grad(i, j) * t_v_grad(j);
-      //     t_a(j) += alpha * t_u_grad(i, j) * t_v_grad(i);
-      //   }
-      //   t_a(i) -= w * t_p * t_v_grad(i);
-      // }
 
       t_a(i) += alpha * t_u_grad(i, j) * t_v_grad(j);
       t_a(j) += alpha * t_u_grad(i, j) * t_v_grad(i);
@@ -611,11 +576,6 @@ NavierStokesElement::OpAssembleRhsVelocityLin::iNtegrate(EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-/**
- * \brief Integrate local entity vector
- * @param  data entity data on element row
- * @return      error code
- */
 MoFEMErrorCode
 NavierStokesElement::OpAssembleRhsVelocityNonLin::iNtegrate(EntData &data) {
   MoFEMFunctionBegin;
@@ -651,7 +611,6 @@ NavierStokesElement::OpAssembleRhsVelocityNonLin::iNtegrate(EntData &data) {
     }
 
     // evaluate constant term
-    // const double beta = w * blockData.fluidDensity;
     const double beta = w * blockData.inertiaCoef;
 
     auto t_a = get_tensor1(locVec, 0);
@@ -677,9 +636,6 @@ NavierStokesElement::OpAssembleRhsVelocityNonLin::iNtegrate(EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-/**
- * \brief Integrate local constrains vector
- */
 MoFEMErrorCode
 NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
   MoFEMFunctionBegin;
@@ -718,7 +674,7 @@ NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
       for (int ii : {0, 1, 2}) {
         t_a -= w * t_q * t_u_grad(ii, ii);
       }
-      // t_a -= w * t_l * t_u_grad(i,i);
+
       ++t_a;
       ++t_q;
     }
@@ -732,9 +688,6 @@ NavierStokesElement::OpAssembleRhsPressure::iNtegrate(EntData &data) {
   MoFEMFunctionReturn(0);
 }
 
-/**
- * \brief Integrate local constrains vector
- */
 MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(int side,
                                                              EntityType type,
                                                              EntData &data) {
@@ -752,7 +705,6 @@ MoFEMErrorCode NavierStokesElement::OpCalcVolumeFlux::doWork(int side,
 
   auto t_u = getFTensor1FromMat<3>(*commonData->velPtr);
   auto t_w = getFTensor0IntegrationWeight(); ///< Integration weight
-  // const double vol = getVolume(); ///< Get Volume of element
 
   FTensor::Index<'i', 3> i;
 
@@ -795,43 +747,53 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragForce::doWork(int side,
     MoFEMFunctionReturnHot(0);
   }
 
-  const int nb_gauss_pts = commonData->gradVelPtr->size2();
+  const int nb_gauss_pts = getGaussPts().size2();
 
   auto pressure_drag_at_gauss_pts =
       getFTensor1FromMat<3>(*commonData->pressureDragTract);
-  auto viscous_drag_at_gauss_pts =
-      getFTensor1FromMat<3>(*commonData->viscousDragTract);
+  auto shear_drag_at_gauss_pts =
+      getFTensor1FromMat<3>(*commonData->shearDragTract);
   auto total_drag_at_gauss_pts =
       getFTensor1FromMat<3>(*commonData->totalDragTract);
 
+  FTensor::Tensor1<double, 3> t_pressure_drag_force;
+  FTensor::Tensor1<double, 3> t_shear_drag_force;
+  FTensor::Tensor1<double, 3> t_total_drag_force;
+
   FTensor::Index<'i', 3> i;
-  //auto t_w = getFTensor0IntegrationWeight();
+
+  t_pressure_drag_force(i) = 0.0; // Zero entries
+  t_shear_drag_force(i) = 0.0;    // Zero entries
+  t_total_drag_force(i) = 0.0;    // Zero entries
+
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_normal = getFTensor1NormalsAtGaussPts();
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
-    // double nrm2 = sqrt(t_normal(i) * t_normal(i));
-    // t_normal(i) = t_normal(i) / nrm2;
+    double nrm2 = sqrt(t_normal(i) * t_normal(i));
+    double w = t_w * nrm2 * 0.5;
 
-    //double w = getArea() * getGaussPts()(2, gg);
-    //double w = t_w * getArea();
+    t_pressure_drag_force(i) += w * pressure_drag_at_gauss_pts(i);
+    t_shear_drag_force(i) += w * shear_drag_at_gauss_pts(i);
+    t_total_drag_force(i) += w * total_drag_at_gauss_pts(i);
 
-    double w = getGaussPts()(2, gg);
-    w *= cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1) / 2.;
-
-    // if (getHoGaussPtsDetJac().size() > 0) {
-    //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    // }
-
-    for (int dd = 0; dd != 3; dd++) {
-      commonData->pressureDragForce[dd] += w * pressure_drag_at_gauss_pts(dd);
-      commonData->viscousDragForce[dd] += w * viscous_drag_at_gauss_pts(dd);
-      commonData->totalDragForce[dd] += w * total_drag_at_gauss_pts(dd);
-    }
-    //++t_w;
+    ++t_w;
+    ++t_normal;
     ++pressure_drag_at_gauss_pts;
-    ++viscous_drag_at_gauss_pts;
+    ++shear_drag_at_gauss_pts;
     ++total_drag_at_gauss_pts;
   }
+
+  // Set array of indices
+  constexpr std::array<int, 3> indices = {0, 1, 2};
+
+  CHKERR VecSetValues(commonData->pressureDragForceVec, 3, indices.data(),
+                      &t_pressure_drag_force(0), ADD_VALUES);
+  CHKERR VecSetValues(commonData->shearDragForceVec, 3, indices.data(),
+                      &t_shear_drag_force(0), ADD_VALUES);
+  CHKERR VecSetValues(commonData->totalDragForceVec, 3, indices.data(),
+                      &t_total_drag_force(0), ADD_VALUES);
 
   MoFEMFunctionReturn(0);
 }
@@ -851,13 +813,14 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragTraction::doWork(int side,
 
   CHKERR loopSideVolumes(sideFeName, *sideFe);
 
-  const int nb_gauss_pts = commonData->gradVelPtr->size2();
+  const int nb_gauss_pts = getGaussPts().size2();
 
   auto t_p = getFTensor0FromVec(*commonData->pressPtr);
   auto t_u_grad = getFTensor2FromMat<3, 3>(*commonData->gradVelPtr);
 
   auto t_normal = getFTensor1NormalsAtGaussPts();
-  // auto t_normal = getFTensor1Normal();
+
+  FTensor::Tensor1<double, 3> t_unit_normal;
 
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
@@ -865,38 +828,34 @@ MoFEMErrorCode NavierStokesElement::OpCalcDragTraction::doWork(int side,
   commonData->pressureDragTract->resize(3, nb_gauss_pts, false);
   commonData->pressureDragTract->clear();
 
-  commonData->viscousDragTract->resize(3, nb_gauss_pts, false);
-  commonData->viscousDragTract->clear();
+  commonData->shearDragTract->resize(3, nb_gauss_pts, false);
+  commonData->shearDragTract->clear();
 
   commonData->totalDragTract->resize(3, nb_gauss_pts, false);
   commonData->totalDragTract->clear();
 
   auto pressure_drag_at_gauss_pts =
       getFTensor1FromMat<3>(*commonData->pressureDragTract);
-  auto viscous_drag_at_gauss_pts =
-      getFTensor1FromMat<3>(*commonData->viscousDragTract);
+  auto shear_drag_at_gauss_pts =
+      getFTensor1FromMat<3>(*commonData->shearDragTract);
   auto total_drag_at_gauss_pts =
       getFTensor1FromMat<3>(*commonData->totalDragTract);
 
   for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
     double nrm2 = sqrt(t_normal(i) * t_normal(i));
-    t_normal(i) = t_normal(i) / nrm2;
+    t_unit_normal(i) = t_normal(i) / nrm2;
 
-    // double w = getArea() * getGaussPts()(2, gg);
     double mu = blockData.fluidViscosity;
-    // if (getHoGaussPtsDetJac().size() > 0) {
-    //   w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    // }
 
-    pressure_drag_at_gauss_pts(i) = t_p * t_normal(i);
-    viscous_drag_at_gauss_pts(i) =
-        -mu * (t_u_grad(i, j) + t_u_grad(j, i)) * t_normal(j);
+    pressure_drag_at_gauss_pts(i) = t_p * t_unit_normal(i);
+    shear_drag_at_gauss_pts(i) =
+        -mu * (t_u_grad(i, j) + t_u_grad(j, i)) * t_unit_normal(j);
     total_drag_at_gauss_pts(i) =
-        pressure_drag_at_gauss_pts(i) + viscous_drag_at_gauss_pts(i);
+        pressure_drag_at_gauss_pts(i) + shear_drag_at_gauss_pts(i);
 
     ++pressure_drag_at_gauss_pts;
-    ++viscous_drag_at_gauss_pts;
+    ++shear_drag_at_gauss_pts;
     ++total_drag_at_gauss_pts;
     ++t_p;
     ++t_u_grad;
@@ -923,23 +882,23 @@ MoFEMErrorCode NavierStokesElement::OpPostProcDrag::doWork(int side,
   Tag th_velocity;
   Tag th_pressure;
   Tag th_velocity_grad;
-  Tag th_viscous_drag;
+  Tag th_shear_drag;
   Tag th_pressure_drag;
   Tag th_total_drag;
 
-  CHKERR postProcMesh.tag_get_handle("U", 3, MB_TYPE_DOUBLE, th_velocity,
+  CHKERR postProcMesh.tag_get_handle("VELOCITY", 3, MB_TYPE_DOUBLE, th_velocity,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-  CHKERR postProcMesh.tag_get_handle("P", 1, MB_TYPE_DOUBLE, th_pressure,
+  CHKERR postProcMesh.tag_get_handle("PRESSURE", 1, MB_TYPE_DOUBLE, th_pressure,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-  CHKERR postProcMesh.tag_get_handle("U_GRAD", 9, MB_TYPE_DOUBLE,
+  CHKERR postProcMesh.tag_get_handle("VELOCITY_GRAD", 9, MB_TYPE_DOUBLE,
                                      th_velocity_grad,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
   CHKERR postProcMesh.tag_get_handle("PRESSURE_DRAG", 3, MB_TYPE_DOUBLE,
                                      th_pressure_drag,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
-  CHKERR postProcMesh.tag_get_handle("VISCOUS_DRAG", 3, MB_TYPE_DOUBLE,
-                                     th_viscous_drag,
+  CHKERR postProcMesh.tag_get_handle("SHEAR_DRAG", 3, MB_TYPE_DOUBLE,
+                                     th_shear_drag,
                                      MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
   CHKERR postProcMesh.tag_get_handle("TOTAL_DRAG", 3, MB_TYPE_DOUBLE,
                                      th_total_drag,
@@ -968,7 +927,7 @@ MoFEMErrorCode NavierStokesElement::OpPostProcDrag::doWork(int side,
       }
       velVec(i) = (*commonData->velPtr)(i, gg);
       pressDragVec(i) = (*commonData->pressureDragTract)(i, gg);
-      viscDragVec(i) = (*commonData->viscousDragTract)(i, gg);
+      viscDragVec(i) = (*commonData->shearDragTract)(i, gg);
       totDragVec(i) = (*commonData->totalDragTract)(i, gg);
     }
     CHKERR postProcMesh.tag_set_data(th_velocity, &mapGaussPts[gg], 1,
@@ -980,7 +939,7 @@ MoFEMErrorCode NavierStokesElement::OpPostProcDrag::doWork(int side,
     CHKERR postProcMesh.tag_set_data(th_pressure_drag, &mapGaussPts[gg], 1,
                                      &pressDragVec(0));
 
-    CHKERR postProcMesh.tag_set_data(th_viscous_drag, &mapGaussPts[gg], 1,
+    CHKERR postProcMesh.tag_set_data(th_shear_drag, &mapGaussPts[gg], 1,
                                      &viscDragVec(0));
 
     CHKERR postProcMesh.tag_set_data(th_total_drag, &mapGaussPts[gg], 1,

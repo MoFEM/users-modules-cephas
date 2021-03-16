@@ -5,8 +5,7 @@
  * \brief Implementation of operators for fluid flow
  *
  * Implementation of operators for computations of the fluid flow, governed by
- * for Stokes and Navier-Stokes equations, and computation of the viscous drag
- * force
+ * for Stokes and Navier-Stokes equations, and computation of the drag force
  */
 
 /* This file is part of MoFEM.
@@ -42,7 +41,6 @@ struct NavierStokesElement {
 
   struct BlockData {
     int iD;
-    // int oRder;
     double fluidViscosity;
     double fluidDensity;
     double inertiaCoef;
@@ -62,12 +60,12 @@ struct NavierStokesElement {
     boost::shared_ptr<VectorDouble> pressPtr;
 
     boost::shared_ptr<MatrixDouble> pressureDragTract;
-    boost::shared_ptr<MatrixDouble> viscousDragTract;
+    boost::shared_ptr<MatrixDouble> shearDragTract;
     boost::shared_ptr<MatrixDouble> totalDragTract;
 
-    VectorDouble3 pressureDragForce;
-    VectorDouble3 viscousDragForce;
-    VectorDouble3 totalDragForce;
+    SmartPetscObj<Vec> pressureDragForceVec;
+    SmartPetscObj<Vec> shearDragForceVec;
+    SmartPetscObj<Vec> totalDragForceVec;
 
     SmartPetscObj<Vec> volumeFluxVec;
 
@@ -81,25 +79,20 @@ struct NavierStokesElement {
       pressPtr = boost::shared_ptr<VectorDouble>(new VectorDouble());
 
       pressureDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      viscousDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
+      shearDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       totalDragTract = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
-      pressureDragForce = VectorDouble3(3);
-      viscousDragForce = VectorDouble3(3);
-      totalDragForce = VectorDouble3(3);
-
-      int volume_flux_vec_size;
-      if (!m_field.get_comm_rank())
-        volume_flux_vec_size = 3;
+      int vec_size;
+      if (m_field.get_comm_rank() == 0)
+        vec_size = 3;
       else
-        volume_flux_vec_size = 0;
+        vec_size = 0;
 
-      volumeFluxVec =
-          createSmartVectorMPI(m_field.get_comm(), volume_flux_vec_size, 3);
+      pressureDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
+      shearDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
+      totalDragForceVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
 
-      pressureDragForce.clear();
-      viscousDragForce.clear();
-      totalDragForce.clear();
+      volumeFluxVec = createSmartVectorMPI(m_field.get_comm(), vec_size, 3);
     }
 
     MoFEMErrorCode getParameters() {
@@ -218,17 +211,13 @@ struct NavierStokesElement {
    */
   struct VolRule {
     int operator()(int order_row, int order_col, int order_data) const {
-      // return order_row < order_col ? 2 * order_col - 1
-      //                   : 2 * order_row - 1;
       return 2 * order_data;
-      // return order_row < order_col ? 3 * order_col - 1
-      //                   : 3 * order_row - 1;
     }
   };
 
   struct FaceRule {
     int operator()(int order_row, int order_col, int order_data) const {
-      return order_data + 1;
+      return order_data + 2;
     }
   };
 
@@ -268,7 +257,7 @@ struct NavierStokesElement {
     MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
   };
 
-  /** * @brief Assemble G *
+  /** * @brief Assemble off-diagonal block of the LHS *
    * \f[
    * {\bf{G}} =  - \int\limits_\Omega  {{{\bf{B}}^T}{\bf m}{{\bf{N}}_p}d\Omega }
    * \f]
