@@ -100,7 +100,7 @@ struct PostProcStress
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
 
     if (printCauchy) {
-      string tag_name_cauchy = dof_ptr->getName() + "_CAUCHY_STRESS";
+      string tag_name_cauchy = "MED_" + dof_ptr->getName() + "_CAUCHY_STRESS";
       CHKERR postProcMesh.tag_get_handle(tag_name_cauchy.c_str(), tag_length,
                                          MB_TYPE_DOUBLE, th_cauchy,
                                          MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
