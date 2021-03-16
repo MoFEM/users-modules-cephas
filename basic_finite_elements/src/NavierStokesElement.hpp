@@ -31,6 +31,9 @@
 
 using namespace boost::numeric;
 
+/**
+   * @brief Element for simulating viscous fluid flow
+*/
 struct NavierStokesElement {
 
   using UserDataOperator =
@@ -117,7 +120,12 @@ struct NavierStokesElement {
   };
 
   /**
-   * @brief Function for setting up element for solving Navier-Stokes equations
+   * @brief Setting up elements
+   *
+   * This functions adds element to the database, adds provided fields to rows
+   * and columns of the element, provides access of the element to the fields
+   * data and adds entities of particular dimension (or a given range of
+   * entities to the element)
    *
    * @param  m_field                    MoFEM interface
    * @param  element_name               Name of the element
@@ -126,7 +134,6 @@ struct NavierStokesElement {
    * @param  mesh_field_name            Name for mesh node positions field
    * @param  ents                       Range of entities to be added to element
    * @return                            Error code
-   *
    */
   static MoFEMErrorCode addElement(MoFEM::Interface &m_field,
                                                const string element_name,
@@ -166,18 +173,59 @@ struct NavierStokesElement {
     MoFEMFunctionReturn(0);
   }
 
+  /**
+   * @brief Setting up operators for solving Navier-Stokes equations
+   * 
+   * Pushes operators for solving Navier-Stokes equations to pipelines of RHS
+   * and LHS element instances
+   *
+   * @param  feRhs                      pointer to RHS element instance
+   * @param  feLhs                      pointer to LHS element instance
+   * @param  velocity_field             name of the velocity field
+   * @param  pressure_field             name of the pressure field
+   * @param  common_data                pointer to common data object
+   * @param  type                       type of entities in the domain
+   * @return                            Error code
+   */
   static MoFEMErrorCode setNavierStokesOperators(
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
       const std::string velocity_field, const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data, const EntityType type = MBTET);
 
+  /**
+   * @brief Setting up operators for solving Stokes equations
+   *
+   * Pushes operators for solving Stokes equations to pipelines of RHS
+   * and LHS element instances
+   *
+   * @param  feRhs                      pointer to RHS element instance
+   * @param  feLhs                      pointer to LHS element instance
+   * @param  velocity_field             name of the velocity field
+   * @param  pressure_field             name of the pressure field
+   * @param  common_data                pointer to common data object
+   * @param  type                       type of entities in the domain
+   * @return                            Error code
+   */
   static MoFEMErrorCode setStokesOperators(
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feRhs,
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> feLhs,
       const std::string velocity_field, const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data, const EntityType type = MBTET);
 
+  /**
+   * @brief Setting up operators for calculating drag force on the solid surface
+   *
+   * Pushes operators for caluclating drag force components on the fluid-solid
+   * interface
+   *
+   * @param  dragFe                   pointer to face element instance
+   * @param  sideDragFe               pointer to volume on side element instance
+   * @param  velocity_field           name of the velocity field
+   * @param  pressure_field           name of the pressure field
+   * @param  common_data              pointer to common data object
+   * @return                          Error code
+   */
   static MoFEMErrorCode setCalcDragOperators(
       boost::shared_ptr<FaceElementForcesAndSourcesCore> dragFe,
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
@@ -185,6 +233,19 @@ struct NavierStokesElement {
       const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data);
 
+  /**
+   * @brief Setting up operators for post processing output of drag traction
+   *
+   * Pushes operators for post processing ouput of drag traction components on
+   * the fluid-solid interface
+   *
+   * @param  dragFe                   pointer to face element instance
+   * @param  sideDragFe               pointer to volume on side element instance
+   * @param  velocity_field           name of the velocity field
+   * @param  pressure_field           name of the pressure field
+   * @param  common_data              pointer to common data object
+   * @return                          Error code
+   */
   static MoFEMErrorCode setPostProcDragOperators(
       boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcDragPtr,
       boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideDragFe,
@@ -192,6 +253,9 @@ struct NavierStokesElement {
       const std::string pressure_field,
       boost::shared_ptr<CommonData> common_data);
 
+  /**
+   * @brief Setting up operators for calculation of volume flux
+   */
   static MoFEMErrorCode setCalcVolumeFluxOperators(
       boost::shared_ptr<VolumeElementForcesAndSourcesCore> fe_flux_ptr,
       const std::string velocity_field,
@@ -199,10 +263,6 @@ struct NavierStokesElement {
 
   /**
    * \brief Set integration rule to volume elements
-   *
-   * This rule is used to integrate \f$\nabla v \cdot \nabla u\f$, thus
-   * if the approximation field and the testing field are polynomials of
-   * order "p", then the rule for the exact integration is 2*(p-1).
    *
    * Integration rule is order of polynomial which is calculated exactly.
    * Finite element selects integration method based on return of this
@@ -221,6 +281,9 @@ struct NavierStokesElement {
     }
   };
 
+  /**
+   * \brief Base class for operators assembling LHS
+   */
   struct OpAssembleLhs : public UserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -257,11 +320,9 @@ struct NavierStokesElement {
     MoFEMErrorCode aSsemble(EntData &row_data, EntData &col_data);
   };
 
-  /** * @brief Assemble off-diagonal block of the LHS *
-   * \f[
-   * {\bf{G}} =  - \int\limits_\Omega  {{{\bf{B}}^T}{\bf m}{{\bf{N}}_p}d\Omega }
-   * \f]
-   *
+  /**
+   * @brief Assemble off-diagonal block of the LHS 
+   * Operator for assembling off-diagonal block of the LHS
    */
   struct OpAssembleLhsOffDiag : public OpAssembleLhs {
 
@@ -278,11 +339,10 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
-  /** * @brief Assemble K *
-   * \f[
-   * {\bf{K}} = \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{D}}_d}{\bf{B}}d\Omega }
-   * \f]
-   *
+  /**
+   * @brief Assemble linear (symmetric) part of the diagonal block of the LHS
+   * Operator for assembling linear (symmetric) part of the diagonal block of
+   * the LHS
    */
   struct OpAssembleLhsDiagLin : public OpAssembleLhs {
 
@@ -301,11 +361,10 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
-  /** * @brief Assemble K *
-   * \f[
-   * {\bf{K}} = \int\limits_\Omega  {{{\bf{B}}^T}{{\bf{D}}_d}{\bf{B}}d\Omega }
-   * \f]
-   *
+  /**
+   * @brief Assemble non-linear (non-symmetric) part of the diagonal block of
+   * the LHS Operator for assembling non-linear (non-symmetric) part of the
+   * diagonal block of the LHS
    */
   struct OpAssembleLhsDiagNonLin : public OpAssembleLhs {
 
@@ -324,6 +383,9 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
+  /**
+   * \brief Base class for operators assembling RHS
+   */
   struct OpAssembleRhs : public UserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -349,6 +411,19 @@ struct NavierStokesElement {
     MoFEMErrorCode aSsemble(EntData &data);
   };
 
+  /**
+   * @brief Assemble linear part of the velocity component of the RHS vector
+   *
+   * Operator for assembling linear part of the velocity component of the RHS
+   * vector: 
+   * \f[ \mathbf{R}^{\textrm{S}}_{\mathbf{u}} =
+   * C_\text{V}\int\limits_{\Omega}\nabla\mathbf{u}\mathbin{:}\nabla\mathbf{v}\,
+   * d\Omega
+   * \f]
+   * where \f$C_\text{V}\f$ is the viscosity
+   * coefficient: \f$C_\text{V}=\mu\f$ in the dimensional case and
+   * \f$C_\text{V}=1\f$ in the non-dimensional case.
+   */
   struct OpAssembleRhsVelocityLin : public OpAssembleRhs {
 
     OpAssembleRhsVelocityLin(const string field_name,
@@ -364,6 +439,20 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &data);
   };
 
+  /**
+   * @brief Assemble non-linear part of the velocity component of the RHS vector
+   *
+   * Operator for assembling non-linear part of the velocity component of the
+   * RHS vector: 
+   * \f[
+   * \mathbf{R}^{\textrm{NS}}_{\mathbf{u}} =
+   * C_\text{I}\int\limits_\Omega \left(\mathbf{u}\cdot\nabla\right)\mathbf{u}
+   * \cdot\mathbf{v} \,d\Omega, 
+   * \f] 
+   * where \f$C_\text{I}\f$ is the inertia
+   * coefficient: \f$C_\text{V}=\rho\f$ in the dimensional case and
+   * \f$C_\text{V}=\mathcal{R}\f$ in the non-dimensional case.
+   */
   struct OpAssembleRhsVelocityNonLin : public OpAssembleRhs {
 
     OpAssembleRhsVelocityNonLin(const string field_name,
@@ -371,14 +460,18 @@ struct NavierStokesElement {
                                 BlockData &block_data)
         : OpAssembleRhs(field_name, common_data, block_data){};
 
-    /**
-     * \brief Integrate local entity vector
-     * @param  data entity data on element row
-     * @return      error code
-     */
     MoFEMErrorCode iNtegrate(EntData &data);
   };
 
+  /**
+   * @brief Assemble the pressure component of the RHS vector
+   * 
+   * Operator for assembling pressure component of the RHS vector:
+   * \f[
+   * \mathbf{R}^{\textrm{S}}_{p} = -\int\limits_{\Omega}p\,
+   * \nabla\cdot\mathbf{v} \, d\Omega
+   * \f]
+   */
   struct OpAssembleRhsPressure : public OpAssembleRhs {
 
     OpAssembleRhsPressure(const string field_name,
@@ -392,6 +485,17 @@ struct NavierStokesElement {
     MoFEMErrorCode iNtegrate(EntData &data);
   };
 
+  /**
+   * @brief Calculate drag force on the fluid-solid interface
+   *
+   * Operator fo calculating drag force components on the fluid-solid interface.
+   * Integrates components of the drag traction:
+   * \f[
+   * \mathbf{F}_{\textrm{D}} =
+   * -\int\limits_{\Gamma_{\textrm{S}}}\left(-p\mathbf{I} +
+   * \mu\left(\nabla\mathbf{u}+\mathbf{u}^{\intercal}\right)\right) \, d\Gamma
+   * \f]
+   */
   struct OpCalcDragForce : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -414,6 +518,15 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  /**
+   * @brief Calculate drag traction on the fluid-solid interface
+   *
+   * Operator fo calculating drag traction on the fluid-solid interface
+   * \f[
+   * \mathbf{t} = -p\mathbf{I} +
+   * \mu\left(\nabla\mathbf{u}+\mathbf{u}^{\intercal}\right) 
+   * \f]
+   */
   struct OpCalcDragTraction : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -441,6 +554,10 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  /**
+   * @brief Post processing output of drag traction on the fluid-solid interface
+   *
+   */
   struct OpPostProcDrag : public FaceUserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -467,6 +584,10 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  /**
+   * @brief Post processing output of the vorticity criterion levels
+   *
+   */
   struct OpPostProcVorticity : public UserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
@@ -492,6 +613,10 @@ struct NavierStokesElement {
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
 
+  /**
+   * @brief calculating volumetric flux
+   *
+   */
     struct OpCalcVolumeFlux : public UserDataOperator {
 
     boost::shared_ptr<CommonData> commonData;
