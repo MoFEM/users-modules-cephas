@@ -9,11 +9,12 @@
 #-snes_converged_reason
 -snes_linesearch_type l2
 -snes_linesearch_max_it 3
--snes_linesearch_keeplambda
+# -snes_linesearch_keeplambda
 #-snes_linesearch_minlambda 0.01
 
 #-snes_linesearch_monitor 
--snes_max_it 40
+-snes_max_it 60
+-ts_max_steps 100
 
 -ts_max_time 2
 -ts_exact_final_time stepover
@@ -33,3 +34,5 @@
 #-quasi_static 0
 #-ts_type alpha2
 #-ts_alpha_radius 1
+
+-ts_max_snes_failures 20
