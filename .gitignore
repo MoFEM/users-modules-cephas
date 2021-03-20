@@ -21,3 +21,6 @@
 !*.in
 
 .DS_Store
+basic_finite_elements/.vscode
+tutorials/.vscode
+tools/.vscode

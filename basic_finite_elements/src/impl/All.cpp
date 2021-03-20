@@ -32,6 +32,7 @@
 #include <AnalyticalDirichlet.cpp>
 #include <HookeElement.cpp>
 #include <SpringElement.cpp>
+#include <NavierStokesElement.cpp>
 #include <SimpleContact.cpp>
 #include <SimpleRodElement.cpp>
 

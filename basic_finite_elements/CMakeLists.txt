@@ -74,4 +74,3 @@ foreach(LOOP_DIR ${BFE_DIRS})
   add_subdirectory(${LOOP_DIR})
   bfe_install(${LOOP_DIR})
 endforeach(LOOP_DIR)
-

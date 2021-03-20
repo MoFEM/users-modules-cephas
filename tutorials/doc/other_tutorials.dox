@@ -59,21 +59,21 @@
 
   <tr valign="top">
         <td width="350px">LOW-7: \subpage simple_elasticity_1</td>
-        <td> Older impolementation of elastic problem
+        <td> Older implementation of elastic problem
         <br/> *Keywords:* Operators and low level implementation
         </td>
   </tr>
 
   <tr valign="top">
         <td width="350px">LOW-8: \subpage elasticity_mixed_formulation</td>
-        <td> Older impolementation of mix elastic problem
+        <td> Older implementation of mixed elastic problem
         <br/> *Keywords:* Pressure field and incompressibility
         </td>
   </tr>
 
   <tr valign="top">
         <td width="350px">LOW-9: \subpage spring_element</td>
-        <td> Implementation of boundary element with sprinfs
+        <td> Implementation of boundary element with springs
         <br/> *Keywords:* face element, spring, user data operators
         </td>
   </tr>
@@ -82,6 +82,13 @@
         <td width="350px">LOW-10: \subpage reaction_diffusion_imp</td>
         <td> Reaction-diffusion Fisher's equation
         <br/> *Keywords:* time solve, Monitor, nonlinearity, 
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">LOW-11: \subpage tutorial_navier_stokes</td>
+        <td> Navier-Stokes equations
+        <br/> *Keywords:* viscous fluid flow, mixed formulation, drag force computation 
         </td>
   </tr>
 
