@@ -311,7 +311,10 @@ struct PostCellProcStress
     ublas::matrix<double, ublas::row_major, ublas::bounded_array<double, 9>> c_stress_data;
     c_stress_data.resize(3, 3);
     c_stress_data.clear();
+    auto t_w = getFTensor0IntegrationWeight();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+      // const double weight = getGaussPts()(3, gg);
 
       dAta.materialDoublePtr->gG = gg;
       dAta.materialDoublePtr->F.resize(3, 3);
@@ -348,11 +351,12 @@ struct PostCellProcStress
         dAta.materialDoublePtr->sigmaCauchy.resize(3, 3);
         CHKERR dAta.materialDoublePtr->calculateCauchyStress(
             dAta, getNumeredEntFiniteElementPtr());
-            c_stress_data += dAta.materialDoublePtr->sigmaCauchy/nb_gauss_pts;
+            c_stress_data += dAta.materialDoublePtr->sigmaCauchy * t_w;
         // CHKERR outMesh.tag_set_data(
         //     th_cauchy, &mapGaussPts[gg], 1,
         //     &dAta.materialDoublePtr->sigmaCauchy(0, 0));
       }
+      ++t_w;
     }
 
     CHKERR outMesh.tag_set_data(
