@@ -105,6 +105,7 @@ double sigmaY = 450;
 double H = 129;
 double visH = 1e4;
 double cn = 1;
+double delta = 1e-2;
 int order = 2;
 
 // const double arc_beta = 1;
@@ -213,6 +214,7 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-yield_stress", &sigmaY,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-delta", &delta, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
@@ -224,6 +226,8 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " <<  sigmaY;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " <<  H;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,

@@ -483,6 +483,16 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
+inline double constrain_abs(double x) {
+  return sqrt(pow(x, 2) + 4 * pow(delta, 2));
+};
+
+inline double constrian_sign(double x) { return x / constrain_abs(x); };
+
+inline double constrian_sign2(double x) {
+  return -(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
+};
+
 /**
 
 \f[
@@ -494,36 +504,27 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 \f]
 
  */
-inline double contrains(double dot_tau, double f, double sigma_y) {
+inline double constrain(double dot_tau, double f, double sigma_y) {
+  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
   return visH * dot_tau +
-         sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
-                   std::abs(cn * dot_tau + (f - sigma_y) / sigmaY));
+         sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) - constrain_abs(w));
 };
 
-inline double sign(double x) {
-  if (x == 0)
-    return 0;
-  else if (x > 0)
-    return 1;
-  else
-    return -1;
-};
-
-inline double diff_constrain_ddot_tau(double dot_dot, double f,
+inline double diff_constrain_ddot_tau(double dot_tau, double f,
                                       double sigma_y) {
-  return visH +
-         sigmaY * (cn - cn * sign((f - sigma_y) / sigmaY + cn * dot_dot));
+  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
+  return visH + sigmaY * (cn - cn * constrian_sign(w));
 };
 
-inline auto diff_constrain_df(double dot_dot, double f, double sigma_y) {
-  return sigmaY *
-         (-1 / sigmaY - sign((f - sigma_y) / sigmaY + cn * dot_dot) / sigmaY);
+inline auto diff_constrain_df(double dot_tau, double f, double sigma_y) {
+  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
+  return sigmaY * (-1 / sigmaY - constrian_sign(w) / sigmaY);
 };
 
-inline auto diff_constrain_dsigma_y(double dot_dot, double f, double sigma_y) {
-  return sigmaY *
-         (1 / sigmaY + sign((f - sigma_y) / sigmaY + cn * dot_dot) / sigmaY);
-};
+inline auto diff_constrain_dsigma_y(double dot_tau, double f, double sigma_y) {
+  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
+  return sigmaY * (1 / sigmaY + constrian_sign(w) / sigmaY);
+}
 
 template <typename T>
 inline auto diff_constrain_dstress(
@@ -716,7 +717,7 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
     const size_t nb_base_functions = data.getN().size2();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double beta = alpha * contrains(t_tau_dot, t_f, hardening(t_tau));
+      const double beta = alpha * constrain(t_tau_dot, t_f, hardening(t_tau));
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
