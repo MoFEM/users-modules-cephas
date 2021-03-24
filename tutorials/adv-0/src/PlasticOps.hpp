@@ -65,6 +65,8 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
 
+  SmartPetscObj<Vec> perviousStepSolution;
+
   inline auto getPlasticTauPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticTau);
   }
