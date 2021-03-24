@@ -689,13 +689,16 @@ struct PostProcFatPrismOnRefinedMesh
           member<PointsMap3D, const int, &PointsMap3D::zEta>>>>>
       PointsMap3D_multiIndex;
 
-  PointsMap3D_multiIndex pointsMap;
+  //PointsMap3D_multiIndex pointsMap;
 
   MoFEMErrorCode setGaussPtsTrianglesOnly(int order_triangles_only);
   MoFEMErrorCode setGaussPtsThroughThickness(int order_thickness);
   MoFEMErrorCode generateReferenceElementMesh();
 
-  std::map<EntityHandle, EntityHandle> elementsMap;
+  //std::map<EntityHandle, EntityHandle> elementsMap;
+  std::map<EntityHandle, std::vector<EntityHandle>> elementsMap;
+  std::map<EntityHandle, std::vector<PointsMap3D_multiIndex>>
+      pointsMapVectorMap;
 
   MoFEMErrorCode preProcess();
   MoFEMErrorCode postProcess();
