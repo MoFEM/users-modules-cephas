@@ -629,7 +629,7 @@ OpCalculatePlasticFlowRhs::OpCalculatePlasticFlowRhs(
       commonDataPtr(common_data_ptr) {}
 
 static inline FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 2>
-get_nf(std::array<double, MAX_DOFS_ON_ENTITY> &nf, FTensor::Number<SPACE_DIM>) {
+get_nf(std::array<double, MAX_DOFS_ON_ENTITY> &nf, FTensor::Number<2>) {
   return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 2>{&nf[0], &nf[1],
                                                                &nf[1], &nf[2]};
 }
@@ -754,13 +754,10 @@ OpCalculatePlasticInternalForceLhs_dEP::OpCalculatePlasticInternalForceLhs_dEP(
 }
 
 FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 3>
-get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat,
-                           FTensor::Number<SPACE_DIM>) {
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  return FTensor::Tensor2<FTensor::PackPtr<double *, size_symm>, SPACE_DIM,
-                          size_symm>{&mat(2 * rr + 0, 0), &mat(2 * rr + 0, 1),
-                                     &mat(2 * rr + 0, 2), &mat(2 * rr + 1, 0),
-                                     &mat(2 * rr + 1, 1), &mat(2 * rr + 1, 2)};
+get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 3>{
+      &mat(2 * rr + 0, 0), &mat(2 * rr + 0, 1), &mat(2 * rr + 0, 2),
+      &mat(2 * rr + 1, 0), &mat(2 * rr + 1, 1), &mat(2 * rr + 1, 2)};
 }
 
 FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 6>
@@ -958,11 +955,8 @@ OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
 }
 
 FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>
-get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat,
-                           FTensor::Number<SPACE_DIM>) {
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  return FTensor::Tensor3<FTensor::PackPtr<double *, SPACE_DIM>, SPACE_DIM,
-                          SPACE_DIM, SPACE_DIM>{
+get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
+  return FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 1, 0),
       &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 1),
       &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1)};
@@ -1201,10 +1195,8 @@ OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
 
 FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2>
 get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
-                               FTensor::Number<SPACE_DIM>) {
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  return FTensor::Tensor4<FTensor::PackPtr<double *, size_symm>, SPACE_DIM,
-                          SPACE_DIM, SPACE_DIM, SPACE_DIM>{
+                               FTensor::Number<2>) {
+  return FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 0, 1),
       &mat(3 * rr + 0, 2), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 1),
       &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 2), &mat(3 * rr + 1, 0),
@@ -1330,10 +1322,8 @@ OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
 }
 
 FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2>
-get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat,
-                           FTensor::Number<SPACE_DIM>) {
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, SPACE_DIM, SPACE_DIM>{
+get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 0),
       &mat(3 * rr + 2, 0)};
 }
@@ -1372,7 +1362,7 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w * getTSa();
 
-      FTensor::Tensor2_symmetric<double, 2> t_flow_stress;
+      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_flow_stress;
       t_flow_stress(i, j) = t_D(i, j, m, n) * t_flow(m, n);
 
       for (size_t rr = 0; rr != nb_row_dofs / size_symm; ++rr) {
@@ -1597,9 +1587,8 @@ OpCalculateContrainsLhs_dEP::OpCalculateContrainsLhs_dEP(
 }
 
 FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>
-get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<SPACE_DIM>) {
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  return FTensor::Tensor1<FTensor::PackPtr<double *, size_symm>, size_symm>{
+get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<2>) {
+  return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
       &mat(0, 0), &mat(0, 1), &mat(0, 2)};
 }
 
@@ -1911,7 +1900,7 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
 struct Monitor : public FEMethod {
 
   Monitor(SmartPetscObj<DM> &dm,
-          boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc_fe,
+          boost::shared_ptr<PostProcEle> &post_proc_fe,
           boost::shared_ptr<DomainEle> &reaction_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
@@ -1974,7 +1963,7 @@ struct Monitor : public FEMethod {
 
 private:
   SmartPetscObj<DM> dM;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;

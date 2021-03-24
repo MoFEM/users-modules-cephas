@@ -45,3 +45,8 @@ tutorials_build_and_install(
 set_target_properties(
   plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
+  tutorials_build_and_install(
+    plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+  
+  set_target_properties(
+    plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
