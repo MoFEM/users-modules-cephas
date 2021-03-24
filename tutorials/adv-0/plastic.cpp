@@ -105,6 +105,8 @@ double sigmaY = 450;
 double H = 129;
 double visH = 1e4;
 double cn = 1;
+double Qinf = 0;
+double b_iso = 1;
 double delta = 1e-2;
 int order = 2;
 
@@ -136,10 +138,11 @@ private:
   MatrixDouble invJac;
   boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
@@ -215,24 +218,28 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-delta", &delta, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
                                &is_quasi_static, PETSC_NULL);
 
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " <<  young_modulus;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " <<  poisson_ratio;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " <<  sigmaY;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " <<  H;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " << H;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
                                PETSC_NULL);
-    if(is_scale) {
+    if (is_scale) {
       scale = 1. / young_modulus;
       young_modulus *= scale;
       rho *= scale;
@@ -286,7 +293,8 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenckyDataPtr->matLogCPlastic =
         commonPlasticDataPtr->getPlasticStrainPtr();
     commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatLogC();
-    commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatHenckyStress();
+    commonPlasticDataPtr->mStressPtr =
+        commonHenckyDataPtr->getMatHenckyStress();
   }
 
   MoFEMFunctionReturn(0);
@@ -298,7 +306,7 @@ MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
   auto fix_disp = [&](const std::string blockset_name) {
-    std::vector<std::pair<std::vector<double>,Range>> bc_data_vec;
+    std::vector<std::pair<std::vector<double>, Range>> bc_data_vec;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
           0) {
@@ -325,7 +333,7 @@ MoFEMErrorCode Example::bC() {
   };
 
   auto mark_boundary_dofs = [&](const auto &&ents, const bool fix_x,
-                                const bool fix_y) {
+                                const bool fix_y, const bool fix_z) {
     auto simple = mField.getInterface<Simple>();
     auto problem_manager = mField.getInterface<ProblemsManager>();
 
@@ -339,6 +347,11 @@ MoFEMErrorCode Example::bC() {
       problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 1, 1,
                                       ProblemsManager::MarkOP::OR, 1,
                                       mark_dofs);
+    if (SPACE_DIM == 3)
+      if (fix_z)
+        problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 2,
+                                        2, ProblemsManager::MarkOP::OR, 1,
+                                        mark_dofs);
 
     std::vector<unsigned char> marked_dofs(mark_dofs.size(), 0);
 
@@ -367,13 +380,16 @@ MoFEMErrorCode Example::bC() {
   };
 
   CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_X"), true, false));
+      mark_boundary_dofs(fix_disp("FIX_X"), true, false, false));
   CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_Y"), false, true));
+      mark_boundary_dofs(fix_disp("FIX_Y"), false, true, false));
+  if (SPACE_DIM == 3)
+    CHKERR merge_boundary_dofs(
+        mark_boundary_dofs(fix_disp("FIX_Z"), false, false, true));
   CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_ALL"), true, true));
+      mark_boundary_dofs(fix_disp("FIX_ALL"), true, true, true));
 
-  auto rec_marker = mark_boundary_dofs(fix_disp("FIX_X1"), true, false);
+  auto rec_marker = mark_boundary_dofs(fix_disp("FIX_X1"), true, false, false);
   reactionMarker = boost::make_shared<std::vector<unsigned char>>(
       rec_marker.begin(), rec_marker.end());
 
@@ -399,9 +415,9 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
 
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<2>(
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
 
     if (is_large_strains) {
@@ -416,12 +432,10 @@ MoFEMErrorCode Example::OPs() {
           new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+          "U", commonHenckyDataPtr));
       pipeline.push_back(
-          new OpCalculateHenckyPlasticStress<SPACE_DIM>("U",
-                                                       commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>(
-              "U", commonHenckyDataPtr));
+          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
     } else {
       pipeline.push_back(
@@ -572,7 +586,7 @@ MoFEMErrorCode Example::OPs() {
       if (it->getName().compare(0, 5, "FORCE") == 0) {
         Range force_edges;
         std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), SPACE_DIM - 1,
                                                    force_edges, true);
         it->getAttributes(attr_vec);
         if (attr_vec.size() < SPACE_DIM)
@@ -601,9 +615,9 @@ MoFEMErrorCode Example::OPs() {
         //       new OpBoundaryVec("U", force_vec_ptr, get_lambda,
         //                         boost::make_shared<Range>(force_edges)));
         // } else {
-          pipeline.push_back(
-              new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
-                                boost::make_shared<Range>(force_edges)));
+        pipeline.push_back(
+            new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
+                              boost::make_shared<Range>(force_edges)));
         // }
       }
     }
@@ -659,7 +673,7 @@ MoFEMErrorCode Example::OPs() {
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
 
     if (is_large_strains) {
@@ -695,7 +709,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
     }
-    pipeline.push_back(new OpUnSetBc("U"));    
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
@@ -731,7 +745,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
 
     postProcFe->getOpPtrVector().push_back(
@@ -746,7 +760,7 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculateTensor2SymmetricFieldValues<2>(
+        new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
             "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpPlasticStress("U", commonPlasticDataPtr, scale));
@@ -782,8 +796,8 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, postProcFe, reactionFe, uXScatter, uYScatter));
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(
+        dm, postProcFe, reactionFe, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
@@ -795,8 +809,8 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR create_post_process_element();
   uXScatter = scatter_create(D, 0);
   uYScatter = scatter_create(D, 1);
-  // if (SPACE_DIM == 3)
-  //   uZScatter = scatter_create(D, 2);
+  if (SPACE_DIM == 3)
+    uZScatter = scatter_create(D, 2);
 
   if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();

@@ -419,9 +419,13 @@ diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
   return t_diff_deviator;
 };
 
-inline auto hardening(double tau) { return H * tau + sigmaY; }
+inline auto hardening(double tau) {
+  return H * tau + Qinf * (1. - exp(-b_iso * tau)) + sigmaY;
+}
 
-inline auto hardening_dtau() { return H; }
+inline auto hardening_dtau(double tau) {
+  return H + Qinf * b_iso * exp(-b_iso * tau);
+}
 
 /**
  *
@@ -625,7 +629,7 @@ OpCalculatePlasticFlowRhs::OpCalculatePlasticFlowRhs(
       commonDataPtr(common_data_ptr) {}
 
 static inline FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 2>
-get_nf(std::array<double, MAX_DOFS_ON_ENTITY> &nf, FTensor::Number<2>) {
+get_nf(std::array<double, MAX_DOFS_ON_ENTITY> &nf, FTensor::Number<SPACE_DIM>) {
   return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 2>{&nf[0], &nf[1],
                                                                &nf[1], &nf[2]};
 }
@@ -650,6 +654,7 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
 
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
     const size_t nb_integration_pts = data.getN().size1();
     const size_t nb_base_functions = data.getN().size2();
@@ -671,7 +676,7 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
                                                     t_tau_dot * t_flow(k, l));
 
       size_t bb = 0;
-      for (; bb != nb_dofs / 3; ++bb) {
+      for (; bb != nb_dofs / size_symm; ++bb) {
         t_nf(i, j) += (alpha * t_base) * t_flow_stress_diff(i, j);
         ++t_base;
         ++t_nf;
@@ -748,6 +753,27 @@ OpCalculatePlasticInternalForceLhs_dEP::OpCalculatePlasticInternalForceLhs_dEP(
   sYmm = false;
 }
 
+FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 3>
+get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat,
+                           FTensor::Number<SPACE_DIM>) {
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  return FTensor::Tensor2<FTensor::PackPtr<double *, size_symm>, SPACE_DIM,
+                          size_symm>{&mat(2 * rr + 0, 0), &mat(2 * rr + 0, 1),
+                                     &mat(2 * rr + 0, 2), &mat(2 * rr + 1, 0),
+                                     &mat(2 * rr + 1, 1), &mat(2 * rr + 1, 2)};
+}
+
+FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 6>
+get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 6>{
+      &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 0, 2),
+      &mat(3 * rr + 0, 3), &mat(3 * rr + 0, 4), &mat(3 * rr + 0, 5),
+      &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 2),
+      &mat(3 * rr + 1, 3), &mat(3 * rr + 1, 4), &mat(3 * rr + 1, 5),
+      &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1), &mat(3 * rr + 2, 2),
+      &mat(3 * rr + 2, 3), &mat(3 * rr + 2, 4), &mat(3 * rr + 2, 5)};
+}
+
 MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
     EntData &row_data, EntData &col_data) {
@@ -783,20 +809,12 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_dEP::doWork(
       double alpha = getMeasure() * t_w;
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 2; ++rr) {
+      for (; rr != nb_row_dofs / SPACE_DIM; ++rr) {
 
-        FTensor::Tensor2<FTensor::PackPtr<double *, size_symm>, 2, size_symm>
-            t_mat{
+        auto t_mat = get_mat_vector_dtensor_sym(rr, locMat,
+                                                FTensor::Number<SPACE_DIM>());
 
-                &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
-                &locMat(2 * rr + 0, 2),
-
-                &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1),
-                &locMat(2 * rr + 1, 2)
-
-            };
-
-        FTensor::Tensor2<double, 2, size_symm> t_tmp;
+        FTensor::Tensor2<double, SPACE_DIM, size_symm> t_tmp;
         t_tmp(i, L) = (t_DL(i, j, L) * (alpha * t_row_diff_base(j)));
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
@@ -850,7 +868,7 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::doWork(
     const size_t nb_integration_pts = row_data.getN().size1();
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+    auto t_row_diff_base = row_data.getFTensor1DiffN<SPACE_DIM>();
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     auto t_D =
@@ -896,24 +914,16 @@ MoFEMErrorCode OpCalculatePlasticInternalForceLhs_LogStrain_dEP::doWork(
                     t_FDLogC_dC(ii, jj, kk, ll) * t_L(kk, ll, LL);
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 2; ++rr) {
+      for (; rr != nb_row_dofs / SPACE_DIM; ++rr) {
 
-        FTensor::Tensor2<FTensor::PackPtr<double *, size_symm>, 2, size_symm>
-            t_mat{
+        auto t_mat = get_mat_vector_dtensor_sym(rr, locMat,
+                                                FTensor::Number<SPACE_DIM>());
 
-                &locMat(2 * rr + 0, 0), &locMat(2 * rr + 0, 1),
-                &locMat(2 * rr + 0, 2),
-
-                &locMat(2 * rr + 1, 0), &locMat(2 * rr + 1, 1),
-                &locMat(2 * rr + 1, 2)
-
-            };
-
-        FTensor::Tensor2<double, 2, size_symm> t_tmp;
+        FTensor::Tensor2<double, SPACE_DIM, size_symm> t_tmp;
         t_tmp(i, L) = (t_DL(i, j, L) * (alpha * t_row_diff_base(j)));
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
+        for (size_t cc = 0; cc != nb_col_dofs / size_symm; ++cc) {
 
           t_mat(i, L) -= (t_col_base * t_tmp(i, L));
 
@@ -947,6 +957,31 @@ OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
   sYmm = false;
 }
 
+FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>
+get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat,
+                           FTensor::Number<SPACE_DIM>) {
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  return FTensor::Tensor3<FTensor::PackPtr<double *, SPACE_DIM>, SPACE_DIM,
+                          SPACE_DIM, SPACE_DIM>{
+      &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 1, 0),
+      &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 1),
+      &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1)};
+}
+
+FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>
+get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
+  return FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>{
+      &mat(6 * rr + 0, 0), &mat(6 * rr + 0, 1), &mat(6 * rr + 0, 2),
+      &mat(6 * rr + 1, 0), &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 2),
+      &mat(6 * rr + 2, 0), &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 2),
+      &mat(6 * rr + 1, 0), &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 2),
+      &mat(6 * rr + 3, 0), &mat(6 * rr + 3, 1), &mat(6 * rr + 3, 2),
+      &mat(6 * rr + 4, 0), &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 2),
+      &mat(6 * rr + 2, 0), &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 2),
+      &mat(6 * rr + 4, 0), &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 2),
+      &mat(6 * rr + 5, 0), &mat(6 * rr + 5, 1), &mat(6 * rr + 5, 2)};
+}
+
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
                                                     EntityType row_type,
                                                     EntityType col_type,
@@ -967,12 +1002,16 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
-    auto t_flow = getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
+    auto t_flow =
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-    FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_grad;
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+
+    FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
+        t_diff_grad;
     t_diff_grad(i, j, k, l) = t_kd(i, k) * t_kd(j, l);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -981,41 +1020,27 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
       auto t_diff_plastic_flow_dstrain = diff_plastic_flow_dstrain(
           t_D,
           diff_plastic_flow_dstress(t_f, t_flow, diff_deviator(diff_tensor())));
-      FTensor::Ddg<double, 2, 2> t_flow_stress_dstrain;
+      FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_flow_stress_dstrain;
       t_flow_stress_dstrain(i, j, k, l) =
           t_D(i, j, m, n) * t_diff_plastic_flow_dstrain(m, n, k, l);
 
-      FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_plastic_flow_stress_dgrad;
+      FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
+          t_diff_plastic_flow_stress_dgrad;
       t_diff_plastic_flow_stress_dgrad(i, j, k, l) =
           t_flow_stress_dstrain(i, j, m, n) * t_diff_grad(m, n, k, l);
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs / size_symm; ++rr) {
 
-        // Tensor3(T * d000, T * d001, T * d010, T * d011, T * d100, T * d101,
-        // T * d110, T * d111)
-
-        FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2> t_mat{
-            &locMat(3 * rr + 0, 0), // 000
-            &locMat(3 * rr + 0, 1), // 001
-
-            &locMat(3 * rr + 1, 0), // 010
-            &locMat(3 * rr + 1, 1), // 011
-
-            &locMat(3 * rr + 1, 0), // 100
-            &locMat(3 * rr + 1, 1), // 101
-
-            &locMat(3 * rr + 2, 0), // 110
-            &locMat(3 * rr + 2, 1)  // 111
-
-        };
+        auto t_mat = get_mat_tensor_sym_dvector(rr, locMat,
+                                                FTensor::Number<SPACE_DIM>());
 
         const double c0 = alpha * t_row_base * t_tau_dot;
 
-        auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 2; ++cc) {
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+        for (size_t cc = 0; cc != nb_col_dofs / SPACE_DIM; ++cc) {
 
-          FTensor::Tensor3<double, 2, 2, 2> t_tmp;
+          FTensor::Tensor3<double, SPACE_DIM, SPACE_DIM, SPACE_DIM> t_tmp;
           t_mat(i, j, l) -= c0 * (t_diff_plastic_flow_stress_dgrad(i, j, l, k) *
                                   t_col_diff_base(k));
 
@@ -1082,6 +1107,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
         commonHenckyDataPtr->matLogCdC);
 
     auto t_diff_symmetrize = diff_symmetrize();
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
 
@@ -1126,28 +1152,14 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
       //     t_diff_plastic_flow_stress_dC(i, j, m, n) * dC_dF(m, n, k, l);
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs / size_symm; ++rr) {
 
-        // Tensor3(T * d000, T * d001, T * d010, T * d011, T * d100, T * d101,
-        // T * d110, T * d111)
-        FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2> t_mat{
-            &locMat(3 * rr + 0, 0), // 000
-            &locMat(3 * rr + 0, 1), // 001
-
-            &locMat(3 * rr + 1, 0), // 010
-            &locMat(3 * rr + 1, 1), // 011
-
-            &locMat(3 * rr + 1, 0), // 100
-            &locMat(3 * rr + 1, 1), // 101
-
-            &locMat(3 * rr + 2, 0), // 110
-            &locMat(3 * rr + 2, 1)  // 111
-
-        };
+        auto t_mat = get_mat_tensor_sym_dvector(rr, locMat,
+                                                FTensor::Number<SPACE_DIM>());
 
         const double c0 = alpha * t_row_base * t_tau_dot;
 
-        auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / SPACE_DIM; ++cc) {
 
           FTensor::Tensor3<double, SPACE_DIM, SPACE_DIM, SPACE_DIM> t_tmp;
@@ -1187,6 +1199,53 @@ OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
   sYmm = false;
 }
 
+FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2>
+get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
+                               FTensor::Number<SPACE_DIM>) {
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  return FTensor::Tensor4<FTensor::PackPtr<double *, size_symm>, SPACE_DIM,
+                          SPACE_DIM, SPACE_DIM, SPACE_DIM>{
+      &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 0, 1),
+      &mat(3 * rr + 0, 2), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 1),
+      &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 2), &mat(3 * rr + 1, 0),
+      &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 1), &mat(3 * rr + 1, 2),
+      &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1), &mat(3 * rr + 2, 1),
+      &mat(3 * rr + 2, 2)};
+}
+
+FTensor::Tensor4<FTensor::PackPtr<double *, 6>, 3, 3, 3, 3>
+get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
+                               FTensor::Number<3>) {
+  return FTensor::Tensor4<FTensor::PackPtr<double *, 6>, 3, 3, 3, 3>{
+      &mat(6 * rr + 0, 0), &mat(6 * rr + 0, 1), &mat(6 * rr + 0, 2),
+      &mat(6 * rr + 0, 1), &mat(6 * rr + 0, 3), &mat(6 * rr + 0, 4),
+      &mat(6 * rr + 0, 2), &mat(6 * rr + 0, 4), &mat(6 * rr + 0, 5),
+      &mat(6 * rr + 1, 0), &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 2),
+      &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 3), &mat(6 * rr + 1, 4),
+      &mat(6 * rr + 1, 2), &mat(6 * rr + 1, 4), &mat(6 * rr + 1, 5),
+      &mat(6 * rr + 2, 0), &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 2),
+      &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 3), &mat(6 * rr + 2, 4),
+      &mat(6 * rr + 2, 2), &mat(6 * rr + 2, 4), &mat(6 * rr + 2, 5),
+      &mat(6 * rr + 1, 0), &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 2),
+      &mat(6 * rr + 1, 1), &mat(6 * rr + 1, 3), &mat(6 * rr + 1, 4),
+      &mat(6 * rr + 1, 2), &mat(6 * rr + 1, 4), &mat(6 * rr + 1, 5),
+      &mat(6 * rr + 3, 0), &mat(6 * rr + 3, 1), &mat(6 * rr + 3, 2),
+      &mat(6 * rr + 3, 1), &mat(6 * rr + 3, 3), &mat(6 * rr + 3, 4),
+      &mat(6 * rr + 3, 2), &mat(6 * rr + 3, 4), &mat(6 * rr + 3, 5),
+      &mat(6 * rr + 4, 0), &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 2),
+      &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 3), &mat(6 * rr + 4, 4),
+      &mat(6 * rr + 4, 2), &mat(6 * rr + 4, 4), &mat(6 * rr + 4, 5),
+      &mat(6 * rr + 2, 0), &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 2),
+      &mat(6 * rr + 2, 1), &mat(6 * rr + 2, 3), &mat(6 * rr + 2, 4),
+      &mat(6 * rr + 2, 2), &mat(6 * rr + 2, 4), &mat(6 * rr + 2, 5),
+      &mat(6 * rr + 4, 0), &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 2),
+      &mat(6 * rr + 4, 1), &mat(6 * rr + 4, 3), &mat(6 * rr + 4, 4),
+      &mat(6 * rr + 4, 2), &mat(6 * rr + 4, 4), &mat(6 * rr + 4, 5),
+      &mat(6 * rr + 5, 0), &mat(6 * rr + 5, 1), &mat(6 * rr + 5, 2),
+      &mat(6 * rr + 5, 1), &mat(6 * rr + 5, 3), &mat(6 * rr + 5, 4),
+      &mat(6 * rr + 5, 2), &mat(6 * rr + 5, 4), &mat(6 * rr + 5, 5)};
+}
+
 MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
                                                      EntityType row_type,
                                                      EntityType col_type,
@@ -1207,18 +1266,20 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
-    auto t_flow = getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
+    auto t_flow =
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
 
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
     auto t_diff_plastic_strain = diff_tensor();
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w;
       double beta = alpha * getTSa();
 
       size_t rr = 0;
-      for (; rr != nb_row_dofs / 3; ++rr) {
+      for (; rr != nb_row_dofs / size_symm; ++rr) {
 
         const double c0 = alpha * t_row_base * t_tau_dot;
         const double c1 = beta * t_row_base;
@@ -1227,35 +1288,11 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
             t_D, diff_plastic_flow_dstress(t_f, t_flow,
                                            diff_deviator(diff_tensor())));
 
-        // Tensor4(T *d0000, T *d0001, T *d0010, T *d0011, T *d0100, T *d0101,
-        //         T *d0110, T *d0111, T *d1000, T *d1001, T *d1010, T *d1011,
-        //         T *d1100, T *d1101, T *d1110, T *d1111)
-        FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2> t_mat{
-
-            &locMat(3 * rr + 0, 0), // 0000
-            &locMat(3 * rr + 0, 1), // 0001
-            &locMat(3 * rr + 0, 1), // 0010
-            &locMat(3 * rr + 0, 2), // 0011
-
-            &locMat(3 * rr + 1, 0), // 0100
-            &locMat(3 * rr + 1, 1), // 0101
-            &locMat(3 * rr + 1, 1), // 0110
-            &locMat(3 * rr + 1, 2), // 0111
-
-            &locMat(3 * rr + 1, 0), // 1000
-            &locMat(3 * rr + 1, 1), // 1001
-            &locMat(3 * rr + 1, 1), // 1010
-            &locMat(3 * rr + 1, 2), // 1011
-
-            &locMat(3 * rr + 2, 0), // 1100
-            &locMat(3 * rr + 2, 1), // 1101
-            &locMat(3 * rr + 2, 1), // 1110
-            &locMat(3 * rr + 2, 2)  // 1111
-
-        };
+        auto t_mat = get_mat_tensor_sym_dtensor_sym(
+            rr, locMat, FTensor::Number<SPACE_DIM>());
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 3; ++cc) {
+        for (size_t cc = 0; cc != nb_col_dofs / size_symm; ++cc) {
 
           t_mat(i, j, k, l) +=
               t_col_base * (t_D(i, j, m, n) *
@@ -1292,6 +1329,23 @@ OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
   sYmm = false;
 }
 
+FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2>
+get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat,
+                           FTensor::Number<SPACE_DIM>) {
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, SPACE_DIM, SPACE_DIM>{
+      &mat(3 * rr + 0, 0), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 0),
+      &mat(3 * rr + 2, 0)};
+}
+
+FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 3, 3>
+get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
+  return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 3, 3>{
+      &mat(6 * rr + 0, 0), &mat(6 * rr + 1, 0), &mat(6 * rr + 2, 0),
+      &mat(6 * rr + 1, 0), &mat(6 * rr + 3, 0), &mat(6 * rr + 4, 0),
+      &mat(6 * rr + 2, 0), &mat(6 * rr + 4, 0), &mat(6 * rr + 5, 0)};
+}
+
 MoFEMErrorCode
 OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
                                        EntityType row_type, EntityType col_type,
@@ -1307,11 +1361,13 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
 
     const size_t nb_integration_pts = row_data.getN().size1();
     auto t_w = getFTensor0IntegrationWeight();
-    auto t_flow = getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
+    auto t_flow =
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
 
     auto t_row_base = row_data.getFTensor0N();
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       double alpha = getMeasure() * t_w * getTSa();
@@ -1319,11 +1375,10 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
       FTensor::Tensor2_symmetric<double, 2> t_flow_stress;
       t_flow_stress(i, j) = t_D(i, j, m, n) * t_flow(m, n);
 
-      for (size_t rr = 0; rr != nb_row_dofs / 3; ++rr) {
+      for (size_t rr = 0; rr != nb_row_dofs / size_symm; ++rr) {
 
-        FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2> t_mat{
-            &locMat(3 * rr + 0, 0), &locMat(3 * rr + 1, 0),
-            &locMat(3 * rr + 1, 0), &locMat(3 * rr + 2, 0)};
+        auto t_mat = get_mat_tensor_sym_dscalar(rr, locMat,
+                                                FTensor::Number<SPACE_DIM>());
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs; cc++) {
@@ -1375,14 +1430,16 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
-    auto t_flow = getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
+    auto t_flow =
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_stress =
-        getFTensor2SymmetricFromMat<2>(*(commonDataPtr->mStressPtr));
+        getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStressPtr));
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
-    FTensor::Tensor4<double, 2, 2, 2, 2> t_diff_grad;
+    FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
+        t_diff_grad;
     t_diff_grad(i, j, k, l) = t_kd(i, k) * t_kd(j, l);
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
@@ -1392,18 +1449,16 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
           t_D,
           diff_constrain_dstress(
               diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
-      FTensor::Tensor2<double, 2, 2> t_diff_constrain_dgrad;
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dstrain(i, j) * t_diff_grad(i, j, k, l);
 
-      FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{&locMat(0, 0),
-                                                               &locMat(0, 1)};
-
+      auto t_mat = getFTensor1FromPtr<SPACE_DIM>(locMat.data().data());
       size_t rr = 0;
       for (; rr != nb_row_dofs; ++rr) {
 
-        auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 2; cc++) {
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+        for (size_t cc = 0; cc != nb_col_dofs / SPACE_DIM; cc++) {
 
           t_mat(i) += alpha * t_row_base * t_diff_constrain_dgrad(i, j) *
                       t_col_diff_base(j);
@@ -1496,14 +1551,13 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dlog_c(i, j) * dC_dF(i, j, k, l);
 
-      FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2> t_mat{&locMat(0, 0),
-                                                               &locMat(0, 1)};
+      auto t_mat = getFTensor1FromPtr<SPACE_DIM>(locMat.data().data());
 
       size_t rr = 0;
       for (; rr != nb_row_dofs; ++rr) {
 
-        auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 2; cc++) {
+        auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
+        for (size_t cc = 0; cc != nb_col_dofs / SPACE_DIM; cc++) {
 
           t_mat(i) += alpha * t_row_base * t_diff_constrain_dgrad(i, j) *
                       t_col_diff_base(j);
@@ -1542,6 +1596,19 @@ OpCalculateContrainsLhs_dEP::OpCalculateContrainsLhs_dEP(
   sYmm = false;
 }
 
+FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>
+get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<SPACE_DIM>) {
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  return FTensor::Tensor1<FTensor::PackPtr<double *, size_symm>, size_symm>{
+      &mat(0, 0), &mat(0, 1), &mat(0, 2)};
+}
+
+FTensor::Tensor1<FTensor::PackPtr<double *, 6>, 6>
+get_mat_scalar_dtensor_sym(MatrixDouble &mat, FTensor::Number<3>) {
+  return FTensor::Tensor1<FTensor::PackPtr<double *, 6>, 6>{
+      &mat(0, 0), &mat(0, 1), &mat(0, 2), &mat(0, 3), &mat(0, 4), &mat(0, 5)};
+}
+
 MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
                                                    EntityType row_type,
                                                    EntityType col_type,
@@ -1563,7 +1630,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
-    auto t_flow = getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
+    auto t_flow =
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
 
@@ -1578,14 +1646,14 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
 
       constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
       auto t_L = symm_L_tensor();
-      FTensor::Tensor1<FTensor::PackPtr<double *, size_symm>, size_symm> t_mat{
-          &locMat(0, 0), &locMat(0, 1), &locMat(0, 2)};
+      auto t_mat =
+          get_mat_scalar_dtensor_sym(locMat, FTensor::Number<SPACE_DIM>());
 
       size_t rr = 0;
       for (; rr != nb_row_dofs; ++rr) {
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
-        for (size_t cc = 0; cc != nb_col_dofs / 3; cc++) {
+        for (size_t cc = 0; cc != nb_col_dofs / size_symm; cc++) {
 
           t_mat(L) -= (alpha * t_row_base * t_col_base) *
                       (t_diff_constrain_dstrain(i, j) * t_L(i, j, L));
@@ -1651,7 +1719,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
           diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
       const double c1 =
           alpha * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
-          hardening_dtau();
+          hardening_dtau(t_tau);
 
       auto mat_ptr = locMat.data().begin();
 
@@ -1797,26 +1865,10 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
 
   MatrixDouble3by3 mat(3, 3);
 
-  auto set_matrix_2d = [&](auto &t) -> MatrixDouble3by3 & {
-    mat.clear();
-    for (size_t r = 0; r != 2; ++r)
-      for (size_t c = 0; c != 2; ++c)
-        mat(r, c) = t(r, c);
-    return mat;
-  };
-
   auto set_matrix_3d = [&](auto &t) -> MatrixDouble3by3 & {
     mat.clear();
-    for (size_t r = 0; r != 3; ++r)
-      for (size_t c = 0; c != 3; ++c)
-        mat(r, c) = t(r, c);
-    return mat;
-  };
-
-  auto set_matrix_2d_symm = [&](auto &t) -> MatrixDouble3by3 & {
-    mat.clear();
-    for (size_t r = 0; r != 2; ++r)
-      for (size_t c = 0; c != 2; ++c)
+    for (size_t r = 0; r != SPACE_DIM; ++r)
+      for (size_t c = 0; c != SPACE_DIM; ++c)
         mat(r, c) = t(r, c);
     return mat;
   };
@@ -1837,17 +1889,18 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
   auto th_plastic_flow = get_tag("PLASTIC_FLOW", 9);
   auto th_plastic_strain = get_tag("PLASTIC_STRAIN", 9);
 
-  auto t_flow = getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticFlow);
+  auto t_flow =
+      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
   auto t_plastic_strain =
-      getFTensor2SymmetricFromMat<2>(commonDataPtr->plasticStrain);
+      getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrain);
   size_t gg = 0;
   for (int gg = 0; gg != commonDataPtr->plasticSurface.size(); ++gg) {
     const double f = (commonDataPtr->plasticSurface)[gg];
     const double tau = (commonDataPtr->plasticTau)[gg];
     CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
-    CHKERR set_tag(th_plastic_flow, gg, set_matrix_2d(t_flow));
-    CHKERR set_tag(th_plastic_strain, gg, set_matrix_2d(t_plastic_strain));
+    CHKERR set_tag(th_plastic_flow, gg, set_matrix_3d(t_flow));
+    CHKERR set_tag(th_plastic_strain, gg, set_matrix_3d(t_plastic_strain));
     ++t_flow;
     ++t_plastic_strain;
   }
@@ -1861,11 +1914,10 @@ struct Monitor : public FEMethod {
           boost::shared_ptr<PostProcFaceOnRefinedMesh> &post_proc_fe,
           boost::shared_ptr<DomainEle> &reaction_fe,
           std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> ux_scatter,
-          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter
-
-          )
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uy_scatter,
+          std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uz_scatter)
       : dM(dm), postProcFe(post_proc_fe), reactionFe(reaction_fe),
-        uXScatter(ux_scatter), uYScatter(uy_scatter){};
+        uXScatter(ux_scatter), uYScatter(uy_scatter), uZScatter(uz_scatter){};
 
   MoFEMErrorCode preProcess() { return 0; }
   MoFEMErrorCode operator()() { return 0; }
@@ -1914,6 +1966,8 @@ struct Monitor : public FEMethod {
     CHKERR calculate_reaction();
     CHKERR print_max_min(uXScatter, "Ux");
     CHKERR print_max_min(uYScatter, "Uy");
+    if (SPACE_DIM == 3)
+      CHKERR print_max_min(uZScatter, "Uz");
 
     MoFEMFunctionReturn(0);
   }
@@ -1924,6 +1978,7 @@ private:
   boost::shared_ptr<DomainEle> reactionFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 };
 
 //! [Postprocessing]
