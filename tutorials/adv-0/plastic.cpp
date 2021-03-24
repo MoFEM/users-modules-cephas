@@ -184,10 +184,11 @@ MoFEMErrorCode Example::setupProblem() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  CHKERR simple->addDomainField("U", H1, base, 2);
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addDomainField("TAU", L2, base, 1);
-  CHKERR simple->addDomainField("EP", L2, base, 3);
-  CHKERR simple->addBoundaryField("U", H1, base, 2);
+  CHKERR simple->addDomainField("EP", L2, base, size_symm);
+  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
   // This can be added for arc-length control
   // CHKERR simple->addDomainField("L", NOFIELD, NOBASE, 1);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
@@ -275,9 +276,9 @@ MoFEMErrorCode Example::createCommonData() {
   };
 
   commonPlasticDataPtr = boost::make_shared<PlasticOps::CommonData>();
-
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   commonPlasticDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->mDPtr->resize(9, 1);
+  commonPlasticDataPtr->mDPtr->resize(size_symm * size_symm, 1);
 
   commonPlasticDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
@@ -404,8 +405,10 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    if (SPACE_DIM == 2) {
+      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    }
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
@@ -586,8 +589,8 @@ MoFEMErrorCode Example::OPs() {
       if (it->getName().compare(0, 5, "FORCE") == 0) {
         Range force_edges;
         std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), SPACE_DIM - 1,
-                                                   force_edges, true);
+        CHKERR it->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
         it->getAttributes(attr_vec);
         if (attr_vec.size() < SPACE_DIM)
           SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
@@ -668,8 +671,10 @@ MoFEMErrorCode Example::OPs() {
 
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    if (SPACE_DIM == 2) {
+      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    }
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
@@ -747,10 +752,11 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
-
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    if (SPACE_DIM == 2) {
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    }
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
             "U", commonPlasticDataPtr->mGradPtr));
