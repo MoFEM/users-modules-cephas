@@ -1,19 +1,37 @@
-/*! \page basic_tutorials_mesh_generation_2d MSH-1: Create a MoFEM-compatible 2D mesh from Gmsh
+/*! \page basic_tutorials_mesh_generation_2d MSH-1: Create a 2D mesh from Gmsh
+
+
+\note Intended learning outcome:
+- create a 2D mesh using [Gmsh](https://gmsh.info)
+- create and use a seperate config file to add attributes to blocksets
+- use a MoFEM tool called `read_med` to generate a MoFEM-compatible input mesh
 
 \tableofcontents
 
 \section basic_tutorials_mesh_generation_2d_introduction Introduction
 
-\subsection basic_tutorials_mesh_generation_2d_ilo Intended learning outcome
+\section basic_tutorials_mesh_generation_2d_geometry Geometry and physical group
 
-After this tutorial, you will learn how to:
+\subsection basic_tutorials_mesh_generation_2d_geometry_creation Geometry
 
-- create a 2D mesh using Gmsh
-- use a seperate config file to add attributes to blocksets
-- use MoFEM tool called `read_med` to generate a MoFEM-compatible input mesh
+\subsection basic_tutorials_mesh_generation_2d_geometry_physical_group Physical group
+
+\section basic_tutorials_mesh_generation_2d_mesh Mesh generation
+
+- generate
+
+- Export med file
 
 
+\section basic_tutorials_mesh_generation_2d_mofem_input MoFEM-compatible input mesh
+
+- Config file
+
+- Run read_med
 
 
+\section basic_tutorials_mesh_generation_2d_useful_tips Useful tips
+
+- Some useful tip while using Gmsh
 
 */
