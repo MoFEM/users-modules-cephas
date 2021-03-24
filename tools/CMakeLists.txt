@@ -91,6 +91,20 @@ target_link_libraries(field_to_vertices
 )
 install(TARGETS field_to_vertices DESTINATION bin)
 
+add_executable(remove_mofem_meshsets
+  ${CMAKE_CURRENT_SOURCE_DIR}/remove_mofem_meshsets.cpp)
+target_link_libraries(remove_mofem_meshsets
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_cblas
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS remove_mofem_meshsets DESTINATION bin)
+
 add_executable(delete_ho_nodes ${CMAKE_CURRENT_SOURCE_DIR}/delete_ho_nodes.cpp)
 target_link_libraries(delete_ho_nodes
   mofem_finite_elements
