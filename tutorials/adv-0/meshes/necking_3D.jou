@@ -1,0 +1,112 @@
+reset
+
+#{rad=6.4135}
+#{rad2=0.982*6.4135}
+#{heigh=53.34/2}
+#{offset=8.98/2}
+
+create surface circle radius {rad} zplane
+create surface circle radius {rad} zplane
+create surface circle radius {rad2} zplane
+move surface 1 location 0 0 {heigh} include_merged
+move surface 2 location 0 0 {offset} include_merged
+create volume loft surface 1 2
+create volume loft surface 2 3
+delete body 1 2 3
+merge volume all
+
+webcut volume 4 5 with plane yplane offset 0
+webcut volume all with plane xplane offset 0
+
+delete volume 6 7 10 8 9 11
+
+imprint volume all
+merge volume all 
+
+
+block 1 volume all
+block 1 name 'MATERIAL'
+block 1 attribute count 2
+block 1 attribute index 1 1000
+block 1 attribute index 2 0.25
+
+#create displacement on surface 29 39 dof 2 fix
+#create displacement on surface 26 36 dof 1 fix 0
+#create displacement on surface 38 dof 3 fix
+#create displacement on surface 30 dof 3 fix 5
+
+volume all scheme tetmesh
+volume 4 size 2
+volume 5 size 1
+
+mesh volume all
+
+block 5 surface 30
+block 5 name "FIX_Z"
+block 5 attribute count 3
+block 5 attribute index 1 0 
+block 5 attribute index 2 0
+block 5 attribute index 3 7.5
+
+#FIXED_BOUNDARY CONDITIONS
+
+block 6 surface 26 36
+block 6 name "FIX_X"
+block 6 attribute count 3
+block 6 attribute index 1 0
+block 6 attribute index 2 0
+block 6 attribute index 3 0
+
+block 7 surface 29 39
+block 7 name "FIX_Y"
+block 7 attribute count 3
+block 7 attribute index 1 0
+block 7 attribute index 2 0
+block 7 attribute index 3 0
+
+block 8 surface 38
+block 8 name "FIX_Z1"
+block 8 attribute count 3
+block 8 attribute index 1 0
+block 8 attribute index 2 0
+block 8 attribute index 3 0
+
+#block 6 surface 26 36
+#block 6 name "REMOVE_X"
+#block 6 attribute count 3
+#block 6 attribute index 1 0
+#block 6 attribute index 2 0
+#block 6 attribute index 3 0
+#
+#block 7 surface 29 39
+#block 7 name "REMOVE_Y"
+#block 7 attribute count 3
+#block 7 attribute index 1 0
+#block 7 attribute index 2 0
+#block 7 attribute index 3 0
+#
+#block 8 surface 38
+#block 8 name "REMOVE_Z1"
+#block 8 attribute count 3
+#block 8 attribute index 1 0
+#block 8 attribute index 2 0
+#block 8 attribute index 3 0
+#
+
+
+save as "/Users/karollewandowski/moFEM/mofem-cephas/mofem/users_modules/tutorials/adv-0/meshes/necking_3D.cub" overwrite
+
+# EXAMPLE COMMAND LINE
+
+# mpirun -np $proc /Users/karollewandowski/moFEM/users_modules/tutorials/adv-0/plastic_3D -file_name out.h5m \
+# -is_scale \
+# -is_quasi_static 1 \
+# -order 2 \
+# -delta 0.01 \
+# -cn 1 \
+# -ts_max_time 1 \
+# -ts_dt 0.005 \
+# -hardening_viscous 0 \
+# -large_strains 1 \
+# -mat_mumps_icntl_14 800 -mat_mumps_icntl_24 1 -mat_mumps_icntl_13 1 \
+# -snes_linesearch_type bt -ts_type theta -ts_adapt_always_accept 1 -ts_theta_initial_guess_extrapolate 1 -ts_theta_theta 1 -ts_adapt_reject_safety 0.9 -ts_exact_final_time matchstep -quasi_static 1 2>&1 | tee log

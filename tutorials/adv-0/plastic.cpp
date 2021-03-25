@@ -105,8 +105,8 @@ double sigmaY = 450;
 double H = 129;
 double visH = 1e4;
 double cn = 1;
-double Qinf = 0;
-double b_iso = 1;
+double Qinf = 265;
+double b_iso = 16.93;
 double delta = 1e-2;
 int order = 2;
 
@@ -232,9 +232,9 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " << H;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
     PetscBool is_scale = PETSC_TRUE;
@@ -246,6 +246,7 @@ MoFEMErrorCode Example::createCommonData() {
       rho *= scale;
       sigmaY *= scale;
       H *= scale;
+      Qinf *= scale;
       visH *= scale;
     }
 
@@ -306,6 +307,42 @@ MoFEMErrorCode Example::createCommonData() {
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
+    auto remove_disp = [&](const std::string blockset_name) {
+    Range remove_ents;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
+          0) {
+        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, remove_ents,
+                                                        true);
+      }
+    }
+    return remove_ents;
+  };
+
+  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
+    auto prb_mng = mField.getInterface<ProblemsManager>();
+    auto simple = mField.getInterface<Simple>();
+    MoFEMFunctionBegin;
+    Range verts;
+    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+    verts.merge(ents);
+    if (SPACE_DIM == 3) {
+      Range adj;
+      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
+                                               moab::Interface::UNION);
+      verts.merge(adj);
+    };
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
+                                         lo, hi);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR remove_ents(remove_disp("REMOVE_X"), 0, 0);
+  CHKERR remove_ents(remove_disp("REMOVE_Y"), 1, 1);
+  CHKERR remove_ents(remove_disp("REMOVE_Z"), 2, 2);
+  CHKERR remove_ents(remove_disp("REMOVE_ALL"), 0, 3);
+
   auto fix_disp = [&](const std::string blockset_name) {
     std::vector<std::pair<std::vector<double>, Range>> bc_data_vec;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
@@ -364,6 +401,13 @@ MoFEMErrorCode Example::bC() {
         Range verts;
         CHKERR mField.get_moab().get_connectivity(v.second, verts, true);
         verts.merge(v.second);
+        if (SPACE_DIM == 3) {
+          Range adj;
+          CHKERR mField.get_moab().get_adjacencies(v.second, 1, false, adj,
+                                                   moab::Interface::UNION);
+          verts.merge(adj);
+        };
+
         std::vector<unsigned char> mark_ents;
         CHKERR problem_manager->markDofs(simple->getProblemName(), ROW, verts,
                                          mark_ents);

@@ -753,14 +753,14 @@ OpCalculatePlasticInternalForceLhs_dEP::OpCalculatePlasticInternalForceLhs_dEP(
   sYmm = false;
 }
 
-FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 3>
+static inline FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 3>
 get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
   return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 2, 3>{
       &mat(2 * rr + 0, 0), &mat(2 * rr + 0, 1), &mat(2 * rr + 0, 2),
       &mat(2 * rr + 1, 0), &mat(2 * rr + 1, 1), &mat(2 * rr + 1, 2)};
 }
 
-FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 6>
+static inline FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 6>
 get_mat_vector_dtensor_sym(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
   return FTensor::Tensor2<FTensor::PackPtr<double *, 6>, 3, 6>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 0, 2),
@@ -954,7 +954,7 @@ OpCalculatePlasticFlowLhs_dU::OpCalculatePlasticFlowLhs_dU(
   sYmm = false;
 }
 
-FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>
+static inline FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>
 get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
   return FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 0, 1), &mat(3 * rr + 1, 0),
@@ -962,7 +962,7 @@ get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
       &mat(3 * rr + 2, 0), &mat(3 * rr + 2, 1)};
 }
 
-FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>
+static inline FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>
 get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
   return FTensor::Tensor3<FTensor::PackPtr<double *, 3>, 3, 3, 3>{
       &mat(6 * rr + 0, 0), &mat(6 * rr + 0, 1), &mat(6 * rr + 0, 2),
@@ -1193,7 +1193,7 @@ OpCalculatePlasticFlowLhs_dEP::OpCalculatePlasticFlowLhs_dEP(
   sYmm = false;
 }
 
-FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2>
+static inline FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2>
 get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
                                FTensor::Number<2>) {
   return FTensor::Tensor4<FTensor::PackPtr<double *, 3>, 2, 2, 2, 2>{
@@ -1205,7 +1205,7 @@ get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
       &mat(3 * rr + 2, 2)};
 }
 
-FTensor::Tensor4<FTensor::PackPtr<double *, 6>, 3, 3, 3, 3>
+static inline FTensor::Tensor4<FTensor::PackPtr<double *, 6>, 3, 3, 3, 3>
 get_mat_tensor_sym_dtensor_sym(size_t rr, MatrixDouble &mat,
                                FTensor::Number<3>) {
   return FTensor::Tensor4<FTensor::PackPtr<double *, 6>, 3, 3, 3, 3>{
@@ -1321,14 +1321,14 @@ OpCalculatePlasticFlowLhs_dTAU::OpCalculatePlasticFlowLhs_dTAU(
   sYmm = false;
 }
 
-FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2>
+static inline FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2>
 get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
   return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 2, 2>{
       &mat(3 * rr + 0, 0), &mat(3 * rr + 1, 0), &mat(3 * rr + 1, 0),
       &mat(3 * rr + 2, 0)};
 }
 
-FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 3, 3>
+static inline FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 3, 3>
 get_mat_tensor_sym_dscalar(size_t rr, MatrixDouble &mat, FTensor::Number<3>) {
   return FTensor::Tensor2<FTensor::PackPtr<double *, 1>, 3, 3>{
       &mat(6 * rr + 0, 0), &mat(6 * rr + 1, 0), &mat(6 * rr + 2, 0),
@@ -1397,6 +1397,18 @@ OpCalculateContrainsLhs_dU::OpCalculateContrainsLhs_dU(
     : DomainEleOp(row_field_name, col_field_name, DomainEleOp::OPROWCOL),
       commonDataPtr(common_data_ptr) {
   sYmm = false;
+}
+
+static inline FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>
+get_mat_scalar_dvector(MatrixDouble &mat, FTensor::Number<2>) {
+  return FTensor::Tensor1<FTensor::PackPtr<double *, 2>, 2>{
+      &mat(0, 0), &mat(0, 1)};
+}
+
+static inline FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>
+get_mat_scalar_dvector(MatrixDouble &mat, FTensor::Number<3>) {
+  return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
+      &mat(0, 0), &mat(0, 1), &mat(0, 2)};
 }
 
 MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,

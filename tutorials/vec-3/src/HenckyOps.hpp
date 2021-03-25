@@ -14,7 +14,7 @@
 
 namespace HenckyOps {
 
-constexpr double eps = 1e-8;
+constexpr double eps = 1e-12;
 
 auto f = [](double v) { return 0.5 * log(v); };
 auto d_f = [](double v) { return 0.5 / v; };
