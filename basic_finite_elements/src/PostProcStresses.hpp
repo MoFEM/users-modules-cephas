@@ -261,7 +261,7 @@ struct PostCellProcStress
     //   CHKERR outMesh.tag_set_data(th_id, &*tit, 1, &id);
     // }
 
-    string tag_name_piola1 = dof_ptr->getName() + "_PIOLA1_STRESS";
+    string tag_name_piola1 = "MED_" + dof_ptr->getName() + "_PIOLA1_STRESS";
     string tag_name_energy = dof_ptr->getName() + "_ENERGY_DENSITY";
 
     int tag_length = 9;
@@ -311,6 +311,10 @@ struct PostCellProcStress
     ublas::matrix<double, ublas::row_major, ublas::bounded_array<double, 9>> c_stress_data;
     c_stress_data.resize(3, 3);
     c_stress_data.clear();
+
+        ublas::matrix<double, ublas::row_major, ublas::bounded_array<double, 9>> piola_stress_data;
+    piola_stress_data.resize(3, 3);
+    piola_stress_data.clear();
     auto t_w = getFTensor0IntegrationWeight();
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
@@ -343,6 +347,7 @@ struct PostCellProcStress
           dAta, getNumeredEntFiniteElementPtr());
       CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
           dAta, getNumeredEntFiniteElementPtr());
+          piola_stress_data += dAta.materialDoublePtr->P * t_w;;
       // CHKERR outMesh.tag_set_data(th_piola1, &mapGaussPts[gg], 1,
       //                                  &dAta.materialDoublePtr->P(0, 0));
       // CHKERR outMesh.tag_set_data(th_energy, &mapGaussPts[gg], 1,
@@ -358,6 +363,10 @@ struct PostCellProcStress
       }
       ++t_w;
     }
+
+    CHKERR outMesh.tag_set_data(
+        th_piola1, &ent, 1,
+        &piola_stress_data(0, 0));
 
     CHKERR outMesh.tag_set_data(
         th_cauchy, &ent, 1,
