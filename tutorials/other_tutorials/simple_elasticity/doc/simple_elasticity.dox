@@ -1,7 +1,7 @@
 /*! \page simple_elasticity_1 Solid elasticity
 
 This tutorial's motivation is to show how finite element is implemented using
-basic blocks, like the Lego block where one can combine them in arbitrarily,
+basic blocks, like the Lego blocks, where one can combine them in arbitrarily,
 restricted only by his or her imagination. That is not short and compact
 code, where PDE can be in single line, but code which can be modified and
 changed in a way that was not imagined by developers.
@@ -25,7 +25,7 @@ post processing of the results are discussed.
 
 The linear elastic problem modelled here is an orthogonal parallelepiped of
 dimensions \f$1.0\times1.0\times4.0 \,\,\rm{m}\f$, subjected to a uniformly
-distributed normal traction \f$\bar t\f$ on one face while its opposite face
+distributed normal traction \f$\bar t\f$ on one face, while its opposite face
 being simply supported. The geometry of the problem is schematically
 presented in \ref Figure_1_Elastic "Figure 1". Boundary conditions are
 applied on the two faces with both edges equal to \f$1\,\,\rm m\f$. Vertical
@@ -41,7 +41,7 @@ of the bottom face by the support number 1 to prevent rigid body rotation.
 
 The boundary conditions where chosen to allow the body to deform freely on
 both horizontal directions. In this way, verification will be possible by
-checking the match between Poisson ratio recovered by the analysis results
+checking the match between Poisson's ratio recovered by the analysis results
 with the one used as input as a material parameter. Since only normal
 tractions are applied on the top face, no bending will occur along the faces
 parallel to the z axis and therefore no extra support is needed along the
@@ -64,7 +64,7 @@ The mesh presented in \ref Figure_2_Elastic "Figure 2" corresponds to the
 geometry of the problem illustrated in \ref Figure_1_Elastic "Figure 1".
 However, it should be noted that the mesh generator as well as MoFEM do not
 require a particular choice of units. Instead, the user is responsible to be
-consisted with her/his own choice of units for any input parameter.
+consistent with her/his own choice of units for any input parameter.
 
 \anchor Figure_2_Elastic
 \image html CubitMesh1_1.png "Figure 2: Mesh geometry of an orthogonal parallelepiped of dimensions of 1x1x4 along x, y and z axis, respectively." width = 600px
@@ -331,7 +331,7 @@ were the hard coded number 2, refers to the dimension of entity under
 consideration which in this case is a face. Numbers 0, 1 and 3 correspond to
 vertices, edges and volumes, respectively.
 
-Since we are interested in prescribing all degrees of freedom lying along the
+Since we are interested in prescribing all degrees of freedom lying along with the
 faces, we need to copy all corresponding entities i.e. vertices and edges, to
 the fix_faces object. This can be achieved by using the MoAB function
 \e get\_adjacencies that provides information for the entities adjacent to the
@@ -416,7 +416,7 @@ are set to be those of "U" type. Furthermore, the list of fields that are
 associated with "PRESSURE" element listed in the elements data is then set to
 be only the "U" type field. In a more complicated case, more than one fields
 can be added to the data, row and col structures of a finite element.
-Similarly, definition of each problem stencil consists of problem's name and
+Similarly, the definition of each problem stencil consists of problem's name and
 the stencils of the various elements previously presented and are defined
 using the code lines below
 
@@ -433,7 +433,7 @@ defined.
 
 The new ``PRESSURE'' finite element has to be explicitly added to DMMoFEM
 since it was not created through \e simple\_interface. Hence, a DM object is
-declared and it is set to point to the DMMoFEM create by the interface as
+declared and it is set to point the DMMoFEM create by the interface as
 \code
   DM dm;
   CHKERR simple_interface->getDM(&dm);
@@ -678,7 +678,7 @@ PostProcVolumeOnRefinedMesh has to be created based on MoAB database
     PostProcVolumeOnRefinedMesh post_proc(m_field);
     \endcode
 \endcode
-Thereafter, information of the problem solution is passed to the post processor as  
+Thereafter, numerical results of the problem solution are passed to the post processor as  
 \code
     // Add operators to the elements, strating with some generic
     CHKERR post_proc.generateReferenceElementMesh();
@@ -728,13 +728,13 @@ D_{ijkl}
 \label{eq:StiffnessIntegral}
 \f]
 where \f${\Omega^e}\f$ is the element volume, \f${\mathbf {D}}\f$ is the
-elastic material stiffness tensor. The row base funcrions and column base
+elastic material stiffness tensor. The row base functions and column base
 functions are represented by \f$\pmb\varphi^\alpha\f$ and
 \f$\pmb\phi^\beta\f$, respectively. \f$\alpha=1,\dots,N^\textrm{row}\f$ and
 \f$\beta= 1,\dots,N^\textrm{col}\f$ are indices of base function on row
 entities and column entities, respectively. \f$N^\textrm{row}\f$ and
-\f$N^\textrm{col}\f$ are numbers of base funcions on row entity and collumn
-entity. The differentation is indicated
+\f$N^\textrm{col}\f$ are the numbers of base functions on row entity and column
+entity. The differentiation is indicated
 by subscript and index after the comma, as follows
 \f[
 \varphi^\alpha_{,j} :=  \frac{\partial \varphi^\alpha}{\partial x_j}.
@@ -756,7 +756,7 @@ left-subscripts takes values
 r,c := \{\textrm{ver, edge, face, vol} \}
 \label{eq:setI}
 \f]
-The element matrix broked down on block subentities cab be represented as follows
+The element matrix broken down on block sub-entities cab be represented as follows
 \f[
 {}_e\mathbf{K} =  
 \left[
@@ -769,7 +769,7 @@ The element matrix broked down on block subentities cab be represented as follow
 \right]
 \label{eq:StiffStiff}
 \f]
-Note that only symmetric part is calculated since the element stiffness matrix is symmetric.
+Note that only the symmetric part is calculated since the element stiffness matrix is symmetric.
 
 \subsection simple_elasticity_OpK OpK
 
@@ -798,8 +798,8 @@ Struct's public members are
 The first four lines encompass the declaration of matrices used for the
 calculation of the elements stiffness matrix as presented in Section \ref simple_elastic_element_stiffness.
 
-The next line variables are associated to the material stiffness tensor where
-D is forth order tensor symmetric on two fisrt and two last indices, \e yOung
+The next line variables are associated to the material stiffness tensor, where
+D is the fourth-order tensor symmetric on two first and two last indices, \e yOung
 is the Young's modulus and \e pOisson is Poisson's ratio.
 OpK constructor is implemented as follows
 \code
@@ -920,9 +920,9 @@ stiffness matrix K that is allocated;
  K.clear();
 \endcode
 
-Next, integration of element block stiffnes matrxi is executed, explained in
-\f$\eqref {eq:StiffnessIntegral}\f$, and finally local matrix is assmble into
-global stiffnes matrix as follows
+Next, integration of element block stiffness matrix is executed, and explained in
+\f$\eqref {eq:StiffnessIntegral}\f$. Finally local matrix is assembled into
+global stiffness matrix as follows
 \code
     // integrate local matrix for entity block
     CHKERR iNtegrate(row_data, col_data);
@@ -957,7 +957,7 @@ MoFEMErrorCode iNtegrate(
     // get element volume
     double vol = getVolume();
 
-    // get intergrayion weights
+    // get integration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // get derivatives of base functions on rows
@@ -1008,16 +1008,16 @@ functions on columns. The essential part of the code is integration itself,
 \code
 t_m(i, k) += a * (tD(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l)));
 \endcode
-Note that is equivalent of sub integral (\ref eq:StiffnessIntegral ). Here we
-group operation in blocks using brackets, that first directives of vase
-functions on rows and columns are multiplied yielding tensor of rank 2
+Note that this is equivalent of sub integral (\ref eq:StiffnessIntegral ). Here we
+group the operation in blocks using brackets, that first derivative of base
+functions on rows and columns are multiplied leading to a tensor of rank 2
 \code
 t_row_diff_base(j) * t_col_diff_base(l)
 \endcode
 and then the tenor of rank two is multiplied by the tenor of rank two,
-yielding tensor of rank two. Resultant is multiplied by integration weight
-times volume of the element and added to local element stiffnes matrix. For 
-more information about tenorial operations see \ref ftenso_readme
+yielding tensor of rank two. The resultant is multiplied by integration weight
+times volume of the element and added to local element stiffness matrix. For 
+further information about the tensorial operations see \ref ftenso_readme
 
 Finally, block local stiffness matrix is assembled into global stiffness
 matrix as follows
@@ -1096,7 +1096,7 @@ is the struct presented below
     //vector of base functions 
     auto t_base = data.getFTensor0N();
 
-    // get intergrayion weights
+    // get integration weights
     auto t_w = getFTensor0IntegrationWeight();
 
     // loop over all gauss points of the face
@@ -1138,7 +1138,7 @@ later discussed
 
 The evaluation of boundary conditions for each element that are applied is
 performed within the OpPressure::doWork function. The number of degrees of freedom is
-initially passed to \e nb\_dofs that is used to appropriately resize vector \e nF.
+initially passed to \e nb\_dofs that is used to resize the vector \e nF.
 \code
     //size of force vector associated to the entity 
     //set equal to the number of degrees of freedom of associated with the entity
@@ -1162,7 +1162,7 @@ the normal to the face is passed to \e t\_normal variable
     auto t_normal = getFTensor1Normal();
 \endcode 
 
-Vector \e t\_normal has 3 component (one for each global axis). Its magnitude is
+Vector \e t\_normal has 3 components (one for each global axis). Its magnitude is
 equal to the double of the area of the triangle face since
 FaceElementForcesAndSourcesCore:UserDataOperator:getTensor1Norma() function
 returns the vector evaluated by the cross product of the vectors having a
@@ -1205,15 +1205,15 @@ integral
     }
 \endcode 
   
-In the loop, initially the weight of the gauss point is assigned to w
+In the loop, initially, the weight of the gauss point is assigned to w
 
 \code 
 double w = getGaussPts()(2, gg);
 \endcode 
 
-then \e t\_nF that is a pointer to a vector is initialised in a fashion that
-points to a piece of memory containing three contiguous double values that
-are in this case the first three elements of the boundary condition vector
+then \e t\_nF, that is a pointer to a vector, is initialised in a fashion that
+points to a piece of the memory containing three contiguous double values that
+are, in this case, the first three elements of the boundary condition vector
 \e nF.
 
 Since the \e t\_nF presents this structure of three contiguous elements pointed
@@ -1230,7 +1230,7 @@ three members of nF can be evaluated as
  t_nf(i) += (w * pressureVal * t_base) * 0.5 * t_normal(i); 
 \endcode 
 
-Index i in the last line operates the for each part of the three elements of \e nF.
+Index i in the last line operates on each part of the three elements of \e nF.
 So in the first instance, where bb = 0, \e nF[0], \e nF[1] and \e nF[2] are evaluated.
 
 Thereafter, pointers \e t\_nf and \e t\_base are increased, and now they are
@@ -1244,13 +1244,13 @@ In the second instance, where \e bb = 1, \e t\_nf(i) operates in the next three
 elements of \e nF, i.e. \e nF[3], \e nF[4], \e nF[5] are evaluated and so on.
 
 Each member of \e nF contains the surface integral presented in (12) of
-``Hierarchical Approximation'' associated to the the corresponding to gauss
+''Hierarchical Approximation'' associated to corresponding gauss
 point gg and degree of freedom 3*bb. The product that is assigned to \e t\_nf(i)
 involves multiplication of weight w of gauss point gg, the uniformly
 distributed traction is a scalar pressureVal times the shape function \e t\_base
 of degrees of freedom encapsulated in bb, times half the vector normal to the
 surface. The halving of the vector is done to recover the face area that is
-the double of the vector magnitude as describe previously.
+the double of the vector magnitude as described previously.
 
 Finally, the values passed to vector \e nF are then copied to the right hand
 side vector \r ksp\_f that points to vector f presented in Section \ref
@@ -1334,9 +1334,9 @@ are assigned through the constructor in public variables \e fixFaces, \e fixNode
 
 The homogeneous boundary conditions are then implemented in postProcess()
 function. Initially, a loop over degrees of freedom is performed through
-macro ``for (\_IT\_NUMEREDDOF\_ROW\_FOR\_LOOP\_(problemPtr, dit))''. Within
+macro ''for (\_IT\_NUMEREDDOF\_ROW\_FOR\_LOOP\_(problemPtr, dit))''. Within
 the loop, the degrees of freedom corresponding to the entities passed to the
-public variables of the struct are inserted to vector of integers
+public variables of the struct are inserted in the vector of integers
 \e set\_fix\_dofs through insert function
 
 \code
@@ -1390,14 +1390,14 @@ Invoking function
 <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MatZeroRowsColumns.html>MatZeroRowsColumns</a>
 the columns and rows corresponding to
 the prescribed degrees of freedom stored in fix\_dofs and the diagonal
-element is set to unity and the corresponding degrees of freedom in vector x
+element are set to unity and the corresponding degrees of freedom in vector x
 are set to zero.
 
 \code
     CHKERR MatZeroRowsColumns(ksp_B, fix_dofs.size(), &fix_dofs[0], 1, x, ksp_f);
 \endcode
 
-finally the memory allocated for vector \e x is freed
+finally, the memory allocated for vector \e x is freed
 
 \code
     CHKERR VecDestroy(&x);
@@ -1405,7 +1405,7 @@ finally the memory allocated for vector \e x is freed
 
 \section simple_elasticity_prog_run Running the program
 
-To run the code one should change directory to 
+To run the code the user should change the directory to 
 
 \code
 cd $HOME/mofem_installation/users_modules/basic_finite_elements/simple_elasticity
@@ -1417,7 +1417,7 @@ Then run the command
 ./simple_elasticity -file_name simple_elasticity_part.h5m -my_order 2
 \endcode
 
-To visualise results first convert the out put file from .h5m format to a vtk
+To visualise the results, the user have to convert the output file from .h5m format to a vtk
 one
 \code 
 mbconvert out.h5m out.vtk
@@ -1435,20 +1435,20 @@ open out.vtk
 \image html simple_elasticity_result.png "Figure 10: Result visualisation in Paraview" width = 600px
 
 \note In the following example solution is homogenous. Thus linear
-approximation is sufficient to get the exact the solution. Thus setting second
-order approximation does not improve solution. Note that all DOFs on edges
+approximation is sufficient to get the exact solution. Thus setting the second
+order approximation does not improve the solution. Note that all DOFs on edges
 for this case have zero values.
 
 \section simple_elasticity_exercises Exercises
 
-- Change boundary conditions to have fix cantilever and apply tractions to
+- Change boundary conditions to have fixed cantilever and apply tractions to
 bend beam in \e x or \e y direction? Check how displacements would
 converge with increasing approximation order?
 
 - Modify code to apply torsion to the beam.
 
 - Write finite element to calculate strain energy of the beam. With that at
-hand plot convergence for beam subjected bending and torsion.
+hand, plot the convergence for beam subjected to bending and torsion.
 
 If you have problems with understanding this tutorial or exercises, please
 contact us on Q&A forum, see <a href=https://groups.google.com/forum/#!categories/mofem-group>link</a>.
