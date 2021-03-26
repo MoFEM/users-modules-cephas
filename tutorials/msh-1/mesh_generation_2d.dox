@@ -10,28 +10,94 @@
 
 \section basic_tutorials_mesh_generation_2d_introduction Introduction
 
+This tutorial shows how to create a simple 2D square mesh in
+[Gmsh](https://gmsh.info) with some physical groups and then use the MoFEM tool
+`read_med` to generate a MoFEM-compatible input mesh for analysis.
+
+The steps will be as follows:
+
+- Create geometry, physical group and mesh in Gmsh
+- Create a seperate config file to add attributes to blocksets (physical group)
+- Use `read_med` to generate a MoFEM-compatible input mesh
+
+The data presented in this tutorial can be found at the directory `/mofem_install/mofem-cephas/mofem/users_modules/tutorials/msh-1`
+
 \section basic_tutorials_mesh_generation_2d_geometry Geometry and physical group
+
+Among a number of tutorials on Youtube regarding Gmsh, a tutorial presenting how
+to create a 2D mesh can be found [here](https://youtu.be/Lfnp8StrSLw). This is a
+good starting point.
 
 \subsection basic_tutorials_mesh_generation_2d_geometry_creation Geometry
 
+In order to create a geometry of a square, as shown in \ref
+figure_square_rectangle "Figure 1", from the panel on the left, choose
+`Modules -> Geometry -> Elementary entities -> Add -> Rectangle`.
+
+\anchor figure_square_rectangle
+\image html square_rectangle.png "Figure 1: Add rectangle." width = 900px
+
+Then provide the geometry inputs including location (X, Y, Z) and dimensions
+(DX, DY) as shown in \ref figure_square_dimensions
+"Figure 2" and click `Add`.
+
+\anchor figure_square_dimensions
+\image html square_dimensions.png "Figure 2: Input location (X, Y, Z) and dimensions (DX, DY) for the square." width = 900px
+
+\note Other tools in `Modules -> Geometry -> Elementary entities -> Add` can be
+used to create wide variaty of 2D geometries. For example, points and lines can
+be used to create a L-shape surface.
+
 \subsection basic_tutorials_mesh_generation_2d_geometry_physical_group Physical group
+
+Physical groups are used to define groups of entities that later will be given
+attributes including inputs of names, material properties, loading conditions,
+contrainsts, etc. These attributes will be read by MoFEM during analysis.
+
+As a demonstration, in this part, physical groups of edges and surface of the 2D
+square will be defined as shown in \ref figure_square_physical_group_curves
+"Figure 3" and \ref figure_square_physical_group_surface
+"Figure 4". It can be done by choosing, from the left panel,
+`Modules -> Geometry -> Physical groups -> Add -> Surface/Curve`. Then give name
+of a physical groups in the box `Name`, select entities to add to the
+corresponding groups and finally press `e` to end the selection.
+
+
+\anchor figure_square_physical_group_surface
+\image html square_physical_group_surface.png "Figure 3: Define physical group of the surface." width = 900px
+
+\anchor figure_square_physical_group_curves
+\image html square_physical_group_curves.png "Figure 4: Define physical group of
+curves (edges) for boundary definition." width = 900px
 
 \section basic_tutorials_mesh_generation_2d_mesh Mesh generation
 
-- generate
+\subsection basic_tutorials_mesh_generation_2d_create_mesh Create the mesh
+Go to `Tools -> Options -> Mesh`, choose the meshing algorithms and change the element size factor, e.g. 0.5 as shown in \ref
+figure_square_mesh "Figure 5", then close the window.
+
+To create the 2D mesh for the square, on the left panel, choose `Modules -> Mesh
+-> 2D`.
+
+\anchor figure_square_mesh
+\image html square_mesh.png "Figure 5: Mesh generation." width = 900px
+
+
+\subsection basic_tutorials_mesh_generation_2d_export_mesh Export mesh in MED format
 
 - Export med file
 
 
 \section basic_tutorials_mesh_generation_2d_mofem_input MoFEM-compatible input mesh
 
+\subsection basic_tutorials_mesh_generation_2d_config_file Create config file
 - Config file
+
+\subsection basic_tutorials_mesh_generation_2d_config_file Generate
+MoFEM-compatible mesh
 
 - Run read_med
 
 
-\section basic_tutorials_mesh_generation_2d_useful_tips Useful tips
-
-- Some useful tip while using Gmsh
 
 */
