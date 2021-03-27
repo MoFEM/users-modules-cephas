@@ -66,10 +66,9 @@ corresponding groups and finally press `e` to end the selection.
 \section basic_tutorials_mesh_generation_2d_mesh Mesh generation
 
 \subsection basic_tutorials_mesh_generation_2d_create_mesh Create the mesh
-Go to `Tools -> Options -> Mesh`, in the `General` tab, choose the meshing algorithms and change the element size factor, e.g. 0.5 as shown in \ref
-figure_square_mesh "Figure 4", then close the window.
 
-To create the 2D mesh for the square, on the left panel, choose `Modules -> Mesh
+Go to `Tools -> Options -> Mesh`, in the `General` tab, choose the meshing algorithms and change the element size factor, e.g. 0.5 as shown in \ref
+figure_square_mesh "Figure 4", then close the window. To create the 2D mesh for the square, on the left panel, choose `Modules -> Mesh
 -> 2D`.
 
 \anchor figure_square_mesh
@@ -85,9 +84,9 @@ to `File -> Export ...` then choose the file type `Mesh - MED (*.med)` and give 
 \section basic_tutorials_mesh_generation_2d_mofem_input MoFEM-compatible input mesh
 
 The mesh created by Gmsh in the previous step is not immediately compatible in
-a MoFEM analysis. We would need to provide additional information to the defined physical
-groups (blocksets) and convert the mesh to `*.h5m` format. We can do it by the
-following steps
+a MoFEM analysis. We would need to provide additional information to the defined
+physical groups (blocksets) and convert the mesh to `*.h5m` format. We can do it
+by the following steps
 
 - Create a config file to add information (block name, material properties,
   boundary conditions, loadings) to the defined physical groups (blocksets)
@@ -138,9 +137,10 @@ add=BLOCKSET
 name=BOUNDARY_CONDITION
 \endcode
 
-where `[block_1]` and `[block_2]` use the blockset IDs in the MED mesh, `id=100`
-and `id=110` are the IDs of the new blocksets that will be created in the next
-step. The remaining of each block are the attributes that will be added, e.g.
+where `[block_1]` and `[block_2]` use the blockset IDs in the MED mesh which
+cannot be changed. Meanwhile, `id=100` and `id=110` are the IDs, specified by
+user at this step, of the new blocksets that will be created in the next step.
+The remaining of each block are the attributes that will be added, e.g. 
 material properties or even just a blockset with a specific name that will be
 used in some MoFEM program.
 
