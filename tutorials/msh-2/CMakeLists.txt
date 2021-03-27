@@ -29,8 +29,6 @@ tutorials_copy_and_install("*.h5m" "${permissions_default}")
 tutorials_copy_and_install("*.petsc" "${permissions_default}")
 tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.md" "${permissions_default}")
-
-tutorials_build_and_install(
-  poisson_2d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_2d_homogeneous.cpp)
-tutorials_build_and_install(
-  poisson_3d_homogeneous ${CMAKE_CURRENT_SOURCE_DIR}/poisson_3d_homogeneous.cpp)
+tutorials_copy_and_install("*.config" "${permissions_default}")
+tutorials_copy_and_install("*.geo" "${permissions_default}")
+tutorials_copy_and_install("*.med" "${permissions_default}")
