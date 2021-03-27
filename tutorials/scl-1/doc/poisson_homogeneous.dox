@@ -1277,12 +1277,12 @@ will do the following steps
 - Third, in the terminal, run commands to partition the input mesh and start
   the analysis
   \code
-  mofem_part -my_file mesh2d.cub -output_file mesh2d.h5m -my_nparts $NPROCS -dim 2 -adj_dim 1
-  mpirun -np $NPROCS ./poisson_2d_homogeneous -file_name mesh2d.h5m -order $APPROX_ORDER
+  mofem_part -my_file square.h5m -output_file square_2parts.h5m -my_nparts 2 -dim 2 -adj_dim 1
+  mpirun -np 2 ./poisson_2d_homogeneous -file_name square_2parts.h5m -order 4
   \endcode
-  where `$NPROCS` is the number of processors you would like to use to run the
-  analysis and `$APPROX_ORDER` denotes the polynomial order of the approximation
-  function.
+  where the mesh of a square plate is partitioned into two parts and then the
+  program is run using two processors (the same number of partitions) with
+  fourth order polynomial of approximation.
 
 \subsection basic_tutorials_poisson_homogeneous_op Output
 
@@ -1389,8 +1389,8 @@ homogeneous boundary condition in poisson_3d_homogeneous.hpp and poisson_3d_homo
 To run the analysis, you will follow very similar procedure as for the 2D case
 using the same `param_file.petsc` file with slight changes in the command lines
 \code
-  mofem_part -my_file mesh3d.cub -output_file mesh3d.h5m -my_nparts $NPROCS -dim 3 -adj_dim 1
-  mpirun -np $NPROCS ./poisson_3d_homogeneous -file_name mesh3d.h5m -order $APPROX_ORDER -log_quiet
+  mofem_part -my_file cube.h5m -output_file cube_2parts.h5m -my_nparts 2 -dim 3 -adj_dim 1
+  mpirun -np 2 ./poisson_3d_homogeneous -file_name cube_2parts.h5m -order 4 -log_quiet
 \endcode
 
 

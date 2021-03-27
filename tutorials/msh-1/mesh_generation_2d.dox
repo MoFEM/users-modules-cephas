@@ -1,0 +1,177 @@
+/*! \page basic_tutorials_mesh_generation_2d MSH-1: Create a 2D mesh from Gmsh
+
+
+\note Intended learning outcome:
+- create a 2D mesh using [Gmsh](https://gmsh.info)
+- create a seperate config file to add attributes to blocksets
+- use a MoFEM tool called `read_med` to generate a MoFEM-compatible input mesh
+
+\tableofcontents
+
+\section basic_tutorials_mesh_generation_2d_introduction Introduction
+
+This tutorial shows how to create a simple 2D square mesh in
+[Gmsh](https://gmsh.info) with some physical groups and then use the MoFEM tool
+`read_med` to generate a MoFEM-compatible input mesh for analysis.
+
+The steps will be as follows:
+
+- Create geometry, physical group and mesh in Gmsh
+- Create a seperate config file to add attributes to blocksets (physical group)
+- Use `read_med` to generate a MoFEM-compatible input mesh
+
+The data presented in this tutorial can be found at the directory `/mofem_install/mofem-cephas/mofem/users_modules/tutorials/msh-1`
+
+\section basic_tutorials_mesh_generation_2d_geometry Geometry and physical group
+
+Among a number of tutorials on Youtube regarding Gmsh, a tutorial presenting how
+to create a 2D mesh can be found [here](https://youtu.be/Lfnp8StrSLw). This is a
+good starting point.
+
+\subsection basic_tutorials_mesh_generation_2d_geometry_creation Geometry
+
+In order to create a geometry of a square, from the panel on the left, choose
+`Modules -> Geometry -> Elementary entities -> Add -> Rectangle`. Then provide the geometry inputs including location (X, Y, Z) and dimensions
+(DX, DY) as shown in \ref figure_square_dimensions
+"Figure 1" and click `Add` and then press `q` on the keyboard to finish.
+
+\anchor figure_square_dimensions
+\image html square_dimensions.png "Figure 1: Input location (X, Y, Z) and dimensions (DX, DY) for the square." width = 900px
+
+\note Other tools in `Modules -> Geometry -> Elementary entities -> Add` can be
+used to create wide variaty of 2D geometries. For example, points and lines can
+be used to create a L-shape surface.
+
+\subsection basic_tutorials_mesh_generation_2d_geometry_physical_group Physical group
+
+Physical groups are used to define groups of entities that later will be given
+attributes including inputs of names, material properties, loading conditions,
+contrainsts, etc. These attributes will be read by MoFEM during analysis.
+
+As a demonstration, in this part, physical groups of edges and surface of the 2D
+square will be defined as shown in \ref figure_square_physical_group_curves
+"Figure 2" and \ref figure_square_physical_group_surface
+"Figure 3". It can be done by choosing, from the left panel,
+`Modules -> Geometry -> Physical groups -> Add -> Surface/Curve`. Then give name
+of a physical groups in the box `Name`, select entities to add to the
+corresponding groups and finally press `e` to end the selection.
+
+
+\anchor figure_square_physical_group_surface
+\image html square_physical_group_surface.png "Figure 2: Define physical group of the surface." width = 900px
+
+\anchor figure_square_physical_group_curves
+\image html square_physical_group_curves.png "Figure 3: Define physical group of curves (edges) for boundary definition." width = 900px
+
+\section basic_tutorials_mesh_generation_2d_mesh Mesh generation
+
+\subsection basic_tutorials_mesh_generation_2d_create_mesh Create the mesh
+
+Go to `Tools -> Options -> Mesh`, in the `General` tab, choose the meshing algorithms and change the element size factor, e.g. 0.5 as shown in \ref
+figure_square_mesh "Figure 4", then close the window. To create the 2D mesh for the square, on the left panel, choose `Modules -> Mesh
+-> 2D`.
+
+\anchor figure_square_mesh
+\image html square_mesh.png "Figure 4: Mesh generation." width = 900px
+
+
+\subsection basic_tutorials_mesh_generation_2d_export_mesh Export mesh in MED format
+
+A preferred mesh format that will be exported is `MED`. This can be done by go
+to `File -> Export ...` then choose the file type `Mesh - MED (*.med)` and give a file name, e.g. `square.med`
+
+
+\section basic_tutorials_mesh_generation_2d_mofem_input MoFEM-compatible input mesh
+
+The mesh created by Gmsh in the previous step is not immediately compatible in
+a MoFEM analysis. We would need to provide additional information to the defined
+physical groups (blocksets) and convert the mesh to `*.h5m` format. We can do it
+by the following steps
+
+- Create a config file to add information (block name, material properties,
+  boundary conditions, loadings) to the defined physical groups (blocksets)
+- Generate MoFEM-compatible input mesh in `*.h5m` format using `read_med` tool
+
+\subsection basic_tutorials_mesh_generation_2d_config_file Create config file
+
+As mentioned above, the mesh created by Gmsh does not contains attributes that
+may be needed for some tasks for analysis in MoFEM, e.g. 
+blockset with a specific name to add material properties, boundary conditions,
+loadings. We need to know the exact ID of the physical group (blockset) in the
+MED file in order to add attributes to that blockset, we can check the IDs by
+running the `read_med` as follows
+
+\code
+read_med -med_file square.med
+\endcode
+
+which would show that the defined physical groups `square` and `boundary` have
+the ID of 1 and 2, respectively, as in the following output message
+\code
+[0] <inform> MoFEM version 0.11.0 (MOAB 5.2.1 Petsc Release Version 3.11.4, Sep, 28, 2019 )
+[0] <inform> git commit id 0ac8895b15c4ad41ea5e7077c4d011f7efb50f13
+[0] <inform> [MedInterface] Reading MED file V4.1.0 using MED library V4.1.0
+[0] <inform> [MedInterface] Check mesh square nsteps 1
+[0] <inform> [MedInterface] Reading mesh square nsteps 1
+[0] <inform> [MedInterface] Read number of nodes 107
+[0] <inform> [read_med] Print all meshsets (old and added from meshsets configurational file
+[0] <inform> [read_med] meshset 12682136550675316737 type BLOCKSET UNKNOWNNAME msId 1 name square
+[0] <inform> [read_med] meshset 12682136550675316738 type BLOCKSET UNKNOWNNAME msId 2 name boundary 
+\endcode  
+
+We would then use these IDs in the config file, named `square.config`, as below
+
+\code
+[block_1]
+# `square` block - Add isotropic elastic material properties
+id=100
+add=BLOCKSET
+name=MAT_ELASTIC
+young=1
+poisson=0.1
+
+[block_2]
+# `boundary` block - Add block and give it a specific name
+id=110
+add=BLOCKSET
+name=BOUNDARY_CONDITION
+\endcode
+
+where `[block_1]` and `[block_2]` use the blockset IDs in the MED mesh which
+cannot be changed. Meanwhile, `id=100` and `id=110` are the IDs, specified by
+user at this step, of the new blocksets that will be created in the next step.
+The remaining of each block are the attributes that will be added, e.g. 
+material properties or even just a blockset with a specific name that will be
+used in some MoFEM program.
+
+\subsection basic_tutorials_mesh_generation_2d_mofem_mesh Generate MoFEM-compatible mesh
+
+Once the `MED` file and config file are ready, the final mesh file in `*.h5m`
+format that contains necessary information and can read by MoFEM can be
+generated by running the command below
+
+\code
+read_med -med_file square.med -meshsets_config  square.config -output_file square.h5m
+\endcode
+
+After running this command, the `square.h5m` file will be created and the main
+part of the output message would look like this
+
+\code
+[0] <inform> [read_med] Print all meshsets (old and added from meshsets configurational file
+[0] <inform> [read_med] meshset 12682136550675316737 type BLOCKSET UNKNOWNNAME msId 1 name square
+[0] <inform> [read_med] meshset 12682136550675316738 type BLOCKSET UNKNOWNNAME msId 2 name boundary                       
+[0] <inform> [read_med] meshset 12682136550675316739 type BLOCKSET MAT_ELASTICSET msId 100 name MAT_ELASTIC
+[0] <inform> [read_med] meshset 12682136550675316740 type BLOCKSET UNKNOWNNAME msId 110 name BOUNDARY_CONDITION
+\endcode
+
+As can be seen, along with the original blocksets 1 and 2, the output mesh
+`square.h5m` now contains the two new blocksets 100 and 110 with the names
+`MAT_ELASTICSET` and `BOUNDARY_CONDITION`, respectively, with additional
+attributes. Using the same concept, more blocksets for different purposes can be
+added to the mesh.
+
+Once the final `square.h5m` mesh is generated, it can be used directly as an
+input in MoFEM programs, e.g. \ref basic_tutorials_poisson_homogeneous.
+
+*/
