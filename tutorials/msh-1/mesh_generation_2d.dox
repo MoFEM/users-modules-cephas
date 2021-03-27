@@ -168,6 +168,10 @@ part of the output message would look like this
 As can be seen, along with the original blocksets 1 and 2, the output mesh
 `square.h5m` now contains the two new blocksets 100 and 110 with the names
 `MAT_ELASTICSET` and `BOUNDARY_CONDITION`, respectively, with additional
-attributes. Using the same concept, more blocksets for different purposes can be added to the mesh.
+attributes. Using the same concept, more blocksets for different purposes can be
+added to the mesh.
+
+Once the final `square.h5m` mesh is generated, it can be used directly as an
+input in MoFEM programs, e.g. \ref basic_tutorials_poisson_homogeneous.
 
 */
