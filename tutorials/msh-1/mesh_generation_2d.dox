@@ -30,19 +30,13 @@ good starting point.
 
 \subsection basic_tutorials_mesh_generation_2d_geometry_creation Geometry
 
-In order to create a geometry of a square, as shown in \ref
-figure_square_rectangle "Figure 1", from the panel on the left, choose
-`Modules -> Geometry -> Elementary entities -> Add -> Rectangle`.
-
-\anchor figure_square_rectangle
-\image html square_rectangle.png "Figure 1: Add rectangle." width = 900px
-
-Then provide the geometry inputs including location (X, Y, Z) and dimensions
+In order to create a geometry of a square, from the panel on the left, choose
+`Modules -> Geometry -> Elementary entities -> Add -> Rectangle`. Then provide the geometry inputs including location (X, Y, Z) and dimensions
 (DX, DY) as shown in \ref figure_square_dimensions
-"Figure 2" and click `Add`.
+"Figure 1" and click `Add` and then press `q` on the keyboard to finish.
 
 \anchor figure_square_dimensions
-\image html square_dimensions.png "Figure 2: Input location (X, Y, Z) and dimensions (DX, DY) for the square." width = 900px
+\image html square_dimensions.png "Figure 1: Input location (X, Y, Z) and dimensions (DX, DY) for the square." width = 900px
 
 \note Other tools in `Modules -> Geometry -> Elementary entities -> Add` can be
 used to create wide variaty of 2D geometries. For example, points and lines can
@@ -56,30 +50,30 @@ contrainsts, etc. These attributes will be read by MoFEM during analysis.
 
 As a demonstration, in this part, physical groups of edges and surface of the 2D
 square will be defined as shown in \ref figure_square_physical_group_curves
-"Figure 3" and \ref figure_square_physical_group_surface
-"Figure 4". It can be done by choosing, from the left panel,
+"Figure 2" and \ref figure_square_physical_group_surface
+"Figure 3". It can be done by choosing, from the left panel,
 `Modules -> Geometry -> Physical groups -> Add -> Surface/Curve`. Then give name
 of a physical groups in the box `Name`, select entities to add to the
 corresponding groups and finally press `e` to end the selection.
 
 
 \anchor figure_square_physical_group_surface
-\image html square_physical_group_surface.png "Figure 3: Define physical group of the surface." width = 900px
+\image html square_physical_group_surface.png "Figure 2: Define physical group of the surface." width = 900px
 
 \anchor figure_square_physical_group_curves
-\image html square_physical_group_curves.png "Figure 4: Define physical group of curves (edges) for boundary definition." width = 900px
+\image html square_physical_group_curves.png "Figure 3: Define physical group of curves (edges) for boundary definition." width = 900px
 
 \section basic_tutorials_mesh_generation_2d_mesh Mesh generation
 
 \subsection basic_tutorials_mesh_generation_2d_create_mesh Create the mesh
-Go to `Tools -> Options -> Mesh`, choose the meshing algorithms and change the element size factor, e.g. 0.5 as shown in \ref
-figure_square_mesh "Figure 5", then close the window.
+Go to `Tools -> Options -> Mesh`, in the `General` tab, choose the meshing algorithms and change the element size factor, e.g. 0.5 as shown in \ref
+figure_square_mesh "Figure 4", then close the window.
 
 To create the 2D mesh for the square, on the left panel, choose `Modules -> Mesh
 -> 2D`.
 
 \anchor figure_square_mesh
-\image html square_mesh.png "Figure 5: Mesh generation." width = 900px
+\image html square_mesh.png "Figure 4: Mesh generation." width = 900px
 
 
 \subsection basic_tutorials_mesh_generation_2d_export_mesh Export mesh in MED format
@@ -130,7 +124,7 @@ We would then use these IDs in the config file, named `square.config`, as below
 
 \code
 [block_1]
-# Applying material block (isotropic elastic material)
+# `square` block - Add isotropic elastic material properties
 id=100
 add=BLOCKSET
 name=MAT_ELASTIC
@@ -138,7 +132,7 @@ young=1
 poisson=0.1
 
 [block_2]
-# Add block and give it a name
+# `boundary` block - Add block and give it a specific name
 id=110
 add=BLOCKSET
 name=BOUNDARY_CONDITION
