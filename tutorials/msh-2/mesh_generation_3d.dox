@@ -1,19 +1,223 @@
 /*! \page basic_tutorials_mesh_generation_3d MSH-2: Create a 3D mesh from Gmsh
 
+\note Prerequisite of this tutorial is \ref basic_tutorials_mesh_generation_2d
+
+<br>
+
+\note Intended learning outcome:
+- create a 2D mesh using [Gmsh](https://gmsh.info)
+- create a seperate config file to add attributes to blocksets
+- use a MoFEM tool called `read_med` to generate a MoFEM-compatible input mesh
+
 \tableofcontents
 
 \section basic_tutorials_mesh_generation_3d_introduction Introduction
 
-\subsection basic_tutorials_mesh_generation_3d_ilo Intended learning outcome
+This tutorial shows how to create a simple 3D square mesh in
+[Gmsh](https://gmsh.info) with some physical groups and then use the MoFEM tool
+`read_med` to generate a MoFEM-compatible input mesh for analysis. This would be
+largely the same as those presented in \ref basic_tutorials_mesh_generation_2d
+which readers are recommended to have a look at first.
 
-After this tutorial, you will learn how to:
+The steps presented in this turorial are as follows
 
-- create a 2D mesh using Gmsh
-- use a seperate config file to add attributes to blocksets
-- use MoFEM tool called `read_med` to generate a MoFEM-compatible input mesh
-
-
+- Create geometry, physical group and mesh in Gmsh
+- Create a seperate config file to add attributes to blocksets (physical group)
+- Use `read_med` to generate a MoFEM-compatible input mesh
 
 
+The data presented in this tutorial can be found at the directory `/mofem_install/mofem-cephas/mofem/users_modules/tutorials/msh-2`
+
+\section basic_tutorials_mesh_generation_3d_geometry Geometry and physical group
+
+\subsection basic_tutorials_mesh_generation_3d_geometry_creation Geometry
+
+In order to create a geometry of a square, from the panel on the left, choose
+`Modules -> Geometry -> Elementary entities -> Add -> Box`. Then provide the geometry inputs including location (X, Y, Z) and dimensions
+(DX, DY, DZ) as shown in \ref figure_cube_dimensions
+"Figure 1" and click `Add` and then press `q` on the keyboard to finish.
+
+\anchor figure_cube_dimensions
+\image html cube_dimensions.png "Figure 1: Input location (X, Y, Z) and dimensions (DX, DY, DZ) for the cube." width = 900px
+
+
+\subsection basic_tutorials_mesh_generation_3d_geometry_physical_group Physical group
+
+As discussed in \ref basic_tutorials_mesh_generation_2d, physical groups are
+used to define groups of entities that later will be given attributes which will
+be read by MoFEM during analysis.
+
+As a demonstration, physical groups of edges, surface and volume of the created
+cube will be defined as shown in \ref figure_cube_physical_group_top_edges
+"Figure 2",  \ref figure_cube_physical_group_bottom_edges
+"Figure 3",  \ref figure_cube_physical_group_top_surface
+"Figure 4",  \ref figure_cube_physical_group_bottom_surface
+"Figure 5", and  \ref figure_cube_physical_group_volume
+"Figure 6". It can be done by choosing, from the left panel,
+`Modules -> Geometry -> Physical groups -> Add -> Curve/Surface/Volume`. Then
+give name of a physical groups in the box `Name`, select entities to add to the
+corresponding groups and finally press `e` to end the selection.
+
+\anchor figure_cube_physical_group_top_edges
+\image html cube_physical_group_top_edges.png "Figure 2: Define physical group of the top edges." width = 900px
+
+
+\anchor figure_cube_physical_group_bottom_edges
+\image html cube_physical_group_bottom_edges.png "Figure 3: Define physical group of the bottom edges." width = 900p
+
+
+\anchor figure_cube_physical_group_top_surface
+\image html cube_physical_group_top_surface.png "Figure 4: Define physical group of the top surface." width = 900p
+
+
+\anchor figure_cube_physical_group_bottom_surface
+\image html cube_physical_group_bottom_surface.png "Figure 5: Define physical group of the bottom surface." width = 900p
+
+
+\anchor figure_cube_physical_group_volume
+\image html cube_physical_group_volume.png "Figure 6: Define physical group of the volume." width = 900p
+
+
+\section basic_tutorials_mesh_generation_3d_mesh Mesh generation
+
+\subsection basic_tutorials_mesh_generation_3d_create_mesh Create the mesh
+
+Go to `Tools -> Options -> Mesh`, in the `General` tab, choose the meshing algorithms and change the element size factor, e.g. 1 as shown in \ref
+figure_cube_mesh "Figure 7", then close the window. To create the 2D mesh for
+the square, on the left panel, choose `Modules -> Mesh -> 3D`.
+
+\anchor figure_cube_mesh
+\image html cube_mesh.png "Figure 7: Mesh generation." width = 900px
+
+
+\subsection basic_tutorials_mesh_generation_3d_export_mesh Export mesh in MED format
+
+A preferred mesh format that will be exported is `MED`. This can be done by go
+to `File -> Export ...` then choose the file type `Mesh - MED (*.med)` and give a file name, e.g. `cube.med`
+
+
+
+\section basic_tutorials_mesh_generation_3d_mofem_input MoFEM-compatible input mesh
+
+This section would be very similar to the one presented in \ref
+basic_tutorials_mesh_generation_2d. The following steps will be presented
+
+- Create a config file to add information (block name, material properties,
+  boundary conditions, loadings) to the defined physical groups (blocksets)
+- Generate MoFEM-compatible input mesh in `*.h5m` format using `read_med` tool
+
+
+\subsection basic_tutorials_mesh_generation_3d_config_file Create config file
+
+As the mesh created by Gmsh does not contains attributes that may be needed for
+some tasks for analysis in MoFEM, e.g. blockset with a specific name to add
+material properties, boundary conditions, loadings. We need to know the exact ID
+of the physical group (blockset) in the MED file in order to add attributes to
+that blockset, we can check the IDs by running the `read_med` as follows
+
+\code
+read_med -med_file cube.med
+\endcode
+
+which would show that the defined physical groups along with their IDs as in the
+following output message
+\code
+[0] <inform> MoFEM version 0.11.0 (MOAB 5.2.1 Petsc Release Version 3.11.4, Sep, 28, 2019 )
+[0] <inform> git commit id 0ac8895b15c4ad41ea5e7077c4d011f7efb50f13
+[0] <inform> [MedInterface] Reading MED file V4.1.0 using MED library V4.1.0
+[0] <inform> [MedInterface] Check mesh cube nsteps 1
+[0] <inform> [MedInterface] Reading mesh cube nsteps 1
+[0] <inform> [MedInterface] Read number of nodes 364
+[0] <inform> [read_med] Print all meshsets (old and added from meshsets configurational file
+[0] <inform> [read_med] meshset 12682136550675316737 type BLOCKSET UNKNOWNNAME msId 1 name cube
+[0] <inform> [read_med] meshset 12682136550675316738 type BLOCKSET UNKNOWNNAME msId 2 name bottom_edges                   
+[0] <inform> [read_med] meshset 12682136550675316739 type BLOCKSET UNKNOWNNAME msId 3 name bottom_surface                 
+[0] <inform> [read_med] meshset 12682136550675316740 type BLOCKSET UNKNOWNNAME msId 4 name top_edges                      
+[0] <inform> [read_med] meshset 12682136550675316741 type BLOCKSET UNKNOWNNAME msId 5 name top_surface                    
+[0] <inform> [read_med] meshset 12682136550675316742 type BLOCKSET UNKNOWNNAME msId 6 name volume  
+\endcode  
+
+We would then use these IDs in the config file, named `cube.config`, as below to
+add materials properties (for block_1), add a specific name that can
+be used later in the source code to do certain operations (for block_2),
+directly add boundary conditions/constraints or springs (for block_3), and
+loading such as pressure (for block_5)
+
+\code
+[block_1]
+# `cube` (1) or `volume` (6) block - Add isotropic elastic material properties
+id=100
+add=BLOCKSET
+name=MAT_ELASTIC
+young=1
+poisson=0.1
+
+[block_2]
+# `bottom_edges` block - Add block and give it a specific name
+id=110
+add=BLOCKSET
+name=BOUNDARY_CONDITION
+
+[block_3]
+# `bottom_surface` block - Add block and apply displacement constraints
+id=120
+add=NODESET 
+disp_flag1=1
+disp_ux=0.0
+disp_flag2=1
+disp_uy=0.0
+disp_flag3=1
+disp_uz=0.0
+
+[block_3]
+# `bottom_surface` block - Add block and apply springs (if no other boundary conditions)
+#id=121
+#add=BLOCKSET
+#name=SPRING_BC
+#user1=1		  # Spring stiffness in normal direction
+#user2=0.1		# Spring stiffness in tangential direction
+
+[block_5]
+# `top_surface` block - Add block and apply pressure
+id=130
+add=SIDESET
+pressure_flag2=1
+pressure_magnitude=0.1
+\endcode
+
+\subsection basic_tutorials_mesh_generation_3d_mofem_mesh Generate MoFEM-compatible mesh
+
+Once the `MED` file and config file are ready, the final mesh file in `*.h5m`
+format that contains necessary information and can read by MoFEM can be
+generated by running the command below
+
+\code
+read_med -med_file cube.med -meshsets_config  cube.config -output_file cube.h5m
+\endcode
+
+After running this command, the `cube.h5m` file will be created and the main
+part of the output message would look like this
+
+\code
+[0] <inform> [read_med] Print all meshsets (old and added from meshsets configurational file
+[0] <inform> [read_med] meshset 12682136550675316737 type BLOCKSET UNKNOWNNAME msId 1 name cube
+[0] <inform> [read_med] meshset 12682136550675316738 type BLOCKSET UNKNOWNNAME msId 2 name bottom_edges                   
+[0] <inform> [read_med] meshset 12682136550675316739 type BLOCKSET UNKNOWNNAME msId 3 name bottom_surface                 
+[0] <inform> [read_med] meshset 12682136550675316740 type BLOCKSET UNKNOWNNAME msId 4 name top_edges                      
+[0] <inform> [read_med] meshset 12682136550675316741 type BLOCKSET UNKNOWNNAME msId 5 name top_surface                    
+[0] <inform> [read_med] meshset 12682136550675316742 type BLOCKSET UNKNOWNNAME msId 6 name volume                         
+[0] <inform> [read_med] meshset 12682136550675316743 type BLOCKSET MAT_ELASTICSET msId 100 name MAT_ELASTIC
+[0] <inform> [read_med] meshset 12682136550675316744 type BLOCKSET UNKNOWNNAME msId 110 name BOUNDARY_CONDITION
+[0] <inform> [read_med] meshset 12682136550675316745 type NODESET DISPLACEMENTSET msId 120
+[0] <inform> [read_med] meshset 12682136550675316746 type SIDESET PRESSURESET msId 130
+\endcode
+
+As can be seen, along with the original blocksets 1 to 6, the output mesh
+`cube.h5m` now contains the three new blocksets 100, 110, 120 and 130 with
+additional attributes. Using the same concept, more blocksets for different
+purposes can be added to the mesh.
+
+Once the final `cube.h5m` mesh is generated, it can be used directly as an input
+in MoFEM programs, e.g. elasticity or \ref basic_tutorials_poisson_homogeneous.
 
 */
