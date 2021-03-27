@@ -3,7 +3,7 @@
 
 \note Intended learning outcome:
 - create a 2D mesh using [Gmsh](https://gmsh.info)
-- create and use a seperate config file to add attributes to blocksets
+- create a seperate config file to add attributes to blocksets
 - use a MoFEM tool called `read_med` to generate a MoFEM-compatible input mesh
 
 \tableofcontents
@@ -100,6 +100,7 @@ following steps
 - Generate MoFEM-compatible input mesh in `*.h5m` format using `read_med` tool
 
 \subsection basic_tutorials_mesh_generation_2d_config_file Create config file
+
 As mentioned above, the mesh created by Gmsh does not contains attributes that
 may be needed for some tasks for analysis in MoFEM, e.g. 
 blockset with a specific name to add material properties, boundary conditions,
