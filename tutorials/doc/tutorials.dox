@@ -16,7 +16,7 @@ the following directories when you install MoFEM with developer version \ref ins
 - Source code:
   `$HOME/mofem_install/mofem-cephas/mofem/users_modules/tutorials`
 - Binary files (build directory):
-  `$HOME/mofem_install/um/build_release/tutorials`
+  `$HOME/mofem_install/mofem-cephas/mofem/users_modules/um-build-RelWithDebInfo-abcd1234/tutorials/`
 
 Each tutorial in this page includes code name and keywords for quick reference
 and search within the browser. 
