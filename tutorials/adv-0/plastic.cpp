@@ -307,13 +307,13 @@ MoFEMErrorCode Example::createCommonData() {
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
-    auto remove_disp = [&](const std::string blockset_name) {
+  auto remove_disp = [&](const std::string blockset_name) {
     Range remove_ents;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
           0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, remove_ents,
-                                                        true);
+        CHKERR mField.get_moab().get_entities_by_handle(it->meshset,
+                                                        remove_ents, true);
       }
     }
     return remove_ents;
