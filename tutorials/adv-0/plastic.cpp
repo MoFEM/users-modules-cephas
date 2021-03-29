@@ -326,8 +326,7 @@ MoFEMErrorCode Example::bC() {
     Range verts;
     CHKERR mField.get_moab().get_connectivity(ents, verts, true);
     if (SPACE_DIM == 3) {
-      Range adj;
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
+      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, verts,
                                                moab::Interface::UNION);
     }
     verts.merge(ents);
