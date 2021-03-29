@@ -21,3 +21,4 @@
 !*.in
 
 .DS_Store
+tutorials/.vscode/launch.json
