@@ -307,7 +307,10 @@ MoFEMErrorCode Example::createCommonData() {
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
-  auto remove_disp = [&](const std::string blockset_name) {
+  auto prb_mng = mField.getInterface<ProblemsManager>();
+  auto simple = mField.getInterface<Simple>();
+
+  auto get_block_ents = [&](const std::string blockset_name) {
     Range remove_ents;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
@@ -319,122 +322,90 @@ MoFEMErrorCode Example::bC() {
     return remove_ents;
   };
 
-  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
-    auto prb_mng = mField.getInterface<ProblemsManager>();
-    auto simple = mField.getInterface<Simple>();
-    MoFEMFunctionBegin;
+  auto get_adj_ents = [&](const Range &ents) {
     Range verts;
     CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    verts.merge(ents);
     if (SPACE_DIM == 3) {
       Range adj;
       CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
                                                moab::Interface::UNION);
-      verts.merge(adj);
-    };
+    }
+    verts.merge(ents);
     CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
+    return verts;
+  };
+
+  auto remove_dofs_on_ents = [&](const Range &&ents, const int lo,
+                                 const int hi) {
+    MoFEMFunctionBegin;
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", ents,
                                          lo, hi);
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR remove_ents(remove_disp("REMOVE_X"), 0, 0);
-  CHKERR remove_ents(remove_disp("REMOVE_Y"), 1, 1);
-  CHKERR remove_ents(remove_disp("REMOVE_Z"), 2, 2);
-  CHKERR remove_ents(remove_disp("REMOVE_ALL"), 0, 3);
+  auto mark_fix_dofs = [&](std::vector<unsigned char> &marked_u_dofs,
+                           const auto lo, const auto hi) {
+    return prb_mng->modifyMarkDofs(simple->getProblemName(), ROW, "U", lo, hi,
+                                   ProblemsManager::MarkOP::OR, 1,
+                                   marked_u_dofs);
+  };
 
-  auto fix_disp = [&](const std::string blockset_name) {
-    std::vector<std::pair<std::vector<double>, Range>> bc_data_vec;
+  auto fix_disp = [&](const std::string blockset_name, const bool fix_x,
+                      const bool fix_y, const bool fix_z) {
+    MoFEMFunctionBegin;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
           0) {
-        Range fix_ents;
-        std::vector<double> attr;
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
-                                                        true);
-        CHKERR it->getAttributes(attr);
-        bc_data_vec.push_back(std::make_pair(attr, fix_ents));
+
+        bcVec.emplace_back(new BCs());
+
+        CHKERR mField.get_moab().get_entities_by_handle(
+            it->meshset, bcVec.back()->bcEdges, true);
+        CHKERR it->getAttributes(bcVec.back()->bcAttributes);
+        
+        if (fix_x)
+          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 0, 0);
+        if (fix_y)
+          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 1, 1);
+        if (fix_z)
+          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 2, 2);
+
+        CHKERR prb_mng->markDofs(
+            simple->getProblemName(), ROW, ProblemsManager::AND,
+            get_adj_ents(bcVec.back()->bcEdges), bcVec.back()->bcMarkers);
       }
-    }
-    return bc_data_vec;
-  };
-
-  boundaryMarker = boost::make_shared<std::vector<unsigned char>>();
-
-  auto merge_boundary_dofs = [&](auto &&marked) {
-    MoFEMFunctionBegin;
-    boundaryMarker->resize(marked.size(), 0);
-    for (auto i = 0; i != boundaryMarker->size(); ++i) {
-      (*boundaryMarker)[i] |= marked[i];
     }
     MoFEMFunctionReturn(0);
   };
 
-  auto mark_boundary_dofs = [&](const auto &&ents, const bool fix_x,
-                                const bool fix_y, const bool fix_z) {
-    auto simple = mField.getInterface<Simple>();
-    auto problem_manager = mField.getInterface<ProblemsManager>();
+  auto mark_dofs_on_ents = [&](const Range &&ents) {
+    std::vector<unsigned char> marked_ents;
+    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW, ProblemsManager::OR,
+                             ents, marked_ents);
 
-    std::vector<unsigned char> mark_dofs;
-    if (fix_x)
-      problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 0, 0,
-                                      ProblemsManager::MarkOP::OR, 1,
-                                      mark_dofs);
-
-    if (fix_y)
-      problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 1, 1,
-                                      ProblemsManager::MarkOP::OR, 1,
-                                      mark_dofs);
-    if (SPACE_DIM == 3)
-      if (fix_z)
-        problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 2,
-                                        2, ProblemsManager::MarkOP::OR, 1,
-                                        mark_dofs);
-
-    std::vector<unsigned char> marked_dofs(mark_dofs.size(), 0);
-
-    for (auto &v : ents) {
-      if (!v.first.empty()) {
-        bcVec.emplace_back(new BCs());
-        bcVec.back()->bcAttributes = v.first;
-        bcVec.back()->bcEdges = v.second;
-        Range verts;
-        CHKERR mField.get_moab().get_connectivity(v.second, verts, true);
-        verts.merge(v.second);
-        if (SPACE_DIM == 3) {
-          Range adj;
-          CHKERR mField.get_moab().get_adjacencies(v.second, 1, false, adj,
-                                                   moab::Interface::UNION);
-          verts.merge(adj);
-        };
-
-        std::vector<unsigned char> mark_ents;
-        CHKERR problem_manager->markDofs(simple->getProblemName(), ROW, verts,
-                                         mark_ents);
-        auto &bc_markers = bcVec.back()->bcMarkers;
-        bc_markers.resize(mark_ents.size(), 0);
-
-        for (auto i = 0; i != mark_ents.size(); ++i) {
-          bc_markers[i] = (mark_ents[i] & mark_dofs[i]);
-          marked_dofs[i] |= bc_markers[i];
-        }
-      }
-    }
-
-    return marked_dofs;
+    return marked_ents;
   };
 
-  CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_X"), true, false, false));
-  CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_Y"), false, true, false));
-  if (SPACE_DIM == 3)
-    CHKERR merge_boundary_dofs(
-        mark_boundary_dofs(fix_disp("FIX_Z"), false, false, true));
-  CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_ALL"), true, true, true));
+  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
+  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
+  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
+  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
 
-  auto rec_marker = mark_boundary_dofs(fix_disp("FIX_X1"), true, false, false);
+  CHKERR fix_disp("FIX_X", true, false, false);
+  CHKERR fix_disp("FIX_Y", false, true, false);
+  if (SPACE_DIM == 3)
+    CHKERR fix_disp("FIX_Z", false, false, true);
+  CHKERR fix_disp("FIX_ALL", true, true, true);
+
+  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  for (auto b : bcVec) {
+    boundaryMarker->resize(b->bcMarkers.size(), 0);
+    for (int i = 0; i != b->bcMarkers.size(); ++i) {
+      (*boundaryMarker)[i] |= b->bcMarkers[i];
+    }
+  }
+
+  auto rec_marker = mark_dofs_on_ents(get_adj_ents(get_block_ents("FIX_X1")));
   reactionMarker = boost::make_shared<std::vector<unsigned char>>(
       rec_marker.begin(), rec_marker.end());
 
@@ -942,7 +913,7 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
-    CHKERR simple->loadFile("");
+    CHKERR simple->loadFile();
     //! [Load mesh]
 
     //! [Example]

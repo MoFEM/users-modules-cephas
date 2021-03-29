@@ -38,6 +38,7 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_copy_and_install("*.png" "${permissions_execute}")
 tutorials_copy_and_install("*.md" "${permissions_execute}")
 tutorials_copy_and_install("*.cfg" "${permissions_execute}")
+tutorials_copy_and_install("*.jou" "${permissions_execute}")
 
 tutorials_build_and_install(
   plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
@@ -45,8 +46,8 @@ tutorials_build_and_install(
 set_target_properties(
   plastic_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
-  tutorials_build_and_install(
-    plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
+tutorials_build_and_install(
+  plastic_3d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
   
-  set_target_properties(
-    plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
+set_target_properties(
+  plastic_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")
