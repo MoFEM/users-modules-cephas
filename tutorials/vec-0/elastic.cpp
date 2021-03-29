@@ -24,22 +24,27 @@
 
 using namespace MoFEM;
 
+constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
 
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+
+// using OpG = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+//     GAUSS>::OpMixTensorTimesGradImpl<1>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+
 using OpInternalForce =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
         GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.25;
+constexpr double young_modulus = 1000.;
+constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
@@ -70,6 +75,7 @@ private:
   boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
   boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
+  boost::shared_ptr<VectorDouble> waterPressurePtr;
 };
 
 //! [Create common data]
@@ -98,8 +104,23 @@ MoFEMErrorCode Example::createCommonData() {
     FTensor::Index<'i', SPACE_DIM> i;
     MoFEMFunctionBegin;
     auto t_force = getFTensor1FromMat<SPACE_DIM, 0>(*bodyForceMatPtr);
+    double unit_weight = 1.;
+    CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-unit_weight", &unit_weight,
+                               PETSC_NULL);
     t_force(i) = 0;
-    t_force(1) = -1;
+    if (SPACE_DIM==2)
+    {
+      t_force(1) = -unit_weight;
+    }
+    else if (SPACE_DIM==3)
+    {
+      t_force(2) = -unit_weight;
+    }
+    
+    
+    
+    //t_force(i) = 0;
+   
     MoFEMFunctionReturn(0);
   };
 
@@ -107,10 +128,15 @@ MoFEMErrorCode Example::createCommonData() {
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
-  bodyForceMatPtr = boost::make_shared<MatrixDouble>();
 
-  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+
+  bodyForceMatPtr = boost::make_shared<MatrixDouble>();
+  waterPressurePtr = boost::make_shared<VectorDouble>();
+
+      constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
+
+
   bodyForceMatPtr->resize(SPACE_DIM, 1);
 
   CHKERR set_matrial_stiffens();
@@ -130,7 +156,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
-  CHKERR checkResults();
+  //CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 //! [Run problem]
@@ -152,9 +178,14 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
+  CHKERR simple->addBoundaryField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  int order_pressure = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order_pressure", &order_pressure, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
+  CHKERR simple->setFieldOrder("P", order_pressure);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -214,18 +245,38 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
   }
+  double conductivity = 0.05;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-conductivity",
+                             &conductivity, PETSC_NULL);
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
+  //pipeline_mng->getOpDomainLhsPipeline().push_back(new OpG("P", conductivity));
+
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", bodyForceMatPtr));
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
-  MoFEMFunctionReturn(0);
+ double water_table = -0.;
+ CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-water_table", &water_table, PETSC_NULL);
+ double specific_weight_water = 9.81 ;
+ CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-specific_weight_water", &specific_weight_water, PETSC_NULL);
+
+ pipeline_mng->getOpDomainRhsPipeline().push_back(
+     new OpDomainRhsHydrostaticStress<SPACE_DIM>(
+         "U", specific_weight_water, water_table));
+
+
+ auto integration_rule = [](int, int, int approx_order) {
+   return 2 * (approx_order - 1);
+ };
+ CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+ CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+
+ MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
 
@@ -255,10 +306,17 @@ MoFEMErrorCode Example::outputResults() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
+  double specific_weight_water = 9.81;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-specific_weight_water",
+                             &specific_weight_water, PETSC_NULL);
+  double water_table = -0.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-water_table", &water_table,
+                             PETSC_NULL);
+
   pipeline_mng->getDomainLhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  if (SPACE_DIM) {
+  if (SPACE_DIM == 2) {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
@@ -273,7 +331,7 @@ MoFEMErrorCode Example::outputResults() {
           "U", matStrainPtr, matStressPtr, matDPtr));
   post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
       "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
-      matStressPtr));
+      matStressPtr, water_table, specific_weight_water ));
   post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
@@ -308,8 +366,8 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));
   (*bodyForceMatPtr) *= -1;
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMatPtr));
+   pipeline_mng->getOpDomainRhsPipeline().push_back(
+       new OpBodyForce("U", bodyForceMatPtr));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
