@@ -103,14 +103,14 @@ double poisson_ratio = 0.29;
 double rho = 0;
 double sigmaY = 450;
 double H = 129;
-double visH = 1e4;
+double visH = 0;
 double cn = 1;
 double Qinf = 265;
 double b_iso = 16.93;
-double delta = 1e-2;
+double delta = 1e-1;
 int order = 2;
 
-// const double arc_beta = 1;
+static Vec pre_step_vec;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -285,6 +285,9 @@ MoFEMErrorCode Example::createCommonData() {
   commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
 
+  commonPlasticDataPtr->perviousStepSolution =
+      smartCreateDMVector(mField.getInterface<Simple>()->getDM());
+
   CHKERR get_command_line_parameters();
   CHKERR set_matrial_stiffness();
 
@@ -437,6 +440,19 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
 
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+        "EP", commonPlasticDataPtr->getPlasticStrain0Ptr(),
+        commonPlasticDataPtr->perviousStepSolution));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonPlasticDataPtr->getPlasticTau0Ptr(),
+        commonPlasticDataPtr->perviousStepSolution));
+
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto add_domain_stress_ops = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     if (is_large_strains) {
 
       if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
@@ -668,10 +684,12 @@ MoFEMErrorCode Example::OPs() {
   };
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
@@ -824,6 +842,22 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+  auto add_pre_step = [&](auto solver) {
+    MoFEMFunctionBegin;
+    pre_step_vec = commonPlasticDataPtr->perviousStepSolution;
+    // pre_step_vec_dot = commonPlasticDataPtr->perviousStepSolutionDot;
+    auto pre_step = [](TS ts) -> PetscErrorCode {
+      MoFEMFunctionBeginHot;
+      Vec d, v;
+      CHKERR TS2GetSolution(ts, &d, &v);
+      CHKERR VecCopy(d, pre_step_vec);
+      // CHKERR VecCopy(v, pre_step_vec_dot);
+      MoFEMFunctionReturnHot(0);
+    };
+    CHKERR TSSetPreStep(solver, pre_step);
+    MoFEMFunctionReturn(0);
+  };
+
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   CHKERR create_post_process_element();
@@ -837,6 +871,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto D = smartCreateDMVector(dm);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
+    CHKERR add_pre_step(solver);
     CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
@@ -848,6 +883,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto DD = smartVectorDuplicate(D);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
+    CHKERR add_pre_step(solver);
     CHKERR TS2SetSolution(solver, D, DD);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);

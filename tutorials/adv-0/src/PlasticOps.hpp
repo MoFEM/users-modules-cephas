@@ -65,6 +65,10 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
 
+  SmartPetscObj<Vec> perviousStepSolution;
+  MatrixDouble plasticStrain0;
+  VectorDouble plasticTau0;
+
   inline auto getPlasticTauPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticTau);
   }
@@ -77,6 +81,12 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   inline auto getPlasticStrainDotPtr() {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
                                            &plasticStrainDot);
+  }
+  inline auto getPlasticStrain0Ptr() {
+    return boost::shared_ptr<MatrixDouble>(shared_from_this(), &plasticStrain0);
+  }
+  inline auto getPlasticTau0Ptr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticTau0);
   }
 };
 //! [Common data]
@@ -452,14 +462,14 @@ s_{kl}}{\partial \sigma_{mn}}\frac{\partial s_{kl}}{\partial \sigma_{ij}}
  */
 inline double
 platsic_surface(FTensor::Tensor2_symmetric<double, 3> &&t_stress_deviator) {
-  return std::sqrt(1.5 * t_stress_deviator(I, J) * t_stress_deviator(I, J));
+  return std::sqrt(1.5 * t_stress_deviator(I, J) * t_stress_deviator(I, J)) +
+         std::numeric_limits<double>::epsilon();
 };
 
 inline auto plastic_flow(double f,
                          FTensor::Tensor2_symmetric<double, 3> &&t_dev_stress,
                          FTensor::Ddg<double, 3, SPACE_DIM> &&t_diff_deviator) {
   FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_f;
-  f += std::numeric_limits<double>::epsilon();
   t_diff_f(k, l) =
       (1.5 / f) * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
   return t_diff_f;
@@ -470,7 +480,6 @@ inline auto diff_plastic_flow_dstress(
     double f, FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_flow,
     FTensor::Ddg<double, 3, SPACE_DIM> &&t_diff_deviator) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_diff_flow;
-  f += std::numeric_limits<double>::epsilon();
   t_diff_flow(i, j, k, l) =
       (1.5 / f) * (t_diff_deviator(M, N, i, j) * t_diff_deviator(M, N, k, l) -
                    (2. / 3.) * t_flow(i, j) * t_flow(k, l));
@@ -489,9 +498,18 @@ inline auto diff_plastic_flow_dstrain(
 
 inline double constrain_abs(double x) {
   return sqrt(pow(x, 2) + 4 * pow(delta, 2));
+  // return std::abs(x);
 };
 
-inline double constrian_sign(double x) { return x / constrain_abs(x); };
+inline double constrian_sign(double x) {
+  // if (x > 0)
+  //   return 1;
+  // else if (x < 0)
+  //   return -1;
+  // else
+  //   return 0;
+  return x / constrain_abs(x);
+};
 
 inline double constrian_sign2(double x) {
   return -(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
@@ -522,12 +540,12 @@ inline double diff_constrain_ddot_tau(double dot_tau, double f,
 
 inline auto diff_constrain_df(double dot_tau, double f, double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return sigmaY * (-1 / sigmaY - constrian_sign(w) / sigmaY);
+  return -1 - constrian_sign(w);
 };
 
 inline auto diff_constrain_dsigma_y(double dot_tau, double f, double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return sigmaY * (1 / sigmaY + constrian_sign(w) / sigmaY);
+  return 1 + constrian_sign(w);
 }
 
 template <typename T>
@@ -1034,7 +1052,6 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
         auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / SPACE_DIM; ++cc) {
 
-          FTensor::Tensor3<double, SPACE_DIM, SPACE_DIM, SPACE_DIM> t_tmp;
           t_mat(i, j, l) -= c0 * (t_diff_plastic_flow_stress_dgrad(i, j, l, k) *
                                   t_col_diff_base(k));
 
