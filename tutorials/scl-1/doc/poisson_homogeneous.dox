@@ -38,10 +38,11 @@ displacement of the membrane. The formal definition of the problem as follows
 
 Find \f$ u \in \bf{R} \f$ such that
 \f[
-\begin{aligned}
+  \begin{align}
 -\nabla \cdot \nabla u(\mathbf{x}) &= f \quad {\rm in} \quad {
-\Omega} \\ u(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega}
-\end{aligned}
+\Omega}, \\ 
+u(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
+  \end{align}
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
 \f$ \partial { \Omega} \f$ is the boundary of the domain.
@@ -60,19 +61,26 @@ derive the weak form. The procedure to achieve it is as follows
 - First, multiplying both sides of the equation by a *test* function \f$ v \f$
   and then integrate over the domain \f$ \Omega \f$
 \f[
--\int_\Omega v(\nabla \cdot \nabla u )= \int_\Omega v f 
+  \begin{equation}
+-\int_\Omega v(\nabla \cdot \nabla u )= \int_\Omega v f.
+  \end{equation}
 \f]
 
 - Second, apply the integration by parts on the left-hand side of the equation,
   we have
 \f[
-\int_\Omega \nabla v \cdot \nabla u - \int_{\partial \Omega} v {\bf n} \cdot \nabla u  = \int_\Omega v f 
+  \begin{equation}
+  \int_\Omega \nabla v \cdot \nabla u - \int_{\partial \Omega} v {\bf n} \cdot
+  \nabla u  = \int_\Omega v f.
+  \end{equation}
 \f]
 It is noted that the test function \f$ v \f$ has to satisfy the homogeneous
   boundary condition, i.e. \f$ v=0 \f$ on \f$ \partial \Omega \f$. Substituting
   it to the above equation, we finally obtain the weak form of the problem
 \f[
-\int_\Omega \nabla v \cdot \nabla u = \int_\Omega v f 
+  \begin{equation}
+\int_\Omega \nabla v \cdot \nabla u = \int_\Omega v f.
+  \end{equation}
 \f]
 
 We are now solving this equation of the weak form instead of the original
@@ -86,7 +94,9 @@ presented in the next part.
 As mentioned above, instead of trying to solve the problem analytically, we will
 approximate \f$ u \f$ assuming its solution has the form
 \f[
-u \approx u^h = \sum_{j=0}^{N-1} \phi_j U_j
+  \begin{equation}
+u \approx u^h = \sum_{j=0}^{N-1} \phi_j U_j.
+  \end{equation}
 \f]
 This expression can be interpreted as follows. Find the approximate solution \f$
 u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution of base function \f$ \phi_j \f$ with the *coefficient* of the contribution is \f$ U_j \f$. 
@@ -94,7 +104,7 @@ u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution
 Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process,
 which will be discussed later in this tutorial, MoFEM gives you values of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
-Remember that, in the weak form, we have another term that also needs to be
+Keep in mind that, in the weak form, we have another term that also needs to be
 taken care of, that is the test function \f$ v \f$. As we were saying, the weak
 form has to be satisfied with all test function \f$ v \f$ meaning it has to be
 true with the arbitrary choice of \f$ v_i=\phi_i \f$.
@@ -102,18 +112,22 @@ true with the arbitrary choice of \f$ v_i=\phi_i \f$.
 Substituting \f$ u \f$ and \f$ v \f$ into the weak form, we have the discrete
 form of the problem given by 
 \f[
-\int_{\Omega^e} \nabla \phi_i \cdot \nabla \left( \sum_j U_j \phi_j \right) = \int_{\Omega^e} \phi_i f
+  \begin{equation}
+\int_{\Omega^e} \nabla \phi_i \cdot \nabla \left( \sum_j U_j \phi_j \right) = \int_{\Omega^e} \phi_i f.
+  \end{equation}
 \f]
 Moving \f$ U_j \f$ outside of the parentheses and rearraging the equation, we
 have 
 \f[
-\sum_j \left( \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \right) U_j   = \int_{\Omega^e} \phi_i f
+  \begin{equation}
+\sum_j \left( \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \right) U_j   = \int_{\Omega^e} \phi_i f.
+  \end{equation}
 \f]
 
 Now, the problem becomes: finding the vector of coefficients \f$ {\bf U} \f$
 such that 
 \f[
-{\bf KU} = {\bf F}  
+{\bf KU} = {\bf F},
 \f]
 where \f$ {\bf K} \f$ and \f$ {\bf F} \f$ are the global stiffness matrix (left
 hand side) and global force vector (right hand side) calculated over the whole
@@ -123,7 +137,7 @@ of element stiffness matrix and element force vector are calculated as
 \f[
   \begin{align}
     K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla  \phi_j, \\
-    F_i^e &= \int_{\Omega^e} \phi_i f
+    F_i^e &= \int_{\Omega^e} \phi_i f.
   \end{align}
 \f]
 One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric which means there will be opportunity to save time later in the implementation.
@@ -141,11 +155,11 @@ of a set of points on each element along with their weights as follows
 K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \approx \sum_q
 \nabla \phi_i \left( {\bf x}_q \right) \cdot \nabla \phi_j \left( {\bf x}_q
 \right) w_q \label{eqn_stiffness}, \\ 
-    F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right) f \left( {\bf x}_q \right) w_q
+    F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right) f \left( {\bf x}_q \right) w_q,
   \end{align}
 \f]
 where \f$ {\bf x}_q \f$ and \f$ w_q \f$ are location and weight of the
-quadrature point. These equations can be interpreted as follows
+quadrature point, respectively. These equations can be interpreted as follows
 
 The approximated value of the component at row \f$ i \f$ and column \f$ j \f$ of
 the element stiffness matrix \f$ K \f$ of element \f$ e \f$ is calculated by
@@ -164,7 +178,7 @@ summation over all quadrature points of the multiplication of
 - the body force evaluated at the same quadrature point \f$ q \f$, and
 - the weight of that quadrature point \f$ q \f$.
 
-More details on this matter can be found here \ref lesson1.
+More details on this matter can be found here \ref integration.
 
 To this end, we have established a linear system of the primary variable \f$
 {\bf U} \f$ through \f$ {\bf K} \f$ and \f$ {\bf F} \f$. In MoFEM, we will use
