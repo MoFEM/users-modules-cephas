@@ -427,16 +427,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
     }
 
-    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr));
-
-    pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
-
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
 
@@ -451,8 +443,16 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_stress_ops = [&](auto &pipeline) {
+  auto add_domain_stress_ops = [&](auto &pipeline, SmartPetscObj<Vec> vec) {
     MoFEMFunctionBegin;
+
+    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonPlasticDataPtr->mGradPtr, vec));
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+        "EP", commonPlasticDataPtr->getPlasticStrainPtr(), vec));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr(), vec));
+
     if (is_large_strains) {
 
       if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
@@ -477,8 +477,13 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
     }
 
-    pipeline.push_back(
-        new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+    if (!vec.use_count())
+      pipeline.push_back(
+          new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+    else
+      pipeline.push_back(
+          new OpCalculatePlasticSurface0("U", commonPlasticDataPtr));
+
     MoFEMFunctionReturn(0);
   };
 
@@ -493,8 +498,8 @@ MoFEMErrorCode Example::OPs() {
           new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr));
-      pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
-          "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr));
+      // pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
+      //     "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr));
       pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
           "TAU", "U", commonPlasticDataPtr, commonHenckyDataPtr));
 
@@ -502,8 +507,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
           "U", "EP", commonPlasticDataPtr));
-      pipeline.push_back(
-          new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
+      // pipeline.push_back(
+      //     new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
       pipeline.push_back(
           new OpCalculateContrainsLhs_dU("TAU", "U", commonPlasticDataPtr));
     }
@@ -585,7 +590,7 @@ MoFEMErrorCode Example::OPs() {
     for (auto &bc : bcVec) {
       pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
       pipeline.push_back(new OpBoundaryMass(
-          "U", "U", [](double, double, double) { return 1.; },
+          "U", "U", [](double, double, double) { return 1. / scale; },
           bc->getBcEdgesPtr()));
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -611,6 +616,12 @@ MoFEMErrorCode Example::OPs() {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
       return -fe_domain_rhs->ts_t;
+    };
+
+    auto time_scaled = [&](double, double, double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      return -fe_domain_rhs->ts_t / scale;
     };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
@@ -672,24 +683,33 @@ MoFEMErrorCode Example::OPs() {
                  bc->bcAttributes.size());
       std::copy(&bc->bcAttributes[0], &bc->bcAttributes[SPACE_DIM],
                 attr_vec->data().begin());
-      pipeline.push_back(new OpBoundaryVec("U", attr_vec, get_minus_time,
-                                           bc->getBcEdgesPtr()));
+
+      pipeline.push_back(
+          new OpBoundaryVec("U", attr_vec, time_scaled, bc->getBcEdgesPtr()));
       pipeline.push_back(new OpBoundaryInternal(
-          "U", u_mat_ptr, [](double, double, double) { return 1.; },
+          "U", u_mat_ptr, [](double, double, double) { return 1. / scale; },
           bc->getBcEdgesPtr()));
+
       pipeline.push_back(new OpUnSetBc("U"));
     }
+
 
     MoFEMFunctionReturn(0);
   };
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
+                               commonPlasticDataPtr->perviousStepSolution);
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
+                               SmartPetscObj<Vec>());
   CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
+                               commonPlasticDataPtr->perviousStepSolution);
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
+                               SmartPetscObj<Vec>());
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
