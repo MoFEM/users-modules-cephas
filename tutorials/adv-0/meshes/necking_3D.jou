@@ -36,8 +36,8 @@ block 1 attribute index 2 0.25
 #create displacement on surface 30 dof 3 fix 5
 
 volume all scheme tetmesh
-volume 4 size 2
-volume 5 size 1
+volume 4 size 10
+volume 5 size 10
 
 mesh volume all
 
@@ -110,3 +110,4 @@ save as "/Users/karollewandowski/moFEM/mofem-cephas/mofem/users_modules/tutorial
 # -large_strains 1 \
 # -mat_mumps_icntl_14 800 -mat_mumps_icntl_24 1 -mat_mumps_icntl_13 1 \
 # -snes_linesearch_type bt -ts_type theta -ts_adapt_always_accept 1 -ts_theta_initial_guess_extrapolate 1 -ts_theta_theta 1 -ts_adapt_reject_safety 0.9 -ts_exact_final_time matchstep -quasi_static 1 2>&1 | tee log
+
