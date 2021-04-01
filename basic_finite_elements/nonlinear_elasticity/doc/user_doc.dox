@@ -1,25 +1,25 @@
 /*! \page elastic_dynamics Nonlinear Elasticity
 
-This is simple example how to run a simple problem for linear and non-linear dynamics. Is is
+This is a simple example of how to run a simple problem for linear and non-linear dynamics. Is is
 directed for beginners starting to work with MoFEM.
 
-Implementation of following examples can be found in module \ref
-nonlinear_elastic_elem. Stiffness matrix and internal force vector is calulated
+Implementation of the following examples can be found in module \ref
+nonlinear_elastic_elem. Stiffness matrix and internal force vector is calculated
 in \ref NonlinearElasticElement, damping matrix is implemented in \ref KelvinVoigtDamper
 and mass matrix is implemented in \ref ConvectiveMassElement.
 
-\image html dam_dynamics.gif "Arch dam - erthquace load" width=700px
+\image html dam_dynamics.gif "Arch dam - earthquake load" width=700px
 
 \tableofcontents
 
 \section dynamic_elastic_bar Dynamic analysis of prismatic 3d bar
 
-You can run this analysis in Jupyter notebook. First follow instruction here \ref docker_jupyter. Then select file in 
+You can run this analysis in Jupyter notebook. First follow the instruction here \ref docker_jupyter. Then select file in 
 \em um_view/linear_elasticity/dam_example.ipynb
 
 \subsection dynamic_elastic_bar_input_file Input files
 
-Following description and line commands are in presumption that user parent
+Following description and line commands are in the presumption that user parent
 working directory is \em users_modules/basic_finite_elements/nonlinear_elasticity/examples/prismatic_bar in build directory.
 All input files used in this example can be found in the example directory.
 
@@ -67,13 +67,13 @@ Notes:
 - Using -my_output_prt -1, each time step is post-processed. In some cases
 every n-th step can be save on hard-drive, then set -my_output_prt -2, if
 every \em even you like to save. If option number is positive in addition
-restart file is saved, this allow to kick-start calculations from last
+restart file is saved, this allows to kick-start calculations from last
 converged step.
 
 \subsection gnuplot Generating data for plots
 
-Note that executing code from example above generates log file. Filtering lines
-starting from key word \em Energy, data file with elastic energy,
+Note that executing code from the example above generates log file. Filtering lines
+starting from keyword \em Energy, data file with elastic energy,
 potential energy and total energy in time can be made.
 
 For example, data for making plots in excel, gnuplot or any other plotting
@@ -95,11 +95,11 @@ VTK files can be generated using script located in \em users_modules/basic_finit
 
 \subsection time_stepping_method Selecting method for time stepping solver
 
-In PETSc user can choose from range of implicit time stepping solvers, by setting option
+In PETSc user can choose from a range of implicit time stepping solvers, by setting option
 \code
 -ts_type type
 \endcode
-where avilavle types are
+where available types are
 - \em -ts_type beuler <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/TSBEULER.html>
 - \em -ts_type theta <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/TSTHETA.html>
 - \em -ts_type alpha <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/TS/TSALPHA.html>
@@ -114,7 +114,7 @@ For Alpha method user can set spectral radius following petsc documentation
 
 \subsection dam_input_file Input files
 
-Following description and line commands are in presumption that user parent
+Following description and line commands are in the presumption that user parent
 working directory is \em users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam in build directory.
 All input files used in this example can be found in the example directory.
 
@@ -124,13 +124,13 @@ This is simplified analysis of dam structure subjected to earthquake. Dynamic
 loads given in accelerogram are given in
 \em users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam/accelerogram.in
 \include users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam/accelerogram.in
-where first columb represents time, second acceleretaion in \em x-direction,
+where first column represents time, second acceleration in \em x-direction,
 third column acceleration in \em y-direction and last column is acceleration in
 \em y-direction.
 
 \subsection time_history_dam Time history data
 
-For simplicity are other loads are constant in time, and time depenent laad
+For simplicity are other loads are constant in time, and time dependent load
 scaling function is in
 \em users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam/dam_history.in
 \include users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam/dam_history.in
@@ -154,8 +154,8 @@ mpirun -np 4 ../../nonlinear_dynamics \
 -elastic_material_configuration block_data.in 2>&1 | tee log
 \endcode
 
-Options discussed in prismatic bar (\ref execution) apply to this case as well, in
- addition more options are introduce in this example:
+Options discussed in the prismatic bar (\ref execution) apply to this case as well, in
+ addition more options are introduced in this example:
 
 - \em -my_accelerogram accelerogram file
 
@@ -172,8 +172,8 @@ User can set material parameters or approximation order to each block defined in
 
 \subsection journal_dam Journal file
 
-Mesh journal mesh file is shown below. Please note that at the end of the file boundary conditions,
-blocks with elastic matrix, damping model and body forces are defined.
+The mesh journal mesh file is shown below. Please note that at the end of the file boundary conditions,
+blocks with elastic matrix, damping model, and body forces are defined.
 
 \include users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam/dam.jou
 
