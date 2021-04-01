@@ -498,6 +498,10 @@ inline double constrian_sign2(double x) {
   return -(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
 };
 
+inline double w(double dot_tau, double f, double sigma_y) {
+  return (f - sigma_y) / sigmaY + cn * dot_tau;
+};
+
 /**
 
 \f[
@@ -510,44 +514,38 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 
  */
 inline double constrain(double dot_tau, double f, double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
   return visH * dot_tau +
-         (sigmaY / 2) *
-             ((cn * dot_tau - (f - sigma_y) / sigmaY) - constrain_abs(w));
+         (sigmaY / 2) * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
+                         constrain_abs(w(dot_tau, f, sigma_y)));
 };
 
 inline double diff_constrain_ddot_tau(double dot_tau, double f,
                                       double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return visH + (sigmaY / 2) * (cn - cn * constrian_sign(w));
+  return visH +
+         (sigmaY / 2) * (cn - cn * constrian_sign(w(dot_tau, f, sigma_y)));
 };
 
 inline auto diff_constrain_df(double dot_tau, double f, double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return (-1 - constrian_sign(w)) / 2;
+  return (-1 - constrian_sign(w(dot_tau, f, sigma_y))) / 2;
 };
 
 inline auto diff_constrain_dsigma_y(double dot_tau, double f, double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return (1 + constrian_sign(w)) / 2;
+  return (1 + constrian_sign(w(dot_tau, f, sigma_y))) / 2;
 }
 
 inline auto diff2_constrain_dsigma_y_df(double dot_tau, double f,
                                       double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return constrian_sign2(w) / (sigmaY / 2);
+  return constrian_sign2(w(dot_tau, f, sigma_y)) / (sigmaY / 2);
 }
 
 inline auto diff2_constrain_d2sigma_y(double dot_tau, double f,
                                       double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return -constrian_sign2(w) / (sigmaY / 2);
+  return -constrian_sign2(w(dot_tau, f, sigma_y)) / (sigmaY / 2);
 }
 
 inline auto diff2_constrain_dsigma_y_ddot_tau(double dot_tau, double f,
                                               double sigma_y) {
-  const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return cn * constrian_sign2(w) / 2;
+  return cn * constrian_sign2(w(dot_tau, f, sigma_y)) / 2;
 }
 
 template <typename T>
