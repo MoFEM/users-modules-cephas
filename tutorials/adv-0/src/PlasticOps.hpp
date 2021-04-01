@@ -512,41 +512,42 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 inline double constrain(double dot_tau, double f, double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
   return visH * dot_tau +
-         sigmaY * ((cn * dot_tau - (f - sigma_y) / sigmaY) - constrain_abs(w));
+         (sigmaY / 2) *
+             ((cn * dot_tau - (f - sigma_y) / sigmaY) - constrain_abs(w));
 };
 
 inline double diff_constrain_ddot_tau(double dot_tau, double f,
                                       double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return visH + sigmaY * (cn - cn * constrian_sign(w));
+  return visH + (sigmaY / 2) * (cn - cn * constrian_sign(w));
 };
 
 inline auto diff_constrain_df(double dot_tau, double f, double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return -1 - constrian_sign(w);
+  return (-1 - constrian_sign(w)) / 2;
 };
 
 inline auto diff_constrain_dsigma_y(double dot_tau, double f, double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return 1 + constrian_sign(w);
+  return (1 + constrian_sign(w)) / 2;
 }
 
 inline auto diff2_constrain_dsigma_y_df(double dot_tau, double f,
                                       double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return constrian_sign2(w) / sigmaY;
+  return constrian_sign2(w) / (sigmaY / 2);
 }
 
 inline auto diff2_constrain_d2sigma_y(double dot_tau, double f,
                                       double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return -constrian_sign2(w) / sigmaY;
+  return -constrian_sign2(w) / (sigmaY / 2);
 }
 
 inline auto diff2_constrain_dsigma_y_ddot_tau(double dot_tau, double f,
                                               double sigma_y) {
   const double w = (f - sigma_y) / sigmaY + cn * dot_tau;
-  return cn * constrian_sign2(w);
+  return cn * constrian_sign2(w) / 2;
 }
 
 template <typename T>
@@ -1607,6 +1608,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
     auto t_row_base = row_data.getFTensor0N();
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
+    auto t_tau0 = getFTensor0FromVec(commonDataPtr->plasticTau0);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
     auto t_flow =
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
@@ -1632,7 +1634,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau0)), t_flow));
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
       t_diff_constrain_dlog_c(k, l) =
@@ -1642,6 +1644,19 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dlog_c(i, j) * dC_dF(i, j, k, l);
 
+      auto t_diff2_constrain_dstrain = diff_constrain_dstrain(
+          t_D, diff_constrain_dstress(diff2_constrain_dsigma_y_df(
+                                          t_tau_dot, t_f, hardening(t_tau0)),
+                                      t_flow));
+
+      FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff2_constrain_dlog_c;
+      t_diff2_constrain_dlog_c(k, l) =
+          t_diff2_constrain_dstrain(i, j) * (t_logC_dC(i, j, k, l) / 2);
+
+      FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff2_constrain_dgrad;
+      t_diff2_constrain_dgrad(k, l) =
+          t_diff2_constrain_dlog_c(i, j) * dC_dF(i, j, k, l);
+
       auto t_mat = getFTensor1FromPtr<SPACE_DIM>(locMat.data().data());
 
       size_t rr = 0;
@@ -1650,7 +1665,17 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
         auto t_col_diff_base = col_data.getFTensor1DiffN<SPACE_DIM>(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / SPACE_DIM; cc++) {
 
-          t_mat(i) += alpha * t_row_base * t_diff_constrain_dgrad(i, j) *
+          t_mat(i) += alpha * t_row_base *
+                      (
+
+                          t_diff_constrain_dgrad(i, j)
+
+                          +
+
+                          t_diff2_constrain_dgrad(i, j) *
+                              hardening_dtau(t_tau0) * (t_tau - t_tau0)
+
+                              ) *
                       t_col_diff_base(j);
 
           ++t_mat;
@@ -1664,6 +1689,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
 
       ++t_f;
       ++t_tau;
+      ++t_tau0;
       ++t_tau_dot;
       ++t_flow;
       ++t_stress;
