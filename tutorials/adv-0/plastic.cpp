@@ -869,8 +869,11 @@ MoFEMErrorCode Example::tsSolve() {
     auto pre_step = [](TS ts) -> PetscErrorCode {
       MoFEMFunctionBeginHot;
       Vec d, v;
-      CHKERR TS2GetSolution(ts, &d, &v);
+      CHKERR TSGetSolution(ts, &d/*, &v*/);
       CHKERR VecCopy(d, pre_step_vec);
+      CHKERR VecGhostUpdateBegin(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
+
       // CHKERR VecCopy(v, pre_step_vec_dot);
       MoFEMFunctionReturnHot(0);
     };
