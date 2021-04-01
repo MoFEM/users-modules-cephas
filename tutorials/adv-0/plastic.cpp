@@ -523,16 +523,16 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
 
-    if (!is_quasi_static) {
-      // Get pointer to U_tt shift in domain element
-      auto get_rho = [this](const double, const double, const double) {
-        auto *pipeline_mng = mField.getInterface<PipelineManager>();
-        auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-        return rho * fe_domain_lhs->ts_aa;
-      };
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpMass("U", "U", get_rho));
-    }
+    // if (!is_quasi_static) {
+    //   // Get pointer to U_tt shift in domain element
+    //   auto get_rho = [this](const double, const double, const double) {
+    //     auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //     auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+    //     return rho * fe_domain_lhs->ts_aa;
+    //   };
+    //   pipeline_mng->getOpDomainLhsPipeline().push_back(
+    //       new OpMass("U", "U", get_rho));
+    // }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -571,15 +571,15 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
 
-    // only in case of dynamics
-    if (!is_quasi_static) {
-      auto mat_acceleration = boost::make_shared<MatrixDouble>();
-      pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
-                                                            mat_acceleration));
-      pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
-          "U", mat_acceleration, [](double, double, double) { return rho; }));
-    }
+    // // only in case of dynamics
+    // if (!is_quasi_static) {
+    //   auto mat_acceleration = boost::make_shared<MatrixDouble>();
+    //   pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //       new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+    //                                                         mat_acceleration));
+    //   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+    //       "U", mat_acceleration, [](double, double, double) { return rho; }));
+    // }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);

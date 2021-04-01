@@ -16,9 +16,11 @@ namespace HenckyOps {
 
 constexpr double eps = std::numeric_limits<double>::epsilon();
 
-auto f = [](double v) { return 0.5 * log(v); };
-auto d_f = [](double v) { return 0.5 / v; };
-auto dd_f = [](double v) { return -0.5 / (v * v); };
+auto f = [](double v) { return 0.5 * std::log(static_cast<long double>(v)); };
+auto d_f = [](double v) { return 0.5 / static_cast<long double>(v); };
+auto dd_f = [](double v) {
+  return -0.5 / (static_cast<long double>(v) * static_cast<long double>(v));
+};
 
 inline auto is_eq(const double &a, const double &b) {
   return std::abs(a - b) < eps;

@@ -411,12 +411,12 @@ diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
   return t_diff_deviator;
 };
 
-inline auto hardening(double tau) {
-  return H * tau + Qinf * (1. - exp(-b_iso * tau)) + sigmaY;
+inline auto hardening(long double tau) {
+  return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
 }
 
-inline auto hardening_dtau(double tau) {
-  return H + Qinf * b_iso * exp(-b_iso * tau);
+inline auto hardening_dtau(long double tau) {
+  return H + Qinf * b_iso * std::exp(-b_iso * tau);
 }
 
 /**
@@ -478,12 +478,12 @@ inline auto diff_plastic_flow_dstrain(
   return t_diff_flow;
 };
 
-inline double constrain_abs(double x) {
-  return sqrt(pow(x, 2) + 4 * pow(delta, 2));
+inline double constrain_abs(long double x) {
+  return std::sqrt(std::pow(x, 2) + 4 * std::pow(delta, 2));
   // return std::abs(x);
 };
 
-inline double constrian_sign(double x) {
+inline double constrian_sign(long double x) {
   // if (x > 0)
   //   return 1;
   // else if (x < 0)
@@ -493,12 +493,12 @@ inline double constrian_sign(double x) {
   return x / constrain_abs(x);
 };
 
-inline double constrian_sign2(double x) {
+inline double constrian_sign2(long double x) {
   // return 0;
   return -(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
 };
 
-inline double w(double dot_tau, double f, double sigma_y) {
+inline double w(long double dot_tau, long double f, long double sigma_y) {
   return (f - sigma_y) / sigmaY + cn * dot_tau;
 };
 
@@ -772,12 +772,12 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
       const double beta =
-          alpha * (constrain(t_tau_dot, t_f, hardening(t_tau0))
+          alpha * (constrain(t_tau_dot, t_f, hardening(t_tau))
 
-                   +
+                   /*+
 
                    diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau0)) *
-                       hardening_dtau(t_tau0) * (t_tau - t_tau0)
+                       hardening_dtau(t_tau0) * (t_tau - t_tau0)*/
 
                   );
 
@@ -1519,7 +1519,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau0)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dstrain(i, j) * t_diff_grad_symmetrise(i, j, k, l);
@@ -1545,10 +1545,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
 
                           t_diff_constrain_dgrad(i, j)
 
-                          +
+                          /*+
 
                           (t_diff2_constrain_dgrad(i, j) *
-                           hardening_dtau(t_tau0) * (t_tau - t_tau0))
+                           hardening_dtau(t_tau0) * (t_tau - t_tau0))*/
 
                               ) *
                       t_col_diff_base(j);
@@ -1632,7 +1632,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau0)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
       t_diff_constrain_dlog_c(k, l) =
@@ -1668,10 +1668,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
 
                           t_diff_constrain_dgrad(i, j)
 
-                          +
+                          /*+
 
                           t_diff2_constrain_dgrad(i, j) *
-                              hardening_dtau(t_tau0) * (t_tau - t_tau0)
+                              hardening_dtau(t_tau0) * (t_tau - t_tau0)*/
 
                               ) *
                       t_col_diff_base(j);
@@ -1755,7 +1755,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau0)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
 
       auto t_diff2_constrain_dstrain =
           diff_constrain_dstrain(
@@ -1780,10 +1780,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
 
                            t_diff_constrain_dstrain(i, j)
 
-                           +
+                           /*+
 
                            t_diff2_constrain_dstrain(i, j) *
-                               hardening_dtau(t_tau0) * (t_tau - t_tau0)
+                               hardening_dtau(t_tau0) * (t_tau - t_tau0)*/
 
                                ) *
                        t_L(i, j, L));
@@ -1848,10 +1848,30 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
       const double alpha = getMeasure() * t_w;
       const double c0 =
           alpha * t_a *
-          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau0));
+          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
+
+      const double h = 1e-8;
+
       const double c1 =
-          alpha * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau0)) *
-          hardening_dtau(t_tau0);
+          alpha
+
+          * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
+          hardening_dtau(t_tau);
+
+      double a = (constrain(t_tau_dot, t_f, hardening(t_tau + h)) -
+               constrain(t_tau_dot, t_f, hardening(t_tau - h))) /
+                      (2 * h) -
+                  diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
+                      hardening_dtau(t_tau);
+      if(std::abs(a)>1e-6)
+        cerr << a << endl;
+
+      // (constrain(t_tau_dot, t_f, hardening(t_tau + h)) -
+      //  constrain(t_tau_dot, t_f, hardening(t_tau - h))) /
+          // (2 * h);
+
+      // diff_constrain_dsigma_y(t_tau_dot, t_f,
+      // hardening(t_tau)) * hardening_dtau(t_tau);
 
       const double c2 =
           alpha * t_a *
@@ -1865,7 +1885,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
 
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs; ++cc) {
-          *mat_ptr += (c0 + c1 + c2) * t_row_base * t_col_base;
+          *mat_ptr += (c0 + c1) * t_row_base * t_col_base;
           ++mat_ptr;
           ++t_col_base;
         }
