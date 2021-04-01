@@ -23,7 +23,7 @@ post-processing of the results are discussed.
 
 \section simple_elasticity_problem The problem
 
-The linear elastic problem modeled here is an orthogonal parallelepiped of
+The linear elastic problem modelled here is an orthogonal parallelepiped of
 dimensions \f$1.0\times1.0\times4.0 \,\,\rm{m}\f$, subjected to a uniformly
 distributed normal traction \f$\bar t\f$ on one face while its opposite face
 is simply supported. The geometry of the problem is schematically
