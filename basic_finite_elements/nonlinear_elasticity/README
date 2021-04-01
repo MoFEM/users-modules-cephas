@@ -23,7 +23,7 @@ mpirun -np 4 ./arc_length_nonlinear_elasticity \
 * dynamic
 
 mpirun -np 4 ./nonlinear_dynamics -my_file LShape.h5m \
-  -ts_dt 0.001 -ts_final_time 10 \
+  -ts_dt 0.1 -ts_final_time 10 \
   -my_time_data_file data.txt -my_output_prt 1 \
   -my_max_post_proc_ref_level 1 -my_disp_order 2 -my_vel_order 2
 
