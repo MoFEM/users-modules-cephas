@@ -12,8 +12,7 @@
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 # copy dox/figures to html directory created by doxygen
-
-# add_custom_target(mesh_generation
-#   ${CMAKE_COMMAND} -E copy_directory
-#   ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
-# add_dependencies(doc mesh_generation)
+add_custom_target(mesh_generation_msh_1
+  ${CMAKE_COMMAND} -E copy_directory
+  ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
+add_dependencies(doc mesh_generation_msh_1)

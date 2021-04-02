@@ -76,6 +76,8 @@ endfunction()
 set(TUTORIALS_DIRS 
   fun-0
   fun-1
+  msh-1
+  msh-2
   scl-0
   scl-1
   scl-2
@@ -101,6 +103,7 @@ set(TUTORIALS_DIRS
   other_tutorials/simple_elasticity
   other_tutorials/elasticity_mixed_formulation
   other_tutorials/reaction_diffusion
+  other_tutorials/navier_stokes
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
