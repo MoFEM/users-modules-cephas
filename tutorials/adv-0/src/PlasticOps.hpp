@@ -448,7 +448,7 @@ platsic_surface(FTensor::Tensor2_symmetric<double, 3> &&t_stress_deviator) {
          std::numeric_limits<double>::epsilon();
 };
 
-inline auto plastic_flow(double f,
+inline auto plastic_flow(long double f,
                          FTensor::Tensor2_symmetric<double, 3> &&t_dev_stress,
                          FTensor::Ddg<double, 3, SPACE_DIM> &&t_diff_deviator) {
   FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_f;
@@ -459,7 +459,7 @@ inline auto plastic_flow(double f,
 
 template <typename T>
 inline auto diff_plastic_flow_dstress(
-    double f, FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_flow,
+    long double f, FTensor::Tensor2_symmetric<T, SPACE_DIM> &t_flow,
     FTensor::Ddg<double, 3, SPACE_DIM> &&t_diff_deviator) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_diff_flow;
   t_diff_flow(i, j, k, l) =
@@ -513,38 +513,42 @@ c_n \sigma_y \dot{\tau} - \frac{1}{2}\left\{c_n\sigma_y \dot{\tau} +
 \f]
 
  */
-inline double constrain(double dot_tau, double f, double sigma_y) {
+inline double constrain(long double dot_tau, long double f,
+                        long double sigma_y) {
   return visH * dot_tau +
          (sigmaY / 2) * ((cn * dot_tau - (f - sigma_y) / sigmaY) -
                          constrain_abs(w(dot_tau, f, sigma_y)));
 };
 
-inline double diff_constrain_ddot_tau(double dot_tau, double f,
-                                      double sigma_y) {
+inline double diff_constrain_ddot_tau(long double dot_tau, long double f,
+                                      long double sigma_y) {
   return visH +
          (sigmaY / 2) * (cn - cn * constrian_sign(w(dot_tau, f, sigma_y)));
 };
 
-inline auto diff_constrain_df(double dot_tau, double f, double sigma_y) {
+inline auto diff_constrain_df(long double dot_tau, long double f,
+                              long double sigma_y) {
   return (-1 - constrian_sign(w(dot_tau, f, sigma_y))) / 2;
 };
 
-inline auto diff_constrain_dsigma_y(double dot_tau, double f, double sigma_y) {
+inline auto diff_constrain_dsigma_y(long double dot_tau, long double f,
+                                    long double sigma_y) {
   return (1 + constrian_sign(w(dot_tau, f, sigma_y))) / 2;
 }
 
-inline auto diff2_constrain_dsigma_y_df(double dot_tau, double f,
-                                      double sigma_y) {
+inline auto diff2_constrain_dsigma_y_df(long double dot_tau, long double f,
+                                        double sigma_y) {
   return constrian_sign2(w(dot_tau, f, sigma_y)) / (sigmaY / 2);
 }
 
-inline auto diff2_constrain_d2sigma_y(double dot_tau, double f,
-                                      double sigma_y) {
+inline auto diff2_constrain_d2sigma_y(long double dot_tau, long double f,
+                                      long double sigma_y) {
   return -constrian_sign2(w(dot_tau, f, sigma_y)) / (sigmaY / 2);
 }
 
-inline auto diff2_constrain_dsigma_y_ddot_tau(double dot_tau, double f,
-                                              double sigma_y) {
+inline auto diff2_constrain_dsigma_y_ddot_tau(long double dot_tau,
+                                              long double f,
+                                              long double sigma_y) {
   return cn * constrian_sign2(w(dot_tau, f, sigma_y)) / 2;
 }
 
@@ -694,7 +698,7 @@ MoFEMErrorCode OpCalculatePlasticFlowRhs::doWork(int side, EntityType type,
   if (nb_dofs) {
 
     auto t_flow =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow0);
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_plastic_strain_dot =
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrainDot);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
@@ -1326,7 +1330,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
     auto t_flow =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow0);
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
 
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
@@ -1353,11 +1357,10 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / size_symm; ++cc) {
 
-          t_mat(i, j, k, l) += t_col_base *
-                               (t_D(i, j, m, n) * (c1 * t_diff_plastic_strain(
-                                                            m, n, k, l) /*+
-                                 c0 * t_diff_plastic_flow_dstrain(m, n, k,
-                                 l)*/));
+          t_mat(i, j, k, l) +=
+              t_col_base * (t_D(i, j, m, n) *
+                            (c1 * t_diff_plastic_strain(m, n, k, l) +
+                             c0 * t_diff_plastic_flow_dstrain(m, n, k, l)));
 
           ++t_mat;
           ++t_col_base;
@@ -1420,7 +1423,7 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
     const size_t nb_integration_pts = row_data.getN().size1();
     auto t_w = getFTensor0IntegrationWeight();
     auto t_flow =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow0);
+        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
 
     auto t_row_base = row_data.getFTensor0N();
     auto t_D =

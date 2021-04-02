@@ -498,8 +498,8 @@ MoFEMErrorCode Example::OPs() {
           new OpKPiola("U", "U", commonHenckyDataPtr->getMatTangent()));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr));
-      // pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
-      //     "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr));
+      pipeline.push_back(new OpCalculatePlasticFlowLhs_LogStrain_dU(
+          "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr));
       pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
           "TAU", "U", commonPlasticDataPtr, commonHenckyDataPtr));
 
@@ -507,8 +507,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
           "U", "EP", commonPlasticDataPtr));
-      // pipeline.push_back(
-      //     new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
+      pipeline.push_back(
+          new OpCalculatePlasticFlowLhs_dU("EP", "U", commonPlasticDataPtr));
       pipeline.push_back(
           new OpCalculateContrainsLhs_dU("TAU", "U", commonPlasticDataPtr));
     }
@@ -590,7 +590,7 @@ MoFEMErrorCode Example::OPs() {
     for (auto &bc : bcVec) {
       pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
       pipeline.push_back(new OpBoundaryMass(
-          "U", "U", [](double, double, double) { return 1. / scale; },
+          "U", "U", [](double, double, double) { return 1.; },
           bc->getBcEdgesPtr()));
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -621,7 +621,7 @@ MoFEMErrorCode Example::OPs() {
     auto time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      return -fe_domain_rhs->ts_t / scale;
+      return -fe_domain_rhs->ts_t;
     };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
@@ -687,7 +687,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpBoundaryVec("U", attr_vec, time_scaled, bc->getBcEdgesPtr()));
       pipeline.push_back(new OpBoundaryInternal(
-          "U", u_mat_ptr, [](double, double, double) { return 1. / scale; },
+          "U", u_mat_ptr, [](double, double, double) { return 1.; },
           bc->getBcEdgesPtr()));
 
       pipeline.push_back(new OpUnSetBc("U"));
