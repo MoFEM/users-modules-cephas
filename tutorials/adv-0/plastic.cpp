@@ -109,6 +109,7 @@ double Qinf = 265;
 double b_iso = 16.93;
 double delta = std::numeric_limits<double>::epsilon();
 int order = 2;
+double theta_flow = 0.;
 
 static Vec pre_step_vec;
 
@@ -241,13 +242,23 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
                                PETSC_NULL);
     if (is_scale) {
-      scale = 1. / young_modulus;
+      scale = scale / young_modulus;
       young_modulus *= scale;
       rho *= scale;
       sigmaY *= scale;
       H *= scale;
       Qinf *= scale;
       visH *= scale;
+
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled Young modulus " << young_modulus;
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled Poisson ratio " << poisson_ratio;
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Yield stress " << sigmaY;
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Hardening " << H;
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Viscous hardening " << visH;
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled Saturation yield stress " << Qinf;
     }
 
     MoFEMFunctionReturn(0);
@@ -284,9 +295,6 @@ MoFEMErrorCode Example::createCommonData() {
   commonPlasticDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStressPtr = boost::make_shared<MatrixDouble>();
-
-  commonPlasticDataPtr->perviousStepSolution =
-      smartCreateDMVector(mField.getInterface<Simple>()->getDM());
 
   CHKERR get_command_line_parameters();
   CHKERR set_matrial_stiffness();
@@ -388,10 +396,10 @@ MoFEMErrorCode Example::bC() {
     return marked_ents;
   };
 
-  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
-  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
-  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
-  // CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
 
   CHKERR fix_disp("FIX_X", true, false, false);
   CHKERR fix_disp("FIX_Y", false, true, false);
@@ -406,6 +414,11 @@ MoFEMErrorCode Example::bC() {
       (*boundaryMarker)[i] |= b->bcMarkers[i];
     }
   }
+  if (boundaryMarker->empty()) {
+    auto marker = mark_dofs_on_ents(Range());
+    boundaryMarker = boost::make_shared<std::vector<unsigned char>>(
+        marker.begin(), marker.end());
+  }
 
   auto rec_marker = mark_dofs_on_ents(get_adj_ents(get_block_ents("FIX_X1")));
   reactionMarker = boost::make_shared<std::vector<unsigned char>>(
@@ -418,7 +431,11 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>(); 
+
+  commonPlasticDataPtr->perviousStepSolution =
+      smartCreateDMVector(simple->getDM());
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -542,20 +559,19 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    // auto get_body_force = [this](const double, const double, const double) {
-    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    //   FTensor::Index<'i', SPACE_DIM> i;
-    //   FTensor::Tensor1<double, SPACE_DIM> t_source;
-    //   auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    //   const auto time = fe_domain_rhs->ts_t;
+    auto get_body_force = [this](const double, const double, const double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Tensor1<double, SPACE_DIM> t_source;
+      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      const auto time = fe_domain_rhs->ts_t;
+      // hardcoded gravity load
+      t_source(i) = 0;
+      t_source(2) = (-5e+7 * scale) * time;
+      return t_source;
+    };
 
-    //   // hardcoded gravity load
-    //   t_source(i) = 0;
-    //   t_source(1) = 1.0 * time;
-    //   return t_source;
-    // };
-
-    // pipeline.push_back(new OpBodyForce("U", get_body_force));
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
     if (is_large_strains) {
@@ -640,29 +656,9 @@ MoFEMErrorCode Example::OPs() {
         auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
         std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
                   force_vec_ptr->data().begin());
-        // auto is_arc_length = mField.check_field("L");
-        // if (is_arc_length) {
-        //   auto dofs_ptr = mField.get_dofs();
-        //   auto lo = dofs_ptr->get<Unique_mi_tag>().lower_bound(
-        //       FieldEntity::getLoBitNumberUId(mField.get_field_bit_number("L")));
-        //   auto hi = dofs_ptr->get<Unique_mi_tag>().upper_bound(
-        //       FieldEntity::getHiBitNumberUId(mField.get_field_bit_number("L")));
-        //   if(std::distance(lo,hi)!=1) {
-        //     SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-        //              "Should be one DOF, but is %d", std::distance(lo, hi));
-        //   }
-        //   arcDof = *lo;
-        //   auto get_lambda = [&](double, double, double) {
-        //     return arcDof->getFieldData();
-        //   };
-        //   pipeline.push_back(
-        //       new OpBoundaryVec("U", force_vec_ptr, get_lambda,
-        //                         boost::make_shared<Range>(force_edges)));
-        // } else {
         pipeline.push_back(
             new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
                               boost::make_shared<Range>(force_edges)));
-        // }
       }
     }
 
