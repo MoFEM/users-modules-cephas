@@ -2,7 +2,26 @@
 
 \tableofcontents
 
-\section tab_user_data_op User data operators
+Templae arguments:
+
+- <b>BASE_DIM</b> is dimension of base function. Typically bases for L2 and
+H1 spaces are scalar bases, thus BASE_DIM is 1. Typically H-div and H-curl
+bases are vectorial bases and BASE_DIM 3. For some special case could be
+exceptions.
+
+- <b>FIELD_DIM</b> is dimenion of the field. We can have scalar filed, vectorial field. For example scalar fiele for scalar base function has one coefficient for base function and \em FIELD_DIM = 1. Vectorial field with scalar based in 3d has three coefficients for each base function and \em FIELD_DIM = 3. From the other hand, vectorial field with vectorial base hase one coeeficient for each base function and \em FIELD_DIM = 3, and tensorial field of rank two in 3d on vectorial base has three coeffients for each base function and \em FIELD_DIM = 9.
+
+- <b>SPACE_DIM</b> is dismension of space. Typically used to inicate how many 
+elements has gradient of base function or field.
+
+- <b>ASSEMBLE_TYPE</b> by this template assmebly method is indictaed. For example if assembly is to CST compresssed matrix assembly type is PETSC. For some ther cases, for example integration to nested matrices, or other mateices
+formats could be added and inmplemented.
+
+- <b>INTEGRATION_TYPE</b> indicate method used to assembly elements. If strandard numerical integration is used, then integration type is GAUSS. Some ther more sophisitied integration method can be inmplemented that expolit properties of some base functions for fast integration.
+
+- <b>OP</b> type of opetaor for voulme, face, edge or vertex finite element.
+
+\section tab_user_data_op Field operators
 
 <table>
 <caption id="user_data_ops_table">Table of user data operators</caption>
@@ -76,6 +95,7 @@ MoFEM::OpCalculateScalarFieldValues see for details there.
 <td>
 
 Evalute scalar field gradinet
+
 \ref MoFEM::OpCalculateScalarFieldGradient
 
 \f[ 
@@ -168,12 +188,145 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 </table>
 
+\note User data operators are defined in file \ref UserDataOperators.hpp
 
-\note User data operators are fefined in file \ref UserDataOperators.hpp
+\section tab_other_data_op Other operators
 
+
+<table>
+<caption id="user_other_ops_table">Table of other operators</caption>
+
+<tr>
+<th>Oparator <th> \hiderefs Usage 
+<tr>
+
+<td>
+Calualte inverse jacobian on face
+
+\ref MoFEM::OpCalculateInvJacForFace
+
+<td>
+Example usage
+\code
+MatrixDouble jac(2, 2);
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateInvJacForFace(inv_jac));
+\endcode
+<tr>
+
+</table>
+
+\note User data operators are defined in file \ref UserDataOperators.hpp
 
 \section tab_linear_forms Linear forms
 
-\section tab_bulinear_forms Bilinear forms
+<table>
+<caption id="user_linear_forms_ops_table">Table of linear from operators</caption>
+
+<tr><th>Oparator <th> \hiderefs Usage 
+<tr>
+
+<td>
+
+Integrate fource term for scalar and vectorial fields
+
+\ref MoFEM::OpSourceImpl
+
+\f[
+(v_i,f_i(\mathbf{x}))_\Omega =
+\int_\Omega v_i f_i (x,y,z) 
+\textrm{d}\Omega
+\f]
+
+Template arguments:
+\code
+using OpSource = 
+  FormsIntegrators<OP>::
+  Assembly<ASSEMBLE_TYPE>::
+  LinearForm<INTEGRATION_TYPE>::
+  OpSource<BASE_DIM, FIELD_DIM>;
+\endcode
+
+<td>
+
+%Example usage for scalar base and scalar field:
+\code
+using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+auto fun = [](double x, double y, double z) {
+  return sin(x/L)*siz(y/L)*siz(z/L);
+};
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpDomainSource("U", fun));
+\endcode
+
+%Example usage for scalar base and vector field:
+\code
+using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 3>;
+auto fun = [](double x, double y, double z) {
+  return FTensor::Tensor1<double>{ sin(x/L), sin(y/L), sin(z/L) };
+};
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpDomainSource("U", fun));
+\endcode
+
+%Example usage for vector base and vector field:
+\code
+using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<3, 3>;
+auto fun = [](double x, double y, double z) {
+  return FTensor::Tensor1<double>{ sin(x/L), sin(y/L), sin(z/L) };
+};
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpDomainSource("U", fun));
+\endcode
+
+
+<tr>
+
+</table>
+
+\note Linear froms are defined in file LinearFormsIntegrators.hpp
+
+\section tab_bilinear_forms Bilinear forms
+
+<table>
+<caption id="user_bilinear_forms_ops_table">Table of bilinear from operators</caption>
+
+<tr><th>Oparator <th> \hiderefs Usage 
+<tr>
+
+<td>
+Integrate Grad Grad operator
+
+\ref MoFEM::OpGradGradImpl
+
+\code
+using OpDomainGradGrad = 
+  FormsIntegrators<OP>::Assembly<
+  ASSEMBLY_TYPE>::
+  BiLinearForm<INTEGRATION_TYPE>::
+  OpGradGrad<BASE_DIM, FIELD_DIM, SPACE_DIM>;
+\endcode
+
+<td>
+
+Example for scalar base, scalar field and 3d problem
+\code
+auto beta = [](double x, double y , double z) {
+  return 1;
+};
+using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 3>;
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpDomainGradGrad("U", "U", beta));
+\endcode
+<tr>
+
+
+</table>
+
+\note Linear froms are defined in file BiLinearFormsIntegrators.hpp
 
 */
