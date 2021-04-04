@@ -1,5 +1,9 @@
 /*! \page user_data_operators_table User data operators table
 
+\tableofcontents
+
+\section tab_user_data_op User data operators
+
 <table>
 <caption id="user_data_ops_table">Table of user data operators</caption>
 
@@ -45,18 +49,6 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 }
 \endcode
 
-\note If smart PETSc vector is provied in constructor, field values are set 
-from DOFs provided in the vector, insted from values stored on field data
-stuctures. For example
-\code
-// Create vector using DM
-auto u_vec = smartCreateDMVector(dm);
-// do somthing
-
-auto vals_U_at_integration_pts = boost::make_shared<VectorDouble>();
-pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateScalarFieldValues("U", vals_U_at_integration_pts, u_vec));
-\endcode
 <tr>
 
 <td>
@@ -79,6 +71,57 @@ where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \
 
 \note Function is similar to used for \ref
 MoFEM::OpCalculateScalarFieldValues see for details there.
+<tr>
+
+<td>
+
+Evalute scalar field gradinet
+\ref MoFEM::OpCalculateScalarFieldGradient
+
+\f[ 
+{u}^h_{,j}
+(\pmb\xi^g) = 
+\sum_i^N \phi^i_{,j}(\pmb\xi^g) 
+\dot{\overline{u}}_i 
+\f]
+
+where 
+\f[
+\phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_j} \right|_{\pmb\xi^g}
+\f]
+
+Depending on contect direvatives are calculated in reference element on current phicial elemen. For most of cases usally gradient is acalulated on
+current phiscal element. Then direvative of base function is interpreted as
+
+\f[
+\phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_j} \frac{\partial \xi_k}{\partial x_j} \right|_{\mathbf{x}(\pmb\xi^g)}
+\f]
+
+<td>
+
+Basic usage:
+\code
+constexpr int SPACE_DIM = 3;
+auto grad_U_at_integration_pts = boost::make_shared<MatrixDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateVectorFieldValues<SPACE_DIM>("U", grad_U_at_integration_pts));
+\endcode
+
+
+Operatutor for given field calulate valuse of scalar field gradient at integration points. Values are stored in for example in \em
+grad_U_at_integration_pts. Then value can be accessad also
+follows
+\code 
+constexpr int FIELD_DIM = 3;
+FTensor::Index<'i', FIELD_DIM> i; 
+auto nb_integtation_pts = grad_U_at_integration_pts->size2();
+auto t_grad = getFTensor1FromMat<FIELD_DIM>((grad_U_at_integration_pts);
+for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+  auto dot = t_grad(i)*t_grad(i);
+  ++t_grad;
+}
+\endcode
+
 <tr>
 
 <td colspan="2">
@@ -120,21 +163,17 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 }
 \endcode
 
-\note If smart PETSc vector is provied in constructor, field values are set 
-from DOFs provided in the vector, insted from values stored on field data
-stuctures. For example
-\code
-// Create vector using DM
-auto u_vec = smartCreateDMVector(dm);
-// do somthing
-
-pipeline_mng->getOpDomainRhsPipeline().push_back(
-  new OpCalculateVectorFieldValues<FIELD_DIM>(
-      "U", vals_U_at_integration_pts, u));
-\endcode
 <tr>
 
 
 </table>
+
+
+\note User data operators are fefined in file \ref UserDataOperators.hpp
+
+
+\section tab_linear_forms Linear forms
+
+\section tab_bulinear_forms Bilinear forms
 
 */
