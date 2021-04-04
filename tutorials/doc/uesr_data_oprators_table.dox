@@ -1,0 +1,140 @@
+/*! \page user_data_operators_table User data operators table
+
+<table>
+<caption id="user_data_ops_table">Table of user data operators</caption>
+
+<tr><th>Oparator <th> \hiderefs Usage 
+<tr>
+
+<td colspan="2">
+<b>Scalar fields</b>
+<tr>
+
+<td>
+
+Evaulate scalar field at integration points. 
+\ref MoFEM::OpCalculateScalarFieldValues 
+
+\f[ u^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) \overline{u}_i 
+\f] 
+
+where \f$u^(\pmb\xi^g)\f$ is value at integration point \f$g\f$,
+\f$\phi^i(\pmb\xi^g)\f$ is value of base function \f$i\f$ at integtation point
+coordinate \f$\pmb\xi^g\f$, and \f$\overline{u}_i\f$ is \f$i\f$-th degree of
+freedom.
+
+<td> 
+
+Basic usage:
+\code
+auto vals_U_at_integration_pts = boost::make_shared<VectorDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateScalarFieldValues("U", vals_U_at_integration_pts));
+\endcode
+
+Operatutor for given field calulate valuse of scalar field at integration
+points. Values are stored in for example in \em
+vals_U_at_integration_pts. Then value can be accessad also
+follows
+\code 
+auto nb_integtation_pts = vals_U_at_integration_pts->size();
+auto t_val = getFTensor0FromVec((vals_U_at_integration_pts);
+for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+  // do somthing
+  ++t_val;
+}
+\endcode
+
+\note If smart PETSc vector is provied in constructor, field values are set 
+from DOFs provided in the vector, insted from values stored on field data
+stuctures. For example
+\code
+// Create vector using DM
+auto u_vec = smartCreateDMVector(dm);
+// do somthing
+
+auto vals_U_at_integration_pts = boost::make_shared<VectorDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateScalarFieldValues("U", vals_U_at_integration_pts, u_vec));
+\endcode
+<tr>
+
+<td>
+
+Evaluate scalar field rate at integration points
+\ref MoFEM::OpCalculateScalarFieldValuesDot
+
+\f[ 
+\dot{u}^h
+(\pmb\xi^g) = 
+\sum_i^N \phi^i(\pmb\xi^g) 
+\dot{\overline{u}}_i 
+\f]
+
+where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \f$\dot{\overline{u}}_i\f$ is rate of \f$i\f$-th degree of freedom.
+
+\note Only can be used with TS solver
+
+<td>
+
+\note Function is similar to used for \ref
+MoFEM::OpCalculateScalarFieldValues see for details there.
+<tr>
+
+<td colspan="2">
+<b>Vector fields</b>
+<tr>
+
+<td>
+Evaluate vector field at integration points
+\ref MoFEM::OpCalculateVectorFieldValues
+
+\f[ 
+u_j^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) 
+\dot{\overline{u}}_i^j 
+\f]
+where \f$j\f$ is vector element index.
+
+<td>
+
+Basic usage:
+\code
+constexpr int FIELD_DIM = 3;
+auto vals_U_at_integration_pts = boost::make_shared<MatrixDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateVectorFieldValues<FIELD_DIM>("U", vals_U_at_integration_pts));
+\endcode
+
+Operatutor for given field calulate valuse of vector field at integration
+points. Values are stored in for example in \em
+vals_U_at_integration_pts. Then value can be accessad also
+follows
+\code 
+constexpr int FIELD_DIM = 3;
+FTensor::Index<'i', FIELD_DIM> i; 
+auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto t_val = getFTensor1FromMat<FIELD_DIM>((vals_U_at_integration_pts);
+for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+  auto dot = t_val(i)*t_val(i);
+  ++t_val;
+}
+\endcode
+
+\note If smart PETSc vector is provied in constructor, field values are set 
+from DOFs provided in the vector, insted from values stored on field data
+stuctures. For example
+\code
+// Create vector using DM
+auto u_vec = smartCreateDMVector(dm);
+// do somthing
+
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateVectorFieldValues<FIELD_DIM>(
+      "U", vals_U_at_integration_pts, u));
+\endcode
+<tr>
+
+
+</table>
+
+*/
