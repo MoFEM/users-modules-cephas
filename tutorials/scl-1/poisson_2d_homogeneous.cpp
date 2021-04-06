@@ -7,9 +7,6 @@ using namespace Poisson2DHomogeneousOperators;
 
 static char help[] = "...\n\n";
 
-using DomainEle = PipelineManager::FaceEle2D;
-using DomainEleOp = DomainEle::UserDataOperator;
-using EntData = DataForcesAndSourcesCore::EntData;
 struct Poisson2DHomogeneous {
 public:
   Poisson2DHomogeneous(MoFEM::Interface &m_field);
