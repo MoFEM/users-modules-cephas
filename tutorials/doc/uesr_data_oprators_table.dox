@@ -19,7 +19,7 @@ formats could be added and inmplemented.
 
 - <b>INTEGRATION_TYPE</b> indicate method used to assembly elements. If strandard numerical integration is used, then integration type is GAUSS. Some ther more sophisitied integration method can be inmplemented that expolit properties of some base functions for fast integration.
 
-- <b>OP</b> type of opetaor for voulme, face, edge or vertex finite element.
+- <b>%OP</b> type of opetaor for voulme, face, edge or vertex finite element.
 
 \section tab_user_data_op Field operators
 
