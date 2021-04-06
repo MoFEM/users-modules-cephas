@@ -131,7 +131,7 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
         new OpDomainLhsMatrixK(domainField, domainField));
   }
 
-  { // Push operators to the Pipeline that is responsible for calculating LHS
+  { // Push operators to the Pipeline that is responsible for calculating RHS
 
     pipelineRhs->getOpPtrVector().push_back(
         new OpDomainRhsVectorF(domainField));
