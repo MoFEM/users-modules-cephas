@@ -122,7 +122,7 @@ MoFEMErrorCode Example::readMesh() {
     EntityHandle tet;
     CHKERR moab.create_element(MBTET, nodes, 4, tet);
     Range adj;
-    for(auto d : {1,2})
+    for (auto d : {1, 2})
       CHKERR moab.get_adjacencies(&tet, 1, d, true, adj);
   }
 
@@ -158,9 +158,9 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
 
   const FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  CHKERR simpleInterface->addDomainField("U", H1, base, 1);
+  CHKERR simpleInterface->addDomainField("U", HCURL, base, 1);
 
-  constexpr int order = 4;
+  constexpr int order = 8;
   CHKERR simpleInterface->setFieldOrder("U", order);
   CHKERR simpleInterface->setUp();
 
@@ -213,6 +213,31 @@ MoFEMErrorCode Example::outputResults() {
 
   CHKERR mField.getInterface<FieldBlas>()->setField(0, MBEDGE, edges, "U");
 
+  auto scale_tag_val = [&]() {
+    MoFEMFunctionBegin;
+    auto &post_proc_mesh = post_proc_fe->postProcMesh;
+    Range nodes;
+    CHKERR post_proc_mesh.get_entities_by_type(0, MBVERTEX, nodes);
+    Tag th;
+    CHKERR post_proc_mesh.tag_get_handle("U", th);
+    int length;
+    CHKERR post_proc_mesh.tag_get_length(th, length);
+    std::vector<double> data(nodes.size() * length);
+    CHKERR post_proc_mesh.tag_get_data(th, nodes, &*data.begin());
+    double max_v = 0;
+    for (int i = 0; i != nodes.size(); ++i) {
+      double v = 0;
+      for (int d = 0; d != length; ++d)
+        v += pow(data[length * i + d], 2);
+      v = sqrt(v);
+      max_v = std::max(max_v, v);
+    }
+    for (auto &v : data)
+      v /= max_v;
+    CHKERR post_proc_mesh.tag_set_data(th, nodes, &*data.begin());
+    MoFEMFunctionReturn(0);
+  };
+
   size_t nb = 0;
   auto dofs_ptr = mField.get_dofs();
   for (auto dof_ptr : (*dofs_ptr)) {
@@ -220,6 +245,7 @@ MoFEMErrorCode Example::outputResults() {
     auto &val = const_cast<double &>(dof_ptr->getFieldData());
     val = 1;
     CHKERR pipeline_mng->loopFiniteElements();
+    CHKERR scale_tag_val();
     CHKERR post_proc_fe->writeFile(
         "out_base_dof_" + boost::lexical_cast<std::string>(nb) + ".h5m");
     CHKERR post_proc_fe->postProcMesh.delete_mesh();
@@ -313,7 +339,7 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
   for (int gg = 0; nit != elem_nodes.end(); nit++, gg++) {
     double coords[3];
     CHKERR moab_ref.get_coords(&*nit, 1, coords);
-    for(auto d :{0,1,2})
+    for (auto d : {0, 1, 2})
       gaussPts(d, gg) = coords[d];
     nodes_pts_map[*nit] = gg;
   }
@@ -364,15 +390,15 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   Tag th;
   int def_in_the_loop = -1;
-  CHKERR postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER,
-                                        th, MB_TAG_CREAT | MB_TAG_SPARSE,
-                                        &def_in_the_loop);
+  CHKERR postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER, th,
+                                     MB_TAG_CREAT | MB_TAG_SPARSE,
+                                     &def_in_the_loop);
 
   // Create physical elements
 
   const int num_el = refEleMap.size1();
   const int num_nodes_on_ele = refEleMap.size2();
-  
+
   EntityHandle starte;
   EntityHandle *conn;
 
