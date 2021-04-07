@@ -121,18 +121,23 @@ MoFEMErrorCode Example::readMesh() {
     }
     EntityHandle tet;
     CHKERR moab.create_element(MBTET, nodes, 4, tet);
+    Range adj;
+    for(auto d : {1,2})
+      CHKERR moab.get_adjacencies(&tet, 1, d, true, adj);
   }
 
   if (SPACE_DIM == 2) {
 
     // create one triangle
-    double tet_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+    double tri_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
     EntityHandle nodes[3];
     for (int nn = 0; nn < 3; nn++) {
-      CHKERR moab.create_vertex(&tet_coords[3 * nn], nodes[nn]);
+      CHKERR moab.create_vertex(&tri_coords[3 * nn], nodes[nn]);
     }
     EntityHandle tri;
     CHKERR moab.create_element(MBTRI, nodes, 3, tri);
+    Range adj;
+    CHKERR moab.get_adjacencies(&tri, 1, 1, true, adj);
   }
 
   CHKERR mField.rebuild_database();
@@ -141,7 +146,7 @@ MoFEMErrorCode Example::readMesh() {
 
   // Add all elements to database
   CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
-      0, SPACE_DIM, simpleInterface->getBitRefLevel(), false);
+      0, SPACE_DIM, simpleInterface->getBitRefLevel());
 
   MoFEMFunctionReturn(0);
 }
@@ -203,14 +208,21 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
+  Range edges;
+  CHKERR mField.get_moab().get_entities_by_type(0, MBEDGE, edges, true);
+
+  CHKERR mField.getInterface<FieldBlas>()->setField(0, MBEDGE, edges, "U");
+
   size_t nb = 0;
   auto dofs_ptr = mField.get_dofs();
   for (auto dof_ptr : (*dofs_ptr)) {
-    auto &val = const_cast<double &>(dofs_ptr->getFieldData());
+    MOFEM_LOG("PLOTBASE", Sev::verbose) << *dof_ptr;
+    auto &val = const_cast<double &>(dof_ptr->getFieldData());
     val = 1;
     CHKERR pipeline_mng->loopFiniteElements();
     CHKERR post_proc_fe->writeFile(
         "out_base_dof_" + boost::lexical_cast<std::string>(nb) + ".h5m");
+    CHKERR post_proc_fe->postProcMesh.delete_mesh();
     val = 0;
     ++nb;
   };
@@ -226,8 +238,7 @@ MoFEMErrorCode Example::checkResults() { return 0; }
 int main(int argc, char *argv[]) {
 
   // Initialisation of MoFEM/PETSc and MOAB data structures
-  const char param_file[] = "param_file.petsc";
-  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+  MoFEM::Core::Initialize(&argc, &argv, (char *)0, help);
 
   try {
 
@@ -235,6 +246,13 @@ int main(int argc, char *argv[]) {
     DMType dm_name = "DMMOFEM";
     CHKERR DMRegister_MoFEM(dm_name);
     //! [Register MoFEM discrete manager in PETSc
+
+    // Add logging channel for example
+    auto core_log = logging::core::get();
+    core_log->add_sink(
+        LogManager::createSink(LogManager::getStrmWorld(), "PLOTBASE"));
+    LogManager::setLog("PLOTBASE");
+    MOFEM_LOG_TAG("PLOTBASE", "plotbase");
 
     //! [Create MoAB]
     moab::Core mb_instance;              ///< mesh database
@@ -289,20 +307,24 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
   std::map<EntityHandle, int> nodes_pts_map;
 
   // Set gauss points coordinates from the reference mesh
-  gaussPts.resize(elem_nodes.size(), 4, false);
+  gaussPts.resize(SPACE_DIM + 1, elem_nodes.size(), false);
+  gaussPts.clear();
   Range::iterator nit = elem_nodes.begin();
   for (int gg = 0; nit != elem_nodes.end(); nit++, gg++) {
-    CHKERR moab_ref.get_coords(&*nit, 1, &gaussPts(gg, 0));
+    double coords[3];
+    CHKERR moab_ref.get_coords(&*nit, 1, coords);
+    for(auto d :{0,1,2})
+      gaussPts(d, gg) = coords[d];
     nodes_pts_map[*nit] = gg;
   }
-  gauss_pts = trans(gauss_pts);
 
-  // Set size of adjacency matrix
-  refEleMap.resize(elems.size(), num_nodes);
+  // Set size of adjacency matrix (note ho order nodes 3 nodes and 3 nodes on
+  // edges)
+  refEleMap.resize(elems.size(), 2 * (SPACE_DIM + 1));
 
   // Set adjacency matrix
   Range::iterator tit = elems.begin();
-  for (int tt = 0; tit != tets.end(); ++tit, ++tt) {
+  for (int tt = 0; tit != elems.end(); ++tit, ++tt) {
     const EntityHandle *conn;
     int num_nodes;
     CHKERR moab_ref.get_connectivity(*tit, conn, num_nodes, false);
@@ -315,8 +337,8 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
   shapeFunctions.resize(elem_nodes.size(), SPACE_DIM + 1);
   if (SPACE_DIM == 2)
     CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
-                                &gauss_pts(0, 0), &gauss_pts(1, 0),
-                                &gauss_pts(2, 0), elem_nodes.size());
+                                &gaussPts(0, 0), &gaussPts(1, 0),
+                                elem_nodes.size());
 
   if (SPACE_DIM == 3)
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
@@ -330,19 +352,19 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   // Create physical nodes
   ReadUtilIface *iface;
-  CHKERR T::postProcMesh.query_interface(iface);
+  CHKERR postProcMesh.query_interface(iface);
 
-  const int num_nodes = gaussPts().size2();
+  const int num_nodes = gaussPts.size2();
   std::vector<double *> arrays;
   EntityHandle startv;
   CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
-  T::mapGaussPts.resize(level_ref_gauss_pts.size2());
+  mapGaussPts.resize(gaussPts.size2());
   for (int gg = 0; gg != num_nodes; ++gg)
-    T::mapGaussPts[gg] = startv + gg;
+    mapGaussPts[gg] = startv + gg;
 
   Tag th;
   int def_in_the_loop = -1;
-  CHKERR T::postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER,
+  CHKERR postProcMesh.tag_get_handle("NB_IN_THE_LOOP", 1, MB_TYPE_INTEGER,
                                         th, MB_TAG_CREAT | MB_TAG_SPARSE,
                                         &def_in_the_loop);
 
@@ -350,6 +372,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   const int num_el = refEleMap.size1();
   const int num_nodes_on_ele = refEleMap.size2();
+  
   EntityHandle starte;
   EntityHandle *conn;
 
@@ -365,20 +388,19 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   for (unsigned int tt = 0; tt != refEleMap.size1(); ++tt) {
     for (int nn = 0; nn != num_nodes_on_ele; ++nn)
-      conn[num_nodes_on_ele * tt + nn] = T::mapGaussPts[refEleMap(tt, nn)];
+      conn[num_nodes_on_ele * tt + nn] = mapGaussPts[refEleMap(tt, nn)];
   }
   CHKERR iface->update_adjacencies(starte, num_el, num_nodes_on_ele, conn);
   auto physical_elements = Range(starte, starte + num_el - 1);
-  CHKERR T::postProcMesh.tag_clear_data(th, physical_elements,
-                                        &(T::nInTheLoop));
+  CHKERR postProcMesh.tag_clear_data(th, physical_elements, &(nInTheLoop));
 
-  EntityHandle fe_ent = T::numeredEntFiniteElementPtr->getEnt();
-  T::coords.resize(12, false);
+  EntityHandle fe_ent = numeredEntFiniteElementPtr->getEnt();
+  coords.resize(12, false);
   {
     const EntityHandle *conn;
     int num_nodes;
-    T::mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
-    CHKERR T::mField.get_moab().get_coords(conn, num_nodes, &T::coords[0]);
+    mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
+    CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords[0]);
   }
 
   // Set physical coordinates to physical nodes
@@ -387,15 +409,18 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
       &*shapeFunctions.data().begin());
   FTensor::Tensor1<FTensor::PackPtr<double *, 1>, 3> t_coords(
       arrays[0], arrays[1], arrays[2]);
-  const double *t_coords_ele_x = &T::coords[0];
-  const double *t_coords_ele_y = &T::coords[1];
-  const double *t_coords_ele_z = &T::coords[2];
+  const double *t_coords_ele_x = &coords[0];
+  const double *t_coords_ele_y = &coords[1];
+  const double *t_coords_ele_z = &coords[2];
   for (int gg = 0; gg != num_nodes; ++gg) {
     FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
         t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
     t_coords(i) = 0;
-    for (int nn = 0; nn != 4; ++nn) {
+    for (int nn = 0; nn != SPACE_DIM + 1; ++nn) {
       t_coords(i) += t_n * t_ele_coords(i);
+      for (auto ii : {0, 1, 2})
+        if (std::abs(t_coords(ii)) < std::numeric_limits<float>::epsilon())
+          t_coords(ii) = 0;
       ++t_ele_coords;
       ++t_n;
     }
