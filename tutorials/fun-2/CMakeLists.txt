@@ -38,7 +38,6 @@ tutorials_build_and_install(
 tutorials_build_and_install(
   plot_base_3d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
 
-
 set_target_properties(
   plot_base_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 set_target_properties(
