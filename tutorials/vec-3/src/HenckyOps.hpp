@@ -14,7 +14,7 @@
 
 namespace HenckyOps {
 
-constexpr double eps = 1e-8;
+constexpr double eps = 1e-12;
 
 auto f = [](double v) { return 0.5 * log(v); };
 auto d_f = [](double v) { return 0.5 / v; };
@@ -477,5 +477,97 @@ struct OpHenckyTangent : public DomainEleOp {
 private:
  boost::shared_ptr<CommonData> commonDataPtr;
 };
+
+template <int DIM> struct OpPostProcHencky : public DomainEleOp {
+  OpPostProcHencky(const std::string field_name,
+                   moab::Interface &post_proc_mesh,
+                   std::vector<EntityHandle> &map_gauss_pts,
+                   boost::shared_ptr<CommonData> common_data_ptr);
+  MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+private:
+  moab::Interface &postProcMesh;
+  std::vector<EntityHandle> &mapGaussPts;
+  boost::shared_ptr<CommonData> commonDataPtr;
+};
+
+template <int DIM>
+OpPostProcHencky<DIM>::OpPostProcHencky(
+    const std::string field_name, moab::Interface &post_proc_mesh,
+    std::vector<EntityHandle> &map_gauss_pts,
+    boost::shared_ptr<CommonData> common_data_ptr)
+    : DomainEleOp(field_name, DomainEleOp::OPROW), postProcMesh(post_proc_mesh),
+      mapGaussPts(map_gauss_pts), commonDataPtr(common_data_ptr) {
+  // Opetor is only executed for vertices
+  std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+}
+
+//! [Postprocessing]
+template <int DIM>
+MoFEMErrorCode OpPostProcHencky<DIM>::doWork(int side, EntityType type,
+                                             EntData &data) {
+  MoFEMFunctionBegin;
+
+    FTensor::Index<'i', DIM> i;
+    FTensor::Index<'j', DIM> j;
+    FTensor::Index<'k', DIM> k;
+
+  std::array<double, 9> def;
+  std::fill(def.begin(), def.end(), 0);
+
+  auto get_tag = [&](const std::string name, size_t size) {
+    Tag th;
+    CHKERR postProcMesh.tag_get_handle(name.c_str(), size, MB_TYPE_DOUBLE, th,
+                                       MB_TAG_CREAT | MB_TAG_SPARSE,
+                                       def.data());
+    return th;
+  };
+
+  MatrixDouble3by3 mat(3, 3);
+
+  auto set_matrix = [&](auto &t) -> MatrixDouble3by3 & {
+    mat.clear();
+    for (size_t r = 0; r != SPACE_DIM; ++r)
+      for (size_t c = 0; c != SPACE_DIM; ++c)
+        mat(r, c) = t(r, c);
+    return mat;
+  };
+
+  auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
+    return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
+                                     &*mat.data().begin());
+  };
+
+  auto th_grad = get_tag("GRAD", 9);
+  auto th_stress = get_tag("STRESS", 9);
+
+  auto t_piola = getFTensor2FromMat<DIM, DIM>(commonDataPtr->matFirstPiolaStress);
+  auto t_grad = getFTensor2FromMat<DIM, DIM>(*commonDataPtr->matGradPtr);
+
+  FTensor::Tensor2<double, DIM, DIM> F;
+  FTensor::Tensor2_symmetric<double, DIM> cauchy_stress;
+
+  for (int gg = 0; gg != commonDataPtr->matGradPtr->size2(); ++gg) {
+
+    F(i, j) = t_grad(i, j) + kronecker_delta(i, j);
+    double inv_t_detF;
+    if(DIM == 2)
+      determinantTensor2by2(F, inv_t_detF);
+    else  
+      determinantTensor3by3(F, inv_t_detF);
+    
+    inv_t_detF = 1. / inv_t_detF;
+
+    cauchy_stress(i, j) = inv_t_detF * (t_piola(i, k) ^ F(j, k));
+
+    CHKERR set_tag(th_grad, gg, set_matrix(t_grad));
+    CHKERR set_tag(th_stress, gg, set_matrix(cauchy_stress));
+
+    ++t_piola;
+    ++t_grad;
+  }
+
+  MoFEMFunctionReturn(0);
+}
 
 } // namespace HenckyOps
