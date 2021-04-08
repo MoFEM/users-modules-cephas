@@ -551,11 +551,12 @@ MoFEMErrorCode OpPostProcHencky<DIM>::doWork(int side, EntityType type,
 
     F(i, j) = t_grad(i, j) + kronecker_delta(i, j);
     double inv_t_detF;
-    if(DIM == 2)
-      determinantTensor2by2(F, inv_t_detF);
-    else  
-      determinantTensor3by3(F, inv_t_detF);
     
+    if (DIM == 2)
+      determinantTensor2by2(F, inv_t_detF);
+    else
+      determinantTensor3by3(F, inv_t_detF);
+
     inv_t_detF = 1. / inv_t_detF;
 
     cauchy_stress(i, j) = inv_t_detF * (t_piola(i, k) ^ F(j, k));
