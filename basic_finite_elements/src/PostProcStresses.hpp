@@ -214,11 +214,13 @@ struct PostCellProcStress
   const bool replaceNonANumberByMaxValue;
   const double maxVal;
   const bool printCauchy;
+  // MatrixDouble &mwlsStresses;
 
   PostCellProcStress(moab::Interface &post_proc_mesh,
                  const std::string field_name,
                  NonlinearElasticElement::BlockData &data,
                  NonlinearElasticElement::CommonData &common_data,
+                // MatrixDouble &mwls_stresses,
                  const bool field_disp = false,
                  const bool replace_nonanumber_by_max_value = false,
                  const double max_val = 1e16,
@@ -228,7 +230,7 @@ struct PostCellProcStress
         outMesh(post_proc_mesh), dAta(data),
         commonData(common_data), fieldDisp(field_disp),
         replaceNonANumberByMaxValue(replace_nonanumber_by_max_value),
-        maxVal(max_val), printCauchy(print_cauchy_stress) {}
+        maxVal(max_val), printCauchy(print_cauchy_stress)/*, mwlsStresses(mwls_stresses)*/ {}
 
   NonlinearElasticElement::CommonData nonLinearElementCommonData;
 
@@ -250,6 +252,9 @@ struct PostCellProcStress
     const EntityHandle ent = getNumeredEntFiniteElementPtr()->getEnt();
 
     int id = dAta.iD;
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
 
     // Tag th_id;
     // int def_block_id = -1;
@@ -315,62 +320,109 @@ struct PostCellProcStress
         ublas::matrix<double, ublas::row_major, ublas::bounded_array<double, 9>> piola_stress_data;
     piola_stress_data.resize(3, 3);
     piola_stress_data.clear();
-    auto t_w = getFTensor0IntegrationWeight();
-    for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
-      // const double weight = getGaussPts()(3, gg);
+  //     MatrixDouble &stress = mwlsStresses;
+  // FTensor::Tensor2_symmetric<FTensor::PackPtr<double *, 1>, 3> t_stress(
+  //     &stress(0, 0), &stress(3, 0), &stress(4, 0), &stress(1, 0), &stress(5, 0),
+  //     &stress(2, 0));
 
-      dAta.materialDoublePtr->gG = gg;
-      dAta.materialDoublePtr->F.resize(3, 3);
+  // FTensor::Tensor2<double *, 3, 3> t_piola(
+  //     &piola_stress_data(0, 0), &piola_stress_data(0, 1),
+  //     &piola_stress_data(0, 2), &piola_stress_data(1, 0),
+  //     &piola_stress_data(1, 1), &piola_stress_data(1, 2),
+  //     &piola_stress_data(2, 0), &piola_stress_data(2, 1),
+  //     &piola_stress_data(2, 2));
+  auto t_w = getFTensor0IntegrationWeight();
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+
+    // const double weight = getGaussPts()(3, gg);
+
+    dAta.materialDoublePtr->gG = gg;
+    dAta.materialDoublePtr->F.resize(3, 3);
+    noalias(dAta.materialDoublePtr->F) =
+        (commonData.gradAtGaussPts[rowFieldName])[gg];
+    if (fieldDisp) {
+      for (int dd = 0; dd != 3; dd++) {
+        dAta.materialDoublePtr->F(dd, dd) += 1;
+      }
+    }
+    if (commonData.gradAtGaussPts["MESH_NODE_POSITIONS"].size() ==
+        (unsigned int)nb_gauss_pts) {
+      H.resize(3, 3);
+      invH.resize(3, 3);
+      noalias(H) = (commonData.gradAtGaussPts["MESH_NODE_POSITIONS"])[gg];
+      CHKERR dAta.materialDoublePtr->dEterminant(H, detH);
+      CHKERR dAta.materialDoublePtr->iNvert(detH, H, invH);
       noalias(dAta.materialDoublePtr->F) =
-          (commonData.gradAtGaussPts[rowFieldName])[gg];
-      if (fieldDisp) {
-        for (int dd = 0; dd != 3; dd++) {
-          dAta.materialDoublePtr->F(dd, dd) += 1;
-        }
-      }
-      if (commonData.gradAtGaussPts["MESH_NODE_POSITIONS"].size() ==
-          (unsigned int)nb_gauss_pts) {
-        H.resize(3, 3);
-        invH.resize(3, 3);
-        noalias(H) = (commonData.gradAtGaussPts["MESH_NODE_POSITIONS"])[gg];
-        CHKERR dAta.materialDoublePtr->dEterminant(H, detH);
-        CHKERR dAta.materialDoublePtr->iNvert(detH, H, invH);
-        noalias(dAta.materialDoublePtr->F) =
-            prod(dAta.materialDoublePtr->F, invH);
-      }
-
-      int nb_active_variables = 9;
-      CHKERR dAta.materialDoublePtr->setUserActiveVariables(
-          nb_active_variables);
-      CHKERR dAta.materialDoublePtr->calculateP_PiolaKirchhoffI(
-          dAta, getNumeredEntFiniteElementPtr());
-      CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
-          dAta, getNumeredEntFiniteElementPtr());
-          piola_stress_data += dAta.materialDoublePtr->P * t_w;;
-      // CHKERR outMesh.tag_set_data(th_piola1, &mapGaussPts[gg], 1,
-      //                                  &dAta.materialDoublePtr->P(0, 0));
-      // CHKERR outMesh.tag_set_data(th_energy, &mapGaussPts[gg], 1,
-      //                                  &dAta.materialDoublePtr->eNergy);
-      if (printCauchy) {
-        dAta.materialDoublePtr->sigmaCauchy.resize(3, 3);
-        CHKERR dAta.materialDoublePtr->calculateCauchyStress(
-            dAta, getNumeredEntFiniteElementPtr());
-            c_stress_data += dAta.materialDoublePtr->sigmaCauchy * t_w;
-        // CHKERR outMesh.tag_set_data(
-        //     th_cauchy, &mapGaussPts[gg], 1,
-        //     &dAta.materialDoublePtr->sigmaCauchy(0, 0));
-      }
-      ++t_w;
+          prod(dAta.materialDoublePtr->F, invH);
     }
 
+    int nb_active_variables = 9;
+    CHKERR dAta.materialDoublePtr->setUserActiveVariables(nb_active_variables);
+    CHKERR dAta.materialDoublePtr->calculateP_PiolaKirchhoffI(
+        dAta, getNumeredEntFiniteElementPtr());
+    CHKERR dAta.materialDoublePtr->calculateElasticEnergy(
+        dAta, getNumeredEntFiniteElementPtr());
+    piola_stress_data += dAta.materialDoublePtr->P * t_w;
+    //t_piola(i, j) += t_w * t_stress(i, j);
+cerr << " \n\n ########\n\n";
+    // piola_stress_data(0, 0) += t_w * stress(0, gg);
+    // piola_stress_data(1, 1) += t_w * stress(1, gg);
+    // piola_stress_data(2, 2) += t_w * stress(2, gg);
+    // piola_stress_data(0, 1) += t_w * stress(3, gg);
+    // piola_stress_data(0, 2) += t_w * stress(4, gg);
+    // piola_stress_data(1, 2) += t_w * stress(5, gg);
+
+
+    // piola_stress_data() += dAta.materialDoublePtr->P * t_w;
+    // CHKERR outMesh.tag_set_data(th_piola1, &mapGaussPts[gg], 1,
+    //                                  &dAta.materialDoublePtr->P(0, 0));
+    // CHKERR outMesh.tag_set_data(th_energy, &mapGaussPts[gg], 1,
+    //                                  &dAta.materialDoublePtr->eNergy);
+    if (printCauchy) {
+      dAta.materialDoublePtr->sigmaCauchy.resize(3, 3);
+      CHKERR dAta.materialDoublePtr->calculateCauchyStress(
+          dAta, getNumeredEntFiniteElementPtr());
+      c_stress_data += dAta.materialDoublePtr->sigmaCauchy * t_w;
+      // CHKERR outMesh.tag_set_data(
+      //     th_cauchy, &mapGaussPts[gg], 1,
+      //     &dAta.materialDoublePtr->sigmaCauchy(0, 0));
+    }
+    ++t_w;
+    }
+
+      VectorDouble vec_cauchy_stress_integrated;
+      vec_cauchy_stress_integrated.resize(9, false);
+      vec_cauchy_stress_integrated.clear();
+
+        VectorDouble vec_piola1_stress_integrated;
+      vec_piola1_stress_integrated.resize(9, false);
+      vec_piola1_stress_integrated.clear();
+
+        vec_cauchy_stress_integrated[0] += c_stress_data(0, 0);
+        vec_cauchy_stress_integrated[1] += c_stress_data(1, 1);
+        vec_cauchy_stress_integrated[2] += c_stress_data(2, 2);
+        vec_cauchy_stress_integrated[3] += c_stress_data(0, 1);
+        vec_cauchy_stress_integrated[4] += c_stress_data(0, 2);
+        vec_cauchy_stress_integrated[5] += c_stress_data(1, 2);
+
+
+        vec_piola1_stress_integrated[0] += piola_stress_data(0, 0);
+        vec_piola1_stress_integrated[1] += piola_stress_data(1, 1);
+        vec_piola1_stress_integrated[2] += piola_stress_data(2, 2);
+        vec_piola1_stress_integrated[3] += piola_stress_data(0, 1);
+        vec_piola1_stress_integrated[4] += piola_stress_data(0, 2);
+        vec_piola1_stress_integrated[5] += piola_stress_data(1, 2);
+
+
+cerr << "vec_piola1_stress_integrated " << vec_piola1_stress_integrated << endl;
     CHKERR outMesh.tag_set_data(
         th_piola1, &ent, 1,
-        &piola_stress_data(0, 0));
+        &*vec_piola1_stress_integrated.begin());
 
     CHKERR outMesh.tag_set_data(
         th_cauchy, &ent, 1,
-        &c_stress_data(0, 0));
+        &*vec_cauchy_stress_integrated.begin());
 
     // cerr << "Stresses   " << c_stress_data(0, 0) << " " << c_stress_data(0, 1)
     //      << " " << c_stress_data(0, 2) << " " << c_stress_data(1, 0) << " "
