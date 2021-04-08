@@ -72,12 +72,6 @@ private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
 
-  //! [Approximated function]
-  static double approxFunction(const double x, const double y, const double z) {
-    return sin(x * 10.) * cos(y * 10.);
-  }
-  //! [Approximated function]
-
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
   MoFEMErrorCode setIntegrationRules();
@@ -109,7 +103,7 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
 
-  auto &moab = mField.get_moab();
+  /* auto &moab = mField.get_moab();
 
   if (SPACE_DIM == 3) {
 
@@ -146,7 +140,11 @@ MoFEMErrorCode Example::readMesh() {
 
   // Add all elements to database
   CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
-      0, SPACE_DIM, simpleInterface->getBitRefLevel());
+      0, SPACE_DIM, simpleInterface->getBitRefLevel());*/
+
+  CHKERR mField.getInterface(simpleInterface);
+  CHKERR simpleInterface->getOptions();
+  CHKERR simpleInterface->loadFile();
 
   MoFEMFunctionReturn(0);
 }
@@ -158,9 +156,9 @@ MoFEMErrorCode Example::setupProblem() {
   // Add field
 
   const FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  CHKERR simpleInterface->addDomainField("U", HCURL, base, 1);
+  CHKERR simpleInterface->addDomainField("U", H1, base, 1);
 
-  constexpr int order = 8;
+  constexpr int order = 3;
   CHKERR simpleInterface->setFieldOrder("U", order);
   CHKERR simpleInterface->setUp();
 
