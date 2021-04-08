@@ -2,7 +2,7 @@ Check before run
 ================
 
 * Check where is your mesh file
-* Check what version of openmoi (or other MPI library) are you using
+* Check what version of openmpi (or other MPI library) are you using
 
 If you are using spack and you would like to use mpirun and mbconvert 
 tools please first run the following 
@@ -23,7 +23,7 @@ mpirun -np 4 ./arc_length_nonlinear_elasticity \
 * dynamic
 
 mpirun -np 4 ./nonlinear_dynamics -my_file LShape.h5m \
-  -ts_dt 0.001 -ts_final_time 10 \
+  -ts_dt 0.1 -ts_final_time 10 \
   -my_time_data_file data.txt -my_output_prt 1 \
   -my_max_post_proc_ref_level 1 -my_disp_order 2 -my_vel_order 2
 
