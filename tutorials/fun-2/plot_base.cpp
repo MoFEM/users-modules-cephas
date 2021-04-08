@@ -46,6 +46,11 @@ template <> struct ElementsAndOps<3> {
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
+// constexpr FieldApproximationBase base = DEMKOWICZ_JACOBI_BASE;
+// constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
+constexpr FieldApproximationBase base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+constexpr FieldSpace space = H1;
+
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
@@ -155,10 +160,9 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   // Add field
 
-  const FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  CHKERR simpleInterface->addDomainField("U", H1, base, 1);
+  CHKERR simpleInterface->addDomainField("U", space, base, 1);
 
-  constexpr int order = 3;
+  constexpr int order = 4;
   CHKERR simpleInterface->setFieldOrder("U", order);
   CHKERR simpleInterface->setUp();
 
@@ -169,12 +173,6 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Set integration rule]
 MoFEMErrorCode Example::setIntegrationRules() {
   MoFEMFunctionBegin;
-
-  auto rule = [](int, int, int p) -> int { return -1; };
-
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule);
-
   MoFEMFunctionReturn(0);
 }
 //! [Set integration rule]
@@ -203,13 +201,23 @@ MoFEMErrorCode Example::outputResults() {
 
   auto post_proc_fe = boost::make_shared<MyPostProc>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("U");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
-  Range edges;
-  CHKERR mField.get_moab().get_entities_by_type(0, MBEDGE, edges, true);
+  if(SPACE_DIM == 2) {
+    if (space == HCURL) {
+      MatrixDouble inv_jac(2, 2), jac(2, 2);
+      post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFace(inv_jac));
+      post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpSetContravariantPiolaTransformFace(jac));
+      post_proc_fe->getOpPtrVector().push_back(
+          new OpSetInvJacHcurlFace(inv_jac));
+    }
+  }
 
-  CHKERR mField.getInterface<FieldBlas>()->setField(0, MBEDGE, edges, "U");
+  post_proc_fe->addFieldValuesPostProc("U");
 
   auto scale_tag_val = [&]() {
     MoFEMFunctionBegin;
