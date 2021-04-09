@@ -20,9 +20,9 @@ private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 
@@ -65,19 +65,6 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
-  MoFEMFunctionBegin;
-
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return p; };
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
@@ -114,6 +101,7 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
+
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
   }
@@ -123,6 +111,19 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
   }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
+  MoFEMFunctionBegin;
+
+  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  auto rule_rhs = [](int, int, int p) -> int { return 2 * p; };
+
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
 
   MoFEMFunctionReturn(0);
 }
