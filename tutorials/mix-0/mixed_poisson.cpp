@@ -1,6 +1,9 @@
 /**
- * \file mix-poisson.cpp
- * \example mix-poisson.cpp
+ * \file mixed_poisson.cpp
+ * \example mixed_poisson.cpp
+ *
+ * MixedPoisson intended to show how to solve mixed formulation of the Dirichlet
+ * problem for the Poisson equation using error indicators and p-adaptivity
  *
  */
 
@@ -39,9 +42,9 @@ using OpDomainSource = FormsIntegrators<DomainEleOp>::Assembly<
 
 inline double sqr(double x) { return x * x; }
 
-struct Example {
+struct MixedPoisson {
 
-  Example(MoFEM::Interface &m_field) : mField(m_field) {}
+  MixedPoisson(MoFEM::Interface &m_field) : mField(m_field) {}
   MoFEMErrorCode runProblem();
 
 private:
@@ -152,7 +155,7 @@ private:
 };
 
 //! [Run programme]
-MoFEMErrorCode Example::runProblem() {
+MoFEMErrorCode MixedPoisson::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
   CHKERR setupProblem();
@@ -164,7 +167,7 @@ MoFEMErrorCode Example::runProblem() {
 //! [Run programme]
 
 //! [Read mesh]
-MoFEMErrorCode Example::readMesh() {
+MoFEMErrorCode MixedPoisson::readMesh() {
   MoFEMFunctionBegin;
   CHKERR mField.getInterface(simpleInterface);
   CHKERR simpleInterface->getOptions();
@@ -174,7 +177,7 @@ MoFEMErrorCode Example::readMesh() {
 //! [Read mesh]
 
 //! [Set up problem]
-MoFEMErrorCode Example::setupProblem() {
+MoFEMErrorCode MixedPoisson::setupProblem() {
   MoFEMFunctionBegin;
   // Note that in 2D case HDIV and HCURL spaces are isomorphic, and therefore
   // only base for HCURL has been implemented in 2D. Base vectors for HDIV space
@@ -209,7 +212,7 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Set up problem]
 
 //! [Set integration rule]
-MoFEMErrorCode Example::setIntegrationRules() {
+MoFEMErrorCode MixedPoisson::setIntegrationRules() {
   MoFEMFunctionBegin;
 
   auto rule = [](int, int, int p) -> int { return 2 * p + 1; };
@@ -223,7 +226,7 @@ MoFEMErrorCode Example::setIntegrationRules() {
 //! [Set integration rule]
 
 //! [Create common data]
-MoFEMErrorCode Example::createCommonData() {
+MoFEMErrorCode MixedPoisson::createCommonData() {
   MoFEMFunctionBegin;
   commonDataPtr = boost::make_shared<CommonData>();
   PetscInt ghosts[4] = {0, 1, 2, 3};
@@ -241,7 +244,7 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Create common data]
 
 //! [Assemble system]
-MoFEMErrorCode Example::assembleSystem() {
+MoFEMErrorCode MixedPoisson::assembleSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
@@ -277,7 +280,7 @@ MoFEMErrorCode Example::assembleSystem() {
 //! [Assemble system]
 
 //! [Solve]
-MoFEMErrorCode Example::solveSystem() {
+MoFEMErrorCode MixedPoisson::solveSystem() {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   auto solver = pipeline_mng->createKSP();
@@ -298,7 +301,7 @@ MoFEMErrorCode Example::solveSystem() {
 //! [Solve]
 
 //! [Refine]
-MoFEMErrorCode Example::refineOrder() {
+MoFEMErrorCode MixedPoisson::refineOrder() {
   MoFEMFunctionBegin;
   Tag th_error_ind, th_order;
   CHKERR getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE, th_error_ind);
@@ -346,7 +349,7 @@ MoFEMErrorCode Example::refineOrder() {
 //! [Refine]
 
 //! [Solve and refine loop]
-MoFEMErrorCode Example::solveRefineLoop() {
+MoFEMErrorCode MixedPoisson::solveRefineLoop() {
   MoFEMFunctionBegin;
   CHKERR assembleSystem();
   CHKERR solveSystem();
@@ -366,7 +369,7 @@ MoFEMErrorCode Example::solveRefineLoop() {
 //! [Solve and refine loop]
 
 //! [Check results]
-MoFEMErrorCode Example::checkError(int iter_num) {
+MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
@@ -452,7 +455,7 @@ MoFEMErrorCode Example::checkError(int iter_num) {
 //! [Check results]
 
 //! [Output results]
-MoFEMErrorCode Example::outputResults(int iter_num) {
+MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
@@ -480,7 +483,7 @@ MoFEMErrorCode Example::outputResults(int iter_num) {
 }
 //! [Output results]
 
-MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
+MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
                                         EntData &data) {
   MoFEMFunctionBegin if (const size_t nb_dofs = data.getIndices().size()) {
     const int nb_integration_pts = getGaussPts().size2();
@@ -498,11 +501,12 @@ MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
     double error_ind = 0;
     for (int gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = t_w * area;
-      double diff = t_val - Example::analyticalFunction(
+      
+      double diff = t_val - MixedPoisson::analyticalFunction(
                                 t_coords(0), t_coords(1), t_coords(2));
       error_l2 += alpha * sqr(diff);
 
-      VectorDouble vec = Example::analyticalFunctionGrad(
+      VectorDouble vec = MixedPoisson::analyticalFunctionGrad(
           t_coords(0), t_coords(1), t_coords(2));
       auto t_fun_grad = getFTensor1FromArray<2, 2>(vec);
       t_diff(i) = t_val_grad(i) - t_fun_grad(i);
@@ -520,11 +524,11 @@ MoFEMErrorCode Example::OpError::doWork(int side, EntityType type,
 
     const EntityHandle ent = getFEEntityHandle();
     Tag th_error_l2, th_error_h1, th_error_ind;
-    CHKERR Example::getTagHandle(mField, "ERROR_L2_NORM", MB_TYPE_DOUBLE,
+    CHKERR MixedPoisson::getTagHandle(mField, "ERROR_L2_NORM", MB_TYPE_DOUBLE,
                                  th_error_l2);
-    CHKERR Example::getTagHandle(mField, "ERROR_H1_SEMINORM", MB_TYPE_DOUBLE,
+    CHKERR MixedPoisson::getTagHandle(mField, "ERROR_H1_SEMINORM", MB_TYPE_DOUBLE,
                                  th_error_h1);
-    CHKERR Example::getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
+    CHKERR MixedPoisson::getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
                                  th_error_ind);
     CHKERR mField.get_moab().tag_set_data(th_error_l2, &ent, 1, &error_l2);
     CHKERR mField.get_moab().tag_set_data(th_error_h1, &ent, 1, &error_h1);
@@ -555,7 +559,7 @@ int main(int argc, char *argv[]) {
   core_log->add_sink(
       LogManager::createSink(LogManager::getStrmWorld(), "EXAMPLE"));
   LogManager::setLog("EXAMPLE");
-  MOFEM_LOG_TAG("EXAMPLE", "Example");
+  MOFEM_LOG_TAG("EXAMPLE", "MixedPoisson");
 
   try {
     //! [Register MoFEM discrete manager in PETSc]
@@ -573,10 +577,10 @@ int main(int argc, char *argv[]) {
     MoFEM::Interface &m_field = core; ///< finite element database interface
     //! [Create MoFEM]
 
-    //! [Example]
-    Example ex(m_field);
+    //! [MixedPoisson]
+    MixedPoisson ex(m_field);
     CHKERR ex.runProblem();
-    //! [Example]
+    //! [MixedPoisson]
   }
   CATCH_ERRORS;
 
