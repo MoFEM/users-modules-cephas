@@ -1,4 +1,4 @@
-/*! \page hierarchical_approximation_1 Hierarchical approximation
+/*! \page hierarchical_approximation_1 fun-2: Hierarchical approximation
 
 \section hierarchical_approximation_introduction Introduction 
 The present tutorial is aimed to introduce elementary concepts of the Finite Element Method (FEM) with hierarchical shape functions and their implementation in MoFEM.
