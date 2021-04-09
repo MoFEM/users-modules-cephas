@@ -43,7 +43,7 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -317,7 +317,7 @@ MoFEMErrorCode Example::assembleSystem() {
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * (approx_order - 1);
   };
 
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
