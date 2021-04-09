@@ -46,11 +46,6 @@ template <> struct ElementsAndOps<3> {
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
 
-// constexpr FieldApproximationBase base = DEMKOWICZ_JACOBI_BASE;
-// constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-constexpr FieldApproximationBase base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
-constexpr FieldSpace space = H1;
-
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
 using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
@@ -86,6 +81,10 @@ private:
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
   MoFEMErrorCode checkResults();
+
+  FieldApproximationBase base;
+  FieldSpace space;
+
 };
 
 //! [Run programme]
@@ -108,7 +107,13 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
 
-  /* auto &moab = mField.get_moab();
+  PetscBool load_file = PETSC_TRUE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-load_file", &load_file,
+                             PETSC_NULL);
+
+  if(load_file == PETSC_TRUE) {
+
+  auto &moab = mField.get_moab();
 
   if (SPACE_DIM == 3) {
 
@@ -145,11 +150,16 @@ MoFEMErrorCode Example::readMesh() {
 
   // Add all elements to database
   CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
-      0, SPACE_DIM, simpleInterface->getBitRefLevel());*/
+      0, SPACE_DIM, simpleInterface->getBitRefLevel());
+
+  } else {
 
   CHKERR mField.getInterface(simpleInterface);
   CHKERR simpleInterface->getOptions();
   CHKERR simpleInterface->loadFile();
+
+  }
+  
 
   MoFEMFunctionReturn(0);
 }
@@ -160,9 +170,48 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   // Add field
 
+  // Declare elements
+  enum bases { AINSWORTH, AINSWORTH_LOBATTO, DEMKOWICZ, BERNSTEIN, LASBASETOP };
+  const char *list_bases[] = {"ainsworth", "ainsworth_labatto", "demkowicz",
+                              "bernstein"};
+
+  PetscBool flg;
+  PetscInt choice_base_value = AINSWORTH;
+  CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-base", list_bases, LASBASETOP,
+                              &choice_base_value, &flg);
+  if (flg != PETSC_TRUE)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "base not set");
+  FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
+  if (choice_base_value == AINSWORTH)
+    base = AINSWORTH_LEGENDRE_BASE;
+  if (choice_base_value == AINSWORTH_LOBATTO)
+    base = AINSWORTH_LOBATTO_BASE;
+  else if (choice_base_value == DEMKOWICZ)
+    base = DEMKOWICZ_JACOBI_BASE;
+  else if (choice_base_value == BERNSTEIN)
+    base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
+
+  enum spaces { H1SPACE, L2SPACE, HCURLSPACE, HDIVSAPCE, LASBASETSPACE };
+  const char *list_spaces[] = {"h1", "l2", "hcurl", "hdiv"};
+  PetscInt choice_space_value = H1SPACE;
+  CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-space", list_spaces,
+                              LASBASETSPACE, &choice_space_value, &flg);
+  if (flg != PETSC_TRUE)
+    SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "space not set");
+  FieldSpace space = H1;
+  if (choice_space_value == H1SPACE)
+    space = H1;
+  else if (choice_space_value == L2SPACE)
+    space = L2;
+  else if (choice_space_value == HCURLSPACE)
+    space = HCURL;
+  else if (choice_space_value == HDIVSAPCE)
+    space = HDIV;
+
   CHKERR simpleInterface->addDomainField("U", space, base, 1);
 
-  constexpr int order = 4;
+  int order = 3;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simpleInterface->setFieldOrder("U", order);
   CHKERR simpleInterface->setUp();
 
@@ -311,14 +360,19 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
   moab::Core core_ref;
   moab::Interface &moab_ref = core_ref;
 
-  // Load mesh
+  char ref_mesh_file_name[255];
+
   if (SPACE_DIM == 2)
-    CHKERR moab_ref.load_file("ref_mesh2d.h5m", 0, "");
+    strcpy(ref_mesh_file_name, "ref_mesh2d.h5m");
   else if (SPACE_DIM == 3)
-    CHKERR moab_ref.load_file("ref_mesh3d.h5m", 0, "");
+    strcpy(ref_mesh_file_name, "ref_mesh3d.h5m");
   else
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "Dimension not implemented");
+
+  CHKERR PetscOptionsGetString(PETSC_NULL, "", "-my_file", ref_mesh_file_name,
+                               255, PETSC_NULL);
+  CHKERR moab_ref.load_file(ref_mesh_file_name, 0, "");
 
   // Get elements
   Range elems;
