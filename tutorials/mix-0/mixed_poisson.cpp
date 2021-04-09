@@ -203,9 +203,8 @@ MoFEMErrorCode MixedPoisson::setupProblem() {
                                                      false);
   Tag th_order;
   CHKERR getTagHandle(mField, "ORDER", MB_TYPE_INTEGER, th_order);
-  for (Range::iterator fit = domainEntities.begin();
-       fit != domainEntities.end(); fit++) {
-    CHKERR mField.get_moab().tag_set_data(th_order, &*fit, 1, &baseOrder);
+  for (auto ent : domainEntities) {
+    CHKERR mField.get_moab().tag_set_data(th_order, &ent, 1, &baseOrder);
   }
   MoFEMFunctionReturn(0);
 }
@@ -309,22 +308,21 @@ MoFEMErrorCode MixedPoisson::refineOrder() {
 
   std::vector<Range> refinement_levels;
   refinement_levels.resize(refIterNum + 1);
-  for (Range::iterator fit = domainEntities.begin();
-       fit != domainEntities.end(); fit++) {
+  for (auto ent : domainEntities) {
     double err_indic = 0;
-    CHKERR mField.get_moab().tag_get_data(th_error_ind, &*fit, 1, &err_indic);
+    CHKERR mField.get_moab().tag_get_data(th_error_ind, &ent, 1, &err_indic);
     int order, new_order;
-    CHKERR mField.get_moab().tag_get_data(th_order, &*fit, 1, &order);
+    CHKERR mField.get_moab().tag_get_data(th_order, &ent, 1, &order);
     new_order = order + 1;
     Range refined_ents;
     if (err_indic > errorIndicatorIntegral / totalElementNumber) {
-      refined_ents.insert(*fit);
+      refined_ents.insert(ent);
       Range adj;
-      CHKERR mField.get_moab().get_adjacencies(&*fit, 1, 1, false, adj,
+      CHKERR mField.get_moab().get_adjacencies(&ent, 1, 1, false, adj,
                                                moab::Interface::UNION);
       refined_ents.merge(adj);
       refinement_levels[new_order - baseOrder].merge(refined_ents);
-      CHKERR mField.get_moab().tag_set_data(th_order, &*fit, 1, &new_order);
+      CHKERR mField.get_moab().tag_set_data(th_order, &ent, 1, &new_order);
     }
   }
 
