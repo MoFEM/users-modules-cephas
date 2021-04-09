@@ -7,13 +7,403 @@
 \note Intended learning outcome:
 - general structure of a program developed using MoFEM
 - idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
-- working woth complex variable fields
+- working with complex variable fields
 - idea of Domain element in MoFEM and how to use it
 - Use default differential Forms Integrals
 - how to **push** the developed UDOs to the *Pipeline*
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 
 \tableofcontents
+
+
+\section tutorial_hemholtz_strong_form The problem in strong form
+
+The solution of the wave propagation problem in the frequency domain by means of the Finite Element Method is presented in this tutorial.
+The wave equation is:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    \dfrac{{\partial}^2 P({\mathbf{x}}, t)}{\partial t^2} - c^2 {\nabla}^2 P({\mathbf{x}}, t) = 0 \quad \text{in } \Omega 
+    \label{eq:one}
+    \end{aligned}
+    \end{equation}
+\f]
+
+where \f$c\f$ is the wave speed assumed to be constant and \f$ P({\mathbf{x}}, t) \f$ is the spatially and temporally varying pressure, with spatial position vector \f${\mathbf{x}} \in \mathbb{R}^2\f$ and 
+time \f$t \in \mathbb{R}^{+}\f$.
+
+Moreover, quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$ defined as 
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    \dfrac{\partial P({\mathbf{x}}, t)}{\partial t} + c\left({\mathbf{N}} \cdot \nabla P ({\mathbf{x}}, t) \right) = 0  \quad \text{on } \Gamma_1 
+    \label{eq:two}
+    \end{aligned}
+    \end{equation}
+\f]
+
+where \f$\mathbf{N}\f$ is the unit normal vector on the quasi absorbing boundary, \f$\Gamma_1\f$.
+
+Finally, a source of constant frequency, \f$\omega\f$, and amplitude is assumed to be located on a different part of the boundary of the domain \f$\Gamma_2\f$:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    P({\mathbf{x}}, t) = {\rm {cos}}(\omega t)  \quad \text{on } \Gamma_2 
+    \label{eq:three}
+    \end{aligned}
+    \end{equation}
+\f]
+
+Since there is only one source with constant frequency and since the boundaries are quasi-absorbing that resemble infinite boundary conditions,
+the problem can be solved in the frequency domain and the solution can admit a variable separation:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    P({\mathbf{x}}, t) = {\rm Re}({p(\mathbf{x}) e^{-i \omega t} })
+    \label{eq:four}   
+    \end{aligned}
+    \end{equation}
+\f]
+
+where now the spatially varying pressure amplitude, \f$p(\mathbf{x})\f$, a complex value:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    p({\mathbf{x}}) = p^{\rm{Re}} + i  p^{\rm{Im}}
+    \label{eq:five}
+    \end{aligned}
+    \end{equation}
+\f]
+
+By introducing the wave number \f$k = \omega / c \f$ and substituting \f$\ref{eq:four}\f$ and \f$\eqref{eq:five}\f$ in \f$\eqref{eq:one}\f$ to \f$\eqref{eq:three}\f$
+the Helmholtz problem is recovered:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    \newenvironment{rcases}
+    {\left.\begin{aligned}}
+    {\end{aligned}\right\rbrace}
+    \begin{rcases}
+    k^2   p^{\rm {Re}} + {\nabla}^2 p^{\rm {Re}} = 0 \\
+    k^2   p^{\rm {Im}} + {\nabla}^2 p^{\rm {Im}} = 0 \\ \end{rcases} {\text {in }} \Omega,\quad
+    \newenvironment{rcases}
+   {\left.\begin{aligned}}
+   {\end{aligned}\right\rbrace}
+   \begin{rcases}
+   \mathbf{N} \cdot \nabla p^{\rm {Re}} + k p^{\rm {Im}} = 0 \\
+   \mathbf{N} \cdot \nabla p^{\rm {Im}} - k p^{\rm {Re}} = 0 \\ \end{rcases} {\text {on }} \Gamma_1,\quad
+   \newenvironment{rcases}
+   {\left.\begin{aligned}}
+   {\end{aligned}\right\rbrace}
+   \begin{rcases}
+   p^{\rm {Re}} = 1 \\
+   p^{\rm {Im}} = 0 \\ \end{rcases} {\text {on }} \Gamma_2
+    \label{eq:six}
+    \end{aligned}
+    \end{equation}
+\f]
+
+It can be observed that the imaginary number \f$i\f$ has disappeared since one can operate on the real and imaginary parts of the equation separately
+to fullfil an equation that is equal to zero.
+Therefore, the original problem of a single field, \f$ P({\mathbf{x}}, t) \f$, into a two field problem where one field is \f$p^{\rm {Re}}\f$ and the second one \f$p^{\rm {Re}}\f$.
+
+\section tutorial_hemholtz_weak_form The weak form and its discretisation
+
+In this section the weak formulation is going to be presented and then extended to the equivalent discrete formulation.
+The weak formulation reads as this:
+
+Find \f$ p^{\rm {Re}}\f$ and  \f$p^{\rm {Re}} \in H^1(\Omega) \f$ such that:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    \newenvironment{rcases}
+    {\left.\begin{aligned}}
+    {\end{aligned}\right\rbrace}
+    \begin{rcases}
+    k^2  {\int_{\Omega}}  p^{\rm {Re}}\delta p^{\rm {Re}} {\rm d} {\Omega}+ {\int_{\Omega}}{\nabla}^2 p^{\rm {Re}} \delta p^{\rm {Re}}{\rm d} {\Omega} = 0 \\
+    k^2  {\int_{\Omega}} p^{\rm {Im}} \delta p^{\rm {Im}} {\rm d} {\Omega}+ {\int_{\Omega}}{\nabla}^2 p^{\rm {Im}}\delta p^{\rm {Im}}{\rm d} {\Omega} = 0 \\ \end{rcases} {\text {in }} \Omega,\quad  \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)\\
+    \newenvironment{rcases}
+   {\left.\begin{aligned}}
+   {\end{aligned}\right\rbrace}
+   \begin{rcases}
+   {\int_{\Gamma_1}}\mathbf{N} \cdot \nabla p^{\rm {Re}} \delta p^{\rm {Re}} {\rm d} {\Gamma_1}+ {\int_{\Gamma_1}}k p^{\rm {Im}} \delta p^{\rm {Re}} {\rm d} {\Gamma_1}= 0 \\
+   {\int_{\Gamma_1}}\mathbf{N} \cdot \nabla p^{\rm {Im}} \delta p^{\rm {Im}} {\rm d} {\Gamma_1} - {\int_{\Gamma_1}}k p^{\rm {Re}} \delta p^{\rm {Im}} {\rm d} {\Gamma_1}= 0 \\ \end{rcases} {\text {on }} \Gamma_1,\quad  \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)\\
+   \newenvironment{rcases}
+   {\left.\begin{aligned}}
+   {\end{aligned}\right\rbrace}
+   \begin{rcases}
+   {\int_{\Gamma_2}}p^{\rm {Re}} \delta p^{\rm {Re}} {\rm d} {\Gamma_2}=  {\int_{\Gamma_2}}\delta p^{\rm {Re}} {\rm d} {\Gamma_2} \\
+   p^{\rm {Im}} = 0 \\ \end{rcases} {\text {on }} \Gamma_2,\quad \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)
+    \label{eq:seven}
+    \end{aligned}
+    \end{equation}
+\f]
+
+where \f$\delta p^{\rm {Re}}\f$ and \f$\delta p^{\rm {Im}}\f$ are the trial functions for the real and imaginary fields, respectively, and fulfill
+the identity, \f$ \delta p({\mathbf{x}}) = \delta p^{\rm {Re}} + i \delta p^{\rm {Im}}\f$.
+
+By applying integration by parts for the laplacian term for the domain integral and substituting the 
+
+
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    {p}^{\rm {Re}} \approx {p}^{h{\rm {Re}}} =  \sum^{N-1}_{j = 0 } \phi_j {\bar {p}}^{\rm {Re}}_j, \quad {p}^{\rm {Im}} \approx {p}^{h{\rm {Im}}} =  \sum^{N-1}_{j = 0 } \psi_j {\bar {p}}^{\rm {Im}}_j
+    \label{eq:eight}
+    \end{aligned}
+    \end{equation}
+\f]
+
+the system of equations presented below are derived
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    \newenvironment{rcases}
+    {\left.\begin{aligned}}
+    {\end{aligned}\right\rbrace}
+    \begin{rcases}
+    \sum^{N-1}_{j = 0 } (k^2 {\displaystyle{\int_{\Omega}}} \phi_i \phi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega) {\bar p}^{\rm{Re}}_j - k ({\displaystyle{\int_{\Gamma_1}}} \phi_i\psi_j {\rm{d}}\Gamma_1) {\bar p}^{\rm{Im}}_j = 0  \\
+    \sum^{N-1}_{j = 0 } (k^2 {\displaystyle{\int_{\Omega}}} \psi_i \psi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega) {\bar p}^{\rm{Im}}_j + k ({\displaystyle{\int_{\Gamma_1}}} \psi_i\phi_j {\rm{d}}\Gamma_1) {\bar p}^{\rm{Re}}_j = 0  \\ \end{rcases} \quad  \forall i = 0, .... (N-1)\\
+    \label{eq:nine}
+    \end{aligned}
+    \end{equation}
+\f]
+
+after grouping the unknowns and their coefficients the matrix notation is obtained:
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    \left[ 
+\begin{array}{c c}
+k^2 {\displaystyle{\int_{\Omega}}} \phi_i \phi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega  &  -k {\displaystyle{\int_{\Gamma_1}}} \phi_i\psi_j {\rm{d}}\Gamma_1 \\ \\
+k{\displaystyle{\int_{\Gamma_1}}} \psi_i\phi_j {\rm{d}}\Gamma_1 & + k^2 \displaystyle{{\int_{\Omega}}} \psi_i \psi_j {\rm{d}}\Omega - \displaystyle{{\int_{\Omega}}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega 
+\end{array}
+\right]
+\left[ 
+\begin{array}{c}
+{\bar {p}}^{\rm {Re}}_j \\[0.2cm]
+{\bar {p}}^{\rm {Im}}_j
+\end{array}
+\right]
+=
+\left[ 
+\begin{array}{c}
+\mathbf 0 \\
+\mathbf 0
+\end{array}
+\right]
+    \label{eq:ten}
+    \end{aligned}
+    \end{equation}
+\f]
+
+
+
+\section tutorial_hemholtz_code_dissection Implementation
+
+The focus of this section is on the points highlighted in the Notes in the beginning of the tutorial.
+The problem is run by execution of a series of functions when invoking the function Example::runProblem():
+
+\code
+MoFEMErrorCode Example::runProblem() {
+  MoFEMFunctionBegin;
+  CHKERR readMesh();
+  CHKERR setupProblem();
+  CHKERR boundaryCondition();
+  CHKERR assembleSystem();
+  CHKERR solveSystem();
+  CHKERR outputResults();
+  CHKERR checkResults();
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+where readMesh() executes the mesh reading procedure, then setupProblem() involves adding the two unknown fields on the entities of the mesh and determine 
+the base function space, base, field rank and base order
+
+\code
+//! [Set up problem]
+MoFEMErrorCode Example::setupProblem() {
+  MoFEMFunctionBegin;
+  // Add field
+  CHKERR simpleInterface->addDomainField("P_REAL", H1,
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addDomainField("P_IMAG", H1,
+                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addBoundaryField("P_REAL", H1,
+                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  CHKERR simpleInterface->addBoundaryField("P_IMAG", H1,
+                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+  int order = 6;
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
+  CHKERR simpleInterface->setFieldOrder("P_REAL", order);
+  CHKERR simpleInterface->setFieldOrder("P_IMAG", order);
+  CHKERR simpleInterface->setUp();
+  MoFEMFunctionReturn(0);
+}
+//! [Set up problem]
+\endcode
+
+where the fields \f$p^{\rm{Re}}\f$ and \f$p^{\rm{Im}}\f$ are marked as P_REAL and P_IMAG, respectively.
+Furthermore, the space chosen is H1, the base is AINSWORTH_BERNSTEIN_BEZIER_BASE and dimension is 1 that corresponds to scalar field.
+The field data is added both to Domain Element and Boundary Element from Simple Interface via invoking addDomainField and addBoundaryField, respectively.
+As it will be shown later, for a problem solved in \f$\mathbb{R}^d\f$ where \f$ d \f$ is the problem dimension, 
+Domain Elements perform operations on the mesh entities of the highest dimension (\f$\mathbb{R}^d\f$) and Boundary Elements 
+that perform operations on mesh entities of dimension \f$ d - 1\f$ that lie only on the boundary of the mesh, in this case \f$ \Gamma_1\f$ and \f$ \Gamma_2\f$.
+
+\code
+  CHKERR simpleInterface->setFieldOrder("P_REAL", order);
+  CHKERR simpleInterface->setFieldOrder("P_IMAG", order);
+\endcode
+
+Finally, the fields are set up via simpleInterface->setUp().
+
+Thereafter, the boundary entities are marked based on the input in Example::boundaryCondition()
+
+\code
+//! [Applying essential BC]
+MoFEMErrorCode Example::boundaryCondition() {
+  MoFEMFunctionBegin;
+
+  auto get_ents_on_mesh_skin = [&]() {
+    Range boundary_entities;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+      if (entity_name.compare(0, 2, "BC") == 0) {
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   boundary_entities, true);
+      }
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
+
+    return boundary_entities;
+  };
+
+  auto mark_boundary_dofs = [&](Range &&skin_edges) {
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+                              skin_edges, *marker_ptr);
+    return marker_ptr;
+  };
+
+  auto remove_dofs_from_problem = [&](Range &&skin_edges) {
+    MoFEMFunctionBegin;
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    CHKERR problem_manager->removeDofsOnEntities(
+        simpleInterface->getProblemName(), "P_IMAG", skin_edges, 0, 1);
+    MoFEMFunctionReturn(0);
+  };
+
+  // Get global local vector of marked DOFs. Is global, since is set for all
+  // DOFs on processor. Is local since only DOFs on processor are in the
+  // vector. To access DOFs use local indices.
+  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
+
+  MoFEMFunctionReturn(0);
+}
+//! [Applying essential BC]
+\endcode
+
+The present code is designated for 2D problems. 
+Hence, all vertices and edges located on the \f$\Gamma_2\f$ boundary, marked with BLOCK_SET with name "BC" in the input file, are added to the
+global variable boundaryMarker that will be used in the assembly procedure. 
+Furthermore, due to uniform essential boundary conditions on \f$\Gamma_2\f$ for the Imaginary field, the dofs located on that boundary are deleted from the problem
+via the lambda function remove_dofs_from_problem.
+
+Thereafter, function Example::assembleSystem() is 
+
+\code
+//! [Push operators to pipeline]
+MoFEMErrorCode Example::assembleSystem() {
+  MoFEMFunctionBegin;
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+
+  double k = 90;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
+
+  auto beta = [](const double, const double, const double) { return -1; };
+  auto k2 = [k](const double, const double, const double) { return pow(k, 2); };
+  auto kp = [k](const double, const double, const double) { return k; };
+  auto km = [k](const double, const double, const double) { return -k; };
+  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+
+  auto set_domain = [&]() {
+    MoFEMFunctionBegin;
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
+
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetBc("P_REAL", true, boundaryMarker));
+
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainGradGrad("P_REAL", "P_REAL", beta));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainGradGrad("P_IMAG", "P_IMAG", beta));
+
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainMass("P_REAL", "P_REAL", k2));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainMass("P_IMAG", "P_IMAG", k2));
+
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto set_boundary = [&]() {
+    MoFEMFunctionBegin;
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("P_REAL", true, boundaryMarker));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("P_IMAG", "P_REAL", kp));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("P_REAL", "P_IMAG", km));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("P_REAL", false, boundaryMarker));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("P_REAL", "P_REAL", beta));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpSetBc("P_REAL", false, boundaryMarker));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpBoundarySource("P_REAL", beta));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+
+    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+    MoFEMFunctionReturn(0);
+  };
+
+  CHKERR set_domain();
+  CHKERR set_boundary();
+
+  MoFEMFunctionReturn(0);
+}
+//! [Push operators to pipeline]
+\endcode
+
 
 \include helmholtz.cpp
 
