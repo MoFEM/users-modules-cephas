@@ -484,68 +484,67 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
 //! [Output results]
 
 MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
-                                        EntData &data) {
-  MoFEMFunctionBegin if (const size_t nb_dofs = data.getIndices().size()) {
-    const int nb_integration_pts = getGaussPts().size2();
-    const double area = getMeasure();
-    auto t_w = getFTensor0IntegrationWeight();
-    auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
-    auto t_val_grad = getFTensor1FromMat<2>(*(commonDataPtr->approxValsGrad));
-    auto t_flux = getFTensor1FromMat<3>(*(commonDataPtr->approxFlux));
-    auto t_coords = getFTensor1CoordsAtGaussPts();
-    FTensor::Tensor1<double, 2> t_diff;
-    FTensor::Index<'i', 2> i;
+                                             EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_integration_pts = getGaussPts().size2();
+  const double area = getMeasure();
+  auto t_w = getFTensor0IntegrationWeight();
+  auto t_val = getFTensor0FromVec(*(commonDataPtr->approxVals));
+  auto t_val_grad = getFTensor1FromMat<2>(*(commonDataPtr->approxValsGrad));
+  auto t_flux = getFTensor1FromMat<3>(*(commonDataPtr->approxFlux));
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+  FTensor::Tensor1<double, 2> t_diff;
+  FTensor::Index<'i', 2> i;
 
-    double error_l2 = 0;
-    double error_h1 = 0;
-    double error_ind = 0;
-    for (int gg = 0; gg != nb_integration_pts; ++gg) {
-      const double alpha = t_w * area;
-      
-      double diff = t_val - MixedPoisson::analyticalFunction(
-                                t_coords(0), t_coords(1), t_coords(2));
-      error_l2 += alpha * sqr(diff);
+  double error_l2 = 0;
+  double error_h1 = 0;
+  double error_ind = 0;
+  for (int gg = 0; gg != nb_integration_pts; ++gg) {
+    const double alpha = t_w * area;
 
-      VectorDouble vec = MixedPoisson::analyticalFunctionGrad(
-          t_coords(0), t_coords(1), t_coords(2));
-      auto t_fun_grad = getFTensor1FromArray<2, 2>(vec);
-      t_diff(i) = t_val_grad(i) - t_fun_grad(i);
-      error_h1 += alpha * t_diff(i) * t_diff(i);
+    double diff = t_val - MixedPoisson::analyticalFunction(
+                              t_coords(0), t_coords(1), t_coords(2));
+    error_l2 += alpha * sqr(diff);
 
-      t_diff(i) = t_val_grad(i) - t_flux(i);
-      error_ind += alpha * t_diff(i) * t_diff(i);
+    VectorDouble vec = MixedPoisson::analyticalFunctionGrad(
+        t_coords(0), t_coords(1), t_coords(2));
+    auto t_fun_grad = getFTensor1FromArray<2, 2>(vec);
+    t_diff(i) = t_val_grad(i) - t_fun_grad(i);
+    error_h1 += alpha * t_diff(i) * t_diff(i);
 
-      ++t_w;
-      ++t_val;
-      ++t_val_grad;
-      ++t_flux;
-      ++t_coords;
-    }
+    t_diff(i) = t_val_grad(i) - t_flux(i);
+    error_ind += alpha * t_diff(i) * t_diff(i);
 
-    const EntityHandle ent = getFEEntityHandle();
-    Tag th_error_l2, th_error_h1, th_error_ind;
-    CHKERR MixedPoisson::getTagHandle(mField, "ERROR_L2_NORM", MB_TYPE_DOUBLE,
-                                 th_error_l2);
-    CHKERR MixedPoisson::getTagHandle(mField, "ERROR_H1_SEMINORM", MB_TYPE_DOUBLE,
-                                 th_error_h1);
-    CHKERR MixedPoisson::getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
-                                 th_error_ind);
-    CHKERR mField.get_moab().tag_set_data(th_error_l2, &ent, 1, &error_l2);
-    CHKERR mField.get_moab().tag_set_data(th_error_h1, &ent, 1, &error_h1);
-    CHKERR mField.get_moab().tag_set_data(th_error_ind, &ent, 1, &error_ind);
-
-    int index = CommonData::ERROR_L2_NORM;
-    constexpr std::array<int, 4> indices = {
-        CommonData::ERROR_L2_NORM, CommonData::ERROR_H1_SEMINORM,
-        CommonData::ERROR_INDICATOR, CommonData::TOTAL_NUMBER};
-    std::array<double, 4> values;
-    values[0] = error_l2;
-    values[1] = error_h1;
-    values[2] = error_ind;
-    values[3] = 1.;
-    CHKERR VecSetValues(commonDataPtr->petscVec, 4, indices.data(),
-                        values.data(), ADD_VALUES);
+    ++t_w;
+    ++t_val;
+    ++t_val_grad;
+    ++t_flux;
+    ++t_coords;
   }
+
+  const EntityHandle ent = getFEEntityHandle();
+  Tag th_error_l2, th_error_h1, th_error_ind;
+  CHKERR MixedPoisson::getTagHandle(mField, "ERROR_L2_NORM", MB_TYPE_DOUBLE,
+                                    th_error_l2);
+  CHKERR MixedPoisson::getTagHandle(mField, "ERROR_H1_SEMINORM", MB_TYPE_DOUBLE,
+                                    th_error_h1);
+  CHKERR MixedPoisson::getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
+                                    th_error_ind);
+  CHKERR mField.get_moab().tag_set_data(th_error_l2, &ent, 1, &error_l2);
+  CHKERR mField.get_moab().tag_set_data(th_error_h1, &ent, 1, &error_h1);
+  CHKERR mField.get_moab().tag_set_data(th_error_ind, &ent, 1, &error_ind);
+
+  int index = CommonData::ERROR_L2_NORM;
+  constexpr std::array<int, 4> indices = {
+      CommonData::ERROR_L2_NORM, CommonData::ERROR_H1_SEMINORM,
+      CommonData::ERROR_INDICATOR, CommonData::TOTAL_NUMBER};
+  std::array<double, 4> values;
+  values[0] = error_l2;
+  values[1] = error_h1;
+  values[2] = error_ind;
+  values[3] = 1.;
+  CHKERR VecSetValues(commonDataPtr->petscVec, 4, indices.data(), values.data(),
+                      ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
 
