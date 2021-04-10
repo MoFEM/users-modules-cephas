@@ -888,6 +888,7 @@ MoFEMErrorCode Example::tsSolve() {
   if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();
     auto D = smartCreateDMVector(dm);
+    CHKERR TSSetSolution(solver, D);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
     CHKERR add_pre_step(solver);
@@ -900,6 +901,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto dm = simple->getDM();
     auto D = smartCreateDMVector(dm);
     auto DD = smartVectorDuplicate(D);
+    CHKERR TS2SetSolution(solver, D, DD);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
     CHKERR add_pre_step(solver);
