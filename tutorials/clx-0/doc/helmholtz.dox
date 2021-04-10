@@ -22,12 +22,10 @@ The solution of the wave propagation problem in the frequency domain by means of
 The wave equation is:
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    \dfrac{{\partial}^2 P({\mathbf{x}}, t)}{\partial t^2} - c^2 {\nabla}^2 P({\mathbf{x}}, t) = 0 \quad \text{in } \Omega 
-    \label{eq:one}
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:one}
+  \dfrac{{\partial}^2 P({\mathbf{x}}, t)}{\partial t^2} - c^2 {\nabla}^2 P({\mathbf{x}}, t) = 0 \quad \text{in } \Omega 
+\end{align}
 \f]
 
 where \f$c\f$ is the wave speed assumed to be constant and \f$ P({\mathbf{x}}, t) \f$ is the spatially and temporally varying pressure, with spatial position vector \f${\mathbf{x}} \in \mathbb{R}^2\f$ and 
@@ -36,12 +34,10 @@ time \f$t \in \mathbb{R}^{+}\f$.
 Moreover, quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$ defined as 
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    \dfrac{\partial P({\mathbf{x}}, t)}{\partial t} + c\left({\mathbf{N}} \cdot \nabla P ({\mathbf{x}}, t) \right) = 0  \quad \text{on } \Gamma_1 
-    \label{eq:two}
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:two}
+  \dfrac{\partial P({\mathbf{x}}, t)}{\partial t} + c\left({\mathbf{N}} \cdot \nabla P ({\mathbf{x}}, t) \right) = 0  \quad \text{on } \Gamma_1
+\end{align}
 \f]
 
 where \f$\mathbf{N}\f$ is the unit normal vector on the quasi absorbing boundary, \f$\Gamma_1\f$.
@@ -49,38 +45,34 @@ where \f$\mathbf{N}\f$ is the unit normal vector on the quasi absorbing boundary
 Finally, a source of constant frequency, \f$\omega\f$, and amplitude is assumed to be located on a different part of the boundary of the domain \f$\Gamma_2\f$:
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    P({\mathbf{x}}, t) = {\rm {cos}}(\omega t)  \quad \text{on } \Gamma_2 
-    \label{eq:three}
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:three}
+  P({\mathbf{x}}, t) = {\rm {cos}}(\omega t)  \quad \text{on } \Gamma_2
+\end{align}
 \f]
 
 Since there is only one source with constant frequency and since the boundaries are quasi-absorbing that resemble infinite boundary conditions,
 the problem can be solved in the frequency domain and the solution can admit a variable separation:
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    P({\mathbf{x}}, t) = {\rm Re}({p(\mathbf{x}) e^{-i \omega t} })
-    \label{eq:four}   
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:four}
+  P({\mathbf{x}}, t) = {\rm Re}({p(\mathbf{x}) e^{-i \omega t} }) 
+\end{align}
 \f]
 
 where now the spatially varying pressure amplitude, \f$p(\mathbf{x})\f$, a complex value:
 
+
+
 \f[
-    \begin{equation}
-    \begin{aligned}
-    p({\mathbf{x}}) = p^{\rm{Re}} + i  p^{\rm{Im}}
-    \label{eq:five}
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:five}
+  p({\mathbf{x}}) = p^{\rm{Re}} + i  p^{\rm{Im}} 
+\end{align}
 \f]
 
-By introducing the wave number \f$k = \omega / c \f$ and substituting \f$\ref{eq:four}\f$ and \f$\eqref{eq:five}\f$ in \f$\eqref{eq:one}\f$ to \f$\eqref{eq:three}\f$
+By introducing the wave number \f$k = \omega / c \f$ and substituting \eqref{eq:four} and \eqref{eq:five} in \eqref{eq:one} to \eqref{eq:three}
 the Helmholtz problem is recovered:
 
 \f[
@@ -121,29 +113,29 @@ The weak formulation reads as this:
 Find \f$ p^{\rm {Re}}\f$ and  \f$p^{\rm {Re}} \in H^1(\Omega) \f$ such that:
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    \newenvironment{rcases}
-    {\left.\begin{aligned}}
-    {\end{aligned}\right\rbrace}
-    \begin{rcases}
-    k^2  {\int_{\Omega}}  p^{\rm {Re}}\delta p^{\rm {Re}} {\rm d} {\Omega}+ {\int_{\Omega}}{\nabla}^2 p^{\rm {Re}} \delta p^{\rm {Re}}{\rm d} {\Omega} = 0 \\
-    k^2  {\int_{\Omega}} p^{\rm {Im}} \delta p^{\rm {Im}} {\rm d} {\Omega}+ {\int_{\Omega}}{\nabla}^2 p^{\rm {Im}}\delta p^{\rm {Im}}{\rm d} {\Omega} = 0 \\ \end{rcases} {\text {in }} \Omega,\quad  \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)\\
-    \newenvironment{rcases}
-   {\left.\begin{aligned}}
-   {\end{aligned}\right\rbrace}
-   \begin{rcases}
-   {\int_{\Gamma_1}}\mathbf{N} \cdot \nabla p^{\rm {Re}} \delta p^{\rm {Re}} {\rm d} {\Gamma_1}+ {\int_{\Gamma_1}}k p^{\rm {Im}} \delta p^{\rm {Re}} {\rm d} {\Gamma_1}= 0 \\
-   {\int_{\Gamma_1}}\mathbf{N} \cdot \nabla p^{\rm {Im}} \delta p^{\rm {Im}} {\rm d} {\Gamma_1} - {\int_{\Gamma_1}}k p^{\rm {Re}} \delta p^{\rm {Im}} {\rm d} {\Gamma_1}= 0 \\ \end{rcases} {\text {on }} \Gamma_1,\quad  \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)\\
-   \newenvironment{rcases}
-   {\left.\begin{aligned}}
-   {\end{aligned}\right\rbrace}
-   \begin{rcases}
-   {\int_{\Gamma_2}}p^{\rm {Re}} \delta p^{\rm {Re}} {\rm d} {\Gamma_2}=  {\int_{\Gamma_2}}\delta p^{\rm {Re}} {\rm d} {\Gamma_2} \\
-   p^{\rm {Im}} = 0 \\ \end{rcases} {\text {on }} \Gamma_2,\quad \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)
-    \label{eq:seven}
-    \end{aligned}
-    \end{equation}
+\begin{equation}
+\begin{aligned}
+  \label{eq:seven}
+  \newenvironment{rcases}
+  {\left.\begin{aligned}}
+  {\end{aligned}\right\rbrace}
+  \begin{rcases}
+  k^2  {\int_{\Omega}}  p^{\rm {Re}}\delta p^{\rm {Re}} {\rm d} {\Omega}+ {\int_{\Omega}}{\nabla}^2 p^{\rm {Re}} \delta p^{\rm {Re}}{\rm d} {\Omega} = 0 \\
+  k^2  {\int_{\Omega}} p^{\rm {Im}} \delta p^{\rm {Im}} {\rm d} {\Omega}+ {\int_{\Omega}}{\nabla}^2 p^{\rm {Im}}\delta p^{\rm {Im}}{\rm d} {\Omega} = 0 \\ \end{rcases} {\text {in }} \Omega,\quad  \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)\\
+  \newenvironment{rcases}
+  {\left.\begin{aligned}}
+  {\end{aligned}\right\rbrace}
+  \begin{rcases}
+  {\int_{\Gamma_1}}\mathbf{N} \cdot \nabla p^{\rm {Re}} \delta p^{\rm {Re}} {\rm d} {\Gamma_1}+ {\int_{\Gamma_1}}k p^{\rm {Im}} \delta p^{\rm {Re}} {\rm d} {\Gamma_1}= 0 \\
+  {\int_{\Gamma_1}}\mathbf{N} \cdot \nabla p^{\rm {Im}} \delta p^{\rm {Im}} {\rm d} {\Gamma_1} - {\int_{\Gamma_1}}k p^{\rm {Re}} \delta p^{\rm {Im}} {\rm d} {\Gamma_1}= 0 \\ \end{rcases} {\text {on }} \Gamma_1,\quad  \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)\\
+  \newenvironment{rcases}
+  {\left.\begin{aligned}}
+  {\end{aligned}\right\rbrace}
+  \begin{rcases}
+  {\int_{\Gamma_2}}p^{\rm {Re}} \delta p^{\rm {Re}} {\rm d} {\Gamma_2}=  {\int_{\Gamma_2}}\delta p^{\rm {Re}} {\rm d} {\Gamma_2} \\
+  p^{\rm {Im}} = 0 \\ \end{rcases} {\text {on }} \Gamma_2,\quad \forall \delta p^{\rm {Re}}, \delta p^{\rm {Im}} \in H^1_0(\Omega)
+\end{aligned}
+\end{equation}
 \f]
 
 where \f$\delta p^{\rm {Re}}\f$ and \f$\delta p^{\rm {Im}}\f$ are the trial functions for the real and imaginary fields, respectively, and fulfill
@@ -165,52 +157,51 @@ By applying integration by parts for the laplacian term for the domain integral 
 the system of equations presented below are derived
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    \newenvironment{rcases}
-    {\left.\begin{aligned}}
-    {\end{aligned}\right\rbrace}
-    \begin{rcases}
-    \sum^{N-1}_{j = 0 } (k^2 {\displaystyle{\int_{\Omega}}} \phi_i \phi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega) {\bar p}^{\rm{Re}}_j - k ({\displaystyle{\int_{\Gamma_1}}} \phi_i\psi_j {\rm{d}}\Gamma_1) {\bar p}^{\rm{Im}}_j = 0  \\
-    \sum^{N-1}_{j = 0 } (k^2 {\displaystyle{\int_{\Omega}}} \psi_i \psi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega) {\bar p}^{\rm{Im}}_j + k ({\displaystyle{\int_{\Gamma_1}}} \psi_i\phi_j {\rm{d}}\Gamma_1) {\bar p}^{\rm{Re}}_j = 0  \\ \end{rcases} \quad  \forall i = 0, .... (N-1)\\
-    \label{eq:nine}
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:nine}
+  \newenvironment{rcases}
+  {\left.\begin{aligned}}
+  {\end{aligned}\right\rbrace}
+  \begin{rcases}
+  \sum^{N-1}_{j = 0 } (k^2 {\displaystyle{\int_{\Omega}}} \phi_i \phi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega) {\bar p}^{\rm{Re}}_j - k ({\displaystyle{\int_{\Gamma_1}}} \phi_i\psi_j {\rm{d}}\Gamma_1) {\bar p}^{\rm{Im}}_j = 0  \\
+  \sum^{N-1}_{j = 0 } (k^2 {\displaystyle{\int_{\Omega}}} \psi_i \psi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega) {\bar p}^{\rm{Im}}_j + k ({\displaystyle{\int_{\Gamma_1}}} \psi_i\phi_j {\rm{d}}\Gamma_1) {\bar p}^{\rm{Re}}_j = 0  \\ \end{rcases} \quad  \forall i = 0, .... (N-1)
+\end{align}
 \f]
 
 after grouping the unknowns and their coefficients the matrix notation is obtained:
 
 \f[
-    \begin{equation}
-    \begin{aligned}
-    \left[ 
-\begin{array}{c c}
-k^2 {\displaystyle{\int_{\Omega}}} \phi_i \phi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega  &  -k {\displaystyle{\int_{\Gamma_1}}} \phi_i\psi_j {\rm{d}}\Gamma_1 \\ \\
-k{\displaystyle{\int_{\Gamma_1}}} \psi_i\phi_j {\rm{d}}\Gamma_1 & + k^2 \displaystyle{{\int_{\Omega}}} \psi_i \psi_j {\rm{d}}\Omega - \displaystyle{{\int_{\Omega}}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega 
-\end{array}
-\right]
-\left[ 
-\begin{array}{c}
-{\bar {p}}^{\rm {Re}}_j \\[0.2cm]
-{\bar {p}}^{\rm {Im}}_j
-\end{array}
-\right]
-=
-\left[ 
-\begin{array}{c}
-\mathbf 0 \\
-\mathbf 0
-\end{array}
-\right]
-    \label{eq:ten}
-    \end{aligned}
-    \end{equation}
+\begin{align}
+  \label{eq:ten}
+  \left[ 
+  \begin{array}{c c}
+  k^2 {\displaystyle{\int_{\Omega}}} \phi_i \phi_j {\rm{d}}\Omega - {\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega  &  -k {\displaystyle{\int_{\Gamma_1}}} \phi_i\psi_j {\rm{d}}\Gamma_1 \\ \\
+  k{\displaystyle{\int_{\Gamma_1}}} \psi_i\phi_j {\rm{d}}\Gamma_1 & + k^2 \displaystyle{{\int_{\Omega}}} \psi_i \psi_j {\rm{d}}\Omega - \displaystyle{{\int_{\Omega}}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega 
+  \end{array}
+  \right]
+  \left[ 
+  \begin{array}{c}
+  {\bar {p}}^{\rm {Re}}_j \\[0.2cm]
+  {\bar {p}}^{\rm {Im}}_j
+  \end{array}
+  \right]
+  =
+  \left[ 
+  \begin{array}{c}
+  \mathbf 0 \\
+  \mathbf 0
+  \end{array}
+  \right]
+  \end{align}
 \f]
 
 
 
 \section tutorial_hemholtz_code_dissection Implementation
+The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MOFEM::Simple, 
+determining boundary conditions, using boundary and domain elements accessed through the interface and pushing form integrators to pipelines for solving the problem.
 
+\subsection tutorial_hemholtz_strong_fields_and_shape_fun Declaration of fields for solution
 The focus of this section is on the points highlighted in the Notes in the beginning of the tutorial.
 The problem is run by execution of a series of functions when invoking the function Example::runProblem():
 
@@ -228,7 +219,7 @@ MoFEMErrorCode Example::runProblem() {
 }
 \endcode
 
-where readMesh() executes the mesh reading procedure, then setupProblem() involves adding the two unknown fields on the entities of the mesh and determine 
+where Example::readMesh() executes the mesh reading procedure, then Example::setupProblem() involves adding the two unknown fields on the entities of the mesh and determine 
 the base function space, base, field rank and base order
 
 \code
@@ -256,19 +247,28 @@ MoFEMErrorCode Example::setupProblem() {
 
 where the fields \f$p^{\rm{Re}}\f$ and \f$p^{\rm{Im}}\f$ are marked as P_REAL and P_IMAG, respectively.
 Furthermore, the space chosen is H1, the base is AINSWORTH_BERNSTEIN_BEZIER_BASE and dimension is 1 that corresponds to scalar field.
-The field data is added both to Domain Element and Boundary Element from Simple Interface via invoking addDomainField and addBoundaryField, respectively.
+The field data is added both to Domain Element and Boundary Element from Simple Interface via invoking `addDomainField` and `addBoundaryField`, respectively.
 As it will be shown later, for a problem solved in \f$\mathbb{R}^d\f$ where \f$ d \f$ is the problem dimension, 
 Domain Elements perform operations on the mesh entities of the highest dimension (\f$\mathbb{R}^d\f$) and Boundary Elements 
 that perform operations on mesh entities of dimension \f$ d - 1\f$ that lie only on the boundary of the mesh, in this case \f$ \Gamma_1\f$ and \f$ \Gamma_2\f$.
 
+Moreover, the base functions corresponding to \f$p^{\rm{Re}}\f$ and to\f$p^{\rm{Im}}\f$ 
 \code
   CHKERR simpleInterface->setFieldOrder("P_REAL", order);
   CHKERR simpleInterface->setFieldOrder("P_IMAG", order);
 \endcode
 
-Finally, the fields are set up via simpleInterface->setUp().
+where the default value is set to be 6 
 
-Thereafter, the boundary entities are marked based on the input in Example::boundaryCondition()
+\code
+    int order = 6;
+\endcode
+
+and can be changed by determining the order of choice via the command line parameter -order.
+Finally, the fields are set up via `simpleInterface->setUp()`.
+
+\subsection tutorial_hemholtz_treatment_of_boundaries Boundary treatment
+Thereafter, the boundary entities are marked based on the input in Example::boundaryCondition() as shown in the snippet below
 
 \code
 //! [Applying essential BC]
@@ -320,13 +320,15 @@ MoFEMErrorCode Example::boundaryCondition() {
 //! [Applying essential BC]
 \endcode
 
+
 The present code is designated for 2D problems. 
 Hence, all vertices and edges located on the \f$\Gamma_2\f$ boundary, marked with BLOCK_SET with name "BC" in the input file, are added to the
-global variable boundaryMarker that will be used in the assembly procedure. 
+global variable Example::boundaryMarker that will be used in the assembly procedure. 
 Furthermore, due to uniform essential boundary conditions on \f$\Gamma_2\f$ for the Imaginary field, the dofs located on that boundary are deleted from the problem
-via the lambda function remove_dofs_from_problem.
+via the lambda function `remove_dofs_from_problem`.
 
-Thereafter, function Example::assembleSystem() is 
+\subsection tutorial_hemholtz_assembly Pushing UDOs to domain and boundary pipelines
+Function Example::assembleSystem() is responsible for evaluating linear and bilinear forms for the problem and assembling the system to be solved
 
 \code
 //! [Push operators to pipeline]
@@ -391,7 +393,7 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpBoundarySource("P_REAL", beta));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("P_REAL"));
 
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
@@ -402,6 +404,306 @@ MoFEMErrorCode Example::assembleSystem() {
   MoFEMFunctionReturn(0);
 }
 //! [Push operators to pipeline]
+\endcode
+
+where the wave-number \f$k\f$ has a default value of 90 and can be determined by the user via command line option -k as dictated by the lines below
+\code
+  double k = 90;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
+\endcode
+
+Thereafter, five lambda functions are determined 
+\code
+  auto beta = [](const double, const double, const double) { return -1; };
+  auto k2 = [k](const double, const double, const double) { return pow(k, 2); };
+  auto kp = [k](const double, const double, const double) { return k; };
+  auto km = [k](const double, const double, const double) { return -k; };
+\endcode
+
+that are going to be used as pointer functions in the rest of the function and explained in more detail later.
+
+Moreover, in Example::assembleSystem() operators are pushed to different pipelines managed by the common Pipe Line object `pipeline_mng`
+\code
+getOpDomainLhsPipeline() 
+getOpBoundaryLhsPipeline()
+getOpBoundaryRhsPipeline()
+\endcode
+when operators are pushed by invoking `getOpDomainLhsPipeline()`, 
+they will be set to be operating on Domain elements and assembling on the LHS of the system of equations.
+When operators are pushed by invoking `getOpBoundaryLhsPipeline()` and `getOpBoundaryRhsPipeline()`, they will be set to be operating on Boundary elements and assembling on the LHS and RHS, respectively.
+
+Two lambda functions set_domain and set_boundary are dedicated to push operators to Domain and Boundary pipelines respectively.
+
+\subsection tutorial_hemholtz_domain_pipeline Pushing operators to LHS domain pipeline
+In `set_domain` lambda function, operators are pushed only in Domain LHS Pipeline.
+For 2D elements, such as those used in the present tutorial, a pre-processing operation has to be applied to evaluate the gradient of the shape functions.
+For this, the operators below have to be pushed.
+
+\code
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpCalculateInvJacForFace(invJac));
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
+\endcode
+
+where the first operator evaluates the inverse of the Jacobian at each gauss point and stored in the global variable Example::invJac.
+Then, this variable is passed to the second operator and for each gauss point the gradient of the shape function is 
+multiplied with the inverse of the Jacobian so that these gradient correspond to the spatial configuration of the element rather than the parent according to the relationship below
+
+\f[
+    \begin{equation}
+    \begin{aligned}
+    (\nabla \phi)_j = \dfrac{\partial \phi}{\partial \xi_i} \dfrac{\partial \xi_{i}}{\partial X_j}
+    \label{eq:eleven}
+    \end{aligned}
+    \end{equation}
+\f]
+
+where \f$\xi_i\f$ are the parent coordinates \f$X_j\f$ are the global coordinates at the gauss point of interest.
+
+Next, the operator pushed is related to treatment of degrees of freedom located at the boundary \f$\Gamma_2\f$ where Essential boundary conditions 
+are applied since the global variable Example::boundaryMarker is passed where all entities located on \f$\Gamma_2\f$ are stored.
+
+\code
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetBc("P_REAL", true, boundaryMarker));
+\endcode
+
+This operator acts on dofs of \f$p^{\rm{Re}}\f$ since string "P_REAL" is passed.
+By pushing this operator with flag true, all indices that correspond to the dofs corresponding to entities in Example::boundaryMarker that lie on the boundary
+are set to -1.
+This will prevent the next operators to assemble the stiffness matrix to rows-columns combination corresponding to those dofs.
+If flag false was chosen, all the indices corresponding to dofs corresponding to entities located to all the boundary except those in Example::boundaryMarker would be set to -1.
+
+Thereafter, bilinear forms for gradients for \f$p^{\rm{Re}}\f$ and \f$p^{\rm{Im}}\f$ as shown at the two diagonal sub-matrices in \eqref{eq:ten}
+
+\f[
+\begin{align}
+  \label{eq:twelve}
+  -{\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega,\quad -{\int_{\Omega}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega
+\end{align}
+\f]
+
+are evaluated by pushing the next two Operators
+
+\code
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainGradGrad("P_REAL", "P_REAL", beta));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainGradGrad("P_IMAG", "P_IMAG", beta));
+\endcode
+
+where for the first and second push correspond to the first and second integral presented in \eqref{eq:twelve}.
+Moreover, `OpDomainGradGrad` stands for an alias for the `OpGradGrad` template specialisation  
+
+\code
+using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpGradGrad<1, 1, 2>;
+\endcode
+
+determined in the beginning of the file, where DomainEleOp is also an 
+alias for User Data Operator from Face Elements also determined in the beginning of the file as
+
+\code
+using DomainEle = FaceElementForcesAndSourcesCoreBase;
+using DomainEleOp = DomainEle::UserDataOperator;
+\endcode
+
+Furthermore, the lambda function beta that returns -1 is passed as pointer function so that it 
+will multiply the integral such that it will be assembled with the negative sign as shown in \eqref{eq:twelve}.
+
+Thereafter, the operator `OpDomainMass` is pushed twice to the domain LHS pipeline
+
+\code
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainMass("P_REAL", "P_REAL", k2));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpDomainMass("P_IMAG", "P_IMAG", k2));
+\endcode
+
+where the first push operates on \f$p^{\rm{Re}}\f$ rows and cols and the second push operates on \f$p^{\rm{Re}}\f$ rows and cols.
+These operators will be used from the domain element when the solver will invoke the pipeline to evaluate the mass matrices located on the diagonal 
+sub-matrices in \eqref{eq:ten}
+
+\f[
+\begin{align}
+  \label{eq:thirteen}
+  k^2{\int_{\Omega}}  \phi_i \phi_j {\rm{d}}\Omega,\quad k^2{\int_{\Omega}}  \psi_i \psi_j {\rm{d}}\Omega
+\end{align}
+\f]
+
+Also, the `OpDomainMass` is an alias of the specialisation of the form integrator template `OpMass` declared in the beginning of the file
+
+\code
+using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+\endcode
+
+that is of element operator type `DomainEleOp` similar to the `OpDomainGradGrad` form integrator shown before.
+Moreover, in both pushes of `OpDomainMass`, the lambda function `k2`, that returns the input of square of wave-number \f$k\f$, 
+is passed as pointer function in order to multiply the mass matrix by \f$k^2\f$ as shown in \eqref{eq:thirteen}.
+
+After all form integrators have been pushed to the Domain LHS pipeline, the dofs that were marked in order not to be used located on \f$\Gamma_2\f$
+so that the next pipeline will receive the dofs conditioning in its virgin configuration.
+This is achieved by pushing operator `OpUnSetBc` as
+
+\code
+pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+\endcode
+
+At the end of lambda function `set_domain`, the integration rule for the Domain element for LHS is determined as 
+
+\code
+    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+\code
+
+where lambda function `integration_rule` is passed as pointer function that has access to the order of the field under consideration and sets the rule to twice the order as shown below
+
+\code
+auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
+\endcode
+
+
+\subsection tutorial_hemholtz_boundary_pipeline Pushing operators to LHS and RHS boundary pipeline
+
+In `set_boundary` lambda function, operators are pushed to the Boundary LHS and RHS pipelines.
+Initially, for LHS Boundary pipeline the dofs corresponding to entities contained in Example::boundaryMarker `Range` variable  for \f$p^{\rm{Re}}\f$ (located on the \f$\Gamma_2\f$ boundary)
+are marked not to allow any assembly of the bilinear forms pushed in the pipeline.
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("P_REAL", true, boundaryMarker));
+\endcode
+
+Thereafter, the mass matrix type bilinear form integrated on \f$\Gamma_1\f$ boundary 
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("P_IMAG", "P_REAL", kp));
+\endcode
+
+that corresponds to imaginary rows and real columns (`"P_IMAG", "P_REAL"`) presented in \eqref{eq:ten} and given by the formula
+
+\f[
+\begin{align}
+  \label{eq:fourteen}
+  k{\int_{\Gamma_1}}  \psi_i \phi_j {\rm{d}}\Gamma_1
+\end{align}
+\f]
+
+where lambda function `kp` is passed as pointer function to multiply the bilinear form by \f$k\f$ as shown in \eqref{eq:fourteen}.
+Operator `OpBoundaryMass` is an alias of bilinear form template specialisation, `OpMass`, determined in the top of the file as
+
+\code
+using OpBoundaryMass = FormsIntegrators<EdgeEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+\endcode
+
+where the difference with the alias operator previously presented, `OpDomainMass`, is that the present template specialisation acts on the boundary element operator
+, `EdgeEleOp`, determined also at the top of the file as
+
+\code
+using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEleOp = EdgeEle::UserDataOperator;
+\endcode
+
+The next operator push is the same, `OpBoundaryMass`, that now acts on the real rows and imaginary columns 
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("P_REAL", "P_IMAG", km));
+\endcode
+
+that evaluates and assembles the bilinear form
+
+\f[
+\begin{align}
+  \label{eq:fifteen}
+  -k{\int_{\Gamma_1}}  \phi_i \psi_j {\rm{d}}\Gamma_1
+\end{align}
+\f]
+
+as shown in \eqref{eq:ten} and lambda function `km` is passed in order to multiply \f$-k\f$ as presented in \eqref{eq:fifteen}.
+Once all the operators for the Boundary LHS pipeline operating on \f$\Gamma_1\f$ are pushed, the marked dofs have to be release so 
+that the dofs conditioning will be passed intact to the next pipeline and achieved by pushing `OpUnSetBc`
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+\endcode
+
+
+Essential boundary conditions are also applied following the third brace in \eqref{eq:seven} but assumed to have both side multiplied by -1.
+Initially, operator `OpSetBc` is now used by setting `false` flag so that now the rest of the boundary except for \f$Gamma_2\f$ 
+is now marked not to allow for assembly as 
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("P_REAL", false, boundaryMarker));
+\endcode
+
+Then the mass bilinear form integrator is pushed using `beta` lambda function to multiply the integral by -1.
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryMass("P_REAL", "P_REAL", beta));
+\endcode
+
+and then the marked boundary is released again by 
+
+\code
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+\endcode
+
+For setting the RHS linear form the boundary is appropriately marked as in the case for the bilinear form corresponding to the essential boundary conditions
+but now for the Boundary RHS pipeline as
+
+\code 
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpSetBc("P_REAL", false, boundaryMarker));
+\endcode
+
+then the linear form is pushed with lambda function beta so that the integral presented in the RHS in the third brace of \eqref{eq:seven} is multiplied by -1
+
+\code
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpBoundarySource("P_REAL", beta));
+\endcode
+
+where operator `OpBoundarySource` is an alias of the template specialisation `OpSource` assigned in the beginning of the file 
+
+\code
+using OpBoundarySource = FormsIntegrators<EdgeEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
+\endcode
+
+and then marked boundary dofs are released again
+
+\code
+pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("P_REAL"));
+\endcode
+
+Finally, integration rules are set for RHS and LHS for Boundary element.
+
+\code
+    CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+\endcode
+
+\section tutorial_hemholtz_running_the_code Running the code and post processing
+
+
+\code
+my_out = FindSource("out_fine_k_180_order_8_new_new_0.vtk")
+for t in range(100):
+ tt = 10*t / float(100)
+ calculator1 = Calculator(Input=my_out)
+ calculator1.Function = "P_REAL*cos(2*3.141* " + str(tt) + ") + P_IMAG*sin(2*3.141*" + str(tt) + ")"
+ calculator1.ResultArrayName = 'new_array'
+ passArrays1 = PassArrays(Input=calculator1)
+ passArrays1.PointDataArrays = ['new_array']
+ SaveData("/Users/ignatiosathanasiadis/Documents/Tutorials/Acoustics/out_" + str(t) + ".vtk", proxy=passArrays1, FileType='Ascii')
+ Delete(calculator1)
+ Delete(passArrays1)
 \endcode
 
 
