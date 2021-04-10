@@ -11,10 +11,9 @@ spack load moab
 
 Example for running magnetostatic
 =================================
-mpirun -np 2 ./magnetostatic -my_file magnetic_coil.cub \
+mpirun -np 2 ./magnetostatic -my_file magnetic_coil_2parts.h5m \
 -my_order 2 \
 -my_max_post_proc_ref_level 1
-
 
 Parameters set by default from param_file.petsc file
 ============================
