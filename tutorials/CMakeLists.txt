@@ -76,6 +76,7 @@ endfunction()
 set(TUTORIALS_DIRS 
   fun-0
   fun-1
+  fun-2
   msh-1
   msh-2
   scl-0

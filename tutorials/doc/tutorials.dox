@@ -46,13 +46,6 @@ continuing with the one you are most excited about.
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref hierarchical_approximation_1</td>
-       <td> Introduce elementary concepts of the Finite Element Method (FEM) with hierarchical shape functions and their implementation in MoFEM
-       <br/> *Keywords:* Hierarchical approximation
-       </td>
-  </tr>
-
-  <tr valign="top">
        <td>\ref hello_world_tut1</td>
        <td> Creating Simple problem, and pushing operators to pipelines
        <br/> *Keywords:* UDOs, pipelines
@@ -63,6 +56,13 @@ continuing with the one you are most excited about.
        <td>\ref integration</td>
        <td> Numerical integration is essential for most of the numerical methods employed to solve partial differential equations (PDEs)
        <br/> *Keywords:* UDOs and integration
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref hierarchical_approximation_1</td>
+       <td> Introduce elementary concepts of the Finite Element Method (FEM) with hierarchical shape functions and their implementation in MoFEM
+       <br/> *Keywords:* Hierarchical approximation
        </td>
   </tr>
 
