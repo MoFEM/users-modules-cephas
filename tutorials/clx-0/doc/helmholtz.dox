@@ -702,7 +702,7 @@ The last three functions invoked in Example::runProblem() are
   CHKERR checkResults();
 \endcode
 
-that each involve solving the system of linear equations using `KSPSolver`, printing the results for the two fields `U_REAL` and `U_IMAG` 
+that each involve solving the system of linear equations using `KSPSolver`, printing the results for the two fields `P_REAL` and `P_IMAG` 
 and checking convergence of the system respectively.
 
 The implementation of these three functions is not discussed in the present tutorial as it is not the focus as 
@@ -711,21 +711,70 @@ Description of such functions will be discussed in other tutorials.
 
 \section tutorial_hemholtz_running_the_code Running the code and post processing
 
+
+In order to run the program that we have been discussing in this tutorial, you
+will have to follow the steps below
+- First, move to the directory where the binary file `helmholtz` is
+  located. Depending on how you install MoFEM shown in this page \ref
+  installation, going to the directory would be something similar to this 
+  - For user version installation
+    \code
+    cd mofem_install/um_view/tutorials/clx-0/
+    \endcode
+  - For developer version installation
+    \code
+    cd mofem_install/um/build_release/tutorials/clx-0/
+    \endcode
+
+- Second, check the parameters in the param_file.petsc. These are PETSc
+  parameters and you should only use parameters that are needed for a particular
+  solver, in this case KSP solver. Only the following parameters should be
+  uncommented
+  \code
+  ## Linear solver
+  -pc_type lu 
+  -pc_factor_mat_solver_type mumps
+  -ksp_monitor
+  \endcode
+- Third, in the terminal, run commands to partition the input mesh and start
+  the analysis
+  \code
+  mofem_part -my_file geometry.cub -output_file part.h5m -my_nparts 2
+  mpirun -np2 ./helmholtz -file_name part.h5m -order 8 -k 180
+  \endcode
+  where in the first line the mesh `geometry.cub` presented in Figure \ref Figure_1 generated in the open source code CUBIT is partitioned in to parts and generated
+  the partioned mesh `part.h5m` with bounraries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in Figure \ref Figure_2 . In the second line, program is run using two processors (the same number of partitions) with
+  fourth order polynomial of approximation and \f$k = 90\f$.
+
 \anchor Figure_1
-\image html problem_desctiption.png "Figure 1: Schematic presentation of the acoustic transducer problem where domain ." width=300px
+\image html transducer_mesh.png "Figure 1: Mesh under the name `geometry.cub` used for partitioning." width=600px
 
 \anchor Figure_2
-\image html transducer_mesh.png "Figure 2: Discretisation of the integration domain" width=600px
+\image html problem_desctiption.png "Figure 2: Schematic presentation of the acoustic transducer problem where ." width=300px
+
+- After the analysis has run successfully, an output file, `out_helmholtz.h5m`, is generated. 
+  To convert the results from `.h5m` format into `.vtk` 
+  \code
+  mbconvert out_helmholtz.h5m out_helmholtz.vtk
+  \endcode
+- To evaluate the wave amplitude from the results, once the `out_helmholtz.vtk` file is openned in freely available postprocessing software
+  the calculator solver must be used to evaluate from the solution of the fields `P_REAL` and `P_IMAG` by setting the name `Intensity` 
+  in the `Result Array Name` field and calculating the wave amplitude as \f$\sqrt{\left(p^{\rm{Re}}\right)^2 + \left(p^{\rm{Im}}\right)^2}\f$
+  by substituting 
+  \code
+  sqrt(P_REAL* P_REAL+P_IMAG*P_IMAG)
+  \endcode
+  into the field below `Result Array Name`. The associated results are presented in Figure \ref Figure_3.
 
 \anchor Figure_3
-\image html k_180_order_8_coarse.png "Figure 3: Discretisation of the integration domain" width=500px
+\image html k_180_order_8_coarse.png "Figure 3: Post processed results for intensity (magnitude) of the result for 
+wave-number 180 and order for approximation shape functions." width=500px
 
-\anchor Figure_4
-\image html wave_presentation.gif "Figure 3. On the bottom axis is depth, on the left axis is pressure head, right axis is water content. Red line is water head, green line is water content. Colormap on the left hand side is for saturation." width=700px
-
+- Finally to obtain a series of files to resemble the evolution in time of the stationary wave evaluated one has to paste the code below 
+  to the python shell of paraview
 
 \code
-my_out = FindSource("out_fine_k_180_order_8_new_new_0.vtk")
+my_out = FindSource("out_helmholtz.vtk")
 for t in range(100):
  tt = 10*t / float(100)
  calculator1 = Calculator(Input=my_out)
@@ -733,10 +782,19 @@ for t in range(100):
  calculator1.ResultArrayName = 'new_array'
  passArrays1 = PassArrays(Input=calculator1)
  passArrays1.PointDataArrays = ['new_array']
- SaveData("/Users/ignatiosathanasiadis/Documents/Tutorials/Acoustics/out_" + str(t) + ".vtk", proxy=passArrays1, FileType='Ascii')
+ SaveData("./out_" + str(t) + ".vtk", proxy=passArrays1, FileType='Ascii')
  Delete(calculator1)
  Delete(passArrays1)
 \endcode
+
+  compiling the series of 100 files gnerated the video presented in Figure \ref Figure_4 will be generated
+
+\anchor Figure_4
+\image html wave_presentation.gif "Figure 4: Post processed results for visual presentation of the periodic movement of the stationary wave 
+corresponding to the solution of the Helmholtz problem in frequency domain." width=700px
+
+
+
 
 
 \include helmholtz.cpp
