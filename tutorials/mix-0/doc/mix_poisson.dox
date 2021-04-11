@@ -1,4 +1,4 @@
-/*! \page tut_mix_poisson MIX-0: Mix poisson equation
+/*! \page tut_mix_poisson MIX-0: Mixed poisson equation
 
 \note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
 
@@ -14,6 +14,6 @@
 
 \tableofcontents
 
-\include mix_poisson.cpp
+\include mixed_poisson.cpp
 
 */
