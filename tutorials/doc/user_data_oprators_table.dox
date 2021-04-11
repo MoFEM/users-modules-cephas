@@ -373,6 +373,48 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpSetInvJacH1ForFace(inv_jac));
 \endcode
+
+<tr>
+
+<td>
+
+Apply contravariant (Piola) transfer to Hdiv space on face \ref MoFEM::OpSetContravariantPiolaTransformFace and \ref MoFEM::OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace
+
+
+Contravariant Piola transformation
+\f[
+\psi_i|_t = \frac{1}{\textrm{det}(J)}J_{ij}\hat{\psi}_j\\
+\left.\frac{\partial \psi_i}{\partial \xi_j}\right|_t
+=
+\frac{1}{\textrm{det}(J)}J_{ik}\frac{\partial \hat{\psi}_k}{\partial \xi_j}
+\f]
+
+<td>
+
+Example for 2d problem for face in XY space
+\code
+Matrix jac;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpCalculateJacForFace(jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpMakeHdivFromHcurl());
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpSetContravariantPiolaTransformFace(jac))
+\endcode
+
+Example for face emerged in 3d space. 
+\code
+Matrix jac;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpCalculateJacForFaceEmbeddedIn3DSpace(jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+     new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jac));
+\endcode
+Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
+
 <tr>
 
 </table>
@@ -441,7 +483,6 @@ auto fun = [](double x, double y, double z) {
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpDomainSource("U", fun));
 \endcode
-
 
 <tr>
 
