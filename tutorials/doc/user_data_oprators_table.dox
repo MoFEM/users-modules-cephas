@@ -327,7 +327,8 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 <tr>
 
 <td>
-Calualte inverse jacobian on face
+Calualte jacobian inverse jacobian on face. See
+\ref MoFEM::OpCalculateJacForFace and
 \ref MoFEM::OpCalculateInvJacForFace
 
 For 2d element on plane XY, jacobian is given by,
@@ -343,7 +344,9 @@ shape functions are pushed to the current configuration.
 <td>
 Example usage
 \code
-MatrixDouble jac;
+MatrixDouble jac, inv_jac;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateJacForFace(inv_jac));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateInvJacForFace(inv_jac));
 \endcode
