@@ -63,8 +63,6 @@ the problem can be solved in the frequency domain and the solution can admit a v
 
 where now the spatially varying pressure amplitude, \f$p(\mathbf{x})\f$, a complex value:
 
-
-
 \f[
 \begin{align}
   \label{eq:five}
@@ -143,8 +141,6 @@ the identity, \f$ \delta p({\mathbf{x}}) = \delta p^{\rm {Re}} + i \delta p^{\rm
 
 By applying integration by parts for the laplacian term for the domain integral and substituting the 
 
-
-
 \f[
     \begin{equation}
     \begin{aligned}
@@ -195,7 +191,14 @@ after grouping the unknowns and their coefficients the matrix notation is obtain
   \end{align}
 \f]
 
+And essential boundary conditions applied on \f$\Gamma_2\f$ are after applying discretisation are
 
+\f[
+\begin{align}
+  \label{eq:eleven}
+  \sum^{N-1}_{j = 0 } -\left({\displaystyle{\int_{\Gamma_2}}} \phi_i \phi_j {\rm{d}}\Gamma_2\right){\bar{p^{\rm{Re}}_j}} = -{\displaystyle{\int_{\Gamma_2}}} \phi_i {\rm{d}}\Gamma_2 \quad \forall i = 0,...(N-1)
+\end{align}
+\f]
 
 \section tutorial_hemholtz_code_dissection Implementation
 The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MOFEM::Simple, 
@@ -246,7 +249,7 @@ MoFEMErrorCode Example::setupProblem() {
 \endcode
 
 where the fields \f$p^{\rm{Re}}\f$ and \f$p^{\rm{Im}}\f$ are marked as P_REAL and P_IMAG, respectively.
-Furthermore, the space chosen is H1, the base is AINSWORTH_BERNSTEIN_BEZIER_BASE and dimension is 1 that corresponds to scalar field.
+Furthermore, the space chosen is H1, the base is AINSWORTH_BERNSTEIN_BEZIER_BASE and dimension is 1 that corresponds to a scalar field.
 The field data is added both to Domain Element and Boundary Element from Simple Interface via invoking `addDomainField` and `addBoundaryField`, respectively.
 As it will be shown later, for a problem solved in \f$\mathbb{R}^d\f$ where \f$ d \f$ is the problem dimension, 
 Domain Elements perform operations on the mesh entities of the highest dimension (\f$\mathbb{R}^d\f$) and Boundary Elements 
@@ -454,7 +457,7 @@ multiplied with the inverse of the Jacobian so that these gradient correspond to
     \begin{equation}
     \begin{aligned}
     (\nabla \phi)_j = \dfrac{\partial \phi}{\partial \xi_i} \dfrac{\partial \xi_{i}}{\partial X_j}
-    \label{eq:eleven}
+    \label{eq:twelve}
     \end{aligned}
     \end{equation}
 \f]
@@ -479,7 +482,7 @@ Thereafter, bilinear forms for gradients for \f$p^{\rm{Re}}\f$ and \f$p^{\rm{Im}
 
 \f[
 \begin{align}
-  \label{eq:twelve}
+  \label{eq:thirteen}
   -{\int_{\Omega}} \nabla \phi_i \nabla\phi_j {\rm{d}}\Omega,\quad -{\int_{\Omega}} \nabla \psi_i \nabla\psi_j {\rm{d}}\Omega
 \end{align}
 \f]
@@ -493,7 +496,7 @@ are evaluated by pushing the next two Operators
         new OpDomainGradGrad("P_IMAG", "P_IMAG", beta));
 \endcode
 
-where for the first and second push correspond to the first and second integral presented in \eqref{eq:twelve}.
+where for the first and second push correspond to the first and second integral presented in \eqref{eq:thirteen}.
 Moreover, `OpDomainGradGrad` stands for an alias for the `OpGradGrad` template specialisation  
 
 \code
@@ -510,7 +513,7 @@ using DomainEleOp = DomainEle::UserDataOperator;
 \endcode
 
 Furthermore, the lambda function beta that returns -1 is passed as pointer function so that it 
-will multiply the integral such that it will be assembled with the negative sign as shown in \eqref{eq:twelve}.
+will multiply the integral such that it will be assembled with the negative sign as shown in \eqref{eq:thirteen}.
 
 Thereafter, the operator `OpDomainMass` is pushed twice to the domain LHS pipeline
 
@@ -527,7 +530,7 @@ sub-matrices in \eqref{eq:ten}
 
 \f[
 \begin{align}
-  \label{eq:thirteen}
+  \label{eq:fourteen}
   k^2{\int_{\Omega}}  \phi_i \phi_j {\rm{d}}\Omega,\quad k^2{\int_{\Omega}}  \psi_i \psi_j {\rm{d}}\Omega
 \end{align}
 \f]
@@ -541,7 +544,7 @@ using OpDomainMass = FormsIntegrators<DomainEleOp>::Assembly<
 
 that is of element operator type `DomainEleOp` similar to the `OpDomainGradGrad` form integrator shown before.
 Moreover, in both pushes of `OpDomainMass`, the lambda function `k2`, that returns the input of square of wave-number \f$k\f$, 
-is passed as pointer function in order to multiply the mass matrix by \f$k^2\f$ as shown in \eqref{eq:thirteen}.
+is passed as pointer function in order to multiply the mass matrix by \f$k^2\f$ as shown in \eqref{eq:fourteen}.
 
 After all form integrators have been pushed to the Domain LHS pipeline, the dofs that were marked in order not to be used located on \f$\Gamma_2\f$
 so that the next pipeline will receive the dofs conditioning in its virgin configuration.
@@ -586,12 +589,12 @@ that corresponds to imaginary rows and real columns (`"P_IMAG", "P_REAL"`) prese
 
 \f[
 \begin{align}
-  \label{eq:fourteen}
+  \label{eq:fifteen}
   k{\int_{\Gamma_1}}  \psi_i \phi_j {\rm{d}}\Gamma_1
 \end{align}
 \f]
 
-where lambda function `kp` is passed as pointer function to multiply the bilinear form by \f$k\f$ as shown in \eqref{eq:fourteen}.
+where lambda function `kp` is passed as pointer function to multiply the bilinear form by \f$k\f$ as shown in \eqref{eq:fifteen}.
 Operator `OpBoundaryMass` is an alias of bilinear form template specialisation, `OpMass`, determined in the top of the file as
 
 \code
@@ -618,12 +621,12 @@ that evaluates and assembles the bilinear form
 
 \f[
 \begin{align}
-  \label{eq:fifteen}
+  \label{eq:sixteen}
   -k{\int_{\Gamma_1}}  \phi_i \psi_j {\rm{d}}\Gamma_1
 \end{align}
 \f]
 
-as shown in \eqref{eq:ten} and lambda function `km` is passed in order to multiply \f$-k\f$ as presented in \eqref{eq:fifteen}.
+as shown in \eqref{eq:ten} and lambda function `km` is passed in order to multiply \f$-k\f$ as presented in \eqref{eq:sixteen}.
 Once all the operators for the Boundary LHS pipeline operating on \f$\Gamma_1\f$ are pushed, the marked dofs have to be release so 
 that the dofs conditioning will be passed intact to the next pipeline and achieved by pushing `OpUnSetBc`
 
@@ -632,8 +635,8 @@ that the dofs conditioning will be passed intact to the next pipeline and achiev
 \endcode
 
 
-Essential boundary conditions are also applied following the third brace in \eqref{eq:seven} but assumed to have both side multiplied by -1.
-Initially, operator `OpSetBc` is now used by setting `false` flag so that now the rest of the boundary except for \f$Gamma_2\f$ 
+Essential boundary conditions are also applied following \eqref{eq:eleven} but assumed to have both side multiplied by -1.
+Initially, operator `OpSetBc` is now used by setting `false` flag so that now the rest of the boundary except for \f$\Gamma_2\f$ 
 is now marked not to allow for assembly as 
 
 \code
@@ -662,7 +665,7 @@ but now for the Boundary RHS pipeline as
         new OpSetBc("P_REAL", false, boundaryMarker));
 \endcode
 
-then the linear form is pushed with lambda function beta so that the integral presented in the RHS in the third brace of \eqref{eq:seven} is multiplied by -1
+then the linear form is pushed with lambda function beta so that the integral presented in the RHS in \eqref{eq:eleven} is multiplied by -1
 
 \code
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
@@ -689,7 +692,36 @@ Finally, integration rules are set for RHS and LHS for Boundary element.
     CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
 \endcode
 
+\subsection tutorial_hemholtz_solving Solving and outputting results
+
+The last three functions invoked in Example::runProblem() are
+
+\code
+  CHKERR solveSystem();
+  CHKERR outputResults();
+  CHKERR checkResults();
+\endcode
+
+that each involve solving the system of linear equations using `KSPSolver`, printing the results for the two fields `U_REAL` and `U_IMAG` 
+and checking convergence of the system respectively.
+
+The implementation of these three functions is not discussed in the present tutorial as it is not the focus as 
+discussed in the notes in the beginning of the tutorial.
+Description of such functions will be discussed in other tutorials.
+
 \section tutorial_hemholtz_running_the_code Running the code and post processing
+
+\anchor Figure_1
+\image html problem_desctiption.png "Figure 1: Schematic presentation of the acoustic transducer problem where domain ." width=300px
+
+\anchor Figure_2
+\image html transducer_mesh.png "Figure 2: Discretisation of the integration domain" width=600px
+
+\anchor Figure_3
+\image html k_180_order_8_coarse.png "Figure 3: Discretisation of the integration domain" width=500px
+
+\anchor Figure_4
+\image html wave_presentation.gif "Figure 3. On the bottom axis is depth, on the left axis is pressure head, right axis is water content. Red line is water head, green line is water content. Colormap on the left hand side is for saturation." width=700px
 
 
 \code
