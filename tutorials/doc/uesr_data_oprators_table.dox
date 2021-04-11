@@ -48,6 +48,19 @@ where \f$u^(\pmb\xi^g)\f$ is value at integration point \f$g\f$,
 coordinate \f$\pmb\xi^g\f$, and \f$\overline{u}_i\f$ is \f$i\f$-th degree of
 freedom.
 
+
+This function has similar variant to calulate rates, when time solver is used,
+see \ref MoFEM::OpCalculateScalarFieldValuesDot. 
+
+\f[ 
+\dot{u}^h
+(\pmb\xi^g) = 
+\sum_i^N \phi^i(\pmb\xi^g) 
+\dot{\overline{u}}_i 
+\f]
+
+where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \f$\dot{\overline{u}}_i\f$ is rate of \f$i\f$-th degree of freedom. \emph Note that funtio will work only with TS solver.
+
 <td> 
 
 Basic usage:
@@ -70,28 +83,6 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 }
 \endcode
 
-<tr>
-
-<td>
-
-Evaluate scalar field rate at integration points
-\ref MoFEM::OpCalculateScalarFieldValuesDot
-
-\f[ 
-\dot{u}^h
-(\pmb\xi^g) = 
-\sum_i^N \phi^i(\pmb\xi^g) 
-\dot{\overline{u}}_i 
-\f]
-
-where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \f$\dot{\overline{u}}_i\f$ is rate of \f$i\f$-th degree of freedom.
-
-\note Only can be used with TS solver
-
-<td>
-
-\note Function is similar to used for \ref
-MoFEM::OpCalculateScalarFieldValues see for details there.
 <tr>
 
 <td>
@@ -160,6 +151,11 @@ u_j^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g)
 \f]
 where \f$j\f$ is vector element index.
 
+This function has similar variant to calulate rates, when time solver is used,
+see \ref MoFEM::OpCalculateVectorFieldValuesDot, which can be used with 
+time solver (TS). Also is variant to calulate accelartions, \ref MoFEM::OpCalculateVectorFieldValuesDotDot, which can be used with second order time solver (TS2). Petsc has currently implemented alpha method for second order
+time differntial equations.
+
 <td>
 
 Basic usage:
@@ -195,7 +191,11 @@ Evaluate vector field gradient at integration points
 u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i_{,k}(\pmb\xi^g) 
 \overline{u}_i^{j}
 \f]
-where \f$j\f$ is vector element index, \f$k\f$ is derivative and \f$i\f$ is index of base function,
+where \f$j\f$ is vector element index, \f$k\f$ is derivative and \f$i\f$ is index of base function.
+
+This function has similar variant to calulate rates, when time solver is used,
+see \ref MoFEM::OpCalculateVectorFieldGradientDot, which can be used with 
+time solver (TS).
 
 <td>
 
