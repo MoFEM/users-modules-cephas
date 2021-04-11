@@ -49,17 +49,16 @@ coordinate \f$\pmb\xi^g\f$, and \f$\overline{u}_i\f$ is \f$i\f$-th degree of
 freedom.
 
 
-This function has similar variant to calulate rates, when time solver is used,
-see \ref MoFEM::OpCalculateScalarFieldValuesDot. 
+This function has a similar variant to calculate time derivative, when a time solver is used, see \ref MoFEM::OpCalculateScalarFieldValuesDot
 
 \f[ 
-\dot{u}^h
+\frac{\partial u^h}{\partial t}
 (\pmb\xi^g) = 
 \sum_i^N \phi^i(\pmb\xi^g) 
-\dot{\overline{u}}_i 
+\frac{\partial \overline{u}}{\partial t}
 \f]
 
-where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \f$\dot{\overline{u}}_i\f$ is rate of \f$i\f$-th degree of freedom. \emph Note that funtio will work only with TS solver.
+where \f$\dot{u}^(\pmb\xi^g)\f$ is rate value at integration point \f$g\f$ and \f$\dot{\overline{u}}_i\f$ is rate of \f$i\f$-th degree of freedom. \emph Note that funtio will work only with TS solver. The numerical schem used to calulate time derivatibe depends on time solver method.
 
 <td> 
 
@@ -95,7 +94,7 @@ Evalute scalar field gradinet
 {u}^h_{,j}
 (\pmb\xi^g) = 
 \sum_i^N \phi^i_{,j}(\pmb\xi^g) 
-\dot{\overline{u}}_i 
+\overline{u}_i 
 \f]
 
 where 
@@ -103,8 +102,7 @@ where
 \phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_j} \right|_{\pmb\xi^g}
 \f]
 
-Depending on contect direvatives are calculated in reference element on current phicial elemen. For most of cases usally gradient is acalulated on
-current phiscal element. Then direvative of base function is interpreted as
+Depending on code context, derivatives are calculated in reference element on the current physical element. For most cases, the gradient is calculated on the current physical element. Then derivative of base function is interpreted as
 
 \f[
 \phi^i_{,j} = \left. \frac{\partial \phi^i}{\partial \xi_j} \frac{\partial \xi_k}{\partial x_j} \right|_{\mathbf{x}(\pmb\xi^g)}
@@ -151,10 +149,8 @@ u_j^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g)
 \f]
 where \f$j\f$ is vector element index.
 
-This function has similar variant to calulate rates, when time solver is used,
-see \ref MoFEM::OpCalculateVectorFieldValuesDot, which can be used with 
-time solver (TS). Also is variant to calulate accelartions, \ref MoFEM::OpCalculateVectorFieldValuesDotDot, which can be used with second order time solver (TS2). Petsc has currently implemented alpha method for second order
-time differntial equations.
+This function has a similar variant to calculate rates when a time solver is used; see \ref MoFEM::OpCalculateVectorFieldValuesDot, which can be used with a time solver (TS). Also is a variant to calculate accelerations, \ref MoFEM::OpCalculateVectorFieldValuesDotDot, which can be used with a second-order time solver (TS2). PETSc has currently implemented the alpha method for second-order
+time differential equations.
 
 <td>
 
@@ -193,7 +189,7 @@ u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i_{,k}(\pmb\xi^g)
 \f]
 where \f$j\f$ is vector element index, \f$k\f$ is derivative and \f$i\f$ is index of base function.
 
-This function has similar variant to calulate rates, when time solver is used,
+This function has a similar variant to calculate rates, when a time solver is used,
 see \ref MoFEM::OpCalculateVectorFieldGradientDot, which can be used with 
 time solver (TS).
 
@@ -242,7 +238,7 @@ u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g)
 \f]
 where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
 
-This function has similar variant to calulate rates, when time solver is used,
+This function has a similar variant to calculate rates, when a time solver is used,
 see \ref MoFEM::OpCalculateTensor2FieldValuesDot, which can be used with 
 time solver (TS). 
 
@@ -284,10 +280,10 @@ u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g)
 \f]
 where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
 
-Note that field degrees of freedom represnts only symmetric coeefcients, so for each base funtion we have number of DOFs given by fromula (FIELD_DIM * (FIELD_DIM + 1)) / 2. For example for 3d case, six DOFs for each base function.  
+Note that field degree of freedom represents only symmetric coefficients, so for each base function, we have a number of DOFs given by formula (FIELD_DIM * (FIELD_DIM + 1)) / 2. For example, for 3d case, six DOFs for each base function.  
 
-This function has similar variant to calulate rates, when time solver is used,
-see \ref MoFEM::OpCalculateTensor2SymmetricFieldValuesDot, which can be used with time solver (TS). 
+This function has a similar variant to calculate rates, when a time solver is used,
+see \ref MoFEM::OpCalculateTensor2SymmetricFieldValuesDot, which can be used with a time solver (TS). 
 
 <td>
 
@@ -323,7 +319,6 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 \section tab_other_data_op Other operators
 
-
 <table>
 <caption id="user_other_ops_table">Table of other operators</caption>
 
@@ -333,15 +328,47 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 <td>
 Calualte inverse jacobian on face
-
 \ref MoFEM::OpCalculateInvJacForFace
+
+For 2d element on plane XY, jacobian is given by,
+\f[
+J_{ij} = \frac{\partial X_i}{\partial \xi_j},\quad i,j=0,1
+\f]
+
+\note That for 3d volume element, the operator is not implemented explicitly. In current implementation, jacobian is calculated implicitly, and derivatives of
+shape functions are pushed to the current configuration.
+
+\note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpCalculateInvJacForFaceEmbeddedIn3DSpace
 
 <td>
 Example usage
 \code
-MatrixDouble jac(2, 2);
+MatrixDouble jac;
 pipeline_mng->getOpDomainRhsPipeline().push_back(
   new OpCalculateInvJacForFace(inv_jac));
+\endcode
+<tr>
+
+<td>
+
+Push face base function to physical element configuration.
+\ref MoFEM::OpSetInvJacH1ForFace
+This operator assumes that the face element is on the XY plane.
+
+\f[
+\frac{\partial \phi}{\partial X_i} = \frac{\partial \phi}{\partial \xi_j} J^{-1}_{ij} 
+\f]
+
+\note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpSetInvJacH1ForFaceEmbeddedIn3DSpace
+
+<td>
+Example usage
+\code
+MatrixDouble jac;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpSetInvJacH1ForFace(inv_jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpSetInvJacH1ForFace(inv_jac));
 \endcode
 <tr>
 
@@ -359,8 +386,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <td>
 
-Integrate fource term for scalar and vectorial fields
-
+Integrate force term for scalar and vectorial fields
 \ref MoFEM::OpSourceImpl
 
 \f[
@@ -430,7 +456,6 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <td>
 Integrate Grad Grad operator
-
 \ref MoFEM::OpGradGradImpl
 
 \code
@@ -458,6 +483,6 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 
 </table>
 
-\note Linear froms are defined in file BiLinearFormsIntegrators.hpp
+\note Bilinear froms are defined in file BiLinearFormsIntegrators.hpp
 
 */
