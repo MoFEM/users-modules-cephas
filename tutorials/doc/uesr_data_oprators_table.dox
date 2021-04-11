@@ -4,22 +4,22 @@
 
 \tableofcontents
 
-Templae arguments:
+Template arguments:
 
 - <b>BASE_DIM</b> is dimension of base function. Typically bases for L2 and
-H1 spaces are scalar bases, thus BASE_DIM is 1. Typically H-div and H-curl
+H1 spaces are scalar bases. Thus BASE_DIM is 1. Typically H-div and H-curl
 bases are vectorial bases and BASE_DIM 3. For some special case could be
 exceptions.
 
-- <b>FIELD_DIM</b> is dimenion of the field. We can have scalar filed, vectorial field. For example scalar fiele for scalar base function has one coefficient for base function and \em FIELD_DIM = 1. Vectorial field with scalar based in 3d has three coefficients for each base function and \em FIELD_DIM = 3. From the other hand, vectorial field with vectorial base hase one coeeficient for each base function and \em FIELD_DIM = 3, and tensorial field of rank two in 3d on vectorial base has three coeffients for each base function and \em FIELD_DIM = 9.
+- <b>FIELD_DIM</b> is dimension of the field. We can have scalar filed, vectorial field. For example, the scalar file for scalar base function has one coefficient for base function and \em FIELD_DIM = 1. Vectorial field with scalar based in 3d has three coefficients for each base function and \em FIELD_DIM = 3. On the other hand, a vectorial field with a vectorial base has one coefficient for each base function and \em FIELD_DIM = 3, and tensorial field of rank two in 3d on vectorial base has three coefficients for each base function and \em FIELD_DIM = 9.
 
-- <b>SPACE_DIM</b> is dismension of space. Typically used to inicate how many 
-elements has gradient of base function or field.
+- <b>SPACE_DIM</b> is dismension of space. Typically used to indicate how many 
+elements have a gradient of base function or field.
 
-- <b>ASSEMBLE_TYPE</b> by this template assmebly method is indictaed. For example if assembly is to CST compresssed matrix assembly type is PETSC. For some ther cases, for example integration to nested matrices, or other mateices
-formats could be added and inmplemented.
+- <b>ASSEMBLE_TYPE</b> by this template assembly method is indicated. For example, if the assembly is to CST compressed matrix assembly type is PETSC. For some other cases, for example, integration to nested matrices, or other matrices
+formats could be added and implemented.
 
-- <b>INTEGRATION_TYPE</b> indicate method used to assembly elements. If strandard numerical integration is used, then integration type is GAUSS. Some ther more sophisitied integration method can be inmplemented that expolit properties of some base functions for fast integration.
+- <b>INTEGRATION_TYPE</b> indicate method used to assembly elements. If standard numerical integration is used, then the integration type is GAUSS. Some other more sophisticated integration methods can be implemented to exploit some base functions for fast integration.
 
 - <b>%OP</b> type of opetaor for voulme, face, edge or vertex finite element.
 
