@@ -119,8 +119,8 @@ int main(int argc, char *argv[]) {
     };
 
     const double dist = 1e-12;             // Distance for tree search
-    const int nb_random_points = 1000;     // number of points
-    const int nb_steps = 50000;            // number of time steps
+    const int nb_random_points = 5000;     // number of points
+    const int nb_steps = 10000;            // number of time steps
     const int mod_step = 10;               // save every step
     const double dt = 1e-5;                // Time step size
     const double velocity_scale = 0.1;     // scale velocity vector

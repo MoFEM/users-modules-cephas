@@ -156,7 +156,7 @@ Evaluate vector field at integration points
 
 \f[ 
 u_j^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) 
-\dot{\overline{u}}_i^j 
+\overline{u}_i^j
 \f]
 where \f$j\f$ is vector element index.
 
@@ -187,6 +187,46 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 <tr>
 
+<td>
+Evaluate vector field gradient at integration points
+\ref MoFEM::OpCalculateVectorFieldGradient
+
+\f[ 
+u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i_{,k}(\pmb\xi^g) 
+\overline{u}_i^{j}
+\f]
+where \f$j\f$ is vector element index, \f$k\f$ is derivative and \f$i\f$ is index of base function,
+
+<td>
+
+Basic usage:
+\code
+constexpr int FIELD_DIM = 3;
+constexpr int SPACE_DIM = 3;
+auto grad_U_at_integration_pts = boost::make_shared<MatrixDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateVectorFieldGradient<FIELD_DIM, SPACE_DIM>("U", grad_U_at_integration_pts));
+\endcode
+
+Operatotor for given field calulate gradien of vector field at integration
+points. Values are stored in for example in \em
+grad_U_at_integration_pts. Then value can be accessad also
+follows
+\code 
+constexpr int FIELD_DIM = 3;
+constexpr int SPACE_DIM = 3;
+FTensor::Index<'i', FIELD_DIM> i; 
+FTensor::Index<'j', SPACE_DIM> j; 
+constexpr auto t_kd = FTensor::Kronecker_Delta<double>();
+auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto t_grad = getFTensor2FromMat<FIELD_DIM, SPACE_DIM>((grad_U_at_integration_pts);
+for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+  auto trace = t_grad(i,j)*t_kd(i,j);
+  ++t_grad;
+}
+\endcode
+
+<tr>
 
 </table>
 
