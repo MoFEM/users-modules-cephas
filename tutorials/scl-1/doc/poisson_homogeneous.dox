@@ -36,12 +36,12 @@ have a membrane that is fixed at its boundary and it experiences a uniformly
 distributed force on its surface, then you are asked to estimate the
 displacement of the membrane. The formal definition of the problem as follows 
 
-Find \f$ u \in \bf{R} \f$ such that
+Find \f$ u \in H_0^{1}(\Omega) \f$ such that
 \f[
   \begin{align}
 -\nabla \cdot \nabla u(\mathbf{x}) &= f \quad {\rm in} \quad {
 \Omega}, \\ 
-u(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
+{\hat u}(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
   \end{align}
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
@@ -62,7 +62,7 @@ derive the weak form. The procedure to achieve it is as follows
   and then integrate over the domain \f$ \Omega \f$
 \f[
   \begin{equation}
--\int_\Omega v(\nabla \cdot \nabla u )= \int_\Omega v f.
+-\int_\Omega v(\nabla \cdot \nabla u ) ~d\Omega= \int_\Omega v f ~d\Omega.
   \end{equation}
 \f]
 
@@ -70,8 +70,8 @@ derive the weak form. The procedure to achieve it is as follows
   we have
 \f[
   \begin{equation}
-  \int_\Omega \nabla v \cdot \nabla u - \int_{\partial \Omega} v {\bf n} \cdot
-  \nabla u  = \int_\Omega v f.
+  \int_\Omega \nabla v \cdot \nabla u ~d\Omega - \int_{\partial \Omega} v {\bf n} \cdot
+  \nabla u ~d\partial \Omega = \int_\Omega v f ~d\Omega.
   \end{equation}
 \f]
 It is noted that the test function \f$ v \f$ has to satisfy the homogeneous
@@ -79,9 +79,11 @@ It is noted that the test function \f$ v \f$ has to satisfy the homogeneous
   it to the above equation, we finally obtain the weak form of the problem
 \f[
   \begin{equation}
-\int_\Omega \nabla v \cdot \nabla u = \int_\Omega v f.
+\int_\Omega \nabla v \cdot \nabla u ~d\Omega = \int_\Omega v f ~d\Omega, \quad \forall v \in H_{0}^{1}(\Omega),
   \end{equation}
 \f]
+  where the space for test function \f$ v \f$ is \f$ H_{0}^{1}(\Omega):=\left\{v
+  \in H^{1}(\Omega) \mid v=0 \text { on } \partial \Omega\right\} \f$.
 
 We are now solving this equation of the weak form instead of the original
 equation. This equation is asking for the solution of \f$ u \f$ that is true for
@@ -95,14 +97,19 @@ As mentioned above, instead of trying to solve the problem analytically, we will
 approximate \f$ u \f$ assuming its solution has the form
 \f[
   \begin{equation}
-u \approx u^h = \sum_{j=0}^{N-1} \phi_j U_j.
+u \approx u^h = \sum_{j=0}^{N-1} \phi_j \bar{u}_j.
   \end{equation}
 \f]
 This expression can be interpreted as follows. Find the approximate solution \f$
-u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution of base function \f$ \phi_j \f$ with the *coefficient* of the contribution is \f$ U_j \f$. 
+u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution
+of base function \f$ \phi_j \f$ with the *coefficient* of the contribution is
+\f$ \bar{u}_j \f$.
 
-Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process,
-which will be discussed later in this tutorial, MoFEM gives you values of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
+Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ \bar{u}_j \f$
+called *degrees of freedom (DOFs)* of the problem. In the implementation
+process, which will be discussed later in this tutorial, MoFEM gives you values
+of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will
+find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
 Keep in mind that, in the weak form, we have another term that also needs to be
 taken care of, that is the test function \f$ v \f$. As we were saying, the weak
@@ -113,18 +120,20 @@ Substituting \f$ u \f$ and \f$ v \f$ into the weak form, we have the discrete
 form of the problem given by 
 \f[
   \begin{equation}
-\int_{\Omega^e} \nabla \phi_i \cdot \nabla \left( \sum_j U_j \phi_j \right) = \int_{\Omega^e} \phi_i f.
+\int_{\Omega^e} \nabla \phi_i \cdot \nabla \left( \sum_j \bar{u}_j \phi_j
+\right) ~d{\Omega^e}= \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
   \end{equation}
 \f]
-Moving \f$ U_j \f$ outside of the parentheses and rearraging the equation, we
+Moving \f$ \bar{u}_j \f$ outside of the parentheses and rearraging the equation, we
 have 
 \f[
   \begin{equation}
-\sum_j \left( \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \right) U_j   = \int_{\Omega^e} \phi_i f.
+\sum_j \left( \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j ~d{\Omega^e}
+\right) \bar{u}_j   = \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
   \end{equation}
 \f]
 
-Now, the problem becomes: finding the vector of coefficients \f$ {\bf U} \f$
+Now, the problem becomes: finding the vector of coefficients (or DOFs) \f$ {\bf U} \f$
 such that 
 \f[
 {\bf KU} = {\bf F},
@@ -136,8 +145,8 @@ assembling all elements (entity) in the domain, and the components
 of element stiffness matrix and element force vector are calculated as
 \f[
   \begin{align}
-    K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla  \phi_j, \\
-    F_i^e &= \int_{\Omega^e} \phi_i f.
+    K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla  \phi_j ~d{\Omega^e}, \\
+    F_i^e &= \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
   \end{align}
 \f]
 One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric which means there will be opportunity to save time later in the implementation.
@@ -154,12 +163,17 @@ of a set of points on each element along with their weights as follows
   \begin{align}
 K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \approx \sum_q
 \nabla \phi_i \left( {\bf x}_q \right) \cdot \nabla \phi_j \left( {\bf x}_q
-\right) w_q \label{eqn_stiffness}, \\ 
-    F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right) f \left( {\bf x}_q \right) w_q,
+\right) W_q \left\|\mathbf{J}_{g}^{e}\right\| \label{eqn_stiffness}, \\ 
+F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right)
+f \left( {\bf x}_q \right) W_q \left\|\mathbf{J}_{g}^{e}\right\|,
   \end{align}
 \f]
-where \f$ {\bf x}_q \f$ and \f$ w_q \f$ are location and weight of the
-quadrature point, respectively. These equations can be interpreted as follows
+where \f$ {\bf x}_q \f$ and \f$ W_q \f$ are the location and weight of the
+quadrature point, respectively. Meanwhile, \f$ \left\|\mathbf{J}_{g}^{e}\right\|
+\f$ is the determinant of the Jacobian of the transformation of the element \f$
+e \f$ from physical coordinates to parent coordinates. For triangular elements,
+this determinant equals to the area of the element. These equations can be
+interpreted as follows 
 
 The approximated value of the component at row \f$ i \f$ and column \f$ j \f$ of
 the element stiffness matrix \f$ K \f$ of element \f$ e \f$ is calculated by
@@ -168,7 +182,8 @@ taking the summation over all quadrature points of the multiplication of
   \f$ evaluated at quadrature point \f$ q \f$, 
 - the first derivative of the \f$ j^{\rm th} \f$ approximation function \f$ \phi
   \f$ evaluated at the same quadrature point \f$ q \f$, and 
-- the weight of that quadrature point \f$ q \f$.
+- the multiplication of the weight of that quadrature point \f$ q \f$ and the
+  determinant of the Jacobian.
 
 Likewise, the approximated value of the component at row \f$ i \f$ of the
 element force vector \f$ F \f$ of element \f$ e \f$ is calculated by taking the
@@ -176,9 +191,11 @@ summation over all quadrature points of the multiplication of
 - the \f$ i^{\rm th} \f$ approximation function \f$ \phi \f$ evaluated at
   quadrature point \f$ q \f$,
 - the body force evaluated at the same quadrature point \f$ q \f$, and
-- the weight of that quadrature point \f$ q \f$.
+- the multiplication of the weight of that quadrature point \f$ q \f$ and the
+  determinant of the Jacobian.
 
-More details on this matter can be found here \ref integration.
+More details on the numerical integration can be found at the tutorial \ref
+integration. 
 
 To this end, we have established a linear system of the primary variable \f$
 {\bf U} \f$ through \f$ {\bf K} \f$ and \f$ {\bf F} \f$. In MoFEM, we will use
@@ -491,7 +508,7 @@ area. If you are dealing with edge (for boundary element) or volume entities
 (for volume domain), you would get edge length or element volume, respectively.
 
 Next, as required for the calculation of stiffness matrix in Eq. (3), we need
-the number of integration points (\f$ q \f$) and their weights ((\f$ w_q \f$)) which can be done as follows
+the number of integration points (\f$ q \f$) and their weights ((\f$ W_q \f$)) which can be done as follows
 \code
 // get number of integration points
 const int nb_integration_points = getGaussPts().size2();
