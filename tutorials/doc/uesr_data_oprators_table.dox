@@ -21,7 +21,7 @@ formats could be added and inmplemented.
 
 - <b>INTEGRATION_TYPE</b> indicate method used to assembly elements. If strandard numerical integration is used, then integration type is GAUSS. Some ther more sophisitied integration method can be inmplemented that expolit properties of some base functions for fast integration.
 
-- <b>OP</b> type of opetaor for voulme, face, edge or vertex finite element.
+- <b>%OP</b> type of opetaor for voulme, face, edge or vertex finite element.
 
 \section tab_user_data_op Field operators
 
@@ -223,6 +223,52 @@ auto t_grad = getFTensor2FromMat<FIELD_DIM, SPACE_DIM>((grad_U_at_integration_pt
 for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
   auto trace = t_grad(i,j)*t_kd(i,j);
   ++t_grad;
+}
+\endcode
+
+<tr>
+
+<td colspan="2">
+<b>Tensor fields</b>
+<tr>
+
+<td>
+Evaluate tensor field at integration points
+\ref MoFEM::OpCalculateTensor2FieldValues
+
+\f[ 
+u_{jk}^h(\pmb\xi^g) = \sum_i^N \phi^i(\pmb\xi^g) 
+\overline{u}_i^{jk}
+\f]
+where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
+
+This function has similar variant to calulate rates, when time solver is used,
+see \ref MoFEM::OpCalculateTensor2FieldValuesDot, which can be used with 
+time solver (TS). 
+
+<td>
+
+Basic usage:
+\code
+constexpr int FIELD_DIM = 3;
+auto vals_U_at_integration_pts = boost::make_shared<MatrixDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpCalculateTensor2FieldValues<FIELD_DIM, FIELD_DIM>("U", vals_U_at_integration_pts));
+\endcode
+
+Operatutor for given field calulate valuse of tensor field at integration
+points. Values are stored in for example in \em
+vals_U_at_integration_pts. Then value can be accessad also
+follows
+\code 
+constexpr int FIELD_DIM = 3;
+FTensor::Index<'i', FIELD_DIM> i; 
+FTensor::Index<'j', FIELD_DIM> j; 
+auto nb_integtation_pts = vals_U_at_integration_pts->size2();
+auto t_val = getFTensor2FromMat<FIELD_DIM, FIELD_DIM>((vals_U_at_integration_pts);
+for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
+  auto norm = sqrt(t_val(i,j)*t_val(i,j));
+  ++t_val;
 }
 \endcode
 
