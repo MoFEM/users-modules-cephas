@@ -178,7 +178,7 @@ MoFEMErrorCode Example::setupProblem() {
                               &choice_base_value, &flg);
   if (flg != PETSC_TRUE)
     SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "base not set");
-  FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
+  base = AINSWORTH_LEGENDRE_BASE;
   if (choice_base_value == AINSWORTH)
     base = AINSWORTH_LEGENDRE_BASE;
   if (choice_base_value == AINSWORTH_LOBATTO)
@@ -195,7 +195,7 @@ MoFEMErrorCode Example::setupProblem() {
                               LASBASETSPACE, &choice_space_value, &flg);
   if (flg != PETSC_TRUE)
     SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "space not set");
-  FieldSpace space = H1;
+  space = H1;
   if (choice_space_value == H1SPACE)
     space = H1;
   else if (choice_space_value == L2SPACE)
@@ -249,17 +249,13 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->generateReferenceElementMesh();
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
+  MatrixDouble inv_jac(2, 2), jac(2, 2);
   if (SPACE_DIM == 2) {
     if (space == HCURL) {
-      MatrixDouble inv_jac(2, 2), jac(2, 2);
       post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac));
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformFace(jac));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacHcurlFace(inv_jac));
     }
   }
 
