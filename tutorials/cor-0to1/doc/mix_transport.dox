@@ -1,4 +1,4 @@
-/*! \page mix_transport Mix formulation and integration on skeleton (h-adaptivity)
+/*! \page mix_transport COR-0: Mixed formulation and integration on skeleton (h-adaptivity)
 
 \brief Set by step example how to implement mix finite element and do hp-adaptivity
 

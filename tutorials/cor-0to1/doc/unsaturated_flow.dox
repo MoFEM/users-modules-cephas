@@ -1,4 +1,4 @@
-/*! \page mix_us_flow Time dependent nonlinear mix formulation (unsaturated flow)
+/*! \page mix_us_flow COR-1: Time dependent nonlinear mix formulation (unsaturated flow)
 
 In this tutorial, we show how to solve a strongly nonlinear time dependent equation
 using mix-finite-elements. We focus attention on construction of finite elements,

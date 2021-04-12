@@ -299,4 +299,102 @@ continuing with the one you are most excited about.
 
 </table>
 
+\section tutorials_core Tutorials using core interfaces or low level implementation
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\subpage mix_transport</td>
+       <td> Mix formulation for transport problem
+       <br/> *Keywords:* h-adaptivity and error estimator
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage mix_us_flow</td>
+       <td> Mix formulation for capilary flow
+       <br/> *Keywords:* Caplilary flow in unsaturated soil. Nonlinear mix-formulation
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut1</td>
+       <td> Poison equation again with different implementations
+       <br/> *Keywords:* %Poisson problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut2</td>
+       <td> Poison equation implementation of differentation operators
+       <br/> *Keywords:* %Poisson problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut3</td>
+       <td> Poison equation implementation of differentation operators
+       <br/> *Keywords:* Using subproblems and nested matrices
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut4</td>
+       <td> Poison nonlinear equation again
+       <br/> *Keywords:* SNES solver and linearisation
+       </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage simple_elasticity_1</td>
+        <td> Older implementation of elastic problem
+        <br/> *Keywords:* Operators and low level implementation
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage elasticity_mixed_formulation</td>
+        <td> Older implementation of mixed elastic problem
+        <br/> *Keywords:* Pressure field and incompressibility
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage spring_element</td>
+        <td> Implementation of boundary element with springs
+        <br/> *Keywords:* face element, spring, user data operators
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage reaction_diffusion_imp</td>
+        <td> Reaction-diffusion Fisher's equation
+        <br/> *Keywords:* time solve, Monitor, nonlinearity, 
+        </td>
+  </tr>
+
+
+  <tr valign="top">
+        <td width="350px">LOW-11: \subpage tutorial_navier_stokes</td>
+        <td> Navier-Stokes equations
+        <br/> *Keywords:* viscous fluid flow, mixed formulation, drag force computation 
+        </td>
+  </tr>
+
+
+</table>
+
+\section tutorials_module Tutorials implemented as a separate module
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">MOD-0: \subpage sope_film</td>
+       <td> Sope film as module
+       <br/> *Keywords:* Module implementations
+       </td>
+  </tr>
+
+</table>
+
 */

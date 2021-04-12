@@ -1,4 +1,4 @@
-/*! \page poisson_tut3 Using fieldsplit solver and DM sub problem.
+/*! \page poisson_tut3 COR-4: Using fieldsplit solver and DM sub problem.
 
 
 In this tutorial, we show how to create sub-problems by using discrete manager (DM)

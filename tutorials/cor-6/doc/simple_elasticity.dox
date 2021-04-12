@@ -1,4 +1,4 @@
-/*! \page simple_elasticity_1 Solid elasticity
+/*! \page simple_elasticity_1 COR-6: Solid elasticity
 
 This tutorial's motivation is to show how finite element is implemented using
 basic blocks, like the Lego block where one can combine them in arbitrarily,

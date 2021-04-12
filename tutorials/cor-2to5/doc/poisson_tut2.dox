@@ -1,4 +1,4 @@
-/*! \page poisson_tut2 Implementing operators for the Poisson equation
+/*! \page poisson_tut2 COR-3: Implementing operators for the Poisson equation
 
 In this tutorial, we focus only on setting up finite element and implementation
 of user data operator for the Poisson equation. It is the next step after

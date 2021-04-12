@@ -1,4 +1,4 @@
-/*! \page poisson_tut1 Solving the Poisson equation
+/*! \page poisson_tut1 COR-2: Solving the Poisson equation
 
 \note The purpose of this tutorial is to show in detail
 how the most basic PDE, the Poisson equation, can be solved using MoFEM. 
