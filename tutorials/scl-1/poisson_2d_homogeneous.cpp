@@ -5,7 +5,7 @@
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
 
-using PostProcEle = PostProcFaceOnRefinedMesh;
+using PostProcFaceEle = PostProcFaceOnRefinedMesh;
 
 static char help[] = "...\n\n";
 
@@ -159,7 +159,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
 
-  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc(domainField);
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
