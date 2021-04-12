@@ -119,7 +119,7 @@ MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
   MoFEMFunctionBegin;
 
   auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return 2 * p; };
+  auto rule_rhs = [](int, int, int p) -> int { return p; };
 
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
@@ -139,10 +139,10 @@ MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
 
   // Create RHS and solution vectors
   auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
+  auto F = smartCreateDMVector(dm);
+  auto D = smartVectorDuplicate(F);
 
-  // Setup KSP solver
+  // Solve the system
   CHKERR KSPSolve(ksp_solver, F, D);
 
   // Scatter result data on the mesh
