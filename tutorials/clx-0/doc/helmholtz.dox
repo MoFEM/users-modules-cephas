@@ -750,7 +750,7 @@ will have to follow the steps below
 \image html transducer_mesh.png "Figure 1: Mesh under the name `geometry.cub` used for partitioning." width=600px
 
 \anchor Figure_2_acoustics
-\image html problem_desctiption.png "Figure 2: Schematic presentation of the acoustic transducer problem where ." width=300px
+\image html problem_desctiption.eps "Figure 2: Schematic presentation of the acoustic transducer problem where ." width=300px
 
 - After the analysis has run successfully, an output file, `out_helmholtz.h5m`, is generated. 
   To convert the results from `.h5m` format into `.vtk` 
