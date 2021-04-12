@@ -18,9 +18,9 @@ private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 
@@ -80,20 +80,6 @@ Poisson2DNonhomogeneous::Poisson2DNonhomogeneous(MoFEM::Interface &m_field)
   boundaryPipelineRhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
 }
 
-MoFEMErrorCode Poisson2DNonhomogeneous::runProgram() {
-  MoFEMFunctionBegin;
-
-  readMesh();
-  setupProblem();
-  setIntegrationRules();
-  boundaryCondition();
-  assembleSystem();
-  solveSystem();
-  outputResults();
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode Poisson2DNonhomogeneous::readMesh() {
   MoFEMFunctionBegin;
 
@@ -117,22 +103,6 @@ MoFEMErrorCode Poisson2DNonhomogeneous::setupProblem() {
   CHKERR simpleInterface->setFieldOrder(domainField, oRder);
 
   CHKERR simpleInterface->setUp();
-
-  MoFEMFunctionReturn(0);
-}
-
-MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
-  MoFEMFunctionBegin;
-
-  auto domain_rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto domain_rule_rhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  domainPipelineLhs->getRuleHook = domain_rule_lhs;
-  domainPipelineRhs->getRuleHook = domain_rule_rhs;
-
-  auto boundary_rule_lhs = [](int, int, int p) -> int { return 2 * p; };
-  auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
-  boundaryPipelineLhs->getRuleHook = boundary_rule_lhs;
-  boundaryPipelineRhs->getRuleHook = boundary_rule_rhs;
 
   MoFEMFunctionReturn(0);
 }
@@ -248,6 +218,22 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
+  MoFEMFunctionBegin;
+
+  auto domain_rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  auto domain_rule_rhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  domainPipelineLhs->getRuleHook = domain_rule_lhs;
+  domainPipelineRhs->getRuleHook = domain_rule_rhs;
+
+  auto boundary_rule_lhs = [](int, int, int p) -> int { return 2 * p; };
+  auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
+  boundaryPipelineLhs->getRuleHook = boundary_rule_lhs;
+  boundaryPipelineRhs->getRuleHook = boundary_rule_rhs;
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
@@ -314,6 +300,20 @@ MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
 
   CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
       ->writeFile("out_result.h5m");
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode Poisson2DNonhomogeneous::runProgram() {
+  MoFEMFunctionBegin;
+
+  readMesh();
+  setupProblem();
+  boundaryCondition();
+  assembleSystem();
+  setIntegrationRules();
+  solveSystem();
+  outputResults();
 
   MoFEMFunctionReturn(0);
 }
