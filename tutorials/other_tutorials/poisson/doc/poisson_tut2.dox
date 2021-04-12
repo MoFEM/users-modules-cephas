@@ -1,13 +1,13 @@
 /*! \page poisson_tut2 Implementing operators for the Poisson equation
 
-In this tutorial, we focus only on setting up finite element and implementation
+In this tutorial, we focus only on setting up finite elements and implementation
 of user data operator for the Poisson equation. It is the next step after
-tutorial \ref poisson_tut1. Source for this tutorial is in \ref PoissonOperators.hpp.
+tutorial \ref poisson_tut1. The source for this tutorial is in \ref PoissonOperators.hpp.
 
 MoFEM is designed to work with various approximation spaces and is utilizing
 hierarchical and heterogenous approximation bases. MoFEM design is reflected in
-hierarchy of classes and implementation of finite elements. Here we
-introduce user data operators which provide core functionality for application
+the hierarchy of classes and implementation of finite elements. Here we
+introduce user data operators, which provide core functionality for application
 developers.
 
 We distinguish between finite element structure (FES), finite element
@@ -15,35 +15,35 @@ entity (FEE), finite element class (FEC) and finite element object (FEO);
 
 - \b FES: Is a structure for declaring finite element, i.e. its name and on which
 fields it operates. It keeps information on meshset tag, meshset contains all
-entities on which given FES is defined. Structure of finite element is
+entities on which given FES is defined. The structure of finite elements is
 implemented in MoFEM::FiniteElement. This class is transparent for application
 developer and used directly by core library developers.
 
 - \b FEE: Is a particular entity on which FES is defined. This is implemented in
-MoFEM::EntFiniteElement and derived classes. On that structure data about degrees of freedom (DOFs)
-on finite element are stored. This hierarchy of classes is transparent for
+MoFEM::EntFiniteElement and derived classes. On that structure, data about degrees of freedom (DOFs)
+on finite elements are stored. This hierarchy of classes is transparent for
 application developer and used directly by core library developers.
 
-- \b FEC: FEC class is used to create FEO. FEC is set of methods operating on
+- \b FEC: FEC class is used to create FEO. FEC is a set of methods operating on
 FEE. In MoFEM we have hierarchy of FEC classes managing complexities associated
 with finite elements calculations.
 
 - \b FEO: Is an instance of FEC.
 
-Implementation of finite element class (FEC) is generic, does not depend on
-problem or PDE which is solved. The most generic FEC is derived directly from
+The implementation of finite element class (FEC) is generic, does not depend on
+problem or PDE, which is solved. The most generic FEC is derived directly from
 MoFEM::FEMethod. This element delivers raw access to multi-index  structures on
-FEE, enabling to make various queries about DOFs, for example to iterate over
-DOFs on lower entity of specific type or DOFs associated with particular field
-and order, utilizing flexibility of multi-index containers. The
+FEE, enabling to make various queries about DOFs. For example, to iterate over
+DOFs on a lower entity of specific type, or DOFs associated with particular field
+and order, utilizing the flexibility of multi-index containers. The
 MoFEM::ForcesAndSourcesCore finite element is derived form MoFEM::FEMethod. From
 MoFEM::ForcesAndSourcesCore are derived range of elements associated with
 particular dimensions, MoFEM::VolumeElementForcesAndSourcesCore,
 MoFEM::FaceElementForcesAndSourcesCore and more or special elements for
 particular type of entity, e.g. MoFEM::FatPrismElementForcesAndSourcesCore. The
-MoFEM::ForcesAndSourcesCore provides simplified interface to access DOFs indices,
+MoFEM::ForcesAndSourcesCore provides a simplified interface to access DOFs indices,
 calculation of base functions and other methods specific to finite element
-entity dimension or finite element entity type. Above comments and insight are
+entity dimension or finite element entity type.  The above comments and insight are
 not needed to develop application in MoFEM. However, it could help to understand
 unique capabilities. If you feel confused by the number of names, don't
 worry, I would be confused on the first reading as well.
@@ -65,7 +65,7 @@ managed internally by MoFEM. For example, UDO can be used to integrate bilinear
 form (calculate elements of matrices) and linear form  (elements of the right
 hand vector).
 
-UDO can be understood as an operator which executes job executed on FEE. UDO are
+UDO can be understood as an operator, that executes job executed on FEE. UDO are
 added/pushed to the FEO and called in sequence (order in
 which are pushed to finite element instance). For example, for vector or matrix
 assembly, finite elements entity (FEE) are iterated, then FEO is called for FEE.
@@ -73,7 +73,7 @@ FEO gets data from the database about FEE, calculates base functions on integrat
 points and other bookkeeping operations. FEO iterates over LDE and for each call
 sequence of UDO.
 
-Hierarchy of UDO classes reflects hierarchy of FEC, where
+Hierarchy of UDO classes reflects the hierarchy of FEC, where
 MoFEM::ForcesAndSourcesCore::UserDataOperator is derived from
 MoFEM::DataOperator. MoFEM::DataOperator is used by core library developers to
 do low level tasks on element, e.g. applying Piola Transform to base functions,
@@ -87,10 +87,10 @@ MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator and more, see \ref
 mofem_forces_and_sources.
 
 In this tutorial, we start with an example of creating finite element instances,
-i.e. FEO. This is a procedure which is repeated practically for every type of
-PDE in very similar way. We are using smart pointers to allocate FEO and UDO. If you
+i.e. FEO. This is a procedure that is repeated practically for every type of
+PDE in a very similar way. We are using smart pointers to allocate FEO and UDO. If you
 are not familiar with this C++ technology, you can skip that part and jump into
-section about the implementation of UDO (see \ref poisson_tut2_op_operators),
+the section about the implementation of UDO (see \ref poisson_tut2_op_operators),
 and come back to the following section later.
 
 \tableofcontents
@@ -137,7 +137,7 @@ boundary_lhs_fe->getRuleHook = FaceRule();
 boundary_rhs_fe->getRuleHook = FaceRule();
 
 // Ass operators to element instances
-// Add operator grad-grad for calualte matrix
+// Add operator grad-grad for calculate matrix
 domain_lhs_fe->getOpPtrVector().push_back(new OpK());
 // Add operator to calculate source terms
 domain_rhs_fe->getOpPtrVector().push_back(new OpF(f_source));
@@ -207,8 +207,8 @@ Dissecting the line, first we start with explicit code
 \code
 boost::ptr_vector<UserDataOperator>& sequence_of_operators = domain_lhs_fe->getOpPtrVector();
 \endcode
-You can see now \e getOpPtrVector returns vector of pointers to operators acting on
-finite element lower dimension entities. Now, having vector of pointers, we are going
+You can see now \e getOpPtrVector returns a vector of pointers to operators acting on
+finite element lower dimension entities. Now, having a vector of pointers, we are going
 to push operator at the end of it
 \code
 sequence_of_operators.push_back(new OpK());
@@ -225,7 +225,7 @@ domain_error->getOpPtrVector().push_back(
   new OpError(f_u,g_u,values_at_integation_ptr,grad_at_integation_ptr,global_error)
 );
 \endcode
-Dissecting above code, we start with creating matrix and vector and shared
+By dissecting the code above, we start with creating matrix and vector and shared
 pointers to them so that passed to operators are not destroyed with the end of
 the scope of the function. Matrix and vector will be destroyed at the time when
 operators using them are destroyed. Smart pointer will do for us that job and we
@@ -237,11 +237,11 @@ MoFEM::OpCalculateScalarFieldGradient is standard operator to calculate field
 gradients and store them in grad_at_integation_ptr. Classes MoFEM::OpCalculateScalarFieldValues
 and MoFEM::OpCalculateScalarFieldGradient are derived from MoFEM::ForcesAndSourcesCore::UserDataOperator
 and can be used with volume and face elements. Once we have field values
-and field gradients, we create third operator PoissonExample::OpError, which
+and field gradients, we create a third operator PoissonExample::OpError, which
 takes arguments with pointers to exact function, exact function derivatives, and
 field gradients. With those data at hand, it calculates H1 error norm. Class
 PoissonExample::OpError is derived form MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator
-and incense of it can be added only to object of MoFEM::VolumeElementForcesAndSourcesCore.
+and increase of it can be added only to object of MoFEM::VolumeElementForcesAndSourcesCore.
 
 \section poisson_tut2_op_operators Implementation of user data operators
 
@@ -346,7 +346,7 @@ and we have set of unique pairs,
 \}
 \end{array}
 \f]
-The number of base functions on each of entities depends on approximation order
+The number of base functions on each of the entities depends on approximation order
 and space, for example, see how it works for H-div and L2 space here \ref
 mixtransport_assmble_matrix. Since the last argument in the constructor is "true",
 it indicates that bilinear form is symmetric and iteration over entities is only
@@ -354,7 +354,7 @@ for unique unordered pairs, i.e. pair is a set with two elements. The task of
 integration over entities is managed by MoFEM::ForcesAndSourcesCore finite
 element from which all entity finite elements are derived.
 
-Now we can dissect overloaded function
+Now we can dissect the overloaded function
 \code
 /**
  * \brief Do calculations for give operator
@@ -425,7 +425,7 @@ if(
 \endcode
 This is when a type of entity and its side number (local index of the entity on
 the finite element) are both the same. Once we have this generic information, we
-call function to integrate local entity matrix and assemble results to global
+call a function to integrate local entity matrix and assemble results to global
 matrix
 \code
 CHKERR iNtegrate(row_data,col_data); 
@@ -487,7 +487,7 @@ a += alpha*(t_row_grad(i)*t_col_grad(i));
 \endcode
 where the grad-grad term is added to the local matrix.
 
-Finally, we assemble local matrix using PoissonExample::OpK::aSsemble
+Finally, we assemble the local matrix using PoissonExample::OpK::aSsemble
 \code
 inline MoFEMErrorCode PoissonExample::OpK::aSsemble(
   DataForcesAndSourcesCore::EntData &row_data,DataForcesAndSourcesCore::EntData &col_data
@@ -522,9 +522,9 @@ where the symmetry of the matrix is exploited.
 
 \subsection poisson_tut2_op_operators_vf The right hand side
 
-The right-hand operator is constructed first by making a generic class, see
-PoissonExample::OpBaseRhs. It is a template class with very exact
-structure to one shown for the grad-grad operator. However, is constructed
+The right-hand operator is constructed firstly by making a generic class, see
+PoissonExample::OpBaseRhs. It is a template class with a very similar
+structure to the one shown for the grad-grad operator. However, this is constructed
 differently
 \code
 PoissonExample::OpBaseRhs(const std::string field_name):
@@ -535,8 +535,7 @@ where OPBASE is a template and is replaced by
 VolumeElementForcesAndSourcesCore::UserDataOperator or
 FaceElementForcesAndSourcesCore::UserDataOperator when we integrate source term
 or constraints, respectively.  It takes only argument \e field_name, which can be
-"U" or "L" for integration over domain and boundary, respectively. This operator
-is type OPROW, that means its iterator is over entities
+"U" or "L" for integration over domain and boundary, respectively. This is OPROW type operator, that means its iterator is over entities
 \f[
 \mathcal{E}_\textrm{row},\mathcal{E}_\textrm{col} =
 \{VERTICES,EDGES \times 6,TRIAGLES \times 4,TETRAHEDRA \}
@@ -559,10 +558,10 @@ MoFEMErrorCode PoissonExample::OpBaseRhs::doWork(
   MoFEMFunctionReturn(0);
 }
 \endcode
-which has similar for loop to one shown for the grad-grad operator, however, this time
-base functions and indices are needed on rows only.
+which has similar for loop to the one shown for the grad-grad operator, but this time
+the base functions and indices are needed only on rows.
 
-With generic operator PoissonExample::OpBaseRhs, we can construct operator for
+With the generic operator PoissonExample::OpBaseRhs, we can construct the operator for
 the integration of source term
 \code
 struct PoissonExample::OpF: public OpBaseRhs<VolumeElementForcesAndSourcesCore::UserDataOperator> {
@@ -656,7 +655,7 @@ PoissonExample::OpError::aSsemble. PoissonExample::OpError is third in sequence.
 points using MoFEM::OpCalculateScalarFieldValues and
 MoFEM::OpCalculateScalarFieldGradient respectively.
 MoFEM::OpCalculateScalarFieldValues and MoFEM::OpCalculateScalarFieldGradient
-use operators which you find in other examples, and can be used in
+use operators that you find in other examples, and can be used in
 the context of volume, face, edge and vertex elements.
 
 Constructor of PoissonExample::OpError is as follows
@@ -681,7 +680,7 @@ gradient at integration points. Next, approximate function values and
 gradients, in shared pointer to vector and matrix, respectively. At last,
 PETSc vector is taken to accumulate values from all processes.
 
-This operator is type OPROW, and is evaluated for ERROR field which is in L2
+This is a OPROW type operator, and evaluated for ERROR field which is in L2
 space, as results this operator is executed only for set of entities
 \f[
 \mathcal{E}_\textrm{row} = \{ TETRAHEDRA \}
@@ -748,8 +747,8 @@ for(int gg = 0;gg!=nbIntegrationPts;gg++) {
 \endcode
 using ++t_u and ++t_grad to move tensors to the next integration point. In similar
 way, coordinates of integration points are iterated. Functions MoFEM::getFTensor0FromVec
-and MoFEM::getFTensor1FromMat take vector or matrix as an argument and express
-it using tensor data structure. Function
+and MoFEM::getFTensor1FromMat take vector or matrix as an argument and expresses
+it using the tensor data structure. Function
 MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator::getFTensor0IntegrationWeight
 and MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator::getFTensor1CoordsAtGaussPts are
 overloaded function for volume operator, to get integration weight and coordinates
