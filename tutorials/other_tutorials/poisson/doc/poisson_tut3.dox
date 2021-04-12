@@ -1,4 +1,4 @@
-/*! \page poisson_tut3 Using fieldsplit solver and DM sub problem.
+/*! \page poisson_tut3 Using field-split solver and DM subproblem.
 
 
 In this tutorial, we show how to create sub-problems by using discrete manager (DM)
@@ -9,7 +9,7 @@ preconditioner see \ref cell_forces.cpp
 
 The field-split preconditioner is a block solver where on a block of matrices we
 apply Jacobi or Gauss–Seidel iterations. Alternatively, if a matrix has 2x2
-blocks, a Schur complement can be approximated by preconditioner.  We do not
+blocks, a Schur complement can be approximated by a preconditioner.  We do not
 intend to explain mathematical details of block solver but merely show how to
 use PETSc preconditioner, i.e. \e PCFIELDSPLIT (see
 <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html>).
@@ -23,7 +23,7 @@ We change only small part of the code described in tutorial \ref poisson_tut1.
 
 \section poisson_tut3_block_matrix Block matrix
 
-We solve the same problem to one shown in \ref poisson_tut1.  However, to remove
+We solve the same problem to the one shown in \ref poisson_tut1.  However, to remove
 some issues with field-split solver, we will make the upper diagonal block of
 matrix invertible, by adding stabilisation matrix, which in this case has the
 interpretation of the penalty;
@@ -81,8 +81,8 @@ and do not differ to what was shown in \ref poisson_tut2.
 
 \section poisson_tut3_code_dissection Creation and assembly of sub-DM problems
 
-We will start with declaration of data structure necessary for creation of nested
-matrix. Nested matrix is PETSc structure which is used to store block matrices
+We will start with the declaration of data structure necessary for the creation of nested
+matrix. Nested matrix is PETSc structure, which stores block matrices
 and on which one can perform operations as on other matrices types.
 \code
 DM dm_sub_KK,dm_sub_LU;
@@ -115,7 +115,7 @@ CHKERR DMSetUp(dm_sub_KK);
 CHKERR DMMoFEMGetSubRowIS(dm_sub_KK,&nested_is[0]); 
 \endcode
 
-- Create matrix and assemble matrix \f$\mathbf{K}\f$ and penalty matrix
+- Create the matrix and assemble matrix \f$\mathbf{K}\f$ and penalty matrix
 \f$\mathbf{S}\f$ by iteration over domain finite elements entities and
 boundary finite elements entities
 \code
@@ -153,9 +153,9 @@ CHKERR MatTranspose(nested_matrices(1,0),MAT_INITIAL_MATRIX,&nested_matrices(0,1
 CHKERR DMDestroy(&dm_sub_LU); 
 \endcode
 
-\subsection poisson_tut3_vector Assembly of the right hand side vector
+\subsection poisson_tut3_vector Assembly of the right-hand side vector
 
-Now we assemble global the right hand side vector, in the usual way using global
+Now we assemble global the right-hand side vector, in the usual way using global
 DM
 \code
 domain_rhs_fe->ksp_f = F;
@@ -223,7 +223,7 @@ CHKERR KSPSolve(solver,F,D);
 
 \section poisson_tut3_running_program Running the program
 
-In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. Typically, this can be done as follows
+To run the program, the user should first go to the directory where the problem is located, compile the code and then run the executable file. Typically, this can be done as follows
 
 \code
 cd mofem_install/um/build/basic_finite_elements/poisson
@@ -363,7 +363,7 @@ ave:      0.3
  5 KSP Residual norm 5.494536394249e-13
 Approximation error 3.391e-11
 \endverbatim
-Note that KPS solver make 5 iterations to converge, since in this case,
+Note that KPS solver takes 5 iterations to converge, since in this case,
 Schur complaint is approximated by pre-conditioner. If from other hand
 we use full Schur complement with and use direct solver
 \code
@@ -380,7 +380,7 @@ we will get
 1 KSP Residual norm 6.498236020454e-01
 2 KSP Residual norm 9.691076621610e-12
 \endverbatim
-Note that we converged in three steps in that case.
+Note that, in this case, we converged in three steps.
 
 \section poisson_tut3_excercise Exercises
 
