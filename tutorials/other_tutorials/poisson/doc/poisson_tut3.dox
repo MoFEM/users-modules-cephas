@@ -9,7 +9,7 @@ preconditioner see \ref cell_forces.cpp
 
 The field-split preconditioner is a block solver where on a block of matrices we
 apply Jacobi or Gauss–Seidel iterations. Alternatively, if a matrix has 2x2
-blocks, a Schur complement can be approximated by preconditioner.  We do not
+blocks, a the Schur complement can be approximated by preconditioner.  We do not
 intend to explain mathematical details of block solver but merely show how to
 use PETSc preconditioner, i.e. \e PCFIELDSPLIT (see
 <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html>).
