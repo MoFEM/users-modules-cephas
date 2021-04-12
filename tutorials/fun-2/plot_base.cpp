@@ -419,28 +419,44 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
     }
   }
 
-  // Calculate sheape functions
-  shapeFunctions.resize(elem_nodes.size(), SPACE_DIM + 1);
-  if (SPACE_DIM == 2)
-    CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
-                                &gaussPts(0, 0), &gaussPts(1, 0),
-                                elem_nodes.size());
-
-  if (SPACE_DIM == 3)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
-            "Not yet simplemented version for 3d");
-
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   MoFEMFunctionBegin;
 
+  const int num_nodes = gaussPts.size2();
+
+  // Calculate sheape functions
+
+  switch (numeredEntFiniteElementPtr->getEntType()) {
+  case MBTRI:
+    shapeFunctions.resize(num_nodes, SPACE_DIM + 1);
+    CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
+                                &gaussPts(0, 0), &gaussPts(1, 0),
+                                num_nodes);
+    break;
+  case MBQUAD: {
+    shapeFunctions.resize(num_nodes, SPACE_DIM + 2);
+    for (int gg = 0; gg != num_nodes; gg++) {
+      double ksi = gaussPts(0, gg);
+      double eta = gaussPts(1, gg);
+      shapeFunctions(gg, 0) = N_MBQUAD0(ksi, eta);
+      shapeFunctions(gg, 1) = N_MBQUAD1(ksi, eta);
+      shapeFunctions(gg, 2) = N_MBQUAD2(ksi, eta);
+      shapeFunctions(gg, 3) = N_MBQUAD3(ksi, eta);
+    }
+  } break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "Not implemented element type");
+  }
+
   // Create physical nodes
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
 
-  const int num_nodes = gaussPts.size2();
+
   std::vector<double *> arrays;
   EntityHandle startv;
   CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
@@ -482,11 +498,11 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   EntityHandle fe_ent = numeredEntFiniteElementPtr->getEnt();
   coords.resize(12, false);
+  int fe_num_nodes;
   {
     const EntityHandle *conn;
-    int num_nodes;
-    mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
-    CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords[0]);
+    mField.get_moab().get_connectivity(fe_ent, conn, fe_num_nodes, true);
+    CHKERR mField.get_moab().get_coords(conn, fe_num_nodes, &coords[0]);
   }
 
   // Set physical coordinates to physical nodes
@@ -502,7 +518,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
     FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
         t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
     t_coords(i) = 0;
-    for (int nn = 0; nn != SPACE_DIM + 1; ++nn) {
+    for (int nn = 0; nn != fe_num_nodes; ++nn) {
       t_coords(i) += t_n * t_ele_coords(i);
       for (auto ii : {0, 1, 2})
         if (std::abs(t_coords(ii)) < std::numeric_limits<float>::epsilon())
