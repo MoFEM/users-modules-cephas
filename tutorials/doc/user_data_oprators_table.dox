@@ -475,6 +475,28 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <tr>
 
+<td>
+
+Modify integration weights on face to take in account higher-order
+geometry \ref MoFEM::OpMakeHighOrderGeometryWeightsOnFace
+
+Suppose jacobian is not constat on the finite element, then this operator set integration weights to take into account the geometry of the finite element, that is, a case for a non-parallelepiped quad. Also, that is a case for any face element given by higher-order geometry approximation. Note that geometry in %MoFEM can be represented by an arbitrary orde approximation field.
+
+\f[
+w^g = \left(\frac{\|J(\pmb\xi^g)\|}{A}\right) W^g
+\f]
+where \f$w^g\f$ is wieght on update configuration, \f$W^g\f$ integration weight at intergration point \f$g\f$, at reference point \f$\pmb\xi^g\f$. \f$\|J(\pmb\xi^g)\|\f$ is determinant of the jacobian, and \f$A\f$ is area of face element.
+
+<td>
+
+Example 
+\code
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+    new OpMakeHighOrderGeometryWeightsOnFace());
+\endcode
+
+<tr>
+
 </table>
 
 \note User data operators are defined in file \ref UserDataOperators.hpp
