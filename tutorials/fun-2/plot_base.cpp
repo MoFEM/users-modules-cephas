@@ -84,7 +84,6 @@ private:
 
   FieldApproximationBase base;
   FieldSpace space;
-
 };
 
 //! [Run programme]
@@ -107,59 +106,57 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
 
-  PetscBool load_file = PETSC_TRUE;
+  PetscBool load_file = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-load_file", &load_file,
                              PETSC_NULL);
 
-  if(load_file == PETSC_TRUE) {
+  if (load_file == PETSC_FALSE) {
 
-  auto &moab = mField.get_moab();
+    auto &moab = mField.get_moab();
 
-  if (SPACE_DIM == 3) {
+    if (SPACE_DIM == 3) {
 
-    // create one tet
-    double tet_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
-    EntityHandle nodes[4];
-    for (int nn = 0; nn < 4; nn++) {
-      CHKERR moab.create_vertex(&tet_coords[3 * nn], nodes[nn]);
+      // create one tet
+      double tet_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
+      EntityHandle nodes[4];
+      for (int nn = 0; nn < 4; nn++) {
+        CHKERR moab.create_vertex(&tet_coords[3 * nn], nodes[nn]);
+      }
+      EntityHandle tet;
+      CHKERR moab.create_element(MBTET, nodes, 4, tet);
+      Range adj;
+      for (auto d : {1, 2})
+        CHKERR moab.get_adjacencies(&tet, 1, d, true, adj);
     }
-    EntityHandle tet;
-    CHKERR moab.create_element(MBTET, nodes, 4, tet);
-    Range adj;
-    for (auto d : {1, 2})
-      CHKERR moab.get_adjacencies(&tet, 1, d, true, adj);
-  }
 
-  if (SPACE_DIM == 2) {
+    if (SPACE_DIM == 2) {
 
-    // create one triangle
-    double tri_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
-    EntityHandle nodes[3];
-    for (int nn = 0; nn < 3; nn++) {
-      CHKERR moab.create_vertex(&tri_coords[3 * nn], nodes[nn]);
+      // create one triangle
+      double tri_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+      EntityHandle nodes[3];
+      for (int nn = 0; nn < 3; nn++) {
+        CHKERR moab.create_vertex(&tri_coords[3 * nn], nodes[nn]);
+      }
+      EntityHandle tri;
+      CHKERR moab.create_element(MBTRI, nodes, 3, tri);
+      Range adj;
+      CHKERR moab.get_adjacencies(&tri, 1, 1, true, adj);
     }
-    EntityHandle tri;
-    CHKERR moab.create_element(MBTRI, nodes, 3, tri);
-    Range adj;
-    CHKERR moab.get_adjacencies(&tri, 1, 1, true, adj);
-  }
 
-  CHKERR mField.rebuild_database();
-  CHKERR mField.getInterface(simpleInterface);
-  simpleInterface->setDim(SPACE_DIM);
+    CHKERR mField.rebuild_database();
+    CHKERR mField.getInterface(simpleInterface);
+    simpleInterface->setDim(SPACE_DIM);
 
-  // Add all elements to database
-  CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
-      0, SPACE_DIM, simpleInterface->getBitRefLevel());
+    // Add all elements to database
+    CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        0, SPACE_DIM, simpleInterface->getBitRefLevel());
 
   } else {
 
-  CHKERR mField.getInterface(simpleInterface);
-  CHKERR simpleInterface->getOptions();
-  CHKERR simpleInterface->loadFile();
-
+    CHKERR mField.getInterface(simpleInterface);
+    CHKERR simpleInterface->getOptions();
+    CHKERR simpleInterface->loadFile();
   }
-  
 
   MoFEMFunctionReturn(0);
 }
@@ -252,7 +249,7 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->generateReferenceElementMesh();
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
-  if(SPACE_DIM == 2) {
+  if (SPACE_DIM == 2) {
     if (space == HCURL) {
       MatrixDouble inv_jac(2, 2), jac(2, 2);
       post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
@@ -433,8 +430,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   case MBTRI:
     shapeFunctions.resize(num_nodes, SPACE_DIM + 1);
     CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
-                                &gaussPts(0, 0), &gaussPts(1, 0),
-                                num_nodes);
+                                &gaussPts(0, 0), &gaussPts(1, 0), num_nodes);
     break;
   case MBQUAD: {
     shapeFunctions.resize(num_nodes, SPACE_DIM + 2);
@@ -455,7 +451,6 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   // Create physical nodes
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
-
 
   std::vector<double *> arrays;
   EntityHandle startv;
