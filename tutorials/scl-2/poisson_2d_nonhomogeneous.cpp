@@ -5,6 +5,8 @@
 using namespace MoFEM;
 using namespace Poisson2DNonhomogeneousOperators;
 
+using PostProcFaceEle = PostProcFaceOnRefinedMesh;
+
 static char help[] = "...\n\n";
 
 struct Poisson2DNonhomogeneous {
@@ -41,15 +43,6 @@ private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
 
-  // mpi parallel communicator
-  MPI_Comm mpiComm;
-  // Number of processors
-  const int mpiRank;
-
-  // Discrete Manager and linear KSP solver using SmartPetscObj
-  SmartPetscObj<DM> dM;
-  SmartPetscObj<KSP> kspSolver;
-
   // Field name and approximation order
   std::string domainField;
   int oRder;
@@ -58,27 +51,12 @@ private:
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
-  // MoFEM working Pipelines for LHS and RHS of domain and boundary
-  boost::shared_ptr<FaceEle> domainPipelineLhs;
-  boost::shared_ptr<FaceEle> domainPipelineRhs;
-  boost::shared_ptr<EdgeEle> boundaryPipelineLhs;
-  boost::shared_ptr<EdgeEle> boundaryPipelineRhs;
-
-  // Object needed for postprocessing
-  boost::shared_ptr<FaceEle> postProc;
-
   // Boundary entities marked for fieldsplit (block) solver - optional
   Range boundaryEntitiesForFieldsplit;
 };
 
 Poisson2DNonhomogeneous::Poisson2DNonhomogeneous(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field), mpiComm(mField.get_comm()),
-      mpiRank(mField.get_comm_rank()) {
-  domainPipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  domainPipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  boundaryPipelineLhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
-  boundaryPipelineRhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
-}
+    : domainField("U"), mField(m_field) {}
 
 MoFEMErrorCode Poisson2DNonhomogeneous::readMesh() {
   MoFEMFunctionBegin;
@@ -111,7 +89,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
   // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  auto get_ents_on_mesh_skin = [&]() {
+  auto get_entities_on_mesh = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
@@ -143,7 +121,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
   // Get global local vector of marked DOFs. Is global, since is set for all
   // DOFs on processor. Is local since only DOFs on processor are in the
   // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  boundaryMarker = mark_boundary_dofs(get_entities_on_mesh());
 
   MoFEMFunctionReturn(0);
 }
@@ -151,68 +129,50 @@ MoFEMErrorCode Poisson2DNonhomogeneous::boundaryCondition() {
 MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetBc(domainField, true, boundaryMarker));
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhs(domainField, domainField));
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpUnSetBc(domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // domain elements
-    domainPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpSetBc(domainField, true, boundaryMarker));
-    domainPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhs(domainField, sourceTermFunction));
-    domainPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpUnSetBc(domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // boundary elements
-    boundaryPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpSetBc(domainField, false, boundaryMarker));
-    boundaryPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryLhs(domainField, domainField));
-    boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpUnSetBc(domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // boundary elements
-    boundaryPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpSetBc(domainField, false, boundaryMarker));
-    boundaryPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpBoundaryRhs(domainField, boundaryFunction));
-    boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  }
-
-  // get Discrete Manager (SmartPetscObj)
-  dM = simpleInterface->getDM();
-
-  { // Set operators for linear equations solver (KSP) from MoFEM Pipelines
-
-    // Set operators for calculation of LHS and RHS of domain elements
-    boost::shared_ptr<FaceEle> null_face;
-    CHKERR DMMoFEMKSPSetComputeOperators(dM, simpleInterface->getDomainFEName(),
-                                         domainPipelineLhs, null_face,
-                                         null_face);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getDomainFEName(),
-                                   domainPipelineRhs, null_face, null_face);
-
-    // Set operators for calculation of LHS and RHS of domain elements
-    boost::shared_ptr<EdgeEle> null_edge;
-    CHKERR DMMoFEMKSPSetComputeOperators(
-        dM, simpleInterface->getBoundaryFEName(), boundaryPipelineLhs,
-        null_edge, null_edge);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getBoundaryFEName(),
-                                   boundaryPipelineRhs, null_edge, null_edge);
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+        new OpUnSetBc(domainField));
   }
 
   MoFEMFunctionReturn(0);
@@ -221,15 +181,17 @@ MoFEMErrorCode Poisson2DNonhomogeneous::assembleSystem() {
 MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
   MoFEMFunctionBegin;
 
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+
   auto domain_rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
   auto domain_rule_rhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  domainPipelineLhs->getRuleHook = domain_rule_lhs;
-  domainPipelineRhs->getRuleHook = domain_rule_rhs;
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(domain_rule_lhs);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(domain_rule_rhs);
 
   auto boundary_rule_lhs = [](int, int, int p) -> int { return 2 * p; };
   auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
-  boundaryPipelineLhs->getRuleHook = boundary_rule_lhs;
-  boundaryPipelineRhs->getRuleHook = boundary_rule_rhs;
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_lhs);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_rhs);
 
   MoFEMFunctionReturn(0);
 }
@@ -237,19 +199,20 @@ MoFEMErrorCode Poisson2DNonhomogeneous::setIntegrationRules() {
 MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
-  // Create RHS and solution vectors
-  SmartPetscObj<Vec> global_rhs, global_solution;
-  CHKERR DMCreateGlobalVector_MoFEM(dM, global_rhs);
-  global_solution = smartVectorDuplicate(global_rhs);
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-  // Setup KSP solver
-  kspSolver = createKSP(mField.get_comm());
-  CHKERR KSPSetFromOptions(kspSolver);
+  auto ksp_solver = pipeline_mng->createKSP();
+  CHKERR KSPSetFromOptions(ksp_solver);
+
+  // Create RHS and solution vectors
+  auto dm = simpleInterface->getDM();
+  auto F = smartCreateDMVector(dm);
+  auto D = smartVectorDuplicate(F);
 
   // Setup fieldsplit (block) solver - optional: yes/no
   if (1) {
     PC pc;
-    CHKERR KSPGetPC(kspSolver, &pc);
+    CHKERR KSPGetPC(ksp_solver, &pc);
     PetscBool is_pcfs = PETSC_FALSE;
     PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
 
@@ -259,7 +222,7 @@ MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
     if (is_pcfs == PETSC_TRUE) {
       IS is_domain, is_boundary;
       const MoFEM::Problem *problem_ptr;
-      CHKERR DMMoFEMGetProblemPtr(dM, &problem_ptr);
+      CHKERR DMMoFEMGetProblemPtr(dm, &problem_ptr);
       CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
           problem_ptr->getName(), ROW, domainField, 0, 1, &is_boundary,
           &boundaryEntitiesForFieldsplit);
@@ -271,16 +234,15 @@ MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
     }
   }
 
-  CHKERR KSPSetDM(kspSolver, dM);
-  CHKERR KSPSetUp(kspSolver);
+  CHKERR KSPSetUp(ksp_solver);
 
   // Solve the system
-  CHKERR KSPSolve(kspSolver, global_rhs, global_solution);
-  // VecView(global_rhs, PETSC_VIEWER_STDOUT_SELF);
+  CHKERR KSPSolve(ksp_solver, F, D);
 
   // Scatter result data on the mesh
-  CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
-                                  SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
@@ -288,18 +250,17 @@ MoFEMErrorCode Poisson2DNonhomogeneous::solveSystem() {
 MoFEMErrorCode Poisson2DNonhomogeneous::outputResults() {
   MoFEMFunctionBegin;
 
-  postProc = boost::shared_ptr<FaceEle>(new PostProcFaceOnRefinedMesh(mField));
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
 
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->generateReferenceElementMesh();
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->addFieldValuesPostProc(domainField);
-
-  CHKERR DMoFEMLoopFiniteElements(dM, simpleInterface->getDomainFEName(),
-                                  postProc);
-
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->writeFile("out_result.h5m");
+  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc(domainField);
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  pipeline_mng->getBoundaryRhsFE() = post_proc_fe;
+  CHKERR pipeline_mng->loopFiniteElements();
+  CHKERR post_proc_fe->writeFile("out_result.h5m");
 
   MoFEMFunctionReturn(0);
 }
