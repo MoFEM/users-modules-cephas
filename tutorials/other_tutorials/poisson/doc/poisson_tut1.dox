@@ -6,48 +6,48 @@ If the reader would prefer, instead, to start from an application to a
 solid mechanics problem, he/she might leave this tutorial for later and 
 proceed directly to \ref simple_elasticity_1 and \ref elasticity_mixed_formulation.
 
-This tutorial shows how to solve Poisson equation. We introduce the basic
-concepts in MoFEM and exploiting MoFEM::Simple interface to set-up problem. A
-procedure is applied to the Poisson problem but easily can be modified to other
+This tutorial shows how to solve the Poisson equation. We introduce the basic
+concepts in MoFEM and exploit the MoFEM::Simple interface to set-up the problem. A
+procedure is applied to the Poisson problem but can easily be modified to other
 problems from elasticity, fluid mechanics, thermo-elasticity, electromagnetics,
-etc. Also, methodology from this tutorial can be applied to mix-problems,
+etc. Methodology from this tutorial can also be applied to mix-problems,
 discontinuous Galerkin method or coupled problems.
 
 We introduce fundamentals of MoFEM::Interface and MoFEM::Simple interfaces and
-show how to link MoFEM data structures with PETSc discrete manager. Also, we
+show how to link MoFEM data structures with PETSc discrete manager. We also
 show how to describe fields and how to loop/iterate finite elements. This
-example is restricted to linear problem and body is subjected to inhomogeneous
-Dirichlet boundary conditions only. We do not explain here how to implement
-finite element data operator; this is part of tutorial \ref poisson_tut2.
+example is restricted to linear problems and the body is subjected to inhomogeneous
+Dirichlet boundary conditions only. We do not explain how to implement
+finite element data operator in this tutorial; this is part of tutorial \ref poisson_tut2.
 
 While writing this tutorial we don't know what type of person you are. Do you like to
 see examples first, before seeing the big picture? Or do you prefer to see big
-picture first and then look for the details after? If you are second kind, you
-would like to see this first \ref general_data_structure before you start with
-implementation. If you like to start from examples, skip the general details and
-go to code.
+picture first and then look for the details after? If you are second kind, its suggested you look at
+ \ref general_data_structure first before you start with
+implementation. If you like to begin with examples, skip the general details and
+go straight to the code.
 
-MoFEM has a bottom-up design, have several levels of abstraction, yet enables
-users at any level to hack levels below. That is intended to give freedom to
+MoFEM has a bottom-up design, with several levels of abstraction, yet enables
+users at any level to hack levels below. This is intended to give freedom to
 create new methods and solve problems in new ways.
 
 - \b level \b 0: Database level, users access structures of the database
 directly using the functionality of hierarchy of multi-indexes. Core
-developers working on very generic low-level functionality most likely will
-use that level.
+developers working on very generic low-level functionality will most likely
+ use this level.
 
 - \b level \b 1: Database is accessed by MoFEM::Interface allowing a user to add
-fields, elements and problems. Interface deliver functionality to iterate over
-elements, however on the finite element level user operates on database
-accessing directly multi-indexes. It is a level of core library developers,
+fields, elements and problems. Interface delivers functionality to iterate over
+elements, however on the finite element level the user operates on the database
+accessing multi-indexes directly. It is a level of core library developers,
 most likely you are not interested what happens at this level, at least at the
 beginning.
 
-- \b level \b 2: User access database by interfaces, e.g.
+- \b level \b 2: User accesses database by interfaces, e.g.
 MoFEM::MeshsetsManager, MoFEM::NodeMergerInterface, MoFEM::MeshRefinement and
 other interfaces. Each interface provides new functionality and uses
 MoFEM/MoAB database to store and exchange data. Problems are managed by
-MoFEM::ProblemsManager, which indexes degrees of freedom (DOFs) on distributed meshes, and do all
+MoFEM::ProblemsManager, which indexes degrees of freedom (DOFs) on distributed meshes, and does all the
 bookkeeping needed to construct matrices and vectors. Other low-level
 interfaces are provided managing "bit levels" or filed algebra. From time to
 time you would use those interfaces, but not in this tutorial.
@@ -63,14 +63,14 @@ operators for PDE given in a weak form. This is implemented by specialization of
 User Data Operators (UDO) and overloaded operators on fields (not yet
 implemented).
 
-Each level up simplifies implementation, making code short and easier to follow,
-from the other hand limiting flexibility. In this tutorial, we focus attention on
-functions from \b level \b 3, we are not going to describe here how finite element
+Each level up simplifies implementation, making the code shorter and easier to follow,
+whilst sacrificing flexibility. In this tutorial, we focus attention on
+functions from \b level \b 3, we are not going to describe here how the finite element
 is implemented, this is part of the next tutorial, \ref poisson_tut2. In this
-one, we focus on generic steps presented in \ref figure_1_level_3_interfaces "Figure 1" below in yellow boxes.
+tutorial, we focus on generic steps presented in \ref figure_1_level_3_interfaces "Figure 1" below in yellow boxes.
 
 We designed code to give you a freedom to create code which does what you want
-and does not force you to follow beaten path. The implementation shown here is
+and does not force you to follow the beaten path. The implementation shown here is
 similar for other types of PDEs, even for nonlinear or time-dependent problems. You
 don't have to understand every detail of the code here, sometimes we are using
 advanced C++. That understanding will come later. For example, if you like to
@@ -90,10 +90,10 @@ We solve the most basic of all PDEs, i.e. the Poisson equation,
 \f[
 -\nabla^2 u(\mathbf{x}) = f(\mathbf{x}),\quad \textrm{in}\,\Omega\\
 \f]
-where \f$u=u(\mathbf{x})\f$ is unknown function, \f$f(\mathbf{x})\f$ is a given
-source term. The Poisson equation is in so-called \e strong form, it has to be
+where \f$u=u(\mathbf{x})\f$ is an unknown function, \f$f(\mathbf{x})\f$ is a given
+source term. The Poisson equation is in the so-called \e strong form, it has to be
 satisfied at every point of the body without boundary. To solve this PDE we need to
-describe the problem on the boundary, in this simple case for the purpose of
+describe the problem on the boundary, in this simple case for the purpose of the 
 tutorial we are self-restricted to Dirichlet boundary condition where functions
 values are given by
 \f[
@@ -119,7 +119,7 @@ of the fundamental laws of the universe.
 
 \section poisson_tut1_variational_formulation Finite element variational formulation
 
-It is well-established recipe how to change the equation in the form convenient
+It is a well-established recipe how to change the equation in the form convenient
 for finite element calculations. The Poisson equation is multiplied by function
 \f$u\f$ and integrated by parts. Without going into mathematical details, applying
 this procedure and enforcing constraints with Lagrange multiplier method, we get
@@ -172,20 +172,20 @@ Euler-Lagrange  equations for discretised problem
 \mathbf{g} = \int_{\partial\Omega} \boldsymbol\psi^\textrm{T} \overline{u} \textrm{d}\partial\Omega.
 \f]
 Applying this procedure, we transformed essential boundary conditions (in this
-case Dirichlet boundary conditions) into problems with natural boundary
-conditions only. Essential boundary conditions need to be a priory satisfied by
+case Dirichlet boundary conditions) into problems with only natural boundary
+conditions. Essential boundary conditions need to be satisfied by the 
 approximation base. Natural conditions are satisfied while
 the problem is solved. Note that Lagrange multiplier has interpretation of flux
 here, which is in \f$H^{-\frac{1}{2}}(\partial\Omega)\f$ space. However, in this
-case, the approximation of Lagrange multiplier by a discontinuous piecewise results in
+case, the approximation of the Lagrange multiplier by a discontinuous piecewise results in
 a singular system of equations, since values are not bounded for natural
 (Neumann) boundary conditions when prescribed on all \f$\partial\Omega\f$. For
-such case, the solution is defined up to an additive constant. To remove that
+such a case, the solution is defined up to an additive constant. To remove that
 difficulty, we will use subspace of trace space, i.e.
 \f$H^{-1}(\partial\Omega)\f$, that will generate as many constraints as many
-degrees of freedom for \f$u^h\f$ on body boundary, and thus enforce boundary
+degrees of freedom for \f$u^h\f$ on the body boundary, and thus enforce the boundary
 conditions exactly. For more information about
-spaces and deeper insight in the Poisson equation see
+spaces and deeper insight into the Poisson equation see
 \cite demkowicz2006computing, \cite brezzi2008mixed and \cite reddy2013introductory.
 
 Matrices and vectors are implemented using user data operators (UDO);
@@ -236,8 +236,8 @@ equation.
 
 \subsection poisson_tut1_code_disection_ss1 Exact solution functions
 
-We choose arbitrary 3rd polynomial function, we add function for the gradient to
-evaluate error on element and function for Laplacian to apply it as a source
+We choose an arbitrary 3rd polynomial function, we add a function for the gradient to
+evaluate error on the element and a function for Laplacian to apply it as a source
 term in the Poisson equation.
 \code
 struct ExactFunction {
@@ -293,7 +293,7 @@ link to it MoAB. MoFEM database is accessed by MoFEM::Interface.
 MoFEM::Core mofem_core(moab);                      // create database
 MoFEM::Interface& m_field = mofem_core;            // create interface to database
 \endcode
-Also, we need to register in PETSc implementation of MoFEM Discrete Manager
+Also, we need to register in PETSc implementation of MoFEM Discrete Manager.
 \code
 CHKERR DMRegister_MoFEM("DMMOFEM");  // register MoFEM DM in PETSc
 \endcode
@@ -304,7 +304,7 @@ We start with declaring smart pointers to finite element objects. A smart
 pointer is like a "raw" pointer, but you do not have to remember to delete
 allocated memory to which it points. More about shared pointers you find
 <a href=https://www.boost.org/doc/libs/1_68_0/libs/smart_ptr/doc/html/smart_ptr.html#shared_ptr>here</a>, if you
-don't know what is a pointer, look <a href=https://en.wikipedia.org/wiki/Pointer_(computer_programming)>here</a>. You do not have
+don't know what a pointer is, look <a href=https://en.wikipedia.org/wiki/Pointer_(computer_programming)>here</a>. You do not have
 to look at the details now, you can start working with code by making
 modifications of solutions which are already there.
 \code
@@ -335,10 +335,10 @@ CHKERR PoissonExample::CreateFiniteElements(m_field).createFEToEvaluateError(
 CHKERR PoissonExample::CreateFiniteElements(m_field).creatFEToPostProcessResults(post_proc_volume); 
 \endcode
 Note that those implementations are problem independent, we could use them in
-different problems context. To make that more visible, we create those elements
-before fields and problem are defined and build. The purpose of finite elements
+ a different problems context. To make that more visible, we create those elements
+before fields and problem are defined and built. The purpose of finite elements
 is shown in Figure 3 and Figure 4, by users data operators added to a finite
-element. Finite element "domain_lhs_fe" is used to calculate matrix by using
+element. Finite element "domain_lhs_fe" is used to calculate the matrix by using
 PoissonExample::OpK, finite element "domain_rhs_fe" is used with
 PoissonExample::OpF. Similarly for a boundary, operators PoissonExample::OpC
 and PoissonExample::Op_g are used to integrate matrices and right vector
@@ -346,7 +346,7 @@ for Lagrange multipliers, with finite elements "boundary_lhs_fe" and
 "boundary_rhs_fe", respectively. The operators MoFEM::OpCalculateScalarFieldValues,
 MoFEM::OpCalculateScalarFieldGradient and PoissonExample::OpError are used to
 integrate error in H1 norm in domain. Finite element "post_proc_volume" is used
-to post-process results for <a href=https://www.paraview.org>ParaView</a> (or another visualization tool), it has set
+to post-process results for <a href=https://www.paraview.org>ParaView</a> (or another visualization tool), it has a set
 of specialised operators saving results on nodes and allows to refine mesh when
 ho-approximation is used. The result can be stored for example on 10-node
 tetrahedra if needed. More details about implementation of
@@ -365,7 +365,7 @@ Simple *simple_interface;
 CHKERR m_field.getInterface(simple_interface); 
 \endcode
 
-- Now we load mesh file and get additional options related to simple interface
+- Now we load a mesh file and get additional options related to simple interface
 \code
 CHKERR simple_interface->getOptions(); 
 CHKERR simple_interface->loadFile(); 
@@ -383,7 +383,7 @@ CHKERR simple_interface->setFieldOrder("ERROR",0);  // approximation order for e
 Note that fields of "U" and Lagrange multipliers "L" are in space H1, error field
 is in L2 space to store error on each element.
 
-- Finally, problem is built by triggering set-up procedure
+- Finally, problem is built by triggering the set-up procedure
 \code
 CHKERR simple_interface->setUp(); 
 \endcode
@@ -418,7 +418,7 @@ CHKERR DMMoFEMKSPSetComputeRHS(
 ); 
 \endcode
 
-At that point, we can solve problem, applying exclusively functions from native
+At that point, we can solve the problem, applying functions exclusively from native
 PETSc interface
 \code
 // Create the right hand side vector and vector of unknowns
@@ -439,7 +439,7 @@ CHKERR KSPSetUp(solver);
 // solves system of equations. Results are stored in vector D.
 CHKERR KSPSolve(solver,F,D); 
 \endcode
-In above code, KSP solver takes control. The KSP solver is using DM creates matrix and
+In the above code, KSP solver takes control. The KSP solver is using DM creates matrix and
 calls DM functions to iterate over finite elements and assembles matrix and
 vectors. KSP solver knows how to do it since it is using MoFEM DM which we
 registered at the very beginning, and get an instance of particular DM from
@@ -451,7 +451,7 @@ Once we have the solution, DOFs values in solution vector are scattered on the m
 CHKERR DMoFEMMeshToGlobalVector(dm,D,INSERT_VALUES,SCATTER_REVERSE); 
 \endcode
 
-It is evident here the role of MoFEM, having topology (mesh) in MoAB database,
+The role of MoFEM is evident here, having topology (mesh) in MoAB database,
 MoFEM is used to manage complexities related to problem discretization and
 construction of algebraic systems of equations (linear in this case). Meanwhile,
 PETSc manages complexities related to algebra and solution of the problem. For
@@ -619,7 +619,7 @@ Approximation error 2.335e-15
 
 \subsection poisson_tut1_running_program_visualisation Visualization
 
-Once we have solution, you can convert file to VTK and open it in ParaView as shown in \ref figure_4_result_paraview "Figure 4"
+Once we have the solution, you can convert the file to VTK and open it in ParaView as shown in \ref figure_4_result_paraview "Figure 4"
 \code
 mbconvert out_vol.h5m out_vol.vtk
 open out_vol.vtk
@@ -682,7 +682,7 @@ H1 space, see \ref poisson_tut2
 
 - Exercise 5: Make convergence plots for polynomial and trigonometric exact functions.
 
-Please feel free to ask question on our Q&A forum, see
+Please feel free to ask any questions on our Q&A forum, see
 <a href=https://groups.google.com/forum/#!forum/mofem-group>link</a>.
 
 \section poisson_tut1_notes Notes
