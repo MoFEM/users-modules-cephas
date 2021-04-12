@@ -12,7 +12,15 @@
 - Convergence analysis for p-adaptive refinement
 \tableofcontents
 
+\section Introduction and motivation 
+
+Consideratioon of mixed formulation represents Introduction of two or more auxiliary variables in a problem governed by one physical process. 
+Possible reasons for using the mixed formulation:
+
+
+
 \include mixed_poisson.cpp
+
 
 
 
