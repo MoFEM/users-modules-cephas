@@ -24,19 +24,23 @@ set(permissions_execute
   GROUP_EXECUTE)
 
 tutorials_copy_and_install("*.msh" "${permissions_default}")
-tutorials_copy_and_install("*.cfg" "${permissions_default}")
-# tutorials_copy_and_install("*.jou" "${permissions_default}")
 tutorials_copy_and_install("*.cub" "${permissions_default}")
 tutorials_copy_and_install("*.h5m" "${permissions_default}")
-tutorials_copy_and_install("*.petsc" "${permissions_default}")
-tutorials_copy_and_install("*.sh" "${permissions_execute}")
-tutorials_copy_and_install("*.geo" "${permissions_execute}")
+tutorials_copy_and_install("*.md" "${permissions_execute}")
 
 tutorials_build_and_install(
-  mixed_poisson ${CMAKE_CURRENT_SOURCE_DIR}/mixed_poisson.cpp)
+  plot_base_2d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
+set_target_properties(
+  plot_base_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
+
+# Add 3d when is tested
+#tutorials_build_and_install(
+#  plot_base_3d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
+#set_target_properties(
+#  plot_base_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3") 
 
 add_test(
-  mixed_poisson
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/mixed_poisson
-  -file_name ${CMAKE_CURRENT_BINARY_DIR}/mesh2d.h5m -log_no_color)
+    plot_base_2d_h1_ainsworth
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+    ${CMAKE_CURRENT_BINARY_DIR}/plot_base_2d
+    -base ainsworth -space h1 -order 3 -log_no_color)
