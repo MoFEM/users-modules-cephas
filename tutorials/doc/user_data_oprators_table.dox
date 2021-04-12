@@ -342,7 +342,7 @@ shape functions are pushed to the current configuration.
 \note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpCalculateInvJacForFaceEmbeddedIn3DSpace
 
 <td>
-Example usage
+%Example usage
 \code
 MatrixDouble jac, inv_jac;
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -365,7 +365,7 @@ This operator assumes that the face element is on the XY plane.
 \note For face element is uncertainty what developer do, whether it calculates problem in 2d, or do integration on the adjacent face of 3d element, or face element is embedded in 3d, i.e. solve 2 and 1/2 dimension problem. See also \ref MoFEM::OpSetInvJacH1ForFaceEmbeddedIn3DSpace
 
 <td>
-Example usage
+%Example usage
 \code
 MatrixDouble jac;
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -383,15 +383,15 @@ Apply contravariant (Piola) transfer to Hdiv space on face \ref MoFEM::OpSetCont
 
 Contravariant Piola transformation
 \f[
-\psi_i|_t = \frac{1}{\textrm{det}(J)}J_{ij}\hat{\psi}_j\\
-\left.\frac{\partial \psi_i}{\partial \xi_j}\right|_t
+\psi_i = \frac{1}{\textrm{det}(J)}J_{ij}\hat{\psi}_j\\
+\frac{\partial \psi_i}{\partial \xi_j}
 =
 \frac{1}{\textrm{det}(J)}J_{ik}\frac{\partial \hat{\psi}_k}{\partial \xi_j}
 \f]
 
 <td>
 
-Example for 2d problem for face in XY space
+%Example for 2d problem for face in XY space
 \code
 Matrix jac;
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -402,7 +402,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpSetContravariantPiolaTransformFace(jac))
 \endcode
 
-Example for face emerged in 3d space. 
+%Example for face emerged in 3d space. 
 \code
 Matrix jac;
 pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -414,6 +414,64 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jac));
 \endcode
 Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
+
+<tr>
+
+<td>
+
+Transform local reference derivatives of shape function to global derivatives for face \ref MoFEM::OpSetInvJacHcurlFace and MoFEM::OpSetInvJacHcurlFaceEmbeddedIn3DSpace
+
+\f[
+\frac{\partial \psi_i}{\partial X_j}= 
+\frac{\partial \psi_i}{\partial \xi_k}
+\frac{\partial \xi_k}{\partial X_j}
+\f]
+
+<td>
+
+%Example for 2d problem for face in XY space
+\code
+Matrix jac;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpCalculateJacForFace(jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpMakeHdivFromHcurl());
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpSetContravariantPiolaTransformFace(jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpSetContravariantPiolaTransformFace(jac))    
+\endcode
+
+<tr>
+
+<td>
+
+Make Hdiv space from Hcurl space in 2d \ref MoFEM::OpMakeHdivFromHcurl
+
+\f[
+\pmb \psi^\textrm{Hdiv} = 
+\left\{ 
+\psi^\textrm{Hcurl}_{1}, -\psi^\textrm{Hcurl}_{0}, 0
+\right\}
+\f]
+where \f$\psi^\textrm{Hdiv}\f$ are base functions for H-div space. 
+
+Note that applying function twice will transform base from H-curl space and then back to H-div space. 
+
+<td>
+
+%Example for 2d problem for face in XY space
+\code
+Matrix jac;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpCalculateJacForFace(jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpMakeHdivFromHcurl());
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpSetContravariantPiolaTransformFace(jac));
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+    new OpSetContravariantPiolaTransformFace(jac))    
+\endcode
 
 <tr>
 
@@ -512,7 +570,7 @@ using OpDomainGradGrad =
 
 <td>
 
-Example for scalar base, scalar field and 3d problem
+%Example for scalar base, scalar field and 3d problem
 \code
 auto beta = [](double x, double y , double z) {
   return 1;
