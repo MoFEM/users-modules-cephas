@@ -169,7 +169,7 @@ MoFEMErrorCode Example::setupProblem() {
 
   // Declare elements
   enum bases { AINSWORTH, AINSWORTH_LOBATTO, DEMKOWICZ, BERNSTEIN, LASBASETOP };
-  const char *list_bases[] = {"ainsworth", "ainsworth_labatto", "demkowicz",
+  const char *list_bases[] = {"ainsworth", "ainsworth_lobatto", "demkowicz",
                               "bernstein"};
 
   PetscBool flg;

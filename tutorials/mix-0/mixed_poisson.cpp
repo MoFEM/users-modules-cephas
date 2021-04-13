@@ -366,7 +366,7 @@ MoFEMErrorCode MixedPoisson::solveRefineLoop() {
 }
 //! [Solve and refine loop]
 
-//! [Check results]
+//! [Check error]
 MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -450,7 +450,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
                                       tag_handles.data(), tag_handles.size());
   MoFEMFunctionReturn(0);
 }
-//! [Check results]
+//! [Check error]
 
 //! [Output results]
 MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
@@ -481,6 +481,7 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
 }
 //! [Output results]
 
+//! [OpError]
 MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
                                              EntData &data) {
   MoFEMFunctionBegin;
@@ -545,6 +546,7 @@ MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
                       ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
+//! [OpError]
 
 int main(int argc, char *argv[]) {
   // Initialisation of MoFEM/PETSc and MOAB data structures
