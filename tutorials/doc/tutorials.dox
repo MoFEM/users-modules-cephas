@@ -375,7 +375,7 @@ continuing with the one you are most excited about.
 
 
   <tr valign="top">
-        <td width="350px">LOW-11: \subpage tutorial_navier_stokes</td>
+        <td width="350px">\subpage tutorial_navier_stokes</td>
         <td> Navier-Stokes equations
         <br/> *Keywords:* viscous fluid flow, mixed formulation, drag force computation 
         </td>
