@@ -33,10 +33,10 @@ tutorials_copy_and_install("*.sh" "${permissions_execute}")
 tutorials_copy_and_install("*.geo" "${permissions_execute}")
 
 tutorials_build_and_install(
-  mix_poisson ${CMAKE_CURRENT_SOURCE_DIR}/mix_poisson.cpp)
+  mixed_poisson ${CMAKE_CURRENT_SOURCE_DIR}/mixed_poisson.cpp)
 
 add_test(
-  mix_poisson
+  mixed_poisson
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
-  ${CMAKE_CURRENT_BINARY_DIR}/mix_poisson
+  ${CMAKE_CURRENT_BINARY_DIR}/mixed_poisson
   -file_name ${CMAKE_CURRENT_BINARY_DIR}/mesh2d.h5m -log_no_color)

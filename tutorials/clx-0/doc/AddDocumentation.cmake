@@ -11,19 +11,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../max-0/src)
-
-tutorials_build_and_install(
-  lorentz_force ${CMAKE_CURRENT_SOURCE_DIR}/lorentz_force.cpp)
-
-set(permissions_default 
-  OWNER_WRITE 
-  OWNER_READ
-  GROUP_READ)
-
-tutorials_copy_and_install("*.jou" "${permissions_default}")
-tutorials_copy_and_install("*.cub" "${permissions_default}")
-tutorials_copy_and_install("*.h5m" "${permissions_default}")
-tutorials_copy_and_install("README.md" "${permissions_default}")
-
-
+# copy dox/figures to html directory created by doxygen
+add_custom_target(complex_scalar
+  ${CMAKE_COMMAND} -E copy_directory
+  ${ADD_DOC_DIRECTORY}/figures ${PROJECT_BINARY_DIR}/html)
+add_dependencies(doc complex_scalar)

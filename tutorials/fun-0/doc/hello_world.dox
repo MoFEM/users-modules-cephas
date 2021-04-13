@@ -1,4 +1,4 @@
-/*! \page hello_world_tut1 fun-0: Hello world
+/*! \page hello_world_tut1 FUN-0: Hello world
 
 In this tutorial, basic ideas about MoFEM::Simple interface, MoFEM::PipelineManager, and programming
 with user data operators (UDO) are presented. This tutorial aims at providing

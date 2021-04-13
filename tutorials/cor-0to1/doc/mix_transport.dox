@@ -1,0 +1,1837 @@
+/*! \page mix_transport COR-0: Mixed formulation and integration on skeleton (h-adaptivity)
+
+\brief Set by step example how to implement mix finite element and do hp-adaptivity
+
+Here we present general procedure applied to h-adaptivity of mix problem. MoFEM
+is generic finite element code capable of solving problems from magnetics,
+mechanics of fluids and solids, and as a result of this operates on necessary
+complex data structures able to carry abstract problems. If you master this
+example, applying the same approach, you will be able to implement in similar
+way other problems, for instance, Discontinuous Galerkin Method, or
+thermo-mechanical coupled problem.
+
+In this tutorial, we show how to implement h-adaptivity for mix transport formulation
+for stationary transport/heat-conduction problem (The Poisson equation). We focus on
+h-adaptivity, however, this implementation allows running problem with the arbitrary order of
+approximation and extension to p-/hp-adativity is possible.
+
+Code relevant to this tutorial could be found in \ref mofem_mix_transport_elem module.
+Plane source code for main program is available under link \ref h_adaptive_transport.cpp, whereas main class implementation of
+finite element and finite element operators is available here \ref
+MixTransportElement.hpp.
+
+MoFEM is built on three pillars, PETSc library which manages abstraction related
+to the algebraic system of equations and delivers interface to several solvers,
+mesh-oriented database (MoAB) which manages complexities related to mesh
+topology and delivers various format readers and Boost library which through
+multi-indices manages access to containers with MoFEM data structures.
+
+MoFEM handles complexities related to finite element method, degrees of freedom,
+approximation spaces and base functions. It provides tools and structures for
+implementation classical and nonclassical finite element codes and can handle
+linear, nonlinear and time dependent problems.
+
+Here we are considering a problem
+\f[
+A_{ij} \sigma_j + u_{,i} = 0 \; \textrm{on} \; \Omega \\
+\sigma_{i,i} = f \; \textrm{on} \; \Omega
+\f]
+where first equation is a physical (constitutive) equation and tensor
+\f$A_{ij}\f$ express material properties, for example, if \f$A_{ij}\f$ is a
+diagonal matrix with single constant on diagonal we have an isotropic material.
+The second equation is conservation equation, which expresses law that mass or
+energy can ot be created or destroyed (close system).
+
+Multiplying the constitutive equation by a test field \f$\tau\f$ and integrating by parts
+over \f$\Omega\f$ (taking into account the inhomogeneous Dirichlet boundary condition), we
+obtain
+\f[
+\int_\Omega A_{ij}\sigma_j \tau_i \textrm{d}x - \int_\Omega u \tau_{i,i} \textrm{d}x =
+\int_{\Gamma_\textrm{u}} \overline{u} \tau_{i} n_i \textrm{d}\Gamma
+,\quad \forall \boldsymbol\tau \in H(\textrm{div},\Omega)
+\f]
+while from the equilibrium equation by multiplying by test field \f$v\f$ we obtain
+\f[
+\int_\Omega \sigma_{i,i}v \textrm{d}x = \int_\Omega f v \textrm{d}x, \quad \forall v \in L^2(\Omega).
+\f]
+
+Before we look into implementation details, you can run simple example
+\code
+cd basic_finite_elements/mix_transport
+mpirun -np 2 ./h_adaptive_transport \
+-my_file l-shape.msh -meshsets_config bc.cfg  \
+-my_order 1 -nb_levels 5 2>&1 | tee log_order1
+\endcode
+where
+- \em -np \b 2 indicate number of processors
+- \em -my_file \b l-shape.msh name of the mesh file
+- \em -meshsets_config \b bc.cfg name of file with boundary conditions
+- \em -my_order \b 1 set approximation order (0,1,2,..)
+- \em -nb_levels \b 5 set number of mesh refinement level driven by approximation error
+
+Above code produces output files, \b out_0.h5m, \b out_1.h5m, ... where number
+of files is dependent on number of refinement levels. You can convert those files to VTK
+format running script
+\code
+../nonlinear_elasticity/do_vtk.sh out_*.h5m
+\endcode
+and post-process results in ParaView <http://www.paraview.org>.
+
+As result of post-processing in ParaView we have created following output
+\image html l-shape-adaptivity.gif "h-adaptivity" width=800px
+\image html l-shape-adaptivity_singularity.gif "Flux singularity" width=800px
+\image html l-shape-convergence.png "Convergence plot" width=800px
+
+You can note that subsequent mesh refinement reduces error and make it more
+uniformly distributed through the mesh. You can also observe that mesh is
+getting denser at the corner where singularity is located.
+
+\todo Should be implemented and tested problem from this article
+\cite demkowicz2011analysis. In this paper analytical solution is available, allowing
+to tested efficiency of evaluated error. You are very welcome to improve that
+documentation.
+
+\tableofcontents
+
+\section mix_mesh_refinement Explaining mesh BitRefLevel
+
+\ref MoFEM::BitRefLevel is a generic tool which allows working on several
+overlapping meshes, partially sharing entities and topology. In the context of
+this problem, we would use it to create and work with a hierarchy of mesh
+refinement.
+
+For each entity in a database (vertex, edge, triangle, quad, ..., tetrahedra,
+brick, prism, ...) we attach bit tag, i.e. \ref MoFEM::BitRefLevel. Using that tag we
+can make selections of entities and other operations on meshes.
+
+It will be easier to understand if you look at the figure below
+\image html mesh_bit_levels.png "Mesh bit refinement levels (Example)" width=800px
+
+Imagine that we load the mesh with the topology like in the top-left figure. We
+seed the mesh (\ref MoFEM::Interface::seed_ref_level) by  tagging each entity
+with the first bit on, i.e. \e 001.
+
+Next, we refine by splitting one of the edges, see middle-left figure. You can
+understand that as edge-splitting-mesh refinement, see \cite ruprecht1998scheme.
+As the result of this mesh refinement, new vertex in the middle of the edge is
+created, four new edges and four triangles. The remaining of mesh entities is
+part of old and new mesh level. As a consequence, entities which are shared between
+the second mesh and first mesh have two bites on, i.e. \e 011, since those are
+coexisting on two meshes. New entities have the only second bit on, i.e. \e 010.
+
+In the next step, we made third mesh refinement. The procedure repeats, we have
+some new entities which have the only third bit on, i.e. \e 100, some entities
+are shared between refinement second and third, those have third and a second
+bit on, i.e. 110, and some entities are shared between all refinement levels,
+i.e. \e 111. In current implementation, we assume that user would not have more
+than 32 refinement levels. However bit squashing and bit level deletion allows
+form deep (more than 32) mesh refinements.
+
+Physically all three meshes overlap, we do not delete overlapped entities or
+create new whole mesh each time. It is the reason behind that since we like to
+transfer data between different refinement levels without the redundancy and
+unnecessary copying and communication between processors if the mesh is distributed.
+
+Now we present examples of mesh selections; you can practically do everything that
+you do with bits, see
+<https://en.wikipedia.org/wiki/Bitwise_operation#Bit_shifts>. For example;
+
+- Setting bit \e 100 and mask \e 110 we can select all entities which were
+  created during second and third refinement level, see top-right figure.
+
+- Setting bit \e 010 and mask \e 111 we can get entities only which belong to
+  the second refinement, see middle-right figure.
+
+- Setting bit \e 001 and mask \e 111 we can get entities only which are belong
+  initial mesh, see the figure in the bottom right corner.
+
+That allows to project data between meshes, do calculations on the part of the
+mesh, to introduce cracks, make topological changes like face flipping. Note that
+problem below is defined for particular bit levels.
+See link \ref mofem_ref_ents for details how to get entities and adjacent by
+bit refinement levels.
+
+\section mix_reading_mesh Setting up problem
+
+We consider the problem which potentially can have complex geometry and a
+non-trivial set of boundary conditions.  Here we use Gmsh
+(see <http://gmsh.info>) to generate the mesh. In this section, we focus attention
+on how to read mesh file and how to apply some arbitrary boundary conditions on
+that mesh.
+
+The first step is to create mesh database, where information about the problem
+is stored. We create MoAB (see <http://ftp.mcs.anl.gov/pub/fathom/moab-docs/>)
+instance and interface to it
+\code{.cpp}
+moab::Core mb_instance;               ///< Create database
+moab::Interface& moab = mb_instance;  ///< Create interface to database
+\endcode
+
+Once we have created mesh database, we get from command line name of file which we
+like to load
+\code{.cpp}
+PetscBool flg = PETSC_TRUE;   ///< Is true of option is set in line command
+char mesh_file_name[255];     ///< File name
+CHKERR PetscOptionsGetString(PETSC_NULL,PETSC_NULL,"-my_file",mesh_file_name,255,&flg); 
+\endcode
+where here we are using PETSc function to do that,
+see <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Sys/PetscOptionsGetString.html> for
+more details. Having mesh file name, we can load mesh, created in Gmsh, to database
+\code{.cpp}
+const char *option;
+option = "";
+CHKERR moab.load_file(mesh_file_name, 0, option); 
+\endcode
+
+MoFEM can read various file format in this example we are using mesh from Gmsh,
+where example file geometry is stored in file \ref l-shape.geo and mesh is in
+\ref l-shape.msh. For more details about file formats please look into MoAB
+documentation.
+
+Creating MoFEM database to store information about fields, finite elements and
+problem, we link it to MOAB database and create interface to manage data
+\code{.cpp}
+MoFEM::Core core(moab);             ///< Create database
+MoFEM::Interface& m_field = core;   ///< Create interface to database
+\endcode
+
+In file \erf l-shape.msh following geometry and mesh is described
+\image html gmesh_blocksets.png "Blocksets and GMesh mesh" width=800px
+where as result of reading of that mesh into MoFEM database, following information is printed on the
+screen
+\verbatim
+read cubit meshset 12682136550675316737 type BLOCKSET msId 2
+read cubit meshset 12682136550675316738 type BLOCKSET msId 3
+read cubit meshset 12682136550675316741 type BLOCKSET msId 1
+\endverbatim
+The output to the screen indicates that three \e BLOCKSETs are available. Those
+\e BOLCKSETs are interpreted as \e Physical Volume and \e Physical Surfaces
+which were created in Gmsh. User can create more sophisticated geometry or use
+more complex set of boundary conditions. Interpretation of BLOCKSETs is a
+matter of separate config file, which describes problem specific types of
+boundary conditions.
+
+The interpretation of \e BLOCKSETs is done by the meshset config file \b bc.cfg,
+\include users_modules/basic_finite_elements/mix_transport/bc.cfg
+According to that file, \e BLOCKSET 3 is set to be \e NODESET 1001 where
+temperature is applied \f$u=0\, x \in \partial \Omega_u\f$ and
+\e BLOCKSET 2 is set to be SIDESET 1002 where flux is applied
+\f$n_i\sigma_i = 1\, x \in \partial \Omega_\sigma\f$.
+On \e BLOCKSET 1 is the domain \f$\Omega\f$ where problem is defined.
+
+In the above example, temperature type, heat flux type and temperature volume are
+used. This is a matter of interpretation as well, we are using this convention to be
+consistent with other meshing programs like CUBIT where boundary conditions like
+that can be set directly. However, MoFEM user can set own types and attach own
+interpretation if needed.
+
+Boundary condition meshsets are managed in MoFEM by \ref MoFEM::MeshsetsManager
+interface. Using that interface user can access information about boundary
+conditions and add a new one. All modules and software components using that
+interface can easily share information through it. To get access to interface,
+user needs to query MoFEM for it, as follows
+\code{.cpp}
+MoFEM::MeshsetsManager *meshsets_manager_ptr; //< Click on class to see more details
+CHKERR m_field.getInterface(meshsets_manager_ptr); 
+\endcode
+using interface we can read file \b bc.cfg, parse it and
+add boundary conditions. All this is automatized for user convenience and done with
+single interface method
+\code{.cpp}
+CHKERR meshsets_manager_ptr->setMeshsetFromFile();   //<- Click on function to see more details
+\endcode
+
+In general, user can query about range of interfaces giving access to specific
+tools. In this example we are using two types of interfaces, one to manage \e
+BLOCKSETs, i.e. \ref MoFEM::MeshsetsManager and another for refining meshes,
+i.e. MoFEM::MeshRefinement.
+
+\note MoFEM uses interfaces to do particular tasks, could have one or more interfaces
+for the same task, which differs in complexity, one is simple to do basic
+operation while another can be for advanced users. It can have different versions of the
+interface. We design MoFEM like that to have a structure which can adapt in time
+to new technologies and programmers need.
+
+\note Note that all commands return an error code and after each function, an
+error code is checked, in a case of the error, appropriate information is
+printed during execution time. It is important to follow that rule, of checking
+the error code, it simplifies code debugging and bug reporting.
+
+\section um_solving_problem Solving problem and calculating matrices and vectors
+
+We start with calculating initial problem on mesh created with Gmsh. The problem
+is broken down into several stages, implementation of a mix transport problem is in
+ExampleMix which is derived from MixTransport::MixTransportElement.
+
+\note We have the hierarchy of classes (structures), some of them are generic
+thus are part of MoFEM namespace and are implemented in the core library. Others
+are generic for a particular problem, for example, mix transport formulation
+(MixTransport::MixTransportElement) is implemented in user modules. And finally, some
+classes (ExampleMix) are for very specific example, where some close
+solution is needed.
+
+In class MixTransport::MixTransportElement all operators for evaluating matrices, the
+right-hand side vector, error evaluation are implemented. Moreover methods for
+declaring and defining fields, finite elements and problems are added. This
+class could be used by other users, solving similar problems.
+
+In derived class ExampleMix, particular functions for given transport
+problem with h-adaptivity are implemented.  The method handles specific boundary
+conditions for this example.
+
+The general procedure to solve problem looks like follows
+\code{.cpp}
+BcFluxMap bc_flux_map;
+ExampleMix ufe(m_field,bc_flux_map);
+// Initially calculate problem on coarse mesh
+CHKERR ufe.addFields("VALUES","FLUXES",order); 
+CHKERR ufe.addFiniteElements("FLUXES","VALUES"); 
+// Set boundary conditions
+CHKERR ufe.addBoundaryElements(ref_level);
+CHKERR ufe.buildProblem(ref_level); 
+CHKERR ufe.createMatrices(); 
+CHKERR ufe.solveLinearProblem(); 
+CHKERR ufe.calculateResidual(); 
+CHKERR ufe.evaluateError(); 
+CHKERR ufe.destroyMatrices(); 
+CHKERR ufe.postProc("out_0.h5m"); 
+\endcode
+such procedure will look very similar to other problems, where we set-up
+problem, apply boundary conditions, solve problem and postprocess results.
+
+Some MoFEM functions and philosophy of building problem are explained in  \ref
+minimal_surface_equation, please look into that document for further explanation.
+
+\subsection mixtransport_add_fields Adding fields to the database (ufe.addFields)
+
+In \ref MixTransport::MixTransportElement::addFields, we declare and define fields and
+add entities to those on which given field is spanning.
+
+\code{.cpp}
+MoFEMErrorCode MixTransport::MixTransportElement::addFields(const std::string &values,const std::string &fluxes,const int order) {
+  MoFEMFunctionBegin;
+  //Fields
+  CHKERR mField.add_field(fluxes,HDIV,DEMKOWICZ_JACOBI_BASE,1); 
+  CHKERR mField.add_field(values,L2,AINSWORTH_LEGENDRE_BASE,1); 
+  //meshset consisting all entities in mesh
+  EntityHandle root_set = mField.get_moab().get_root_set();
+  //add entities to field
+  CHKERR mField.add_ents_to_field_by_type(root_set,MBTET,fluxes); 
+  CHKERR mField.add_ents_to_field_by_type(root_set,MBTET,values); 
+  CHKERR mField.set_field_order(root_set,MBTET,fluxes,order+1); 
+  CHKERR mField.set_field_order(root_set,MBTRI,fluxes,order+1); 
+  CHKERR mField.set_field_order(root_set,MBTET,values,order); 
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+Note that in the first two lines we declare two fields \e FLUXES and \e
+VALUES. We define fields, by setting space to HDIV and L2,
+respectively. The fourth argument in functions MoFEM::Interface::add_field sets
+number of coefficients. Since we have vector and scalar field, number of
+coefficients is 1. If for example we would like to have second rank field for
+HDIV space and vector field for L2 space, number of coefficients would be three.
+Note that in general case you can set the field on part of the mesh and on some
+part it could be 3d field, 2d or 1d.
+
+Function MoFEM::Interface::add_ents_to_field_by_TETs adds entities to a field, in
+this case, we like to solve the problem on whole mesh, so all entities from root
+meshset are added. Since we span that field on tetrahedra and all lower entities
+field is in 3d. The dimension of field is dictated by a dimension of entities.
+
+\subsection mixtransport_add_elements Adding elements to the database (ufe.addFiniteElements)
+
+In the following part of the code we declare finite elements, implementation of
+elements is done separately. By definition of finite elements, we are simply
+telling code on what fields given finite element operates. Domain of elements,
+i.e. entities on which elements integrate operators could be declared on the part
+of the mesh where the field is given. If you declare element on entities on
+which fields is no spanning, that element will have zero number of degrees of
+freedom.
+
+In this example, we have four kinds of finite elements \e MIX,
+\e MIX_SKELETON, \e MIX_BCVALUE and \e MIX_BCFLUX.
+
+- \e MIX finite element is used to integrate over volume; it allows us to
+  calculate stiffness matrix and the right-hand side vector.
+
+- \e MIX_SKELETON finite element is used to integrate over the skeleton,
+  i.e. faces between elements. We are using it to calculate jumps of the values
+  to evaluate the solution error.
+
+- \e MIX_BCVALUE finite element is used to integrate over faces where
+  Dirichlet (natural) boundary conditions are declared. The values integrated on
+  that element are assembled into the right-hand side vector.
+
+- \e MIX_BCFLUX is the finite element to calculate degrees of freedom where
+  flux boundary conditions are declared. This element works on faces.
+  Note that in mix transport formulation Neumann boundary conditions are essential.
+
+\code{.cpp}
+MoFEMErrorCode MixTransport::MixTransportElement::addFiniteElements(
+  const std::string &fluxes_name,
+  const std::string &values_name,
+  const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS"
+) {
+  MoFEMFunctionBegin;
+
+  // Set up volume element operators. Operators are used to calculate components
+  // of stiffness matrix & right hand side, in essence are used to do volume integrals over
+  // tetrahedral in this case.
+
+  // Declare element "MIX". Note that this element will work with fluxes_name and
+  // values_name. This reflect bilinear form for the problem
+  CHKERR mField.add_finite_element("MIX",MF_ZERO); 
+  // Define element
+  CHKERR mField.modify_finite_element_add_field_row("MIX",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_col("MIX",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_row("MIX",values_name); 
+  CHKERR mField.modify_finite_element_add_field_col("MIX",values_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX",values_name); 
+
+  // Declare finite element to integrate over skeleton, we need that to evaluate error
+  CHKERR mField.add_finite_element("MIX_SKELETON",MF_ZERO); 
+  // Define element
+  CHKERR mField.modify_finite_element_add_field_row("MIX_SKELETON",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_col("MIX_SKELETON",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX_SKELETON",fluxes_name); 
+
+  // In some cases you like to use HO geometry to describe shape of the body, curved edges and faces, for
+  // example body is a sphere. HO geometry is approximated by a field,  which can be hierarchical, so shape of
+  // the edges could be given by polynomial of arbitrary order.
+  //
+  // Check if field "mesh_nodals_positions" is declared, and if it is add that field to data of finite
+  // element. MoFEM will use that that to calculate Jacobian as result that geometry in nonlinear.
+  if(mField.check_field(mesh_nodals_positions)) {
+    CHKERR mField.modify_finite_element_add_field_data("MIX",mesh_nodals_positions); 
+    CHKERR mField.modify_finite_element_add_field_data("MIX_SKELETON",mesh_nodals_positions); 
+  }
+  // Look for all BLOCKSET which are MAT_THERMALSET, takes entities from those BLOCKSETS
+  // and add them to "MIX" finite element. In addition get data from that meshset
+  // and set cOnductivity which is used to calculate fluxes from gradients of concentration
+  // or gradient of temperature, depending how you interpret variables.
+  for(_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(mField,BLOCKSET|MAT_THERMALSET,it)) {
+
+    // cerr << *it << endl;
+
+    Mat_Thermal temp_data;
+    CHKERR it->getAttributeDataStructure(temp_data); 
+    setOfBlocks[it->getMeshsetId()].cOnductivity = temp_data.data.Conductivity;
+    setOfBlocks[it->getMeshsetId()].cApacity = temp_data.data.HeatCapacity;
+    CHKERR mField.get_moab().get_entities_by_type(
+      it->meshset,MBTET,setOfBlocks[it->getMeshsetId()].tEts,true
+    ); 
+    CHKERR mField.add_ents_to_finite_element_by_TETs(
+      setOfBlocks[it->getMeshsetId()].tEts,"MIX"
+    ); 
+
+    Range skeleton;
+    CHKERR mField.get_moab().get_adjacencies(
+      setOfBlocks[it->getMeshsetId()].tEts,2,false,skeleton,moab::Interface::UNION
+    );
+    CHKERR mField.add_ents_to_finite_element_by_type(
+      skeleton,MBTRI,"MIX_SKELETON"
+    ); 
+
+  }
+
+  // Declare element to integrate natural boundary conditions, i.e. set values.
+  CHKERR mField.add_finite_element("MIX_BCVALUE",MF_ZERO); 
+  // Define element
+  CHKERR mField.modify_finite_element_add_field_row("MIX_BCVALUE",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_col("MIX_BCVALUE",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",values_name); 
+  if(mField.check_field(mesh_nodals_positions)) {
+    CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",mesh_nodals_positions); 
+  }
+
+  // Declare element to apply essential boundary conditions.
+  CHKERR mField.add_finite_element("MIX_BCFLUX",MF_ZERO); 
+  // Define element
+  CHKERR mField.modify_finite_element_add_field_row("MIX_BCFLUX",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_col("MIX_BCFLUX",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",fluxes_name); 
+  CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",values_name); 
+  if(mField.check_field(mesh_nodals_positions)) {
+    CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",mesh_nodals_positions); 
+  }
+
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+Function MoFEM::Interface::add_finite_element adds the element of given name to
+the database, the second  argument indicates that if the element of such name
+already exists do not throw the error. When the second argument is not given
+default behaviour is that error is thrown if the element already exists.
+
+Function MoFEM::Interface::modify_finite_element_add_field_row,
+MoFEM::Interface::modify_finite_element_add_field_col and
+MoFEM::Interface::modify_finite_element_add_field_data define on what fields
+given element operates. You can think that this corresponds how you define the
+bilinear form for your operator, what is the first and second argument. Also,
+you specify data, for example, permeability could be given as a separate field
+which needs to be evaluated at integration points to assemble matrix. In that
+case you add that information using
+MoFEM::Interface::modify_finite_element_add_field_data.
+
+Function MoFEM::Interface::add_ents_to_finite_element_by_type adds tetrahedral and
+triangles to given element respectively. You can think about tetrahedral and
+triangles as domains on which you perform the integration. Note that field can
+be spanned on tetrahedral (3d entities) but you can integrate on triangles, then
+on such element trace of field on the triangle is available from that element.
+
+Note part of the code
+\code{.cpp}
+for(_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(mField,BLOCKSET|MAT_THERMALSET,it)) {
+
+}
+\endcode
+which iterates over all BLOCKSETs on which MAT_THERMALSET is defined, then it
+gets information about material parameters and range of tetrahedral entities in
+that block. Next, it adds those tetrahedral to \e  MIX finite element. In
+addition, it takes all adjacent triangles to tetrahedra and adds those entities to \e
+MIX_SKELETON finite element.
+
+Adding elements to \e MIX_BCVALUE and \e MIX_BCFLUX is implemented
+in the next  section. In above code, those finite elements are only declared and
+defined, but not yet implemented. Declaration, definition and implementation are
+independent of each other. You can use two different implementations of the same
+element.
+
+\subsection mixtransport_add_bc_elements Adding boundary elements to the database (ufe.addBoundaryElements)
+
+In ExampleMix::addBoundaryElements, loop over boundary BLOCKSETs is made to
+get triangles in that BLOCKSET. Then appropriate triangles are added to \e
+MIX_BCVALUE and \e MIX_BCFLUX
+\code{.cpp}
+MoFEMErrorCode ExampleMix::addBoundaryElements(BitRefLevel &ref_level) {
+  MoFEMFunctionBegin;
+  Range tets;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(ref_level,BitRefLevel().set(),MBTET,tets);
+  Skinner skin(&mField.get_moab());
+  Range skin_faces; // skin faces from 3d ents
+  CHKERR skin.find_skin(0,tets,false,skin_faces); 
+  // note: what is essential (dirichlet) is natural (neumann) for mix-FE compared to classical FE
+  Range natural_bc;
+  for(_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(mField,NODESET|TEMPERATURESET,it)) {
+    Range tris;
+    CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(),2,tris,true); 
+    natural_bc.insert(tris.begin(),tris.end());
+  }
+  for(_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(mField,SIDESET|HEATFLUXSET,it)) {
+    HeatFluxCubitBcData mydata;
+    CHKERR it->getBcDataStructure(mydata); 
+    if(mydata.data.flag1==1) {
+      Range tris;
+      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(),2,tris,true); 
+      bcFluxMap[it->getMeshsetId()].eNts = tris;
+      bcFluxMap[it->getMeshsetId()].fLux = mydata.data.value1;
+      // cerr << bcFluxMap[it->getMeshsetId()].eNts << endl;
+      // cerr << bcFluxMap[it->getMeshsetId()].fLux << endl;
+    }
+  }
+  Range essential_bc = subtract(skin_faces,natural_bc);
+  Range bit_tris;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(ref_level,BitRefLevel().set(),MBTRI,bit_tris);
+  essential_bc = intersect(bit_tris,essential_bc);
+  natural_bc = intersect(bit_tris,natural_bc);
+  CHKERR mField.add_ents_to_finite_element_by_type(essential_bc,MBTRI,"MIX_BCFLUX"); 
+  CHKERR mField.add_ents_to_finite_element_by_type(natural_bc,MBTRI,"MIX_BCVALUE"); 
+  // CHKERR mField.add_ents_to_finite_element_by_type(skin_faces,MBTRI,"MIX_BCVALUE"); 
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+Note that, at the end of the above code, the skin from full mesh is taken,
+i.e. triangle elements on boundary of meshet. Then, triangles on the boundary
+(skin) on which values or fluxes are not set are used to set zero-flux
+boundary condition.
+
+\note For standard finite element formulation, boundary condition on fluxes is
+natural, so if you have zero flux on the boundary, you have zero value for DOFs
+on the right-hand side vector. In essence, you do nothing to enforce zero flux.
+This is not the case here.
+
+In addition, function
+\code{.cpp}
+MoFEMErrorCode ExampleMix::getBcOnValues(
+  const EntityHandle ent,
+  const double x,const double y,const double z,
+  double &value) {
+  MoFEMFunctionBeginHot;
+  value = 0;
+  MoFEMFunctionReturnHot(0);
+}
+\endcode
+and
+\code{.cpp}
+MoFEMErrorCode ExampleMix::getBcOnFluxes(
+  const EntityHandle ent,
+  const double x,const double y,const double z,
+  double &flux) {
+  MoFEMFunctionBegin;
+  if(lastEnt==ent) {
+    flux = lastFlux;
+  } else {
+    flux = 0;
+    for(BcFluxMap::iterator mit = bcFluxMap.begin();mit!=bcFluxMap.end();mit++) {
+      Range &tris = mit->second.eNts;
+      if(tris.find(ent)!=tris.end()) {
+        flux = mit->second.fLux;
+      }
+    }
+    lastEnt = ent;
+    lastFlux = flux;
+  }
+  MoFEMFunctionReturn(0);
+}
+\endcode
+are implemented. Those functions are used to evaluate values and boundary
+conditions at integration points. For more details how those functions are used
+look into MixTransport::MixTransportElement::OpRhsBcOnValues and
+MixTransport::MixTransportElement::OpEvaluateBcOnFluxes, those classes are
+implementations of operations on particular elements which are later explained.
+
+\subsection mixtransport_build_problem Declaring and building problem (ufe.buildProblem)
+
+Once fields and finite elements are declared and defined, we build/rebuild data
+structures carrying information needed to do the analysis. Note that function
+below is general, takes into account that problem could be built on several
+refinement levels, and if only the necessary part of structures if rebuild in
+subsequent mesh refinements.
+
+The mesh MoFEM::BitRefLevel and related details with mesh refinement are described in
+the following sections. Here we focus only on declaring, building and partitioning
+problem for parallelized calculations.
+
+MoFEM can work on partitioned meshes and parallel algebra and calculations.
+However, here we assume that mesh is the same on all processors, only
+calculations, matrices and vectors are distributed.
+
+\code{.cpp}
+MoFEMErrorCode MixTransport::MixTransportElement::buildProblem(BitRefLevel &ref_level) {
+  MoFEMFunctionBegin;
+  //build field
+  CHKERR mField.build_fields(); 
+  // get tetrahedrons which has been build previously and now in so called garbage bit level
+  Range done_tets;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    BitRefLevel().set(0),BitRefLevel().set(),MBTET,done_tets
+  ); 
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    BitRefLevel().set(BITREFLEVEL_SIZE-1),BitRefLevel().set(),MBTET,done_tets
+  ); 
+  // get tetrahedrons which belong to problem bit level
+  Range ref_tets;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    ref_level,BitRefLevel().set(),MBTET,ref_tets
+  ); 
+  ref_tets = subtract(ref_tets,done_tets);
+  CHKERR mField.build_finite_elements("MIX",&ref_tets,2); 
+  // get triangles which has been build previously and now in so called garbage bit level
+  Range done_faces;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    BitRefLevel().set(0),BitRefLevel().set(),MBTRI,done_faces
+  ); 
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    BitRefLevel().set(BITREFLEVEL_SIZE-1),BitRefLevel().set(),MBTRI,done_faces
+  ); 
+  // get triangles which belong to problem bit level
+  Range ref_faces;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    ref_level,BitRefLevel().set(),MBTRI,ref_faces
+  ); 
+  ref_faces = subtract(ref_faces,done_faces);
+  //build finite elements structures
+  CHKERR mField.build_finite_elements("MIX_BCFLUX",&ref_faces,2); 
+  CHKERR mField.build_finite_elements("MIX_BCVALUE",&ref_faces,2); 
+  CHKERR mField.build_finite_elements("MIX_SKELETON",&ref_faces,2); 
+  //Build adjacencies of degrees of freedom and elements
+  CHKERR mField.build_adjacencies(ref_level); 
+  //Declare problem
+  CHKERR mField.add_problem("MIX",MF_ZERO); 
+  //set refinement level for problem
+  CHKERR mField.modify_problem_ref_level_set_bit("MIX",ref_level); 
+  // Add element to problem
+  CHKERR mField.modify_problem_add_finite_element("MIX","MIX"); 
+  CHKERR mField.modify_problem_add_finite_element("MIX","MIX_SKELETON"); 
+  // Boundary conditions
+  CHKERR mField.modify_problem_add_finite_element("MIX","MIX_BCFLUX"); 
+  CHKERR mField.modify_problem_add_finite_element("MIX","MIX_BCVALUE"); 
+  //build problem
+  ProblemsManager *prb_mng_ptr;
+  CHKERR mField.getInterface(prb_mng_ptr); 
+  CHKERR prb_mng_ptr->buildProblems(); 
+  //mesh partitioning
+  //partition
+  CHKERR prb_mng_ptr->partitionProblem("MIX"); 
+  CHKERR prb_mng_ptr->partitionFiniteElements("MIX"); 
+  //what are ghost nodes, see Petsc Manual
+  CHKERR prb_mng_ptr->partitionGhostDofs("MIX"); 
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+In the above code, several key functions are used. Function MoFEM::Interface::build_fields
+builds field data structure by construction degrees of freedom on each entity on
+which given field is spanning. For example, for L2 space, DOFs are only on
+tetrahedra which were added to the field. For H-div space is the more complex
+case, degrees of freedom are associated with triangles and tetrahedra, but a
+number of degrees of each type of entity depend on approximation order, for
+details look to \cite NME:NME847.
+
+At that point, field structure is created including DOFs on entities. Such
+structure can carry information about approximation order and values of a field.
+For example, you can do algebraic operations on field values directly \ref
+mofem_field_algebra.
+
+No indices are attached to DOFs since indices depend on a number of processors
+on which solution is carried on, partitioning method or directly type of problem
+which you like to solve.
+
+Function MoFEM::Interface::build_finite_elements is used to build data
+structure.  You can note that, in the above code, in subsequent mesh refinements,
+elements are added to the database, no whole base is rebuilt from scratch. At
+that point, information about degrees of freedom of fields acting on the element
+is aggregated. Finite element is problem independent.
+
+Once fields and finite element structures are built, we can build problem.
+Domain of the problem, its size and structure of the matrix are uniquely defined
+by finite elements and fields on which element operates. First, a problem is
+declared using MoFEM::Interface::add_problem, where the argument of the function
+is the name of the problem which we like to add. Next we define problem, by
+setting finite elements, this is done using function
+MoFEM::Interface::modify_problem_add_finite_element where elements are added to
+the problem.
+
+To build problem, we need to set \ref MoFEM::BitRefLevel to the problem.  In short
+\ref MoFEM::BitRefLevel allows selecting a refined mesh on which we like to
+solve our problem. The details and unique flexibility of \ref MoFEM::BitRefLevel
+are explained in \ref mix_mesh_refinement.
+
+\note Declaration, definition and building of data structures, are independent
+of each other. We can first declare fields, finite elements and problems, then
+define at the end build data structures. Implementation of a finite element is
+independent of its definition.
+
+Having all those stages done, at that point, structure of algebraic equations
+emerging from problem definition, finite elements, fields and domains on which
+finite elements and fields operate. That defines the structure of sparse matrix
+and structure of parallel vectors which ghost values.
+
+\note MoFEM utilizes properties of approximation spaces, knowing space of
+approximation field, we know how DOFs are distributed on the mesh. With
+information about the bilinear form, which is set in the definition of a
+finite element, we can build adjacencies between DOFs. At last, with the
+definition of a problem, i.e. set of finite elements in the problem, we can
+build unique enumeration of DOFs and build the system of algebraic equations.
+Using spaces (L2, H1, H-DIV, H-CURL) and their properties, we build a system of a
+data structure which abstracts and general.
+
+\subsection mixtransport_create_matrices Create vectors and matrices (ufe.createMatrices)
+
+At that point, we have defined and partitioned problem and that is enough to
+construct distributed matrices and vectors. The sparsity of the matrix,
+adjacencies and other bookkeeping operations are handled by MoFEM and PETSc.
+
+Functions and use of below code have been explained earlier in \ref minimal_surface_equation;
+\code
+MoFEMErrorCode MixTransport::MixTransportElement::createMatrices() {
+  MoFEMFunctionBegin;
+  CHKERR mField.getInterface<MatrixManager>()->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("MIX",&Aij); 
+  CHKERR mField.getInterface<VecManager>()->vecCreateGhost("MIX",COL,&D); 
+  CHKERR mField.getInterface<VecManager>()->vecCreateGhost("MIX",COL,&D0); 
+  CHKERR mField.getInterface<VecManager>()->vecCreateGhost("MIX",ROW,&F); 
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+\section mixtransport_assemble_and_solve Assemble and solve
+
+At this point, we have all data structures necessary to solve the problem. Now
+we focus attention on the implementation of finite element instances and
+solution procedure. In essence, we need to assemble matrices and vectors,
+enforce constraints, solve a linear system of equations and post-process results.
+
+\subsection mixtransport_finite_element_instances Finite element instances
+
+Definition of the finite element allows building the structure (adjacency) of
+the matrix, however, assemble (calculate) matrix we need finite element class
+implementation and its instance which will do the work. MoFEM allows
+implementing finite element at a low level, however, except special cases, a
+generic finite element class implementations can be used, where some operations
+like calculation of Jacobian, face areas and normals are implemented. Generic
+finite element classes enable us to focusses attention on the implementation of
+the bilinear form and its algebraic representation. That is numerical
+integration and evaluation of physical equations, evaluation of base functions
+and fields.  The implementation of generic finite element is done by user data
+operators, see tutorials \ref hello_world_tut1 and \ref poisson_tut1. Class of user
+data operator is inherited, and problem specific application is by function
+overloading. From user data operator class, we have access to base functions,
+integration points, local and global indices and values of DOFs. etc. \e UserDataOperator
+is run for entities on the element, on which approximation base
+is constructed.
+
+In MixTransport::MixTransportElement class we create two generic finite
+element instances, i.e. MixTransport::MixTransportElement::MyVolumeFE and
+MixTransport::MixTransportElement::MyTriFE.
+\code
+struct MixTransport::MixTransportElement::MyVolumeFE: public MoFEM::VolumeElementForcesAndSourcesCore {
+  MyVolumeFE(MoFEM::Interface &m_field): MoFEM::VolumeElementForcesAndSourcesCore(m_field) {}
+  int getRule(int order) { return 2*order+1; };
+};
+MyVolumeFE feVol;   ///> Instance of volume element
+struct MixTransport::MixTransportElement::MyTriFE: public MoFEM::FaceElementForcesAndSourcesCore {
+  MyTriFE(MoFEM::Interface &m_field): MoFEM::FaceElementForcesAndSourcesCore(m_field) {}
+  int getRule(int order) { return 2*order+1; };
+};
+MyTriFE feTri;   ///< Instance of surface element
+\endcode
+
+Those two finite element classes have method
+MoFEM::ForcesAndSourcesCore::getRule overloaded, which sets rank of integration rule
+on the element. The programmer needs to set integration rule, since he knows what will
+be integrated.
+
+MoFEM bases on that function and higher order of approximation base functions
+sets precalculated in integration points and weights. In some classes, the
+programmer would like to use own integration rule, that could be easily done as
+well, but we postpone explanation how to do this to another example. If you like to
+see how it works in practice, please have a look here \ref mofem_fs_post_proc.
+
+Now we can add tasks (\e UsersOperators) to finite element, which will
+do a sequence of calculations. However, before we show how to implement \e
+UsersOperators, we show first how finite element objects are used.
+
+\subsection mixtransport_solve_problem Solve problem (ufe.solveLinearProblem)
+
+In the previous step, we have constructed matrices and vectors, next step is to
+calculate matrices and vectors and to solve the linear system of equations. At
+that point, we not yet focus how to integrate local finite element matrices,
+showing only how a solution of this problem is constructed. Numeration of DOFs,
+looping over finite elements, parallelization of the problem or assembly itself
+is handled by MoFEM.
+
+The function
+\code{.cpp}
+MoFEMErrorCode MixTransport::MixTransportElement::solveLinearProblem() {
+    MoFEMFunctionBegin;
+    \\ Code inside
+    MoFEMFunctionReturn(0);
+ }
+\endcode
+can be divided into several stages. First, we will focus on the
+calculation of essential boundary conditions. We already defined boundary where
+flux is applied, however unlike in standard FE formulation where nodal shape
+functions are used, for H-div space we need to apriori calculate values of
+degrees of freedom for essential boundary conditions. Exploiting properties of
+H-div space, trace of base functions on the boundary can be evaluated element by
+element, where for each boundary triangle small system of linear equations is
+solved.
+\code{.cpp}
+feTri.getOpPtrVector().clear();
+feTri.getOpPtrVector().push_back(new OpEvaluateBcOnFluxes(*this,"FLUXES",D0));
+CHKERR mField.loop_finite_elements("MIX","MIX_BCFLUX",feTri); 
+\endcode
+Note that first line in the code above cleans vector of operators on the element
+instance (element object could be used before doing other tasks), second line adds operator
+MixTransport::MixTransportElement::OpEvaluateBcOnFluxes to the finite element instance.
+The operator has an argument vector D0 in which DOF values for essential
+boundary conditions are stored. The third line makes the loop over all elements
+in the problem (name of the problem is the first argument and the finite
+element is the second argument) and evaluates operators of element instance for object
+MixTransport::MixTransportElement::feTri. It is clear here that definition of element is
+separated from its implementation.
+
+The similar procedure is repeated to calculate matrix and the right-hand side vector
+\code
+feVol.getOpPtrVector().clear();
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpL2Source(*this,"VALUES",F));
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpFluxDivergenceAtGaussPts(*this,"FLUXES"));
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpValuesAtGaussPts(*this,"VALUES"));
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpDivTauU_HdivL2(*this,"FLUXES","VALUES",Aij,F));
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpTauDotSigma_HdivHdiv(*this,"FLUXES",Aij,F));
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv(*this,"VALUES","FLUXES",Aij,F));
+CHKERR mField.loop_finite_elements("MIX","MIX",feVol); 
+\endcode
+where the calculation of matrix and right-hand side vector is broken down into
+several stages, where each sub-matrix is calculated by an user operator acting
+on finite element entities. Note that this time integration is over volume
+element, i.e. MixTransport::MixTransportElement::feVol. Finally, this part of code ends
+with the loop over all \e MIX finite elements in the \e MIX problem.
+If calculations are done in parallel, MoFEM manages related complexities
+transparently.
+
+To complete calculations we have to integrate natural boundary conditions, i.e.
+enforce Dirichlet boundary condition
+\code
+feTri.getOpPtrVector().clear();
+feTri.getOpPtrVector().push_back(new OpRhsBcOnValues(*this,"FLUXES",F));
+CHKERR mField.loop_finite_elements("MIX","MIX_BCVALUE",feTri); 
+\endcode
+This procedure looks very similar to what has been done before, we clear existing operators
+on MixTransport::MixTransportElement::feTri, add operator
+MixTransport::MixTransportElement::OpRhsBcOnValues and loop over all surface elements
+where Dirichlet boundary is set.
+
+At this point, we have created and assembled linear system of equations, we have
+not given an explanation how to do integration at user operator level, this will
+be explained later. At this point, we will show how to enforce essential
+boundary conditions. We have calculated values of DOFs already. Now we have to
+modify matrix and the right-hand side vector
+\code
+CHKERR getDirichletBCIndices(&essential_bc_ids); 
+CHKERR MatZeroRowsIS(Aij,essential_bc_ids,1,D0,F); 
+\endcode
+while operator MixTransport::MixTransportElement::OpEvaluateBcOnFluxes is executed, it
+records indices of DOFs for which essential boundary conditions are applied.
+These DOFs are accessed by MixTransport::MixTransportElement::getDirichletBCIndices. We
+use those indices to zero rows of matrix \e Aij  and insert 1 on diagonal. In
+addition, we fill the right-hand side vector with previously calculated vector
+D0. This operation is performed with PETSc function MatZeroRowsIS
+(<http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MatZeroRowsIS.html>)
+
+At this point, we can solve system of equations
+\code
+KSP solver;
+CHKERR KSPCreate(PETSC_COMM_WORLD,&solver); 
+CHKERR KSPSetOperators(solver,Aij,Aij); 
+CHKERR KSPSetFromOptions(solver); 
+CHKERR KSPSetUp(solver); 
+CHKERR KSPSolve(solver,F,D); 
+CHKERR VecGhostUpdateBegin(D,INSERT_VALUES,SCATTER_FORWARD); 
+CHKERR VecGhostUpdateEnd(D,INSERT_VALUES,SCATTER_FORWARD); 
+CHKERR KSPDestroy(&solver); 
+\endcode
+For details about the code above, we refer to PETSc user manual
+<https://www.mcs.anl.gov/petsc/documentation/index.html>.
+
+The last operation at that stage is to store results on the mesh
+\code
+CHKERR mField.getInterface<VecManager>()->setGlobalGhostVector("MIX",COL,D,INSERT_VALUES,SCATTER_REVERSE); 
+\endcode
+You can think about MoFEM as a link between algebraic structures (e.g. vector)
+and mesh. Function MoFEM::Interface::set_global_ghost_vector is an example of
+this, using it you can transfer field values from mesh to vector and reverse of
+it.
+
+\note Note that discretization field is abstract has no indices, where vector
+has indexing by its nature. You can imagine that you solve the thermal problem.
+As a result, you have calculated temperature field, in other problem, solved
+with different partitioning, on some subdomain of thermal problem, you like to
+calculate mechanical field using a staggered method where previously calculated
+temperature is used. In that case, an algebraic structure (enumeration of DOFs)
+is different. However, when you use MoFEM::Interface::set_global_ghost_vector,
+transferring field from one problem to another is straightforward.
+
+\section mixtransport_implementation Implementation of user operator
+
+In MoFEM, we apply general procedure, recognising in the typical finite analysis,
+to calculate matrices and vectors we make loops. Loop over finite elements on
+given partition, loop over entities in the elements (e.g. triangle is composed
+of entities like vertices, edges and triangle itself) and build on those
+entities base functions. Finally loop over integration points, where base
+functions are evaluated and local element matrix assembled.
+
+Performing those loops, MoFEM manages associated complexities, like extraction
+of global and local indices or DOFs values, evaluation of base functions and
+derivatives and other typical operations.
+
+All this work is done by generic finite element,  the basic finite element
+instance is built on MoFEM::FEMethod, then more advanced structure recognising
+that finite element entity is composed of lower dimension entities is
+MoFEM::ForcesAndSourcesCore. MoFEM::ForcesAndSourcesCore allows to add so-called
+user operators, which are classes operating on each lower dimension entities
+and performing loops over integration points.
+
+From class MoFEM::ForcesAndSourcesCore, there are more specialised classes like
+MoFEM::VolumeElementForcesAndSourcesCore, MoFEM::FaceElementForcesAndSourcesCore
+and others, see \ref mofem_forces_and_sources . Those elements recognise the
+fact that for example working with a volume (3d) finite element you would like
+to calculate volume or use appropriate integration rule. From other hand, working
+with faces like triangles, MoFEM::FaceElementForcesAndSourcesCore, you would
+like to know what is the area of the face or its normal and tangent vectors.
+Derived classes like MoFEM::VolumeElementForcesAndSourcesCore delivers tools for
+finite element programmer to do the specific job.
+
+In this example, we use functionality of
+MoFEM::VolumeElementForcesAndSourcesCore by creating new class
+MixTransport::MixTransportElement::MyVolumeFE that derives from the existing class. The
+derived class inherits the properties of the base class, and you can add or
+override methods and properties as required. Each class has method
+MoFEM::ForcesAndSourcesCore::getOpPtrVector, returning reference to vector of
+shared pointers to MoFEM::ForcesAndSourcesCore::UserDataOperator, i.e.
+\code
+boost::ptr_vector<MoFEM::ForcesAndSourcesCore::UserDataOperator>& MoFEM::ForcesAndSourcesCore::getOpPtrVector ();
+\endcode
+
+Instances of operator classes derived from MoFEM::DataOperator.
+MoFEM::ForcesAndSourcesCore::UserDataOperator does particular jobs, for example,
+calculating field values at integration points, integrating mass or stiffness
+matrix. Finite element instance can run the sequence of user operator in the order
+you add them to share common data structure, here \ref MixTransport::MixTransportElement
+itself. So for example, in one operator you can
+calculate gradients of displacement field at each integration point, in another,
+you can symmetrize gradient to calculate strain and in following to calculate
+stress and another to calculate the vector of internal forces. You break down the
+big job into smaller components, which you can use in several different contexts
+and easily test them one by one, making debugging easy. That is general
+philosophy of MoFEM, that complex and difficult problems are composition of
+small and simple tasks.
+
+Class MoFEM::ForcesAndSourcesCore::UserDataOperator is inherited by
+MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator or
+MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator and other user
+operator classes associated with vertices and edges. User operator class has two
+types of functions which need to be overloaded to do calculations, and they are
+\code virtual MoFEMErrorCode MoFEM::DataOperator::doWork( int row_side,int
+col_side, EntityType row_type,EntityType col_type,
+DataForcesAndSourcesCore::EntData &row_data, DataForcesAndSourcesCore::EntData
+&col_data ); 
+\endcode 
+and 
+\code virtual MoFEMErrorCode
+MoFEM::DataOperator::doWork( int side, EntityType type,
+DataForcesAndSourcesCore::EntData &data ) 
+\endcode 
+You have seen how we use those operators in the previous section. Here we show how to implement particular
+cases. The first \b doWork(int row_side, int col_side, ...) function is usually
+overloaded when you assemble matrix, the second is often used to assemble
+vectors. However, use of user operators is beyond assembly of matrices and
+vectors. Note that first \b doWork(int side, EntityType type, ...) function
+has an argument information about data in rows and columns, where second takes as
+an argument only rows or columns, depending on how user operator is set-up.
+
+\subsection mixtransport_assmble_matrix Assembling matrix
+
+We will show how user operators work on two examples. First, we focus attention on term
+\f[
+b_\mathbf{C}(\sigma,v) =
+\int_\Omega \textrm{div}[\boldsymbol\sigma] v \textrm{d}\Omega =
+\sum_\mathcal{T}^E
+\int_{\mathcal{T}^e} \textrm{div}[\boldsymbol\sigma] v \textrm{d}\mathcal{T} =
+\mathbf{q}_\textrm{h-div}^\textrm{T}
+\left(
+\sum_\mathcal{T}^E
+\sum_\mathcal{E_\textrm{row}}^e
+\sum_\mathcal{E_\textrm{col}}^e
+\sum_{g=0}^\textrm{N}
+w_g B^\textrm{h-div}_{i,i} B^\textrm{v}
+\right) \mathbf{q}_\textrm{v} =
+\left(\mathbf{q}_\textrm{h-div}\right)^\textrm{T} \mathbf{C} \mathbf{q}_\textrm{v}
+\f]
+were we implement matrix \f$\mathbf{C}\f$
+\f[
+\mathbf{C} = \sum_\mathcal{T}^E
+\sum_\mathcal{E_\textrm{row}}^e
+\sum_\mathcal{E_\textrm{col}}^e
+\sum_{g=0}^\textrm{N}
+w_g B^\textrm{h-div}_{i,i} B^\textrm{v}
+\f]
+Note that in this case, where we have H-div space on rows and L2 space on columns, we have
+\f[
+\mathcal{E}_\textrm{row}=\{ TRIANGLES\,\times\,4, TETRAHERAL \},\quad \mathcal{E}_\textrm{col} = \{ TETRAHEDRAL \}
+\f]
+
+You can notice three loops, over elements, entities on element and integration
+point. The first and second loop are managed by MoFEM while the last one over
+integration points where a particular operator is evaluated is implemented by
+programmer, as shown below
+\code
+struct MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv: public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+  Mat Aij;
+  OpVDivSigma_L2Hdiv(Mat aij):
+  MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
+    "FLUXES","VALUES",UserDataOperator::OPROWCOL
+  ),
+  Aij(aij) {
+    //this operator is not symmetric setting this variable makes element
+    //operator to loop over element entities without
+    //assumption that off-diagonal matrices are symmetric.
+    sYmm = false;
+  }
+  MatrixDouble C;
+  VectorDouble divVec,Nf;
+  MoFEMErrorCode doWork(
+    int row_side,int col_side,
+    EntityType row_type,EntityType col_type,
+    DataForcesAndSourcesCore::EntData &row_data,
+    DataForcesAndSourcesCore::EntData &col_data
+  ) {
+    MoFEMFunctionBegin;
+    int nb_row = row_data.getFieldData().size();
+    int nb_col = col_data.getFieldData().size();
+    if(nb_row==0) MoFEMFunctionReturnHot(0);
+    if(nb_col==0) MoFEMFunctionReturnHot(0);
+    C.resize(nb_row,nb_col);
+    C.clear();
+    divVec.resize(nb_row,false);
+    int nb_gauss_pts = row_data.getVectorN().size1();
+    for(int gg = 0;gg<nb_gauss_pts;gg++) {
+      double w = getGaussPts()(3,gg)*getVolume();
+      CHKERR getDivergenceOfHDivBaseFunctions(
+        row_side,row_type,col_data,gg,divVec
+      ); 
+      noalias(C) += w*outer_prod(divVec,row_data.getN(gg));
+    }
+    CHKERR MatSetValues(
+      Aij,
+      nb_row,&row_data.getIndices()[0],
+      nb_col,&col_data.getIndices()[0],
+      &C(0,0),ADD_VALUES
+    ); 
+    MoFEMFunctionReturn(0);
+  }
+};
+
+\endcode
+Note that we integrate over tetrahedra. Thus operator
+MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator is inherited.  The class
+constructor
+MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv::OpVDivSigma_L2Hdiv takes an
+argument PETSc matrix and set variable \e sYmm to false, since matrix
+\f$\mathbf{C}\f$ is non-symmetric. Moreover, constructing operator we indicate
+that in the first argument of bilinear form we take field \e FLUXES and in the
+second argument of bilinear form we take field \e VALUES. Finally, in the
+constructor of operator we indicate that we like to loop over all possible
+combinations of entities on rows and columns, by setting \e OPROWCOL from enum
+type MoFEM::ForcesAndSourcesCore::UserDataOperator::OpType.
+
+The real work is done in
+\code
+MoFEMErrorCode MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv::doWork(
+  int row_side,int col_side,
+  EntityType row_type,EntityType col_type,
+  DataForcesAndSourcesCore::EntData &row_data,
+  DataForcesAndSourcesCore::EntData &col_data
+);
+\endcode
+MoFEM executes this method, in this particular case, for each combination of pairs
+\f[
+\mathcal{E}_\textrm{row} \times \mathcal{E}_\textrm{col} = \{
+\left(TRI_0, TET\right),
+\left(TRI_1, TET\right),
+\left(TRI_2, TET\right),
+\left(TRI_4, TET\right),
+\left(TET, TET\right)
+\}
+\f]
+Note that function MoFEM::DataOperator::doWork takes as argument \b row_side and
+\b col_side, which represent a local index of processed entity on rows and columns,
+respectively.  Also,  \b row_type and \b col_type shows the type of entity, for
+example, tetrahedra or triangle in this case.  To see more details about a type
+of entities, local indices and canonical numeration see  \cite tautges2010canonical.
+
+The \b row_data and \b col_data are data structures
+MoFEM::DataForcesAndSourcesCore::EntData carrying information about values of base
+functions, global and local DOF indices, DOF values on evaluated entities. For
+example, you can get indices on the row using \b row_data.getIndices(), or matrix
+of base functions at integration point as follows
+\code
+MatrixDouble &base_row_hdiv = row_data.getVectorN(gg);
+\endcode
+In this case, each row of the matrix \b base_row_hdiv represents base function, where columns
+represent values of the element of base function vector. Look to
+MoFEM::DataForcesAndSourcesCore::EntData to see a range of data which is accessible by
+this data structure.
+
+From inside MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator, we
+can access more finite element specific information, in that case volume
+element, for example,
+\code
+double vol = getVolume(); // get volume of element
+MarixDouble &coords_at_gauss_pts = getCoordsAtGaussPts(); // physical coordinates of integration points
+\endcode
+and much more.
+
+After above explanation, we focus on implementation itself, so finally we loop
+over integration points and calculate local matrix \b C, as follows
+\code
+int nb_gauss_pts = row_data.getVectorN().size1();
+for(int gg = 0;gg<nb_gauss_pts;gg++) {
+  double w = getGaussPts()(3,gg)*getVolume();
+  CHKERR getDivergenceOfHDivBaseFunctions(
+    row_side,row_type,col_data,gg,divVec
+  ); 
+  noalias(C) += w*outer_prod(divVec,row_data.getN(gg));
+}
+\endcode
+Here we are using Boost uBlas functions to do operations on local matrices.  You can
+alternatively use tensor library implemented in MoFEM (\ref FTensor) to do the
+job. Once local element matrix \b C is calculated, it is assembled into global matrix
+\code
+CHKERR MatSetValues(
+  Aij,
+  nb_row,&row_data.getIndices()[0],
+  nb_col,&col_data.getIndices()[0],
+  &C(0,0),ADD_VALUES
+); 
+\endcode
+where global indices on entities on rows and columns are easily retrieved by
+\code
+VectorInt &global_row_indices = row_data.getIndices();
+VectorInt &global_col_indices = col_data.getIndices();
+\endcode
+where  MatSetValues is a PETSc function documented here
+<http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MatSetValues.html>
+
+To solve problem, other blocks of matrix need to be assembled, for details how is
+done please see  MixTransport::MixTransportElement.
+
+\subsection mixtransport_assmble_vector Assembling vector
+
+At this stage you could see how to assemble vector, we focus attention on the
+assembly of Dirichlet boundary condition. Note the Dirichlet boundary conditions
+in this formulation, are natural, i.e. enforced in a weak sense when a system of
+linear equations is solved.
+
+This time, we will calculate integral
+\f[
+\mathbf{f} = \int_{\Gamma_\textrm{u}} \overline{u} \tau_{i} n_i \textrm{d}\Gamma =
+\sum_\mathcal{T}^E \int_{\partial\mathcal{T}_\textrm{u}} \overline{u} \tau_{i} n_i \textrm{d}\partial\mathcal{T} =
+\sum_\mathcal{T}^E \sum_\mathcal{E}^e \sum_{g=0}^N w_g \overline{u} B^\textrm{h-div}_{i} n_i
+\f]
+to do that we use following user operator class
+\code
+struct MixTransport::MixTransportElement::OpRhsBcOnValues: public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+  MixTransport::MixTransportElement &cTx;
+  Vec F;
+  OpRhsBcOnValues(MixTransport::MixTransportElement &ctx,Vec f):
+  MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator("FLUXES",UserDataOperator::OPROW),
+  cTx(ctx),
+  F(f) {}
+  VectorDouble Nf;
+  MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    if(data.getFieldData().size()==0) MoFEMFunctionReturnHot(0);
+    Nf.resize(data.getIndices().size());
+    Nf.clear();
+    int nb_gauss_pts = data.getVectorN().size1();
+    for(int gg = 0;gg<nb_gauss_pts;gg++) {
+      const double x = getCoordsAtGaussPts()(gg,0);
+      const double y = getCoordsAtGaussPts()(gg,1);
+      const double z = getCoordsAtGaussPts()(gg,2);
+      double value;
+      CHKERR cTx.getBcOnValues(x,y,z,value); 
+      double w = getGaussPts()(2,gg)*0.5;
+      noalias(Nf) += w*prod(data.getVectorN(gg),getNormal())*value;
+    }
+    CHKERR VecSetValues(F,data.getIndices().size(),&data.getIndices()[0],&Nf[0],ADD_VALUES); 
+    MoFEMFunctionReturn(0);
+  }
+};
+\endcode
+Note that above class is derived from
+MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator, since we integrate
+over triangles where Dirichlet boundary conditions are set.
+
+In this case, the constructor has two arguments, reference to
+MixTransport::MixTransportElement object itself, and the right-hand side vector.  We use
+\b cTx reference to access function evaluating boundary conditions. Constructing
+derived class, we are indicating that use field \e FLUXES and loop only over
+entities on the row, by setting OPROW from enum type
+MoFEM::ForcesAndSourcesCore::UserDataOperator::OpType.
+
+The real work is done in
+\code
+MoFEMErrorCode MixTransport::MixTransportElement::OpRhsBcOnValues::doWork(
+  int side,EntityType type,DataForcesAndSourcesCore::EntData &data
+);
+\endcode
+Since we loop only over row entities, the function \b doWork, looks different that
+that one to integrate matrix, it is simpler.  It passes argument about \b side
+which is local number of entity for which operator is executed, \b type of
+entity and finally \b data structure
+
+MoFEM executes this method, in this particular case, for only one entity, i.e.
+\f[
+\mathcal{E}=\{ TRI \}
+\f]
+This is a consequence that testing functions on rows are in H-div space. Note
+that if the testing function would be in H-curl space, so for triangle loop on
+entities will involve three edges and triangle itself, from a testing function
+in H1 space loop will involve vertices, edges and triangle itself.
+
+The integration takes place in these lines of the code
+\code
+for(int gg = 0;gg<nb_gauss_pts;gg++) {
+  const double x = getCoordsAtGaussPts()(gg,0);
+  const double y = getCoordsAtGaussPts()(gg,1);
+  const double z = getCoordsAtGaussPts()(gg,2);
+  double value;
+  CHKERR cTx.getBcOnValues(x,y,z,value); 
+  double w = getGaussPts()(2,gg)*0.5;
+  noalias(Nf) += w*prod(data.getVectorN(gg),getNormal())*value;
+}
+\endcode
+where \b getNormal() get normal of the face and \b cTx.getBcOnValues(x,y,z,value)
+calculates value of boundary condition at coordinates of integration point.
+
+Finally, local entity local vector is assembled,
+\code
+CHKERR VecSetValues(F,data.getIndices().size(),&data.getIndices()[0],&Nf[0],ADD_VALUES); 
+\endcode
+where VecSetValues is PETSc function, see
+<http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Vec/VecSetValues.html>
+for details.
+
+
+\section mixtransport_error Evaluate error
+
+In this example to estimate posterior error we follow paper
+\cite braess1996posteriori. This error estimator works well for mesh-dependent norms,
+for which is reliable and efficient. However, it is not efficient in natural norm of
+\f$H(\textrm{div},\Omega)\times L^2(\Omega)\f$ \cite  carstensen1997posteriori.
+
+\todo You can find two other papers, \cite  carstensen1997posteriori and
+\cite ainsworth2007posteriori which have efficient error estimator working in the
+natural norm. Those error estimators are not very different from an
+implementation point of view and could be easily added here.
+
+\todo To do numerical experiment testing error bound, we can solve the problem
+from \cite demkowicz2011analysis where analytical solutions are given. That will
+involve modification how boundary conditions are applied. Again, this is easy to
+implement, so if you are willing to add this to this documentation, it is very
+welcome.
+
+\todo Based on this work, you can write a good journal article about the
+efficiency of error estimator, taking into account two above remarks. If you are
+interested, we are happy to help. Extension to hp-adaptivity is straightforward.
+
+\todo A useful add-on is to construct preconditioner, which will take into
+account hierarchy created during hp-adaptivity, this involves some work, again
+we are happy to help.
+
+Following paper \cite braess1996posteriori, we consider bounds of the error
+estimator in respect to the mesh-dependent norms
+\f[
+\| \boldsymbol\tau \|_{0,h} := \left(
+\| \boldsymbol\tau \|_0^2 + h \sum_{e\in\Gamma_h} \| \boldsymbol\tau \mathbf{n} \|^2_{0,e}
+\right)^{1/2}
+\f]
+and
+\f[
+|v|_{1,h} := \left(
+\sum_{T\in\mathcal{T}_h} |v|^2_{1,T}
++
+h^{-1}\sum_{e\in\Gamma_h} | J(v) |_{0,e}^2
+\right)^{1/2}
+\f]
+where \f$J(v)\f$ is a jump on the face \f$e\f$ and h is  is consistently
+replaced by the diameters of the actual elements and the lengths of the edges.
+\f$\|\cdot\|_0\f$ and \f$\|\cdot\|_1\f$ are Sobolev norms and semi-norm, respectively.
+
+Our a posteriori estimator will be based on residuals. There will be
+contributions from the tetrahedra as
+\f[
+\begin{split}
+\eta_{T,R,1} &:= \| \mathbf{A} \boldsymbol\sigma + \textrm{grad}[\mathbf{u}] \|_{0,T} \\
+\eta_{T,R,2} &:= h\| \textrm{div}[\boldsymbol\sigma] -\mathbf{f} \|_{0,T}
+\end{split}
+\f]
+and from the jumps on the inter-element boundaries
+\f[
+\eta_{e,R} := h^{-1/2} \| J(u) \|_{0,e}
+\f]
+The local error estimator is a weighted combination
+\f[
+\eta_{T,R} :=
+\left(
+\eta^2_{T,R,1} + \eta^2_{T,R,2} + \sum_{e \in \partial T} \eta_{e,R}^2
+\right)^{1/2}
+\f]
+For convenience, we will also refer to the global sum
+\f[
+\eta_{T,R} :=
+\left(
+\sum_{T \in \mathcal{T}_h} \left[ \eta^2_{T,R,1} + \eta^2_{T,R,2} \right] + \sum_{e \in \partial T} \eta_{e,R}^2
+\right)^{1/2}
+\f]
+
+This error estimator is reliable and efficient, and the upper bound is
+\f[
+\|\boldsymbol\sigma^*-\boldsymbol\sigma\|_{0,h} + | u^* - u |_{1,h} \leq \frac{c}{1-\beta} \eta_R
+\f]
+where \f$c\f$ depends on the shape parameter of \f$\mathcal{T}_h\f$ and \f$\beta\f$ is saturation
+parameter, see \cite braess1996posteriori for details. Lower bound is
+\f[
+\eta_{T,R} \leq
+\| \boldsymbol\sigma^* - \boldsymbol\sigma \|_{0,h} +
+| u^* -  u |_{1,h} +
+h \| f - \textrm{div}[\boldsymbol\sigma] \|_0
+\f]
+
+\subsection mixtransport_refinemnt_sequence Calculate error and refine mesh
+
+Once we have residual error estimator we could do h-adaptivity, it is done by
+executing following code
+\code
+for(int ll = 1;ll!=nb_levels;ll++) {
+  const int nb_levels = ll;
+  CHKERR ufe.squashBits(); 
+  CHKERR ufe.refineMesh(ufe,nb_levels,order); 
+  ref_level = BitRefLevel().set(nb_levels);
+  bc_flux_map.clear();
+  CHKERR ufe.addBoundaryElements(ref_level);
+  CHKERR ufe.buildProblem(ref_level); 
+  CHKERR ufe.createMatrices(); 
+  CHKERR ufe.solveLinearProblem(); 
+  CHKERR ufe.calculateResidual(); 
+  CHKERR ufe.evaluateError(); 
+  CHKERR ufe.destroyMatrices(); 
+  CHKERR ufe.postProc(
+    static_cast<std::ostringstream&>
+    (std::ostringstream().seekp(0) << "out_" << nb_levels << ".h5m").str()
+  ); 
+}
+\endcode
+where \e nb_levels is the number of refinement levels.
+
+We focus attention on mesh refinement procedures in next section, but first we
+will show how to calculate residual error estimator using user operators.
+Function evaluating error is implemented as follows
+\code
+MoFEMErrorCode MixTransport::MixTransportElement::evaluateError() {
+  MoFEMFunctionBegin;
+  errorMap.clear();
+  sumErrorFlux = 0;
+  sumErrorDiv = 0;
+  sumErrorJump = 0;
+  feTri.getOpPtrVector().clear();
+  feTri.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpSkeleton(*this,"FLUXES"));
+  CHKERR mField.loop_finite_elements("MIX","MIX_SKELETON",feTri,0,mField.get_comm_size()); 
+  feVol.getOpPtrVector().clear();
+  feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpFluxDivergenceAtGaussPts(*this,"FLUXES"));
+  feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpValuesGradientAtGaussPts(*this,"VALUES"));
+  feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpError(*this,"VALUES"));
+  CHKERR mField.loop_finite_elements("MIX","MIX",feVol,0,mField.get_comm_size()); 
+  const Problem *problem_ptr;
+  CHKERR mField.get_problem("MIX",&problem_ptr); 
+  PetscPrintf(
+    mField.get_comm(),
+    "Nb dofs %d error flux^2 = %6.4e error div^2 = %6.4e error jump^2 = %6.4e error tot^2 = %6.4e\n",
+    problem_ptr->getNbDofsRow(),
+    sumErrorFlux,sumErrorDiv,sumErrorJump,sumErrorFlux+sumErrorDiv+sumErrorJump
+  );
+  MoFEMFunctionReturn(0);
+}
+\endcode
+
+Once the problem is solved, first we need to calculate jump on the skeleton.  We
+simply doing this by applying the same procedure like before, adding appropriate
+entity operator to the element object and looping over all triangular elements
+in the problem, as follows
+\code
+feTri.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpSkeleton(*this,"FLUXES"));
+CHKERR mField.loop_finite_elements("MIX","MIX_SKELETON",feTri,0,mField.get_comm_size()); 
+\endcode
+Note that entity operator MixTransport::MixTransportElement::OpSkeleton is executed for
+every element \e MIX_SKELETON. How this entity operator is implemented is
+described in the following section.
+
+Once the jump is calculated, we can evaluate error estimator, by running
+sequence of entity operators on each volume element, as follows,
+\code{.cpp}
+feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpFluxDivergenceAtGaussPts(*this,"FLUXES"));
+  feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpValuesGradientAtGaussPts(*this,"VALUES"));
+  feVol.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpError(*this,"VALUES"));
+  CHKERR mField.loop_finite_elements("MIX","MIX",feVol,0,mField.get_comm_size()); 
+\endcode
+
+Once we loop over all elements and calculate error, we aggregate all element
+contributions in \b sumErrorFlux and \b sumErrorDiv and \b sumErrorJump which are
+\f$\eta^2_{T,R,1}\f$, \f$\eta^2_{T,R,2}\f$ and \f$\eta^2_{e,R}\f$, respectively.
+
+\subsection mixtransport_jump Calculate jump on the skeleton
+
+At this point, we will describe how to integrate over skeleton to get jumps on
+the faces. That involves loop over triangles and then for each triangle
+visiting adjacent tetrahedral, one by one.
+
+On each triangle, we set some integration rule, which integration points are
+projected on appropriate sides of two adjacent tetrahedra. Next, for each
+tetrahedron, base functions (and derivatives) are evaluated at integration
+points and values of function \f$u\f$ calculated. Once values on each
+tetrahedron are computed we do loop over all integration points on face and
+calculate norm of the jump, i.e. \f$\eta_{e,R}\f$.
+
+MoFEM has some dedicated data structures and methods to do this type of
+integration. Those procedures were implemented to give user ability to implement
+Discontinuous (Petrov) Galerkin, contact mechanics or other approaches involving
+integration on skeleton where information from adjacent entities is needed.
+
+\code{.cpp}
+struct MixTransport::MixTransportElement::OpSkeleton: public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
+
+  /**
+   * \brief volume element to get values from adjacent tets to face
+   */
+  MoFEM::VolumeElementForcesAndSourcesCoreOnSide volSideFe;
+
+  /** store values at integration point, key of the map is sense of face in
+   * respect to adjacent tetrahedra
+   */
+  map<int,VectorDouble> valMap;
+
+  /**
+   * \brief calculate values on adjacent tetrahedra to face
+   */
+  struct OpVolSide;
+
+  MixTransport::MixTransportElement &cTx;
+
+  OpSkeleton(
+    MixTransport::MixTransportElement &ctx,const std::string flux_name
+  ):
+  MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(flux_name,UserDataOperator::OPROW),
+  volSideFe(ctx.mField),
+  cTx(ctx) {
+    volSideFe.getOpPtrVector().push_back(new OpSkeleton::OpVolSide(valMap));
+  }
+  MoFEMErrorCode doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data);
+};
+\endcode
+
+User entity operator MixTransport::MixTransportElement::OpSkeleton has nested volume
+element and nested entity operator to integrate over it. Note that nested volume
+element is a class MoFEM::VolumeElementForcesAndSourcesCoreOnSide, that
+is inherited from MoFEM::VolumeElementForcesAndSourcesCore. This derived class has
+additional functionality, which if an instance of it is called from face
+operator, it projects face integration points on the appropriate face of adjacent
+tetrahedra. As results volume, base functions are evaluated at integration points
+which come from currently evaluated skeleton face.
+
+That nested volume element, here having instance \b volSideFe, run nested
+operator class MixTransport::MixTransportElement::OpSkeleton::OpVolSide, this class is
+derived form MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator.
+Again this class gives access to additional information which is useful when integration
+is over skeleton, like face normal vector, face area, etc. Note that nested
+operator MixTransport::MixTransportElement::OpSkeleton::OpVolSide is added to nested
+volume instance \b volSideFe, in constructor of face operator with the command
+line
+\code{.cpp}
+volSideFe.getOpPtrVector().push_back(new MixTransport::MixTransportElement::OpSkeleton::OpSkeleton::OpVolSide(valMap));
+\endcode
+
+The example of implementation of nested volume element operator looks as follows
+\code{.cpp}
+struct MixTransport::MixTransportElement::OpSkeleton::OpVolSide: public MoFEM::VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator {
+  map<int,VectorDouble> &valMap;
+  OpVolSide(map<int,VectorDouble> &val_map):
+  VolumeElementForcesAndSourcesCoreOnSide::UserDataOperator("VALUES",UserDataOperator::OPROW),
+  valMap(val_map) {
+  }
+  MoFEMErrorCode doWork(int side, EntityType type,DataForcesAndSourcesCore::EntData &data) {
+    MoFEMFunctionBegin;
+    if(data.getFieldData().size() == 0)  MoFEMFunctionReturnHot(0);
+    int nb_gauss_pts = data.getN().size1();
+    valMap[getFaceSense()].resize(nb_gauss_pts);
+    for(int gg = 0;gg<nb_gauss_pts;gg++) {
+      valMap[getFaceSense()][gg] = inner_prod(trans(data.getN(gg)),data.getFieldData());
+    }
+    MoFEMFunctionReturn(0);
+  }
+};
+\endcode
+Implementation of \b doWork function is straightforward. It loops over integration
+points and computes function values using base functions and DOF values.
+Results are stored in the map \b valMap. Note that internal face has two
+adjacent volume elements, whereas face on boundary has only one. Each face has a
+unique orientation (sense) in respect to face, information about that sense is
+accessed by \b getFaceSense().
+
+Once we evaluated approximation function values at each face, we can calculate
+error \f$\eta_{e,R}\f$, using face operator
+\code{.cpp}
+MoFEMErrorCode MixTransport::MixTransportElement::OpSkeleton::doWork(int side,EntityType type,DataForcesAndSourcesCore::EntData &data) {
+  MoFEMFunctionBegin;
+  if(type == MBTRI) {
+    EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
+    double def_val = 0;
+    Tag th_error_jump;
+    CHKERR cTx.mField.get_moab().tag_get_handle(
+      "ERROR_JUMP",1,MB_TYPE_DOUBLE,th_error_jump,MB_TAG_CREAT|MB_TAG_SPARSE,&def_val
+    ); 
+    double* error_jump_ptr;
+    CHKERR cTx.mField.get_moab().tag_get_by_ptr(
+      th_error_jump,&fe_ent,1,(const void**)&error_jump_ptr
+    ); 
+    *error_jump_ptr = 0;
+    // check if this is essential boundary condition
+    EntityHandle essential_bc_meshset = cTx.mField.get_finite_element_meshset("MIX_BCFLUX");
+    if(cTx.mField.get_moab().contains_entities(essential_bc_meshset,&fe_ent,1)) {
+      // essential bc, np jump then, exit and go to next face
+      MoFEMFunctionReturnHot(0);
+    }
+    // calculate values form adjacent tets
+    valMap.clear();
+    CHKERR loopSideVolumes("MIX",volSideFe); 
+    int nb_gauss_pts = data.getVectorN().size1();
+    // it is only one face, so it has to be bc natural boundary condition
+    if(valMap.size()==1) {
+      if(valMap.begin()->second.size()!=nb_gauss_pts) {
+        SETERRQ(PETSC_COMM_WORLD,MOFEM_DATA_INCONSISTENCY,"wrong number of integration points");
+      }
+      for(int gg = 0;gg!=nb_gauss_pts;gg++) {
+        const double x = getCoordsAtGaussPts()(gg,0);
+        const double y = getCoordsAtGaussPts()(gg,1);
+        const double z = getCoordsAtGaussPts()(gg,2);
+        double value;
+        CHKERR cTx.getBcOnValues(fe_ent,x,y,z,value); 
+        double w = getGaussPts()(2,gg);
+        w *= getArea();
+        *error_jump_ptr += w*pow(value-valMap.begin()->second[gg],2);
+      }
+    } else if(valMap.size()==2) {
+      for(int gg = 0;gg!=nb_gauss_pts;gg++) {
+        double w = getGaussPts()(2,gg);
+        w *= getArea();
+        double delta = valMap.at(1)[gg]-valMap.at(-1)[gg];
+        *error_jump_ptr += w*pow(delta,2);
+      }
+    }
+  }
+  MoFEMFunctionReturn(0);
+}
+\endcode
+Note that we have to consider three scenarios, first, on the face is essential
+boundary condition. In that case, jump on face values is zero. If
+that is not a case, we run loop over adjacent volume elements
+\code
+ CHKERR loopSideVolumes("MIX",volSideFe); 
+\endcode
+At this point nested volume element instance is called and then operator on this
+element executed. Results of this operation are stored in \b valMap.
+
+If it is not case one, and if a face has only one volume in the side, thus on
+that face natural boundary is applied, then jump is a difference between
+boundary value and values evaluated by adjacent volume operator. If a face is in
+volume, i.e. third case, we calculate the difference between values from
+adjacent volumes. Results are stored on face tag values, here we are using MOAB to
+do that for us, using
+\code
+ CHKERR cTx.mField.get_moab().tag_get_by_ptr(
+    th_error_jump,&fe_ent,1,(const void**)&error_jump_ptr
+ ); 
+\endcode
+which returns pointer to value stored (tagged) on face. Look here
+<http://ftp.mcs.anl.gov/pub/fathom/moab-docs/contents.html#twofour> to learn
+about tags in MOAB and how to use them.
+
+\subsection mixtransport_calculate_error Calculate residual error estimator
+
+Once we have implemented how to calculate jumps between adjacent volume elements,
+we can focus on computing residual error estimator. We do that in standard way
+using operator which acts on volume element
+\code
+struct MixTransport::MixTransportElement::OpError: public MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator {
+  MixTransport::MixTransportElement &cTx;
+  OpError(
+    MixTransport::MixTransportElement &ctx,
+    const std::string field_name
+  ):
+  MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(field_name,UserDataOperator::OPROW),
+  cTx(ctx) {}
+  VectorDouble deltaFlux;
+  MatrixDouble invK;
+  MoFEMErrorCode doWork(
+    int side,EntityType type,DataForcesAndSourcesCore::EntData &data
+  ) {
+    MoFEMFunctionBegin;
+    if(type != MBTET) MoFEMFunctionReturnHot(0);
+    invK.resize(3,3,false);
+    int nb_gauss_pts = data.getN().size1();
+    EntityHandle fe_ent = getNumeredEntFiniteElementPtr()->getEnt();
+    double def_val = 0;
+    Tag th_error_flux,th_error_div;
+    CHKERR cTx.mField.get_moab().tag_get_handle(
+      "ERROR_FLUX",1,MB_TYPE_DOUBLE,th_error_flux,MB_TAG_CREAT|MB_TAG_SPARSE,&def_val
+    ); 
+    double* error_flux_ptr;
+    CHKERR cTx.mField.get_moab().tag_get_by_ptr(
+      th_error_flux,&fe_ent,1,(const void**)&error_flux_ptr
+    ); 
+    CHKERR cTx.mField.get_moab().tag_get_handle(
+      "ERROR_DIV",1,MB_TYPE_DOUBLE,th_error_div,MB_TAG_CREAT|MB_TAG_SPARSE,&def_val
+    ); 
+    double* error_div_ptr;
+    CHKERR cTx.mField.get_moab().tag_get_by_ptr(
+      th_error_div,&fe_ent,1,(const void**)&error_div_ptr
+    ); 
+    Tag th_error_jump;
+    CHKERR cTx.mField.get_moab().tag_get_handle(
+      "ERROR_JUMP",1,MB_TYPE_DOUBLE,th_error_jump,MB_TAG_CREAT|MB_TAG_SPARSE,&def_val
+    ); 
+    double* error_jump_ptr;
+    CHKERR cTx.mField.get_moab().tag_get_by_ptr(
+      th_error_jump,&fe_ent,1,(const void**)&error_jump_ptr
+    ); 
+    *error_jump_ptr = 0;
+    /// characteristic size of the element
+    const double h = pow(getVolume()*12/sqrt(2),(double)1/3);
+    for(int ff = 0;ff!=4;ff++) {
+      EntityHandle face;
+      CHKERR cTx.mField.get_moab().side_element(fe_ent,2,ff,face); 
+      double* error_face_jump_ptr;
+      CHKERR cTx.mField.get_moab().tag_get_by_ptr(
+        th_error_jump,&face,1,(const void**)&error_face_jump_ptr
+      ); 
+      *error_face_jump_ptr = (1/sqrt(h))*sqrt(*error_face_jump_ptr);
+      *error_face_jump_ptr = pow(*error_face_jump_ptr,2);
+      *error_jump_ptr += *error_face_jump_ptr;
+    }
+    *error_flux_ptr = 0;
+    *error_div_ptr = 0;
+    deltaFlux.resize(3,false);
+    for(int gg = 0;gg<nb_gauss_pts;gg++) {
+      double w = getGaussPts()(3,gg)*getVolume();
+      const double x = getCoordsAtGaussPts()(gg,0);
+      const double y = getCoordsAtGaussPts()(gg,1);
+      const double z = getCoordsAtGaussPts()(gg,2);
+      double flux;
+      CHKERR cTx.getSource(fe_ent,x,y,z,flux); 
+      *error_div_ptr += w*pow(cTx.divergenceAtGaussPts[gg]-flux,2);
+      CHKERR cTx.getResistivity(fe_ent,x,y,z,invK); 
+      noalias(deltaFlux) = prod(invK,cTx.fluxesAtGaussPts[gg])+cTx.valuesGradientAtGaussPts[gg];
+      *error_flux_ptr += w*inner_prod(deltaFlux,deltaFlux);
+    }
+    *error_div_ptr = h*sqrt(*error_div_ptr);
+    *error_div_ptr = pow(*error_div_ptr,2);
+    cTx.sumErrorFlux += *error_flux_ptr;
+    cTx.sumErrorDiv += *error_div_ptr;
+    // FIXME: Summation should be while skeleton is calculated
+    cTx.sumErrorJump += *error_jump_ptr; // FIXME: this need to be fixed
+    cTx.errorMap[sqrt(*error_flux_ptr+*error_div_ptr+*error_jump_ptr)] = fe_ent;
+    MoFEMFunctionReturn(0);
+  }
+};
+\endcode
+The scheme in which how we implement is similar to those above, we integrate values, save
+them on volume tags, and aggregate errors from individual elements. Note that we
+read tag values of previously calculated error from adjacent to tetrahedra
+faces, summing them up to calculate
+\f$
+\sum_{e \in \partial T} \eta_{e,R}^2
+\f$.
+
+\section mixtransport_meshrefinement Mesh refinement
+
+We will build a refined mesh from scratch, each time we add the new level. Using
+bit refinement levels (see \ref mix_mesh_refinement) we can do that
+efficiently.
+
+Since we build mesh without hanging nodes, not all edges in coarse tetrahedra
+are always refined. Refining such tetrahedra in subsequent refinements would result
+in poorly shaped elements. We will show how to overcome this difficulty.
+
+Implementation of mesh refinement is in ExampleMix::refineMesh. First, we
+have to create a set of edges which are going to be split. This set is built
+from edges which were refined in previous mesh refinement levels and new edges
+which are adjacent to tetrahedra which have error above threshold. We used
+the standard "greedy" strategy for h-adaptive refinements, i.e. all elements
+which contribute 25% of the maximum element contribution to the square of total
+error in energy norm are marked for the refinement.
+
+To get edges which have been refined in previous steps we run
+\code
+const RefEntity_multiIndex *ref_ents_ptr;
+// get pointer to multi-index in databse having all entities
+CHKERR mField.get_ref_ents(&ref_ents_ptr); 
+typedef RefEntity_multiIndex::index<Composite_EntType_and_ParentEntType_mi_tag>::type RefEntsByComposite;
+const RefEntsByComposite &ref_ents = ref_ents_ptr->get<Composite_EntType_and_ParentEntType_mi_tag>();
+RefEntsByComposite::iterator rit,hi_rit;
+// get all entities which parenrt are vertices and parent is edges.
+rit = ref_ents.lower_bound(boost::make_tuple(MBVERTEX,MBEDGE));
+hi_rit = ref_ents.upper_bound(boost::make_tuple(MBVERTEX,MBEDGE));
+// get parent edges, those edges were refined in previous steps
+Range refined_edges;
+// thist loop is over vertices which parent is edge
+for(;rit!=hi_rit;rit++) {
+  refined_edges.insert((*rit)->getParentEnt()); // get parent edge
+}
+\endcode
+
+To get entities which are deemed to refine at this level, we first get all
+elements which have error of 25% of the maximum element contribution
+\code
+// get tets which has large error
+Range tets_to_refine;
+const double max_error = ufe.errorMap.rbegin()->first;
+for(
+  map<double,EntityHandle>::iterator mit = ufe.errorMap.begin();
+  mit!=ufe.errorMap.end();
+  mit++
+) {
+  if(mit->first<0.25*max_error) continue;
+  tets_to_refine.insert(mit->second);
+}
+\endcode
+where \b ufe.errorMap is filled in MixTransport::MixTransportElement::OpError .
+
+Once we have elements, we can find adjacent edges
+\code
+Range tets_to_refine_edges;
+CHKERR mField.get_moab().get_adjacencies(
+  tets_to_refine,1,false,tets_to_refine_edges,moab::Interface::UNION
+); 
+\endcode
+and merge edges into the set of all edges which are refined or going to be refined
+\code
+refined_edges.merge(tets_to_refine_edges);
+\endcode
+
+At that point we have elements and edges to refine so we can do mesh refinement.
+Mesh refinement is managed by interface MoFEM::MeshRefinement, we can query
+for that interface as follows
+\code
+MoFEM::MeshRefinement *refine_ptr;
+CHKERR mField.getInterface(refine_ptr); 
+\endcode
+with this interface at hand, we do
+\code
+for(int ll = 0;ll!=nb_levels;ll++) {
+ // get edges from previous mesh level
+  Range edges;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    BitRefLevel().set(ll),BitRefLevel().set(),MBEDGE,edges
+  ); 
+  // get intersection of all edges to refine and edges of previous level
+  edges = intersect(edges,refined_edges);
+  // refine edges by creation of node in middle of edge, if node was previously created use that node, and set BitRefLevel to that node
+  CHKERR refine_ptr->add_vertices_in_the_middle_of_edges(edges,BitRefLevel().set(ll+1)); 
+  //  get all tetrahderals for current refined level
+  Range tets;
+  CHKERR mField.getInterface<BitRefManager>()->getEntitiesByTypeAndRefLevel(
+    BitRefLevel().set(ll),BitRefLevel().set(),MBTET,tets
+  ); 
+  // refine those tetrahedrals using nodes in middle of refined edges
+  CHKERR refine_ptr->refine_TET(tets,BitRefLevel().set(ll+1)); 
+  // update meshsets with boundary conditons, etc.
+  CHKERR updateMeshsetsFieldsAndElements(ll+1); 
+}
+\endcode
+
+\section mixtransport_future_work Future work and contribution
+
+If you like to contribute to this module (or MoFEM library), you are very
+welcome. Please feel free to add changes, including improving this documentation.
+If you like to work and modify this user module, you can fork this repository,
+make your changes, and do pull request. Contact us
+<a href="https://groups.google.com/forum/#!forum/mofem-group">mofem-group@googlegroups.com</a> or
+<https://mofem.slack.com/>  if you need any help or comments.
+
+This is work in progress, and more stuff can be done. You could consider own
+paper or student project.
+
+\todo Make this documentation better
+
+\todo hp-adaptive
+
+\todo Problem tailored preconditioner for Krylov solver
+
+\todo Convergence study, estimation of constants
+
+*/

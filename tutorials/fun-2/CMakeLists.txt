@@ -11,26 +11,36 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-tutorials_build_and_install(
-  magnetostatic ${CMAKE_CURRENT_SOURCE_DIR}/magnetostatic.cpp)
-
-add_test(magnetostatic
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
-  ${CMAKE_CURRENT_BINARY_DIR}/magnetostatic
-  -my_file ${CMAKE_CURRENT_SOURCE_DIR}/magnetic_coil_2parts.h5m -my_order 1 
-  -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_package mumps 
-  -ksp_monitor -my_max_post_proc_ref_level 0 -regression_test 1)
-
 set(permissions_default 
   OWNER_WRITE 
   OWNER_READ
   GROUP_READ)
 
-tutorials_copy_and_install("*.jou" "${permissions_default}")
+set(permissions_execute 
+  OWNER_WRITE 
+  OWNER_READ
+  GROUP_READ
+  OWNER_EXECUTE 
+  GROUP_EXECUTE)
+
+tutorials_copy_and_install("*.msh" "${permissions_default}")
 tutorials_copy_and_install("*.cub" "${permissions_default}")
 tutorials_copy_and_install("*.h5m" "${permissions_default}")
-tutorials_copy_and_install("README.md" "${permissions_default}")
+tutorials_copy_and_install("*.md" "${permissions_execute}")
 
+tutorials_build_and_install(
+  plot_base_2d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
+set_target_properties(
+  plot_base_2d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=2")
 
+# Add 3d when is tested
+#tutorials_build_and_install(
+#  plot_base_3d ${CMAKE_CURRENT_SOURCE_DIR}/plot_base.cpp)
+#set_target_properties(
+#  plot_base_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3") 
+
+add_test(
+    plot_base_2d_h1_ainsworth
+    ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+    ${CMAKE_CURRENT_BINARY_DIR}/plot_base_2d
+    -base ainsworth -space h1 -order 3 -log_no_color)
