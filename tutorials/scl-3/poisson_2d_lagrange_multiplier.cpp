@@ -6,6 +6,7 @@ using namespace MoFEM;
 using namespace Poisson2DLagrangeMultiplierOperators;
 
 using PostProcFaceEle = PostProcFaceOnRefinedMesh;
+using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
 
 static char help[] = "...\n\n";
 
@@ -245,14 +246,19 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::outputResults() {
   pipeline_mng->getDomainLhsFE().reset();
   pipeline_mng->getBoundaryLhsFE().reset();
 
-  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc(domainField);
-  // post_proc_fe->addFieldValuesPostProc(boundaryField);
-  pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  pipeline_mng->getBoundaryRhsFE() = post_proc_fe;
+  auto post_proc_domain_fe = boost::make_shared<PostProcFaceEle>(mField);
+  post_proc_domain_fe->generateReferenceElementMesh();
+  post_proc_domain_fe->addFieldValuesPostProc(domainField);
+  pipeline_mng->getDomainRhsFE() = post_proc_domain_fe;
+
+  auto post_proc_boundary_fe = boost::make_shared<PostProcEdgeEle>(mField);
+  post_proc_boundary_fe->generateReferenceElementMesh();
+  post_proc_boundary_fe->addFieldValuesPostProc(boundaryField);
+  pipeline_mng->getBoundaryRhsFE() = post_proc_boundary_fe;
+
   CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_result.h5m");
+  CHKERR post_proc_domain_fe->writeFile("out_result_domain.h5m");
+  CHKERR post_proc_boundary_fe->writeFile("out_result_boundary.h5m");
 
   MoFEMFunctionReturn(0);
 }
