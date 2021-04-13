@@ -1,5 +1,7 @@
 /*! \page tutorial_hemholtz_problem CLX-0: Hemholtz problem 
 
+This problem formulation follows tutorial from deal.II https://www.dealii.org/current/doxygen/deal.II/step_29.html.
+
 \note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
 
 <br>
@@ -31,7 +33,7 @@ The wave equation is:
 where \f$c\f$ is the wave speed assumed to be constant and \f$ P({\mathbf{x}}, t) \f$ is the spatially and temporally varying pressure, with spatial position vector \f${\mathbf{x}} \in \mathbb{R}^2\f$ and 
 time \f$t \in \mathbb{R}^{+}\f$.
 
-Moreover, quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$ defined as 
+Quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$ defined as 
 
 \f[
 \begin{align}
@@ -42,7 +44,7 @@ Moreover, quasi-absorbing boundary conditions are assumed for part of the bounda
 
 where \f$\mathbf{N}\f$ is the unit normal vector on the quasi absorbing boundary, \f$\Gamma_1\f$.
 
-Finally, a source of constant frequency, \f$\omega\f$, and amplitude is assumed to be located on a different part of the boundary of the domain \f$\Gamma_2\f$:
+A source of constant frequency, \f$\omega\f$, and amplitude is assumed to be located on a different part of the boundary of the domain \f$\Gamma_2\f$:
 
 \f[
 \begin{align}
@@ -51,9 +53,8 @@ Finally, a source of constant frequency, \f$\omega\f$, and amplitude is assumed 
 \end{align}
 \f]
 
-Since there is only one source with constant frequency and since the boundaries are quasi-absorbing that resemble infinite boundary conditions,
-the problem can be solved in the frequency domain and the solution can admit a variable separation:
-
+Since we focus attention on a single frequency, we solve the problem in the frequency domain, reducing problem complexity. 
+Assuming that the solution can admit variable separation:
 \f[
 \begin{align}
   \label{eq:four}
@@ -71,7 +72,7 @@ where now the spatially varying pressure amplitude, \f$p(\mathbf{x})\f$, a compl
 \f]
 
 By introducing the wave number \f$k = \omega / c \f$ and substituting \eqref{eq:four} and \eqref{eq:five} in \eqref{eq:one} to \eqref{eq:three}
-the Helmholtz problem is recovered:
+we arrive to the Helmholtz problem:
 
 \f[
     \begin{equation}
@@ -746,11 +747,13 @@ will have to follow the steps below
   the partioned mesh `part.h5m` with bounraries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in \ref Figure_2_acoustics "Figure 2". In the second line, program is run using two processors (the same number of partitions) with
   fourth order polynomial of approximation and \f$k = 90\f$.
 
-\anchor Figure_1_acoustics
-\image html transducer_mesh.png "Figure 1: Mesh under the name `geometry.cub` used for partitioning." width=600px
-
 \anchor Figure_2_acoustics
-\image html problem_desctiption.eps "Figure 2: Schematic presentation of the acoustic transducer problem where ." width=300px
+\image html problem_desctiption.eps "Figure 1: Schematic presentation of the acoustic transducer problem where ." width=300px
+
+
+\anchor Figure_1_acoustics
+\image html transducer_mesh.png "Figure 2: Mesh under the name `geometry.cub` used for partitioning." width=600px
+
 
 - After the analysis has run successfully, an output file, `out_helmholtz.h5m`, is generated. 
   To convert the results from `.h5m` format into `.vtk` 
