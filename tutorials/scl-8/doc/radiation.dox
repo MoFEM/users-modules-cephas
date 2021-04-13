@@ -14,7 +14,7 @@
 
 \section running_pluto_jupyter Running Jupyter notebook
 
-First follow instruction here \ref docker_jupyter. Then select file in 
+First follow instruction here \ref docker_jupyterhub. Then select file in 
 \em um_views/tutorial/scl-8/pluto.ipynb
 
 \section theory_pluto Jupyter notebook
