@@ -92,25 +92,25 @@ Note that in the weak statement velocity and pressure fields belong to different
 
 The example class has necessary fields to store input parameters and internal data structures, as well as a set of functions for setting up and solving the problem:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Example Navier Stokes
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Example Navier Stokes
 
 The set of functions used in this tutorials in the following:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Run problem
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Run problem
 
 The function ExampleNavierStokes::runProblem is executed from the `main` function:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Main function
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Main function
 
 \subsection navier_stokes_running_input_parameters Reading mesh and input parameters
 
 The workflow of solving a problem using the finite-element method starts from reading the mesh and other input parameters:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Read input
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Read input
 
 Once the mesh is read, we find the set of tetrahedra corresponding to the computational domain. Furthermore, we identify the fluid-structure interface, i.e. the set of triangles corresponding to the surface of the sphere:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Find blocks
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Find blocks
 
 \subsection navier_stokes_running_setup Setting up fields, finite elements and the problem itself
 
@@ -118,11 +118,11 @@ Once the domain and the fluid-structure interface are identified, we can setup t
 
 Furthermore, the properties of hierarchical basis functions can be used to locally increase the approximation order for the elements on the fluid-structure interface, where the gradients of the velocity can be expected to be the highest due to the no-slip boundary condition on the surface of the sphere. 
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup fields
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Setup fields
 
 After that the finite elements operating on the set above fields can be defined. In particular, we define elements for solving Navier-Stokes equations, computation of the drag traction and force on the surface of the surface, and, finally, for computing the contribution of Neumann (natural) boundary conditions.
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Define finite elements
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Define finite elements
 
 Once the finite elements are defined, we will need to create element instances and push necessary operators to their pipelines. First, we setup an element for solving Navier-Stokes (or if one prefers, Stokes) equations. Note that right-hand side and left-hand side elements are considered separately. In case of Navier-Stokes equations, operators are pushed to elements pipelines using function NavierStokesElement::setNavierStokesOperators. In particular, the following operators are pushed to right-hand side: 
 - NavierStokesElement::OpAssembleRhsVelocityLin, 
@@ -136,25 +136,25 @@ while for the left-hand side we push these operators:
 
 Upon that, we setup in the same way elements for computing the drag traction and the drag force acting on the sphere using operators NavierStokesElement::OpCalcDragTraction and NavierStokesElement::OpCalcDragForce, respectively. Additionally, operators for the Neumann boundary conditions are set using the function MetaNeumannForces::setMomentumFluxOperators and the element for the Dirichlet boundary conditions is created as well. Finally, operators for post-processing output are created: in the volume and on the fluid-solid interface.
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup element instances
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Setup element instances
 
 Note that the class for enforcing Dirichlet boundary conditions DirichletDisplacementBc used in the snippet above requires the algebraic data structures for storing components of the right-hand side vector, left-hand side matrix and the solution vector. Therefore, these data structures need to be created beforehand using PETSc:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup algebraic structures
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Setup algebraic structures
 
 However, one may note that creation of PETSCc vectors and matrices requires the instance of the MoFEM Discrete Manager (DM), which needs a certain setup as well:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup discrete manager
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Setup discrete manager
 
 Finally, the last preparatory step required is the setup of the SNES functionality:
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Setup SNES
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Setup SNES
 
 \subsection navier_stokes_running_input_parameters Solving the problem and post-processing the results
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Solve problem
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Solve problem
 
-\snippet users_modules/tutorials/other_tutorials/navier_stokes/navier_stokes.cpp Post process
+\snippet users_modules/tutorials/cor-10/navier_stokes.cpp Post process
 
 \section navier_stokes_running Running the example
 

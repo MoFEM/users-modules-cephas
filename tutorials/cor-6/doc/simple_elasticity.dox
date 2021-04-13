@@ -1458,6 +1458,6 @@ contact us on Q&A forum, see <a href=https://groups.google.com/forum/#!categorie
 
 The plain program is located in \e users_modules/basic_finite_elements/simple_elasticity/simple_elasticity.cpp
 
-\include users_modules/tutorials/other_tutorials/simple_elasticity/simple_elasticity.cpp 
+\include users_modules/tutorials/cor-6/simple_elasticity.cpp 
 
 */
