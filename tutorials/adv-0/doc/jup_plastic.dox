@@ -1,0 +1,16 @@
+/*! \page jup_tutorial_plastic_problem Elastoplastic plate
+
+\section running_eiegn_jupyter Running Jupyter notebook
+
+First follow instruction here \ref docker_jupyterhub. Then select file in 
+\em um_views/tutorial/adv-0/plate_with_hole.md and \em um_views/tutorial/adv-0/plasticity.md
+
+\section jup_adv_0 Generating mesh
+
+\subpage jup_plate_with_hole
+
+\section jup_adv_1 Elastoplastic analysis
+
+\subpage jup_plasticity
+
+*/
