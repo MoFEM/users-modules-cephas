@@ -5,7 +5,7 @@
 using namespace MoFEM;
 using namespace Poisson2DHomogeneousOperators;
 
-using PostProcEle = PostProcFaceOnRefinedMesh;
+using PostProcFaceEle = PostProcFaceOnRefinedMesh;
 
 static char help[] = "...\n\n";
 
@@ -20,9 +20,9 @@ private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 
@@ -65,19 +65,6 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
-  MoFEMFunctionBegin;
-
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return p; };
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
@@ -114,15 +101,29 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
+
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
   }
 
-  { // Push operators to the Pipeline that is responsible for calculating LHS
+  { // Push operators to the Pipeline that is responsible for calculating RHS
 
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
   }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
+  MoFEMFunctionBegin;
+
+  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  auto rule_rhs = [](int, int, int p) -> int { return p; };
+
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
 
   MoFEMFunctionReturn(0);
 }
@@ -138,10 +139,10 @@ MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
 
   // Create RHS and solution vectors
   auto dm = simpleInterface->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
+  auto F = smartCreateDMVector(dm);
+  auto D = smartVectorDuplicate(F);
 
-  // Setup KSP solver
+  // Solve the system
   CHKERR KSPSolve(ksp_solver, F, D);
 
   // Scatter result data on the mesh
@@ -158,7 +159,7 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   pipeline_mng->getDomainLhsFE().reset();
 
-  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   post_proc_fe->addFieldValuesPostProc(domainField);
   pipeline_mng->getDomainRhsFE() = post_proc_fe;

@@ -36,12 +36,13 @@ have a membrane that is fixed at its boundary and it experiences a uniformly
 distributed force on its surface, then you are asked to estimate the
 displacement of the membrane. The formal definition of the problem as follows 
 
-Find \f$ u \in \bf{R} \f$ such that
+Find \f$ u \in H_0^{1}(\Omega) \f$ such that
 \f[
-\begin{aligned}
+  \begin{align}
 -\nabla \cdot \nabla u(\mathbf{x}) &= f \quad {\rm in} \quad {
-\Omega} \\ u(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega}
-\end{aligned}
+\Omega}, \\ 
+{\hat u}(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
+  \end{align}
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
 \f$ \partial { \Omega} \f$ is the boundary of the domain.
@@ -60,20 +61,29 @@ derive the weak form. The procedure to achieve it is as follows
 - First, multiplying both sides of the equation by a *test* function \f$ v \f$
   and then integrate over the domain \f$ \Omega \f$
 \f[
--\int_\Omega v(\nabla \cdot \nabla u )= \int_\Omega v f 
+  \begin{equation}
+-\int_\Omega v(\nabla \cdot \nabla u ) ~d\Omega= \int_\Omega v f ~d\Omega.
+  \end{equation}
 \f]
 
 - Second, apply the integration by parts on the left-hand side of the equation,
   we have
 \f[
-\int_\Omega \nabla v \cdot \nabla u - \int_{\partial \Omega} v {\bf n} \cdot \nabla u  = \int_\Omega v f 
+  \begin{equation}
+  \int_\Omega \nabla v \cdot \nabla u ~d\Omega - \int_{\partial \Omega} v {\bf n} \cdot
+  \nabla u ~d\partial \Omega = \int_\Omega v f ~d\Omega.
+  \end{equation}
 \f]
 It is noted that the test function \f$ v \f$ has to satisfy the homogeneous
   boundary condition, i.e. \f$ v=0 \f$ on \f$ \partial \Omega \f$. Substituting
   it to the above equation, we finally obtain the weak form of the problem
 \f[
-\int_\Omega \nabla v \cdot \nabla u = \int_\Omega v f 
+  \begin{equation}
+\int_\Omega \nabla v \cdot \nabla u ~d\Omega = \int_\Omega v f ~d\Omega, \quad \forall v \in H_{0}^{1}(\Omega),
+  \end{equation}
 \f]
+  where the space for test function \f$ v \f$ is \f$ H_{0}^{1}(\Omega):=\left\{v
+  \in H^{1}(\Omega) \mid v=0 \text { on } \partial \Omega\right\} \f$.
 
 We are now solving this equation of the weak form instead of the original
 equation. This equation is asking for the solution of \f$ u \f$ that is true for
@@ -86,15 +96,22 @@ presented in the next part.
 As mentioned above, instead of trying to solve the problem analytically, we will
 approximate \f$ u \f$ assuming its solution has the form
 \f[
-u \approx u^h = \sum_{j=0}^{N-1} \phi_j U_j
+  \begin{equation}
+u \approx u^h = \sum_{j=0}^{N-1} \phi_j \bar{u}_j.
+  \end{equation}
 \f]
 This expression can be interpreted as follows. Find the approximate solution \f$
-u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution of base function \f$ \phi_j \f$ with the *coefficient* of the contribution is \f$ U_j \f$. 
+u^h \f$ of \f$ u \f$ where \f$ u^h \f$ is calculated by summing the contribution
+of base function \f$ \phi_j \f$ with the *coefficient* of the contribution is
+\f$ \bar{u}_j \f$.
 
-Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ U_j \f$ called *degrees of freedom* of the problem. In the implementation process,
-which will be discussed later in this tutorial, MoFEM gives you values of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
+Sometimes, \f$ \phi_j \f$ is also called shape functions and \f$ \bar{u}_j \f$
+called *degrees of freedom (DOFs)* of the problem. In the implementation
+process, which will be discussed later in this tutorial, MoFEM gives you values
+of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will
+find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
-Remember that, in the weak form, we have another term that also needs to be
+Keep in mind that, in the weak form, we have another term that also needs to be
 taken care of, that is the test function \f$ v \f$. As we were saying, the weak
 form has to be satisfied with all test function \f$ v \f$ meaning it has to be
 true with the arbitrary choice of \f$ v_i=\phi_i \f$.
@@ -102,18 +119,24 @@ true with the arbitrary choice of \f$ v_i=\phi_i \f$.
 Substituting \f$ u \f$ and \f$ v \f$ into the weak form, we have the discrete
 form of the problem given by 
 \f[
-\int_{\Omega^e} \nabla \phi_i \cdot \nabla \left( \sum_j U_j \phi_j \right) = \int_{\Omega^e} \phi_i f
+  \begin{equation}
+\int_{\Omega^e} \nabla \phi_i \cdot \nabla \left( \sum_j \bar{u}_j \phi_j
+\right) ~d{\Omega^e}= \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
+  \end{equation}
 \f]
-Moving \f$ U_j \f$ outside of the parentheses and rearraging the equation, we
+Moving \f$ \bar{u}_j \f$ outside of the parentheses and rearraging the equation, we
 have 
 \f[
-\sum_j \left( \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \right) U_j   = \int_{\Omega^e} \phi_i f
+  \begin{equation}
+\sum_j \left( \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j ~d{\Omega^e}
+\right) \bar{u}_j   = \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
+  \end{equation}
 \f]
 
-Now, the problem becomes: finding the vector of coefficients \f$ {\bf U} \f$
+Now, the problem becomes: finding the vector of coefficients (or DOFs) \f$ {\bf U} \f$
 such that 
 \f[
-{\bf KU} = {\bf F}  
+{\bf KU} = {\bf F},
 \f]
 where \f$ {\bf K} \f$ and \f$ {\bf F} \f$ are the global stiffness matrix (left
 hand side) and global force vector (right hand side) calculated over the whole
@@ -122,8 +145,8 @@ assembling all elements (entity) in the domain, and the components
 of element stiffness matrix and element force vector are calculated as
 \f[
   \begin{align}
-    K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla  \phi_j, \\
-    F_i^e &= \int_{\Omega^e} \phi_i f
+    K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla  \phi_j ~d{\Omega^e}, \\
+    F_i^e &= \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
   \end{align}
 \f]
 One thing we can notice here is that the matrix \f$ {\bf K} \f$ is symmetric which means there will be opportunity to save time later in the implementation.
@@ -140,12 +163,17 @@ of a set of points on each element along with their weights as follows
   \begin{align}
 K_{ij}^e &= \int_{\Omega^e} \nabla \phi_i \cdot \nabla \phi_j \approx \sum_q
 \nabla \phi_i \left( {\bf x}_q \right) \cdot \nabla \phi_j \left( {\bf x}_q
-\right) w_q \label{eqn_stiffness}, \\ 
-    F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right) f \left( {\bf x}_q \right) w_q
+\right) W_q \left\|\mathbf{J}_{g}^{e}\right\| \label{eqn_stiffness}, \\ 
+F_i^e &= \int_{\Omega^e} \phi_i f \approx \sum_q \phi_i \left( {\bf x}_q \right)
+f \left( {\bf x}_q \right) W_q \left\|\mathbf{J}_{g}^{e}\right\|,
   \end{align}
 \f]
-where \f$ {\bf x}_q \f$ and \f$ w_q \f$ are location and weight of the
-quadrature point. These equations can be interpreted as follows
+where \f$ {\bf x}_q \f$ and \f$ W_q \f$ are the location and weight of the
+quadrature point, respectively. Meanwhile, \f$ \left\|\mathbf{J}_{g}^{e}\right\|
+\f$ is the determinant of the Jacobian of the transformation of the element \f$
+e \f$ from physical coordinates to parent coordinates. For triangular elements,
+this determinant equals to the area of the element. These equations can be
+interpreted as follows 
 
 The approximated value of the component at row \f$ i \f$ and column \f$ j \f$ of
 the element stiffness matrix \f$ K \f$ of element \f$ e \f$ is calculated by
@@ -154,7 +182,8 @@ taking the summation over all quadrature points of the multiplication of
   \f$ evaluated at quadrature point \f$ q \f$, 
 - the first derivative of the \f$ j^{\rm th} \f$ approximation function \f$ \phi
   \f$ evaluated at the same quadrature point \f$ q \f$, and 
-- the weight of that quadrature point \f$ q \f$.
+- the multiplication of the weight of that quadrature point \f$ q \f$ and the
+  determinant of the Jacobian.
 
 Likewise, the approximated value of the component at row \f$ i \f$ of the
 element force vector \f$ F \f$ of element \f$ e \f$ is calculated by taking the
@@ -162,9 +191,11 @@ summation over all quadrature points of the multiplication of
 - the \f$ i^{\rm th} \f$ approximation function \f$ \phi \f$ evaluated at
   quadrature point \f$ q \f$,
 - the body force evaluated at the same quadrature point \f$ q \f$, and
-- the weight of that quadrature point \f$ q \f$.
+- the multiplication of the weight of that quadrature point \f$ q \f$ and the
+  determinant of the Jacobian.
 
-More details on this matter can be found here \ref lesson1.
+More details on the numerical integration can be found at the tutorial \ref
+integration. 
 
 To this end, we have established a linear system of the primary variable \f$
 {\bf U} \f$ through \f$ {\bf K} \f$ and \f$ {\bf F} \f$. In MoFEM, we will use
@@ -477,7 +508,8 @@ area. If you are dealing with edge (for boundary element) or volume entities
 (for volume domain), you would get edge length or element volume, respectively.
 
 Next, as required for the calculation of stiffness matrix in Eq. (3), we need
-the number of integration points (\f$ q \f$) and their weights ((\f$ w_q \f$)) which can be done as follows
+the number of integration points (\f$ q \f$) and their weights (\f$ W_q \f$)
+which can be done as follows
 \code
 // get number of integration points
 const int nb_integration_points = getGaussPts().size2();
@@ -526,7 +558,7 @@ points. They are done in the following part of the code
 \endcode
 Here you can see inside the loop over the integration points, we have two other
 nested loops that loop over the row (\f$i\f$) and column (\f$j\f$) DOFs of the matrix which is ultimately calculated similarly to the way
-they are presented in Eq. (3)
+they are presented in Eq. (11)
 \code
 locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
 \endcode
@@ -537,7 +569,7 @@ const double a = t_w * area;
 where `area` can be considered as the determinant of the Jacobian of the
 transformation from the physical (global) coordinate system to the reference
 (local) coordinate system. See more about the integration and Jacobian at \ref
-lesson1.
+integration.
 
 It should be noticed that at the end of each loop over the row and column
 DOFs, `t_row_diff_base` and `t_col_diff_base` which have the values of the
@@ -750,9 +782,9 @@ private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 \endcode
@@ -761,29 +793,12 @@ or some of the member functions declared above
 \code
   // MoFEM interfaces
   MoFEM::Interface &mField;
-  moab::Interface &mOab;
   Simple *simpleInterface;
-
-  // mpi parallel communicator
-  MPI_Comm mpiComm;
-  // Number of processors
-  const int mpiRank;
-
-  // Discrete Manager and linear KSP solver using SmartPetscObj
-  SmartPetscObj<DM> dM;
-  SmartPetscObj<KSP> kspSolver;
 
   // Field name and approximation order
   std::string domainField;
   int oRder;
   MatrixDouble invJac;
-
-  // MoFEM working Pipelines for LHS and RHS
-  boost::shared_ptr<FaceEle> pipelineLhs;
-  boost::shared_ptr<FaceEle> pipelineRhs;
-
-  // Object needed for postprocessing
-  boost::shared_ptr<FaceEle> postProc;
 \endcode
 
 \note For writting program in MoFEM, we follow some coding practices for code
@@ -796,32 +811,18 @@ style and naming convention described at \ref coding_practice
 Now is the constructor
 \code
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
-    : domainField("U"), mField(m_field),
-      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
-  pipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  pipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
-}
+    : domainField("U"), mField(m_field) {}
 \endcode
 The constructor specifies
 - `domainField("U")`: The domain field name as U (the field that we need to
   solve for solution)
-- `mOab(mb_instance)`: The MOAB instance that helps MoFEM to manage element data
-  and topology
-- `mField(core)`: The MoFEM instance that is the backbone of the program
-- `mpiComm(mField.get_comm())` and `mpiRank(mField.get_comm_rank())`: These are
-  required for parallel computation
-
-In the constructor, we also initialise two **Pipelines** `pipelineLhs` and
-`pipelineRhs` to which two implemented UDOs for matrix \f$ {\bf K} \f$ and
-vector \f$ {\bf F} \f$ will be pushed, respectively, as mentioned in the
-previous section \ref basic_tutorials_poisson_homogeneous_udo.
+- `mField(m_field)`: The MoFEM instance that is the backbone of the program
 
 
-  
 \subsubsection basic_tutorials_poisson_homogeneous_readmesh readMesh()
 
-Now the first function that actually does some finite element task is the function
-responsible for reading input mesh
+Now the first function that actually does some finite element task is the
+function responsible for reading input mesh
 \code
 MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
   MoFEMFunctionBegin;
@@ -834,11 +835,12 @@ MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
 }
 \endcode
 Apart from the codes for error handling, the main three lines of code
-is a standard way to read an input mesh using Simple interface. Inteface in MoFEM
-is a set of rules through which program developers use to setup a problem.
+is a standard way to read an input mesh using Simple interface. Inteface in
+MoFEM is a set of rules through which program developers use to setup a problem.
 Simple interface provides simplest but also less flexible way to setup a
 problem. More on the intefaces can be found at \ref
-basic_lessons1_interfaces. Implementation of more advanced interfaces will be presented in later tutorials.
+basic_lessons1_interfaces. Implementation of more advanced interfaces will be
+presented in later tutorials.
 
 \subsubsection basic_tutorials_poisson_homogeneous_setupproblem setupProblem()
 Next is the function that is responsible for setting up the finite element
@@ -860,46 +862,27 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
 }
 \endcode
 This function has
-- `simpleInterface->addDomainField`: Add the field through the `simpleInterface`. This requires 
+- `simpleInterface->addDomainField`: Add the domain field through the
+  `simpleInterface`. We need to add the domain field only as the field at
+  the boundary is zero (homogeneous) for this particular example hence no need
+  to add the boundary field. The addition of the domain field requires the
+  followings 
   - Field name (`domainField`), 
-  - Approximation space (`H1`) - function space can also be `HCURL`,
-    `HDIV`, `L2` depending on physical properties of the field you are approximating, see more at [FieldSpace](http://mofem.eng.gla.ac.uk/mofem/html/definitions_8h.html#a5ed4cb303bab8cd0673ae12e5bc73c12)
+  - Approximation space (`H1` - scalar space) - function space can also be
+    `H(curl)`, `H(div)`, `L2` depending on physical properties of the field you
+    are approximating, see more at
+    [FieldSpace](http://mofem.eng.gla.ac.uk/mofem/html/definitions_8h.html#a5ed4cb303bab8cd0673ae12e5bc73c12)
+    
   - Approximation bases (`AINSWORTH_BERNSTEIN_BEZIER_BASE`) - base can also be
     `AINSWORTH_LEGENDRE_BASE`, `AINSWORTH_LOBATTO_BASE`, `DEMKOWICZ_JACOBI_BASE
     `, see more at
     [FieldApproximationBase](http://mofem.eng.gla.ac.uk/mofem/html/definitions_8h.html#a2ed4ed94b56d2843840bb7c55adcf0c5),
     and
-  - Rank (`1`) as current problem is scalar-field problem. Rank will be `3` for
-    vector-field problem.
+  - Number of DOFs per shape function (`1`) as the current problem is a
+    scalar-field problem. This will be `3` for vector-field problem.
 - `simpleInterface->setFieldOrder`: Set the polynomial order of the approximation of the field
 - `simpleInterface->setUp()`: Finally, do the setup of the problem.
 
-
-\subsubsection basic_tutorials_poisson_homogeneous_intergration setIntegrationRules() 
-
-This function is responsible for setting the Gauss integration rules and it
-looks like this
-\code
-MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
-  MoFEMFunctionBegin;
-
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return p; };
-  pipelineLhs->getRuleHook = rule_lhs;
-  pipelineRhs->getRuleHook = rule_rhs;
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
-Here \f$ p \f$ is the polynomial order of the approximation function. For
-the LHS matrix, we are calculating the integral of function \f$\nabla \phi_i
-\cdot \nabla \phi_j\f$ so the polynomial order of the integral is \f$ p - 1 \f$ 
-plus \f$ p - 1 \f$ resulting \f$ 2 * (p - 1)\f$  as we see in the 
-implementation of the integration rules for the LHS. Similarly, as we calculate 
-the integral of \f$ \phi_i\f$ for the RHS, we use \f$ p \f$ as the integration 
-rule of the RHS. Having the integration rules, MoFEM will automatically 
-determine the number of integration (Gauss) points that need to be used for 
-each entity (element).
 
 \subsubsection basic_tutorials_poisson_homogeneous_bc boundaryCondition() 
 
@@ -994,57 +977,59 @@ UDOs are *pushed* to the **Pipeline**
 
 Apart from pushing UDOs to the main program, this function is also responsible
 for setting operators for KSP solver (iterative linear solver provided by PETSc)
-from the implemented pipelines. The full source code for the function is as follows
+from the implemented pipelines. The full source code for the function is as
+follows 
+
 \code
 MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
-    pipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
-    pipelineLhs->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
 
-    pipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
   }
 
-  { // Push operators to the Pipeline that is responsible for calculating LHS
+  { // Push operators to the Pipeline that is responsible for calculating RHS
 
-    pipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
-  }
-
-  // get Discrete Manager (SmartPetscObj)
-  dM = simpleInterface->getDM();
-
-  { // Set operators for linear equations solver (KSP) from MoFEM Pipelines
-
-    boost::shared_ptr<FaceEle> null;
-    CHKERR DMMoFEMKSPSetComputeOperators(dM, simpleInterface->getDomainFEName(),
-                                         pipelineLhs, null, null);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getDomainFEName(),
-                                   pipelineRhs, null, null);
   }
 
   MoFEMFunctionReturn(0);
 }
 \endcode
 
-- First, pushing the operators to the Pipeline that is responsible for the
+- First, the pipeline manager (`pipeline_mng`) that manages two main pipelines
+  are created. These two main pipelines are
+  - `LhsPipeline`: responsible for calculations of the left hand side matrix
+  - `RhsPipeline`: responsible for calculations of the right hand side vector
+\code
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+\endcode
+
+- Second, pushing the operators to the Pipeline that is responsible for the
 calculation of the LHS matrix. This is done in two steps. Initially, the
 operators to calculate the *inverse of the Jacobian* of the mapping from
 reference (parent) space to the phyisical space is pushed first and then
 the implemented UDO for stiffness matrix `OpDomainLhsMatrixK` is pushed to the 
-pipeline, namely `pipelineLhs`.
+LhsPipeline.
 \code
   { // Push operators to the Pipeline that is responsible for calculating LHS
 
-    pipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
-    pipelineLhs->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+        new OpSetInvJacH1ForFace(invJac));
 
-    pipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsMatrixK(domainField, domainField));
   }
 \endcode
@@ -1055,12 +1040,12 @@ have to manually add codes to push operators calculating the inverse of
 Jacobian. This is because MoFEM was initially designed to solve 3D problems and
 it made some adjustments along the way for solving 2D problems.
 
-- Second, pushing the implemented UDO to Pipeline that is responsible for the
+- Third, pushing the implemented UDO to Pipeline that is responsible for the
 calculation of the RHS vector
 \code
-  { // Push operators to the Pipeline that is responsible for calculating LHS
+  { // Push operators to the Pipeline that is responsible for calculating RHS
 
-    pipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsVectorF(domainField));
   }
 \endcode
@@ -1068,35 +1053,40 @@ Here you can see, we do not need derivative of the approximation function to
 calculate force vector in UDO `OpDomainRhsVectorF`. Consequently, the operators
 for calculating inverse of Jacobian is not needed as well.
 
-- Third, setting operators for KSP solver from the implemented pipelines, namely
-  `pipelineLhs` and `pipelineRhs`
+
+\subsubsection basic_tutorials_poisson_homogeneous_intergration setIntegrationRules() 
+
+This function is responsible for setting the Gauss integration rules and it
+looks like this
 \code
-  // get Discrete Manager (SmartPetscObj)
-  dM = simpleInterface->getDM();
+MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
+  MoFEMFunctionBegin;
 
-  { // Set operators for linear equations solver (KSP) from MoFEM Pipelines
+  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  auto rule_rhs = [](int, int, int p) -> int { return p; };
 
-    boost::shared_ptr<FaceEle> null;
-    CHKERR DMMoFEMKSPSetComputeOperators(dM, simpleInterface->getDomainFEName(),
-                                         pipelineLhs, null, null);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getDomainFEName(),
-                                   pipelineRhs, null, null);
-  }
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
+
+  MoFEMFunctionReturn(0);
+}
 \endcode
-Here we first get the Discrete Manager (DM) which is a common object allowing
-things implemented in MoFEM talk to things implemented in PETSc. At this
-particular point, Discrete Manager allows Pipelines (responsible for LHS and
-RHS) implemented in MoFEM to be used later as the input for KSP solver
-implemented in PETSc, through functions `DMMoFEMKSPSetComputeOperators` and
-`DMMoFEMKSPSetComputeRHS` to set the computation of the LHS and RHS. From that,
-the solution vector \f$ {\bf U} \f$ of the system of equations \f${\bf KU=F} \f$
-will be obtained when the KSP solver is triggered at the later step \ref
-basic_tutorials_poisson_homogeneous_solve.
+Here \f$ p \f$ is the polynomial order of the approximation function. For
+the LHS matrix, we are calculating the integral of function \f$\nabla \phi_i
+\cdot \nabla \phi_j\f$ so the polynomial order of the integral is \f$ p - 1 \f$ 
+plus \f$ p - 1 \f$ resulting \f$ 2 * (p - 1)\f$  as we see in the 
+implementation of the integration rules for the LHS. Similarly, as we calculate 
+the integral of \f$ \phi_i\f$ for the RHS, we use \f$ p \f$ as the integration 
+rule of the RHS. Having the integration rules, MoFEM will automatically 
+determine the number of integration (Gauss) points that need to be used for 
+each entity (element). Here you can see MoFEM allows you to choose different
+integration rules for different operators.
 
 \subsubsection basic_tutorials_poisson_homogeneous_solve solveSystem()
-Having the computation of LHS and RHS is set in the previous function. We now
-can actually solve the system of equations using iterative KSP solver from
-PETSc.
+Having the computation of LHS and RHS is defined in the previous function. We
+now can actually solve the system of equations using iterative KSP solver from
+[PETSc](https://www.mcs.anl.gov/petsc/).
 
 The codes for the function that is responsible for solving the systems of
 equations look like this
@@ -1104,48 +1094,73 @@ equations look like this
 MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+
+  auto ksp_solver = pipeline_mng->createKSP();
+  CHKERR KSPSetFromOptions(ksp_solver);
+  CHKERR KSPSetUp(ksp_solver);
+
   // Create RHS and solution vectors
-  SmartPetscObj<Vec> global_rhs, global_solution;
-  CHKERR DMCreateGlobalVector_MoFEM(dM, global_rhs);
-  global_solution = smartVectorDuplicate(global_rhs);
+  auto dm = simpleInterface->getDM();
+  auto F = smartCreateDMVector(dm);
+  auto D = smartVectorDuplicate(F);
 
-  // Setup KSP solver
-  kspSolver = createKSP(mField.get_comm());
-  CHKERR KSPSetFromOptions(kspSolver);
-  CHKERR KSPSetDM(kspSolver, dM);
-  CHKERR KSPSetUp(kspSolver);
-
-  // Solve the system
-  CHKERR KSPSolve(kspSolver, global_rhs, global_solution);
-  // VecView(global_rhs, PETSC_VIEWER_STDOUT_SELF);
+  // KSP solver
+  CHKERR KSPSolve(ksp_solver, F, D);
 
   // Scatter result data on the mesh
-  CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
-                                  SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
 \endcode
 
-It first starts with the initialisation of PETSc objects to store global RHS
-vector and solution vector. Then, we setup the KSP solver which includes a step
-to set up the DM that has been created in the previous function.
+It starts first with getting the pipeline manager
 \code
-CHKERR KSPSetDM(kspSolver, dM);
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+\endcode 
+
+Then create the KSP solver using wrapped function in MoFEM
+(`pipeline_mng->createKSP()`) and setup the solver using PETSc functions
+\code
+  auto ksp_solver = pipeline_mng->createKSP();
+  CHKERR KSPSetFromOptions(ksp_solver);
+  CHKERR KSPSetUp(ksp_solver);
 \endcode
-This allows all the information in two Pipelines, `pipelineLhs` and
-`pipelineRhs`, to be fed to the KSP solver. And then the system of equations is
-solved and the solution is stored in the PETSc vector object `global_solution`
+
+Next is getting the Discrete Manager (`dm`) which is a common object allowing
+things implemented in MoFEM talk to things implemented in PETSc before
+initilising the RHS and solution vectors
+\code
+  // Create RHS and solution vectors
+  auto dm = simpleInterface->getDM();
+  auto F = smartCreateDMVector(dm);
+  auto D = smartVectorDuplicate(F);
+\endcode
+
+At this particular point, Discrete Manager allows the two pipelines (responsible
+for LHS and RHS) implemented in MoFEM to be used as the input for KSP solver
+implemented in PETSc. From that, the solution vector \f$ {\bf U} \f$ of the
+system of equations \f${\bf KU=F} \f$ will be obtained when the KSP solver is
+triggered by this
 \code
   // Solve the system
-  CHKERR KSPSolve(kspSolver, global_rhs, global_solution);
+  CHKERR KSPSolve(ksp_solver, F, D);
 \endcode
+It is important to note that all the implementation of the UDOs presented in the
+previous sections was just the definition. All the calculations (all the loops
+to calculate matrix and vector entries implemented in UDOs) are only triggered
+when the line of code above calling `KSPSolve()` function is executed.
+
 Lastly, the results are scatttered through DM and ready to be fed to the output
 mesh in the next step
 \code
-// Scatter result data on the mesh
-  CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
-                                  SCATTER_REVERSE);
+  // Scatter result data on the mesh
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 \endcode
 
 
@@ -1157,18 +1172,15 @@ writing the calculated field values to the output mesh.
 MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   MoFEMFunctionBegin;
 
-  postProc = boost::shared_ptr<FaceEle>(new PostProcFaceOnRefinedMesh(mField));
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
 
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->generateReferenceElementMesh();
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->addFieldValuesPostProc(domainField);
-
-  CHKERR DMoFEMLoopFiniteElements(dM, simpleInterface->getDomainFEName(),
-                                  postProc);
-
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->writeFile("out_result.h5m");
+  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+  post_proc_fe->addFieldValuesPostProc(domainField);
+  pipeline_mng->getDomainRhsFE() = post_proc_fe;
+  CHKERR pipeline_mng->loopFiniteElements();
+  CHKERR post_proc_fe->writeFile("out_result.h5m"); 
 
   MoFEMFunctionReturn(0);
 }
@@ -1186,9 +1198,9 @@ MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
 
   readMesh();
   setupProblem();
-  setIntegrationRules();
   boundaryCondition();
   assembleSystem();
+  setIntegrationRules();
   solveSystem();
   outputResults();
 
@@ -1260,7 +1272,7 @@ will do the following steps
     \endcode
   - For developer version installation
     \code
-    cd mofem_install/um/build_release/tutorials/scl-1/
+    cd mofem_install/mofem-cephas/mofem/users_modules/um-build-RelWithDebInfo-abcd1234/tutorials/scl-1
     \endcode
 
 - Second, check the parameters in the param_file.petsc. These are PETSc
@@ -1290,35 +1302,45 @@ Once the analaysis is complete, you see all output messages printed to the
 terminal
 - Version of MoFEM used to run the analysis
 \code
-MoFEM version 0.9.2 (MOAB 5.1.0 Petsc Release Version 3.11.3, Jun, 26, 2019 )
-git commit id c7dec267e3dc854dfdd62fff66ecd3119ec940cc
+MoFEM version 0.11.0 (MOAB 5.2.1 Petsc Release Version 3.11.4, Sep, 28, 2019 )
+git commit id 0ac8895b15c4ad41ea5e7077c4d011f7efb50f13
 \endcode
-- Meshset and entity block defined in the input mesh
+- Meshset and entity blocks defined in the input mesh
 \code
-read cubit meshset 12682136550675316746 type BLOCKSET UNKNOWNNAME msId 1 name BOUNDARY_CONDITION block header:  blockCol = 4294967295 blockMat = 0 blockDimension = 1
+read cubit meshset 12682136550675316738 type BLOCKSET UNKNOWNNAME msId 1 name square
+read cubit meshset 12682136550675316739 type BLOCKSET UNKNOWNNAME msId 2 name boundary                       
+read cubit meshset 12682136550675316740 type BLOCKSET UNKNOWNNAME msId 3 name surface                        
+read cubit meshset 12682136550675316741 type BLOCKSET MAT_ELASTICSET msId 100 name MAT_ELASTIC
+read cubit meshset 12682136550675316742 type BLOCKSET UNKNOWNNAME msId 110 name BOUNDARY_CONDITION
 \endcode
 - Domain field name, approximation space and bases, as well as rank (1 for
   scalar problem) as implemented in \ref   basic_tutorials_poisson_homogeneous_setupproblem
 \code
-Add field U field_id 1 space H1 approximation base AINSWORTH_BERNSTEIN_BEZIER_BASE rank 1 meshset 12682136550675316749
+Add field U field_id 1 space H1 approximation base AINSWORTH_BERNSTEIN_BEZIER_BASE rank 1 meshset 12682136550675316745
 Add finite element dFE
 \endcode
 - General information about the problem including removing DOFs associated with
   the boundary
 \code
-Add probken SimpleProblem
-Number of dofs 3001
-Finite element dFE added. Nb. of elements added 232
-Number of adjacencies 1624
-SimpleProblem Nb. local dof 3001 by 3001 nb global dofs 3001 by 3001
- FEs ghost dofs on problem SimpleProblem Nb. ghost dof 0 by 0 Nb. local dof 3001 by 3001
-removed ents on rank 0 from problem SimpleProblem dofs [ 2801 / 2801  (before 3001 / 3001) local, 0 / 0 (before 0 / 0) ghost, 2801 / 2801 (before 3001 / 3001) global]
+Add problem SimpleProblem
+Number of dofs 1687
+Number of dofs 1659
+Finite element dFE added. Nb. of elements added 205
+Finite element dFE added. Nb. of elements added 201
+Number of adjacencies 1435
+SimpleProblem Nb. local dof 1687 by 1687 nb global dofs 3289 by 3289
+SimpleProblem Nb. local dof 1602 by 1602 nb global dofs 3289 by 3289
+ FEs ghost dofs on problem SimpleProblem Nb. ghost dof 0 by 0 Nb. local dof 1687 by 1687
+ FEs ghost dofs on problem SimpleProblem Nb. ghost dof 57 by 57 Nb. local dof 1602 by 1602
+removed ents on rank 0 from problem SimpleProblem dofs [ 1650 / 1650  (before 3289 / 3289) local, 0 / 0 (before 0 / 0) ghost, 3209 / 3209 (before 1687 / 1687) global]
+removed ents on rank 1 from problem SimpleProblem dofs [ 1559 / 1559  (before 3289 / 3289) local, 55 / 55 (before 57 / 57) ghost, 3209 / 3209 (before 1602 / 1602) global]
+
 \endcode
 - Convergence of the KSP iterative solver from PETSC. As shown, it is converged
   is one step which is expected for this simple linear problem.
 \code
-  0 KSP Residual norm 1.109112371166e+01 
-  1 KSP Residual norm 2.268250563795e-14
+  0 KSP Residual norm 1.057541430518e-01 
+  1 KSP Residual norm 2.720205258196e-15 
 \endcode
 
 
