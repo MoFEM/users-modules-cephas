@@ -84,7 +84,6 @@ private:
 
   FieldApproximationBase base;
   FieldSpace space;
-
 };
 
 //! [Run programme]
@@ -107,59 +106,57 @@ MoFEMErrorCode Example::runProblem() {
 MoFEMErrorCode Example::readMesh() {
   MoFEMFunctionBegin;
 
-  PetscBool load_file = PETSC_TRUE;
+  PetscBool load_file = PETSC_FALSE;
   CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-load_file", &load_file,
                              PETSC_NULL);
 
-  if(load_file == PETSC_TRUE) {
+  if (load_file == PETSC_FALSE) {
 
-  auto &moab = mField.get_moab();
+    auto &moab = mField.get_moab();
 
-  if (SPACE_DIM == 3) {
+    if (SPACE_DIM == 3) {
 
-    // create one tet
-    double tet_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
-    EntityHandle nodes[4];
-    for (int nn = 0; nn < 4; nn++) {
-      CHKERR moab.create_vertex(&tet_coords[3 * nn], nodes[nn]);
+      // create one tet
+      double tet_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
+      EntityHandle nodes[4];
+      for (int nn = 0; nn < 4; nn++) {
+        CHKERR moab.create_vertex(&tet_coords[3 * nn], nodes[nn]);
+      }
+      EntityHandle tet;
+      CHKERR moab.create_element(MBTET, nodes, 4, tet);
+      Range adj;
+      for (auto d : {1, 2})
+        CHKERR moab.get_adjacencies(&tet, 1, d, true, adj);
     }
-    EntityHandle tet;
-    CHKERR moab.create_element(MBTET, nodes, 4, tet);
-    Range adj;
-    for (auto d : {1, 2})
-      CHKERR moab.get_adjacencies(&tet, 1, d, true, adj);
-  }
 
-  if (SPACE_DIM == 2) {
+    if (SPACE_DIM == 2) {
 
-    // create one triangle
-    double tri_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
-    EntityHandle nodes[3];
-    for (int nn = 0; nn < 3; nn++) {
-      CHKERR moab.create_vertex(&tri_coords[3 * nn], nodes[nn]);
+      // create one triangle
+      double tri_coords[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+      EntityHandle nodes[3];
+      for (int nn = 0; nn < 3; nn++) {
+        CHKERR moab.create_vertex(&tri_coords[3 * nn], nodes[nn]);
+      }
+      EntityHandle tri;
+      CHKERR moab.create_element(MBTRI, nodes, 3, tri);
+      Range adj;
+      CHKERR moab.get_adjacencies(&tri, 1, 1, true, adj);
     }
-    EntityHandle tri;
-    CHKERR moab.create_element(MBTRI, nodes, 3, tri);
-    Range adj;
-    CHKERR moab.get_adjacencies(&tri, 1, 1, true, adj);
-  }
 
-  CHKERR mField.rebuild_database();
-  CHKERR mField.getInterface(simpleInterface);
-  simpleInterface->setDim(SPACE_DIM);
+    CHKERR mField.rebuild_database();
+    CHKERR mField.getInterface(simpleInterface);
+    simpleInterface->setDim(SPACE_DIM);
 
-  // Add all elements to database
-  CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
-      0, SPACE_DIM, simpleInterface->getBitRefLevel());
+    // Add all elements to database
+    CHKERR mField.getInterface<BitRefManager>()->setBitRefLevelByDim(
+        0, SPACE_DIM, simpleInterface->getBitRefLevel());
 
   } else {
 
-  CHKERR mField.getInterface(simpleInterface);
-  CHKERR simpleInterface->getOptions();
-  CHKERR simpleInterface->loadFile();
-
+    CHKERR mField.getInterface(simpleInterface);
+    CHKERR simpleInterface->getOptions();
+    CHKERR simpleInterface->loadFile();
   }
-  
 
   MoFEMFunctionReturn(0);
 }
@@ -181,7 +178,7 @@ MoFEMErrorCode Example::setupProblem() {
                               &choice_base_value, &flg);
   if (flg != PETSC_TRUE)
     SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "base not set");
-  FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
+  base = AINSWORTH_LEGENDRE_BASE;
   if (choice_base_value == AINSWORTH)
     base = AINSWORTH_LEGENDRE_BASE;
   if (choice_base_value == AINSWORTH_LOBATTO)
@@ -198,7 +195,7 @@ MoFEMErrorCode Example::setupProblem() {
                               LASBASETSPACE, &choice_space_value, &flg);
   if (flg != PETSC_TRUE)
     SETERRQ(PETSC_COMM_SELF, MOFEM_IMPOSIBLE_CASE, "space not set");
-  FieldSpace space = H1;
+  space = H1;
   if (choice_space_value == H1SPACE)
     space = H1;
   else if (choice_space_value == L2SPACE)
@@ -252,17 +249,13 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->generateReferenceElementMesh();
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
 
-  if(SPACE_DIM == 2) {
+  MatrixDouble inv_jac(2, 2), jac(2, 2);
+  if (SPACE_DIM == 2) {
     if (space == HCURL) {
-      MatrixDouble inv_jac(2, 2), jac(2, 2);
       post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpCalculateInvJacForFace(inv_jac));
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformFace(jac));
-      post_proc_fe->getOpPtrVector().push_back(
-          new OpSetInvJacHcurlFace(inv_jac));
     }
   }
 
@@ -419,28 +412,42 @@ MoFEMErrorCode MyPostProc::generateReferenceElementMesh() {
     }
   }
 
-  // Calculate sheape functions
-  shapeFunctions.resize(elem_nodes.size(), SPACE_DIM + 1);
-  if (SPACE_DIM == 2)
-    CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
-                                &gaussPts(0, 0), &gaussPts(1, 0),
-                                elem_nodes.size());
-
-  if (SPACE_DIM == 3)
-    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
-            "Not yet simplemented version for 3d");
-
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode MyPostProc::setGaussPts(int order) {
   MoFEMFunctionBegin;
 
+  const int num_nodes = gaussPts.size2();
+
+  // Calculate sheape functions
+
+  switch (numeredEntFiniteElementPtr->getEntType()) {
+  case MBTRI:
+    shapeFunctions.resize(num_nodes, SPACE_DIM + 1);
+    CHKERR Tools::shapeFunMBTRI(&*shapeFunctions.data().begin(),
+                                &gaussPts(0, 0), &gaussPts(1, 0), num_nodes);
+    break;
+  case MBQUAD: {
+    shapeFunctions.resize(num_nodes, SPACE_DIM + 2);
+    for (int gg = 0; gg != num_nodes; gg++) {
+      double ksi = gaussPts(0, gg);
+      double eta = gaussPts(1, gg);
+      shapeFunctions(gg, 0) = N_MBQUAD0(ksi, eta);
+      shapeFunctions(gg, 1) = N_MBQUAD1(ksi, eta);
+      shapeFunctions(gg, 2) = N_MBQUAD2(ksi, eta);
+      shapeFunctions(gg, 3) = N_MBQUAD3(ksi, eta);
+    }
+  } break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "Not implemented element type");
+  }
+
   // Create physical nodes
   ReadUtilIface *iface;
   CHKERR postProcMesh.query_interface(iface);
 
-  const int num_nodes = gaussPts.size2();
   std::vector<double *> arrays;
   EntityHandle startv;
   CHKERR iface->get_node_coords(3, num_nodes, 0, startv, arrays);
@@ -482,11 +489,11 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
 
   EntityHandle fe_ent = numeredEntFiniteElementPtr->getEnt();
   coords.resize(12, false);
+  int fe_num_nodes;
   {
     const EntityHandle *conn;
-    int num_nodes;
-    mField.get_moab().get_connectivity(fe_ent, conn, num_nodes, true);
-    CHKERR mField.get_moab().get_coords(conn, num_nodes, &coords[0]);
+    mField.get_moab().get_connectivity(fe_ent, conn, fe_num_nodes, true);
+    CHKERR mField.get_moab().get_coords(conn, fe_num_nodes, &coords[0]);
   }
 
   // Set physical coordinates to physical nodes
@@ -502,7 +509,7 @@ MoFEMErrorCode MyPostProc::setGaussPts(int order) {
     FTensor::Tensor1<FTensor::PackPtr<const double *, 3>, 3> t_ele_coords(
         t_coords_ele_x, t_coords_ele_y, t_coords_ele_z);
     t_coords(i) = 0;
-    for (int nn = 0; nn != SPACE_DIM + 1; ++nn) {
+    for (int nn = 0; nn != fe_num_nodes; ++nn) {
       t_coords(i) += t_n * t_ele_coords(i);
       for (auto ii : {0, 1, 2})
         if (std::abs(t_coords(ii)) < std::numeric_limits<float>::epsilon())
