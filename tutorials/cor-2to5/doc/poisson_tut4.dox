@@ -1,0 +1,296 @@
+/*! \page poisson_tut4 COR-5: A nonlinear Poisson equation
+
+In this tutorial, we show how to solve nonlinear Poisson equation.  Note that
+structure of the main program remains almost unchanged compared to linear
+analysis as shown in the first Poisson tutorial, i.e. \ref poisson_tut1.
+
+\tableofcontents
+
+\section poisson_tut4_pde PDE problem
+
+As a model problem for the solution of nonlinear PDEs, we take the following nonlinear Poisson equation:
+\f[
+-\nabla \cdot (A(u)\nabla u) = f
+\f]
+in domain \f$\Omega\f$ with \f$u=\overline{u}\f$ on boundary \f$\partial\Omega\f$. The
+source of nonlinearity is the coefficient \f$A(u)\f$ which is dependent on the
+solution \f$u\f$, here we restrict ourself to the case
+\f[
+A(u) = 1+u^2
+\f]
+Note, code implementation is general, and you can look at the alternative cases,
+at the beginning of \ref analytical_nonlinear_poisson.cpp example you can find
+two classes. Those functions can be modified to investigate alternative
+solutions
+\code
+struct FunA {
+  double operator()(const double u) { return 1+u*u; }
+};
+struct DiffFunA {
+  double operator()(const double u) { return 2*u; }
+};
+\endcode
+Note that second class has to be the exact derivative of \f$A(u)\f$.
+
+\subsection poisson_tut4_linearization Linearization
+
+With that at hand we can express equation in the weak form, where residuals are
+\f[
+\mathbf{r}=
+\left[
+\begin{array}{c}
+r_F\\
+r_g
+\end{array}
+\right]=
+\left\{
+\begin{array}{l}
+(\nabla v,(1+u^2)\nabla u)_\Omega-(v,f)_\Omega+(v,\lambda)_{\partial\Omega} = 0\\
+(\tau,u-\overline{u})_{\partial\Omega} = 0
+\end{array}
+\right.,\quad \forall v,\tau,\; u,v \in H^1(\Omega),\;\tau,\lambda \in H^1(\partial\Omega).
+\f]
+where \f$\overline{u}\f$ is given function on boundary, \f$f\f$ is a source
+term, \f$u,\lambda\f$ are unknown  functions and \f$v,\tau\f$ are test
+functions. This notation, suitable for problems with many terms in the
+variational formulations, requires some explanation. First, we use the shorthand
+notation
+\f[
+(v,u)_\Omega = \int_\Omega vu \textrm{d}\Omega,\quad (\lambda,u)_{\partial\Omega} = \int_{\partial \Omega} \lambda u \textrm{d}\partial\Omega
+\f]
+With that at hand, we expand residuals in Taylor series and truncate after
+first order term, as a result we have
+\f[
+\mathbf{r}^i +
+\frac{\partial \mathbf{r}^i}{\partial \{ u, \lambda \}}
+\left\{
+\begin{array}{c}
+\delta u^{i+1}\\
+\delta \lambda^{i+1}
+\end{array}
+\right\} =
+\mathbf{0}
+\f]
+where \f$(\cdot)^i\f$ is quantity at Newton iteration \f$i\f$,
+\f$u^{i+1} = u^i + \delta u^{i+1}\f$ and \f$\lambda^{i+1} = \lambda^i + \delta \lambda^{i+1}\f$.
+The linearized system of equations takes form
+\f[
+\left\{
+\begin{array}{l}
+r^i_F
++
+(\nabla v,(1+(u^i)^2)\nabla \delta u)_\Omega+(\nabla v,(2u^i) \nabla u^i \delta u^{i+1})_\Omega+(v,\delta\lambda^{i+1})
+= 0
+\\
+r^i_g+
+(\tau,\delta u^{i+1})_{\partial\Omega}=0
+\end{array}
+\right.
+\f]
+and applying discretization
+\f[
+u^h = \sum_i^{n_u} \phi^i(\mathbf{x}) U_i = \boldsymbol\phi\cdot\mathbf{U}
+, \quad \mathbf{x} \in \Omega,\\
+\lambda^h = \sum_i^{n_\lambda} \psi^i(\mathbf{x}) L_i = \boldsymbol\psi\cdot\mathbf{L}
+, \quad \mathbf{x} \in \partial\Omega
+\f]
+we get
+\f[
+\left[
+\begin{array}{c}
+\mathbf{r}_F\\
+\mathbf{r}_g
+\end{array}
+\right]+
+\left[
+\begin{array}{cc}
+\mathbf{K}_t & \mathbf{C}^T \\
+\mathbf{C} & \mathbf{0}
+\end{array}
+\right]
+\left\{
+\begin{array}{c}
+\delta\mathbf{U}^{i+1}\\
+\delta\mathbf{L}^{i+1}
+\end{array}
+\right\}
+=
+\left[
+\begin{array}{c}
+\mathbf{0}\\
+\mathbf{0}
+\end{array}
+\right]
+\f]
+where
+\f[
+\mathbf{K}_t = \int_\Omega (\nabla \boldsymbol\phi)^\textrm{T} (1+(u^i)^2)\boldsymbol\phi + (\nabla \boldsymbol\phi)^\textrm{T} (2(u^i))\boldsymbol u^i \boldsymbol\phi \textrm{d}\Omega,\\
+\mathbf{C} = \int_{\partial\Omega} \boldsymbol\psi^\textrm{T} \boldsymbol\phi \textrm{d}\partial\Omega,\\
+\mathbf{r}_F = \mathbf{r}_{F_\Omega} + \mathbf{r}_{F_{\partial\Omega}} =
+\int_\Omega (\nabla \boldsymbol\phi)^\textrm{T} (1+(u^i)^2)\boldsymbol u^i - \boldsymbol\phi^\textrm{T}f \textrm{d}\Omega+
+\int_{\partial\Omega} \boldsymbol\phi^\textrm{T} \lambda^i \textrm{d}\partial\Omega\\
+\mathbf{r}_g = \int_{\partial\Omega} \boldsymbol\psi^\textrm{T} (u^i-\overline{u}) \textrm{d}\partial\Omega
+\f]
+
+\subsection poisson_tut4_analytical_solution Analytical solution
+
+To validate correctness of implementation, we first presume exact solution to be
+polynomial, such that it can be precisely represented by finite element
+approximation base, see function
+\code
+struct ExactFunction {
+  double operator()(const double x,const double y,const double z) const {
+    return 1+x+y+pow(z,3);
+  }
+};
+\endcode
+where the gradient of that function is implemented here
+\code
+struct ExactFunctionGrad {
+  FTensor::Tensor1<double,3> operator()(const double x,const double y,const double z) const {
+    FTensor::Tensor1<double,3> grad;
+    grad(0) = 1;
+    grad(1) = 1;
+    grad(2) = 3*z*z;
+    return grad;
+  }
+};
+\endcode
+and source term
+\code
+struct ExactLaplacianFunction {
+  double operator()(const double x,const double y,const double z) const {
+    return 0.4e1 + (double) (4 * x) + (double) (4 * y) + 0.4e1 * pow(z, 0.3e1) +
+    0.3e1 * (0.6e1 * z * z + 0.6e1 * (double) x * z * z +
+    0.6e1 * (double) y * z * z + 0.6e1 * pow(z, 0.5e1)) * z * z +
+    0.6e1 * (0.2e1 + (double) (2 * x) + (double) (2 * y) +
+    0.2e1 * pow(z, 0.3e1) + (double) (x * x) + (double) (2 * x * y) +
+    0.2e1 * (double) x * pow(z, 0.3e1) +
+    (double) (y * y) + 0.2e1 * (double) y * pow(z, 0.3e1) + pow(z, 0.6e1)) * z;
+  }
+};
+\endcode
+Note that source term has a complex form and is obtained from the following formula
+\f[
+f = \nabla \cdot \left( A(u)\nabla u \right)
+\f]
+For 3rd polynomial order, as above, results can be obtained after tedious
+calculations, to avoid that you can use symbolic derivations from Mathematica, Maple,
+Matlab or free and open alternative <a href=http://maxima.sourceforge.net>Maxima</a>.
+
+\section poisson_tut4_code_dissection Code dissection
+
+\subsection poisson_tut4_operators Implementation of operators
+
+All operators from this example are implemented in \ref PoissonOperators.cpp. In particular
+integration is implemented in the following methods
+
+- Tangent \f$\mathbf{K}_t\f$ matrix integration  is implemented in \ref PoissonExample::OpKt::iNtegrate
+
+- Constrains matrix \f$\mathbf{C}\f$ is implemented in \ref PoissonExample::OpC::iNtegrate
+
+- Residual of momentum integrated over domain \f$\mathbf{r}_{F_\Omega}\f$ is implemented in \ref PoissonExample::OpResF_Domain::iNtegrate
+
+- Residual of momentum integrated over boundary \f$\mathbf{r}_{F_{\partial\Omega}}\f$ is implemented in \ref PoissonExample::OpResF_Boundary::iNtegrate
+
+- Constrains residual \f$\mathbf{r}_g\f$ is implemented in \ref PoissonExample::OpRes_g::iNtegrate
+
+Finite element instances and setup of finite element operators, following \ref figure_1_operator_volume_element "Figure 1", is implanted
+in \ref PoissonExample::CreateFiniteElements::createFEToAssembleMatrixAndVectorForNonlinearProblem,
+in particular we find there the following code
+\code
+boost::shared_ptr<VectorDouble> values_at_integation_ptr = boost::make_shared<VectorDouble>();
+boost::shared_ptr<MatrixDouble> grad_at_integation_ptr = boost::make_shared<MatrixDouble>();
+domain_lhs_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues("U",values_at_integation_ptr));
+domain_lhs_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldGradient<3>("U",grad_at_integation_ptr));
+domain_lhs_fe->getOpPtrVector().push_back(new OpKt(a,diff_a,values_at_integation_ptr,grad_at_integation_ptr));
+\endcode
+You can note that instances of vector and matrix are created to store values of
+function \f$u^h\f$ and function gradients at integration points, respectively.
+Next operators are added to evaluate function and function gradients at
+integration points. Finally, operator to calculate tangent matrix is added.
+Operator constructor takes arguments of pointers of previously created instances
+of vector and matrix. The same procedure is applied to evaluate residuals by
+integration over domain and boundary.
+
+\anchor figure_1_operator_volume_element
+\image html poisson_tut4_fig1.png "Figure 1. Operators of volume finite element" width=700px
+
+\subsection poisson_tut4_main_code Nonlinear Poisson code
+
+\include analytical_nonlinear_poisson.cpp
+
+Following code is practically the same which we used to linear Poisson example.
+In nonlinear case, instead of KSP solver,  we set-up SNES solver, first by
+adding finite elements instances to MoFEM SNES solver context
+\code
+CHKERR DMMoFEMSNESSetJacobian(dm,simple_interface->getDomainFEName(),domain_lhs_fe,null,null); 
+CHKERR DMMoFEMSNESSetJacobian(dm,simple_interface->getBoundaryFEName(),boundary_lhs_fe,null,null); 
+CHKERR DMMoFEMSNESSetFunction(dm,simple_interface->getDomainFEName(),domain_rhs_fe,null,null); 
+CHKERR DMMoFEMSNESSetFunction(dm,simple_interface->getBoundaryFEName(),boundary_rhs_fe,null,null); 
+\endcode
+Once we have done this, we create solver instance and kick-start calculations
+\code
+SNES solver;
+CHKERR SNESCreate(PETSC_COMM_WORLD,&solver); 
+CHKERR SNESSetFromOptions(solver); 
+CHKERR SNESSetDM(solver,dm); 
+CHKERR SNESSetUp(solver); 
+CHKERR SNESSolve(solver,F,D); 
+\endcode
+Note that SNES solver controls DM, and implicitly query of DM to create
+necessary matrices and assembly of the tangent matrix and residual vectors.
+SNES solver can be configured from a command line, <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/SNESSetFromOptions.html>see for details</a>.
+
+
+\subsection poisson_tut4_main_running_code Running code
+
+In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. Typically, this can be done as follows
+
+\code
+cd mofem_install/um/build/basic_finite_elements/poisson
+make -j2
+mpirun -np 2 ./analytical_nonlinear_poisson -file_name cube_2part.h5m -order 3 \
+-snes_monitor -snes_converged_reason  -snes_type newtonls \
+-snes_linesearch_type cp -snes_linesearch_monitor
+\endcode
+where SNES options are explained <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/SNESSetFromOptions.html>here</a>.
+
+As a result of above command, we get
+\verbatim
+0 SNES Function norm 6.585598470492e-01
+  0 KSP Residual norm 6.585598470492e-01
+  1 KSP Residual norm 5.914941314228e-15
+    Line search: lambdas = [1., 0.], ftys = [-3.52513, -12.2419]
+    Line search terminated: lambda = 0.595591, fnorms = 0.34441
+1 SNES Function norm 3.444100959814e-01
+  0 KSP Residual norm 3.444100959814e-01
+  1 KSP Residual norm 4.038504742986e-15
+    Line search: lambdas = [1., 0.], ftys = [-0.443111, -2.89313]
+    Line search terminated: lambda = 0.81914, fnorms = 0.160021
+2 SNES Function norm 1.600212778450e-01
+  0 KSP Residual norm 1.600212778450e-01
+  1 KSP Residual norm 1.468413895487e-15
+    Line search: lambdas = [1., 0.], ftys = [-0.00392301, -0.184194]
+    Line search terminated: lambda = 0.978238, fnorms = 0.0159661
+3 SNES Function norm 1.596606319710e-02
+  0 KSP Residual norm 1.596606319710e-02
+  1 KSP Residual norm 4.135944054060e-17
+    Line search: lambdas = [1., 0.], ftys = [-2.21812e-07, -0.000140473]
+    Line search terminated: lambda = 0.998418, fnorms = 2.23868e-05
+4 SNES Function norm 2.238684200528e-05
+  0 KSP Residual norm 2.238684200528e-05
+  1 KSP Residual norm 7.619868739966e-20
+    Line search: lambdas = [1., 0.], ftys = [-4.35284e-16, -4.97174e-10]
+    Line search terminated: lambda = 0.999999, fnorms = 4.34694e-11
+5 SNES Function norm 4.346943842203e-11
+Nonlinear solve converged due to CONVERGED_FNORM_RELATIVE iterations 5
+Approximation error 4.109e-10
+\endverbatim
+Note fast convergence, after first two interactions, once iterative approximation
+approaches the exact solution. To obtain this solution, we are using Newton method with line-searcher, in this case,
+we use critical point secant line search, <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/SNESLINESEARCHCP.html>see details</a>
+Line-search method has several alternative types and can be setup independently
+from solver, they can be found  <a href=http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/SNESLineSearchSetFromOptions.html>here</a>.
+
+*/

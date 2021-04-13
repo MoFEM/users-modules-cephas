@@ -1,3 +1,5 @@
+Dam example {#jup_dam_example}
+==============================
 # Running problem
 
 ```python

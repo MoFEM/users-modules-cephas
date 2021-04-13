@@ -2,53 +2,99 @@
 
 \tableofcontents
 
-\section running_programms Running code
+\section running_meshing Meshing
+
+<table style="width:100%">
+
+  <tr valign="top">
+        <td width="350px">RUN-1: \subpage using_Gmsh_tut</td>
+        <td> Meshing with Gmsh
+        <br/> *Keywords:* meshing
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-2: \subpage using_salome_tut_elasticity</td>
+        <td> Meshing with Salome
+        <br/> *Keywords:* meshing
+  </tr>
+
+</table>
+
+\section running_jupyter Running code in Jupyter notebook
+
+<table style="width:100%">
+
+  <tr valign="top">
+        <td width="350px">JUP-1: \subpage jup_tutorial_eigen_elastic</td>
+        <td> Jupyter notebook
+        <br/> *Keywords:* Eiegn analysis 
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">JUP-2: \subpage jup_radiation_pluto</td>
+        <td> Jupyter notebook
+        <br/> *Keywords:* Time solver, nonlinear
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">JUP-3: \subpage jup_tutorial_plastic_problem</td>
+        <td> Jupyter notebook
+        <br/> *Keywords:* Plasticity
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">JUP-4: \subpage jup_dam_example</td>
+        <td> Jupyter notebook
+        <br/> *Keywords:* Time solver, nonlinear
+        </td>
+  </tr>
+
+</table>
+
+\section running_programms Running code in terminal
 
 \note This section shows some examples for the end-user, how to execute programs.
 
 <table style="width:100%">
 
   <tr valign="top">
-        <td width="350px">RUN-0: \subpage elastic_dynamics</td>
+        <td width="350px">RUN-3: \subpage elastic_dynamics</td>
         <td> Elasto-dynamics
         <br/> *Keywords:* Time solver, elasticity, dynamics
         </td>
   </tr>
 
   <tr valign="top">
-        <td width="350px">RUN-1: \subpage unsaturated_flow</td>
+        <td width="350px">RUN-4: \subpage unsaturated_flow</td>
         <td> Unsaturated flow in 2d
         <br/> *Keywords:* Time solver, soil, capilary forces
         </td>
   </tr>
 
   <tr valign="top">
-        <td width="350px">RUN-3: \subpage um_bone_remodelling_readnme</td>
+        <td width="350px">RUN-5: \subpage frac_mech_simple_examples</td>
+        <td> Fracture mechanics
+        <br/> *Keywords:* Fracture, configurational mechanics
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-6: \subpage um_topology_optimization_readme</td>
+        <td> Topology optimization
+        <br/> *Keywords:* topology optimization, optimality criteria, anisotropic filtering
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">RUN-7: \subpage um_bone_remodelling_readnme</td>
         <td> Bone remodelling
-        <br/> *Keywords:* bine
+        <br/> *Keywords:* bone, nonlinear elasticity
         </td>
   </tr>
   
- </table>
-
-\section running_messhing Meshing
-
-<table style="width:100%">
-
-  <tr valign="top">
-        <td width="350px">RUN-4: \subpage using_Gmsh_tut</td>
-        <td> Meshing with Gmsh
-        <br/> *Keywords:* meshing
-        </td>
-  </tr>
-
-  <tr valign="top">
-        <td width="350px">RUN-4: \subpage using_salome_tut_elasticity</td>
-        <td> Meshing with Salome
-        <br/> *Keywords:* meshing
-        </td>
-  </tr>
-
  </table>
 
 */

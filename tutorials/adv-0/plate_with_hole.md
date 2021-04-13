@@ -1,8 +1,11 @@
+Plate with hole {#jup_plate_with_hole}
+===================== 
+
 ![plate_with_hole_geometric_model.png](plate_with_hole_geometric_model.png)
 
 ```python
 import sys
-sys.path.append("/usr/local/lib/python3.8/site-packages/gmsh-4.8.0-Linux64-sdk/lib")
+sys.path.append("/usr/local/lib/python3.8/site-packages/gmsh-4.8.3-Linux64-sdk/lib")
 %load_ext autoreload
 %autoreload 2
 ```
