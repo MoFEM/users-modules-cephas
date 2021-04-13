@@ -64,6 +64,7 @@ private:
   MatrixDouble invJac;
 };
 
+//! [run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
@@ -75,6 +76,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
+//! [run problem]
 
 //! [Read mesh]
 MoFEMErrorCode Example::readMesh() {
