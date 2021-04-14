@@ -40,6 +40,7 @@ private:
 Poisson2DHomogeneous::Poisson2DHomogeneous(MoFEM::Interface &m_field)
     : domainField("U"), mField(m_field) {}
 
+//! [Read mesh]
 MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
   MoFEMFunctionBegin;
 
@@ -49,7 +50,9 @@ MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Read mesh]
 
+//! [Setup problem]
 MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
   MoFEMFunctionBegin;
 
@@ -64,7 +67,9 @@ MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Setup problem]
 
+//! [Boundary condition]
 MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
   MoFEMFunctionBegin;
 
@@ -89,7 +94,9 @@ MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Boundary condition]
 
+//! [Assemble system]
 MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
   MoFEMFunctionBegin;
 
@@ -114,7 +121,9 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Assemble system]
 
+//! [Set integration rules]
 MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
   MoFEMFunctionBegin;
 
@@ -127,7 +136,9 @@ MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Set integration rules]
 
+//! [Solve system]
 MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
   MoFEMFunctionBegin;
 
@@ -152,7 +163,9 @@ MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Solve system]
 
+//! [Output results]
 MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
   MoFEMFunctionBegin;
 
@@ -168,7 +181,9 @@ MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Output results]
 
+//! [Run program]
 MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
   MoFEMFunctionBegin;
 
@@ -182,7 +197,9 @@ MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
 
   MoFEMFunctionReturn(0);
 }
+//! [Run program]
 
+//! [Main]
 int main(int argc, char *argv[]) {
 
   // Initialisation of MoFEM/PETSc and MOAB data structures
@@ -214,3 +231,4 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+//! [Main]
