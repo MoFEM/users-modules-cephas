@@ -12,9 +12,6 @@
 # License along with MoFEM. If not, see <http://www.gnu.org/licenses/>
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
-# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-3/src)
-# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../adv-0/src)
 
 set(permissions_default 
   OWNER_WRITE 
@@ -45,11 +42,4 @@ tutorials_build_and_install(
 # set_target_properties(
 #   contact_3d PROPERTIES COMPILE_FLAGS "-DEXECUTABLE_DIMENSION=3")  
 
-# add_test(
-#   contact_2d
-#   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
-#   contact_2d
-#   -file_name ${CMAKE_CURRENT_BINARY_DIR}/sphere_2d.h5m
-#   -ts_type beuler
-#   -ts_max_time 1 -ts_dt 0.2 -log_no_color)
-  
+ 

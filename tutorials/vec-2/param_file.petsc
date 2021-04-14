@@ -6,12 +6,13 @@
 -snes_rtol 1e-8
 -snes_max_linear_solve_fail -1
 #-snes_converged_reason
--snes_linesearch_type bt
--snes_linesearch_monitor 
+-snes_linesearch_type basic
+#-snes_linesearch_monitor 
 -snes_max_it 20
+-snes_monitor
 
--ts_type alpha2
--ts_exact_final_time stepover
+-ts_type beuler
+-ts_exact_final_time matchstep
 -ts_max_time 10
 -ts_dt 0.1
 -ts_max_snes_failures -1
@@ -19,7 +20,7 @@
 -ts_adapt_type none
 
 -ts_monitor
--ts_adapt_monitor
+#-ts_adapt_monitor
 
 -st_ksp_type preonly 
 -st_pc_type lu 
