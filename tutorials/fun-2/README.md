@@ -40,5 +40,5 @@ Options
 Note
 ====
 
-Note tested for 3d. Not tested for hdiv in 3d.
+Note tested for 2d. Not tested for hdiv in 3d.
 

@@ -11,11 +11,11 @@ encouraged to have a look at \ref general_data_structure,
 to have better ideas how MoFEM works and how a specific problem is implemented
 in the platform. They may also find this <a href="https://youtu.be/rO1_j8p9epk">tutorial video</a>  helpful.
 
-The remain of the tutorial is organised as follows. The
+The remainder of the tutorial is organised as follows. The
 mathematical and finite element formulation is presented in the next section
-before the input mesh of L-shape structure which is used as an example is
+before the input mesh of the L-shape structure which is used as an example is
 defined. It is followed by explanation of the source code and then how to run
-and visualise the results. Remark on choosing approximation order and its consequence will be discussed at the end of the tutorial.
+and visualise the results. Remarks on choosing approximation order and its consequence will be discussed at the end of the tutorial.
 
 \section elasticity_mixed_formulation_mathematical_fe_formulation Mathematical and finite element formulation
 
@@ -54,7 +54,7 @@ The above problem of compressible elasticity can be solved using typical finite
 element procedure. However, in case of \f$ \nu=0.5 \f$, \f$ \lambda \f$ becomes
 infinity implying incompressible state. This causes \e volumetric \e locking
 which makes the approximation converge very slowly or even unable to converge.
-Therefore, an alternative formulation need to be considered to bypass this
+Therefore, an alternative formulation needs to be considered to bypass this
 difficulty. This can be done by introducing additional independent unknown
 called \e hydrostatic \e pressure \f$ p \f$ where \f$ p = -\lambda u_{k,k} \f$.
 Therefore, the following equation should be added to the formal problem

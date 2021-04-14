@@ -70,7 +70,7 @@
   <tr valign="top">
         <td width="350px">RUN-4: \subpage unsaturated_flow</td>
         <td> Unsaturated flow in 2d
-        <br/> *Keywords:* Time solver, soil, capilary forces
+        <br/> *Keywords:* Time solver, soil, capillary forces
         </td>
   </tr>
 
