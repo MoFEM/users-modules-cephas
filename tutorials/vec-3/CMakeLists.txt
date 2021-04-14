@@ -13,6 +13,7 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 
 set(permissions_default 
   OWNER_WRITE 
