@@ -34,14 +34,13 @@ will solve a simple Poisson's equation in 2D with homogeneous boundary condition
 (zero boundary values). The physical example of this equation is that you
 have a membrane that is fixed at its boundary and it experiences a uniformly
 distributed force on its surface, then you are asked to estimate the
-displacement of the membrane. The formal definition of the problem as follows 
+displacement of the membrane. The strong form of the problem as follows 
 
-Find \f$ u \in H_0^{1}(\Omega) \f$ such that
 \f[
   \begin{align}
 -\nabla \cdot \nabla u(\mathbf{x}) &= f \quad {\rm in} \quad {
 \Omega}, \\ 
-{\hat u}(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
+{ u}(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
   \end{align}
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
@@ -58,11 +57,11 @@ As you may have already learned from the basic finite element method, in order
 to approximate the field \f$ u \f$ of the problem equation, we need to 
 derive the weak form. The procedure to achieve it is as follows
 
-- First, multiplying both sides of the equation by a *test* function \f$ v \f$
+- First, multiplying both sides of the equation by a *test* function \f$ \delta u \f$
   and then integrate over the domain \f$ \Omega \f$
 \f[
   \begin{equation}
--\int_\Omega v(\nabla \cdot \nabla u ) ~d\Omega= \int_\Omega v f ~d\Omega.
+-\int_\Omega \delta u(\nabla \cdot \nabla u ) ~d\Omega= \int_\Omega \delta u f ~d\Omega.
   \end{equation}
 \f]
 
@@ -70,24 +69,24 @@ derive the weak form. The procedure to achieve it is as follows
   we have
 \f[
   \begin{equation}
-  \int_\Omega \nabla v \cdot \nabla u ~d\Omega - \int_{\partial \Omega} v {\bf n} \cdot
-  \nabla u ~d\partial \Omega = \int_\Omega v f ~d\Omega.
+  \int_\Omega \nabla \delta u \cdot \nabla u ~d\Omega - \int_{\partial \Omega} \delta u {\bf n} \cdot
+  \nabla u ~d\partial \Omega = \int_\Omega \delta u f ~d\Omega.
   \end{equation}
 \f]
-It is noted that the test function \f$ v \f$ has to satisfy the homogeneous
-  boundary condition, i.e. \f$ v=0 \f$ on \f$ \partial \Omega \f$. Substituting
+It is noted that the test function \f$ \delta u \f$ has to satisfy the homogeneous
+  boundary condition, i.e. \f$ \delta u=0 \f$ on \f$ \partial \Omega \f$. Substituting
   it to the above equation, we finally obtain the weak form of the problem
 \f[
   \begin{equation}
-\int_\Omega \nabla v \cdot \nabla u ~d\Omega = \int_\Omega v f ~d\Omega, \quad \forall v \in H_{0}^{1}(\Omega),
+\int_\Omega \nabla \delta u \cdot \nabla u ~d\Omega = \int_\Omega \delta u f ~d\Omega, \quad \forall \delta u \in H_{0}^{1}(\Omega),
   \end{equation}
 \f]
-  where the space for test function \f$ v \f$ is \f$ H_{0}^{1}(\Omega):=\left\{v
-  \in H^{1}(\Omega) \mid v=0 \text { on } \partial \Omega\right\} \f$.
+  where the space for test function \f$ \delta u \f$ is \f$
+  H_{0}^{1}(\Omega):=\left\{v \in H^{1}(\Omega) \mid v=0 \text { on } \partial \Omega\right\} \f$.
 
 We are now solving this equation of the weak form instead of the original
 equation. This equation is asking for the solution of \f$ u \f$ that is true for
-all test function \f$ v \f$. In order to achieve it, we will approximate \f$ u
+all test function \f$ \delta u \f$. In order to achieve it, we will approximate \f$ u
 \f$ following a process in finite element called *discretisation* which will be
 presented in the next part.
 
@@ -112,11 +111,11 @@ of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will
 find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
 Keep in mind that, in the weak form, we have another term that also needs to be
-taken care of, that is the test function \f$ v \f$. As we were saying, the weak
-form has to be satisfied with all test function \f$ v \f$ meaning it has to be
-true with the arbitrary choice of \f$ v_i=\phi_i \f$.
+taken care of, that is the test function \f$ \delta u \f$. As we were saying, the weak
+form has to be satisfied with all test function \f$ \delta u \f$ meaning it has to be
+true with the arbitrary choice of \f$ \delta u_i=\phi_i \f$.
 
-Substituting \f$ u \f$ and \f$ v \f$ into the weak form, we have the discrete
+Substituting \f$ u \f$ and \f$ \delta u \f$ into the weak form, we have the discrete
 form of the problem given by 
 \f[
   \begin{equation}
