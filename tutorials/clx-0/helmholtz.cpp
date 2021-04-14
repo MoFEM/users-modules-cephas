@@ -64,6 +64,7 @@ private:
   MatrixDouble invJac;
 };
 
+//! [run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
@@ -75,6 +76,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
+//! [run problem]
 
 //! [Read mesh]
 MoFEMErrorCode Example::readMesh() {
@@ -219,7 +221,7 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpBoundarySource("P_REAL", beta));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("P_REAL"));
 
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
