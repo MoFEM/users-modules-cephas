@@ -27,7 +27,7 @@ where \f$\mathbf{u}_D\f$ is the prescribed velocity on the part of the boundary 
 In this tutorial we will solve the problem of the fluid flow around a rigid sphere (see \ref navier_stokes_problem_statement "Figure 1") of a radius \f$r\f$ positioned in the centre of a cubic domain, the side length \f$2l\f$ of which is considered sufficiently large compared to \f$r\f$, so that a uniform far-field velocity on the exterior boundaries is valid (note that the body forces are neglected). Exploiting the symmetry of the problem, we will use a quarter of the domain in our simulations.
 
 \anchor navier_stokes_problem_statement
-\image html mesh.png "Figure 1: (a) Finite-element mesh used for simulation of fluid flow around a rigid sphere. (b) Sketch of the problem set-up on a section $z=0$ of the mesh." width=900px
+\image html mesh_navier_stokes.png "Figure 1: (a) Finite-element mesh used for simulation of fluid flow around a rigid sphere. (b) Sketch of the problem set-up on a section $z=0$ of the mesh." width=900px
 
 Note that due to the structure of differential operators in the Navier-Stokes equations \eqref{eq:balance_momentum}, the fluid pressure has to be specified on a part of boundary in order to obtain a unique solution. To achieve that, we will combine Dirichlet and Neumann condition on the outlet boundary of the domain, see see \ref navier_stokes_problem_statement "Figure 1". In the case when the flow is perpendicular to the boundary (\f$u_y = u_z = 0\f$), which is enforced by the Dirichlet boundary condition, the hydrostatic fluid pressure equals to the normal traction on such boundary, see Theorem 1 in \cite barth2007boundary.
 
@@ -150,7 +150,7 @@ Finally, the last preparatory step required is the setup of the SNES functionali
 
 \snippet users_modules/tutorials/cor-10/navier_stokes.cpp Setup SNES
 
-\subsection navier_stokes_running_input_parameters Solving the problem and post-processing the results
+\subsection navier_stokes_running_solving_problem Solving the problem and post-processing the results
 
 \snippet users_modules/tutorials/cor-10/navier_stokes.cpp Solve problem
 
