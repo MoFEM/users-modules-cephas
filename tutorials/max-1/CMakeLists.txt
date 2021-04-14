@@ -24,6 +24,6 @@ set(permissions_default
 tutorials_copy_and_install("*.jou" "${permissions_default}")
 tutorials_copy_and_install("*.cub" "${permissions_default}")
 tutorials_copy_and_install("*.h5m" "${permissions_default}")
-tutorials_copy_and_install("README" "${permissions_default}")
+tutorials_copy_and_install("README.md" "${permissions_default}")
 
 

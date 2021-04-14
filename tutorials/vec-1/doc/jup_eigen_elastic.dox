@@ -1,0 +1,12 @@
+/*! \page jup_tutorial_eigen_elastic Tuning fork
+
+\section running_eiegn_jupyter Running Jupyter notebook
+
+First follow instruction here \ref docker_jupyterhub. Then select file in 
+\em um_views/tutorial/vec-1/eigen_elastic.md
+
+\section jup_vec_1 Jupyter notebook
+
+\htmlinclude eigen_elastic.html
+
+*/

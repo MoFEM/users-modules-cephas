@@ -24,11 +24,32 @@
 
 using namespace MoFEM;
 
-using EntData = DataForcesAndSourcesCore::EntData;
-using DomainEle = FaceElementForcesAndSourcesCoreBase;
-using DomainEleOp = DomainEle::UserDataOperator;
+template <int DIM> struct ElementsAndOps {};
+
+template <> struct ElementsAndOps<2> {
+  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcFaceOnRefinedMesh;
+};
+
+template <> struct ElementsAndOps<3> {
+  using DomainEle = VolumeElementForcesAndSourcesCore;
+  using DomainEleOp = DomainEle::UserDataOperator;
+  using BoundaryEle = FaceElementForcesAndSourcesCore;
+  using BoundaryEleOp = BoundaryEle::UserDataOperator;
+  using PostProcEle = PostProcVolumeOnRefinedMesh;
+};
 
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+
+using EntData = DataForcesAndSourcesCore::EntData;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
@@ -38,8 +59,8 @@ using OpInternalForce =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
         GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
-constexpr double young_modulus = 1;
-constexpr double poisson_ratio = 0.25;
+constexpr double young_modulus = 100;
+constexpr double poisson_ratio = 0.3;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
 
@@ -257,9 +278,9 @@ MoFEMErrorCode Example::outputResults() {
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   pipeline_mng->getDomainLhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  if (SPACE_DIM) {
+  if (SPACE_DIM == 2) {
     post_proc_fe->getOpPtrVector().push_back(
         new OpCalculateInvJacForFace(invJac));
     post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
@@ -292,7 +313,7 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
 
-  if (SPACE_DIM) {
+  if (SPACE_DIM == 2) {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainRhsPipeline().push_back(

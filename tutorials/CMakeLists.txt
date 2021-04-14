@@ -99,12 +99,13 @@ set(TUTORIALS_DIRS
   max-1
   adv-0
   adv-1
-  other_tutorials/mix_transport
-  other_tutorials/poisson
-  other_tutorials/simple_elasticity
-  other_tutorials/elasticity_mixed_formulation
-  other_tutorials/reaction_diffusion
-  other_tutorials/navier_stokes
+  cor-0to1
+  cor-2to5
+  cor-6
+  cor-7
+  cor-8
+  cor-9
+  cor-10
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})
