@@ -64,7 +64,7 @@ using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
 using OpLambdaGraULhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMixTensorTimesGrad<SPACE_DIM>;
 using OpMixDivURhs = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-    GAUSS>::OpMixDivTimesU<SPACE_DIM, SPACE_DIM>;
+    GAUSS>::OpMixDivTimesU<3, SPACE_DIM, SPACE_DIM>;
 using OpMixLambdaGradURhs = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpMixTensorTimesGradU<SPACE_DIM>;
 using OpMixUTimesDivLambdaRhs = FormsIntegrators<DomainEleOp>::Assembly<
