@@ -105,9 +105,10 @@ double sigmaY = 450;
 double H = 129;
 double visH = 1e4;
 double cn = 1;
+double delta = 1e-2;
 int order = 2;
 
-// const double arc_beta = 1;
+static Vec pre_step_vec;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -213,6 +214,7 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-yield_stress", &sigmaY,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-delta", &delta, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
@@ -224,6 +226,8 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " <<  sigmaY;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " <<  H;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
@@ -729,32 +733,45 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
     postProcFe->generateReferenceElementMesh();
+    auto &pipeline = postProcFe->getOpPtrVector();
 
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-            "U", commonPlasticDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-
-    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonPlasticDataPtr->mGradPtr));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
         "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
-    postProcFe->getOpPtrVector().push_back(
-        new OpCalculateTensor2SymmetricFieldValues<2>(
-            "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-    postProcFe->getOpPtrVector().push_back(
-        new OpPlasticStress("U", commonPlasticDataPtr, scale));
-    postProcFe->getOpPtrVector().push_back(
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
+        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
+
+    if (is_large_strains) {
+      pipeline.push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(
+          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+          "U", commonHenckyDataPtr));
+      pipeline.push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(new OpPostProcHencky<SPACE_DIM>(
+          "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+          commonHenckyDataPtr));
+    } else {
+      pipeline.push_back(
+          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
+                                            commonPlasticDataPtr->mStrainPtr));
+      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, scale));
+      postProcFe->getOpPtrVector().push_back(
+          new Tutorial::OpPostProcElastic<SPACE_DIM>(
+              "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+              commonPlasticDataPtr->mStrainPtr,
+              commonPlasticDataPtr->mStressPtr));
+    }
+
+    pipeline.push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-
-    postProcFe->getOpPtrVector().push_back(
-        new Tutorial::OpPostProcElastic<SPACE_DIM>(
-            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonPlasticDataPtr->mStrainPtr,
-            commonPlasticDataPtr->mStressPtr));
-
     postProcFe->getOpPtrVector().push_back(
         new OpPostProcPlastic("U", postProcFe->postProcMesh,
                               postProcFe->mapGaussPts, commonPlasticDataPtr));
@@ -786,6 +803,21 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
+
+  auto add_pres_step = [&](auto solver) {
+    MoFEMFunctionBegin;
+    pre_step_vec = commonPlasticDataPtr->perviousStepSolution;
+    auto pre_step = [](TS ts) -> PetscErrorCode {
+      MoFEMFunctionBeginHot;
+      Vec d, v;
+      CHKERR TS2GetSolution(ts, &d, &v);
+      CHKERR VecCopy(d, pre_step_vec);
+      MoFEMFunctionReturnHot(0);
+    };
+    CHKERR TSSetPreStep(solver, pre_step);
+    MoFEMFunctionReturn(0);
+  };
+
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   CHKERR create_post_process_element();
@@ -797,9 +829,10 @@ MoFEMErrorCode Example::tsSolve() {
   if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();
     auto D = smartCreateDMVector(dm);
+    CHKERR TSSetSolution(solver, D);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
-    CHKERR TSSetSolution(solver, D);
+    CHKERR add_pres_step(solver);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
@@ -808,9 +841,10 @@ MoFEMErrorCode Example::tsSolve() {
     auto dm = simple->getDM();
     auto D = smartCreateDMVector(dm);
     auto DD = smartVectorDuplicate(D);
+    CHKERR TS2SetSolution(solver, D, DD);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
-    CHKERR TS2SetSolution(solver, D, DD);
+    CHKERR add_pres_step(solver);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);

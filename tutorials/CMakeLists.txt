@@ -76,6 +76,9 @@ endfunction()
 set(TUTORIALS_DIRS 
   fun-0
   fun-1
+  fun-2
+  msh-1
+  msh-2
   scl-0
   scl-1
   scl-2
@@ -96,11 +99,13 @@ set(TUTORIALS_DIRS
   max-1
   adv-0
   adv-1
-  other_tutorials/mix_transport
-  other_tutorials/poisson
-  other_tutorials/simple_elasticity
-  other_tutorials/elasticity_mixed_formulation
-  other_tutorials/reaction_diffusion
+  cor-0to1
+  cor-2to5
+  cor-6
+  cor-7
+  cor-8
+  cor-9
+  cor-10
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})

@@ -102,8 +102,7 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
-    MeshsetsManager *meshsets_interface_ptr;
-    CHKERR m_field.getInterface(meshsets_interface_ptr);
+    auto meshsets_interface_ptr = m_field.getInterface<MeshsetsManager>();
     CHKERR meshsets_interface_ptr->setMeshsetFromFile();
 
     MOFEM_LOG_CHANNEL("WORLD");
@@ -112,6 +111,7 @@ int main(int argc, char *argv[]) {
              meshsets_interface_ptr->getBegin();
          cit != meshsets_interface_ptr->getEnd(); cit++) 
       MOFEM_LOG("WORLD", Sev::inform) << *cit;
+    MOFEM_LOG_CHANNEL("WORLD");
 
     {
       Range ents_dim;
