@@ -800,45 +800,33 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
-    auto &pipeline = postProcFe->getOpPtrVector();
-
-    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
-    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr));
-    pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
-        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-
-    if (is_large_strains) {
-      pipeline.push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-          "U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(new OpPostProcHencky<SPACE_DIM>(
-          "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-          commonHenckyDataPtr));
-    } else {
-      pipeline.push_back(
-          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
-                                            commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, scale));
+    if (SPACE_DIM == 2) {
       postProcFe->getOpPtrVector().push_back(
-          new Tutorial::OpPostProcElastic<SPACE_DIM>(
-              "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-              commonPlasticDataPtr->mStrainPtr,
-              commonPlasticDataPtr->mStressPtr));
+          new OpCalculateInvJacForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
     }
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonPlasticDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
 
-    pipeline.push_back(
+    postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+            "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
+    postProcFe->getOpPtrVector().push_back(
+        new OpPlasticStress("U", commonPlasticDataPtr, scale));
+    postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+
+    postProcFe->getOpPtrVector().push_back(
+        new Tutorial::OpPostProcElastic<SPACE_DIM>(
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+            commonPlasticDataPtr->mStrainPtr,
+            commonPlasticDataPtr->mStressPtr));
+
     postProcFe->getOpPtrVector().push_back(
         new OpPostProcPlastic("U", postProcFe->postProcMesh,
                               postProcFe->mapGaussPts, commonPlasticDataPtr));
