@@ -7,7 +7,7 @@
 -snes_dtol 0
 -snes_max_linear_solve_fail 0
 #-snes_converged_reason
--snes_linesearch_type l2
+-snes_linesearch_type basic
 -snes_linesearch_max_it 3
 # -snes_linesearch_keeplambda
 #-snes_linesearch_minlambda 0.01
@@ -27,7 +27,7 @@
 -ts_adapt_monitor
 
 -quasi_static 1
--ts_type theta
+-ts_type beuler
 -ts_theta_initial_guess_extrapolate 1
 -ts_theta_theta 1
 

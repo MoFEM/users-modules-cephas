@@ -295,11 +295,16 @@ private:
 template <int DIM>
 struct OpCalculateHenckyPlasticStress : public DomainEleOp {
 
-  OpCalculateHenckyPlasticStress(const std::string field_name,
-                                boost::shared_ptr<CommonData> common_data)
+  OpCalculateHenckyPlasticStress(
+      const std::string field_name, boost::shared_ptr<CommonData> common_data,
+      boost::shared_ptr<MatrixDouble> mat_log_c_plastic = nullptr)
       : DomainEleOp(field_name, DomainEleOp::OPROW),
         commonDataPtr(common_data) {
     std::fill(&doEntities[MBEDGE], &doEntities[MBMAXTYPE], false);
+    if(mat_log_c_plastic)
+      matLogCPlastic = mat_log_c_plastic;
+    else
+      matLogCPlastic = commonDataPtr->matLogCPlastic;
   }
 
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data) {
@@ -316,8 +321,7 @@ struct OpCalculateHenckyPlasticStress : public DomainEleOp {
     const size_t nb_gauss_pts = getGaussPts().size2();
     auto t_D = getFTensor4DdgFromMat<DIM, DIM, 0>(*commonDataPtr->matDPtr);
     auto t_logC = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matLogC);
-    auto t_logCPlastic =
-        getFTensor2SymmetricFromMat<DIM>(*commonDataPtr->matLogCPlastic);
+    auto t_logCPlastic = getFTensor2SymmetricFromMat<DIM>(*matLogCPlastic);
     constexpr auto size_symm = (DIM * (DIM + 1)) / 2;
     commonDataPtr->matHenckyStress.resize(size_symm, nb_gauss_pts, false);
     auto t_T = getFTensor2SymmetricFromMat<DIM>(commonDataPtr->matHenckyStress);
@@ -335,6 +339,7 @@ struct OpCalculateHenckyPlasticStress : public DomainEleOp {
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> matLogCPlastic;
 };
 
 template <int DIM>

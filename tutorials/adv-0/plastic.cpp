@@ -103,10 +103,13 @@ double poisson_ratio = 0.29;
 double rho = 0;
 double sigmaY = 450;
 double H = 129;
-double visH = 1e4;
+double visH = 0;
 double cn = 1;
-double delta = 1e-2;
+double Qinf = 265;
+double b_iso = 16.93;
+double delta = std::numeric_limits<double>::epsilon();
 int order = 2;
+double theta_flow = 0.;
 
 static Vec pre_step_vec;
 
@@ -136,10 +139,11 @@ private:
   MatrixDouble invJac;
   boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
-  boost::shared_ptr<PostProcFaceOnRefinedMesh> postProcFe;
+  boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
@@ -181,10 +185,11 @@ MoFEMErrorCode Example::setupProblem() {
   Simple *simple = mField.getInterface<Simple>();
   // Add field
   constexpr FieldApproximationBase base = AINSWORTH_LEGENDRE_BASE;
-  CHKERR simple->addDomainField("U", H1, base, 2);
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  CHKERR simple->addDomainField("U", H1, base, SPACE_DIM);
   CHKERR simple->addDomainField("TAU", L2, base, 1);
-  CHKERR simple->addDomainField("EP", L2, base, 3);
-  CHKERR simple->addBoundaryField("U", H1, base, 2);
+  CHKERR simple->addDomainField("EP", L2, base, size_symm);
+  CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
   // This can be added for arc-length control
   // CHKERR simple->addDomainField("L", NOFIELD, NOBASE, 1);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
@@ -215,30 +220,45 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-cn", &cn, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-delta", &delta, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
                                &is_quasi_static, PETSC_NULL);
 
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " <<  young_modulus;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " <<  poisson_ratio;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " <<  sigmaY;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " <<  H;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Yield stress " << sigmaY;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Hardening " << H;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
     PetscBool is_scale = PETSC_TRUE;
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-is_scale", &is_scale,
                                PETSC_NULL);
-    if(is_scale) {
-      scale = 1. / young_modulus;
+    if (is_scale) {
+      scale = scale / young_modulus;
       young_modulus *= scale;
       rho *= scale;
       sigmaY *= scale;
       H *= scale;
+      Qinf *= scale;
       visH *= scale;
+
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled Young modulus " << young_modulus;
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled Poisson ratio " << poisson_ratio;
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Yield stress " << sigmaY;
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Hardening " << H;
+      MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Viscous hardening " << visH;
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled Saturation yield stress " << Qinf;
     }
 
     MoFEMFunctionReturn(0);
@@ -268,9 +288,9 @@ MoFEMErrorCode Example::createCommonData() {
   };
 
   commonPlasticDataPtr = boost::make_shared<PlasticOps::CommonData>();
-
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   commonPlasticDataPtr->mDPtr = boost::make_shared<MatrixDouble>();
-  commonPlasticDataPtr->mDPtr->resize(9, 1);
+  commonPlasticDataPtr->mDPtr->resize(size_symm * size_symm, 1);
 
   commonPlasticDataPtr->mGradPtr = boost::make_shared<MatrixDouble>();
   commonPlasticDataPtr->mStrainPtr = boost::make_shared<MatrixDouble>();
@@ -286,7 +306,8 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenckyDataPtr->matLogCPlastic =
         commonPlasticDataPtr->getPlasticStrainPtr();
     commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatLogC();
-    commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatHenckyStress();
+    commonPlasticDataPtr->mStressPtr =
+        commonHenckyDataPtr->getMatHenckyStress();
   }
 
   MoFEMFunctionReturn(0);
@@ -297,83 +318,109 @@ MoFEMErrorCode Example::createCommonData() {
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
-  auto fix_disp = [&](const std::string blockset_name) {
-    std::vector<std::pair<std::vector<double>,Range>> bc_data_vec;
+  auto prb_mng = mField.getInterface<ProblemsManager>();
+  auto simple = mField.getInterface<Simple>();
+
+  auto get_block_ents = [&](const std::string blockset_name) {
+    Range remove_ents;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
           0) {
-        Range fix_ents;
-        std::vector<double> attr;
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
-                                                        true);
-        CHKERR it->getAttributes(attr);
-        bc_data_vec.push_back(std::make_pair(attr, fix_ents));
+        CHKERR mField.get_moab().get_entities_by_handle(it->meshset,
+                                                        remove_ents, true);
       }
     }
-    return bc_data_vec;
+    return remove_ents;
   };
 
-  boundaryMarker = boost::make_shared<std::vector<unsigned char>>();
+  auto get_adj_ents = [&](const Range &ents) {
+    Range verts;
+    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
+    if (SPACE_DIM == 3) {
+      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, verts,
+                                               moab::Interface::UNION);
+    }
+    verts.merge(ents);
+    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
+    return verts;
+  };
 
-  auto merge_boundary_dofs = [&](auto &&marked) {
+  auto remove_dofs_on_ents = [&](const Range &&ents, const int lo,
+                                 const int hi) {
     MoFEMFunctionBegin;
-    boundaryMarker->resize(marked.size(), 0);
-    for (auto i = 0; i != boundaryMarker->size(); ++i) {
-      (*boundaryMarker)[i] |= marked[i];
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", ents,
+                                         lo, hi);
+    MoFEMFunctionReturn(0);
+  };
+
+  auto mark_fix_dofs = [&](std::vector<unsigned char> &marked_u_dofs,
+                           const auto lo, const auto hi) {
+    return prb_mng->modifyMarkDofs(simple->getProblemName(), ROW, "U", lo, hi,
+                                   ProblemsManager::MarkOP::OR, 1,
+                                   marked_u_dofs);
+  };
+
+  auto fix_disp = [&](const std::string blockset_name, const bool fix_x,
+                      const bool fix_y, const bool fix_z) {
+    MoFEMFunctionBegin;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
+          0) {
+
+        bcVec.emplace_back(new BCs());
+
+        CHKERR mField.get_moab().get_entities_by_handle(
+            it->meshset, bcVec.back()->bcEdges, true);
+        CHKERR it->getAttributes(bcVec.back()->bcAttributes);
+        
+        if (fix_x)
+          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 0, 0);
+        if (fix_y)
+          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 1, 1);
+        if (fix_z)
+          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 2, 2);
+
+        CHKERR prb_mng->markDofs(
+            simple->getProblemName(), ROW, ProblemsManager::AND,
+            get_adj_ents(bcVec.back()->bcEdges), bcVec.back()->bcMarkers);
+      }
     }
     MoFEMFunctionReturn(0);
   };
 
-  auto mark_boundary_dofs = [&](const auto &&ents, const bool fix_x,
-                                const bool fix_y) {
-    auto simple = mField.getInterface<Simple>();
-    auto problem_manager = mField.getInterface<ProblemsManager>();
+  auto mark_dofs_on_ents = [&](const Range &&ents) {
+    std::vector<unsigned char> marked_ents;
+    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW, ProblemsManager::OR,
+                             ents, marked_ents);
 
-    std::vector<unsigned char> mark_dofs;
-    if (fix_x)
-      problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 0, 0,
-                                      ProblemsManager::MarkOP::OR, 1,
-                                      mark_dofs);
-
-    if (fix_y)
-      problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U", 1, 1,
-                                      ProblemsManager::MarkOP::OR, 1,
-                                      mark_dofs);
-
-    std::vector<unsigned char> marked_dofs(mark_dofs.size(), 0);
-
-    for (auto &v : ents) {
-      if (!v.first.empty()) {
-        bcVec.emplace_back(new BCs());
-        bcVec.back()->bcAttributes = v.first;
-        bcVec.back()->bcEdges = v.second;
-        Range verts;
-        CHKERR mField.get_moab().get_connectivity(v.second, verts, true);
-        verts.merge(v.second);
-        std::vector<unsigned char> mark_ents;
-        CHKERR problem_manager->markDofs(simple->getProblemName(), ROW, verts,
-                                         mark_ents);
-        auto &bc_markers = bcVec.back()->bcMarkers;
-        bc_markers.resize(mark_ents.size(), 0);
-
-        for (auto i = 0; i != mark_ents.size(); ++i) {
-          bc_markers[i] = (mark_ents[i] & mark_dofs[i]);
-          marked_dofs[i] |= bc_markers[i];
-        }
-      }
-    }
-
-    return marked_dofs;
+    return marked_ents;
   };
 
-  CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_X"), true, false));
-  CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_Y"), false, true));
-  CHKERR merge_boundary_dofs(
-      mark_boundary_dofs(fix_disp("FIX_ALL"), true, true));
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
 
-  auto rec_marker = mark_boundary_dofs(fix_disp("FIX_X1"), true, false);
+  CHKERR fix_disp("FIX_X", true, false, false);
+  CHKERR fix_disp("FIX_Y", false, true, false);
+  if (SPACE_DIM == 3)
+    CHKERR fix_disp("FIX_Z", false, false, true);
+  CHKERR fix_disp("FIX_ALL", true, true, true);
+
+  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  for (auto b : bcVec) {
+    boundaryMarker->resize(b->bcMarkers.size(), 0);
+    for (int i = 0; i != b->bcMarkers.size(); ++i) {
+      (*boundaryMarker)[i] |= b->bcMarkers[i];
+    }
+  }
+  if (boundaryMarker->empty()) {
+    auto marker = mark_dofs_on_ents(Range());
+    boundaryMarker = boost::make_shared<std::vector<unsigned char>>(
+        marker.begin(), marker.end());
+  }
+
+  auto rec_marker = mark_dofs_on_ents(get_adj_ents(get_block_ents("FIX_X1")));
   reactionMarker = boost::make_shared<std::vector<unsigned char>>(
       rec_marker.begin(), rec_marker.end());
 
@@ -384,25 +431,44 @@ MoFEMErrorCode Example::bC() {
 //! [Push operators to pipeline]
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>(); 
+
+  commonPlasticDataPtr->perviousStepSolution =
+      smartCreateDMVector(simple->getDM());
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    if (SPACE_DIM == 2) {
+      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    }
 
-    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr));
-
-    pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
-
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
-        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<2>(
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
+
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+        "EP", commonPlasticDataPtr->getPlasticStrain0Ptr(),
+        commonPlasticDataPtr->perviousStepSolution));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonPlasticDataPtr->getPlasticTau0Ptr(),
+        commonPlasticDataPtr->perviousStepSolution));
+
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto add_domain_stress_ops = [&](auto &pipeline, SmartPetscObj<Vec> vec) {
+    MoFEMFunctionBegin;
+
+    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+        "U", commonPlasticDataPtr->mGradPtr, vec));
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+        "EP", commonPlasticDataPtr->getPlasticStrainPtr(), vec));
+    pipeline.push_back(new OpCalculateScalarFieldValues(
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr(), vec));
 
     if (is_large_strains) {
 
@@ -416,12 +482,10 @@ MoFEMErrorCode Example::OPs() {
           new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+          "U", commonHenckyDataPtr));
       pipeline.push_back(
-          new OpCalculateHenckyPlasticStress<SPACE_DIM>("U",
-                                                       commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>(
-              "U", commonHenckyDataPtr));
+          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
     } else {
       pipeline.push_back(
@@ -430,8 +494,13 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
     }
 
-    pipeline.push_back(
-        new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+    if (!vec.use_count())
+      pipeline.push_back(
+          new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+    else
+      pipeline.push_back(
+          new OpCalculatePlasticSurface0("U", commonPlasticDataPtr));
+
     MoFEMFunctionReturn(0);
   };
 
@@ -471,16 +540,16 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
 
-    if (!is_quasi_static) {
-      // Get pointer to U_tt shift in domain element
-      auto get_rho = [this](const double, const double, const double) {
-        auto *pipeline_mng = mField.getInterface<PipelineManager>();
-        auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-        return rho * fe_domain_lhs->ts_aa;
-      };
-      pipeline_mng->getOpDomainLhsPipeline().push_back(
-          new OpMass("U", "U", get_rho));
-    }
+    // if (!is_quasi_static) {
+    //   // Get pointer to U_tt shift in domain element
+    //   auto get_rho = [this](const double, const double, const double) {
+    //     auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    //     auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
+    //     return rho * fe_domain_lhs->ts_aa;
+    //   };
+    //   pipeline_mng->getOpDomainLhsPipeline().push_back(
+    //       new OpMass("U", "U", get_rho));
+    // }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -490,20 +559,19 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    // auto get_body_force = [this](const double, const double, const double) {
-    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    //   FTensor::Index<'i', SPACE_DIM> i;
-    //   FTensor::Tensor1<double, SPACE_DIM> t_source;
-    //   auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    //   const auto time = fe_domain_rhs->ts_t;
+    auto get_body_force = [this](const double, const double, const double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Tensor1<double, SPACE_DIM> t_source;
+      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      const auto time = fe_domain_rhs->ts_t;
+      // hardcoded gravity load
+      t_source(i) = 0;
+      t_source(2) = (-5e+7 * scale) * time;
+      return t_source;
+    };
 
-    //   // hardcoded gravity load
-    //   t_source(i) = 0;
-    //   t_source(1) = 1.0 * time;
-    //   return t_source;
-    // };
-
-    // pipeline.push_back(new OpBodyForce("U", get_body_force));
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
     if (is_large_strains) {
@@ -519,15 +587,15 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
 
-    // only in case of dynamics
-    if (!is_quasi_static) {
-      auto mat_acceleration = boost::make_shared<MatrixDouble>();
-      pipeline_mng->getOpDomainRhsPipeline().push_back(
-          new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
-                                                            mat_acceleration));
-      pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
-          "U", mat_acceleration, [](double, double, double) { return rho; }));
-    }
+    // // only in case of dynamics
+    // if (!is_quasi_static) {
+    //   auto mat_acceleration = boost::make_shared<MatrixDouble>();
+    //   pipeline_mng->getOpDomainRhsPipeline().push_back(
+    //       new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
+    //                                                         mat_acceleration));
+    //   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
+    //       "U", mat_acceleration, [](double, double, double) { return rho; }));
+    // }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -566,14 +634,20 @@ MoFEMErrorCode Example::OPs() {
       return -fe_domain_rhs->ts_t;
     };
 
+    auto time_scaled = [&](double, double, double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      return -fe_domain_rhs->ts_t;
+    };
+
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       if (it->getName().compare(0, 5, "FORCE") == 0) {
         Range force_edges;
         std::vector<double> attr_vec;
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   force_edges, true);
+        CHKERR it->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, force_edges, true);
         it->getAttributes(attr_vec);
         if (attr_vec.size() < SPACE_DIM)
           SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
@@ -582,29 +656,9 @@ MoFEMErrorCode Example::OPs() {
         auto force_vec_ptr = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
         std::copy(&attr_vec[0], &attr_vec[SPACE_DIM],
                   force_vec_ptr->data().begin());
-        // auto is_arc_length = mField.check_field("L");
-        // if (is_arc_length) {
-        //   auto dofs_ptr = mField.get_dofs();
-        //   auto lo = dofs_ptr->get<Unique_mi_tag>().lower_bound(
-        //       FieldEntity::getLoBitNumberUId(mField.get_field_bit_number("L")));
-        //   auto hi = dofs_ptr->get<Unique_mi_tag>().upper_bound(
-        //       FieldEntity::getHiBitNumberUId(mField.get_field_bit_number("L")));
-        //   if(std::distance(lo,hi)!=1) {
-        //     SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-        //              "Should be one DOF, but is %d", std::distance(lo, hi));
-        //   }
-        //   arcDof = *lo;
-        //   auto get_lambda = [&](double, double, double) {
-        //     return arcDof->getFieldData();
-        //   };
-        //   pipeline.push_back(
-        //       new OpBoundaryVec("U", force_vec_ptr, get_lambda,
-        //                         boost::make_shared<Range>(force_edges)));
-        // } else {
-          pipeline.push_back(
-              new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
-                                boost::make_shared<Range>(force_edges)));
-        // }
+        pipeline.push_back(
+            new OpBoundaryVec("U", force_vec_ptr, get_time_scaled,
+                              boost::make_shared<Range>(force_edges)));
       }
     }
 
@@ -625,27 +679,38 @@ MoFEMErrorCode Example::OPs() {
                  bc->bcAttributes.size());
       std::copy(&bc->bcAttributes[0], &bc->bcAttributes[SPACE_DIM],
                 attr_vec->data().begin());
-      pipeline.push_back(new OpBoundaryVec("U", attr_vec, get_minus_time,
-                                           bc->getBcEdgesPtr()));
+
+      pipeline.push_back(
+          new OpBoundaryVec("U", attr_vec, time_scaled, bc->getBcEdgesPtr()));
       pipeline.push_back(new OpBoundaryInternal(
           "U", u_mat_ptr, [](double, double, double) { return 1.; },
           bc->getBcEdgesPtr()));
+
       pipeline.push_back(new OpUnSetBc("U"));
     }
+
 
     MoFEMFunctionReturn(0);
   };
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
+                               commonPlasticDataPtr->perviousStepSolution);
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
+                               SmartPetscObj<Vec>());
   CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
+                               commonPlasticDataPtr->perviousStepSolution);
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
+                               SmartPetscObj<Vec>());
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order;
+    return 2 * approx_order + 2;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
@@ -654,12 +719,14 @@ MoFEMErrorCode Example::OPs() {
 
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-    pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    if (SPACE_DIM == 2) {
+      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    }
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<2>(
+    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
 
     if (is_large_strains) {
@@ -695,7 +762,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
     }
-    pipeline.push_back(new OpUnSetBc("U"));    
+    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
@@ -731,7 +798,7 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto create_post_process_element = [&]() {
     MoFEMFunctionBegin;
-    postProcFe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+    postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
     auto &pipeline = postProcFe->getOpPtrVector();
 
@@ -795,23 +862,27 @@ MoFEMErrorCode Example::tsSolve() {
 
   auto set_time_monitor = [&](auto dm, auto solver) {
     MoFEMFunctionBegin;
-    boost::shared_ptr<Monitor> monitor_ptr(
-        new Monitor(dm, postProcFe, reactionFe, uXScatter, uYScatter));
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(
+        dm, postProcFe, reactionFe, uXScatter, uYScatter, uZScatter));
     boost::shared_ptr<ForcesAndSourcesCore> null;
     CHKERR DMMoFEMTSSetMonitor(dm, solver, simple->getDomainFEName(),
                                monitor_ptr, null, null);
     MoFEMFunctionReturn(0);
   };
 
-
-  auto add_pres_step = [&](auto solver) {
+  auto add_pre_step = [&](auto solver) {
     MoFEMFunctionBegin;
     pre_step_vec = commonPlasticDataPtr->perviousStepSolution;
+    // pre_step_vec_dot = commonPlasticDataPtr->perviousStepSolutionDot;
     auto pre_step = [](TS ts) -> PetscErrorCode {
       MoFEMFunctionBeginHot;
       Vec d, v;
-      CHKERR TS2GetSolution(ts, &d, &v);
+      CHKERR TSGetSolution(ts, &d/*, &v*/);
       CHKERR VecCopy(d, pre_step_vec);
+      CHKERR VecGhostUpdateBegin(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecGhostUpdateEnd(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
+
+      // CHKERR VecCopy(v, pre_step_vec_dot);
       MoFEMFunctionReturnHot(0);
     };
     CHKERR TSSetPreStep(solver, pre_step);
@@ -823,8 +894,8 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR create_post_process_element();
   uXScatter = scatter_create(D, 0);
   uYScatter = scatter_create(D, 1);
-  // if (SPACE_DIM == 3)
-  //   uZScatter = scatter_create(D, 2);
+  if (SPACE_DIM == 3)
+    uZScatter = scatter_create(D, 2);
 
   if (is_quasi_static) {
     auto solver = pipeline_mng->createTS();
@@ -832,7 +903,8 @@ MoFEMErrorCode Example::tsSolve() {
     CHKERR TSSetSolution(solver, D);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
-    CHKERR add_pres_step(solver);
+    CHKERR add_pre_step(solver);
+    CHKERR TSSetSolution(solver, D);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
@@ -844,7 +916,8 @@ MoFEMErrorCode Example::tsSolve() {
     CHKERR TS2SetSolution(solver, D, DD);
     CHKERR set_section_monitor(solver);
     CHKERR set_time_monitor(dm, solver);
-    CHKERR add_pres_step(solver);
+    CHKERR add_pre_step(solver);
+    CHKERR TS2SetSolution(solver, D, DD);
     CHKERR TSSetFromOptions(solver);
     CHKERR TSSetUp(solver);
     CHKERR TSSolve(solver, NULL);
@@ -908,7 +981,7 @@ int main(int argc, char *argv[]) {
     //! [Load mesh]
     Simple *simple = m_field.getInterface<Simple>();
     CHKERR simple->getOptions();
-    CHKERR simple->loadFile("");
+    CHKERR simple->loadFile();
     //! [Load mesh]
 
     //! [Example]
