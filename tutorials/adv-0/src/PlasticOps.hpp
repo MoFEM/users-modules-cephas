@@ -64,6 +64,8 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   VectorDouble plasticTauDot;
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
+  
+  MatrixDouble dualBaseMat;
 
   SmartPetscObj<Vec> perviousStepSolution;
   MatrixDouble plasticStrain0;
