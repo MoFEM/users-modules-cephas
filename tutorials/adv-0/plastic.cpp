@@ -109,7 +109,7 @@ double Qinf = 265;
 double b_iso = 16.93;
 double delta = std::numeric_limits<double>::epsilon();
 int order = 2;
-double theta_flow = 0.;
+double theta_flow = 1.;
 
 static Vec pre_step_vec;
 
@@ -710,7 +710,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 2;
+    return 2 * approx_order + 1;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
