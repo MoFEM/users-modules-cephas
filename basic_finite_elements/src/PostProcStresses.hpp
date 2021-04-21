@@ -214,13 +214,13 @@ struct PostCellProcStress
   const bool replaceNonANumberByMaxValue;
   const double maxVal;
   const bool printCauchy;
-  // MatrixDouble &mwlsStresses;
+  MatrixDouble &mwlsStresses;
 
   PostCellProcStress(moab::Interface &post_proc_mesh,
                  const std::string field_name,
                  NonlinearElasticElement::BlockData &data,
                  NonlinearElasticElement::CommonData &common_data,
-                // MatrixDouble &mwls_stresses,
+                MatrixDouble &mwls_stresses,
                  const bool field_disp = false,
                  const bool replace_nonanumber_by_max_value = false,
                  const double max_val = 1e16,
@@ -230,7 +230,7 @@ struct PostCellProcStress
         outMesh(post_proc_mesh), dAta(data),
         commonData(common_data), fieldDisp(field_disp),
         replaceNonANumberByMaxValue(replace_nonanumber_by_max_value),
-        maxVal(max_val), printCauchy(print_cauchy_stress)/*, mwlsStresses(mwls_stresses)*/ {}
+        maxVal(max_val), printCauchy(print_cauchy_stress), mwlsStresses(mwls_stresses) {}
 
   NonlinearElasticElement::CommonData nonLinearElementCommonData;
 
@@ -266,13 +266,25 @@ struct PostCellProcStress
     //   CHKERR outMesh.tag_set_data(th_id, &*tit, 1, &id);
     // }
 
+    // Tag th_help;
+    // CHKERR outMesh.tag_get_handle("MED_SIEFELGA",
+    //                                            th_help);
+
+    // VectorDouble approx_stresses(9);
+    // // CHKERR outMesh.tag_get_data(th_help, ent, &*approx_stresses.begin());
+    // CHKERR outMesh.tag_get_data(th_help, &ent, 9,
+    //                                      &*approx_stresses.begin());
+
+    // cerr << " approx_stresses  " << approx_stresses(0)<< "   " << approx_stresses(1)<< "  "<< approx_stresses(2) <<"\n";
+    // cerr << " mwlsStresses  " << mwlsStresses(0,0)<< "   " << mwlsStresses(1,1)<< "  "<< mwlsStresses(2, 2) <<"\n";
+
     string tag_name_piola1 = "MED_" + dof_ptr->getName() + "_PIOLA1_STRESS";
     string tag_name_energy = dof_ptr->getName() + "_ENERGY_DENSITY";
 
     int tag_length = 9;
     double def_VAL[tag_length];
     bzero(def_VAL, tag_length * sizeof(double));
-    Tag th_piola1, th_energy, th_cauchy;
+    Tag th_piola1, th_energy, th_cauchy, th_actual, th_approx;
     CHKERR outMesh.tag_get_handle(tag_name_piola1.c_str(), tag_length,
                                        MB_TYPE_DOUBLE, th_piola1,
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
@@ -285,6 +297,16 @@ struct PostCellProcStress
       CHKERR outMesh.tag_get_handle(tag_name_cauchy.c_str(), tag_length,
                                          MB_TYPE_DOUBLE, th_cauchy,
                                          MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+      string tag_name_actual = "MED_" + dof_ptr->getName() + "_ACTUAL_STRESS";
+      CHKERR outMesh.tag_get_handle(tag_name_actual.c_str(), tag_length,
+                                    MB_TYPE_DOUBLE, th_actual,
+                                    MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+      string tag_name_approx = "MED_" + dof_ptr->getName() + "_APPROX_STRESS";
+      CHKERR outMesh.tag_get_handle(tag_name_approx.c_str(), tag_length,
+                                    MB_TYPE_DOUBLE, th_approx,
+                                    MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
     }
 
     int nb_gauss_pts = data.getN().size1();
@@ -333,6 +355,12 @@ struct PostCellProcStress
   //     &piola_stress_data(2, 0), &piola_stress_data(2, 1),
   //     &piola_stress_data(2, 2));
   auto t_w = getFTensor0IntegrationWeight();
+
+
+  VectorDouble vec_approx;
+  vec_approx.resize(9, false);
+  vec_approx.clear();
+
   for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
     // const double weight = getGaussPts()(3, gg);
@@ -365,7 +393,7 @@ struct PostCellProcStress
         dAta, getNumeredEntFiniteElementPtr());
     piola_stress_data += dAta.materialDoublePtr->P * t_w;
     //t_piola(i, j) += t_w * t_stress(i, j);
-cerr << " \n\n ########\n\n";
+// cerr << " \n\n ########\n\n";
     // piola_stress_data(0, 0) += t_w * stress(0, gg);
     // piola_stress_data(1, 1) += t_w * stress(1, gg);
     // piola_stress_data(2, 2) += t_w * stress(2, gg);
@@ -388,6 +416,14 @@ cerr << " \n\n ########\n\n";
       //     th_cauchy, &mapGaussPts[gg], 1,
       //     &dAta.materialDoublePtr->sigmaCauchy(0, 0));
     }
+
+    vec_approx[0] += t_w * mwlsStresses(0, gg);
+    vec_approx[1] += t_w * mwlsStresses(1, gg);
+    vec_approx[2] += t_w * mwlsStresses(2, gg);
+    vec_approx[3] += t_w * mwlsStresses(3, gg);
+    vec_approx[4] += t_w * mwlsStresses(4, gg);
+    vec_approx[5] += t_w * mwlsStresses(5, gg);
+
     ++t_w;
     }
 
@@ -415,7 +451,7 @@ cerr << " \n\n ########\n\n";
         vec_piola1_stress_integrated[5] += piola_stress_data(1, 2);
 
 
-cerr << "vec_piola1_stress_integrated " << vec_piola1_stress_integrated << endl;
+// cerr << "vec_piola1_stress_integrated " << vec_piola1_stress_integrated << endl;
     CHKERR outMesh.tag_set_data(
         th_piola1, &ent, 1,
         &*vec_piola1_stress_integrated.begin());
@@ -423,6 +459,27 @@ cerr << "vec_piola1_stress_integrated " << vec_piola1_stress_integrated << endl;
     CHKERR outMesh.tag_set_data(
         th_cauchy, &ent, 1,
         &*vec_cauchy_stress_integrated.begin());
+
+  
+
+    VectorDouble vec_actual;
+    vec_actual.resize(9, false);
+    vec_actual.clear();
+
+    vec_actual[0] += vec_cauchy_stress_integrated[0] - vec_approx[0];
+    vec_actual[1] += vec_cauchy_stress_integrated[1] - vec_approx[1];
+    vec_actual[2] += vec_cauchy_stress_integrated[2] - vec_approx[2];
+    vec_actual[3] += vec_cauchy_stress_integrated[3] - vec_approx[0];
+    vec_actual[4] += vec_cauchy_stress_integrated[4] - vec_approx[0];
+    vec_actual[5] += vec_cauchy_stress_integrated[5] - vec_approx[1];
+
+    CHKERR outMesh.tag_set_data(th_actual, &ent, 1,
+                                &*vec_actual.begin());
+
+    
+
+    CHKERR outMesh.tag_set_data(th_approx, &ent, 1,
+                                &*vec_approx.begin());
 
     // cerr << "Stresses   " << c_stress_data(0, 0) << " " << c_stress_data(0, 1)
     //      << " " << c_stress_data(0, 2) << " " << c_stress_data(1, 0) << " "
