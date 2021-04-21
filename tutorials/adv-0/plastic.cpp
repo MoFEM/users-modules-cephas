@@ -58,6 +58,8 @@ using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
 
+using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
+
 //! [Body force]
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, SPACE_DIM>;
@@ -439,6 +441,9 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+
+    pipeline.push_back(new OpScaleL2(L2));
+
     if (SPACE_DIM == 2) {
       pipeline.push_back(new OpCalculateInvJacForFace(invJac));
       pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
@@ -800,6 +805,8 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
+
+    postProcFe->getOpPtrVector().push_back(new OpScaleL2(L2));
     if (SPACE_DIM == 2) {
       postProcFe->getOpPtrVector().push_back(
           new OpCalculateInvJacForFace(invJac));
