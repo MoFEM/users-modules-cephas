@@ -541,7 +541,7 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 
 <tr style="width:100%">
 <th style="width:50%">Oparator 
-<th style="width:50%>\hiderefs Usage 
+<th style="width:50%">\hiderefs Usage 
 <tr>
 
 <td>
