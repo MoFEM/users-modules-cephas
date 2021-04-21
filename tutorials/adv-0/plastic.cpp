@@ -94,9 +94,11 @@ using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
 using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Essential boundary conditions]
+using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
 PetscBool is_quasi_static = PETSC_FALSE;
 PetscBool is_large_strains = PETSC_TRUE;
+PetscBool is_dual_base = PETSC_TRUE;
 
 double scale = 1.;
 
@@ -118,6 +120,7 @@ static Vec pre_step_vec;
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>
+#include <DualBase.hpp>
 
 using namespace PlasticOps;
 using namespace HenckyOps;
@@ -227,6 +230,8 @@ MoFEMErrorCode Example::createCommonData() {
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-dual_base",
+                               &is_dual_base, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
                                &is_quasi_static, PETSC_NULL);
 
@@ -449,6 +454,9 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
     }
 
+    if (is_dual_base)
+      pipeline.push_back(new OpScaleL2(L2));
+
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
@@ -512,6 +520,12 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    if (is_dual_base) {
+      pipeline.push_back(
+          new DualBaseOps::OpSetDualBase("EP", "EP", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpSetDualBase("TAU", "TAU", commonPlasticDataPtr));
+    }
 
     if (is_large_strains) {
       pipeline.push_back(
@@ -544,6 +558,13 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateContrainsLhs_dEP("TAU", "EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
+
+    if (is_dual_base) {
+      pipeline.push_back(
+          new DualBaseOps::OpUnsetDualBase("EP", "EP", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpUnsetDualBase("TAU", "TAU", commonPlasticDataPtr));
+    }
 
     // if (!is_quasi_static) {
     //   // Get pointer to U_tt shift in domain element
@@ -587,10 +608,24 @@ MoFEMErrorCode Example::OPs() {
           new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
     }
 
+    if (is_dual_base) {
+      pipeline.push_back(
+          new DualBaseOps::OpSetDualBase("EP", "EP", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpSetDualBase("TAU", "TAU", commonPlasticDataPtr));
+    }
+
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
+
+    if (is_dual_base) {
+      pipeline.push_back(
+          new DualBaseOps::OpUnsetDualBase("EP", "EP", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpUnsetDualBase("TAU", "TAU", commonPlasticDataPtr));
+    }
 
     // // only in case of dynamics
     // if (!is_quasi_static) {
