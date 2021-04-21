@@ -444,13 +444,13 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+    if (is_dual_base)
+      pipeline.push_back(new OpScaleL2(L2));
+
     if (SPACE_DIM == 2) {
       pipeline.push_back(new OpCalculateInvJacForFace(invJac));
       pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
     }
-
-    if (is_dual_base)
-      pipeline.push_back(new OpScaleL2(L2));
 
     pipeline.push_back(new OpCalculateScalarFieldValuesDot(
         "TAU", commonPlasticDataPtr->getPlasticTauDotPtr()));
@@ -817,6 +817,8 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
+    if(is_dual_base)
+      postProcFe->getOpPtrVector().push_back(new OpScaleL2(L2));
     if (SPACE_DIM == 2) {
       postProcFe->getOpPtrVector().push_back(
           new OpCalculateInvJacForFace(invJac));
