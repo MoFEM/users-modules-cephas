@@ -106,6 +106,7 @@ set(TUTORIALS_DIRS
   cor-8
   cor-9
   cor-10
+  cor-11
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})

@@ -1,0 +1,24 @@
+Check before run
+================
+
+* Check where is your mesh file
+* Check what version of openmpi (or other MPI library) are you using
+
+First partition mesh (in this case it is partitioned in two: -my_nparts 2)
+==========================================================================
+
+../../tools/mofem_part -my_file simple_elasticity.h5m -output_file simple_elasticity_2part.h5m -my_nparts 2 -dim 3 -adj_dim 0
+
+Example Static (simple_elastcity)
+==========================
+
+mpirun -np 2 ./simple_elasticity -file_name simple_elasticity_2part.h5m -my_order 2
+
+
+Parameters set by default from param_file.petsc file
+============================
+
+-ksp_type fgmres 
+-pc_type lu 
+-pc_factor_mat_solver_package mumps 
+-ksp_monitor
