@@ -435,20 +435,20 @@ struct PostCellProcStress
       vec_piola1_stress_integrated.resize(9, false);
       vec_piola1_stress_integrated.clear();
 
-        vec_cauchy_stress_integrated[0] += c_stress_data(0, 0);
-        vec_cauchy_stress_integrated[1] += c_stress_data(1, 1);
-        vec_cauchy_stress_integrated[2] += c_stress_data(2, 2);
-        vec_cauchy_stress_integrated[3] += c_stress_data(0, 1);
-        vec_cauchy_stress_integrated[4] += c_stress_data(0, 2);
-        vec_cauchy_stress_integrated[5] += c_stress_data(1, 2);
+        vec_cauchy_stress_integrated[0] = c_stress_data(0, 0);
+        vec_cauchy_stress_integrated[1] = c_stress_data(1, 1);
+        vec_cauchy_stress_integrated[2] = c_stress_data(2, 2);
+        vec_cauchy_stress_integrated[3] = c_stress_data(0, 1);
+        vec_cauchy_stress_integrated[4] = c_stress_data(0, 2);
+        vec_cauchy_stress_integrated[5] = c_stress_data(1, 2);
 
 
-        vec_piola1_stress_integrated[0] += piola_stress_data(0, 0);
-        vec_piola1_stress_integrated[1] += piola_stress_data(1, 1);
-        vec_piola1_stress_integrated[2] += piola_stress_data(2, 2);
-        vec_piola1_stress_integrated[3] += piola_stress_data(0, 1);
-        vec_piola1_stress_integrated[4] += piola_stress_data(0, 2);
-        vec_piola1_stress_integrated[5] += piola_stress_data(1, 2);
+        vec_piola1_stress_integrated[0] = piola_stress_data(0, 0);
+        vec_piola1_stress_integrated[1] = piola_stress_data(1, 1);
+        vec_piola1_stress_integrated[2] = piola_stress_data(2, 2);
+        vec_piola1_stress_integrated[3] = piola_stress_data(0, 1);
+        vec_piola1_stress_integrated[4] = piola_stress_data(0, 2);
+        vec_piola1_stress_integrated[5] = piola_stress_data(1, 2);
 
 
 // cerr << "vec_piola1_stress_integrated " << vec_piola1_stress_integrated << endl;
@@ -460,23 +460,19 @@ struct PostCellProcStress
         th_cauchy, &ent, 1,
         &*vec_cauchy_stress_integrated.begin());
 
-  
-
     VectorDouble vec_actual;
     vec_actual.resize(9, false);
     vec_actual.clear();
 
-    vec_actual[0] += vec_cauchy_stress_integrated[0] - vec_approx[0];
-    vec_actual[1] += vec_cauchy_stress_integrated[1] - vec_approx[1];
-    vec_actual[2] += vec_cauchy_stress_integrated[2] - vec_approx[2];
-    vec_actual[3] += vec_cauchy_stress_integrated[3] - vec_approx[0];
-    vec_actual[4] += vec_cauchy_stress_integrated[4] - vec_approx[0];
-    vec_actual[5] += vec_cauchy_stress_integrated[5] - vec_approx[1];
+    vec_actual[0] = vec_piola1_stress_integrated[0] + vec_approx[0];
+    vec_actual[1] = vec_piola1_stress_integrated[1] + vec_approx[1];
+    vec_actual[2] = vec_piola1_stress_integrated[2] + vec_approx[2];
+    vec_actual[3] = vec_piola1_stress_integrated[3] + vec_approx[3];
+    vec_actual[4] = vec_piola1_stress_integrated[4] + vec_approx[4];
+    vec_actual[5] = vec_piola1_stress_integrated[5] + vec_approx[5];
 
     CHKERR outMesh.tag_set_data(th_actual, &ent, 1,
                                 &*vec_actual.begin());
-
-    
 
     CHKERR outMesh.tag_set_data(th_approx, &ent, 1,
                                 &*vec_approx.begin());
