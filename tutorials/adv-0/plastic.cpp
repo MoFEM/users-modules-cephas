@@ -517,8 +517,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     
     if (is_dual_base)
-      pipeline.push_back(new DualBaseOps::OpCalculateDualBase(
-          "TAU", "TAU", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpCalculateDualBase("TAU", commonPlasticDataPtr));
 
     if (is_large_strains) {
       pipeline.push_back(
@@ -595,14 +595,22 @@ MoFEMErrorCode Example::OPs() {
           new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
     }
 
-    if (is_dual_base)
+    if (is_dual_base) {
       pipeline.push_back(new DualBaseOps::OpCalculateDualBase(
-          "TAU", "TAU", commonPlasticDataPtr));
+          "TAU", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpDualSwap("TAU", commonPlasticDataPtr));
+    }
 
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
+
+    if (is_dual_base) {
+      pipeline.push_back(
+          new DualBaseOps::OpDualSwap("TAU", commonPlasticDataPtr));
+    }
 
     // // only in case of dynamics
     // if (!is_quasi_static) {
