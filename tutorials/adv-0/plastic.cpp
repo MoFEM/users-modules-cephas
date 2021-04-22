@@ -226,6 +226,9 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
 
+
+    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-theta_flow", &theta_flow,
+                                 PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-dual_base",
@@ -240,6 +243,7 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
+    MOFEM_LOG("EXAMPLE", Sev::inform) << "Theta flow " << theta_flow;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
@@ -735,7 +739,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 4;
+    return 2 * approx_order + 2;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);

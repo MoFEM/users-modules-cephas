@@ -481,23 +481,23 @@ inline auto diff_plastic_flow_dstrain(
 };
 
 inline double constrain_abs(long double x) {
-  return std::sqrt(std::pow(x, 2) + 4 * std::pow(delta, 2));
-  // return std::abs(x);
+  // return std::sqrt(std::pow(x, 2) + 4 * std::pow(delta, 2));
+  return std::abs(x);
 };
 
 inline double constrian_sign(long double x) {
-  // if (x > 0)
-  //   return 1;
-  // else if (x < 0)
-  //   return -1;
-  // else
-  //   return 0;
+  if (x > 0)
+    return 1;
+  else if (x < 0)
+    return -1;
+  else
+    return 0;
   return x / constrain_abs(x);
 };
 
 inline double constrian_sign2(long double x) {
   // return 0;
-  return -(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
+  return 0;//-(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
 };
 
 inline double w(long double dot_tau, long double f, long double sigma_y) {
