@@ -1481,8 +1481,7 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
       }
     };
 
-    auto t_row_base = row_data.getFTensor0N();
-
+    auto t_row_base = get_row_base();
 
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
