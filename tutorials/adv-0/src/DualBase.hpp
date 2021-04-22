@@ -38,7 +38,7 @@ struct OpCalculateDualBase : public DomainEleOp {
 
       auto t_row_base = data.getFTensor0N();
       for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
-        const double alpha = getMeasure() * t_w;
+        const double alpha = /*getMeasure() **/ t_w;
 
         noalias(A) += t_w * outer_prod(data.getN(gg, nb_row),
                                        data.getN(gg, nb_row));

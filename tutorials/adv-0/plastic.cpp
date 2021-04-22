@@ -572,19 +572,19 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-    // auto get_body_force = [this](const double, const double, const double) {
-    //   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    //   FTensor::Index<'i', SPACE_DIM> i;
-    //   FTensor::Tensor1<double, SPACE_DIM> t_source;
-    //   auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-    //   const auto time = fe_domain_rhs->ts_t;
-    //   // hardcoded gravity load
-    //   t_source(i) = 0;
-    //   t_source(2) = (-5e+7 * scale) * time;
-    //   return t_source;
-    // };
+    auto get_body_force = [this](const double, const double, const double) {
+      auto *pipeline_mng = mField.getInterface<PipelineManager>();
+      FTensor::Index<'i', SPACE_DIM> i;
+      FTensor::Tensor1<double, SPACE_DIM> t_source;
+      auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+      const auto time = fe_domain_rhs->ts_t;
+      // hardcoded gravity load
+      t_source(i) = 0;
+      t_source(1) = (-5e+7 * scale) * time;
+      return t_source;
+    };
 
-    // pipeline.push_back(new OpBodyForce("U", get_body_force));
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
     if (is_large_strains) {
@@ -735,7 +735,7 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 1;
+    return 2 * approx_order + 4;
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
