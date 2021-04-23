@@ -588,7 +588,7 @@ MoFEMErrorCode Example::OPs() {
       return t_source;
     };
 
-    pipeline.push_back(new OpBodyForce("U", get_body_force));
+    // pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
     if (is_large_strains) {
