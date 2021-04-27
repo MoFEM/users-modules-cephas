@@ -313,21 +313,21 @@ inline auto diff_tensor() {
 
 inline auto symm_L_tensor() {
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
-  FTensor::Dg<double, SPACE_DIM, size_symm> L;
-  L(i, j, k) = 0;
+  FTensor::Dg<double, SPACE_DIM, size_symm> t_L;
+  t_L(i, j, L) = 0;
   if (SPACE_DIM == 2) {
-    L(0, 0, 0) = 1;
-    L(1, 0, 1) = 1;
-    L(1, 1, 2) = 1;
+    t_L(0, 0, 0) = 1;
+    t_L(1, 0, 1) = 1;
+    t_L(1, 1, 2) = 1;
   } else if (SPACE_DIM == 3) {
-    L(0, 0, 0) = 1;
-    L(1, 0, 1) = 1;
-    L(2, 0, 2) = 1;
-    L(1, 1, 3) = 1;
-    L(2, 1, 4) = 1;
-    L(2, 2, 5) = 1;
+    t_L(0, 0, 0) = 1;
+    t_L(1, 0, 1) = 1;
+    t_L(2, 0, 2) = 1;
+    t_L(1, 1, 3) = 1;
+    t_L(2, 1, 4) = 1;
+    t_L(2, 2, 5) = 1;
   }
-  return L;
+  return t_L;
 }
 
 inline auto diff_symmetrize() {
@@ -413,11 +413,11 @@ diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
   return t_diff_deviator;
 };
 
-inline auto hardening(long double tau) {
+inline long double hardening(long double tau) {
   return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
 }
 
-inline auto hardening_dtau(long double tau) {
+inline long double hardening_dtau(long double tau) {
   return H + Qinf * b_iso * std::exp(-b_iso * tau);
 }
 
@@ -455,7 +455,7 @@ inline auto plastic_flow(long double f,
                          FTensor::Ddg<double, 3, SPACE_DIM> &&t_diff_deviator) {
   FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_f;
   t_diff_f(k, l) =
-      (1.5 / f) * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l));
+      (1.5 * (t_dev_stress(I, J) * t_diff_deviator(I, J, k, l))) / f;
   return t_diff_f;
 };
 
@@ -465,8 +465,9 @@ inline auto diff_plastic_flow_dstress(
     FTensor::Ddg<double, 3, SPACE_DIM> &&t_diff_deviator) {
   FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_diff_flow;
   t_diff_flow(i, j, k, l) =
-      (1.5 / f) * (t_diff_deviator(M, N, i, j) * t_diff_deviator(M, N, k, l) -
-                   (2. / 3.) * t_flow(i, j) * t_flow(k, l));
+      (1.5 * (t_diff_deviator(M, N, i, j) * t_diff_deviator(M, N, k, l) -
+              (2. / 3.) * t_flow(i, j) * t_flow(k, l))) /
+      f;
   return t_diff_flow;
 };
 
@@ -492,7 +493,7 @@ inline double constrian_sign(long double x) {
     return -1;
   else
     return 0;
-  return x / constrain_abs(x);
+  // return x / constrain_abs(x);
 };
 
 inline double constrian_sign2(long double x) {
