@@ -828,8 +828,13 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
 
-    PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
-    CHKERR moab.write_file(output_mesh_name, "MOAB", "PARALLEL=WRITE_PART");
+    const int n_parts = m_field.get_comm_size();
+    if (m_field.get_comm_rank() == 0) {
+      CHKERR DMoFEMLoopFiniteElementsUpAndLowRank(
+          dm, "ELASTIC", fe_elastic_rhs_ptr, 0, n_parts);
+      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
+      CHKERR moab.write_file(output_mesh_name, "MOAB", "PARALLEL=WRITE_PART");
+    }
 
     auto get_tag_handle = [&](auto name, auto size) {
       Tag th;
