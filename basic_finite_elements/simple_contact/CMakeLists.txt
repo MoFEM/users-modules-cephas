@@ -282,7 +282,7 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 1
-  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/test_1.cub
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/thermal/test_1.cub
   -my_order 2
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 1
@@ -296,7 +296,7 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 2
-  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/test_2.cub
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/thermal/test_2.cub
   -my_order 2
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 1

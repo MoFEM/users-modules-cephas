@@ -120,7 +120,6 @@ struct HookeElement {
       stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       energyVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       eshelbyStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      // stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
       eshelbyStress_dx = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
