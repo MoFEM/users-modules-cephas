@@ -828,12 +828,17 @@ int main(int argc, char *argv[]) {
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
 
+    // save on mesh
+    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+    CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
     const int n_parts = m_field.get_comm_size();
     if (m_field.get_comm_rank() == 0) {
       CHKERR DMoFEMLoopFiniteElementsUpAndLowRank(
           dm, "ELASTIC", fe_elastic_rhs_ptr, 0, n_parts);
       PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
-      CHKERR moab.write_file(output_mesh_name, "MOAB", "PARALLEL=WRITE_PART");
+      CHKERR moab.write_file(output_mesh_name, "MOAB");
     }
 
     auto get_tag_handle = [&](auto name, auto size) {
@@ -886,11 +891,6 @@ int main(int argc, char *argv[]) {
         }
       }
     }
-
-    // save on mesh
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     Vec v_energy;
     CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "SPATIAL_POSITION",
