@@ -20,7 +20,6 @@
  * License along with MoFEM. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <BasicFiniteElements.hpp>
 #include <HookeInternalStressElement.hpp>
 
 using namespace std;
@@ -96,17 +95,13 @@ int main(int argc, char *argv[]) {
 
     PetscReal thermal_expansion_coef = 1e-5;
     PetscReal init_temp = 250.0;
-
     PetscReal scale_factor = 1.0;
-
-    PetscBool ignore_contact = PETSC_FALSE;
-    PetscBool ignore_pressure = PETSC_FALSE;
-
     PetscBool analytical_input = PETSC_FALSE;
     char stress_tag_name[255];
     PetscBool flg_tag_name;
-
     PetscBool save_mean_stress = PETSC_FALSE;
+    PetscBool ignore_contact = PETSC_FALSE;
+    PetscBool ignore_pressure = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -162,7 +157,6 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsBool("-my_ignore_pressure",
                             "if set true, ignore pressure", "", PETSC_FALSE,
                             &ignore_pressure, PETSC_NULL);
-
     CHKERR PetscOptionsBool("-my_analytical_input",
                             "if set true, use analytical strain", "",
                             PETSC_FALSE, &analytical_input, PETSC_NULL);
@@ -172,7 +166,6 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsString("-my_stress_tag_name",
                               "stress tag name file name", "", "STRESS",
                               stress_tag_name, 255, &flg_tag_name);
-
     CHKERR PetscOptionsReal(
         "-my_thermal_expansion_coef", "thermal expansion coef ", "",
         thermal_expansion_coef, &thermal_expansion_coef, PETSC_NULL);
@@ -204,17 +197,14 @@ int main(int argc, char *argv[]) {
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
 
-    MeshsetsManager *mmanager_ptr;
-    CHKERR m_field.getInterface(mmanager_ptr);
-    CHKERR mmanager_ptr->printDisplacementSet();
-    CHKERR mmanager_ptr->printForceSet();
-    // print block sets with materials
-    CHKERR mmanager_ptr->printMaterialsSet();
+    std::vector<BitRefLevel> bit_levels;
+    bit_levels.push_back(BitRefLevel().set(0));
+    auto bit_ref_manager = m_field.getInterface<BitRefManager>();
+    CHKERR bit_ref_manager->setBitRefLevelByDim(0, 3, bit_levels.back());
 
     auto add_prism_interface = [&](std::vector<BitRefLevel> &bit_levels) {
       MoFEMFunctionBegin;
-      PrismInterface *interface;
-      CHKERR m_field.getInterface(interface);
+      auto prism_interface = m_field.getInterface<PrismInterface>();
 
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, cit)) {
         if (cit->getName().compare(0, 11, "INT_CONTACT") == 0) {
@@ -225,47 +215,39 @@ int main(int argc, char *argv[]) {
           // get tet entities from back bit_level
           EntityHandle ref_level_meshset;
           CHKERR moab.create_meshset(MESHSET_SET, ref_level_meshset);
-          CHKERR m_field.getInterface<BitRefManager>()
-              ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-                                             BitRefLevel().set(), MBTET,
-                                             ref_level_meshset);
-          CHKERR m_field.getInterface<BitRefManager>()
-              ->getEntitiesByTypeAndRefLevel(bit_levels.back(),
-                                             BitRefLevel().set(), MBPRISM,
-                                             ref_level_meshset);
+          CHKERR bit_ref_manager->getEntitiesByTypeAndRefLevel(
+              bit_levels.back(), BitRefLevel().set(), MBTET, ref_level_meshset);
+          CHKERR bit_ref_manager->getEntitiesByTypeAndRefLevel(
+              bit_levels.back(), BitRefLevel().set(), MBPRISM,
+              ref_level_meshset);
 
           // get faces and tets to split
-          CHKERR interface->getSides(cubit_meshset, bit_levels.back(), true, 0);
+          CHKERR prism_interface->getSides(cubit_meshset, bit_levels.back(),
+                                           true, 0);
           // set new bit level
           bit_levels.push_back(BitRefLevel().set(bit_levels.size()));
           // split faces and tets
-          CHKERR interface->splitSides(ref_level_meshset, bit_levels.back(),
-                                       cubit_meshset, true, true, 0);
+          CHKERR prism_interface->splitSides(ref_level_meshset,
+                                             bit_levels.back(), cubit_meshset,
+                                             true, true, 0);
           // clean meshsets
           CHKERR moab.delete_entities(&ref_level_meshset, 1);
 
           // update cubit meshsets
           for (_IT_CUBITMESHSETS_FOR_LOOP_(m_field, ciit)) {
             EntityHandle cubit_meshset = ciit->meshset;
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->updateMeshsetByEntitiesChildren(
-                    cubit_meshset, bit_levels.back(), cubit_meshset, MBVERTEX,
-                    true);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->updateMeshsetByEntitiesChildren(cubit_meshset,
-                                                  bit_levels.back(),
-                                                  cubit_meshset, MBEDGE, true);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->updateMeshsetByEntitiesChildren(cubit_meshset,
-                                                  bit_levels.back(),
-                                                  cubit_meshset, MBTRI, true);
-            CHKERR m_field.getInterface<BitRefManager>()
-                ->updateMeshsetByEntitiesChildren(cubit_meshset,
-                                                  bit_levels.back(),
-                                                  cubit_meshset, MBTET, true);
+            CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+                cubit_meshset, bit_levels.back(), cubit_meshset, MBVERTEX,
+                true);
+            CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+                cubit_meshset, bit_levels.back(), cubit_meshset, MBEDGE, true);
+            CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+                cubit_meshset, bit_levels.back(), cubit_meshset, MBTRI, true);
+            CHKERR bit_ref_manager->updateMeshsetByEntitiesChildren(
+                cubit_meshset, bit_levels.back(), cubit_meshset, MBTET, true);
           }
 
-          CHKERR m_field.getInterface<BitRefManager>()->shiftRightBitRef(1);
+          CHKERR bit_ref_manager->shiftRightBitRef(1);
           bit_levels.pop_back();
         }
       }
@@ -280,9 +262,8 @@ int main(int argc, char *argv[]) {
 
       EntityHandle meshset_prisms;
       CHKERR moab.create_meshset(MESHSET_SET, meshset_prisms);
-      CHKERR m_field.getInterface<BitRefManager>()
-          ->getEntitiesByTypeAndRefLevel(bit_levels.back(), BitRefLevel().set(),
-                                         MBPRISM, meshset_prisms);
+      CHKERR bit_ref_manager->getEntitiesByTypeAndRefLevel(
+          bit_levels.back(), BitRefLevel().set(), MBPRISM, meshset_prisms);
       CHKERR moab.get_entities_by_handle(meshset_prisms, contact_prisms);
       CHKERR moab.delete_entities(&meshset_prisms, 1);
 
@@ -298,44 +279,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionReturn(0);
     };
 
-    auto set_contact_order = [&](Range &contact_prisms, int order_contact,
-                                 int nb_ho_levels) {
-      MoFEMFunctionBegin;
-      Range contact_tris, contact_edges;
-      CHKERR moab.get_adjacencies(contact_prisms, 2, false, contact_tris,
-                                  moab::Interface::UNION);
-      contact_tris = contact_tris.subset_by_type(MBTRI);
-      CHKERR moab.get_adjacencies(contact_tris, 1, false, contact_edges,
-                                  moab::Interface::UNION);
-      Range ho_ents;
-      ho_ents.merge(contact_tris);
-      ho_ents.merge(contact_edges);
-      for (int ll = 0; ll < nb_ho_levels; ll++) {
-        Range ents, verts, tets;
-        CHKERR moab.get_connectivity(ho_ents, verts, true);
-        CHKERR moab.get_adjacencies(verts, 3, false, tets,
-                                    moab::Interface::UNION);
-        tets = tets.subset_by_type(MBTET);
-        for (auto d : {1, 2}) {
-          CHKERR moab.get_adjacencies(tets, d, false, ents,
-                                      moab::Interface::UNION);
-        }
-        ho_ents = unite(ho_ents, ents);
-        ho_ents = unite(ho_ents, tets);
-      }
-
-      CHKERR m_field.set_field_order(ho_ents, "SPATIAL_POSITION",
-                                     order_contact);
-
-      MoFEMFunctionReturn(0);
-    };
-
     Range contact_prisms, master_tris, slave_tris;
-    std::vector<BitRefLevel> bit_levels;
-
-    bit_levels.push_back(BitRefLevel().set(0));
-    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(
-        0, 3, bit_levels.back());
 
     if (!ignore_contact) {
       CHKERR add_prism_interface(bit_levels);
@@ -369,6 +313,38 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBEDGE, "LAGMULT", order_lambda);
     CHKERR m_field.set_field_order(0, MBVERTEX, "LAGMULT", 1);
+
+    auto set_contact_order = [&](Range &contact_prisms, int order_contact,
+                                 int nb_ho_levels) {
+      MoFEMFunctionBegin;
+      Range contact_tris, contact_edges;
+      CHKERR moab.get_adjacencies(contact_prisms, 2, false, contact_tris,
+                                  moab::Interface::UNION);
+      contact_tris = contact_tris.subset_by_type(MBTRI);
+      CHKERR moab.get_adjacencies(contact_tris, 1, false, contact_edges,
+                                  moab::Interface::UNION);
+      Range ho_ents;
+      ho_ents.merge(contact_tris);
+      ho_ents.merge(contact_edges);
+      for (int ll = 0; ll < nb_ho_levels; ll++) {
+        Range ents, verts, tets;
+        CHKERR moab.get_connectivity(ho_ents, verts, true);
+        CHKERR moab.get_adjacencies(verts, 3, false, tets,
+                                    moab::Interface::UNION);
+        tets = tets.subset_by_type(MBTET);
+        for (auto d : {1, 2}) {
+          CHKERR moab.get_adjacencies(tets, d, false, ents,
+                                      moab::Interface::UNION);
+        }
+        ho_ents = unite(ho_ents, ents);
+        ho_ents = unite(ho_ents, tets);
+      }
+
+      CHKERR m_field.set_field_order(ho_ents, "SPATIAL_POSITION",
+                                     order_contact);
+
+      MoFEMFunctionReturn(0);
+    };
 
     if (!ignore_contact && order_contact > order) {
       CHKERR set_contact_order(contact_prisms, order_contact, nb_ho_levels);
