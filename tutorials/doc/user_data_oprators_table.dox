@@ -28,7 +28,9 @@ formats could be added and implemented.
 <table>
 <caption id="user_data_ops_table">Table of user data operators</caption>
 
-<tr><th>Oparator <th> \hiderefs Usage 
+<tr style="width:100%">
+<th style="width:50%">Oparator 
+<th style="width:50%">\hiderefs Usage 
 <tr>
 
 <td colspan="2">
@@ -322,9 +324,12 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 <table>
 <caption id="user_other_ops_table">Table of other operators</caption>
 
+<tr style="width:100%">
+<th style="width:50%">Oparator 
+<th style="width:50%">\hiderefs Usage 
 <tr>
-<th>Oparator <th> \hiderefs Usage 
-<tr>
+
+<td colspan="2"> <b>Face operators</b> <tr>
 
 <td>
 Calualte jacobian inverse jacobian on face. See
@@ -497,6 +502,34 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 
 <tr>
 
+<td colspan="2">
+<b>Generic operators</b>
+<tr>
+
+<td>
+
+Scale base (default L2) functions by inverses of measure of element
+\ref MoFEM::OpScaleBaseBySpaceInverseOfMeasure
+
+Scale base
+\f[
+\overline{\phi}^m  = \frac{1}{\mu(\Omega^e)} \phi^m
+\f]
+where \f$\mu(\Omega^e)\f$ is length, area or volume, depending on dimension of the finite elemen entitiy. Note that function scales also base function direvatives.
+
+<td>
+
+Call that functions at front of the operators, before you evaluate field on givne space, i.e. L2 space.
+
+Example:
+\code
+using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpScaleL2());
+\endcode
+
+<tr>
+
 </table>
 
 \note User data operators are defined in file \ref UserDataOperators.hpp
@@ -506,7 +539,9 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 <table>
 <caption id="user_linear_forms_ops_table">Table of linear from operators</caption>
 
-<tr><th>Oparator <th> \hiderefs Usage 
+<tr style="width:100%">
+<th style="width:50%">Oparator 
+<th style="width:50%>\hiderefs Usage 
 <tr>
 
 <td>
@@ -575,7 +610,9 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 <table>
 <caption id="user_bilinear_forms_ops_table">Table of bilinear from operators</caption>
 
-<tr><th>Oparator <th> \hiderefs Usage 
+<tr style="width:100%">
+<th style="width:50%">Oparator 
+<th style="width:50%">\hiderefs Usage 
 <tr>
 
 <td>

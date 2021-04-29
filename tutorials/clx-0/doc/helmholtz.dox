@@ -588,8 +588,8 @@ will have to follow the steps below
 - Third, in the terminal, run commands to partition the input mesh and start
   the analysis
   \code
-  mofem_part -my_file geometry.cub -output_file part.h5m -my_nparts 2
-  mpirun -np2 ./helmholtz -file_name part.h5m -order 8 -k 180
+  mofem_part -my_file geometry.cub -output_file part.h5m -my_nparts 2 -dim 2 -adj_dim 1
+  mpirun -np 2 ./helmholtz -file_name part.h5m -order 8 -k 180
   \endcode
   where in the first line the mesh `geometry.cub` presented in \ref Figure_2_acoustics "Figure 2" generated in the open source code CUBIT is partitioned in to parts and generated
   the partitioned mesh `part.h5m` with boundaries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in \ref Figure_1_acoustics "Figure 1". In the second line, program is run using two processors (the same number of partitions) with

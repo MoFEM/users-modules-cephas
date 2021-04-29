@@ -12,15 +12,6 @@
 
 \tableofcontents
 
-\section running_pluto_jupyter Running Jupyter notebook
-
-First follow instruction here \ref docker_jupyterhub. Then select file in 
-\em um_views/tutorial/scl-8/pluto.ipynb
-
-\section theory_pluto Jupyter notebook
-
-\htmlinclude jupyter_pluto.html
-
 \section source_pluto Source code
 
 \include radiation.cpp

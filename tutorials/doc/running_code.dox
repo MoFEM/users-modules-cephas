@@ -20,6 +20,26 @@
 
 </table>
 
+\section running_colab Running code in Google Colab
+
+<table style="width:100%">
+
+  <tr valign="top">
+        <td width="350px">COLAB-1: <a href="https://colab.research.google.com/drive/1eWtsHPa0eKr8VNhFJh5fnMPXh5b7iF6Y?usp=sharing">Poisson problem</a></td>
+        <td> Google Colab
+        <br/> *Keywords:* SCL-1 tutorial, Poisson's problem
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">COLAB-2: <a href="https://colab.research.google.com/drive/19Rt-alLKp1GgDqpi1ejQ79T3ERAbbP8R?usp=sharing">Hemholtz problem</a></td>
+        <td> Google Colab
+        <br/> *Keywords:* CLX-0 tutorial, Hemholtz probem
+        </td>
+  </tr>
+
+</table>
+
 \section running_jupyter Running code in Jupyter notebook
 
 <table style="width:100%">
@@ -27,21 +47,21 @@
   <tr valign="top">
         <td width="350px">JUP-1: \subpage jup_tutorial_eigen_elastic</td>
         <td> Jupyter notebook
-        <br/> *Keywords:* Eiegn analysis 
+        <br/> *Keywords:* VEC-1 tutorial, eiegn analysis 
         </td>
   </tr>
 
   <tr valign="top">
         <td width="350px">JUP-2: \subpage jup_radiation_pluto</td>
         <td> Jupyter notebook
-        <br/> *Keywords:* Time solver, nonlinear
+        <br/> *Keywords:* SCL-8 tutorial, time solver, nonlinear problem
         </td>
   </tr>
 
   <tr valign="top">
         <td width="350px">JUP-3: \subpage jup_tutorial_plastic_problem</td>
         <td> Jupyter notebook
-        <br/> *Keywords:* Plasticity
+        <br/> *Keywords:* ADV-0 tutorial, plasticity
         </td>
   </tr>
 
