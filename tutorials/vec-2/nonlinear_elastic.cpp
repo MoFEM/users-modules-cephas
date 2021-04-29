@@ -1,6 +1,6 @@
 /**
- * \file dynamic_elastic.cpp
- * \example dynamic_elastic.cpp
+ * \file nonlinear_elastic.cpp
+ * \example nonlinear_elastic.cpp
  *
  * Plane stress elastic dynamic problem
  *
