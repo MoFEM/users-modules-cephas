@@ -715,7 +715,6 @@ int main(int argc, char *argv[]) {
 
     auto snes = MoFEM::createSNES(m_field.get_comm());
     CHKERR SNESSetDM(snes, dm);
-    SNESConvergedReason snes_reason;
     SnesCtx *snes_ctx;
     // create snes nonlinear solver
     {
@@ -793,20 +792,11 @@ int main(int argc, char *argv[]) {
 
       CHKERR SNESSolve(snes, PETSC_NULL, D);
 
-      CHKERR SNESGetConvergedReason(snes, &snes_reason);
-
-      int its;
-      CHKERR SNESGetIterationNumber(snes, &its);
-      CHKERR PetscPrintf(PETSC_COMM_WORLD, "Number of Newton iterations = %D\n",
-                         its);
-
       CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     }
 
     // save on mesh
-    CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
     const int n_parts = m_field.get_comm_size();
@@ -903,7 +893,6 @@ int main(int argc, char *argv[]) {
     }
 
     if (!ignore_contact) {
-
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
           "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
