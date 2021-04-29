@@ -31,7 +31,7 @@ time \f$t \in \mathbb{R}^{+}\f$.
 
 
 \anchor Figure_1_acoustics
-\image html problem_desctiption.eps "Figure 1: Schematic presentation of the acoustic transducer problem where ." width=300px
+\image html problem_desctiption.png "Figure 1: Schematic presentation of the acoustic transducer." width=300px
 
 Quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$, as presented with red line in \ref Figure_1_acoustics "Figure 1", defined as 
 
