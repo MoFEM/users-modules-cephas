@@ -46,7 +46,6 @@ function(bfe_build_and_install target source)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${BFE_MOD_DIR})
 endfunction(bfe_build_and_install)

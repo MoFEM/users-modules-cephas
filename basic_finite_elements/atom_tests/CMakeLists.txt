@@ -25,7 +25,6 @@ target_link_libraries(body_force_atom_test
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS})
 add_test(
@@ -53,7 +52,6 @@ target_link_libraries(neumann_forces_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS})
 
@@ -126,7 +124,6 @@ target_link_libraries(fluid_pressure_element_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -145,7 +142,6 @@ target_link_libraries(thermal_elem_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -164,7 +160,6 @@ target_link_libraries(thermal_elem_unsteady_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -189,7 +184,6 @@ target_link_libraries(thermal_stress_elem
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -217,7 +211,6 @@ target_link_libraries(thermal_with_analytical_bc
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 
@@ -240,7 +233,6 @@ target_link_libraries(field_approximation
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS})
 
@@ -273,7 +265,6 @@ if(ADOL-C_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
@@ -294,7 +285,6 @@ if(ADOL-C_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
@@ -330,7 +320,6 @@ if(ADOL-C_LIBRARY)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     ${MoFEM_PROJECT_LIBS}
   )
 
@@ -359,7 +348,6 @@ if(ADOL-C_LIBRARY)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     ${MoFEM_PROJECT_LIBS}
   )
 
@@ -385,7 +373,6 @@ target_link_libraries(testing_jacobian_of_hook_element
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 
@@ -417,7 +404,6 @@ target_link_libraries(testing_jacobian_of_hook_scaled_with_density_element
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 
@@ -449,7 +435,6 @@ mofem_multi_indices
 mofem_petsc
 mofem_approx
 mofem_third_party
-mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
 
@@ -473,7 +458,6 @@ target_link_libraries(testing_jacobian_of_navier_stokes_element
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 cm_export_file("mesh_for_testing_navier_stokes_element.h5m" export_atom_tests_basic_fe)
@@ -516,7 +500,6 @@ mofem_multi_indices
 mofem_petsc
 mofem_approx
 mofem_third_party
-mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
 

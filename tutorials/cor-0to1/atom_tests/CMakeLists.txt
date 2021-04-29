@@ -21,7 +21,6 @@ target_link_libraries(mix_transport
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS})
 

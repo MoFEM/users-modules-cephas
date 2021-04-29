@@ -54,7 +54,6 @@ function(tutorials_build_and_install target source)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     mofem_matrix_function
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${TUTORIALS_INSTALL_DIR}/${TUTORIALS_MOD_DIR})
