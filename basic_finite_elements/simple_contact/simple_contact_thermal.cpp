@@ -400,7 +400,7 @@ int main(int argc, char *argv[]) {
 
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
-          double temp = init_temp + 1.0;
+          double temp = init_temp - 1.0;
 
           t_thermal_strain(i, j) =
               thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
@@ -799,65 +799,6 @@ int main(int argc, char *argv[]) {
     // save on mesh
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-    const int n_parts = m_field.get_comm_size();
-    if (m_field.get_comm_rank() == 0) {
-      CHKERR DMoFEMLoopFiniteElementsUpAndLowRank(
-          dm, "ELASTIC", fe_elastic_rhs_ptr, 0, n_parts);
-      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
-      CHKERR moab.write_file(output_mesh_name, "MOAB");
-    }
-
-    auto get_tag_handle = [&](auto name, auto size) {
-      Tag th;
-      std::vector<double> def_vals(size, 0.0);
-      CHKERR moab.tag_get_handle(name, size, MB_TYPE_DOUBLE, th,
-                                 MB_TAG_CREAT | MB_TAG_SPARSE, def_vals.data());
-      return th;
-    };
-
-    if (test_num) {
-      Range tets;
-      CHKERR moab.get_entities_by_dimension(0, 3, tets);
-      EntityHandle tet = tets.front();
-      std::vector<double> internal_stress, actual_stress;
-      internal_stress.resize(9, 0.);
-      actual_stress.resize(9, 0.);
-      std::vector<double> internal_stress_ref, actual_stress_ref;
-      internal_stress_ref = {-5., -5., -5., 0., 0., 0., 0., 0., 0.};
-      switch (test_num) {
-      case 1:
-        actual_stress_ref = {0., 0., -1., 0., 0., 0., 0., 0., 0.};
-        break;
-      case 2:
-        actual_stress_ref = {0., -5. / 3., -5. / 3., 0., 0., 0., 0., 0., 0.};
-        break;
-      default:
-        SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
-                 test_num);
-      }
-
-      auto th_internal_stress = get_tag_handle("MED_INTERNAL_STRESS", 9);
-      auto th_actual_stress = get_tag_handle("MED_ACTUAL_STRESS", 9);
-      CHKERR moab.tag_get_data(th_internal_stress, &tet, 1,
-                               internal_stress.data());
-      CHKERR moab.tag_get_data(th_actual_stress, &tet, 1, actual_stress.data());
-      const double eps = 1e-12;
-      for (int i = 0; i < 9; i++) {
-        if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
-          SETERRQ3(
-              PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-              "Wrong component %d of internal stress: should be %g but is %g",
-              i, internal_stress_ref[i], internal_stress[i]);
-        }
-        if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
-          SETERRQ3(
-              PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-              "Wrong component %d of actual stress: should be %g but is %g", i,
-              actual_stress_ref[i], actual_stress[i]);
-        }
-      }
-    }
-
     Vec v_energy;
     CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "SPATIAL_POSITION",
                                          "MESH_NODE_POSITIONS", false, false,
@@ -967,6 +908,83 @@ int main(int argc, char *argv[]) {
                          out_file_name.c_str());
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+    }
+
+    const int n_parts = m_field.get_comm_size();
+    if (m_field.get_comm_rank() == 0) {
+      CHKERR DMoFEMLoopFiniteElementsUpAndLowRank(
+          dm, "ELASTIC", fe_elastic_rhs_ptr, 0, n_parts);
+
+      Range faces, tris, quads, tris_edges, quads_edges, ents_to_delete;
+
+      CHKERR moab.get_adjacencies(contact_prisms, 2, true, faces,
+                                  moab::Interface::UNION);
+      tris = faces.subset_by_type(MBTRI);
+      quads = faces.subset_by_type(MBQUAD);
+      CHKERR moab.get_adjacencies(tris, 1, true, tris_edges,
+                                  moab::Interface::UNION);
+      CHKERR moab.get_adjacencies(quads, 1, true, quads_edges,
+                                  moab::Interface::UNION);
+
+      ents_to_delete.merge(contact_prisms);
+      ents_to_delete.merge(quads);
+      ents_to_delete.merge(subtract(quads_edges, tris_edges));
+
+      CHKERR moab.delete_entities(ents_to_delete);
+
+      PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
+      CHKERR moab.write_file(output_mesh_name, "MOAB");
+    }
+
+    auto get_tag_handle = [&](auto name, auto size) {
+      Tag th;
+      std::vector<double> def_vals(size, 0.0);
+      CHKERR moab.tag_get_handle(name, size, MB_TYPE_DOUBLE, th,
+                                 MB_TAG_CREAT | MB_TAG_SPARSE, def_vals.data());
+      return th;
+    };
+
+    if (test_num) {
+      Range tets;
+      CHKERR moab.get_entities_by_dimension(0, 3, tets);
+      EntityHandle tet = tets.front();
+      std::vector<double> internal_stress, actual_stress;
+      internal_stress.resize(9, 0.);
+      actual_stress.resize(9, 0.);
+      std::vector<double> internal_stress_ref, actual_stress_ref;
+      internal_stress_ref = {-5., -5., -5., 0., 0., 0., 0., 0., 0.};
+      switch (test_num) {
+      case 1:
+        actual_stress_ref = {0., 0., -1., 0., 0., 0., 0., 0., 0.};
+        break;
+      case 2:
+        actual_stress_ref = {0., -5. / 3., -5. / 3., 0., 0., 0., 0., 0., 0.};
+        break;
+      default:
+        SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
+                 test_num);
+      }
+
+      auto th_internal_stress = get_tag_handle("MED_INTERNAL_STRESS", 9);
+      auto th_actual_stress = get_tag_handle("MED_ACTUAL_STRESS", 9);
+      CHKERR moab.tag_get_data(th_internal_stress, &tet, 1,
+                               internal_stress.data());
+      CHKERR moab.tag_get_data(th_actual_stress, &tet, 1, actual_stress.data());
+      const double eps = 1e-12;
+      for (int i = 0; i < 9; i++) {
+        if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
+          SETERRQ3(
+              PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+              "Wrong component %d of internal stress: should be %g but is %g",
+              i, internal_stress_ref[i], internal_stress[i]);
+        }
+        if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
+          SETERRQ3(
+              PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+              "Wrong component %d of actual stress: should be %g but is %g", i,
+              actual_stress_ref[i], actual_stress[i]);
+        }
+      }
     }
   }
   CATCH_ERRORS;
