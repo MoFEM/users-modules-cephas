@@ -10,12 +10,46 @@
 - implementing vector valued problems like linear elasticity
 - implementing boundary conditions specified on the part of the boundary
 - developing code that can be compiled for 2D or 3D cases
-- Use of default forms integrators
+- use of default forms integrators
 - pushing UDOs to the *Pipeline*
 - utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
 
 \tableofcontents
 
+The solution of the linear elasticity problem is presented in this tutorial. Lets consider an isotropic elastic cantilever beam with prescribed gravity load as presented in Figure \ref figure1_problem_schematic. 
+
+\anchor figure1_problem_schematic
+\image html vec0_load_beam.pdf "Figure 1: Cantilever beam considered in this example." width=300px
+
+\section tutorial_elastic_strong_form Strong form
+
+In order to compute displacement vector field \f$\mathbf{u}\f$, every point in the beam has to satisfy balance of linear momentum and boundary conditions as follows:
+
+\f[
+\begin{align}
+  \label{eq:momentum_balance}
+  \begin{cases}
+  \nabla \cdot \boldsymbol \sigma \left(\mathbf u(\mathbf{x}) \right) + \mathbf b =0 & \text { in }  \Omega \\
+  \mathbf u(\mathbf{x}) = \bar{\mathbf{u}} & \text { on }  \partial\Omega^\mathbf{u} \\
+  \boldsymbol \sigma \cdot \mathbf n = \bar {\mathbf t} & \text { on }  \partial\Omega^\mathbf{t}
+\end{cases}
+\end{align}
+\f]
+
+where \f$\mathbf{b}\f$ are body forces, \f$ \bar{\mathbf{u}} \f$ are fixed displacements, \f$ \bar{\mathbf{t}} is traction vector and \f$\mathbf{n}\f$ is the unit normal vector on boundary,
+
+\section tutorial_elastic_weak_form Discretisation
+\section tutorial_elastic_code_dissection Implementation
+\subsection tutorial_elastic_problem_set_up Problem setup
+\subsection tutorial_elastic_common_data Elasticity tensor
+\subsection tutorial_elastic_dirichlet Essential boundary conditions
+\subsection tutorial_elastic_neumann Natural boundary conditions
+\subsection tutorial_elastic_lhs Pushing operators to LHS domain pipeline
+\subsection tutorial_elastic_solver_setup Solver setup
+\subsection tutorial_elastic_postprocessing Pushing operators to postprocessing pipeline
+\section tutorial_elastic_code_run_and_post Running code and postprocessing
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Run problem
 
 elastic.cpp
 
