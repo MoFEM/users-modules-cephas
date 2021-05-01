@@ -28,9 +28,9 @@ static char help[] = "-order approximation order\n"
 //! [Analytical function for dT]
   static double analyticalFunction(const double x, const double y,
                                 const double z) {
+  return ((y+0.5)+(x+0.5))*1.;
   // return (y+0.5)*1.;
-  //return (z+2)*1.;
-  return(1);
+  // return(1);
   }
 //! [Analytical function]
 struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
@@ -92,13 +92,6 @@ struct OpK : public VolumeElementForcesAndSourcesCore::UserDataOperator {
     tDT(0, 0, 0, 0) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
     tDT(1, 1, 1, 1) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
     tDT(2, 2, 2, 2) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
-
-    // tDT(0, 0, 1, 1) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
-    // tDT(1, 1, 0, 0) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
-    // tDT(0, 0, 2, 2) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
-    // tDT(2, 2, 0, 0) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
-    // tDT(1, 1, 2, 2) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
-    // tDT(2, 2, 1, 1) -= (yOung*cOeff_exp)/(1 - 2 * pOisson);
 
   }
 
@@ -268,6 +261,209 @@ protected:
     MoFEMFunctionReturn(0);
   }
 };
+
+// Thermal operator
+
+struct OpKTT : public VolumeElementForcesAndSourcesCore::UserDataOperator {
+
+  // Finite element stiffness sub-matrix K_ij
+  MatrixDouble K;
+
+  // Elastic stiffness tensor (4th rank tensor with minor and major symmetry)
+  FTensor::Ddg<double, 3, 3> tDTT;
+
+  // Conductivity
+  double Conductivity;
+
+  OpKTT(bool symm = true)
+      : VolumeElementForcesAndSourcesCore::UserDataOperator("T", "T", OPROWCOL,
+                                                            symm) {
+
+    // Evaluation of the elastic stiffness tensor, D
+
+    // hardcoded choice of heat equation parameters
+    Conductivity = 1.0;
+    // coefficient used in intermediate calculation
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
+
+    tDTT(i, j, k, l) = 0.;
+
+    tDTT(0, 0, 0, 0) = Conductivity;
+    tDTT(1, 1, 1, 1) = Conductivity;
+    tDTT(2, 2, 2, 2) = Conductivity;
+
+  }
+
+  /**
+   * \brief Do calculations for give operator
+   * @param  row_side row side number (local number) of entity on element
+   * @param  col_side column side number (local number) of entity on element
+   * @param  row_type type of row entity MBVERTEX, MBEDGE, MBTRI or MBTET
+   * @param  col_type type of column entity MBVERTEX, MBEDGE, MBTRI or MBTET
+   * @param  row_data data for row
+   * @param  col_data data for column
+   * @return          error code
+   */
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type,
+                        DataForcesAndSourcesCore::EntData &row_data,
+                        DataForcesAndSourcesCore::EntData &col_data) {
+
+    MoFEMFunctionBegin;
+    // get number of dofs on row
+    nbRows = row_data.getIndices().size();
+    // if no dofs on row, exit that work, nothing to do here
+    if (!nbRows)
+      MoFEMFunctionReturnHot(0);
+
+    // get number of dofs on column
+    nbCols = col_data.getIndices().size();
+    // if no dofs on Columbia, exit nothing to do here
+    if (!nbCols)
+      MoFEMFunctionReturnHot(0);
+
+    // K_ij matrix will have 3 times the number of degrees of freedom of the
+    // i-th entity set (nbRows)
+    // and 3 times the number of degrees of freedom of the j-th entity set
+    // (nbCols)
+    K.resize(nbRows, nbCols, false);
+    K.clear();
+
+    // get number of integration points
+    nbIntegrationPts = getGaussPts().size2();
+    // check if entity block is on matrix diagonal
+    if (row_side == col_side && row_type == col_type) {
+      isDiag = true;
+    } else {
+      isDiag = false;
+    }
+
+    // integrate local matrix for entity block
+    CHKERR iNtegrate(row_data, col_data);
+
+    // assemble local matrix
+    CHKERR aSsemble(row_data, col_data);
+
+    MoFEMFunctionReturn(0);
+  }
+
+protected:
+  int nbRows;           ///< number of dofs on rows
+  int nbCols;           ///< number if dof on column
+  int nbIntegrationPts; ///< number of integration points
+  bool isDiag;          ///< true if this block is on diagonal
+
+  /**
+   * \brief Integrate B^T D B operator
+   * @param  row_data row data (consist base functions on row entity)
+   * @param  col_data column data (consist base functions on column entity)
+   * @return error code
+   */
+  MoFEMErrorCode
+  iNtegrate(DataForcesAndSourcesCore::EntData &row_data,
+            DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    // get sub-block (3x3) of local stiffens matrix, here represented by second
+    // order tensor
+    auto get_tensor2 = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor2<FTensor::PackPtr<double *, 3>, 3, 3>(
+          &m(r + 0, c + 0), &m(r + 0, c + 1), &m(r + 0, c + 2),
+          &m(r + 1, c + 0), &m(r + 1, c + 1), &m(r + 1, c + 2),
+          &m(r + 2, c + 0), &m(r + 2, c + 1), &m(r + 2, c + 2));
+    };
+
+    FTensor::Index<'i', 3> i;
+    FTensor::Index<'j', 3> j;
+    FTensor::Index<'k', 3> k;
+    FTensor::Index<'l', 3> l;
+
+    // get element volume
+    double vol = getVolume();
+
+    // get intergration weights
+    auto t_w = getFTensor0IntegrationWeight();
+    auto t_coords = getFTensor1CoordsAtGaussPts();
+    // get derivatives of base functions on rows
+    auto t_row_diff_base = row_data.getFTensor1DiffN<3>();
+    // iterate over integration points
+    for (int gg = 0; gg != nbIntegrationPts; ++gg) {
+
+      // calculate scalar weight times element volume
+      const double a = t_w * vol;
+
+      // iterate over row base functions
+      for (int rr = 0; rr != nbRows / 3; ++rr) {
+
+        // get sub matrix for the row
+        auto t_m = get_tensor2(K, 3 * rr, 0);
+
+        // get derivatives of base functions for columns
+        auto t_col_diff_base = col_data.getFTensor1DiffN<3>(gg, 0);
+
+        // iterate column base functions
+        for (int cc = 0; cc != nbCols / 3;++cc) {
+
+          // integrate block local stiffens matrix
+          t_m(i, k) +=
+              a * (tDTT(i, j, k, l) * (t_row_diff_base(j) * t_col_diff_base(l)));
+          // move to next column base function
+          ++t_col_diff_base;
+
+          // move to next block of local stiffens matrix
+          ++t_m;
+        }
+
+        // move to next row base function
+        ++t_row_diff_base;
+      }
+
+      // move to next integration weight
+      ++t_w;
+
+      ++t_coords;
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+  /**
+   * \brief Assemble local entity block matrix
+   * @param  row_data row data (consist base functions on row entity)
+   * @param  col_data column data (consist base functions on column entity)
+   * @return          error code
+   */
+  MoFEMErrorCode aSsemble(DataForcesAndSourcesCore::EntData &row_data,
+                                  DataForcesAndSourcesCore::EntData &col_data) {
+    MoFEMFunctionBegin;
+    // get pointer to first global index on row
+    const int *row_indices = &*row_data.getIndices().data().begin();
+    // get pointer to first global index on column
+    const int *col_indices = &*col_data.getIndices().data().begin();
+    Mat B = getFEMethod()->ksp_B != PETSC_NULL ? getFEMethod()->ksp_B
+                                               : getFEMethod()->snes_B;
+    // assemble local matrix
+    CHKERR MatSetValues(B, nbRows, row_indices, nbCols, col_indices,
+                        &*K.data().begin(), ADD_VALUES);
+
+    if (!isDiag && sYmm) {
+      // if not diagonal term and since global matrix is symmetric assemble
+      // transpose term.
+      K = trans(K);
+      CHKERR MatSetValues(B, nbCols, col_indices, nbRows, row_indices,
+                          &*K.data().begin(), ADD_VALUES);
+    }
+    MoFEMFunctionReturn(0);
+  }
+};
+
+// End Thermal operator
+
+
 
 struct OpPressure : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
@@ -491,7 +687,9 @@ int main(int argc, char *argv[]) {
       FIX_BRICK_FACES      = 1,
       FIX_NODES            = 2,
       BRICK_PRESSURE_FACES = 3,
-      FIX_NODES_Y_DIR      = 4
+      FIX_NODES_Y_DIR      = 4,
+      TOP_TEMP_FACES      = 5,
+      BOTTOM_TEMP_FACES      = 6
     };
 
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
@@ -519,12 +717,19 @@ int main(int argc, char *argv[]) {
         CHKERR m_field.get_moab().get_entities_by_dimension(
             meshset, 2, pressure_faces, true);
 
-      } else if (id ==
-                 FIX_NODES_Y_DIR) { // restrained second node in y direction
+      } else if (id == FIX_NODES_Y_DIR) { // restrained second node in y direction
         CHKERR m_field.get_moab().get_entities_by_dimension(
             meshset, 0, fix_second_node, true);
 
-      } else {
+      } else if (id == TOP_TEMP_FACES) { // Add Temperature on top face
+        CHKERR m_field.get_moab().get_entities_by_dimension(
+            meshset, 2, pressure_faces, true);
+
+      } else if (id == BOTTOM_TEMP_FACES) { // Add Temperature on bottom face
+        CHKERR m_field.get_moab().get_entities_by_dimension(
+            meshset, 2, pressure_faces, true);
+
+      }else {
         SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Unknown blockset");
       }
     }
@@ -532,6 +737,10 @@ int main(int argc, char *argv[]) {
     CHKERR simple_interface->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE,
                                             3);
     CHKERR simple_interface->setFieldOrder("U", order);
+
+    // CHKERR simple_interface->addDomainField("T", H1, AINSWORTH_LEGENDRE_BASE,
+    //                                         3);
+    // CHKERR simple_interface->setFieldOrder("T", order);
 
     CHKERR simple_interface->defineFiniteElements();
 
@@ -561,16 +770,20 @@ int main(int argc, char *argv[]) {
     // Create elements instances
     boost::shared_ptr<VolumeElementForcesAndSourcesCore> elastic_fe(
         new VolumeElementForcesAndSourcesCore(m_field));
+    // boost::shared_ptr<VolumeElementForcesAndSourcesCore> thermal_fe(
+    //     new VolumeElementForcesAndSourcesCore(m_field));    
     boost::shared_ptr<FaceElementForcesAndSourcesCore> pressure_fe(
         new FaceElementForcesAndSourcesCore(m_field));
 
     // Set integration rule to elements instances
     elastic_fe->getRuleHook = VolRule();
+    // thermal_fe->getRuleHook = VolRule();    
     pressure_fe->getRuleHook = FaceRule();
 
     // Add operators to element instances
     // push operators to elastic_fe
     elastic_fe->getOpPtrVector().push_back(new OpK());
+    // thermal_fe->getOpPtrVector().push_back(new OpKTT());
     // push operators to pressure_fe
     pressure_fe->getOpPtrVector().push_back(new OpPressure());
 
