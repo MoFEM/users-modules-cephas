@@ -27,6 +27,11 @@
 #include <MoFEM.hpp>
 #include <MatrixFunction.hpp>
 
+extern "C" {
+#include <tetrahedron_ncc_rule.h>
+#include <triangle_ncc_rule.h>
+}
+
 using namespace MoFEM;
 
 template <int DIM> struct ElementsAndOps {};
@@ -739,12 +744,74 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * approx_order + 2;
+    return -1;
   };
+
+  auto set_gauss_rule_3d = [&](ForcesAndSourcesCore *fe_ptr, int, int,
+                            int approx_order) {
+    MoFEMFunctionBegin;
+
+    const int rule = 2 * (approx_order - 1);
+    const auto order_num = tetrahedron_ncc_order_num(rule);
+    MatrixDouble xyz(order_num, 3);
+    VectorDouble w(order_num);
+    tetrahedron_ncc_rule(rule, order_num, &*xyz.data().begin(), &*w.begin());
+
+    auto &gauss_pts = fe_ptr->gaussPts;
+    gauss_pts.resize(4, order_num);
+    for (int gg = 0; gg != order_num; ++gg) {
+      gauss_pts(3, gg) = w(gg);
+      for (auto d : {0, 1, 2})
+        gauss_pts(d, gg) = xyz(gg, d);
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  auto set_gauss_rule_2d = [&](ForcesAndSourcesCore *fe_ptr, int, int,
+                               int approx_order) {
+    MoFEMFunctionBegin;
+
+    const int rule = 2 * (approx_order - 1);
+    const auto order_num = triangle_ncc_order_num(rule);
+    MatrixDouble xyz(order_num, 2);
+    VectorDouble w(order_num);
+    triangle_ncc_rule(rule, order_num, &*xyz.data().begin(), &*w.begin());
+
+    auto &gauss_pts = fe_ptr->gaussPts;
+    gauss_pts.resize(3, order_num);
+    for (int gg = 0; gg != order_num; ++gg) {
+      gauss_pts(2, gg) = w(gg);
+      for (auto d : {0, 1})
+        gauss_pts(d, gg) = xyz(gg, d);
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
-  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  if (SPACE_DIM == 3) {
+    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
+        pipeline_mng->getDomainLhsFE())
+        ->setRuleHook = set_gauss_rule_3d;
+    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
+        pipeline_mng->getDomainRhsFE())
+        ->setRuleHook = set_gauss_rule_3d;
+  } else {
+    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
+        pipeline_mng->getDomainLhsFE())
+        ->setRuleHook = set_gauss_rule_2d;
+    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
+        pipeline_mng->getDomainRhsFE())
+        ->setRuleHook = set_gauss_rule_2d;
+  }
+
+  auto integration_rule_bc = [](int, int, int approx_order) {
+    return 2 * approx_order + 2;
+  };
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -796,7 +863,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
-  reactionFe->getRuleHook = integration_rule;
+  reactionFe->getRuleHook = integration_rule_bc;
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
 
   MoFEMFunctionReturn(0);
