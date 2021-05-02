@@ -2046,7 +2046,16 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
     return mat;
   };
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
+    for(auto &v : mat.data())
+      v = set_float_precision(v);
     return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
                                      &*mat.data().begin());
   };

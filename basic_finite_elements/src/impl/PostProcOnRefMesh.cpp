@@ -268,6 +268,13 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
   }
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   switch (space) {
   case H1:
     commonData.gradMap[rowFieldName].resize(nb_gauss_pts);
@@ -287,7 +294,8 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
             (commonData.gradMap[rowFieldName])[gg](rr, dd) =
-                ((double *)tags_ptr[gg])[rank * rr + dd] += val;
+                ((double *)tags_ptr[gg])[rank * rr + dd] +=
+                set_float_precision(val);
           }
         }
       }
@@ -309,7 +317,8 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
             (commonData.gradMap[rowFieldName])[gg](rr, dd) =
-                ((double *)tags_ptr[gg])[rank * rr + dd] += val;
+                ((double *)tags_ptr[gg])[rank * rr + dd] +=
+                set_float_precision(val);
           }
         }
       }
