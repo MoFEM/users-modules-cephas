@@ -23,9 +23,9 @@
 #include <MoFEM.hpp>
 
 using namespace MoFEM;
-
+//! [Define dimension]
 template <int DIM> struct ElementsAndOps {};
-
+//! [Define dimension]
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle2D;
   using DomainEleOp = DomainEle::UserDataOperator;
@@ -41,6 +41,7 @@ template <> struct ElementsAndOps<3> {
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
+
 
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 
@@ -97,7 +98,8 @@ private:
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto set_matrial_stiffens = [&]() {
+  //! [Calculate elasticity tensor]
+  auto set_material_stiffness = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
@@ -114,7 +116,9 @@ MoFEMErrorCode Example::createCommonData() {
                           t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
+  //! [Calculate elasticity tensor]
 
+  //! [Define gravity vector]
   auto set_body_force = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     MoFEMFunctionBegin;
@@ -123,7 +127,9 @@ MoFEMErrorCode Example::createCommonData() {
     t_force(1) = -1;
     MoFEMFunctionReturn(0);
   };
+  //! [Define gravity vector]
 
+  //! [Initialise containers for commonData]
   matGradPtr = boost::make_shared<MatrixDouble>();
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
@@ -133,8 +139,9 @@ MoFEMErrorCode Example::createCommonData() {
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
   bodyForceMatPtr->resize(SPACE_DIM, 1);
+  //! [Initialise containers for commonData]
 
-  CHKERR set_matrial_stiffens();
+  CHKERR set_material_stiffness();
   CHKERR set_body_force();
 
   MoFEMFunctionReturn(0);
@@ -184,6 +191,7 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
+  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
 
   auto fix_disp = [&](const std::string blockset_name) {
     Range fix_ents;
@@ -221,6 +229,11 @@ MoFEMErrorCode Example::boundaryCondition() {
   CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
   CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
 
+  //! [Pushing gravity load operator]
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
+  //! [Pushing gravity load operator]
+
   MoFEMFunctionReturn(0);
 }
 //! [Boundary condition]
@@ -237,9 +250,6 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpSetInvJacH1ForFace(invJac));
   }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
-      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);

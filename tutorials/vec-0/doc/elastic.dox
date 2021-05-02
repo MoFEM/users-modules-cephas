@@ -16,10 +16,10 @@
 
 \tableofcontents
 
-The solution of the linear elasticity problem is presented in this tutorial. Lets consider an isotropic elastic cantilever beam with prescribed gravity load as presented in Figure \ref figure1_problem_schematic. 
+The solution of the linear elasticity problem is presented in this tutorial. Lets consider an isotropic elastic cantilever beam with prescribed gravity load as presented in \ref figure1_problem_schematic "Figure 1". 
 
 \anchor figure1_problem_schematic
-\image html vec0_load_beam.pdf "Figure 1: Cantilever beam considered in this example." width=300px
+\image html vec0_load_beam.eps "Figure 1: Cantilever beam considered in this example." width=300px
 
 \section tutorial_elastic_strong_form Strong form
 
@@ -36,21 +36,146 @@ In order to compute displacement vector field \f$\mathbf{u}\f$, every point in t
 \end{align}
 \f]
 
-where \f$\mathbf{b}\f$ are body forces, \f$ \bar{\mathbf{u}} \f$ are fixed displacements, \f$ \bar{\mathbf{t}} is traction vector and \f$\mathbf{n}\f$ is the unit normal vector on boundary,
+where \f$\mathbf{b}\f$ are body forces, \f$ \bar{\mathbf{u}} \f$ are fixed displacements, \f$ \bar{\mathbf{t}} \f$ is traction vector and \f$\mathbf{n}\f$ is the unit normal vector on the boundary and \f$ \boldsymbol \sigma \f$ is the Cauchy stress tensor. In case of linear elasticity, small strains are assumed whereby the stress measure is defined as: 
+
+\f[
+\begin{align}
+\boldsymbol \sigma =& \mathbb D : \frac{1}{2} (\nabla \mathbf u^\text{T} + \nabla \mathbf u) 
+\end{align}
+\f]
+where \f$ \mathbb D  \f$ is the 4th order elasticity tensor.
 
 \section tutorial_elastic_weak_form Discretisation
+Following a standard Galerkin approach as in \ref basic_tutorials_poisson_homogeneous, the governing equations are discretised into weak form as follows: 
+
+\f[
+\begin{align}
+\int_{\Omega} \nabla  \delta \mathbf u  : \boldsymbol \sigma(\mathbf u) \, \mathrm d \Omega= - \int_{\Omega} \delta \mathbf u \cdot \mathbf b \, \mathrm d \Omega  + \int_{\partial{\Omega}^\mathbf t} \delta \mathbf u \cdot \bar{\mathbf t} \, \mathrm d S \quad \forall\, \delta \mathbf u \in \mathbf{H}^1_0(\Omega) 
+\end{align}
+\f]
+
+To approximate displacements /f$ \mathbf u /f$ and variance of displacements /f$ \delta \mathbf u /f$, once again we will use MoFEM's hierarchical shape functions:
+\f[
+\begin{align}
+ \mathbf u \approx   \mathbf u^{h}=\sum_{j=0}^{N-1} \phi_{j}  \bar{\mathbf{u}}_{j}, \quad \quad \delta \mathbf u \approx  \delta \mathbf u^{h}=\sum_{j=0}^{N-1} \phi_{j} \delta \bar{\mathbf{u}}_{j}
+\end{align}
+\f]
+
+By substituting the above definitions into the weak form, the global system /f$ \mathbf{K U}=\mathbf{F} /f$ can be assembled, where elements contributions from every finite elements are computed as follows:
+
+\f[
+\begin{align}
+\mathbf K_{i j}^{e}&=\int_{\Omega^{e}} \nabla \phi_{i}  \mathbb D  \nabla \phi_{j} \, \mathrm d \Omega  \\
+\mathbf F_{i}^{e}&=\int_{\partial \Omega^{e}} \phi_{i} \mathbf t  \, \mathrm d S + \int_{\Omega^{e}} \phi_{i} \mathbf b  \, \mathrm d \Omega 
+\end{align}
+\f]
+
+The Gauss quadrature is utilised to calculate the integrals. 
+
 \section tutorial_elastic_code_dissection Implementation
+In this section we will focus on the procedure of setting up and solving vector-valued problems like elasticity in MoFEM using MoFEM::Simple and Form Integrators, which are template UDOs used for common operations.  
+The code developed for this example can be compiled for both 2D and 3D cases by changing the following constant variable:
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Define dimension
+
+*SPACE_DIM* will be used throughout the code to determine dimension of the executable. It is also possible to setup *CMakeFiles.txt* to compile both, 2D and 3D executables (see plastic.cpp example). 
+
+The main program consists of a series of functions when invoking the function Example::runProblem():
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Run problem
+
+where Example::readMesh() executes the mesh reading procedure.
+
+
 \subsection tutorial_elastic_problem_set_up Problem setup
-\subsection tutorial_elastic_common_data Elasticity tensor
+The function Example::setupProblem() involves adding the displacement field *U* on the entities of the mesh and determine 
+the base function space, base, field rank and base order. We are adding *U* as both domain and a boundary field.
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Set up problem
+
+The space chosen is H1, the base is AINSWORTH_LEGENDRE_BASE and dimension is *SPACE_DIM* that corresponds to a vector field with *SPACE_DIM* number of coefficients.
+Additionally, we define a command line parameter *-order* that specifies the order of our base, 2nd order is chosen as a default.
+
+\subsection tutorial_elastic_common_data Common data
+The next function in our main program: Example::createCommonData() defines and initialises the data passed between UDOs. In case of elasticity, we have to compute elasticity tensor /f$ \mathbb D /f$ using the formula below: 
+
+\f[
+\begin{align}
+\mathbb D_{ijkl} = G \left[ \delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk} \right] + A (K - \frac{2}{3} G) \left[  \delta_{ij} \delta_{kl} \right]
+\end{align}
+\f]
+where /f$ K /f$ and /f$ G /f$ are bulk and shear modulus, respectively. The coefficient /f$ A /f$ depends on the dimension of the problem, for 3D cases and plane strain formulation it is simply /f$ A = 1 /f$, whereas for plane stress it takes the following form: 
+
+\f[
+\begin{align}
+ A=\frac{2 G}{K+\frac{4}{3} G}
+\end{align}
+\f]
+
+Using the FTensor::Index type these formulas can be directly implemented using Einstein's summation convention as shown below:
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Calculate elasticity tensor
+
+Note that depending on *SPACE_DIM* this code will appropriately sum over all the indices and set coefficient /f$ A /f$ for plane stress or 3D case.
+In the next lines of the program, we define a vector that will be passed to the UDOs and specify the gravity load. 
+For this example, we will *hardcode* the load to be always 1 in the Y direction /f$ \mathbf{ b } = [ 0,1,0 ] /f$
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Define gravity vector
+
+It is also possible to implement passing that data from command line parameter or read it from the mesh blocksets. 
+
+Finally, Example::createCommonData() we initialise containers that will be storing data between different UDOs. For elasticity problem we will be storing gradient of deformation, small strain tensor, stress tensor, elasticity tensor and body force vector.
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Initialise containers for commonData
+
+In the last two lines we call previously defined lambda functions for calculating elasticity tensor and body force vector.
+
+\code
+  CHKERR set_material_stiffness();
+  CHKERR set_body_force();
+\endcode
+
 \subsection tutorial_elastic_dirichlet Essential boundary conditions
+In order to apply homogeneous Dirichlet boundary conditions for our problem, we will utilise MoFEM's utility to remove degrees of freedom from a problem.
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Boundary condition
+
+The first lambda function in the snippet above *fix_disp* searches for entities in a meshset with a given name. Subsequently, these entities (*Range*) are passed to another lambda function - *remove_ents* that removes them from the problem. This operation is equivalent of setting all the degrees of freedom to zero on associated entities. For the examples considered in this tutorial, the provided meshes contain only one meshset *"FIX_ALL"* that will essentially fix displacements in all directions to zero. In Figure \ref figure2_problem_fix_all "Figure 2" we show selected triangles on the face of triangle that are used to define the *"FIX_ALL"* meshset. Note that in case of 2D mesh, we select edge elements.
+
+\anchor figure2_problem_fix_all
+\image html boundary_cond_canti.png "Figure 2: FIX_ALL block meshset specified on the mesh of the cantilever for 3D case. " width=300px
+
 \subsection tutorial_elastic_neumann Natural boundary conditions
+For natural boundary conditions we will only specify simple gravity load on the entire domain. We have to push into our Domain RHS pipeline an operator that calculates the following integral: 
+
+\f[
+\begin{align}
+\mathbf F_{i}^{e}&=\int_{\Omega^{e}} \phi_{i} \mathbf b \, \mathrm d V
+\end{align}
+\f]
+
+This operation can be done by pushing `OpBodyForce` User Data Operator. Note that arguments of this operator are: name of the field "*U"*, container *bodyForceMatPtr* for vector of body force and lambda function which is defines a coefficient for our vector. The function takes three arguments, which are the coordinates of the integration points. However, in this example, we assume homogeneous body, therefore the coefficient can by simply set to 1.
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Pushing gravity load operator
+
+The `OpBodyForce` is an alias of the specialisation of the form integrator template `OpBaseTimesVector` declared in the beginning of the file
+
+\code 
+using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+\endcode 
+
+The first parameter in the above template specifies the dimension of the base (we use scalar base, so set to 1), second parameter requires specification of the number of the coefficients of we field we are operating on (our vector field of displacements has *SPACE_DIM* coefficients). The last parameter specifies whether the passed vector is constant for all integration points. In this case `bodyForceMatPtr` body force vector is assumed constant, (has the same values for all gauss points). However, if the considered body would be heterogeneous, then the last parameter would be set to 1. 
+
 \subsection tutorial_elastic_lhs Pushing operators to LHS domain pipeline
+
+
 \subsection tutorial_elastic_solver_setup Solver setup
 \subsection tutorial_elastic_postprocessing Pushing operators to postprocessing pipeline
 \section tutorial_elastic_code_run_and_post Running code and postprocessing
 
-\snippet users_modules/tutorials/vec-0/elastic.cpp Run problem
 
+\section tutorial_elastic_code_source_code The entire source code of the main program can be accessed here:
 elastic.cpp
 
 */

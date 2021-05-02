@@ -244,7 +244,7 @@ MoFEMErrorCode Example::boundaryCondition() {
                             boost::make_shared<Range>(force_edges)));
     }
   }
-
+  //! [Define gravity vector]
   auto get_body_force = [this](const double, const double, const double) {
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
     FTensor::Index<'i', SPACE_DIM> i;
@@ -256,6 +256,8 @@ MoFEMErrorCode Example::boundaryCondition() {
     t_source(1) = 1 * time;
     return t_source;
   };
+  //! [Define gravity vector]
+  
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", get_body_force));
 

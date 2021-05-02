@@ -32,9 +32,9 @@
   </tr>
 
   <tr valign="top">
-        <td width="350px">COLAB-2: <a href="https://colab.research.google.com/drive/19Rt-alLKp1GgDqpi1ejQ79T3ERAbbP8R?usp=sharing">Hemholtz problem</a></td>
+        <td width="350px">COLAB-2: <a href="https://colab.research.google.com/drive/19Rt-alLKp1GgDqpi1ejQ79T3ERAbbP8R?usp=sharing">Helmholtz problem</a></td>
         <td> Google Colab
-        <br/> *Keywords:* CLX-0 tutorial, Hemholtz probem
+        <br/> *Keywords:* CLX-0 tutorial, Helmholtz peoblem
         </td>
   </tr>
 
@@ -47,7 +47,7 @@
   <tr valign="top">
         <td width="350px">JUP-1: \subpage jup_tutorial_eigen_elastic</td>
         <td> Jupyter notebook
-        <br/> *Keywords:* VEC-1 tutorial, eiegn analysis 
+        <br/> *Keywords:* VEC-1 tutorial, eigen analysis 
         </td>
   </tr>
 

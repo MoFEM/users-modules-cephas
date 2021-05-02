@@ -1,4 +1,4 @@
-/*! \page tutorial_hemholtz_problem CLX-0: Hemholtz problem 
+/*! \page tutorial_hemholtz_problem CLX-0: Helmholtz problem 
 
 
 \note This problem formulation follows tutorial from deal.II https://www.dealii.org/current/doxygen/deal.II/step_29.html. <br><br> Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d. <br> <br> Intended learning outcome:
@@ -204,7 +204,7 @@ And essential boundary conditions applied on \f$\Gamma_2\f$ are after applying d
 \f]
 
 \section tutorial_hemholtz_code_dissection Implementation
-The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MOFEM::Simple, 
+The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MoFEM::Simple, 
 determining boundary conditions, using boundary and domain elements accessed through the interface and pushing form integrators to pipelines for solving the problem.
 
 \subsection tutorial_hemholtz_strong_fields_and_shape_fun Declaration of fields for solution
