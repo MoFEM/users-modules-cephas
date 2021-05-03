@@ -115,9 +115,6 @@ double Qinf = 265;
 double b_iso = 16.93;
 double delta = std::numeric_limits<double>::epsilon();
 int order = 2;
-double theta_flow = 1.;
-
-static Vec pre_step_vec;
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -197,8 +194,6 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addDomainField("TAU", L2, base, 1);
   CHKERR simple->addDomainField("EP", L2, base, size_symm);
   CHKERR simple->addBoundaryField("U", H1, base, SPACE_DIM);
-  // This can be added for arc-length control
-  // CHKERR simple->addDomainField("L", NOFIELD, NOBASE, 1);
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("TAU", order - 1);
@@ -230,8 +225,6 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
 
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-theta_flow", &theta_flow,
-                                 PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-dual_base", &is_dual_base,
@@ -244,7 +237,6 @@ MoFEMErrorCode Example::createCommonData() {
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Viscous hardening " << visH;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation yield stress " << Qinf;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Saturation exponent " << b_iso;
-    MOFEM_LOG("EXAMPLE", Sev::inform) << "Theta flow " << theta_flow;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "cn " << cn;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "delta " << delta;
 
@@ -444,9 +436,6 @@ MoFEMErrorCode Example::OPs() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
 
-  commonPlasticDataPtr->perviousStepSolution =
-      smartCreateDMVector(simple->getDM());
-
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     if (is_dual_base)
@@ -462,25 +451,18 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValuesDot<SPACE_DIM>(
         "EP", commonPlasticDataPtr->getPlasticStrainDotPtr()));
 
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-        "EP", commonPlasticDataPtr->getPlasticStrain0Ptr(),
-        commonPlasticDataPtr->perviousStepSolution));
-    pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTau0Ptr(),
-        commonPlasticDataPtr->perviousStepSolution));
-
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_stress_ops = [&](auto &pipeline, SmartPetscObj<Vec> vec) {
+  auto add_domain_stress_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr, vec));
+        "U", commonPlasticDataPtr->mGradPtr));
     pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-        "EP", commonPlasticDataPtr->getPlasticStrainPtr(), vec));
+        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
     pipeline.push_back(new OpCalculateScalarFieldValues(
-        "TAU", commonPlasticDataPtr->getPlasticTauPtr(), vec));
+        "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
 
     if (is_large_strains) {
 
@@ -506,12 +488,8 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
     }
 
-    if (!vec.use_count())
-      pipeline.push_back(
-          new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-    else
-      pipeline.push_back(
-          new OpCalculatePlasticSurface0("U", commonPlasticDataPtr));
+    pipeline.push_back(
+        new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
 
     MoFEMFunctionReturn(0);
   };
@@ -700,18 +678,12 @@ MoFEMErrorCode Example::OPs() {
   };
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
-                               commonPlasticDataPtr->perviousStepSolution);
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
-                               SmartPetscObj<Vec>());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_ops_lhs(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
 
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
-                               commonPlasticDataPtr->perviousStepSolution);
-  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline(),
-                               SmartPetscObj<Vec>());
+  CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
@@ -926,25 +898,6 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_pre_step = [&](auto solver) {
-    MoFEMFunctionBegin;
-    pre_step_vec = commonPlasticDataPtr->perviousStepSolution;
-    // pre_step_vec_dot = commonPlasticDataPtr->perviousStepSolutionDot;
-    auto pre_step = [](TS ts) -> PetscErrorCode {
-      MoFEMFunctionBeginHot;
-      Vec d, v;
-      CHKERR TSGetSolution(ts, &d /*, &v*/);
-      CHKERR VecCopy(d, pre_step_vec);
-      CHKERR VecGhostUpdateBegin(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
-      CHKERR VecGhostUpdateEnd(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
-
-      // CHKERR VecCopy(v, pre_step_vec_dot);
-      MoFEMFunctionReturnHot(0);
-    };
-    CHKERR TSSetPreStep(solver, pre_step);
-    MoFEMFunctionReturn(0);
-  };
-
   auto dm = simple->getDM();
   auto D = smartCreateDMVector(dm);
   CHKERR create_post_process_element();
@@ -957,7 +910,6 @@ MoFEMErrorCode Example::tsSolve() {
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
   CHKERR set_time_monitor(dm, solver);
-  CHKERR add_pre_step(solver);
   CHKERR TSSetSolution(solver, D);
   CHKERR TSSetFromOptions(solver);
   CHKERR TSSetUp(solver);
