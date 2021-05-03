@@ -23,9 +23,9 @@
 #include <MoFEM.hpp>
 
 using namespace MoFEM;
-//! [Define dimension]
+
 template <int DIM> struct ElementsAndOps {};
-//! [Define dimension]
+
 template <> struct ElementsAndOps<2> {
   using DomainEle = PipelineManager::FaceEle2D;
   using DomainEleOp = DomainEle::UserDataOperator;
@@ -42,8 +42,9 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
-
-constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+//! [Define dimension]
+constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
+//! [Define dimension]
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;

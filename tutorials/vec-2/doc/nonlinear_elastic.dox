@@ -16,4 +16,6 @@
 
 nonlinear_elastic.cpp
 
+HenckyOps.hpp
+
 */

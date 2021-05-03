@@ -19,7 +19,7 @@
 The solution of the linear elasticity problem is presented in this tutorial. Lets consider an isotropic elastic cantilever beam with prescribed gravity load as presented in \ref figure1_problem_schematic "Figure 1". 
 
 \anchor figure1_problem_schematic
-\image html vec0_load_beam.eps "Figure 1: Cantilever beam considered in this example." width=300px
+\image html vec0_load_beam.png "Figure 1: Cantilever beam considered in this example." width=600px
 
 \section tutorial_elastic_strong_form Strong form
 
@@ -54,14 +54,14 @@ Following a standard Galerkin approach as in \ref basic_tutorials_poisson_homoge
 \end{align}
 \f]
 
-To approximate displacements /f$ \mathbf u /f$ and variance of displacements /f$ \delta \mathbf u /f$, once again we will use MoFEM's hierarchical shape functions:
+To approximate displacements\f$ \mathbf u\f$ and variance of displacements\f$ \delta \mathbf u\f$, once again we will use MoFEM's hierarchical shape functions:
 \f[
 \begin{align}
  \mathbf u \approx   \mathbf u^{h}=\sum_{j=0}^{N-1} \phi_{j}  \bar{\mathbf{u}}_{j}, \quad \quad \delta \mathbf u \approx  \delta \mathbf u^{h}=\sum_{j=0}^{N-1} \phi_{j} \delta \bar{\mathbf{u}}_{j}
 \end{align}
 \f]
 
-By substituting the above definitions into the weak form, the global system /f$ \mathbf{K U}=\mathbf{F} /f$ can be assembled, where elements contributions from every finite elements are computed as follows:
+By substituting the above definitions into the weak form, the global system\f$ \mathbf{K U}=\mathbf{F}\f$ can be assembled, where elements contributions from every finite elements are computed as follows:
 
 \f[
 \begin{align}
@@ -80,6 +80,16 @@ The code developed for this example can be compiled for both 2D and 3D cases by 
 
 *SPACE_DIM* will be used throughout the code to determine dimension of the executable. It is also possible to setup *CMakeFiles.txt* to compile both, 2D and 3D executables (see plastic.cpp example). 
 
+Note that based on *SPACE_DIM* an appropriate type of elements is defined in the following snippet:
+\code 
+using EntData = DataForcesAndSourcesCore::EntData;
+using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
+using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
+using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
+using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
+using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+\endcode 
+
 The main program consists of a series of functions when invoking the function Example::runProblem():
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Run problem
@@ -97,14 +107,14 @@ The space chosen is H1, the base is AINSWORTH_LEGENDRE_BASE and dimension is *SP
 Additionally, we define a command line parameter *-order* that specifies the order of our base, 2nd order is chosen as a default.
 
 \subsection tutorial_elastic_common_data Common data
-The next function in our main program: Example::createCommonData() defines and initialises the data passed between UDOs. In case of elasticity, we have to compute elasticity tensor /f$ \mathbb D /f$ using the formula below: 
+The next function in our main program: Example::createCommonData() defines and initialises the data passed between UDOs. In case of elasticity, we compute elasticity tensor \f$ \mathbb D\f$ using the formula below: 
 
 \f[
 \begin{align}
 \mathbb D_{ijkl} = G \left[ \delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk} \right] + A (K - \frac{2}{3} G) \left[  \delta_{ij} \delta_{kl} \right]
 \end{align}
 \f]
-where /f$ K /f$ and /f$ G /f$ are bulk and shear modulus, respectively. The coefficient /f$ A /f$ depends on the dimension of the problem, for 3D cases and plane strain formulation it is simply /f$ A = 1 /f$, whereas for plane stress it takes the following form: 
+where\f$ K\f$ and\f$ G\f$ are bulk and shear modulus, respectively. The coefficient\f$ A\f$ depends on the dimension of the problem, for 3D cases and plane strain formulation it is simply\f$ A = 1\f$, whereas for plane stress it takes the following form: 
 
 \f[
 \begin{align}
@@ -116,9 +126,9 @@ Using the FTensor::Index type these formulas can be directly implemented using E
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Calculate elasticity tensor
 
-Note that depending on *SPACE_DIM* this code will appropriately sum over all the indices and set coefficient /f$ A /f$ for plane stress or 3D case.
+Note that depending on *SPACE_DIM* this code will appropriately sum over all the indices and set coefficient \f$ A \f$ for plane stress or 3D case.
 In the next lines of the program, we define a vector that will be passed to the UDOs and specify the gravity load. 
-For this example, we will *hardcode* the load to be always 1 in the Y direction /f$ \mathbf{ b } = [ 0,1,0 ] /f$
+For this example, we will *hardcode* the load to be always 1 in the Y direction\f$ \mathbf{ b } = [ 0,1,0 ]\f$
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Define gravity vector
 
@@ -140,7 +150,7 @@ In order to apply homogeneous Dirichlet boundary conditions for our problem, we 
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Boundary condition
 
-The first lambda function in the snippet above *fix_disp* searches for entities in a meshset with a given name. Subsequently, these entities (*Range*) are passed to another lambda function - *remove_ents* that removes them from the problem. This operation is equivalent of setting all the degrees of freedom to zero on associated entities. For the examples considered in this tutorial, the provided meshes contain only one meshset *"FIX_ALL"* that will essentially fix displacements in all directions to zero. In Figure \ref figure2_problem_fix_all "Figure 2" we show selected triangles on the face of triangle that are used to define the *"FIX_ALL"* meshset. Note that in case of 2D mesh, we select edge elements.
+The first lambda function in the snippet above *fix_disp* searches for entities in a meshset with a given name. Subsequently, these entities (*Range*) are passed to another lambda function - *remove_ents* that removes them from the problem. This operation is equivalent of setting all the degrees of freedom to zero on associated entities. For the examples considered in this tutorial, the provided meshes contain only one meshset *FIX_ALL* that will essentially fix displacements in all directions to zero. In Figure \ref figure2_problem_fix_all "Figure 2" we show selected triangles on the face of triangle that are used to define the *FIX_ALL* meshset. Note that in case of 2D mesh, we select edge elements.
 
 \anchor figure2_problem_fix_all
 \image html boundary_cond_canti.png "Figure 2: FIX_ALL block meshset specified on the mesh of the cantilever for 3D case. " width=300px
@@ -154,7 +164,7 @@ For natural boundary conditions we will only specify simple gravity load on the 
 \end{align}
 \f]
 
-This operation can be done by pushing `OpBodyForce` User Data Operator. Note that arguments of this operator are: name of the field "*U"*, container *bodyForceMatPtr* for vector of body force and lambda function which is defines a coefficient for our vector. The function takes three arguments, which are the coordinates of the integration points. However, in this example, we assume homogeneous body, therefore the coefficient can by simply set to 1.
+This operation can be done by pushing `OpBodyForce` User Data Operator into RHS domain pipeline. Note that arguments of this operator are: name of the field *U*, container *bodyForceMatPtr* for vector of body force and lambda function which is defines a coefficient for our vector. The function takes three arguments, which are the coordinates of the integration points. However, in this example, we assume homogeneous body, therefore the coefficient can by simply set to 1.
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Pushing gravity load operator
 
@@ -169,13 +179,131 @@ The first parameter in the above template specifies the dimension of the base (w
 
 \subsection tutorial_elastic_lhs Pushing operators to LHS domain pipeline
 
+Another function of the main program Example::assembleSystem() is responsible for defining pipelines used to evaluate linear and bilinear forms of the system and assembly to the global matrices and vectors.
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Push operators to pipeline
+
+In case of linear elasticity, after pushing boundary and source term operators (gravity load), we only have to define UDOs for LHS pipeline of the domain. In case of 2D problem we push operators (MoFEM::OpCalculateInvJacForFace and MoFEM::OpSetInvJacH1ForFace) that calculate and set the inverse of Jacobian for 2D elements. 
+
+The last operator `OpK` integrates the bilinear form: 
+
+\f[
+\begin{align}
+ \mathbf K^e_{ij} = \int_{\Omega^e} \nabla \phi_i \mathbb D \nabla \phi_j \, \mathrm d \Omega
+\end{align}
+\f]
+
+and subsequently assembles it into global system matrix \f$ \mathbf K \f$.
+Note that once again, a new operator does not have to be defined as `OpK` is simply an alias to existing operator from MoFEM's repertoire. To that operator we are passing previously defined container that stores elasticity tensor \f$ \mathbb D \f$.
+
+\code
+using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
+\endcode
+
+The utilised `OpGradSymTensorGrad` form integrator template of Bilinear Form has four parameters: rank of the base, rank of row field, rank of the column field and finally, the increment of elasticity tensor, which in case of homogeneous material can be set to 0.
+
+More info about available Form Integrators can be found in \ref user_data_operators_table.
+
 
 \subsection tutorial_elastic_solver_setup Solver setup
-\subsection tutorial_elastic_postprocessing Pushing operators to postprocessing pipeline
-\section tutorial_elastic_code_run_and_post Running code and postprocessing
+With appropriately defined pipelines for assembling the global system of equations \f$ \mathbf{K} \mathbf{U} = \mathbf{F} \f$, the next functions Example::solveSystem() sets up PETSc solver and calculates it directly or iteratively based on specified settings. 
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Solve
+
+Note that in case of simple linear problems like elasticity considered therein the above snippet will look very similar. A detailed description of each function can be found e.g. in \ref basic_tutorials_poisson_homogeneous.
+
+\subsection tutorial_elastic_postprocessing Postprocessing pipeline
+Finally, once the solver calculations are completed and solution vector is obtained, it is necessary save the data on the visualisation mesh and compute quantities of interest like strains and stresses. In function Example::outputResults() we will define pipeline to postprocess the results and save the calculated values to the output mesh. 
+
+\snippet users_modules/tutorials/vec-0/elastic.cpp Postprocess results
+
+We can reuse LHS domain pipeline, for the purpose of postprocessing. The following line resets (cleans) the operators pushed previously
+\code
+pipeline_mng->getDomainLhsFE().reset();
+\endcode 
+
+In the next two lines we create a postprocessig element (object) and use its function to generate a reference mesh.
+\code
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
+  post_proc_fe->generateReferenceElementMesh();
+\endcode 
+
+Next, a series of operators is pushed:
+- `OpCalculateInvJacForFace` and `OpSetInvJacH1ForFace` computes and sets the Jacobian in case of 2D elements
+- `OpCalculateVectorFieldGradient` computes the gradient of the obtained displacement field \f$ \nabla \mathbf u^{h}=\sum_{m=0}^{N-1} \nabla \phi_m \bar{\mathbf u}_m \f$
+- `OpSymmetrizeTensor` symmetrises the previously computed gradient to compute small strain tensor \f$ \boldsymbol \varepsilon = \frac{1}{2} (\nabla \mathbf u^\text{T} + \nabla \mathbf u)  \f$
+- `OpTensorTimesSymmetricTensor` is another form integrator that computes Cauchy stress:  \f$ \boldsymbol \sigma =& \mathbb D : \boldsymbol \varepsilon \f$
+- Tutorial::OpPostProcElastic saves the tensors \f$ \boldsymbol \varepsilon \f$ and \f$ \boldsymbol \sigma \f$ onto the reference mesh using moab tags.
 
 
-\section tutorial_elastic_code_source_code The entire source code of the main program can be accessed here:
+\section tutorial_elastic_code_run_and_post Running code and visualisation
+
+In order to run the program that we have been discussing in this tutorial, you
+will do the following steps
+- First, go to the directory where the binary file named `elastic` is
+  located. Depending on how you install MoFEM shown in this page \ref
+  installation, going to the directory would be something similar to this 
+  - For user version installation
+    \code
+    cd mofem_install/um_view/tutorials/vec-0/
+    \endcode
+  - For developer version installation
+    \code
+    cd mofem_install/mofem-cephas/mofem/users_modules/um-build-RelWithDebInfo-abcd1234/tutorials/vec-0
+    \endcode
+
+- Second, check the parameters in the param_file.petsc. These are PETSc
+  parameters and you should only use parameters that are needed for a particular
+  solver, in this case KSP solver. Only the following parameters should be
+  uncommented
+  \code
+  ## Linear solver
+  -ksp_type fgmres 
+  -pc_type lu 
+  -pc_factor_mat_solver_type mumps
+  -ksp_monitor
+  \endcode
+- Third, in the terminal, run commands to partition the input mesh and start
+  the analysis
+  \code
+  ./elastic -file_name beam_3D.cub -order 2
+  \endcode
+  where the mesh of a square plate is partitioned into two parts and then the
+  program is run using two processors (the same number of partitions) with
+  fourth order polynomial of approximation.
+
+This will produce *out_elastic.h5m* file which we can convert using 
+\code
+  mbconvert out_elastic.h5m out_elastic_3D.vtk
+\endcode
+
+The file *out_elastic_3D.vtk* can be opened in Paraview and use the filter `WarpByScalar`, you will be able to
+see the deformation as in \ref figure3_output "Figure 3". 
+
+We can also compute 2D case of the beam. In order to do that, change the below variable:
+\snippet users_modules/tutorials/vec-0/elastic.cpp Define dimension
+
+to the value equal to 2 and compile the code (in your build directory) using `make` command. You should be able then to compute 2D variant as follows
+\code
+  ./elastic -file_name beam_2D.cub -order 2
+\endcode
+and generate vtk file using:
+\code
+  mbconvert out_elastic.h5m out_elastic_2D.vtk
+\endcode
+
+
+\anchor figure3_output
+\image html beams_2D_3D_case.gif "Figure 3: Deformation of cantilever beams for 2D and 3D case. The color map represents displacements U." width=800px
+
+Note that the beams, both for 2D and 3D cases experience spurious deformation at the free end. This is a known feature of small strain kinematic description. To mitigate this issue, a large strain geometrically nonlinear formulation can be used. The extension of the above tutorial to such nonlinear case can be found in \ref tutorial_nonlinear_elastic. We propose there a simple Hencky strain measure that improves the behaviour of the material experiencing large rotations.
+
+\section tutorial_elastic_code_source_code Plain program
+
+The full source code of the main program can be accessed below:
 elastic.cpp
 
+The implementation of the postprocessing operator can be found in:
+OpPostProcElastic.hpp
 */
