@@ -136,8 +136,6 @@ private:
   MoFEMErrorCode bC();
   MoFEMErrorCode OPs();
   MoFEMErrorCode tsSolve();
-  MoFEMErrorCode postProcess();
-  MoFEMErrorCode checkResults();
 
   MatrixDouble invJac;
   boost::shared_ptr<PlasticOps::CommonData> commonPlasticDataPtr;
@@ -176,8 +174,6 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR bC();
   CHKERR OPs();
   CHKERR tsSolve();
-  CHKERR postProcess();
-  CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 //! [Run problem]
@@ -919,21 +915,6 @@ MoFEMErrorCode Example::tsSolve() {
   MoFEMFunctionReturn(0);
 }
 //! [Solve]
-
-//! [Postprocess results]
-MoFEMErrorCode Example::postProcess() {
-  MoFEMFunctionBegin;
-
-  MoFEMFunctionReturn(0);
-}
-//! [Postprocess results]
-
-//! [Check]
-MoFEMErrorCode Example::checkResults() {
-  MoFEMFunctionBegin;
-  MoFEMFunctionReturn(0);
-}
-//! [Check]
 
 static char help[] = "...\n\n";
 
