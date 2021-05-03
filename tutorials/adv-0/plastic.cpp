@@ -99,7 +99,6 @@ using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
 //! [Essential boundary conditions]
 using OpScaleL2 = MoFEM::OpScaleBaseBySpaceInverseOfMeasure<DomainEleOp>;
 
-PetscBool is_quasi_static = PETSC_FALSE;
 PetscBool is_large_strains = PETSC_TRUE;
 PetscBool is_dual_base = PETSC_TRUE;
 
@@ -231,15 +230,12 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Qinf", &Qinf, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-b_iso", &b_iso, PETSC_NULL);
 
-
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-theta_flow", &theta_flow,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-large_strains",
                                &is_large_strains, PETSC_NULL);
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-dual_base",
-                               &is_dual_base, PETSC_NULL);
-    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-quasi_static",
-                               &is_quasi_static, PETSC_NULL);
+    CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-dual_base", &is_dual_base,
+                               PETSC_NULL);
 
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Young modulus " << young_modulus;
     MOFEM_LOG("EXAMPLE", Sev::inform) << "Poisson ratio " << poisson_ratio;
@@ -386,7 +382,7 @@ MoFEMErrorCode Example::bC() {
         CHKERR mField.get_moab().get_entities_by_handle(
             it->meshset, bcVec.back()->bcEdges, true);
         CHKERR it->getAttributes(bcVec.back()->bcAttributes);
-        
+
         if (fix_x)
           CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 0, 0);
         if (fix_y)
@@ -446,7 +442,7 @@ MoFEMErrorCode Example::bC() {
 MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   auto pipeline_mng = mField.getInterface<PipelineManager>();
-  auto simple = mField.getInterface<Simple>(); 
+  auto simple = mField.getInterface<Simple>();
 
   commonPlasticDataPtr->perviousStepSolution =
       smartCreateDMVector(simple->getDM());
@@ -472,7 +468,6 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpCalculateScalarFieldValues(
         "TAU", commonPlasticDataPtr->getPlasticTau0Ptr(),
         commonPlasticDataPtr->perviousStepSolution));
-
 
     MoFEMFunctionReturn(0);
   };
@@ -524,7 +519,7 @@ MoFEMErrorCode Example::OPs() {
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-    
+
     if (is_dual_base)
       pipeline.push_back(
           new DualBaseOps::OpCalculateDualBase("TAU", commonPlasticDataPtr));
@@ -560,18 +555,6 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateContrainsLhs_dEP("TAU", "EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
-    
-
-    // if (!is_quasi_static) {
-    //   // Get pointer to U_tt shift in domain element
-    //   auto get_rho = [this](const double, const double, const double) {
-    //     auto *pipeline_mng = mField.getInterface<PipelineManager>();
-    //     auto &fe_domain_lhs = pipeline_mng->getDomainLhsFE();
-    //     return rho * fe_domain_lhs->ts_aa;
-    //   };
-    //   pipeline_mng->getOpDomainLhsPipeline().push_back(
-    //       new OpMass("U", "U", get_rho));
-    // }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -605,8 +588,8 @@ MoFEMErrorCode Example::OPs() {
     }
 
     if (is_dual_base) {
-      pipeline.push_back(new DualBaseOps::OpCalculateDualBase(
-          "TAU", commonPlasticDataPtr));
+      pipeline.push_back(
+          new DualBaseOps::OpCalculateDualBase("TAU", commonPlasticDataPtr));
       pipeline.push_back(
           new DualBaseOps::OpDualSwap("TAU", commonPlasticDataPtr));
     }
@@ -620,16 +603,6 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new DualBaseOps::OpDualSwap("TAU", commonPlasticDataPtr));
     }
-
-    // // only in case of dynamics
-    // if (!is_quasi_static) {
-    //   auto mat_acceleration = boost::make_shared<MatrixDouble>();
-    //   pipeline_mng->getOpDomainRhsPipeline().push_back(
-    //       new OpCalculateVectorFieldValuesDotDot<SPACE_DIM>("U",
-    //                                                         mat_acceleration));
-    //   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
-    //       "U", mat_acceleration, [](double, double, double) { return rho; }));
-    // }
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -723,7 +696,6 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpUnSetBc("U"));
     }
 
-
     MoFEMFunctionReturn(0);
   };
 
@@ -743,12 +715,10 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_ops_rhs(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
-  auto integration_rule = [](int, int, int approx_order) {
-    return -1;
-  };
+  auto integration_rule = [](int, int, int approx_order) { return -1; };
 
   auto set_gauss_rule_3d = [&](ForcesAndSourcesCore *fe_ptr, int, int,
-                            int approx_order) {
+                               int approx_order) {
     MoFEMFunctionBegin;
 
     const int rule = 2 * (approx_order - 1);
@@ -896,7 +866,7 @@ MoFEMErrorCode Example::tsSolve() {
     MoFEMFunctionBegin;
     postProcFe = boost::make_shared<PostProcEle>(mField);
     postProcFe->generateReferenceElementMesh();
-    if(is_dual_base)
+    if (is_dual_base)
       postProcFe->getOpPtrVector().push_back(new OpScaleL2(L2));
     if (SPACE_DIM == 2) {
       postProcFe->getOpPtrVector().push_back(
@@ -963,7 +933,7 @@ MoFEMErrorCode Example::tsSolve() {
     auto pre_step = [](TS ts) -> PetscErrorCode {
       MoFEMFunctionBeginHot;
       Vec d, v;
-      CHKERR TSGetSolution(ts, &d/*, &v*/);
+      CHKERR TSGetSolution(ts, &d /*, &v*/);
       CHKERR VecCopy(d, pre_step_vec);
       CHKERR VecGhostUpdateBegin(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
       CHKERR VecGhostUpdateEnd(pre_step_vec, INSERT_VALUES, SCATTER_FORWARD);
@@ -983,31 +953,15 @@ MoFEMErrorCode Example::tsSolve() {
   if (SPACE_DIM == 3)
     uZScatter = scatter_create(D, 2);
 
-  if (is_quasi_static) {
-    auto solver = pipeline_mng->createTS();
-    auto D = smartCreateDMVector(dm);
-    CHKERR TSSetSolution(solver, D);
-    CHKERR set_section_monitor(solver);
-    CHKERR set_time_monitor(dm, solver);
-    CHKERR add_pre_step(solver);
-    CHKERR TSSetSolution(solver, D);
-    CHKERR TSSetFromOptions(solver);
-    CHKERR TSSetUp(solver);
-    CHKERR TSSolve(solver, NULL);
-  } else {
-    auto solver = pipeline_mng->createTS2();
-    auto dm = simple->getDM();
-    auto D = smartCreateDMVector(dm);
-    auto DD = smartVectorDuplicate(D);
-    CHKERR TS2SetSolution(solver, D, DD);
-    CHKERR set_section_monitor(solver);
-    CHKERR set_time_monitor(dm, solver);
-    CHKERR add_pre_step(solver);
-    CHKERR TS2SetSolution(solver, D, DD);
-    CHKERR TSSetFromOptions(solver);
-    CHKERR TSSetUp(solver);
-    CHKERR TSSolve(solver, NULL);
-  }
+  auto solver = pipeline_mng->createTS();
+  CHKERR TSSetSolution(solver, D);
+  CHKERR set_section_monitor(solver);
+  CHKERR set_time_monitor(dm, solver);
+  CHKERR add_pre_step(solver);
+  CHKERR TSSetSolution(solver, D);
+  CHKERR TSSetFromOptions(solver);
+  CHKERR TSSetUp(solver);
+  CHKERR TSSolve(solver, NULL);
 
   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
