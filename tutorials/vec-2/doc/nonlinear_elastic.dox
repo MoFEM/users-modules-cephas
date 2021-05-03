@@ -13,9 +13,8 @@
 
 \tableofcontents
 
+\ref nonlinear_elastic.cpp
 
-nonlinear_elastic.cpp
-
-HenckyOps.hpp
+\ref HenckyOps.hpp
 
 */
