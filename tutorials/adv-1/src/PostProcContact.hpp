@@ -231,6 +231,7 @@ struct Monitor : public FEMethod {
     if (SPACE_DIM == 2)
       vertexPostProc->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformOnEdge());
+
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
             "U", commonDataPtr->contactDispPtr));
@@ -239,126 +240,121 @@ struct Monitor : public FEMethod {
             "SIGMA", commonDataPtr->contactTractionPtr));
     vertexPostProc->getOpPtrVector().push_back(
         new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
-  };
 
-  postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
-  postProcFe->generateReferenceElementMesh();
-  if (SPACE_DIM == 2) {
-    jAC.resize(2, 2, false);
-    invJac.resize(2, 2, false);
-    postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAC));
+    postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
+    postProcFe->generateReferenceElementMesh();
+    if (SPACE_DIM == 2) {
+      jAC.resize(2, 2, false);
+      invJac.resize(2, 2, false);
+      postProcFe->getOpPtrVector().push_back(new OpCalculateJacForFace(jAC));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateInvJacForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
+      postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+      postProcFe->getOpPtrVector().push_back(
+          new OpSetContravariantPiolaTransformFace(jAC));
+      postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+    }
+
     postProcFe->getOpPtrVector().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
-    postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
+        new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mGradPtr));
+    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+        "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
     postProcFe->getOpPtrVector().push_back(
-        new OpSetContravariantPiolaTransformFace(jAC));
-    postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
+        new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+            "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
+            commonDataPtr->mDPtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
+            "SIGMA", commonDataPtr->contactStressDivergencePtr));
+    postProcFe->getOpPtrVector().push_back(
+        new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
+            "SIGMA", commonDataPtr->contactStressPtr));
+
+    postProcFe->getOpPtrVector().push_back(
+        new Tutorial::OpPostProcElastic<SPACE_DIM>(
+            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+            commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr));
+
+    postProcFe->getOpPtrVector().push_back(new OpPostProcContact<SPACE_DIM>(
+        "SIGMA", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+        commonDataPtr));
+    postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
   }
 
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-          "U", commonDataPtr->mGradPtr));
-  postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-      "U", commonDataPtr->mGradPtr, commonDataPtr->mStrainPtr));
-  postProcFe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", commonDataPtr->mStrainPtr, commonDataPtr->mStressPtr,
-          commonDataPtr->mDPtr));
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateHVecTensorDivergence<SPACE_DIM, SPACE_DIM>(
-          "SIGMA", commonDataPtr->contactStressDivergencePtr));
-  postProcFe->getOpPtrVector().push_back(
-      new OpCalculateHVecTensorField<SPACE_DIM, SPACE_DIM>(
-          "SIGMA", commonDataPtr->contactStressPtr));
+  MoFEMErrorCode preProcess() { return 0; }
+  MoFEMErrorCode operator()() { return 0; }
 
-  postProcFe->getOpPtrVector().push_back(
-      new Tutorial::OpPostProcElastic<SPACE_DIM>("U", postProcFe->postProcMesh,
-                                                 postProcFe->mapGaussPts,
-                                                 commonDataPtr->mStrainPtr,
-                                                 commonDataPtr->mStressPtr));
-
-  postProcFe->getOpPtrVector().push_back(
-      new OpPostProcContact<SPACE_DIM>("SIGMA", postProcFe->postProcMesh,
-                                       postProcFe->mapGaussPts, commonDataPtr));
-  postProcFe->addFieldValuesPostProc("U", "DISPLACEMENT");
-}
-
-MoFEMErrorCode
-preProcess() {
-  return 0;
-}
-MoFEMErrorCode operator()() { return 0; }
-
-MoFEMErrorCode postProcess() {
-  MoFEMFunctionBegin;
-
-  auto post_proc_volume = [&]() {
+  MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
-    CHKERR postProcFe->writeFile(
-        "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
-    MoFEMFunctionReturn(0);
-  };
 
-  auto post_proc_boundary = [&] {
-    MoFEMFunctionBegin;
-    std::ostringstream ostrm;
-    ostrm << "out_boundary_contact_" << sTEP << ".h5m";
-    CHKERR DMoFEMLoopFiniteElements(dM, "bFE", vertexPostProc);
-    CHKERR moabVertex.write_file(ostrm.str().c_str(), "MOAB",
-                                 "PARALLEL=WRITE_PART");
-    moabVertex.delete_mesh();
-    MoFEMFunctionReturn(0);
-  };
+    auto post_proc_volume = [&]() {
+      MoFEMFunctionBegin;
+      CHKERR DMoFEMLoopFiniteElements(dM, "dFE", postProcFe);
+      CHKERR postProcFe->writeFile(
+          "out_contact_" + boost::lexical_cast<std::string>(sTEP) + ".h5m");
+      MoFEMFunctionReturn(0);
+    };
 
-  auto print_max_min = [&](auto &tuple, const std::string msg) {
-    MoFEMFunctionBegin;
-    CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+    auto post_proc_boundary = [&] {
+      MoFEMFunctionBegin;
+      std::ostringstream ostrm;
+      ostrm << "out_boundary_contact_" << sTEP << ".h5m";
+      CHKERR DMoFEMLoopFiniteElements(dM, "bFE", vertexPostProc);
+      CHKERR moabVertex.write_file(ostrm.str().c_str(), "MOAB",
+                                   "PARALLEL=WRITE_PART");
+      moabVertex.delete_mesh();
+      MoFEMFunctionReturn(0);
+    };
+
+    auto print_max_min = [&](auto &tuple, const std::string msg) {
+      MoFEMFunctionBegin;
+      CHKERR VecScatterBegin(std::get<1>(tuple), ts_u, std::get<0>(tuple),
+                             INSERT_VALUES, SCATTER_FORWARD);
+      CHKERR VecScatterEnd(std::get<1>(tuple), ts_u, std::get<0>(tuple),
                            INSERT_VALUES, SCATTER_FORWARD);
-    CHKERR VecScatterEnd(std::get<1>(tuple), ts_u, std::get<0>(tuple),
-                         INSERT_VALUES, SCATTER_FORWARD);
-    double max, min;
-    CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
-    CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
-    MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
-                msg.c_str(), ts_t, min, max);
+      double max, min;
+      CHKERR VecMax(std::get<0>(tuple), PETSC_NULL, &max);
+      CHKERR VecMin(std::get<0>(tuple), PETSC_NULL, &min);
+      MOFEM_LOG_C("EXAMPLE", Sev::inform, "%s time %3.4e min %3.4e max %3.4e",
+                  msg.c_str(), ts_t, min, max);
+      MoFEMFunctionReturn(0);
+    };
+
+    MOFEM_LOG("EXAMPLE", Sev::inform)
+        << "Write file at time " << ts_t << " write step " << sTEP;
+
+    ++sTEP;
+    CHKERR post_proc_volume();
+    CHKERR post_proc_boundary();
+
+    CHKERR print_max_min(uXScatter, "Ux");
+    CHKERR print_max_min(uYScatter, "Uy");
+    if (SPACE_DIM == 3)
+      CHKERR print_max_min(uZScatter, "Uz");
+
     MoFEMFunctionReturn(0);
-  };
-
-  MOFEM_LOG("EXAMPLE", Sev::inform)
-      << "Write file at time " << ts_t << " write step " << sTEP;
-
-  ++sTEP;
-  CHKERR post_proc_volume();
-  CHKERR post_proc_boundary();
-
-  CHKERR print_max_min(uXScatter, "Ux");
-  CHKERR print_max_min(uYScatter, "Uy");
-  if (SPACE_DIM == 3)
-    CHKERR print_max_min(uZScatter, "Uz");
-
-  MoFEMFunctionReturn(0);
-}
+  }
 
 private:
-SmartPetscObj<DM> dM;
-boost::shared_ptr<CommonData> commonDataPtr;
-std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
-std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
-std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+  SmartPetscObj<DM> dM;
+  boost::shared_ptr<CommonData> commonDataPtr;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
+  std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
 
-boost::shared_ptr<PostProcEle> postProcFe;
-boost::shared_ptr<BoundaryEle> vertexPostProc;
-moab::Core mbVertexPostproc;
-moab::Interface &moabVertex;
+  boost::shared_ptr<PostProcEle> postProcFe;
+  boost::shared_ptr<BoundaryEle> vertexPostProc;
+  moab::Core mbVertexPostproc;
+  moab::Interface &moabVertex;
 
-MatrixDouble invJac;
-MatrixDouble jAC;
+  MatrixDouble invJac;
+  MatrixDouble jAC;
 
-double lastTime;
-double deltaTime;
-int sTEP;
+  double lastTime;
+  double deltaTime;
+  int sTEP;
 };
 
 } // namespace ContactOps
