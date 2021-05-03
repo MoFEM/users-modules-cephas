@@ -39,6 +39,7 @@ tutorials_copy_and_install("*.png" "${permissions_execute}")
 tutorials_copy_and_install("*.md" "${permissions_execute}")
 tutorials_copy_and_install("*.cfg" "${permissions_execute}")
 tutorials_copy_and_install("*.jou" "${permissions_execute}")
+tutorials_copy_and_install("meshes/*" "${permissions_execute}")
 
 tutorials_build_and_install(
   plastic_2d ${CMAKE_CURRENT_SOURCE_DIR}/plastic.cpp)
