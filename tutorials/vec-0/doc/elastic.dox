@@ -78,7 +78,7 @@ The code developed for this example can be compiled for both 2D and 3D cases by 
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Define dimension
 
-*SPACE_DIM* will be used throughout the code to determine dimension of the executable. It is also possible to setup *CMakeFiles.txt* to compile both, 2D and 3D executables (see plastic.cpp example). 
+ The constant variable *SPACE_DIM* will be used throughout the code to determine dimension of the executable. It is also possible to setup *CMakeFiles.txt* to compile both, 2D and 3D executables (see plastic.cpp example). 
 
 Note that based on *SPACE_DIM* an appropriate type of elements is defined in the following snippet:
 \code 
@@ -98,12 +98,11 @@ where Example::readMesh() executes the mesh reading procedure.
 
 
 \subsection tutorial_elastic_problem_set_up Problem setup
-The function Example::setupProblem() involves adding the displacement field *U* on the entities of the mesh and determine 
-the base function space, base, field rank and base order. We are adding *U* as both domain and a boundary field.
+The function Example::setupProblem() involves adding the displacement field *U* on the entities of the mesh and determine the base function space, base, field rank and base order. We are adding *U* as both domain and a boundary field.
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Set up problem
 
-The space chosen is H1, the base is AINSWORTH_LEGENDRE_BASE and dimension is *SPACE_DIM* that corresponds to a vector field with *SPACE_DIM* number of coefficients.
+The space chosen is `H1`, the base is `AINSWORTH_LEGENDRE_BASE` and dimension is *SPACE_DIM* that corresponds to a vector field with *SPACE_DIM* number of coefficients.
 Additionally, we define a command line parameter *-order* that specifies the order of our base, 2nd order is chosen as a default.
 
 \subsection tutorial_elastic_common_data Common data
@@ -126,9 +125,9 @@ Using the FTensor::Index type these formulas can be directly implemented using E
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Calculate elasticity tensor
 
-Note that depending on *SPACE_DIM* this code will appropriately sum over all the indices and set coefficient \f$ A \f$ for plane stress or 3D case.
+Note that depending on *SPACE_DIM* our code will appropriately sum over all the indices and set coefficient \f$ A \f$ for plane stress or 3D case.
 In the next lines of the program, we define a vector that will be passed to the UDOs and specify the gravity load. 
-For this example, we will *hardcode* the load to be always 1 in the Y direction\f$ \mathbf{ b } = [ 0,1,0 ]\f$
+For this example, we will *hardcode* the load to be always 1 in the Y direction\f$ \mathbf{ b } = [ 0,-1,0 ]\f$
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Define gravity vector
 
@@ -150,7 +149,7 @@ In order to apply homogeneous Dirichlet boundary conditions for our problem, we 
 
 \snippet users_modules/tutorials/vec-0/elastic.cpp Boundary condition
 
-The first lambda function in the snippet above *fix_disp* searches for entities in a meshset with a given name. Subsequently, these entities (*Range*) are passed to another lambda function - *remove_ents* that removes them from the problem. This operation is equivalent of setting all the degrees of freedom to zero on associated entities. For the examples considered in this tutorial, the provided meshes contain only one meshset *FIX_ALL* that will essentially fix displacements in all directions to zero. In Figure \ref figure2_problem_fix_all "Figure 2" we show selected triangles on the face of triangle that are used to define the *FIX_ALL* meshset. Note that in case of 2D mesh, we select edge elements.
+The first lambda function in the snippet above *fix_disp* searches for entities in a meshset with a given name. Subsequently, these entities (*Range*) are passed to another lambda function - *remove_ents* that removes them from the problem. This operation is equivalent of setting all the degrees of freedom to zero on associated entities. For the examples considered in this tutorial, the provided meshes contain only one meshset *FIX_ALL* that will essentially fix displacements in all directions to zero. In \ref figure2_problem_fix_all "Figure 2" we show selected triangles on the face of triangle that are used to define the *FIX_ALL* meshset. Note that in case of 2D mesh, we select edge elements.
 
 \anchor figure2_problem_fix_all
 \image html boundary_cond_canti.png "Figure 2: FIX_ALL block meshset specified on the mesh of the cantilever for 3D case. " width=300px
@@ -175,7 +174,7 @@ using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 \endcode 
 
-The first parameter in the above template specifies the dimension of the base (we use scalar base, so set to 1), second parameter requires specification of the number of the coefficients of we field we are operating on (our vector field of displacements has *SPACE_DIM* coefficients). The last parameter specifies whether the passed vector is constant for all integration points. In this case `bodyForceMatPtr` body force vector is assumed constant, (has the same values for all gauss points). However, if the considered body would be heterogeneous, then the last parameter would be set to 1. 
+The first parameter in the above template specifies the dimension of the base (we use scalar base, so set to 1), second parameter requires specification of the number of the coefficients of we field we are operating on (our vector field of displacements has *SPACE_DIM* coefficients). The last parameter specifies whether the passed vector is constant for all integration points. In this case `bodyForceMatPtr` body force vector is assumed constant, (has the same values for all gauss points). However, if the considered body is heterogeneous, then the last parameter would be set to 1. 
 
 \subsection tutorial_elastic_lhs Pushing operators to LHS domain pipeline
 
@@ -205,7 +204,6 @@ The utilised `OpGradSymTensorGrad` form integrator template of Bilinear Form has
 
 More info about available Form Integrators can be found in \ref user_data_operators_table.
 
-
 \subsection tutorial_elastic_solver_setup Solver setup
 With appropriately defined pipelines for assembling the global system of equations \f$ \mathbf{K} \mathbf{U} = \mathbf{F} \f$, the next functions Example::solveSystem() sets up PETSc solver and calculates it directly or iteratively based on specified settings. 
 
@@ -233,7 +231,7 @@ Next, a series of operators is pushed:
 - `OpCalculateInvJacForFace` and `OpSetInvJacH1ForFace` computes and sets the Jacobian in case of 2D elements
 - `OpCalculateVectorFieldGradient` computes the gradient of the obtained displacement field \f$ \nabla \mathbf u^{h}=\sum_{m=0}^{N-1} \nabla \phi_m \bar{\mathbf u}_m \f$
 - `OpSymmetrizeTensor` symmetrises the previously computed gradient to compute small strain tensor \f$ \boldsymbol \varepsilon = \frac{1}{2} (\nabla \mathbf u^\text{T} + \nabla \mathbf u)  \f$
-- `OpTensorTimesSymmetricTensor` is another form integrator that computes Cauchy stress:  \f$ \boldsymbol \sigma =& \mathbb D : \boldsymbol \varepsilon \f$
+- `OpTensorTimesSymmetricTensor` is another form integrator that computes Cauchy stress:  \f$ \boldsymbol \sigma = \mathbb D : \boldsymbol \varepsilon \f$
 - Tutorial::OpPostProcElastic saves the tensors \f$ \boldsymbol \varepsilon \f$ and \f$ \boldsymbol \sigma \f$ onto the reference mesh using moab tags.
 
 
@@ -253,7 +251,7 @@ will do the following steps
     cd mofem_install/mofem-cephas/mofem/users_modules/um-build-RelWithDebInfo-abcd1234/tutorials/vec-0
     \endcode
 
-- Second, check the parameters in the param_file.petsc. These are PETSc
+- Second, check the parameters in the *param_file.petsc*. These are PETSc
   parameters and you should only use parameters that are needed for a particular
   solver, in this case KSP solver. Only the following parameters should be
   uncommented
@@ -278,8 +276,7 @@ This will produce *out_elastic.h5m* file which we can convert using
   mbconvert out_elastic.h5m out_elastic_3D.vtk
 \endcode
 
-The file *out_elastic_3D.vtk* can be opened in Paraview and use the filter `WarpByScalar`, you will be able to
-see the deformation as in \ref figure3_output "Figure 3". 
+The file *out_elastic_3D.vtk* can be opened in Paraview. Using the filter `WarpByScalar` allows to visualise the deformation as shown in \ref figure3_output "Figure 3". 
 
 We can also compute 2D case of the beam. In order to do that, change the below variable:
 \snippet users_modules/tutorials/vec-0/elastic.cpp Define dimension
