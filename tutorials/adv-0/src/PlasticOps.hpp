@@ -533,6 +533,7 @@ inline auto diff_constrain_dstrain(T1 &t_D, T2 &&t_diff_constrain_dstress) {
 };
 //! [Lambda functions]
 
+//! [Auxiliary functions functions
 static inline FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>
 get_mat_tensor_sym_dvector(size_t rr, MatrixDouble &mat, FTensor::Number<2>) {
   return FTensor::Tensor3<FTensor::PackPtr<double *, 2>, 2, 2, 2>{
@@ -566,6 +567,8 @@ static inline auto get_mat_scalar_dvector(MatrixDouble &mat,
   return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>{
       &mat(0, 0), &mat(0, 1), &mat(0, 2)};
 }
+//! [Auxiliary functions functions
+
 
 }; // namespace PlasticOps
 
