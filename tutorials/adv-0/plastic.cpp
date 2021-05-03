@@ -164,6 +164,8 @@ private:
 
   std::vector<boost::shared_ptr<BCs>> bcVec;
   boost::shared_ptr<DofEntity> arcDof;
+
+  std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 };
 
 //! [Run problem]
@@ -506,7 +508,6 @@ MoFEMErrorCode Example::OPs() {
           "EP", "U", commonPlasticDataPtr, commonHenckyDataPtr));
       pipeline.push_back(new OpCalculateContrainsLhs_LogStrain_dU(
           "TAU", "U", commonPlasticDataPtr, commonHenckyDataPtr));
-
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
       pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
@@ -535,19 +536,36 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      const std::string block_name = "BODY_FORCE";
+      if (it->getName().compare(0, block_name.size(), block_name) == 0) {
+        std::vector<double> attr;
+        CHKERR it->getAttributes(attr);
+        if (attr.size() == 3) {
+          bodyForces.push_back(
+              FTensor::Tensor1<double, 3>{attr[0], attr[1], attr[2]});
+        } else {
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                   "Should be three atributes in BODYFORCE blockset, but is %d",
+                   attr.size());
+        }
+      }
+    }
+
     auto get_body_force = [this](const double, const double, const double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       FTensor::Index<'i', SPACE_DIM> i;
       FTensor::Tensor1<double, SPACE_DIM> t_source;
+      t_source(i) = 0;
       auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
       const auto time = fe_domain_rhs->ts_t;
       // hardcoded gravity load
-      t_source(i) = 0;
-      t_source(1) = (-5e+7 * scale) * time;
+      for (auto &t_b : bodyForces)
+        t_source(i) += (scale * t_b(i)) * time;
       return t_source;
     };
 
-    // pipeline.push_back(new OpBodyForce("U", get_body_force));
+    pipeline.push_back(new OpBodyForce("U", get_body_force));
 
     // Calculate internal forece
     if (is_large_strains) {
