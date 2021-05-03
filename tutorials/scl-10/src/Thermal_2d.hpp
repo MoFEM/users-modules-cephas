@@ -1,5 +1,5 @@
-#ifndef __POISSON2DNONHOMOGENEOUS_HPP__
-#define __POISSON2DNONHOMOGENEOUS_HPP__
+#ifndef __THERMAL2D_HPP__
+#define __THERMAL2D_HPP__
 
 #include <stdlib.h>
 #include <BasicFiniteElements.hpp>
@@ -448,4 +448,4 @@ private:
 
 }; // namespace Thermal2DOperators
 
-#endif //__POISSON2DNONHOMOGENEOUS_HPP__
+#endif //__THERMAL2D_HPP__

@@ -1,5 +1,7 @@
-mofem_part -my_file mesh2d.cub -output_file mesh2d.h5m -my_nparts 2 -dim 2 -adj_dim 1
+This command line is used to run a steady-state heat analysis with the conduction as input "-D"
 
-mpirun -np 2 ./poisson_2d_nonhomogeneous -file_name mesh2d.h5m -order 4
+./thermal_2d -file_name mesh2d_test2.cub -order 2 -D 10
 
-mpirun -np 2 ./thermal_2d -file_name mesh2d.h5m -order 4
+Use the following command to convert the output file into a format compatible with Paraview.
+
+mbconvert out_result.h5m out_result_D10.vtk
