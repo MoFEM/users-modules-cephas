@@ -465,7 +465,6 @@ inline auto diff_plastic_flow_dstrain(
 };
 
 inline double constrain_abs(long double x) {
-  // return std::sqrt(std::pow(x, 2) + 4 * std::pow(delta, 2));
   return std::abs(x);
 };
 
@@ -476,12 +475,6 @@ inline double constrian_sign(long double x) {
     return -1;
   else
     return 0;
-  // return x / constrain_abs(x);
-};
-
-inline double constrian_sign2(long double x) {
-  // return 0;
-  return 0; //-(x * x / pow(constrain_abs(x), 3)) + (1 / constrain_abs(x));
 };
 
 inline double w(long double dot_tau, long double f, long double sigma_y) {
@@ -520,22 +513,6 @@ inline auto diff_constrain_df(long double dot_tau, long double f,
 inline auto diff_constrain_dsigma_y(long double dot_tau, long double f,
                                     long double sigma_y) {
   return (1 + constrian_sign(w(dot_tau, f, sigma_y))) / 2;
-}
-
-inline auto diff2_constrain_dsigma_y_df(long double dot_tau, long double f,
-                                        double sigma_y) {
-  return constrian_sign2(w(dot_tau, f, sigma_y)) / (sigmaY / 2);
-}
-
-inline auto diff2_constrain_d2sigma_y(long double dot_tau, long double f,
-                                      long double sigma_y) {
-  return -constrian_sign2(w(dot_tau, f, sigma_y)) / (sigmaY / 2);
-}
-
-inline auto diff2_constrain_dsigma_y_ddot_tau(long double dot_tau,
-                                              long double f,
-                                              long double sigma_y) {
-  return cn * constrian_sign2(w(dot_tau, f, sigma_y)) / 2;
 }
 
 template <typename T>
