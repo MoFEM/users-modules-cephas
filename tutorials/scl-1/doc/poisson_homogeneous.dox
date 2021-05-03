@@ -123,7 +123,7 @@ form of the problem given by
 \right) ~d{\Omega^e}= \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
   \end{equation}
 \f]
-Moving \f$ \bar{u}_j \f$ outside of the parentheses and rearraging the equation, we
+Moving \f$ \bar{u}_j \f$ outside of the parentheses and rearranging the equation, we
 have 
 \f[
   \begin{equation}
@@ -225,7 +225,7 @@ As a common practice, typically all the implementation of UDOs for a specific
 problem is put in a `*.hpp` file. This file will be included in the main `*.cpp`
 file which contains all the necessary classes and functions. Detailed
 explanation of the implementation of UDOs, how you pushed UDOs to Pipeline as
-well as developement of classes/functions are presented below
+well as development of classes/functions are presented below
 
 \subsection basic_tutorials_poisson_homogeneous_udo User Data Operators 
 
@@ -243,7 +243,7 @@ vector. They are
 
 Before going into details of the implementation of the two UDOs in
 poisson_2d_homogeneous.hpp, let's have a look at the first few lines of code of
-the file that includes some libaries for finite element implementation, some
+the file that includes some libraries for finite element implementation, some
 aliases, and declaration/initialisation as commented below.
 
 \code
@@ -561,7 +561,7 @@ they are presented in Eq. (11)
 \code
 locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
 \endcode
-where `a` is the intemediate variable of type `double` and calculated earlier as
+where `a` is the intermediate variable of type `double` and calculated earlier as
 \code
 const double a = t_w * area;
 \endcode
@@ -615,7 +615,7 @@ memory address where the first components of the local stiffness matrix
 `getKSPB()` is the method to set the value of LHS matrix that will be solved by
 the iterative solver namely [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) in PETSc.
 
-And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we tranpose
+And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we transpose
 everything that has already assembled to form the full matrix of \f$ {\bf K} \f$. This process is implemented and visualised as follows
 \code
       if (row_side != col_side || row_type != col_type) {
@@ -730,7 +730,7 @@ beginning of the `*.hpp` to calculate the local vector
         }
 \endcode
 
-Similarly to the implemenation of matrix UDO, the final part of the code
+Similarly to the implementation of matrix UDO, the final part of the code
 involves filling/assembling the calculated values from local force vector to the
 global one. This procedure for force vector is slightly different from the
 matrix. It is done in two steps. First, we need to tell the program to ignore
@@ -800,7 +800,7 @@ or some of the member functions declared above
   MatrixDouble invJac;
 \endcode
 
-\note For writting program in MoFEM, we follow some coding practices for code
+\note For writhing program in MoFEM, we follow some coding practices for code
 style and naming convention described at \ref coding_practice
 
 
@@ -826,10 +826,10 @@ function responsible for reading input mesh
 \snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Read mesh
 
 Apart from the codes for error handling, the main three lines of code
-is a standard way to read an input mesh using Simple interface. Inteface in
+is a standard way to read an input mesh using Simple interface. Interface in
 MoFEM is a set of rules through which program developers use to setup a problem.
 Simple interface provides simplest but also less flexible way to setup a
-problem. More on the intefaces can be found at \ref
+problem. More on the interfaces can be found at \ref
 basic_lessons1_interfaces. Implementation of more advanced interfaces will be
 presented in later tutorials.
 
@@ -948,7 +948,7 @@ follows
 - Second, pushing the operators to the Pipeline that is responsible for the
 calculation of the LHS matrix. This is done in two steps. Initially, the
 operators to calculate the *inverse of the Jacobian* of the mapping from
-reference (parent) space to the phyisical space is pushed first and then
+reference (parent) space to the physical space is pushed first and then
 the implemented UDO for stiffness matrix `OpDomainLhsMatrixK` is pushed to the 
 LhsPipeline.
 \code
@@ -963,7 +963,7 @@ LhsPipeline.
         new OpDomainLhsMatrixK(domainField, domainField));
   }
 \endcode
-It is noted that the procedure to push operators calculting the inverse of
+It is noted that the procedure to push operators calculating the inverse of
 Jacobian with the presence of the gradient of approximation function is needed
 only for 2D problem. For 3D problem, it is done automatically and user does not
 have to manually add codes to push operators calculating the inverse of
@@ -1050,7 +1050,7 @@ previous sections was just the definition. All the calculations (all the loops
 to calculate matrix and vector entries implemented in UDOs) are only triggered
 when the line of code above calling `KSPSolve()` function is executed.
 
-Lastly, the results are scatttered through DM and ready to be fed to the output
+Lastly, the results are scattered through DM and ready to be fed to the output
 mesh in the next step
 \code
   // Scatter result data on the mesh
@@ -1200,7 +1200,7 @@ see the deformation as below
 
 \subsection basic_tutorials_poisson_homogeneous_discussion Discussion
 
-As mentioned at the begining of this tutorial, this Poisson
+As mentioned at the beginning of this tutorial, this Poisson
 equation with homogeneous boundary condition helps to predict the deformation
 of a membrane that is fixed at the boundary bearing an uniformly distributed
 force on its surface. In this case, the force \f$ f=5.0\f$ is hardcoded in the

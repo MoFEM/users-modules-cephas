@@ -1,0 +1,21 @@
+/*! \page tutorial_nonlinear_elastic VEC-2: Nonlinear elastic
+
+\note Prerequisites of this tutorial include \ref tutorial_elastic_problem and \ref basic_tutorials_poisson_nonlinear
+
+<br>
+
+\note Intended learning outcome:
+- solving nonlinear vector-valued problem in MoFEM
+- extension of linear elasticity to large strains with Hencky material
+- developing code that can be compiled for 2D or 3D cases
+- using matrix functions
+- implementation of tangent stiffness matrix and verification with PETSc
+
+\tableofcontents
+
+
+nonlinear_elastic.cpp
+
+HenckyOps.hpp
+
+*/
