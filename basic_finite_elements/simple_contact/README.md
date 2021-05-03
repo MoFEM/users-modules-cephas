@@ -154,7 +154,6 @@ Name | Description | Default value
 `my_alm_flag` | Defines the choice of the algorithm: `0` (False) - Complementarity function approach, `1` (True) - Augmented Lagrangian method | `0`  
 `my_convect` | If set to `1` (True), moderate relative tangential displacements can be  taken into account | `0`  
 
-
 ## 6. Running the contact simulation
 
 ```bash
@@ -178,4 +177,44 @@ The obtained `vtk` files can be viewed in *Paraview*, in particular:
 - File `out.vtk` contains the stress tensor components (tag `SPATIAL_POSITION_PIOLA1_STRESS`), as well as material coordinates (tag `MESH_NODE_POSITIONS`) and current coordinates (tag `SPATIAL_POSITION`), which can be used to compute the displacement field with the *Calculator* filter as `DISPLACEMENT=SPATIAL_POSITION-MESH_NODE_POSITIONS`
 - File `out_contact.vtk` contains the nodal interpolation of the Lagrange multipliers equivalent to the contact pressure (tag `LAGMULT`)
 - File `out_contact_integ_pts.vtk` contains values of Lagrange multipliers (tag `LAGMULT`) and the normal gap (tag `GAP`) at Gauss points of the contact interface. Note that the _Point Gaussian_ representation or alternatively the _Glyph_ filter should be used for their visualisation in *Paraview*.
+
+## 8. Simulation with internal stress
+Simulation taking into account matching-meshes contact and internal stress is  possible using executable `simple_contact_thermal`. Furthermore, this program provides possibility to save the value of the internal stress and the corresponding actual stress on the input mesh for subsequent use in the fracture module.
+
+Two options are available for the internal stress:
+
+- internal stress caused by thermal expansion given by an analytical formula; by default the temperature is decreased by 1 degree compared to the initial one, however, this can be changed to a different formula, e.g. coordinate-dependant in the function `thermal_strain` in file `simple_contact_thermal.cpp`
+- internal stress pre-computed such that its integration points values are saved on tags of the input mesh
+
+Two options are available for saving the internal and corresponding actual stress on the mesh:
+
+- mean values of internal and actual stress saved on tags `MED_INTERNAL_STRESS` and `MED_ACTUAL_STRESS`, respectively 
+- values of internal and actual stress at integration points saved using tags `INTERNAL_STRESS` and `ACTUAL_STRESS`, respectively
+
+In addition to outlined above parameters, the following parameters can be used with `simple_contact_thermal`:
+Name | Description | Default value
+--- | --- | ---
+`my_analytical_input` | If set to `1` (True), compute internal stress using analytical formula for thermal strain, otherwise use pre-computed internal stress saved on tags of the input mesh | `1`
+`my_thermal_expansion_coef` | Value of thermal expansion coefficient for computing thermal strain (used if `my_analytical_input` is set to `1`) | `1e-5`
+`my_init_temp` | Value of initial temperature for computing thermal strain (used if `my_analytical_input` is set to `1`) | `250.0`
+`my_stress_tag_name` | Tag name used when reading internal stress from the mesh (if `my_analytical_input` is set to `0`) | `INTERNAL_STRESS`
+`my_save_mean_stress` |  If set to `1` (True), save mean values of internal and actual stress on the tags of the mesh, otherwise save integration point values of stresses | `1`
+`my_scale_factor` | Scale for the internal stress | `1.0`
+`my_ignore_contact` | If set to `1` (True), ignore contact | `0` 
+`my_ignore_pressure` | If set to `1` (True), ignore pressure | `0` 
+`my_output_mesh_file` | Name of the file for writing the mesh with internal and actual stress saved on tags | `0` 
+
+Example of running the simulation using the analytical thermal strain for the internal stress and saving the mean values of the internal and external stress on the mesh:
+```bash
+mpirun -np 4 simple_contact_thermal \
+-my_file test.cub \
+-my_output_mesh_file med_stress.h5m \
+-my_analytical_input 1
+-my_thermal_expansion_coef 1e-3 \
+-my_init_temp 250. \
+-my_save_mean_stress 1 \
+-my_scale_factor 1 \
+```
+
+
 

@@ -96,10 +96,10 @@ int main(int argc, char *argv[]) {
     PetscReal thermal_expansion_coef = 1e-5;
     PetscReal init_temp = 250.0;
     PetscReal scale_factor = 1.0;
-    PetscBool analytical_input = PETSC_FALSE;
+    PetscBool analytical_input = PETSC_TRUE;
     char stress_tag_name[255];
     PetscBool flg_tag_name;
-    PetscBool save_mean_stress = PETSC_FALSE;
+    PetscBool save_mean_stress = PETSC_TRUE;
     PetscBool ignore_contact = PETSC_FALSE;
     PetscBool ignore_pressure = PETSC_FALSE;
 
@@ -159,13 +159,13 @@ int main(int argc, char *argv[]) {
                             &ignore_pressure, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_analytical_input",
                             "if set true, use analytical strain", "",
-                            PETSC_FALSE, &analytical_input, PETSC_NULL);
+                            PETSC_TRUE, &analytical_input, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_save_mean_stress",
-                            "if set true, save mean stress", "", PETSC_FALSE,
+                            "if set true, save mean stress", "", PETSC_TRUE,
                             &save_mean_stress, PETSC_NULL);
-    CHKERR PetscOptionsString("-my_stress_tag_name",
-                              "stress tag name file name", "", "STRESS",
-                              stress_tag_name, 255, &flg_tag_name);
+    CHKERR PetscOptionsString(
+        "-my_stress_tag_name", "stress tag name file name", "",
+        "INTERNAL_STRESS", stress_tag_name, 255, &flg_tag_name);
     CHKERR PetscOptionsReal(
         "-my_thermal_expansion_coef", "thermal expansion coef ", "",
         thermal_expansion_coef, &thermal_expansion_coef, PETSC_NULL);
@@ -952,13 +952,13 @@ int main(int argc, char *argv[]) {
       internal_stress.resize(9, 0.);
       actual_stress.resize(9, 0.);
       std::vector<double> internal_stress_ref, actual_stress_ref;
-      internal_stress_ref = {-5., -5., -5., 0., 0., 0., 0., 0., 0.};
+      internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
       switch (test_num) {
       case 1:
-        actual_stress_ref = {0., 0., -1., 0., 0., 0., 0., 0., 0.};
+        actual_stress_ref = {0., 0., 1., 0., 0., 0., 0., 0., 0.};
         break;
       case 2:
-        actual_stress_ref = {0., -5. / 3., -5. / 3., 0., 0., 0., 0., 0., 0.};
+        actual_stress_ref = {0., 5. / 3., 5. / 3., 0., 0., 0., 0., 0., 0.};
         break;
       default:
         SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
