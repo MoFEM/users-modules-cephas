@@ -419,7 +419,7 @@ MoFEMErrorCode Example::bC() {
         marker.begin(), marker.end());
   }
 
-  auto rec_marker = mark_dofs_on_ents(get_adj_ents(get_block_ents("FIX_X1")));
+  auto rec_marker = mark_dofs_on_ents(get_adj_ents(get_block_ents("REACTION")));
   reactionMarker = boost::make_shared<std::vector<unsigned char>>(
       rec_marker.begin(), rec_marker.end());
 
