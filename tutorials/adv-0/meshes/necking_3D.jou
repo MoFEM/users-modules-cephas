@@ -24,31 +24,22 @@ imprint volume all
 merge volume all 
 
 
-block 1 volume all
-block 1 name 'MATERIAL'
-block 1 attribute count 2
-block 1 attribute index 1 1000
-block 1 attribute index 2 0.25
-
-#create displacement on surface 29 39 dof 2 fix
-#create displacement on surface 26 36 dof 1 fix 0
-#create displacement on surface 38 dof 3 fix
-#create displacement on surface 30 dof 3 fix 5
-
+volume 5 size 2
+volume 4 size 2
 volume all scheme tetmesh
-volume 4 size 10
-volume 5 size 10
+mesh volume 5
+mesh volume 4
 
-mesh volume all
+set duplicate block elements on
+
+#FIXED_BOUNDARY CONDITIONS
 
 block 5 surface 30
 block 5 name "FIX_Z"
 block 5 attribute count 3
 block 5 attribute index 1 0 
 block 5 attribute index 2 0
-block 5 attribute index 3 7.5
-
-#FIXED_BOUNDARY CONDITIONS
+block 5 attribute index 3 0
 
 block 6 surface 26 36
 block 6 name "FIX_X"
@@ -69,7 +60,14 @@ block 8 name "FIX_Z1"
 block 8 attribute count 3
 block 8 attribute index 1 0
 block 8 attribute index 2 0
-block 8 attribute index 3 0
+block 8 attribute index 3 -7.5
+
+block 9 surface 38
+block 9 name "REACTION"
+block 9 attribute count 3
+block 9 attribute index 1 0
+block 9 attribute index 2 0
+block 9 attribute index 3 0
 
 #block 6 surface 26 36
 #block 6 name "REMOVE_X"
@@ -93,21 +91,4 @@ block 8 attribute index 3 0
 #block 8 attribute index 3 0
 #
 
-
-save as "/Users/karollewandowski/moFEM/mofem-cephas/mofem/users_modules/tutorials/adv-0/meshes/necking_3D.cub" overwrite
-
-# EXAMPLE COMMAND LINE
-
-# mpirun -np $proc /Users/karollewandowski/moFEM/users_modules/tutorials/adv-0/plastic_3D -file_name out.h5m \
-# -is_scale \
-# -is_quasi_static 1 \
-# -order 2 \
-# -delta 0.01 \
-# -cn 1 \
-# -ts_max_time 1 \
-# -ts_dt 0.005 \
-# -hardening_viscous 0 \
-# -large_strains 1 \
-# -mat_mumps_icntl_14 800 -mat_mumps_icntl_24 1 -mat_mumps_icntl_13 1 \
-# -snes_linesearch_type bt -ts_type theta -ts_adapt_always_accept 1 -ts_theta_initial_guess_extrapolate 1 -ts_theta_theta 1 -ts_adapt_reject_safety 0.9 -ts_exact_final_time matchstep -quasi_static 1 2>&1 | tee log
 
