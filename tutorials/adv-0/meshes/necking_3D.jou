@@ -23,7 +23,6 @@ delete volume 6 7 10 8 9 11
 imprint volume all
 merge volume all 
 
-
 volume 5 size 2
 volume 4 size 2
 volume all scheme tetmesh
@@ -62,7 +61,7 @@ block 8 attribute index 1 0
 block 8 attribute index 2 0
 block 8 attribute index 3 -7.5
 
-block 9 surface 38
+block 9 surface 30
 block 9 name "REACTION"
 block 9 attribute count 3
 block 9 attribute index 1 0

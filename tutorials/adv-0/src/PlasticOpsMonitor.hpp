@@ -128,12 +128,16 @@ struct Monitor : public FEMethod {
       reactionFe->f = r;
       CHKERR VecZeroEntries(r);
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe);
+      CHKERR VecGhostUpdateBegin(r, ADD_VALUES, SCATTER_REVERSE);
+      CHKERR VecGhostUpdateEnd(r, ADD_VALUES, SCATTER_REVERSE);
       CHKERR VecAssemblyBegin(r);
       CHKERR VecAssemblyEnd(r);
+
       double sum;
       CHKERR VecSum(r, &sum);
       MOFEM_LOG_C("EXAMPLE", Sev::inform, "reaction time %3.4e %3.4e", ts_t,
                   sum);
+
       MoFEMFunctionReturn(0);
     };
 

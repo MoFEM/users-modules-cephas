@@ -159,7 +159,6 @@ private:
   };
 
   std::vector<boost::shared_ptr<BCs>> bcVec;
-  boost::shared_ptr<DofEntity> arcDof;
 
   std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 };
@@ -389,10 +388,10 @@ MoFEMErrorCode Example::bC() {
     return marked_ents;
   };
 
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
+  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_Y", 0, 0);
+  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_Y", 1, 1);
+  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_Z", 2, 2);
+  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_ALL", 0, 3);
 
   CHKERR fix_disp("FIX_X", true, false, false);
   CHKERR fix_disp("FIX_Y", false, true, false);
@@ -413,7 +412,8 @@ MoFEMErrorCode Example::bC() {
         marker.begin(), marker.end());
   }
 
-  auto rec_marker = mark_dofs_on_ents(get_adj_ents(get_block_ents("REACTION")));
+  auto rec_marker = mark_dofs_on_ents(
+      get_adj_ents(get_block_ents("REACTION")).subset_by_type(MBVERTEX));
   reactionMarker = boost::make_shared<std::vector<unsigned char>>(
       rec_marker.begin(), rec_marker.end());
 
@@ -819,10 +819,14 @@ MoFEMErrorCode Example::OPs() {
 
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
+
     if (SPACE_DIM == 2) {
       pipeline.push_back(new OpCalculateInvJacForFace(invJac));
       pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
     }
+
+    if (is_dual_base)
+      pipeline.push_back(new OpScaleL2(L2));
 
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
         "U", commonPlasticDataPtr->mGradPtr));
@@ -867,7 +871,19 @@ MoFEMErrorCode Example::OPs() {
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
-  reactionFe->getRuleHook = integration_rule_bc;
+  reactionFe->getRuleHook = integration_rule_nc;
+  if (SPACE_DIM == 3) {
+    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
+      return set_gauss_rule_3d(fe_ptr, ro, co, ao, 0);
+    };
+    reactionFe->setRuleHook = set;
+  } else {
+    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
+      return set_gauss_rule_2d(fe_ptr, ro, co, ao, 0);
+    };
+    reactionFe->setRuleHook = set;
+  }
+
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
 
   MoFEMFunctionReturn(0);
