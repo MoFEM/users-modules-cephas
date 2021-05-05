@@ -138,8 +138,6 @@ private:
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
-  boost::shared_ptr<DomainEle> constrainFeLhs;
-  boost::shared_ptr<DomainEle> constrainFeRhs;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
@@ -738,20 +736,6 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_ops_rhs_constrain(pipeline_mng->getOpDomainRhsPipeline());
   CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
-
-  CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
-
-  constrainFeLhs = boost::make_shared<DomainEle>(mField);
-  constrainFeRhs = boost::make_shared<DomainEle>(mField);
-
-  CHKERR add_domain_base_ops(constrainFeLhs->getOpPtrVector());
-  CHKERR add_domain_stress_ops(constrainFeLhs->getOpPtrVector());
-  CHKERR add_domain_ops_lhs_constrain(constrainFeLhs->getOpPtrVector());
-
-  CHKERR add_domain_base_ops(constrainFeRhs->getOpPtrVector());
-  CHKERR add_domain_stress_ops(constrainFeRhs->getOpPtrVector());
-  CHKERR add_domain_ops_rhs_constrain(constrainFeRhs->getOpPtrVector());
-
   auto integration_rule_nc = [](int, int, int approx_order) { return -1; };
 
   auto set_gauss_rule_3d = [&](ForcesAndSourcesCore *fe_ptr, int, int,
@@ -798,23 +782,6 @@ MoFEMErrorCode Example::OPs() {
 
     MoFEMFunctionReturn(0);
   };
-
-  constrainFeLhs->getRuleHook = integration_rule_nc;
-  constrainFeRhs->getRuleHook = integration_rule_nc;
-
-  if (SPACE_DIM == 3) {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return set_gauss_rule_3d(fe_ptr, ro, co, ao, 0);
-    };
-    constrainFeLhs->setRuleHook = set;
-    constrainFeRhs->setRuleHook = set;
-  } else {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return set_gauss_rule_3d(fe_ptr, ro, co, ao, 0);
-    };
-    constrainFeLhs->setRuleHook = set;
-    constrainFeRhs->setRuleHook = set;  
-  }
 
   auto integration_rule_domain = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -1029,12 +996,6 @@ MoFEMErrorCode Example::tsSolve() {
     uZScatter = scatter_create(D, 2);
 
   auto solver = pipeline_mng->createTS();
-
-  // boost::shared_ptr<FEMethod> null_fe;
-  // CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), constrainFeLhs,
-  //                              null_fe, null_fe);
-  // CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), constrainFeRhs,
-  //                              null_fe, null_fe);
 
   CHKERR TSSetSolution(solver, D);
   CHKERR set_section_monitor(solver);
