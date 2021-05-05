@@ -51,18 +51,18 @@ private:
     //             cos(M_PI * x) * cos(M_PI * y)); // this with D_mat = 1 return exp(-100. * (sqr(x) + sqr(y)))
     return 0;
   }
-  // Function to impose Dirichelet boundary condition (Temperature)
-  static double boundaryFunction(const double x, const double y,
-                                 const double z) {
-    return 1; 
-  }
+  // // Function to impose Dirichelet boundary condition (Temperature)
+  // static double boundaryFunction(const double x, const double y,
+  //                                const double z) {
+  //   return 1; 
+  // }
 
-    // Function to impose Neuman boundary condition (Heat Flux)
-  static double boundaryFlux(const double x, const double y,
-                                 const double z) {
+  //   // Function to impose Neuman boundary condition (Heat Flux)
+  // static double boundaryFlux(const double x, const double y,
+  //                                const double z) {
     
-    return 5;
-  }
+  //   return 1;
+  // }
   // Main interfaces
   MoFEM::Interface &mField;
   Simple *simpleInterface;
@@ -84,12 +84,14 @@ private:
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_1;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_2;
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_3;
   // MoFEM working Pipelines for LHS and RHS of domain and boundary
   boost::shared_ptr<FaceEle> domainPipelineLhs;
   boost::shared_ptr<FaceEle> domainPipelineRhs;
   boost::shared_ptr<EdgeEle> boundaryPipelineLhs;
   boost::shared_ptr<EdgeEle> boundaryPipelineRhs;
+
+
+  Range fluxBoundaryConditions;
 
   // Object needed for postprocessing
   boost::shared_ptr<FaceEle> postProc;
@@ -189,38 +191,8 @@ MoFEMErrorCode Thermal2D::boundaryCondition() {
     return boundary_entities;
   };
 
-  //BC for DOMAIN
-    auto get_ents_on_mesh_skin_2 = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      Range boundary_entities_loop;
-      if (entity_name.compare(0, 20, "BOUNDARY_CONDITION_1") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities_loop, true);
-        boundary_entities.merge(boundary_entities_loop);                                           
-      }
-      if (entity_name.compare(0, 6, "FLUX_1") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities_loop, true);
-        boundary_entities.merge(boundary_entities_loop);  
-      }           
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-
-    // Store entities for fieldsplit (block) solver
-    boundaryEntitiesForFieldsplit = boundary_entities;
-
-    return boundary_entities;
-  };
-  
-
     // BC Bottom Boundary
-    auto get_ents_on_mesh_skin_3 = [&]() {
+    auto get_ents_on_mesh_skin_2 = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
@@ -254,7 +226,7 @@ MoFEMErrorCode Thermal2D::boundaryCondition() {
   // vector. To access DOFs use local indices.
   boundaryMarker_1 = mark_boundary_dofs(get_ents_on_mesh_skin_1());
   boundaryMarker_2 = mark_boundary_dofs(get_ents_on_mesh_skin_2());
-  boundaryMarker_3 = mark_boundary_dofs(get_ents_on_mesh_skin_3());
+  fluxBoundaryConditions = get_ents_on_mesh_skin_2();
   MoFEMFunctionReturn(0);
 }
 
@@ -265,6 +237,23 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-D", &D, PETSC_NULL);
   auto D_mat = [D](const double, const double, const double) { return D; };
   auto q_unit = [](const double, const double, const double) { return 1; };
+
+  double bc_temp1 = 1;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_temp1", &bc_temp1, PETSC_NULL);
+  auto bc_1 =[bc_temp1](const double, const double, const double) { return bc_temp1; };
+
+  double bc_flux1 = 1;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_flux1", &bc_flux1, PETSC_NULL);
+  auto flux_1 =[&](const double, const double, const double) { 
+    const auto fe_ent = boundaryPipelineRhs->getFEEntityHandle();
+    if(fluxBoundaryConditions.find(fe_ent)!=fluxBoundaryConditions.end()) {
+      return bc_flux1; 
+    } else {
+      return 0.;
+    }
+  };
+
+
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
     // Calculate the inverse Jacobian for both Domain and Boundary
@@ -275,23 +264,23 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
 
     // Push back the LHS  for conduction
     domainPipelineLhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, true, boundaryMarker_2));
+        new OpSetBc(domainField, true, boundaryMarker_1));
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpDomainGradGrad(domainField, domainField, D_mat));   
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));
     //Push back the LHS for the definition of Neuman bcs
     domainPipelineLhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, false, boundaryMarker_3));
+        new OpSetBc(domainField, true, boundaryMarker_1));
     domainPipelineLhs->getOpPtrVector().push_back(
-        new OpDomainGradGrad(domainField, domainField, D_mat));   
+        new OpDomainGradGrad(domainField, domainField, q_unit));   
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));        
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of the source
     domainPipelineRhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, true, boundaryMarker_2));
+        new OpSetBc(domainField, true, boundaryMarker_1));
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpDomainSource(domainField, sourceTermFunction));
     domainPipelineRhs->getOpPtrVector().push_back(
@@ -310,16 +299,16 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
     boundaryPipelineRhs->getOpPtrVector().push_back(
         new OpSetBc(domainField, false, boundaryMarker_1));
     boundaryPipelineRhs->getOpPtrVector().push_back(
-        new OpBoundarySource(domainField, boundaryFunction));
+        new OpBoundarySource(domainField, bc_1));
     boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
   }
 
     { // Push operators to the Pipeline that is responsible for calculating RHS of
     // boundary elements
     boundaryPipelineRhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, false, boundaryMarker_3));
+        new OpSetBc(domainField, false, boundaryMarker_2));
     boundaryPipelineRhs->getOpPtrVector().push_back(
-        new OpBoundarySource(domainField, boundaryFlux));
+        new OpBoundarySource(domainField, flux_1));
     boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
   }
 
