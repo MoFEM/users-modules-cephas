@@ -30,6 +30,8 @@
 extern "C" {
 #include <tetrahedron_ncc_rule.h>
 #include <triangle_ncc_rule.h>
+#include <tetrahedron_nco_rule.h>
+#include <triangle_nco_rule.h>
 }
 
 using namespace MoFEM;
