@@ -302,7 +302,7 @@ MoFEMErrorCode Example::createCommonData() {
     commonHenckyDataPtr->matDPtr = commonPlasticDataPtr->mDPtr;
     commonHenckyDataPtr->matLogCPlastic =
         commonPlasticDataPtr->getPlasticStrainPtr();
-    commonPlasticDataPtr->mStressPtr = commonHenckyDataPtr->getMatLogC();
+    commonPlasticDataPtr->mStrainPtr = commonHenckyDataPtr->getMatLogC();
     commonPlasticDataPtr->mStressPtr =
         commonHenckyDataPtr->getMatHenckyStress();
   }
@@ -705,6 +705,15 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     const int rule = 2 * (approx_order - 1);
+
+    // if (rule < 0) {
+    //   auto &gauss_pts = fe_ptr->gaussPts;
+    //   gauss_pts.resize(4, 1);
+    //   gauss_pts(0, 0) = gauss_pts(1, 0) = gauss_pts(2, 0) = 0.25;
+    //   gauss_pts(3, 0) = 1;
+    //   MoFEMFunctionReturnHot(0);
+    // }
+
     const auto order_num = tetrahedron_ncc_order_num(rule);
     MatrixDouble xyz(order_num, 3);
     VectorDouble w(order_num);
@@ -791,7 +800,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
       pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-          "U", commonHenckyDataPtr));
+          "U", commonHenckyDataPtr, scale));
       pipeline.push_back(
           new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
 
@@ -799,7 +808,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
                                             commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
+      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, scale));
     }
 
     pipeline.push_back(new OpSetBc("U", false, reactionMarker));
@@ -859,25 +868,47 @@ MoFEMErrorCode Example::tsSolve() {
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
             "U", commonPlasticDataPtr->mGradPtr));
-    postProcFe->getOpPtrVector().push_back(new OpSymmetrizeTensor<SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr, commonPlasticDataPtr->mStrainPtr));
-
     postProcFe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues(
         "TAU", commonPlasticDataPtr->getPlasticTauPtr()));
     postProcFe->getOpPtrVector().push_back(
         new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
             "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-    postProcFe->getOpPtrVector().push_back(
-        new OpPlasticStress("U", commonPlasticDataPtr, scale));
+
+    if (is_large_strains) {
+
+      if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
+        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                "Wrong pointer for grad");
+
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+              "U", commonHenckyDataPtr, scale));
+      postProcFe->getOpPtrVector().push_back(
+          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+      postProcFe->getOpPtrVector().push_back(new OpPostProcHencky<SPACE_DIM>(
+          "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+          commonHenckyDataPtr));
+
+    } else {
+      postProcFe->getOpPtrVector().push_back(
+          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
+                                            commonPlasticDataPtr->mStrainPtr));
+      postProcFe->getOpPtrVector().push_back(
+          new OpPlasticStress("U", commonPlasticDataPtr, scale));
+      postProcFe->getOpPtrVector().push_back(
+          new Tutorial::OpPostProcElastic<SPACE_DIM>(
+              "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
+              commonPlasticDataPtr->mStrainPtr,
+              commonPlasticDataPtr->mStressPtr));
+    }
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-
-    postProcFe->getOpPtrVector().push_back(
-        new Tutorial::OpPostProcElastic<SPACE_DIM>(
-            "U", postProcFe->postProcMesh, postProcFe->mapGaussPts,
-            commonPlasticDataPtr->mStrainPtr,
-            commonPlasticDataPtr->mStressPtr));
-
     postProcFe->getOpPtrVector().push_back(
         new OpPostProcPlastic("U", postProcFe->postProcMesh,
                               postProcFe->mapGaussPts, commonPlasticDataPtr));
