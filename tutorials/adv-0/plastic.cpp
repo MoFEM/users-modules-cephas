@@ -421,6 +421,8 @@ MoFEMErrorCode Example::OPs() {
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr));
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
+      pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
+          "U", "EP", commonPlasticDataPtr));
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
