@@ -388,10 +388,10 @@ MoFEMErrorCode Example::bC() {
     return marked_ents;
   };
 
-  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_Y", 0, 0);
-  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_Y", 1, 1);
-  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_Z", 2, 2);
-  CHKERR simple->removeBlockDOFsOnEntities("REMOVE_ALL", 0, 3);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
+  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
 
   CHKERR fix_disp("FIX_X", true, false, false);
   CHKERR fix_disp("FIX_Y", false, true, false);
