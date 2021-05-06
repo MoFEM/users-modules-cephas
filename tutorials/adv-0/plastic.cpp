@@ -742,7 +742,7 @@ MoFEMErrorCode Example::OPs() {
                                int approx_order, int add) {
     MoFEMFunctionBegin;
 
-    const int rule = 2 * (approx_order - 1);
+    const int rule = 2 * (approx_order - 1) + add;
 
     if (rule < 0) {
       auto &gauss_pts = fe_ptr->gaussPts;
@@ -752,7 +752,7 @@ MoFEMErrorCode Example::OPs() {
       MoFEMFunctionReturnHot(0);
     }
 
-    const auto order_num = tetrahedron_ncc_order_num(rule);
+    const auto order_num = IntRules::NCO::tetrahedron_nco_order_num(rule);
     MatrixDouble xyz(order_num, 3);
     VectorDouble w(order_num);
     IntRules::NCO::tetrahedron_nco_rule(rule, order_num, &*xyz.data().begin(),
