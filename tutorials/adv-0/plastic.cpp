@@ -314,25 +314,25 @@ MoFEMErrorCode Example::bC() {
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                               "REMOVE_X", "U", 0, 0);
-  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                               "REMOVE_Y", "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
+                                           "U", 1, 1);
   if (SPACE_DIM == 3)
     CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                              "REMOVE_Z", "U", 2, 2);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
 
-  CHKERR bc_mng->markDOFsOnEntities("FIX_X", simple->getProblemName(), "FIX_X",
-                                    "U", 0, 0);
-  CHKERR bc_mng->markDOFsOnEntities("FIX_Y", simple->getProblemName(), "FIX_Y",
-                                    "U", 1, 1);
+  CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_X", "U", 0,
+                                    0);
+  CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U", 1,
+                                    1);
   if (SPACE_DIM == 3)
-    CHKERR bc_mng->markDOFsOnEntities("FIX_Z", simple->getProblemName(),
-                                      "FIX_Z", "U", 2, 2);
-  CHKERR bc_mng->markDOFsOnEntities("FIX_ALL", simple->getProblemName(),
-                                    "FIX_ALL", "U", 0, 3);
+    CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U", 2,
+                                      2);
+  CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_ALL", "U", 0,
+                                    3);
 
   auto get_block_ents = [&](const std::string blockset_name) {
     Range remove_ents;
@@ -415,7 +415,7 @@ MoFEMErrorCode Example::bC() {
     CHKERR fix_disp("FIX_Z", false, false, true);
   CHKERR fix_disp("FIX_ALL", true, true, true);
 
-  auto &bc_map = bc_mng->getBcMap();
+  auto &bc_map = bc_mng->getBcMapByBlockName();
 
   for (auto b : bc_map) {
     MOFEM_LOG("EXAMPLE", Sev::verbose)
@@ -445,7 +445,7 @@ MoFEMErrorCode Example::bC() {
   }
 
   auto m0 = bc_map["FIX_Y"];
-  if(m0->bcMarkers.size() != bcVec[1]->bcMarkers.size())
+  if (m0->bcMarkers.size() != bcVec[1]->bcMarkers.size())
     MOFEM_LOG("EXAMPLE", Sev::error) << "Wrong size";
 
   for (size_t i = 0; i != bcVec[1]->bcMarkers.size(); ++i)
@@ -677,11 +677,12 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    for (auto &bc : bcVec) {
-      pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
+    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+    for (auto bc : bc_map) {
+      pipeline.push_back(new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
       pipeline.push_back(new OpBoundaryMass(
           "U", "U", [](double, double, double) { return 1.; },
-          bc->getBcEdgesPtr()));
+          bc.second->getBcEdgesPtr()));
       pipeline.push_back(new OpUnSetBc("U"));
     }
     MoFEMFunctionReturn(0);
@@ -742,23 +743,23 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
-    for (auto &bc : bcVec) {
-      pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
+    for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
+      pipeline.push_back(new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
       auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
       attr_vec->clear();
-      if (bc->bcAttributes.size() < SPACE_DIM)
+      if (bc.second->bcAttributes.size() < SPACE_DIM)
         SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                  "Wrong size of boundary attributes vector. Set right block "
                  "size attributes. Size of attributes %d",
-                 bc->bcAttributes.size());
-      std::copy(&bc->bcAttributes[0], &bc->bcAttributes[SPACE_DIM],
-                attr_vec->data().begin());
+                 bc.second->bcAttributes.size());
+      std::copy(&bc.second->bcAttributes[0],
+                &bc.second->bcAttributes[SPACE_DIM], attr_vec->data().begin());
 
-      pipeline.push_back(
-          new OpBoundaryVec("U", attr_vec, time_scaled, bc->getBcEdgesPtr()));
+      pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+                                           bc.second->getBcEdgesPtr()));
       pipeline.push_back(new OpBoundaryInternal(
           "U", u_mat_ptr, [](double, double, double) { return 1.; },
-          bc->getBcEdgesPtr()));
+          bc.second->getBcEdgesPtr()));
 
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -1009,10 +1010,8 @@ MoFEMErrorCode Example::tsSolve() {
               commonPlasticDataPtr->mStressPtr));
     }
 
-
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
-
 
     postProcFe->getOpPtrVector().push_back(
         new OpPostProcPlastic("U", postProcFe->postProcMesh,
