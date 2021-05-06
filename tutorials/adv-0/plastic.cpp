@@ -328,7 +328,13 @@ MoFEMErrorCode Example::bC() {
 
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
-  reactionMarker = bc_mng->popMarkDOFsOnEntities("REACTION")->getBcMarkersPtr();
+  if (auto bc = bc_mng
+                    ->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
+                                            "REACTION")
+                    ->getBcMarkersPtr())
+    reactionMarker = bc;
+  else
+    MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
 
   MoFEMFunctionReturn(0);
 }
@@ -734,53 +740,57 @@ MoFEMErrorCode Example::OPs() {
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if (SPACE_DIM == 2) {
-      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    if (reactionMarker) {
+
+      if (SPACE_DIM == 2) {
+        pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+        pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+      }
+
+      if (is_dual_base)
+        pipeline.push_back(new OpScaleL2(L2));
+
+      pipeline.push_back(
+          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+              "U", commonPlasticDataPtr->mGradPtr));
+      pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+          "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
+
+      if (is_large_strains) {
+
+        if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Wrong pointer for grad");
+
+        pipeline.push_back(
+            new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+            "U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+
+      } else {
+        pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+            "U", commonPlasticDataPtr->mGradPtr,
+            commonPlasticDataPtr->mStrainPtr));
+        pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
+      }
+
+      pipeline.push_back(new OpSetBc("U", false, reactionMarker));
+      // Calculate internal forece
+      if (is_large_strains) {
+        pipeline.push_back(new OpInternalForcePiola(
+            "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
+      } else {
+        pipeline.push_back(
+            new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+      }
+      pipeline.push_back(new OpUnSetBc("U"));
     }
-
-    if (is_dual_base)
-      pipeline.push_back(new OpScaleL2(L2));
-
-    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-
-    if (is_large_strains) {
-
-      if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "Wrong pointer for grad");
-
-      pipeline.push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-          "U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
-
-    } else {
-      pipeline.push_back(
-          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
-                                            commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
-    }
-
-    pipeline.push_back(new OpSetBc("U", false, reactionMarker));
-    // Calculate internal forece
-    if (is_large_strains) {
-      pipeline.push_back(new OpInternalForcePiola(
-          "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
-    } else {
-      pipeline.push_back(
-          new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
-    }
-    pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
   };
 
