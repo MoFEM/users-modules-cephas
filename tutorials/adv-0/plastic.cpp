@@ -312,6 +312,27 @@ MoFEMErrorCode Example::bC() {
 
   auto prb_mng = mField.getInterface<ProblemsManager>();
   auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
+
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                               "REMOVE_X", "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                               "REMOVE_Y", "U", 1, 1);
+  if (SPACE_DIM == 3)
+    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                             "REMOVE_Z", "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "REMOVE_ALL", "U", 0, 3);
+
+  CHKERR bc_mng->markDOFsOnEntities("FIX_X", simple->getProblemName(), "FIX_X",
+                                    "U", 0, 0);
+  CHKERR bc_mng->markDOFsOnEntities("FIX_Y", simple->getProblemName(), "FIX_Y",
+                                    "U", 1, 1);
+  if (SPACE_DIM == 3)
+    CHKERR bc_mng->markDOFsOnEntities("FIX_Z", simple->getProblemName(),
+                                      "FIX_Z", "U", 2, 2);
+  CHKERR bc_mng->markDOFsOnEntities("FIX_ALL", simple->getProblemName(),
+                                    "FIX_ALL", "U", 0, 3);
 
   auto get_block_ents = [&](const std::string blockset_name) {
     Range remove_ents;
@@ -388,22 +409,33 @@ MoFEMErrorCode Example::bC() {
     return marked_ents;
   };
 
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
-
   CHKERR fix_disp("FIX_X", true, false, false);
   CHKERR fix_disp("FIX_Y", false, true, false);
   if (SPACE_DIM == 3)
     CHKERR fix_disp("FIX_Z", false, false, true);
   CHKERR fix_disp("FIX_ALL", true, true, true);
 
-  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  auto &bc_map = bc_mng->getBcMap();
+
+  for (auto b : bc_map) {
+    MOFEM_LOG("EXAMPLE", Sev::verbose)
+        << "1: Found block "
+        << " number of entities " << b.second->bcEdges.size()
+        << " number of attributes " << b.second->bcAttributes.size();
+  }
+
   for (auto b : bcVec) {
-    boundaryMarker->resize(b->bcMarkers.size(), 0);
-    for (int i = 0; i != b->bcMarkers.size(); ++i) {
-      (*boundaryMarker)[i] |= b->bcMarkers[i];
+    MOFEM_LOG("EXAMPLE", Sev::verbose)
+        << "2: Found block "
+        << " number of entities " << b->bcEdges.size()
+        << " number of attributes " << b->bcAttributes.size();
+  }
+
+  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  for (auto b : bc_map) {
+    boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+    for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+      (*boundaryMarker)[i] |= b.second->bcMarkers[i];
     }
   }
   if (boundaryMarker->empty()) {
@@ -411,6 +443,16 @@ MoFEMErrorCode Example::bC() {
     boundaryMarker = boost::make_shared<std::vector<unsigned char>>(
         marker.begin(), marker.end());
   }
+
+  auto m0 = bc_map["FIX_Y"];
+  if(m0->bcMarkers.size() != bcVec[1]->bcMarkers.size())
+    MOFEM_LOG("EXAMPLE", Sev::error) << "Wrong size";
+
+  for (size_t i = 0; i != bcVec[1]->bcMarkers.size(); ++i)
+    if (m0->bcMarkers[i] != bcVec[1]->bcMarkers[i])
+      MOFEM_LOG("EXAMPLE", Sev::error)
+          << "AAAA " << static_cast<int>(m0->bcMarkers[i]) << " "
+          << static_cast<int>(bcVec[1]->bcMarkers[i]);
 
   auto rec_marker = mark_dofs_on_ents(
       get_adj_ents(get_block_ents("REACTION")).subset_by_type(MBVERTEX));
