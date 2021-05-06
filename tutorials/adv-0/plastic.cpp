@@ -295,7 +295,6 @@ MoFEMErrorCode Example::createCommonData() {
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
-  auto prb_mng = mField.getInterface<ProblemsManager>();
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
 
@@ -303,9 +302,8 @@ MoFEMErrorCode Example::bC() {
                                            "U", 0, 0);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
                                            "U", 1, 1);
-  if (SPACE_DIM == 3)
-    CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
-                                             "REMOVE_Z", "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
+                                           "U", 2, 2);
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
 
@@ -313,9 +311,8 @@ MoFEMErrorCode Example::bC() {
                                         0, 0);
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
                                         1, 1);
-  if (SPACE_DIM == 3)
-    CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z",
-                                          "U", 2, 2);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U",
+                                        2, 2);
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
                                         "U", 0, 3);
 
