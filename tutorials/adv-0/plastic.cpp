@@ -328,11 +328,9 @@ MoFEMErrorCode Example::bC() {
 
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
-  if (auto bc = bc_mng
-                    ->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
-                                            "REACTION")
-                    ->getBcMarkersPtr())
-    reactionMarker = bc;
+  if (auto bc = bc_mng->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
+                                              "REACTION"))
+    reactionMarker = bc->getBcMarkersPtr();
   else
     MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
 
