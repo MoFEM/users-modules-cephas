@@ -85,8 +85,8 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrain);
   size_t gg = 0;
   for (int gg = 0; gg != commonDataPtr->plasticSurface.size(); ++gg) {
-    const double f = (commonDataPtr->plasticSurface)[gg];
     const double tau = (commonDataPtr->plasticTau)[gg];
+    const double f = (commonDataPtr->plasticSurface)[gg] - hardening(tau);
     CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_3d(t_flow));
@@ -128,12 +128,16 @@ struct Monitor : public FEMethod {
       reactionFe->f = r;
       CHKERR VecZeroEntries(r);
       CHKERR DMoFEMLoopFiniteElements(dM, "dFE", reactionFe);
+      CHKERR VecGhostUpdateBegin(r, ADD_VALUES, SCATTER_REVERSE);
+      CHKERR VecGhostUpdateEnd(r, ADD_VALUES, SCATTER_REVERSE);
       CHKERR VecAssemblyBegin(r);
       CHKERR VecAssemblyEnd(r);
+
       double sum;
       CHKERR VecSum(r, &sum);
       MOFEM_LOG_C("EXAMPLE", Sev::inform, "reaction time %3.4e %3.4e", ts_t,
                   sum);
+
       MoFEMFunctionReturn(0);
     };
 
