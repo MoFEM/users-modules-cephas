@@ -145,21 +145,6 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
 
-  struct BCs : boost::enable_shared_from_this<BCs> {
-    Range bcEdges;
-    std::vector<double> bcAttributes;
-    std::vector<unsigned char> bcMarkers;
-    inline auto getBcEdgesPtr() {
-      return boost::shared_ptr<Range>(shared_from_this(), &bcEdges);
-    }
-    inline auto getBcMarkersPtr() {
-      return boost::shared_ptr<std::vector<unsigned char>>(shared_from_this(),
-                                                           &bcMarkers);
-    }
-  };
-
-  std::vector<boost::shared_ptr<BCs>> bcVec;
-
   std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 };
 
@@ -324,112 +309,17 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "REMOVE_ALL", "U", 0, 3);
 
-  CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_X", "U", 0,
-                                    0);
-  CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U", 1,
-                                    1);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
+                                        0, 0);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
+                                        1, 1);
   if (SPACE_DIM == 3)
-    CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U", 2,
-                                      2);
-  CHKERR bc_mng->markDOFsOnEntities(simple->getProblemName(), "FIX_ALL", "U", 0,
-                                    3);
-
-  auto get_block_ents = [&](const std::string blockset_name) {
-    Range remove_ents;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset,
-                                                        remove_ents, true);
-      }
-    }
-    return remove_ents;
-  };
-
-  auto get_adj_ents = [&](const Range &ents) {
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    if (SPACE_DIM == 3) {
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, verts,
-                                               moab::Interface::UNION);
-    }
-    verts.merge(ents);
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
-    return verts;
-  };
-
-  auto remove_dofs_on_ents = [&](const Range &&ents, const int lo,
-                                 const int hi) {
-    MoFEMFunctionBegin;
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", ents,
-                                         lo, hi);
-    MoFEMFunctionReturn(0);
-  };
-
-  auto mark_fix_dofs = [&](std::vector<unsigned char> &marked_u_dofs,
-                           const auto lo, const auto hi) {
-    return prb_mng->modifyMarkDofs(simple->getProblemName(), ROW, "U", lo, hi,
-                                   ProblemsManager::MarkOP::OR, 1,
-                                   marked_u_dofs);
-  };
-
-  auto fix_disp = [&](const std::string blockset_name, const bool fix_x,
-                      const bool fix_y, const bool fix_z) {
-    MoFEMFunctionBegin;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-
-        bcVec.emplace_back(new BCs());
-
-        CHKERR mField.get_moab().get_entities_by_handle(
-            it->meshset, bcVec.back()->bcEdges, true);
-        CHKERR it->getAttributes(bcVec.back()->bcAttributes);
-
-        if (fix_x)
-          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 0, 0);
-        if (fix_y)
-          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 1, 1);
-        if (fix_z)
-          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 2, 2);
-
-        CHKERR prb_mng->markDofs(
-            simple->getProblemName(), ROW, ProblemsManager::AND,
-            get_adj_ents(bcVec.back()->bcEdges), bcVec.back()->bcMarkers);
-      }
-    }
-    MoFEMFunctionReturn(0);
-  };
-
-  auto mark_dofs_on_ents = [&](const Range &&ents) {
-    std::vector<unsigned char> marked_ents;
-    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW, ProblemsManager::OR,
-                             ents, marked_ents);
-
-    return marked_ents;
-  };
-
-  CHKERR fix_disp("FIX_X", true, false, false);
-  CHKERR fix_disp("FIX_Y", false, true, false);
-  if (SPACE_DIM == 3)
-    CHKERR fix_disp("FIX_Z", false, false, true);
-  CHKERR fix_disp("FIX_ALL", true, true, true);
+    CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z",
+                                          "U", 2, 2);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                        "U", 0, 3);
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
-
-  for (auto b : bc_map) {
-    MOFEM_LOG("EXAMPLE", Sev::verbose)
-        << "1: Found block "
-        << " number of entities " << b.second->bcEdges.size()
-        << " number of attributes " << b.second->bcAttributes.size();
-  }
-
-  for (auto b : bcVec) {
-    MOFEM_LOG("EXAMPLE", Sev::verbose)
-        << "2: Found block "
-        << " number of entities " << b->bcEdges.size()
-        << " number of attributes " << b->bcAttributes.size();
-  }
 
   boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
   for (auto b : bc_map) {
@@ -438,26 +328,10 @@ MoFEMErrorCode Example::bC() {
       (*boundaryMarker)[i] |= b.second->bcMarkers[i];
     }
   }
-  if (boundaryMarker->empty()) {
-    auto marker = mark_dofs_on_ents(Range());
-    boundaryMarker = boost::make_shared<std::vector<unsigned char>>(
-        marker.begin(), marker.end());
-  }
 
-  auto m0 = bc_map["FIX_Y"];
-  if (m0->bcMarkers.size() != bcVec[1]->bcMarkers.size())
-    MOFEM_LOG("EXAMPLE", Sev::error) << "Wrong size";
-
-  for (size_t i = 0; i != bcVec[1]->bcMarkers.size(); ++i)
-    if (m0->bcMarkers[i] != bcVec[1]->bcMarkers[i])
-      MOFEM_LOG("EXAMPLE", Sev::error)
-          << "AAAA " << static_cast<int>(m0->bcMarkers[i]) << " "
-          << static_cast<int>(bcVec[1]->bcMarkers[i]);
-
-  auto rec_marker = mark_dofs_on_ents(
-      get_adj_ents(get_block_ents("REACTION")).subset_by_type(MBVERTEX));
-  reactionMarker = boost::make_shared<std::vector<unsigned char>>(
-      rec_marker.begin(), rec_marker.end());
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
+                                        "U", 0, 3);
+  reactionMarker = bc_mng->popMarkDOFsOnEntities("REACTION")->getBcMarkersPtr();
 
   MoFEMFunctionReturn(0);
 }
