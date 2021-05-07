@@ -744,7 +744,7 @@ MoFEMErrorCode Example::OPs() {
 
     const int rule = 2 * (approx_order - 1) + add;
 
-    if (rule < 0) {
+    if (rule <= 0) {
       auto &gauss_pts = fe_ptr->gaussPts;
       gauss_pts.resize(4, 1);
       gauss_pts(0, 0) = gauss_pts(1, 0) = gauss_pts(2, 0) = 0.25;
@@ -775,7 +775,7 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
 
     const int rule = 2 * (approx_order - 1) + add;
-    if (rule < 0) {
+    if (rule <= 0) {
       auto &gauss_pts = fe_ptr->gaussPts;
       gauss_pts.resize(4, 1);
       gauss_pts(0, 0) = gauss_pts(1, 0) = gauss_pts(2, 0) = 0.25;
