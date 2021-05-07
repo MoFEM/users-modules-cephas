@@ -206,13 +206,25 @@ MoFEMErrorCode AnalyticalDirichletBC::DirichletBC::iNitalize(Range &tris) {
   CHKERR mField.get_moab().get_adjacencies(tris, 1, false, ents,
                                            moab::Interface::UNION);
   ents.merge(tris);
-  for (Range::iterator eit = ents.begin(); eit != ents.end(); eit++) {
-    for (_IT_NUMEREDDOF_ROW_BY_NAME_ENT_PART_FOR_LOOP_(
-             problemPtr, fieldName, *eit, pcomm->rank(), dof)) {
-      mapZeroRows[dof->get()->getPetscGlobalDofIdx()] =
-          dof->get()->getFieldData();
+
+  const auto bit_number = mField.get_field_bit_number(fieldName);
+
+  for (auto eit = ents.pair_begin(); eit != ents.pair_end(); eit++) {
+    const auto f = eit->first;
+    const auto s = eit->second;
+
+    auto &dofs = *problemPtr->getNumeredRowDofsPtr();
+    auto dit = dofs.get<Unique_mi_tag>().lower_bound(
+        DofEntity::getLoFieldEntityUId(bit_number, f));
+    auto hi_dit = dofs.get<Unique_mi_tag>().upper_bound(
+        DofEntity::getHiFieldEntityUId(bit_number, s));
+    for (; dit != hi_dit; ++dit) {
+      if ((*dit)->getPart() == mField.get_comm_rank()) {
+        mapZeroRows[(*dit)->getPetscGlobalDofIdx()] = (*dit)->getFieldData();
+      }
     }
   }
+  
   dofsIndices.resize(mapZeroRows.size());
   dofsValues.resize(mapZeroRows.size());
   int ii = 0;

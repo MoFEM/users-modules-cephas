@@ -49,9 +49,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_jacobian", &test_jacobian,
                                PETSC_NULL);
     CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-order_spat", &order_x,
-                               &flg);
+                              &flg);
     CHKERR PetscOptionsGetInt(PETSC_NULL, PETSC_NULL, "-order_mat", &order_X,
-                               &flg);
+                              &flg);
 
     CHKERR DMRegister_MoFEM("DMMOFEM");
 
@@ -59,14 +59,33 @@ int main(int argc, char *argv[]) {
 
     CHKERR si->getOptions();
     CHKERR si->loadFile();
-    CHKERR si->addDomainField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->addBoundaryField("x", H1, AINSWORTH_LOBATTO_BASE, 3);
-    CHKERR si->setFieldOrder("x", order_x);
+    CHKERR si->addDomainField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE,
+                              3);
+    CHKERR si->addBoundaryField("SPATIAL_POSITION", H1, AINSWORTH_LOBATTO_BASE,
+                                3);
+    CHKERR si->setFieldOrder("SPATIAL_POSITION", order_x);
 
-    CHKERR si->addDomainField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->addBoundaryField("X", H1, AINSWORTH_LEGENDRE_BASE, 3);
-    CHKERR si->setFieldOrder("X", order_X);
+    CHKERR si->addDomainField("MESH_NODE_POSITIONS", H1,
+                              AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->addBoundaryField("MESH_NODE_POSITIONS", H1,
+                                AINSWORTH_LEGENDRE_BASE, 3);
+    CHKERR si->setFieldOrder("MESH_NODE_POSITIONS", order_X);
 
+    Range triangle_springs;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      if (it->getName().compare(0, 9, "SPRING_BC") == 0) {
+        CHKERR m_field.get_moab().get_entities_by_type(it->meshset, MBTRI,
+                                                       triangle_springs, true);
+      }
+    }
+
+    // Add spring boundary condition applied on surfaces.
+    CHKERR MetaSpringBC::addSpringElements(m_field, "SPATIAL_POSITION",
+                                           "MESH_NODE_POSITIONS");
+    CHKERR MetaSpringBC::addSpringElementsALE(
+        m_field, "SPATIAL_POSITION", "MESH_NODE_POSITIONS", triangle_springs);
+    si->getOtherFiniteElements().push_back("SPRING");
+    si->getOtherFiniteElements().push_back("SPRING_ALE");
     CHKERR si->setUp();
 
     // create DM
@@ -77,7 +96,7 @@ int main(int argc, char *argv[]) {
     PetscRandomCreate(PETSC_COMM_WORLD, &rctx);
 
     auto set_coord = [&](VectorAdaptor &&field_data, double *x, double *y,
-                           double *z) {
+                         double *z) {
       MoFEMFunctionBegin;
       double value;
       double scale = 0.5;
@@ -87,11 +106,13 @@ int main(int argc, char *argv[]) {
       field_data[1] = (*y) + (value - 0.5) * scale;
       PetscRandomGetValue(rctx, &value);
       field_data[2] = (*z) + (value - 0.5) * scale;
-       MoFEMFunctionReturn(0);
+      MoFEMFunctionReturn(0);
     };
 
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "x");
-    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord, "X");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
+                                                            "SPATIAL_POSITION");
+    CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+        set_coord, "MESH_NODE_POSITIONS");
 
     PetscRandomDestroy(&rctx);
 
@@ -107,10 +128,10 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NeumannForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeMatLhs()));
 
-    fe_rhs_ptr->meshPositionsFieldName = "X"; 
-    fe_lhs_ptr->meshPositionsFieldName = "X";
-    fe_mat_rhs_ptr->meshPositionsFieldName = "X";
-    fe_mat_lhs_ptr->meshPositionsFieldName = "X";
+    fe_rhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    fe_lhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    fe_mat_rhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    fe_mat_lhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
 
     Range nodes;
     CHKERR moab.get_entities_by_type(0, MBVERTEX, nodes, false);
@@ -125,18 +146,64 @@ int main(int argc, char *argv[]) {
 
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
       if (bit->getName().compare(0, 8, "PRESSURE") == 0) {
-        CHKERR surfacePressure->addPressure("x", PETSC_NULL,
+        CHKERR surfacePressure->addPressure("SPATIAL_POSITION", PETSC_NULL,
                                             bit->getMeshsetId(), true, true);
         CHKERR surfacePressure->addPressureAle(
-            "x", "X", dataAtPts, si->getDomainFEName(), PETSC_NULL, PETSC_NULL,
-            bit->getMeshsetId(), surfacePressure, true, true);
+            "SPATIAL_POSITION", "MESH_NODE_POSITIONS", dataAtPts,
+            si->getDomainFEName(), PETSC_NULL, PETSC_NULL, bit->getMeshsetId(),
+            true, true);
       }
     }
+
+    // Implementation of spring element
+    // Create new instances of face elements for springs
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+    CHKERR MetaSpringBC::setSpringOperators(
+        m_field, fe_spring_lhs_ptr, fe_spring_rhs_ptr, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS");
+
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr_dx(
+        new FaceElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_lhs_ale_ptr_dX(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_spring_rhs_ale_ptr(
+        new FaceElementForcesAndSourcesCore(m_field));
+
+    boost::shared_ptr<MetaSpringBC::DataAtIntegrationPtsSprings>
+        data_at_spring_gp =
+            boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(
+                m_field);
+
+    Range spring_ale_nodes;
+    CHKERR moab.get_connectivity(triangle_springs, spring_ale_nodes, true);
+
+    data_at_spring_gp->forcesOnlyOnEntitiesRow = spring_ale_nodes;
+
+    CHKERR MetaSpringBC::setSpringOperatorsMaterial(
+        m_field, fe_spring_lhs_ale_ptr_dx, fe_spring_lhs_ale_ptr_dX,
+        fe_spring_rhs_ale_ptr, data_at_spring_gp, "SPATIAL_POSITION",
+        "MESH_NODE_POSITIONS", si->getDomainFEName());
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING", fe_spring_lhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING", fe_spring_rhs_ptr, PETSC_NULL,
+                                  PETSC_NULL);
+
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dx,
+                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetJacobian(dm, "SPRING_ALE", fe_spring_lhs_ale_ptr_dX,
+                                  PETSC_NULL, PETSC_NULL);
+    CHKERR DMMoFEMSNESSetFunction(dm, "SPRING_ALE", fe_spring_rhs_ale_ptr,
+                                  PETSC_NULL, PETSC_NULL);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_lhs_ptr,
                                   nullptr, nullptr);
     CHKERR DMMoFEMSNESSetFunction(dm, si->getBoundaryFEName(), fe_rhs_ptr,
-                                  nullptr, nullptr); 
+                                  nullptr, nullptr);
 
     CHKERR DMMoFEMSNESSetJacobian(dm, si->getBoundaryFEName(), fe_mat_lhs_ptr,
                                   nullptr, nullptr);
@@ -157,13 +224,13 @@ int main(int argc, char *argv[]) {
       char testing_options[] =
           "-snes_test_jacobian -snes_test_jacobian_display "
           "-snes_no_convergence_test -snes_atol 0 -snes_rtol 0 -snes_max_it 1 ";
-          //"-pc_type none";
+      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     } else {
       char testing_options[] = "-snes_no_convergence_test -snes_atol 0 "
                                "-snes_rtol 0 "
                                "-snes_max_it 1 ";
-                               //"-pc_type none";
+      //"-pc_type none";
       CHKERR PetscOptionsInsertString(NULL, testing_options);
     }
 

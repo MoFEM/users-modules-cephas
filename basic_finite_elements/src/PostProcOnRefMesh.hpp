@@ -310,7 +310,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
       MoFEMFunctionReturn(0);
     };
 
-    MoFEM::Core m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
+    MoFEM::CoreTmp<-1> m_core_ref(moab_ref, PETSC_COMM_SELF, -2);
     MoFEM::Interface &m_field_ref = m_core_ref;
 
     auto refine_ref_tetrahedron = [this, &m_field_ref, max_level]() {
@@ -415,8 +415,8 @@ struct PostProcTemplateVolumeOnRefinedMesh
 
     auto get_element_max_dofs_order = [this]() {
       int max_order = 0;
-      auto &dofs_multi_index = *this->dataPtr;
-      for (auto &dof : dofs_multi_index) {
+      auto dofs_vec = this->getDataVectorDofsPtr();
+      for (auto &dof : *dofs_vec) {
         const int dof_order = dof->getDofOrder();
         max_order = (max_order < dof_order) ? dof_order : max_order;
       };
@@ -689,13 +689,16 @@ struct PostProcFatPrismOnRefinedMesh
           member<PointsMap3D, const int, &PointsMap3D::zEta>>>>>
       PointsMap3D_multiIndex;
 
-  PointsMap3D_multiIndex pointsMap;
+  //PointsMap3D_multiIndex pointsMap;
 
   MoFEMErrorCode setGaussPtsTrianglesOnly(int order_triangles_only);
   MoFEMErrorCode setGaussPtsThroughThickness(int order_thickness);
   MoFEMErrorCode generateReferenceElementMesh();
 
-  std::map<EntityHandle, EntityHandle> elementsMap;
+  //std::map<EntityHandle, EntityHandle> elementsMap;
+  std::map<EntityHandle, std::vector<EntityHandle>> elementsMap;
+  std::map<EntityHandle, std::vector<PointsMap3D_multiIndex>>
+      pointsMapVectorMap;
 
   MoFEMErrorCode preProcess();
   MoFEMErrorCode postProcess();

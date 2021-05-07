@@ -16,19 +16,19 @@ cmake_minimum_required (VERSION 3.1.3)
 project(MoFEM-UserModules C CXX)
 
 # Set fallback version. Fallback version is version of users moudles which is used
-# as default version if version from the git tags can not be extracted. For exammple 
-# that is a keys when somone commole mofem frome tarball.
-set(UM_FALLBACK_VERSION "0.9.1" CACHE STRING "Fallback version")
-message(STATUS "Falback vecrsion v${UM_FALLBACK_VERSION}")
+# as default version if version from the git tags can not be extracted. For example 
+# that is a case when someone install mofem from tarball.
+set(UM_FALLBACK_VERSION "0.11.1" CACHE STRING "Fallback version" FORCE)
+message(STATUS "Falback version v${UM_FALLBACK_VERSION}")
 
 #search include directories before system directories
 set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 
 # options
-option(NOT_PRECOMPILED_HEADRES "Do not use procompiled headers" OFF)
-option(STAND_ALLONE_USERS_MODULES "If if ON copy files, othrewise make link" OFF)
+option(NOT_PRECOMPILED_HEADRES "Do not use precompiled headers" OFF)
+option(STAND_ALLONE_USERS_MODULES "If if ON copy files, otherwise make link" OFF)
 option(EXTERNAL_MODULES_BUILD "If is in build modules only from external folders" OFF)
-option(MOFEM_UM_BUILD_TESTS "If is ON enbale testing" ON)
+option(MOFEM_UM_BUILD_TESTS "If is ON enable testing" ON)
 
 # set MPI runtime flags when not set form command line but set in core library
 if(NOT MPI_RUN_FLAGS)
@@ -37,7 +37,7 @@ if(NOT MPI_RUN_FLAGS)
   endif(MoFEM_MPI_RUN_FLAGS)
 endif(NOT MPI_RUN_FLAGS)
 
-# This is obsolete option should not be used, is set for back comaptibility
+# This is obsolete option should not be used, is set for back compatibility
 # with some old modules. You should replace UM_SOURCE_DIR by PROJECT_SOURCE_DIR
 # when you spot it in your code.
 set(UM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
@@ -72,7 +72,7 @@ set(CMAKE_CXX_COMPILER ${MoFEM_CMAKE_CXX_COMPILER})
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Add options unique to compiliation with Spack
+# Add options unique to compilation with Spack
 include(${MoFEM_INSTALL_DIR}/lib/cmake/mofem/WithSpack.cmake)
 
 #add coverage
@@ -89,7 +89,7 @@ include_directories(
   ${MoFEM_PETSC_DIR}/${PETSC_ARCH}/include
   ${MoFEM_PETSC_DIR}/${MoFEM_PETSC_ARCH}/include
   ${MoFEM_PETSCVAR_DIR}/include
-)
+  ${MOAB_INCLUDE_DIR})
 
 add_definitions(${MOAB_DEFINITIONS})
 
@@ -122,23 +122,32 @@ if(MOFEM_UM_BUILD_TESTS)
   include(CTest)
 endif(MOFEM_UM_BUILD_TESTS)
 
-if(SLEPC_LIBRARY)
+if(SLEPC_FOUND)
+  include_directories("${SLEPC_INCLUDE_DIRS}")
+  add_definitions(-DWITH_SLEPC)
+  message(STATUS "With SLEPC")
+elseif(SLEPC_LIBRARY OR SLEPC_LINK_LIBRARIES)
+  # This is depracated adde for back compatibility
   include_directories("${SLEPC_DIR}/${PETSC_ARCH}/include")
   include_directories("${SLEPC_DIR}/include")
-  add_definitions( -DWITH_SLEPC_DIR )
-  message(STATUS "WITH SLEPC")
-endif(SLEPC_LIBRARY)
+  set(SLEPC_FOUND TRUE)
+  add_definitions(-DWITH_SLEPC)
+  message(STATUS "With SLEPC")
+endif()
 
 if(TETGEN_DIR)
-  include(cmake/FindTetGen.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindTetGen.cmake)
+  message(STATUS "With TetGen")
 endif(TETGEN_DIR)
 
 if(ADOL-C_DIR)
-  include(cmake/FindADOL-C.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindADOL-C.cmake)
+  message(STATUS "With Adol-C")
 endif(ADOL-C_DIR)
 
 if(MED_DIR)
-  include(cmake/FindMed.cmake)
+  include(${MoFEM_INSTALL_DIR}/include/cmake/FindMed.cmake)
+  message(STATUS "With Med")
 endif(MED_DIR)
 
 set(OPTIONAL_PROJECT_LIBS

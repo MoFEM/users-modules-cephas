@@ -12,6 +12,8 @@
 !scripts/**
 !tools
 !tools/**
+!tutorials
+!tutorials/**
 !.gitignore
 !CMakeLists.txt
 !CTestConfig.cmake
@@ -19,3 +21,6 @@
 !*.in
 
 .DS_Store
+basic_finite_elements/.vscode
+tutorials/.vscode
+tools/.vscode

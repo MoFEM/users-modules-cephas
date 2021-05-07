@@ -49,7 +49,7 @@ struct NonlinearElasticElement {
     int addToRule;
 
     MyVolumeFE(MoFEM::Interface &m_field);
-    ~MyVolumeFE();
+    virtual ~MyVolumeFE();
 
     /** \brief it is used to calculate nb. of Gauss integration points
      *
@@ -87,6 +87,7 @@ struct NonlinearElasticElement {
   short int tAg;
 
   NonlinearElasticElement(MoFEM::Interface &m_field, short int tag);
+  virtual ~NonlinearElasticElement() = default;
 
   template <typename TYPE> struct FunctionsToCalculatePiolaKirchhoffI;
 
@@ -186,8 +187,8 @@ struct NonlinearElasticElement {
 
     double lambda, mu;
     ublas::matrix<TYPE, ublas::row_major, ublas::bounded_array<TYPE, 9>> F, C,
-        E, S, invF, P, SiGma, h, H, invH;
-    TYPE J, eNergy, detH;
+        E, S, invF, P, SiGma, h, H, invH, sigmaCauchy;
+    TYPE J, eNergy, detH, detF;
 
     int gG;                    ///< Gauss point number
     CommonData *commonDataPtr; ///< common data shared between entities (f.e.
@@ -263,6 +264,41 @@ struct NonlinearElasticElement {
       CHKERR calculateS_PiolaKirchhoffII();
       P.resize(3, 3);
       noalias(P) = prod(F, S);
+      MoFEMFunctionReturn(0);
+    }
+
+    /** \brief Function overload to implement user material
+      *
+
+      * Calculation of Piola Kirchhoff I is implemented by user. Tangent matrix
+      * user implemented physical equation is calculated using automatic
+      * differentiation.
+
+      * \f$\mathbf{S} =
+      \lambda\textrm{tr}[\mathbf{E}]\mathbf{I}+2\mu\mathbf{E}\f$
+
+      * Notes: <br>
+      * Number of actual Gauss point is accessed from variable gG. <br>
+      * Access to operator data structures is available by variable opPtr. <br>
+      * Access to common data is by commonDataPtr. <br>
+
+      * \param block_data used to give access to material parameters
+      * \param fe_ptr pointer to element data structures
+
+      For details look to: <br>
+      NONLINEAR CONTINUUM MECHANICS FOR FINITE ELEMENT ANALYSIS, Javier Bonet,
+      Richard D. Wood
+
+      */
+    virtual MoFEMErrorCode calculateCauchyStress(
+        const BlockData block_data,
+        boost::shared_ptr<const NumeredEntFiniteElement> fe_ptr) {
+      MoFEMFunctionBegin;
+      sigmaCauchy.resize(3, 3);
+      dEterminant(F, detF);
+      noalias(sigmaCauchy) = prod(P, trans(F));
+      sigmaCauchy /= detF;
+
       MoFEMFunctionReturn(0);
     }
 

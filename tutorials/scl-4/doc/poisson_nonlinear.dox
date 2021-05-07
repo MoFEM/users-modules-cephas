@@ -1,0 +1,36 @@
+/*! \page basic_tutorials_poisson_nonlinear SCL-4: Nonlinear Poisson's equation
+
+\tableofcontents
+
+\note Prerequisite of this tutorial is \ref basic_tutorials_poisson_lagrange_multiplier
+
+<br>
+
+\note Intended learning outcome:
+- solving a nonlinear problem in MoFEM
+- usage of PETSc SNES solver to solve nonlinear equations
+
+
+\tableofcontents
+
+\section basic_tutorials_poisson_nonlinear_introduction Introduction
+
+
+
+\section basic_tutorials_poisson_nonlinear_plain_program Plain program 
+
+
+The plain program for both the implementation of the UDOs (\c *.hpp) and the
+main program (\c *.cpp) are as follows
+
+\subsection basic_tutorials_poisson_nonlinear_impl_udo Implementation of User Data Operators (*.hpp)
+
+\include nonlinear_poisson_2d.hpp
+
+\subsection basic_tutorials_poisson_nonlinear_impl_main Implementation of the main program (*.cpp) 
+
+\include nonlinear_poisson_2d.cpp
+
+
+
+*/

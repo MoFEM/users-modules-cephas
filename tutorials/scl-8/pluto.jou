@@ -1,0 +1,10 @@
+reset
+
+create surface circle radius 1.1883e-3 zplane 
+brick x 3e-3 y 3e-3 z 3e-3
+move Volume 2 x -1.5e-3 y 0 z 0 include_merged 
+subtract volume 2  from volume 1  
+save as "/Users/likask/tmp/pluto.cub" overwrite
+surface all size auto factor 4
+surface all scheme TriMesh
+mesh surface all

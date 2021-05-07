@@ -12,18 +12,9 @@
 
 set(BFE_DIRS 
   elasticity
-  simple_elasticity
-  elasticity_mixed_formulation
   nonlinear_elasticity
-  mix_transport
   thermal
   cohesive_interface
-  magnetostatic
-  poisson
-  basic
-  hello_world
-  hierarchical_approximation
-  reaction_diffusion_equation
   simple_contact)
 
 function(bfe_install bfe_mod_dir)
@@ -55,7 +46,6 @@ function(bfe_build_and_install target source)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${BFE_MOD_DIR})
 endfunction(bfe_build_and_install)
@@ -83,4 +73,3 @@ foreach(LOOP_DIR ${BFE_DIRS})
   add_subdirectory(${LOOP_DIR})
   bfe_install(${LOOP_DIR})
 endforeach(LOOP_DIR)
-

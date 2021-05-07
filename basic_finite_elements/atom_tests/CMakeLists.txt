@@ -16,26 +16,30 @@ include_directories(
 )
 
 # body forces test
-bfe_add_executable(body_force_atom ${CMAKE_CURRENT_SOURCE_DIR}/body_force_atom_test.cpp)
-target_link_libraries(body_force_atom
+cm_export_file("elasticity_atom_test_body_force.h5m" export_atom_tests_basic_fe)
+
+bfe_add_executable(body_force_atom_test ${CMAKE_CURRENT_SOURCE_DIR}/body_force_atom_test.cpp)
+target_link_libraries(body_force_atom_test
   mofem_finite_elements
   mofem_interfaces
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
-  ${MoFEM_PROJECT_LIBS}
-)
-
-cm_export_file("elasticity_atom_test_body_force.h5m" export_atom_tests_basic_fe)
-add_test(basic_body_force_atom_test
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 ${CMAKE_CURRENT_BINARY_DIR}/body_force_atom -my_file elasticity_atom_test_body_force.h5m
-)
-add_test(basic_forces_and_sources_body_force_atom_test_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/body_force_atom_test.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/body_force_atom_test.txt
-)
+  ${MoFEM_PROJECT_LIBS})
+add_test(
+  basic_body_force_atom_test
+  ${CMAKE_COMMAND}
+  -DMPI_RUN=${MoFEM_MPI_RUN}
+  -DMPI_FLAGS=${MPI_RUN_FLAGS}
+  -DMPI_NP=1
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/body_force_atom_test
+  -DFILE=elasticity_atom_test_body_force.h5m
+  -DLOG1=body_force_atom_test.txt
+  -DLOG2=body_force_atom_test.txt
+  -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/blessed_files
+  -P ${MoFEM_INSTALL_DIR}/include/cmake/RunAndComp.cmake)
 
 # neumann forces
 cm_export_file("elasticity_atom_test_01X_pressure.h5m" export_atom_tests_basic_fe)
@@ -48,34 +52,67 @@ target_link_libraries(neumann_forces_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS})
 
 cm_export_file("elasticity_atom_test_01X.h5m" export_atom_tests_basic_fe)
 cm_export_file("sphere.h5m" export_atom_tests_basic_fe)
 
-add_test(basic_neumann_elasticity_atom_test_01X_pressure
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 ${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom -my_file elasticity_atom_test_01X_pressure.h5m
-)
-add_test(basic_neumann_elasticity_atom_test_01X_pressure_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/forces_and_sources_elasticity_atom_test_01X_pressure.cub.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/forces_and_sources_elasticity_atom_test_01X_pressure.h5m.txt
-)
-add_test(basic_neumann_elasticity_atom_test_01X
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 ${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom -my_file elasticity_atom_test_01X.h5m
-)
-add_test(basic_neumann_elasticity_atom_test_01X_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/forces_and_sources_elasticity_atom_test_01X.cub.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/forces_and_sources_elasticity_atom_test_01X.h5m.txt
-)
-add_test(basic_neumann_sphre_pressure_test
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 ${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom -my_file sphere.h5m
-)
-add_test(basic_neumann_sphre_pressure_test_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/forces_and_sources_sphere.cub.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/forces_and_sources_sphere.h5m.txt
-)
+add_test(
+  basic_neumann_elasticity_atom_test_01X_pressure
+  ${CMAKE_COMMAND}
+  -DMPI_RUN=${MoFEM_MPI_RUN}
+  -DMPI_FLAGS=${MPI_RUN_FLAGS}
+  -DMPI_NP=1
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom
+  -DFILE=elasticity_atom_test_01X_pressure.h5m
+  -DLOG1=forces_and_sources_elasticity_atom_test_01X_pressure.h5m.txt
+  -DLOG2=forces_and_sources_elasticity_atom_test_01X_pressure.h5m.txt
+  -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/blessed_files
+  -P ${MoFEM_INSTALL_DIR}/include/cmake/RunAndComp.cmake)
+
+add_test(
+  basic_neumann_elasticity_atom_test_01X_pressure
+  ${CMAKE_COMMAND}
+  -DMPI_RUN=${MoFEM_MPI_RUN}
+  -DMPI_FLAGS=${MPI_RUN_FLAGS}
+  -DMPI_NP=1
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom
+  -DFILE=elasticity_atom_test_01X.h5m
+  -DLOG1=forces_and_sources_elasticity_atom_test_01X.h5m.txt
+  -DLOG2=forces_and_sources_elasticity_atom_test_01X.h5m.txt
+  -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/blessed_files
+  -P ${MoFEM_INSTALL_DIR}/include/cmake/RunAndComp.cmake)
+
+add_test(
+  basic_neumann_elasticity_atom_test_01X_pressure
+  ${CMAKE_COMMAND}
+  -DMPI_RUN=${MoFEM_MPI_RUN}
+  -DMPI_FLAGS=${MPI_RUN_FLAGS}
+  -DMPI_NP=1
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom
+  -DFILE=elasticity_atom_test_01X.h5m
+  -DLOG1=forces_and_sources_elasticity_atom_test_01X.h5m.txt
+  -DLOG2=forces_and_sources_elasticity_atom_test_01X.h5m.txt
+  -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/blessed_files
+  -P ${MoFEM_INSTALL_DIR}/include/cmake/RunAndComp.cmake)
+
+add_test(
+  basic_neumann_elasticity_atom_test_01X_pressure
+  ${CMAKE_COMMAND}
+  -DMPI_RUN=${MoFEM_MPI_RUN}
+  -DMPI_FLAGS=${MPI_RUN_FLAGS}
+  -DMPI_NP=1
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/neumann_forces_atom
+  -DFILE=sphere.h5m
+  -DLOG1=forces_and_sources_sphere.h5m.txt
+  -DLOG2=forces_and_sources_sphere.h5m.txt
+  -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/blessed_files
+  -P ${MoFEM_INSTALL_DIR}/include/cmake/RunAndComp.cmake)
 
 # add example test for forces_and_sources_fluid_pressure_element_atom
 cm_export_file("fluid_presssure_cub_test.h5m" export_atom_tests_basic_fe)
@@ -87,7 +124,6 @@ target_link_libraries(fluid_pressure_element_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -106,7 +142,6 @@ target_link_libraries(thermal_elem_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -125,7 +160,6 @@ target_link_libraries(thermal_elem_unsteady_atom
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -150,7 +184,6 @@ target_link_libraries(thermal_stress_elem
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -178,7 +211,6 @@ target_link_libraries(thermal_with_analytical_bc
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 
@@ -201,22 +233,22 @@ target_link_libraries(field_approximation
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
-  ${MoFEM_PROJECT_LIBS}
-)
+  ${MoFEM_PROJECT_LIBS})
 
 add_test(
   basic_field_approximation_test
-  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 ${CMAKE_CURRENT_BINARY_DIR}/field_approximation
-  -my_file elasticity_atom_test_01X_pressure.h5m
-  -ksp_monitor -ksp_type fgmres -pc_type bjacobi -ksp_atol 0 -ksp_rtol 1e-12
-)
-add_test(
-  basic_field_approximation_test_compare ${CMAKE_COMMAND} -E compare_files
-  ${CMAKE_CURRENT_SOURCE_DIR}/blessed_files/field_approximation.txt
-  ${CMAKE_CURRENT_BINARY_DIR}/field_approximation.txt
-)
+  ${CMAKE_COMMAND}
+  -DMPI_RUN=${MoFEM_MPI_RUN}
+  -DMPI_FLAGS=${MPI_RUN_FLAGS}
+  -DMPI_NP=1
+  -DPROG=${CMAKE_CURRENT_BINARY_DIR}/field_approximation
+  -DFILE=elasticity_atom_test_01X_pressure.h5m
+  -DLOG1=field_approximation.txt
+  -DLOG2=field_approximation.txt
+  -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/blessed_files
+  -P ${MoFEM_INSTALL_DIR}/include/cmake/RunAndComp.cmake)
 
 if(ADOL-C_LIBRARY)
 
@@ -233,7 +265,6 @@ if(ADOL-C_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
@@ -254,7 +285,6 @@ if(ADOL-C_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
@@ -290,7 +320,6 @@ if(ADOL-C_LIBRARY)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     ${MoFEM_PROJECT_LIBS}
   )
 
@@ -319,7 +348,6 @@ if(ADOL-C_LIBRARY)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
     ${MoFEM_PROJECT_LIBS}
   )
 
@@ -345,7 +373,6 @@ target_link_libraries(testing_jacobian_of_hook_element
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 
@@ -377,7 +404,6 @@ target_link_libraries(testing_jacobian_of_hook_scaled_with_density_element
   mofem_petsc
   mofem_approx
   mofem_third_party
-  mofem_cblas
   ${MoFEM_PROJECT_LIBS}
 )
 
@@ -409,7 +435,6 @@ mofem_multi_indices
 mofem_petsc
 mofem_approx
 mofem_third_party
-mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
 
@@ -419,6 +444,46 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
   -file_name mesh_for_testing_surface_pressure_element.h5m
+  )
+
+bfe_add_executable(testing_jacobian_of_navier_stokes_element
+  ${CMAKE_CURRENT_SOURCE_DIR}/testing_jacobian_of_navier_stokes_element.cpp
+)
+
+target_link_libraries(testing_jacobian_of_navier_stokes_element
+  users_modules
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+cm_export_file("mesh_for_testing_navier_stokes_element.h5m" export_atom_tests_basic_fe)
+
+add_test(
+  testing_jacobian_of_navier_stokes_element
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_navier_stokes_element
+  -my_file mesh_for_testing_navier_stokes_element.h5m 
+  -my_order_u 4 -my_order_p 3
+)
+
+add_test(
+  testing_jacobian_of_navier_stokes_element_discont_pressure
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_navier_stokes_element
+  -my_file mesh_for_testing_navier_stokes_element.h5m 
+  -my_order_u 4 -my_order_p 2 -discont_pressure 1
+)
+
+cm_export_file("2_tets_springs.cub" export_atom_tests_basic_fe)
+add_test(
+  testing_jacobian_of_spring_element_ale
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/testing_jacobian_of_surface_pressure_element
+  -file_name 2_tets_springs.cub -snes_test_jacobian_display
 )
 
 # SIMPLE CONTACT
@@ -435,7 +500,6 @@ mofem_multi_indices
 mofem_petsc
 mofem_approx
 mofem_third_party
-mofem_cblas
 ${MoFEM_PROJECT_LIBS}
 )
 
@@ -447,9 +511,22 @@ add_test(
   -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 3 -my_order_lambda 3
 )
 add_test(
+  test_jacobian_of_simple_contact_element_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 3 -my_order_lambda 3 -alm_flag 1
+)
+add_test(
   test_jacobian_of_simple_contact_element_convect_integration_pts
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
   -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 3 -my_order_lambda 3 
   -my_convect 1
+)
+add_test(
+  test_jacobian_of_simple_contact_element_ale
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 4 -my_order_lambda 3 
+  -test_ale 1
 )
