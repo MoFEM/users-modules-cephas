@@ -43,7 +43,7 @@ template <> struct ElementsAndOps<3> {
 };
 
 //! [Define dimension]
-constexpr int SPACE_DIM = 3; //< Space dimension of problem, mesh
+constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 //! [Define dimension]
 
 using EntData = DataForcesAndSourcesCore::EntData;
