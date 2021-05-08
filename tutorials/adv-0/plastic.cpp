@@ -297,6 +297,7 @@ MoFEMErrorCode Example::bC() {
 
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
+  auto prb_mng = mField.getInterface<ProblemsManager>();
 
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
                                            "U", 0, 0);
@@ -331,10 +332,19 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
   if (auto bc = bc_mng->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
-                                              "REACTION"))
+                                              "REACTION")) {
     reactionMarker = bc->getBcMarkersPtr();
-  else
+
+    // Only take reaction from nodes
+    Range nodes;
+    CHKERR mField.get_moab().get_entities_by_type(0, MBVERTEX, nodes, true);
+    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW,
+                             ProblemsManager::MarkOP::AND, nodes,
+                             *reactionMarker);
+
+  } else {
     MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
+  }
 
   MoFEMFunctionReturn(0);
 }
