@@ -41,28 +41,16 @@ private:
   MoFEMErrorCode outputResults();
 
   // Function to calculate the Source term
-  static double sourceTermFunction(const double x, const double y,
-                                   const double z) {
-    // return -exp(-100. * (sqr(x) + sqr(y))) *
-    //        (400. * M_PI *
-    //             (x * cos(M_PI * y) * sin(M_PI * x) +
-    //              y * cos(M_PI * x) * sin(M_PI * y)) +
-    //         2. * (20000. * (sqr(x) + sqr(y)) - 200. - sqr(M_PI)) *
-    //             cos(M_PI * x) * cos(M_PI * y)); // this with D_mat = 1 return exp(-100. * (sqr(x) + sqr(y)))
-    return 6;
-  }
-  // // Function to impose Dirichelet boundary condition (Temperature)
-  // static double boundaryFunction(const double x, const double y,
-  //                                const double z) {
-  //   return 1; 
+  // static double sourceTermFunction(const double x, const double y,
+  //                                  const double z) {
+  //   // return -exp(-100. * (sqr(x) + sqr(y))) *
+  //   //        (400. * M_PI *
+  //   //             (x * cos(M_PI * y) * sin(M_PI * x) +
+  //   //              y * cos(M_PI * x) * sin(M_PI * y)) +
+  //   //         2. * (20000. * (sqr(x) + sqr(y)) - 200. - sqr(M_PI)) *
+  //   //             cos(M_PI * x) * cos(M_PI * y)); // this with D_mat = 1 return exp(-100. * (sqr(x) + sqr(y)))
   // }
 
-  //   // Function to impose Neuman boundary condition (Heat Flux)
-  // static double boundaryFlux(const double x, const double y,
-  //                                const double z) {
-    
-  //   return 1;
-  // }
   // Main interfaces
   MoFEM::Interface &mField;
   Simple *simpleInterface;
@@ -299,20 +287,24 @@ MoFEMErrorCode Thermal2D::boundaryCondition() {
 MoFEMErrorCode Thermal2D::assembleSystem() {
   MoFEMFunctionBegin;
   // make this an input
-  double D = 1;
+  double D = 1.;
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-D", &D, PETSC_NULL);
   auto D_mat = [D](const double, const double, const double) { return D; };
   auto q_unit = [](const double, const double, const double) { return 1; };
 
-  double bc_temp1 = 1;
+  double source = 1.;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-source", &source, PETSC_NULL);
+  auto sourceTermFunction =[source](const double, const double, const double) { return source; };
+  
+  double bc_temp1 = 1.;
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_temp1", &bc_temp1, PETSC_NULL);
   auto bc_1 =[bc_temp1](const double, const double, const double) { return bc_temp1; };
 
-  double bc_temp2 = 1;
+  double bc_temp2 = 1.;
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_temp2", &bc_temp1, PETSC_NULL);
   auto bc_2 =[bc_temp2](const double, const double, const double) { return bc_temp2; };
 
-  double bc_flux1 = 1;
+  double bc_flux1 = 0.;
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_flux1", &bc_flux1, PETSC_NULL);
   auto flux_1 =[&](const double, const double, const double) { 
     const auto fe_ent = boundaryPipelineRhs->getFEEntityHandle();
@@ -324,7 +316,7 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
   };
 
   double bc_flux2 = 0.;
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_flux2", &bc_flux1, PETSC_NULL);
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_flux2", &bc_flux2, PETSC_NULL);
   auto flux_2 =[&](const double, const double, const double) { 
     const auto fe_ent = boundaryPipelineRhs->getFEEntityHandle();
     if(fluxBoundaryConditions_2.find(fe_ent)!=fluxBoundaryConditions_2.end()) {
@@ -333,7 +325,6 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
       return 0.;
     }
   };
-
 
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
@@ -350,13 +341,6 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
         new OpDomainGradGrad(domainField, domainField, D_mat));   
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));
-    //Push back the LHS for the definition of Neuman bcs
-    // domainPipelineLhs->getOpPtrVector().push_back(
-    //     new OpSetBc(domainField, true, boundaryMarker_1));
-    // domainPipelineLhs->getOpPtrVector().push_back(
-    //     new OpDomainGradGrad(domainField, domainField, q_unit));   
-    // domainPipelineLhs->getOpPtrVector().push_back(
-    //     new OpUnSetBc(domainField));       
    }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of the source
@@ -367,6 +351,8 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));
   }
+
+// Start Code for non zero Dirichelet conditions
 
   // { // Push operators in boundary pipeline LHS for Dirichelet
   //   boundaryPipelineLhs->getOpPtrVector().push_back(
@@ -383,22 +369,7 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
   //       new OpBoundarySource(domainField, bc_1));
   //   boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
   // }
-
-  // { // Push operators in boundary pipeline LHS for Dirichelet
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_2));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpBoundaryMass(domainField, domainField, q_unit));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
-
-  // { // Push operators in boundary pipeline RHS for Dirichelet
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_2));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpBoundarySource(domainField, bc_2));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
+// End Code for non zero Dirichelet conditions
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // boundary elements
