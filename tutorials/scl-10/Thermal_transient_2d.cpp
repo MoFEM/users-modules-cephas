@@ -49,20 +49,20 @@ private:
     //              y * cos(M_PI * x) * sin(M_PI * y)) +
     //         2. * (20000. * (sqr(x) + sqr(y)) - 200. - sqr(M_PI)) *
     //             cos(M_PI * x) * cos(M_PI * y)); // this with D_mat = 1 return exp(-100. * (sqr(x) + sqr(y)))
-    return 6;
+    return 0;
   }
-  // // Function to impose Dirichelet boundary condition (Temperature)
-  // static double boundaryFunction(const double x, const double y,
-  //                                const double z) {
-  //   return 1; 
-  // }
+  // Function to impose Dirichelet boundary condition (Temperature)
+  static double boundaryFunction(const double x, const double y,
+                                 const double z) {
+    return 1; 
+  }
 
-  //   // Function to impose Neuman boundary condition (Heat Flux)
-  // static double boundaryFlux(const double x, const double y,
-  //                                const double z) {
+    // Function to impose Neuman boundary condition (Heat Flux)
+  static double boundaryFlux(const double x, const double y,
+                                 const double z) {
     
-  //   return 1;
-  // }
+    return 5;
+  }
   // Main interfaces
   MoFEM::Interface &mField;
   Simple *simpleInterface;
@@ -72,9 +72,9 @@ private:
   // Number of processors
   const int mpiRank;
 
-  // Discrete Manager and linear KSP solver using SmartPetscObj
+  // Discrete Manager and time-stepping solver using SmartPetscObj
   SmartPetscObj<DM> dM;
-  SmartPetscObj<KSP> kspSolver;
+  SmartPetscObj<TS> tsSolver;
 
   // Field name and approximation order
   std::string domainField;
@@ -85,16 +85,12 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_1;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_2;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_3;
-  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_4;
   // MoFEM working Pipelines for LHS and RHS of domain and boundary
   boost::shared_ptr<FaceEle> domainPipelineLhs;
   boost::shared_ptr<FaceEle> domainPipelineRhs;
   boost::shared_ptr<EdgeEle> boundaryPipelineLhs;
   boost::shared_ptr<EdgeEle> boundaryPipelineRhs;
 
-
-  Range fluxBoundaryConditions_1;
-  Range fluxBoundaryConditions_2;
   // Object needed for postprocessing
   boost::shared_ptr<FaceEle> postProc;
 
@@ -193,57 +189,8 @@ MoFEMErrorCode Thermal2D::boundaryCondition() {
     return boundary_entities;
   };
 
-    // Remove DOFs as homogeneous boundary condition is used
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), domainField, get_ents_on_mesh_skin_1());
-
-    // BC NEUMANN 1
-    auto get_ents_on_mesh_skin_2 = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 6, "FLUX_1") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
-      }
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-
-    // Store entities for fieldsplit (block) solver
-    boundaryEntitiesForFieldsplit = boundary_entities;
-
-    return boundary_entities;
-  };
-
-    // BC NEUMANN 2
-    auto get_ents_on_mesh_skin_3 = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 6, "FLUX_2") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
-      }
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-
-    // Store entities for fieldsplit (block) solver
-    boundaryEntitiesForFieldsplit = boundary_entities;
-
-    return boundary_entities;
-  };
-
-
   //BC for DOMAIN
-    auto get_ents_on_mesh_skin_4 = [&]() {
+    auto get_ents_on_mesh_skin_2 = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
@@ -257,12 +204,30 @@ MoFEMErrorCode Thermal2D::boundaryCondition() {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities_loop, true);
         boundary_entities.merge(boundary_entities_loop);  
-      }
-      if (entity_name.compare(0, 6, "FLUX_2") == 0) {
+      }           
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
+
+    // Store entities for fieldsplit (block) solver
+    boundaryEntitiesForFieldsplit = boundary_entities;
+
+    return boundary_entities;
+  };
+  
+
+    // BC Bottom Boundary
+    auto get_ents_on_mesh_skin_3 = [&]() {
+    Range boundary_entities;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+      if (entity_name.compare(0, 6, "FLUX_1") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities_loop, true);
-        boundary_entities.merge(boundary_entities_loop);  
-      }                
+                                                   boundary_entities, true);
+      }
     }
     // Add vertices to boundary entities
     Range boundary_vertices;
@@ -290,51 +255,25 @@ MoFEMErrorCode Thermal2D::boundaryCondition() {
   boundaryMarker_1 = mark_boundary_dofs(get_ents_on_mesh_skin_1());
   boundaryMarker_2 = mark_boundary_dofs(get_ents_on_mesh_skin_2());
   boundaryMarker_3 = mark_boundary_dofs(get_ents_on_mesh_skin_3());
-  boundaryMarker_4 = mark_boundary_dofs(get_ents_on_mesh_skin_4());
-  fluxBoundaryConditions_1 = get_ents_on_mesh_skin_2();
-  fluxBoundaryConditions_2 = get_ents_on_mesh_skin_3();
   MoFEMFunctionReturn(0);
 }
 
 MoFEMErrorCode Thermal2D::assembleSystem() {
   MoFEMFunctionBegin;
-  // make this an input
+  // Conductivity of the material
   double D = 1;
   CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-D", &D, PETSC_NULL);
+  // Density of the material
+  double rho = 1;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-rho", &D, PETSC_NULL);
+  // Heat capacity of the material
+  double Cv = 1;
+  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-Cv", &D, PETSC_NULL);
+
   auto D_mat = [D](const double, const double, const double) { return D; };
+  auto transient_coeff = [rho](const double, const double, const double) { return rho; };
+  auto heat_capacity = [Cv](const double, const double, const double) { return Cv; };
   auto q_unit = [](const double, const double, const double) { return 1; };
-
-  double bc_temp1 = 1;
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_temp1", &bc_temp1, PETSC_NULL);
-  auto bc_1 =[bc_temp1](const double, const double, const double) { return bc_temp1; };
-
-  double bc_temp2 = 1;
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_temp2", &bc_temp1, PETSC_NULL);
-  auto bc_2 =[bc_temp2](const double, const double, const double) { return bc_temp2; };
-
-  double bc_flux1 = 1;
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_flux1", &bc_flux1, PETSC_NULL);
-  auto flux_1 =[&](const double, const double, const double) { 
-    const auto fe_ent = boundaryPipelineRhs->getFEEntityHandle();
-    if(fluxBoundaryConditions_1.find(fe_ent)!=fluxBoundaryConditions_1.end()) {
-      return bc_flux1; 
-    } else {
-      return 0.;
-    }
-  };
-
-  double bc_flux2 = 0.;
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-bc_flux2", &bc_flux1, PETSC_NULL);
-  auto flux_2 =[&](const double, const double, const double) { 
-    const auto fe_ent = boundaryPipelineRhs->getFEEntityHandle();
-    if(fluxBoundaryConditions_2.find(fe_ent)!=fluxBoundaryConditions_2.end()) {
-      return bc_flux2; 
-    } else {
-      return 0.;
-    }
-  };
-
-
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
     // Calculate the inverse Jacobian for both Domain and Boundary
@@ -343,69 +282,51 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpSetInvJacH1ForFace(invJac));
 
-    // Push back the LHS  for conduction
+    // Push back the LHS for steady conduction
     domainPipelineLhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, true, boundaryMarker_1));
+        new OpSetBc(domainField, true, boundaryMarker_2));
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpDomainGradGrad(domainField, domainField, D_mat));   
     domainPipelineLhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));
+    // Push back the LHS for transient conduction   
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpSetBc(domainField, true, boundaryMarker_2));
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpDomainMass(domainField, domainField, transient_coeff));   
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpUnSetBc(domainField));     
     //Push back the LHS for the definition of Neuman bcs
-    // domainPipelineLhs->getOpPtrVector().push_back(
-    //     new OpSetBc(domainField, true, boundaryMarker_1));
-    // domainPipelineLhs->getOpPtrVector().push_back(
-    //     new OpDomainGradGrad(domainField, domainField, q_unit));   
-    // domainPipelineLhs->getOpPtrVector().push_back(
-    //     new OpUnSetBc(domainField));       
-   }
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpSetBc(domainField, false, boundaryMarker_3));
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpDomainGradGrad(domainField, domainField, D_mat));   
+    domainPipelineLhs->getOpPtrVector().push_back(
+        new OpUnSetBc(domainField));        
+  }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of the source
     domainPipelineRhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, true, boundaryMarker_1));
+        new OpSetBc(domainField, true, boundaryMarker_2));
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpDomainSource(domainField, sourceTermFunction));
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));
   }
 
-  // { // Push operators in boundary pipeline LHS for Dirichelet
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_1));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpBoundaryMass(domainField, domainField, q_unit));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
+  { // Push operators in boundary pipeline LHS for Dirichelet
+    boundaryPipelineLhs->getOpPtrVector().push_back(
+        new OpSetBc(domainField, false, boundaryMarker_1));
+    boundaryPipelineLhs->getOpPtrVector().push_back(
+        new OpBoundaryMass(domainField, domainField, q_unit));
+    boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
+  }
 
-  // { // Push operators in boundary pipeline RHS for Dirichelet
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_1));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpBoundarySource(domainField, bc_1));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
-
-  // { // Push operators in boundary pipeline LHS for Dirichelet
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_2));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpBoundaryMass(domainField, domainField, q_unit));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
-
-  // { // Push operators in boundary pipeline RHS for Dirichelet
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_2));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpBoundarySource(domainField, bc_2));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
-
-  { // Push operators to the Pipeline that is responsible for calculating RHS of
-    // boundary elements
+  { // Push operators in boundary pipeline RHS for Dirichelet
     boundaryPipelineRhs->getOpPtrVector().push_back(
-        new OpSetBc(domainField, false, boundaryMarker_2));
+        new OpSetBc(domainField, false, boundaryMarker_1));
     boundaryPipelineRhs->getOpPtrVector().push_back(
-        new OpBoundarySource(domainField, flux_1));
+        new OpBoundarySource(domainField, boundaryFunction));
     boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
   }
 
@@ -414,30 +335,8 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
     boundaryPipelineRhs->getOpPtrVector().push_back(
         new OpSetBc(domainField, false, boundaryMarker_3));
     boundaryPipelineRhs->getOpPtrVector().push_back(
-        new OpBoundarySource(domainField, flux_2));
+        new OpBoundarySource(domainField, boundaryFlux));
     boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  }
-
-  // get Discrete Manager (SmartPetscObj)
-  dM = simpleInterface->getDM();
-
-  { // Set operators for linear equations solver (KSP) from MoFEM Pipelines
-
-    // Set operators for calculation of LHS and RHS of domain elements
-    boost::shared_ptr<FaceEle> null_face;
-    CHKERR DMMoFEMKSPSetComputeOperators(dM, simpleInterface->getDomainFEName(),
-                                         domainPipelineLhs, null_face,
-                                         null_face);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getDomainFEName(),
-                                   domainPipelineRhs, null_face, null_face);
-
-    // Set operators for calculation of LHS and RHS of domain elements
-    boost::shared_ptr<EdgeEle> null_edge;
-    CHKERR DMMoFEMKSPSetComputeOperators(
-        dM, simpleInterface->getBoundaryFEName(), boundaryPipelineLhs,
-        null_edge, null_edge);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getBoundaryFEName(),
-                                   boundaryPipelineRhs, null_edge, null_edge);
   }
 
   MoFEMFunctionReturn(0);
@@ -446,50 +345,70 @@ MoFEMErrorCode Thermal2D::assembleSystem() {
 MoFEMErrorCode Thermal2D::solveSystem() {
   MoFEMFunctionBegin;
 
-  // Create RHS and solution vectors
-  SmartPetscObj<Vec> global_rhs, global_solution;
-  CHKERR DMCreateGlobalVector_MoFEM(dM, global_rhs);
-  global_solution = smartVectorDuplicate(global_rhs);
+  // Create and set Time Stepping solver
+  tsSolver = createTS(mField.get_comm());
+  // Use fully implicit type (backward Euler) for Heat Equation
+  CHKERR TSSetType(tsSolver, TSBEULER);
+  // CHKERR TSSetType(tsSolver, TSARKIMEX);
+  // CHKERR TSARKIMEXSetType(tsSolver, TSARKIMEXA2);
 
-  // Setup KSP solver
-  kspSolver = createKSP(mField.get_comm());
-  CHKERR KSPSetFromOptions(kspSolver);
+  // get Discrete Manager (SmartPetscObj)
+  dM = simpleInterface->getDM();
 
-  // Setup fieldsplit (block) solver - optional: yes/no
-  if (1) {
-    PC pc;
-    CHKERR KSPGetPC(kspSolver, &pc);
-    PetscBool is_pcfs = PETSC_FALSE;
-    PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
+  boost::shared_ptr<ForcesAndSourcesCore> null;
 
-    // Set up FIELDSPLIT, only when user set -pc_type fieldsplit
-    // Identify the index for boundary entities, remaining will be for domain
-    // Then split the fields for boundary and domain for solving
-    if (is_pcfs == PETSC_TRUE) {
-      IS is_domain, is_boundary;
-      const MoFEM::Problem *problem_ptr;
-      CHKERR DMMoFEMGetProblemPtr(dM, &problem_ptr);
-      CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
-          problem_ptr->getName(), ROW, domainField, 0, 1, &is_boundary,
-          &boundaryEntitiesForFieldsplit);
-      // CHKERR ISView(is_boundary, PETSC_VIEWER_STDOUT_SELF);
+  // // Add element to calculate Jacobian of function dF/du (LHS) of stiff part
+  // CHKERR DMMoFEMTSSetIJacobian(dM, simpleInterface->getDomainFEName(),
+  //                              stiffTangentLhsMatrixPipeline, null, null);
+  // // and boundary term (LHS)
+  // CHKERR DMMoFEMTSSetIJacobian(dM, simpleInterface->getBoundaryFEName(),
+  //                              boundaryLhsMatrixPipeline, null, null);
 
-      CHKERR PCFieldSplitSetIS(pc, NULL, is_boundary);
+  // // Add element to calculate function F (RHS) of stiff part
+  // CHKERR DMMoFEMTSSetIFunction(dM, simpleInterface->getDomainFEName(),
+  //                              stiffFunctionRhsVectorPipeline, null, null);
+  // // and boundary term (RHS)
+  // CHKERR DMMoFEMTSSetIFunction(dM, simpleInterface->getBoundaryFEName(),
+  //                              boundaryRhsVectorPipeline, null, null);
 
-      CHKERR ISDestroy(&is_boundary);
-    }
+  // Add element to calculate function G (RHS) of slow (nonlinear) part
+  // Note: G(t,y) = 0 in the heat equation with fully implicit scheme
+  // CHKERR DMMoFEMTSSetRHSFunction(dM, simpleInterface->getDomainFEName(),
+  //                                vol_ele_slow_rhs, null, null);
+
+  { // Set output of the results
+
+    // Create element for post-processing
+    CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
+        ->generateReferenceElementMesh();
+    CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
+        ->addFieldValuesPostProc(domainField);
+
+    // Add monitor to time solver
+    boost::shared_ptr<Monitor> monitor_ptr(new Monitor(dM, postProc));
+    CHKERR DMMoFEMTSSetMonitor(dM, tsSolver, simpleInterface->getDomainFEName(),
+                               monitor_ptr, null, null);
   }
 
-  CHKERR KSPSetDM(kspSolver, dM);
-  CHKERR KSPSetUp(kspSolver);
-
-  // Solve the system
-  CHKERR KSPSolve(kspSolver, global_rhs, global_solution);
-  // VecView(global_rhs, PETSC_VIEWER_STDOUT_SELF);
+  // Create global solution vector
+  SmartPetscObj<Vec> global_solution;
+  CHKERR DMCreateGlobalVector_MoFEM(dM, global_solution);
 
   // Scatter result data on the mesh
-  CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
-                                  SCATTER_REVERSE);
+  // CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
+  //                                 SCATTER_REVERSE);
+  CHKERR DMoFEMMeshToLocalVector(dM, global_solution, INSERT_VALUES,
+                                 SCATTER_FORWARD);
+
+  // Solve problem
+  // double max_time = 1;
+  // double max_steps = 1000;
+  CHKERR TSSetDM(tsSolver, dM);
+  // CHKERR TSSetMaxTime(tsSolver, max_time);
+  // CHKERR TSSetMaxSteps(tsSolver, max_steps);
+  CHKERR TSSetSolution(tsSolver, global_solution);
+  CHKERR TSSetFromOptions(tsSolver);
+  CHKERR TSSolve(tsSolver, global_solution);
 
   MoFEMFunctionReturn(0);
 }
@@ -497,18 +416,7 @@ MoFEMErrorCode Thermal2D::solveSystem() {
 MoFEMErrorCode Thermal2D::outputResults() {
   MoFEMFunctionBegin;
 
-  postProc = boost::shared_ptr<FaceEle>(new PostProcFaceOnRefinedMesh(mField));
-
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->generateReferenceElementMesh();
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->addFieldValuesPostProc(domainField);
-
-  CHKERR DMoFEMLoopFiniteElements(dM, simpleInterface->getDomainFEName(),
-                                  postProc);
-
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(postProc)
-      ->writeFile("out_result.h5m");
+  // Processes to set output results are integrated in solveSystem()
 
   MoFEMFunctionReturn(0);
 }

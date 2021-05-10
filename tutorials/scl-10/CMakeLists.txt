@@ -37,3 +37,7 @@ tutorials_copy_and_install("*.geo" "${permissions_execute}")
 tutorials_build_and_install(
   thermal_2d
   ${CMAKE_CURRENT_SOURCE_DIR}/thermal_2d.cpp)
+
+tutorials_build_and_install(
+  thermal_elastic_2d
+  ${CMAKE_CURRENT_SOURCE_DIR}/thermal_elastic_2d.cpp)  
