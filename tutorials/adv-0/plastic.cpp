@@ -145,21 +145,6 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
 
-  struct BCs : boost::enable_shared_from_this<BCs> {
-    Range bcEdges;
-    std::vector<double> bcAttributes;
-    std::vector<unsigned char> bcMarkers;
-    inline auto getBcEdgesPtr() {
-      return boost::shared_ptr<Range>(shared_from_this(), &bcEdges);
-    }
-    inline auto getBcMarkersPtr() {
-      return boost::shared_ptr<std::vector<unsigned char>>(shared_from_this(),
-                                                           &bcMarkers);
-    }
-  };
-
-  std::vector<boost::shared_ptr<BCs>> bcVec;
-
   std::vector<FTensor::Tensor1<double, 3>> bodyForces;
 };
 
@@ -310,112 +295,46 @@ MoFEMErrorCode Example::createCommonData() {
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
 
-  auto prb_mng = mField.getInterface<ProblemsManager>();
   auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
 
-  auto get_block_ents = [&](const std::string blockset_name) {
-    Range remove_ents;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset,
-                                                        remove_ents, true);
-      }
-    }
-    return remove_ents;
-  };
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "REMOVE_ALL", "U", 0, 3);
 
-  auto get_adj_ents = [&](const Range &ents) {
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    if (SPACE_DIM == 3) {
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, verts,
-                                               moab::Interface::UNION);
-    }
-    verts.merge(ents);
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
-    return verts;
-  };
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
+                                        0, 0);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
+                                        1, 1);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U",
+                                        2, 2);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                        "U", 0, 3);
 
-  auto remove_dofs_on_ents = [&](const Range &&ents, const int lo,
-                                 const int hi) {
-    MoFEMFunctionBegin;
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", ents,
-                                         lo, hi);
-    MoFEMFunctionReturn(0);
-  };
-
-  auto mark_fix_dofs = [&](std::vector<unsigned char> &marked_u_dofs,
-                           const auto lo, const auto hi) {
-    return prb_mng->modifyMarkDofs(simple->getProblemName(), ROW, "U", lo, hi,
-                                   ProblemsManager::MarkOP::OR, 1,
-                                   marked_u_dofs);
-  };
-
-  auto fix_disp = [&](const std::string blockset_name, const bool fix_x,
-                      const bool fix_y, const bool fix_z) {
-    MoFEMFunctionBegin;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-
-        bcVec.emplace_back(new BCs());
-
-        CHKERR mField.get_moab().get_entities_by_handle(
-            it->meshset, bcVec.back()->bcEdges, true);
-        CHKERR it->getAttributes(bcVec.back()->bcAttributes);
-
-        if (fix_x)
-          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 0, 0);
-        if (fix_y)
-          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 1, 1);
-        if (fix_z)
-          CHKERR mark_fix_dofs(bcVec.back()->bcMarkers, 2, 2);
-
-        CHKERR prb_mng->markDofs(
-            simple->getProblemName(), ROW, ProblemsManager::AND,
-            get_adj_ents(bcVec.back()->bcEdges), bcVec.back()->bcMarkers);
-      }
-    }
-    MoFEMFunctionReturn(0);
-  };
-
-  auto mark_dofs_on_ents = [&](const Range &&ents) {
-    std::vector<unsigned char> marked_ents;
-    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW, ProblemsManager::OR,
-                             ents, marked_ents);
-
-    return marked_ents;
-  };
-
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_X")), 0, 0);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Y")), 1, 1);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_Z")), 2, 2);
-  CHKERR remove_dofs_on_ents(get_adj_ents(get_block_ents("REMOVE_ALL")), 0, 3);
-
-  CHKERR fix_disp("FIX_X", true, false, false);
-  CHKERR fix_disp("FIX_Y", false, true, false);
-  if (SPACE_DIM == 3)
-    CHKERR fix_disp("FIX_Z", false, false, true);
-  CHKERR fix_disp("FIX_ALL", true, true, true);
+  auto &bc_map = bc_mng->getBcMapByBlockName();
 
   boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-  for (auto b : bcVec) {
-    boundaryMarker->resize(b->bcMarkers.size(), 0);
-    for (int i = 0; i != b->bcMarkers.size(); ++i) {
-      (*boundaryMarker)[i] |= b->bcMarkers[i];
+  for (auto b : bc_map) {
+    boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+    for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+      (*boundaryMarker)[i] |= b.second->bcMarkers[i];
     }
   }
-  if (boundaryMarker->empty()) {
-    auto marker = mark_dofs_on_ents(Range());
-    boundaryMarker = boost::make_shared<std::vector<unsigned char>>(
-        marker.begin(), marker.end());
-  }
 
-  auto rec_marker = mark_dofs_on_ents(
-      get_adj_ents(get_block_ents("REACTION")).subset_by_type(MBVERTEX));
-  reactionMarker = boost::make_shared<std::vector<unsigned char>>(
-      rec_marker.begin(), rec_marker.end());
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
+                                        "U", 0, 3);
+  if (auto bc = bc_mng
+                    ->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
+                                            "REACTION")
+                    ->getBcMarkersPtr())
+    reactionMarker = bc;
+  else
+    MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
 
   MoFEMFunctionReturn(0);
 }
@@ -635,11 +554,12 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     MoFEMFunctionBegin;
-    for (auto &bc : bcVec) {
-      pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
+    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+    for (auto bc : bc_map) {
+      pipeline.push_back(new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
       pipeline.push_back(new OpBoundaryMass(
           "U", "U", [](double, double, double) { return 1.; },
-          bc->getBcEdgesPtr()));
+          bc.second->getBcEdgesPtr()));
       pipeline.push_back(new OpUnSetBc("U"));
     }
     MoFEMFunctionReturn(0);
@@ -700,23 +620,23 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
-    for (auto &bc : bcVec) {
-      pipeline.push_back(new OpSetBc("U", false, bc->getBcMarkersPtr()));
+    for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
+      pipeline.push_back(new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
       auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
       attr_vec->clear();
-      if (bc->bcAttributes.size() < SPACE_DIM)
+      if (bc.second->bcAttributes.size() < SPACE_DIM)
         SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                  "Wrong size of boundary attributes vector. Set right block "
                  "size attributes. Size of attributes %d",
-                 bc->bcAttributes.size());
-      std::copy(&bc->bcAttributes[0], &bc->bcAttributes[SPACE_DIM],
-                attr_vec->data().begin());
+                 bc.second->bcAttributes.size());
+      std::copy(&bc.second->bcAttributes[0],
+                &bc.second->bcAttributes[SPACE_DIM], attr_vec->data().begin());
 
-      pipeline.push_back(
-          new OpBoundaryVec("U", attr_vec, time_scaled, bc->getBcEdgesPtr()));
+      pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+                                           bc.second->getBcEdgesPtr()));
       pipeline.push_back(new OpBoundaryInternal(
           "U", u_mat_ptr, [](double, double, double) { return 1.; },
-          bc->getBcEdgesPtr()));
+          bc.second->getBcEdgesPtr()));
 
       pipeline.push_back(new OpUnSetBc("U"));
     }
@@ -836,53 +756,58 @@ MoFEMErrorCode Example::OPs() {
   auto create_reaction_pipeline = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
-    if (SPACE_DIM == 2) {
-      pipeline.push_back(new OpCalculateInvJacForFace(invJac));
-      pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+    if (reactionMarker) {
+
+      if (SPACE_DIM == 2) {
+        pipeline.push_back(new OpCalculateInvJacForFace(invJac));
+        pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
+      }
+
+      if (is_dual_base)
+        pipeline.push_back(new OpScaleL2(L2));
+
+      pipeline.push_back(
+          new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
+              "U", commonPlasticDataPtr->mGradPtr));
+      pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
+          "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
+
+      if (is_large_strains) {
+
+        if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                  "Wrong pointer for grad");
+
+        pipeline.push_back(
+            new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
+        pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
+            "U", commonHenckyDataPtr));
+        pipeline.push_back(
+            new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
+
+      } else {
+        pipeline.push_back(new OpSymmetrizeTensor<SPACE_DIM>(
+            "U", commonPlasticDataPtr->mGradPtr,
+            commonPlasticDataPtr->mStrainPtr));
+        pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, 1));
+      }
+
+      pipeline.push_back(new OpSetBc("U", false, reactionMarker));
+      // Calculate internal forece
+      if (is_large_strains) {
+        pipeline.push_back(new OpInternalForcePiola(
+            "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
+      } else {
+        pipeline.push_back(
+            new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
+      }
+      pipeline.push_back(new OpUnSetBc("U"));
     }
-
-    if (is_dual_base)
-      pipeline.push_back(new OpScaleL2(L2));
-
-    pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
-        "U", commonPlasticDataPtr->mGradPtr));
-    pipeline.push_back(new OpCalculateTensor2SymmetricFieldValues<SPACE_DIM>(
-        "EP", commonPlasticDataPtr->getPlasticStrainPtr()));
-
-    if (is_large_strains) {
-
-      if (commonPlasticDataPtr->mGradPtr != commonHenckyDataPtr->matGradPtr)
-        SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "Wrong pointer for grad");
-
-      pipeline.push_back(
-          new OpCalculateEigenVals<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculateLogC<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(
-          new OpCalculateLogC_dC<SPACE_DIM>("U", commonHenckyDataPtr));
-      pipeline.push_back(new OpCalculateHenckyPlasticStress<SPACE_DIM>(
-          "U", commonHenckyDataPtr, scale));
-      pipeline.push_back(
-          new OpCalculatePiolaStress<SPACE_DIM>("U", commonHenckyDataPtr));
-
-    } else {
-      pipeline.push_back(
-          new OpSymmetrizeTensor<SPACE_DIM>("U", commonPlasticDataPtr->mGradPtr,
-                                            commonPlasticDataPtr->mStrainPtr));
-      pipeline.push_back(new OpPlasticStress("U", commonPlasticDataPtr, scale));
-    }
-
-    pipeline.push_back(new OpSetBc("U", false, reactionMarker));
-    // Calculate internal forece
-    if (is_large_strains) {
-      pipeline.push_back(new OpInternalForcePiola(
-          "U", commonHenckyDataPtr->getMatFirstPiolaStress()));
-    } else {
-      pipeline.push_back(
-          new OpInternalForceCauchy("U", commonPlasticDataPtr->mStressPtr));
-    }
-    pipeline.push_back(new OpUnSetBc("U"));
+    
     MoFEMFunctionReturn(0);
   };
 
@@ -982,8 +907,10 @@ MoFEMErrorCode Example::tsSolve() {
               commonPlasticDataPtr->mStrainPtr,
               commonPlasticDataPtr->mStressPtr));
     }
+
     postProcFe->getOpPtrVector().push_back(
         new OpCalculatePlasticSurface("U", commonPlasticDataPtr));
+
     postProcFe->getOpPtrVector().push_back(
         new OpPostProcPlastic("U", postProcFe->postProcMesh,
                               postProcFe->mapGaussPts, commonPlasticDataPtr));
