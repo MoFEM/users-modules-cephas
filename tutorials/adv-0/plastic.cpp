@@ -297,6 +297,7 @@ MoFEMErrorCode Example::bC() {
 
   auto simple = mField.getInterface<Simple>();
   auto bc_mng = mField.getInterface<BcManager>();
+  auto prb_mng = mField.getInterface<ProblemsManager>();
 
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
                                            "U", 0, 0);
@@ -320,21 +321,30 @@ MoFEMErrorCode Example::bC() {
 
   boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
   for (auto b : bc_map) {
-    boundaryMarker->resize(b.second->bcMarkers.size(), 0);
-    for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
-      (*boundaryMarker)[i] |= b.second->bcMarkers[i];
+    if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
+      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
+      }
     }
   }
 
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
-  if (auto bc = bc_mng
-                    ->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
-                                            "REACTION")
-                    ->getBcMarkersPtr())
-    reactionMarker = bc;
-  else
+  if (auto bc = bc_mng->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
+                                              "REACTION")) {
+    reactionMarker = bc->getBcMarkersPtr();
+
+    // Only take reaction from nodes
+    Range nodes;
+    CHKERR mField.get_moab().get_entities_by_type(0, MBVERTEX, nodes, true);
+    CHKERR prb_mng->markDofs(simple->getProblemName(), ROW,
+                             ProblemsManager::MarkOP::AND, nodes,
+                             *reactionMarker);
+
+  } else {
     MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
+  }
 
   MoFEMFunctionReturn(0);
 }
@@ -421,6 +431,8 @@ MoFEMErrorCode Example::OPs() {
           "U", "EP", commonPlasticDataPtr, commonHenckyDataPtr));
     } else {
       pipeline.push_back(new OpKCauchy("U", "U", commonPlasticDataPtr->mDPtr));
+      pipeline.push_back(new OpCalculatePlasticInternalForceLhs_dEP(
+          "U", "EP", commonPlasticDataPtr));
     }
 
     pipeline.push_back(new OpUnSetBc("U"));
@@ -556,11 +568,14 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
     for (auto bc : bc_map) {
-      pipeline.push_back(new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-      pipeline.push_back(new OpBoundaryMass(
-          "U", "U", [](double, double, double) { return 1.; },
-          bc.second->getBcEdgesPtr()));
-      pipeline.push_back(new OpUnSetBc("U"));
+      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+        pipeline.push_back(
+            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        pipeline.push_back(new OpBoundaryMass(
+            "U", "U", [](double, double, double) { return 1.; },
+            bc.second->getBcEdgesPtr()));
+        pipeline.push_back(new OpUnSetBc("U"));
+      }
     }
     MoFEMFunctionReturn(0);
   };
@@ -621,24 +636,28 @@ MoFEMErrorCode Example::OPs() {
         new OpCalculateVectorFieldValues<SPACE_DIM>("U", u_mat_ptr));
 
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
-      pipeline.push_back(new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
-      auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
-      attr_vec->clear();
-      if (bc.second->bcAttributes.size() < SPACE_DIM)
-        SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-                 "Wrong size of boundary attributes vector. Set right block "
-                 "size attributes. Size of attributes %d",
-                 bc.second->bcAttributes.size());
-      std::copy(&bc.second->bcAttributes[0],
-                &bc.second->bcAttributes[SPACE_DIM], attr_vec->data().begin());
+      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+        pipeline.push_back(
+            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
+        attr_vec->clear();
+        if (bc.second->bcAttributes.size() < SPACE_DIM)
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                   "Wrong size of boundary attributes vector. Set right block "
+                   "size attributes. Size of attributes %d",
+                   bc.second->bcAttributes.size());
+        std::copy(&bc.second->bcAttributes[0],
+                  &bc.second->bcAttributes[SPACE_DIM],
+                  attr_vec->data().begin());
 
-      pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
-                                           bc.second->getBcEdgesPtr()));
-      pipeline.push_back(new OpBoundaryInternal(
-          "U", u_mat_ptr, [](double, double, double) { return 1.; },
-          bc.second->getBcEdgesPtr()));
+        pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+                                             bc.second->getBcEdgesPtr()));
+        pipeline.push_back(new OpBoundaryInternal(
+            "U", u_mat_ptr, [](double, double, double) { return 1.; },
+            bc.second->getBcEdgesPtr()));
 
-      pipeline.push_back(new OpUnSetBc("U"));
+        pipeline.push_back(new OpUnSetBc("U"));
+      }
     }
 
     MoFEMFunctionReturn(0);
