@@ -12,7 +12,7 @@
 -snes_monitor
 
 -ts_type alpha2
--ts_exact_final_time stepover
+-ts_exact_final_time matchstep
 -ts_max_time 10
 -ts_dt 0.1
 -ts_max_snes_failures -1
