@@ -495,6 +495,92 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode SimpleContactProblem::OpGetMatPosForDisplAtGaussPtsMaster::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->displacementsAtGaussPtsMasterPtr.get()->resize(
+        3, nb_gauss_pts, false);
+
+    commonDataSimpleContact->displacementsAtGaussPtsMasterPtr.get()->clear();
+  }
+
+  auto t_init_displ_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->displacementsAtGaussPtsMasterPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_master(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_init_displ_master(i) -= t_base_master * t_field_data_master(i);
+
+      ++t_base_master;
+      ++t_field_data_master;
+    }
+    ++t_init_displ_master;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetDeformationFieldForDisplAtGaussPtsMaster::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  // if (type == MBVERTEX) {
+  //   commonDataSimpleContact->positionAtGaussPtsMasterPtr.get()->resize(
+  //       3, nb_gauss_pts, false);
+
+  //   commonDataSimpleContact->positionAtGaussPtsMasterPtr.get()->clear();
+  // }
+
+  auto t_displacements_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->displacementsAtGaussPtsMasterPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_master(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_displacements_master(i) += t_base_master * t_field_data_master(i);
+
+      ++t_base_master;
+      ++t_field_data_master;
+    }
+    ++t_displacements_master;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -504,9 +590,11 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
     MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
+
   if (type == MBVERTEX) {
     commonDataSimpleContact->positionAtGaussPtsSlavePtr.get()->resize(
         3, nb_gauss_pts, false);
+
     commonDataSimpleContact->positionAtGaussPtsSlavePtr.get()->clear();
   }
 
@@ -522,7 +610,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
 
     FTensor::Tensor1<double *, 3> t_field_data_slave(
         &data.getFieldData()[0], &data.getFieldData()[1],
-        &data.getFieldData()[2], 3); // in-between
+        &data.getFieldData()[2], 3);
 
     for (int bb = 0; bb != nb_base_fun_col; ++bb) {
       t_position_slave(i) += t_base_slave * t_field_data_slave(i);
@@ -531,6 +619,153 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
       ++t_field_data_slave;
     }
     ++t_position_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpDisplaceSlaveAtGaussPtsSlave::doWork(int side,
+                                                           EntityType type,
+                                                           EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  commonDataSimpleContact->gapPtr.get()->resize(nb_gauss_pts);
+  commonDataSimpleContact->gapPtr.get()->clear();
+
+  FTensor::Index<'i', 3> i;
+
+  auto t_displacements_slave_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->displacementsAtGaussPtsSlavePtr);
+  auto t_position_slave_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    t_position_slave_gp(i) += t_displacements_slave_gp(i);
+    ++t_position_slave_gp;
+    ++t_displacements_slave_gp;
+  } // for gauss points
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpDisplaceMasterAtGaussPtsMaster::doWork(int side,
+                                                           EntityType type,
+                                                           EntData &data) {
+  MoFEMFunctionBegin;
+
+  if (data.getFieldData().size() == 0)
+    MoFEMFunctionReturnHot(0);
+
+  if (type != MBVERTEX)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  FTensor::Index<'i', 3> i;
+
+  auto t_displacements_master_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->displacementsAtGaussPtsSlavePtr);
+  auto t_position_master_gp = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    t_position_master_gp(i) += t_displacements_master_gp(i);
+    ++t_position_master_gp;
+    ++t_displacements_master_gp;
+  } // for gauss points
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetMatPosForDisplAtGaussPtsSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  if (type == MBVERTEX) {
+    commonDataSimpleContact->displacementsAtGaussPtsSlavePtr.get()->resize(
+        3, nb_gauss_pts, false);
+
+    commonDataSimpleContact->displacementsAtGaussPtsSlavePtr.get()->clear();
+  }
+
+  auto t_init_displ_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->displacementsAtGaussPtsSlavePtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_init_displ_slave(i) -= t_base_slave * t_field_data_slave(i);
+
+      ++t_base_slave;
+      ++t_field_data_slave;
+    }
+    ++t_init_displ_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetDeformationFieldForDisplAtGaussPtsSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  // if (type == MBVERTEX) {
+  //   commonDataSimpleContact->positionAtGaussPtsMasterPtr.get()->resize(
+  //       3, nb_gauss_pts, false);
+
+  //   commonDataSimpleContact->positionAtGaussPtsMasterPtr.get()->clear();
+  // }
+
+  auto t_displacements_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->displacementsAtGaussPtsSlavePtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_displacements_slave(i) += t_base_slave * t_field_data_slave(i);
+
+      ++t_base_slave;
+      ++t_field_data_slave;
+    }
+    ++t_displacements_slave;
   }
 
   MoFEMFunctionReturn(0);

@@ -434,6 +434,9 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<VectorDouble> gaussPtsStatePtr;
 
+    boost::shared_ptr<MatrixDouble> displacementsAtGaussPtsMasterPtr;
+    boost::shared_ptr<MatrixDouble> displacementsAtGaussPtsSlavePtr;
+
     double areaSlave;
     double areaMaster;
 
@@ -467,6 +470,9 @@ struct SimpleContactProblem {
       tangentTwoVectorSlavePtr = boost::make_shared<VectorDouble>();
       tangentOneVectorMasterPtr = boost::make_shared<VectorDouble>();
       tangentTwoVectorMasterPtr = boost::make_shared<VectorDouble>();
+
+      displacementsAtGaussPtsMasterPtr = boost::make_shared<MatrixDouble>();
+      displacementsAtGaussPtsSlavePtr = boost::make_shared<MatrixDouble>();
 
       gaussPtsStatePtr = boost::make_shared<VectorDouble>();
 
@@ -771,6 +777,60 @@ struct SimpleContactProblem {
   /**
    * @brief Operator for the simple contact element
    *
+   * Calculates the spacial coordinates of the gauss points of master triangle.
+   *
+   */
+  struct OpGetMatPosForDisplAtGaussPtsMaster : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetMatPosForDisplAtGaussPtsMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of master triangle.
+   *
+   */
+  struct OpGetDeformationFieldForDisplAtGaussPtsMaster : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetDeformationFieldForDisplAtGaussPtsMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of master triangle.
+   *
+   */
+  struct OpDisplaceMasterAtGaussPtsMaster : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDisplaceMasterAtGaussPtsMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
    * Calculates the spacial coordinates of the gauss points of slave triangle.
    *
    */
@@ -778,6 +838,60 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetPositionAtGaussPtsSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of slave triangle.
+   *
+   */
+  struct OpGetMatPosForDisplAtGaussPtsSlave : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetMatPosForDisplAtGaussPtsSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+    /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of slave triangle.
+   *
+   */
+  struct OpGetDeformationFieldForDisplAtGaussPtsSlave : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetDeformationFieldForDisplAtGaussPtsSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of master triangle.
+   *
+   */
+  struct OpDisplaceSlaveAtGaussPtsSlave : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpDisplaceSlaveAtGaussPtsSlave(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
