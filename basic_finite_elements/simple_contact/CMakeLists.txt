@@ -30,6 +30,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 bfe_build_and_install(simple_contact
     ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact.cpp)
 
+bfe_build_and_install(simple_contact_thermal
+    ${CMAKE_CURRENT_SOURCE_DIR}/simple_contact_thermal.cpp)
+
 bfe_copy_and_install("README.md" "${permissions_default}")
 
 file(
@@ -273,3 +276,32 @@ add_test(
   -snes_monitor
   -snes_divergence_tolerance 0
 )
+
+add_test(
+  test_simple_contact_thermal_1
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 1
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/thermal/test_1.cub
+  -my_order 2
+  -my_output_mesh_file med_stress.h5m
+  -my_analytical_input 1
+  -my_save_mean_stress 1
+  -my_thermal_expansion_coef 1e-3
+  -snes_monitor
+)
+
+add_test(
+  test_simple_contact_thermal_2
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 2
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/thermal/test_2.cub
+  -my_order 2
+  -my_output_mesh_file med_stress.h5m
+  -my_analytical_input 1
+  -my_save_mean_stress 1
+  -my_thermal_expansion_coef 1e-3
+  -snes_monitor
+)
+
