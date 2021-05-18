@@ -105,6 +105,12 @@ int main(int argc, char *argv[]) {
     PetscBool ignore_contact = PETSC_FALSE;
     PetscBool ignore_pressure = PETSC_FALSE;
 
+    PetscBool deform_flat_flag = PETSC_FALSE;
+    PetscReal flat_shift = 1.0;
+    PetscReal mesh_height = 1.0;
+
+    PetscBool delete_prisms = PETSC_FALSE;
+
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
     CHKERR PetscOptionsString("-my_file", "mesh file name", "", "mesh.h5m",
@@ -154,9 +160,8 @@ int main(int argc, char *argv[]) {
                             "if set use ALM, if not use C-function", "",
                             PETSC_FALSE, &eigen_pos_flag, PETSC_NULL);
 
-    CHKERR PetscOptionsReal("-my_scale_factor",
-                                              "scale factor", "", scale_factor,
-                                              &scale_factor, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_scale_factor", "scale factor", "",
+                            scale_factor, &scale_factor, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_ignore_contact", "if set true, ignore contact",
                             "", PETSC_FALSE, &ignore_contact, PETSC_NULL);
@@ -177,6 +182,17 @@ int main(int argc, char *argv[]) {
         thermal_expansion_coef, &thermal_expansion_coef, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_init_temp", "init_temp ", "", init_temp,
                             &init_temp, PETSC_NULL);
+
+    CHKERR PetscOptionsReal("-my_mesh_height",
+                            "vertical dimension of the mesh ", "", mesh_height,
+                            &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsBool("-my_deform_flat", "if set true, deform flat", "",
+                            PETSC_FALSE, &deform_flat_flag, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_flat_shift", "flat shift ", "", flat_shift,
+                            &flat_shift, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_delete_prisms", "if set true, delete prisms",
+                            "", PETSC_FALSE, &delete_prisms, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -288,9 +304,45 @@ int main(int argc, char *argv[]) {
     Range contact_prisms, master_tris, slave_tris;
 
     if (!ignore_contact) {
-      CHKERR add_prism_interface(bit_levels);
+      if (analytical_input) {
+        CHKERR add_prism_interface(bit_levels);
+      }
       CHKERR find_contact_prisms(bit_levels, contact_prisms, master_tris,
                                  slave_tris);
+    }
+
+    auto deform_flat_surface = [&](int block_id, double shift, int dir,
+                                   double height) {
+      MoFEMFunctionBegin;
+      Range all_tets, all_nodes;
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "MAT_ELASTIC") == 0) {
+          const int id = bit->getMeshsetId();
+          Range tets;
+          if (id == block_id) {
+            CHKERR m_field.get_moab().get_entities_by_dimension(
+                bit->getMeshset(), 3, tets, true);
+            all_tets.merge(tets);
+          }
+        }
+      }
+      CHKERR m_field.get_moab().get_connectivity(all_tets, all_nodes);
+      double coords[3];
+      for (Range::iterator nit = all_nodes.begin(); nit != all_nodes.end();
+           nit++) {
+        CHKERR moab.get_coords(&*nit, 1, coords);
+        double x = coords[0];
+        double y = coords[1];
+        double z = coords[2];
+        coords[2] += shift * dir;
+        CHKERR moab.set_coords(&*nit, 1, coords);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    if (deform_flat_flag && analytical_input) {
+      CHKERR deform_flat_surface(1, flat_shift, 1, mesh_height);
+      CHKERR deform_flat_surface(2, flat_shift, -1, mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -406,10 +458,13 @@ int main(int argc, char *argv[]) {
 
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
-          double temp = init_temp - 1.0;
+          double temp = init_temp + 1.0;
 
-          t_thermal_strain(i, j) =
-              thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
+          t_thermal_strain(i, j) = 0.0;
+          t_thermal_strain(2, 2) = thermal_expansion_coef * (temp - init_temp);
+
+          // t_thermal_strain(i, j) =
+          //     thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
           return t_thermal_strain;
         };
 
@@ -537,12 +592,13 @@ int main(int argc, char *argv[]) {
         m_field, cn_value_ptr, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
-    if(eigen_pos_flag)
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+    if (eigen_pos_flag)
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms);
     else
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms, eigen_pos_flag, "PUT_A_FIELD");
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms, true,
+                                         eigen_pos_flag, "PUT_A_FIELD");
 
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
@@ -925,22 +981,24 @@ int main(int argc, char *argv[]) {
       CHKERR DMoFEMLoopFiniteElementsUpAndLowRank(
           dm, "ELASTIC", fe_elastic_rhs_ptr, 0, n_parts);
 
-      Range faces, tris, quads, tris_edges, quads_edges, ents_to_delete;
+      if (delete_prisms) {
+        Range faces, tris, quads, tris_edges, quads_edges, ents_to_delete;
 
-      CHKERR moab.get_adjacencies(contact_prisms, 2, true, faces,
-                                  moab::Interface::UNION);
-      tris = faces.subset_by_type(MBTRI);
-      quads = faces.subset_by_type(MBQUAD);
-      CHKERR moab.get_adjacencies(tris, 1, true, tris_edges,
-                                  moab::Interface::UNION);
-      CHKERR moab.get_adjacencies(quads, 1, true, quads_edges,
-                                  moab::Interface::UNION);
+        CHKERR moab.get_adjacencies(contact_prisms, 2, true, faces,
+                                    moab::Interface::UNION);
+        tris = faces.subset_by_type(MBTRI);
+        quads = faces.subset_by_type(MBQUAD);
+        CHKERR moab.get_adjacencies(tris, 1, true, tris_edges,
+                                    moab::Interface::UNION);
+        CHKERR moab.get_adjacencies(quads, 1, true, quads_edges,
+                                    moab::Interface::UNION);
 
-      ents_to_delete.merge(contact_prisms);
-      ents_to_delete.merge(quads);
-      ents_to_delete.merge(subtract(quads_edges, tris_edges));
+        ents_to_delete.merge(contact_prisms);
+        ents_to_delete.merge(quads);
+        ents_to_delete.merge(subtract(quads_edges, tris_edges));
 
-      CHKERR moab.delete_entities(ents_to_delete);
+        CHKERR moab.delete_entities(ents_to_delete);
+      }
 
       PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
       CHKERR moab.write_file(output_mesh_name, "MOAB");
