@@ -371,7 +371,7 @@ MoFEMErrorCode Example::solveSystem() {
                              null_fe, monitor_ptr);
 
   double ftime = 1;
-  CHKERR TSSetMaxTime(ts, ftime);
+  // CHKERR TSSetMaxTime(ts, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
   auto T = smartCreateDMVector(simple->getDM());
