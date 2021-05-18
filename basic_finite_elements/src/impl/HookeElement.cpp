@@ -191,7 +191,7 @@ MoFEMErrorCode HookeElement::OpCalculateEshelbyStress::doWork(
 
 HookeElement::OpAssemble::OpAssemble(
     const std::string row_field, const std::string col_field,
-    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts, const char type,
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts, const char type,
     bool symm)
     : VolUserDataOperator(row_field, col_field, type, symm),
       dataAtPts(data_at_pts) {}

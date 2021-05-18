@@ -120,7 +120,6 @@ struct HookeElement {
       stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
       energyVec = boost::shared_ptr<VectorDouble>(new VectorDouble());
       eshelbyStressMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
-      stiffnessMat = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
 
       eshelbyStress_dx = boost::shared_ptr<MatrixDouble>(new MatrixDouble());
     }
@@ -356,7 +355,7 @@ struct HookeElement {
   struct OpAssemble : public VolUserDataOperator {
 
     OpAssemble(const std::string row_field, const std::string col_field,
-               boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
+               boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
                const char type, bool symm = false);
 
     /**
@@ -576,7 +575,7 @@ struct HookeElement {
     MoFEMErrorCode iNtegrate(EntData &row_data, EntData &col_data);
   };
 
-  template <int S> struct OpAnalyticalInternalStain_dx : public OpAssemble {
+  template <int S> struct OpAnalyticalInternalStrain_dx : public OpAssemble {
 
     typedef boost::function<
 
@@ -587,19 +586,19 @@ struct HookeElement {
             )
 
         >
-        StrainFunctions;
+        StrainFunction;
 
-    OpAnalyticalInternalStain_dx(
+    OpAnalyticalInternalStrain_dx(
         const std::string row_field,
-        boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun);
+        boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+        StrainFunction strain_fun);
 
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
-    StrainFunctions strainFun;
+    StrainFunction strainFun;
   };
 
-  template <int S> struct OpAnalyticalInternalAleStain_dX : public OpAssemble {
+  template <int S> struct OpAnalyticalInternalAleStrain_dX : public OpAssemble {
 
     typedef boost::function<
 
@@ -610,21 +609,21 @@ struct HookeElement {
             )
 
         >
-        StrainFunctions;
+        StrainFunction;
 
-    OpAnalyticalInternalAleStain_dX(
+    OpAnalyticalInternalAleStrain_dX(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun,
+        StrainFunction strain_fun,
         boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr);
 
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
-    StrainFunctions strainFun;
+    StrainFunction strainFun;
     boost::shared_ptr<MatrixDouble> matPosAtPtsPtr;
   };
 
-  template <int S> struct OpAnalyticalInternalAleStain_dx : public OpAssemble {
+  template <int S> struct OpAnalyticalInternalAleStrain_dx : public OpAssemble {
 
     typedef boost::function<
 
@@ -635,17 +634,17 @@ struct HookeElement {
             )
 
         >
-        StrainFunctions;
+        StrainFunction;
 
-    OpAnalyticalInternalAleStain_dx(
+    OpAnalyticalInternalAleStrain_dx(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun,
+        StrainFunction strain_fun,
         boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr);
 
   protected:
     MoFEMErrorCode iNtegrate(EntData &row_data);
-    StrainFunctions strainFun;
+    StrainFunction strainFun;
     boost::shared_ptr<MatrixDouble> matPosAtPtsPtr;
   };
 
@@ -1428,7 +1427,7 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
     t2(1, 2) = t2(2, 1) = t1(2, 1);
   };
 
-  std::array<double,9> def_val;
+  std::array<double, 9> def_val;
   def_val.fill(0);
 
   auto make_tag = [&](auto name, auto size) {
@@ -1438,9 +1437,9 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
                                        def_val.data());
     return th;
   };
-  
+
   auto th_stress = make_tag("STRESS", 9);
-  auto th_psi =  make_tag("ENERGY", 1);
+  auto th_psi = make_tag("ENERGY", 1);
 
   const int nb_integration_pts = mapGaussPts.size();
 
@@ -1451,7 +1450,7 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
 
   auto t_h = getFTensor2FromMat<3, 3>(*dataAtPts->hMat);
   auto t_H = getFTensor2FromMat<3, 3>(*dataAtPts->HMat);
-  
+
   dataAtPts->stiffnessMat->resize(36, 1, false);
   FTensor::Ddg<FTensor::PackPtr<double *, 1>, 3, 3> t_D(
       MAT_TO_DDG(dataAtPts->stiffnessMat));
@@ -1519,16 +1518,16 @@ MoFEMErrorCode HookeElement::OpPostProcHookeElement<ELEMENT>::doWork(
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalStain_dx<S>::OpAnalyticalInternalStain_dx(
+HookeElement::OpAnalyticalInternalStrain_dx<S>::OpAnalyticalInternalStrain_dx(
     const std::string row_field,
-    boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-    StrainFunctions strain_fun)
+    boost::shared_ptr<DataAtIntegrationPts> data_at_pts,
+    StrainFunction strain_fun)
     : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
       strainFun(strain_fun) {}
 
 template <int S>
 MoFEMErrorCode
-HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
+HookeElement::OpAnalyticalInternalStrain_dx<S>::iNtegrate(EntData &row_data) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
@@ -1570,7 +1569,7 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
 
     auto t_fun_strain = strainFun(t_coords);
     FTensor::Tensor2_symmetric<double, 3> t_stress;
-    t_stress(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
+    t_stress(i, j) = -t_D(i, j, k, l) * t_fun_strain(k, l);
 
     // calculate scalar weight times element volume
     double a = t_w * vol;
@@ -1601,18 +1600,18 @@ HookeElement::OpAnalyticalInternalStain_dx<S>::iNtegrate(EntData &row_data) {
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalAleStain_dX<S>::
-    OpAnalyticalInternalAleStain_dX(
+HookeElement::OpAnalyticalInternalAleStrain_dX<S>::
+    OpAnalyticalInternalAleStrain_dX(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun,
+        StrainFunction strain_fun,
         boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr)
     : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
       strainFun(strain_fun), matPosAtPtsPtr(mat_pos_at_pts_ptr) {}
 
 template <int S>
-MoFEMErrorCode
-HookeElement::OpAnalyticalInternalAleStain_dX<S>::iNtegrate(EntData &row_data) {
+MoFEMErrorCode HookeElement::OpAnalyticalInternalAleStrain_dX<S>::iNtegrate(
+    EntData &row_data) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
@@ -1652,7 +1651,7 @@ HookeElement::OpAnalyticalInternalAleStain_dX<S>::iNtegrate(EntData &row_data) {
 
     auto t_fun_strain = strainFun(t_coords);
     FTensor::Tensor2_symmetric<double, 3> t_stress;
-    t_stress(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
+    t_stress(i, j) = -t_D(i, j, k, l) * t_fun_strain(k, l);
     FTensor::Tensor2<double, 3, 3> t_eshelby_stress;
     t_eshelby_stress(i, j) = -t_F(k, i) * t_stress(k, j);
 
@@ -1684,18 +1683,18 @@ HookeElement::OpAnalyticalInternalAleStain_dX<S>::iNtegrate(EntData &row_data) {
 }
 
 template <int S>
-HookeElement::OpAnalyticalInternalAleStain_dx<S>::
-    OpAnalyticalInternalAleStain_dx(
+HookeElement::OpAnalyticalInternalAleStrain_dx<S>::
+    OpAnalyticalInternalAleStrain_dx(
         const std::string row_field,
         boost::shared_ptr<DataAtIntegrationPts> &data_at_pts,
-        StrainFunctions strain_fun,
+        StrainFunction strain_fun,
         boost::shared_ptr<MatrixDouble> mat_pos_at_pts_ptr)
     : OpAssemble(row_field, row_field, data_at_pts, OPROW, true),
       strainFun(strain_fun), matPosAtPtsPtr(mat_pos_at_pts_ptr) {}
 
 template <int S>
-MoFEMErrorCode
-HookeElement::OpAnalyticalInternalAleStain_dx<S>::iNtegrate(EntData &row_data) {
+MoFEMErrorCode HookeElement::OpAnalyticalInternalAleStrain_dx<S>::iNtegrate(
+    EntData &row_data) {
   FTensor::Index<'i', 3> i;
   FTensor::Index<'j', 3> j;
   FTensor::Index<'k', 3> k;
@@ -1734,7 +1733,7 @@ HookeElement::OpAnalyticalInternalAleStain_dx<S>::iNtegrate(EntData &row_data) {
 
     auto t_fun_strain = strainFun(t_coords);
     FTensor::Tensor2_symmetric<double, 3> t_stress;
-    t_stress(i, j) = t_D(i, j, k, l) * t_fun_strain(k, l);
+    t_stress(i, j) = -t_D(i, j, k, l) * t_fun_strain(k, l);
 
     // calculate scalar weight times element volume
     double a = t_w * vol * det_H[gg];
