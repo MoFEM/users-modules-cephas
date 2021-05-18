@@ -849,26 +849,35 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionReturn(0);
 }
 
+template <int RANK>
 MoFEMErrorCode
-PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
+PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
   if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
-
+  // if (data.getFieldData().size() == 0)
+  //   MoFEMFunctionReturnHot(0);
+  
   CHKERR loopSideVolumes(feVolName, *sideOpFe);
 
   // quit if tag is not needed
   if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
-  auto dof_ptr = data.getFieldDofs()[0];
-  int rank = dof_ptr->getNbOfCoeffs();
+  auto &m_field = getPtrFE()->mField;
+  auto field_ptr = m_field.get_field_structure(fieldName);
+  const int rank = field_ptr->getNbOfCoeffs();
+  FieldSpace space = field_ptr->getSpace();
 
-  int tag_length = rank * 3;
-  FieldSpace space = dof_ptr->getSpace();
+  // auto dof_ptr = data.getFieldDofs()[0];
+  // int rank = dof_ptr->getNbOfCoeffs();
+  // FieldSpace space = dof_ptr->getSpace();
 
+  int full_size = rank * RANK;
+  // for paraview
+  int tag_length = full_size > 3 && full_size < 9 ? 9 : full_size;
   double def_VAL[tag_length];
   bzero(def_VAL, tag_length * sizeof(double));
   Tag th;
@@ -881,7 +890,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   const void *tags_ptr[mapGaussPts.size()];
   int nb_gauss_pts = data.getN().size1();
   if (mapGaussPts.size() != (unsigned int)nb_gauss_pts ||
-      nb_gauss_pts != gradMatPtr->size2()) {
+      nb_gauss_pts != matPtr->size2()) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
   }
   switch (space) {
@@ -890,16 +899,17 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
 
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
-    // FIXME: this is not very efficient
+
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      for (int rr = 0; rr != rank; ++rr) {
-        for (int dd = 0; dd != 3; ++dd) {
-          const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
-          double *my_ptr = const_cast<double *>(my_ptr2);
-          my_ptr[rank * rr + dd] = (*gradMatPtr)(rank * rr + dd, gg);
+      const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
+      double *my_ptr = const_cast<double *>(my_ptr2);
+      for (int rr = 0; rr != RANK; ++rr) {
+        for (int dd = 0; dd != rank; ++dd) {
+          my_ptr[rank * rr + dd] = (*matPtr)(rank * rr + dd, gg);
         }
       }
     }
+
     break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
@@ -933,18 +943,67 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
     my_side_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
     break;
+  case 6:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateTensor2SymmetricFieldGradient<3, 3>(field_name,
+                                                           grad_mat_ptr));
+    break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "field with that number of coefficients is not implemented");
   }
 
   FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-      new OpGetFieldGradientValuesOnSkin(
+      new OpGetFieldValuesOnSkinImpl<3>(
           postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
           my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
 
   MoFEMFunctionReturn(0);
 }
+
+
+MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
+    const std::string field_name, const std::string vol_fe_name,
+    boost::shared_ptr<MatrixDouble> mat_ptr, bool save_on_tag) {
+  MoFEMFunctionBegin;
+
+  if (!mat_ptr)
+    mat_ptr = boost::make_shared<MatrixDouble>();
+
+  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
+      boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+  // check number of coefficients
+  auto field_ptr = mField.get_field_structure(field_name);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+
+  switch (nb_coefficients) {
+  case 1:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<1>(field_name, mat_ptr));
+    break; 
+  case 3:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateVectorFieldValues<3>(field_name, mat_ptr));
+    break;
+  case 6:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateTensor2SymmetricFieldValues<3>(field_name,
+                                                      mat_ptr));
+    break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "field with that number of coefficients is not implemented");
+  }
+
+  FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+      new OpGetFieldValuesOnSkinImpl<1>(
+          postProcMesh, mapGaussPts, field_name, field_name,
+          my_side_fe, vol_fe_name, mat_ptr, save_on_tag));
+
+  MoFEMFunctionReturn(0);
+}
+
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
   return OpSwitch<
