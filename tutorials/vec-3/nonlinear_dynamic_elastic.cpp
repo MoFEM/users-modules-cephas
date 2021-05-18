@@ -390,7 +390,11 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSGetTime(ts, &ftime);
 
   PetscInt steps, snesfails, rejects, nonlinits, linits;
-  CHKERR TSGetStepNumber(ts, &steps);
+#if PETSC_VERSION_GE(3, 8, 0)
+  CHKERR TSGetStepNumber(ts, &step);
+#else
+  CHKERR TSGetTimeStepNumber(ts, &step);
+#endif
   CHKERR TSGetSNESFailures(ts, &snesfails);
   CHKERR TSGetStepRejections(ts, &rejects);
   CHKERR TSGetSNESIterations(ts, &nonlinits);
