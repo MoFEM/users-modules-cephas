@@ -103,6 +103,15 @@ private:
   MatrixDouble locLhs, transLocLhs;
 };
 
+struct DataAtGaussPoints {
+  // This struct is for data required for the update of Newton's iteration
+
+  VectorDouble fieldValue; // field value at integration point
+  MatrixDouble fieldGrad;  // field gradient at integration point
+  VectorDouble fieldDot;   // time derivative of field at integration point
+};
+
+
 struct OpDomainRhs : public OpFaceEle {
 public:
   OpDomainRhs(std::string field_name, ScalarFunc source_term_function)

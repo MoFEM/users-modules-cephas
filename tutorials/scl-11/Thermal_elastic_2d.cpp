@@ -97,11 +97,17 @@ private:
   boost::shared_ptr<MatrixDouble> matStressPtr;
   boost::shared_ptr<MatrixDouble> matDPtr;
   boost::shared_ptr<MatrixDouble> thDPtr;
-  boost::shared_ptr<VectorDouble> tempPtr;
   boost::shared_ptr<MatrixDouble> bodyForceMatPtr;
 
   Range fluxBoundaryConditions_1;
   Range fluxBoundaryConditions_2;
+
+  // Objects needed for solution updates in Newton's method (dynamics) and for calling also temperature field
+  boost::shared_ptr<DataAtGaussPoints> previousUpdate;
+  boost::shared_ptr<VectorDouble> fieldValuePtr;
+  boost::shared_ptr<MatrixDouble> fieldGradPtr;
+  boost::shared_ptr<VectorDouble> fieldDotPtr;
+
   // Object needed for postprocessing
   boost::shared_ptr<FaceEle> postProc;
 
@@ -116,6 +122,11 @@ Thermal_Elasticity2D::Thermal_Elasticity2D(MoFEM::Interface &m_field)
   domainPipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
   boundaryPipelineLhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
   boundaryPipelineRhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
+
+  previousUpdate =
+      boost::shared_ptr<DataAtGaussPoints>(new DataAtGaussPoints());
+  fieldValuePtr = boost::shared_ptr<VectorDouble>(previousUpdate,
+                                                  &previousUpdate->fieldValue);
 }
 
 //! [Create common data]
@@ -145,23 +156,20 @@ MoFEMErrorCode Thermal_Elasticity2D::createCommonData() {
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
     FTensor::Index<'l', SPACE_DIM> l;
-    
-    MoFEMFunctionBegin;
-    auto tDT = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*thDPtr);
-    // tDT(i, j, k, l) = 0.;
 
-    // tDT(0, 0, 0, 0) -= (young_modulus*coeff_expansion)/(1 - 2 * poisson_ratio);
-    // tDT(1, 1, 1, 1) -= (young_modulus*coeff_expansion)/(1 - 2 * poisson_ratio);
-    // // tDT(2, 2, 2, 2) -= (young_modulus*coeff_expansion)/(1 - 2 * poisson_ratio);
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+    MoFEMFunctionBegin;
+    auto t_u = getFTensor0FromVec(previousUpdate->fieldValue);
+    // auto alpha =  -1 * t_u * (young_modulus*coeff_expansion)/(1 - 2 * poisson_ratio);                     
+    auto alpha =  -1 * t_u * coeff_expansion; 
     constexpr double A =
         (SPACE_DIM == 2) ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
-    tDT(i, j, k, l) = 2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
+    t_D(i, j, k, l) = (2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
                       A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
-                          t_kd(i, j) * t_kd(k, l);
-                          
+                          t_kd(i, j) * t_kd(k, l)) * alpha;
     MoFEMFunctionReturn(0);
   };
 
@@ -179,11 +187,11 @@ MoFEMErrorCode Thermal_Elasticity2D::createCommonData() {
   matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
   thDPtr = boost::make_shared<MatrixDouble>();
-  tempPtr = boost::make_shared<VectorDouble>();
   bodyForceMatPtr = boost::make_shared<MatrixDouble>();
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
+  thDPtr->resize(size_symm * size_symm, 1);
   bodyForceMatPtr->resize(SPACE_DIM, 1);
 
   CHKERR set_matrial_stiffens();
@@ -486,6 +494,10 @@ MoFEMErrorCode Thermal_Elasticity2D::assembleSystem() {
         new OpUnSetBc(domainField));
    }
 
+  // Push operator to get TEMP from Integration Points and pass at pointer 
+  domainPipelineRhs->getOpPtrVector().push_back(
+    new OpCalculateScalarFieldValues("TEMP", fieldValuePtr));
+
   { // Push operators to the Pipeline that is responsible for calculating RHS of the source
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpSetBc(domainField, true, boundaryMarker_1));
@@ -494,25 +506,6 @@ MoFEMErrorCode Thermal_Elasticity2D::assembleSystem() {
     domainPipelineRhs->getOpPtrVector().push_back(
         new OpUnSetBc(domainField));
   }
-
-// Start Code for non zero Dirichelet conditions
-
-  // { // Push operators in boundary pipeline LHS for Dirichelet
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_1));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(
-  //       new OpBoundaryMass(domainField, domainField, q_unit));
-  //   boundaryPipelineLhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
-
-  // { // Push operators in boundary pipeline RHS for Dirichelet
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpSetBc(domainField, false, boundaryMarker_1));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(
-  //       new OpBoundarySource(domainField, bc_1));
-  //   boundaryPipelineRhs->getOpPtrVector().push_back(new OpUnSetBc(domainField));
-  // }
-// End Code for non zero Dirichelet conditions
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // boundary elements
@@ -540,7 +533,6 @@ MoFEMErrorCode Thermal_Elasticity2D::assembleSystem() {
   }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
   
-  auto unity = []() { return -(young_modulus*coeff_expansion)/(1 - 2 * poisson_ratio); };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpK("U", "TEMP", thDPtr));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
@@ -616,7 +608,6 @@ PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
       matStressPtr));
   post_proc_fe->addFieldValuesPostProc("U");
   post_proc_fe->addFieldValuesPostProc("TEMP");
-  post_proc_fe->getOpPtrVector().push_back(new OpCalculateScalarFieldValues("TEMP", tempPtr));
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_result.h5m");
