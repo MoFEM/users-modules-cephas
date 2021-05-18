@@ -934,23 +934,12 @@ int main(int argc, char *argv[]) {
     auto set_post_proc_skin = [&](auto &post_proc_skin) {
       MoFEMFunctionBegin;
       CHKERR post_proc_skin.generateReferenceElementMesh();
-      auto my_vol_side_fe_ptr =
-          boost::make_shared<MoFEM::VolumeElementForcesAndSourcesCoreOnSide>(
-              m_field);
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("MESH_NODE_POSITIONS",
-                                                   data_at_pts->HMat));
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("DISPLACEMENT",
-                                                   data_at_pts->hMat));
-
       CHKERR post_proc_skin.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-      post_proc_skin.getOpPtrVector().push_back(
-          new PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin(
-              post_proc_skin.postProcMesh, post_proc_skin.mapGaussPts,
-              "DISPLACEMENT", "DISPLACEMENT_GRAD", my_vol_side_fe_ptr,
-              "ELASTIC", data_at_pts->hMat, true));
+      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+          "DISPLACEMENT", "ELASTIC", data_at_pts->hMat, true);
+      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+          "MESH_NODE_POSITIONS", "ELASTIC", data_at_pts->HMat, false);
       post_proc_skin.getOpPtrVector().push_back(
           new HookeElement::OpPostProcHookeElement<
               FaceElementForcesAndSourcesCore>(

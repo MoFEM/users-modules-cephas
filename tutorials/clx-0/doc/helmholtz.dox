@@ -1,4 +1,4 @@
-/*! \page tutorial_hemholtz_problem CLX-0: Hemholtz problem 
+/*! \page tutorial_hemholtz_problem CLX-0: Helmholtz problem 
 
 
 \note This problem formulation follows tutorial from deal.II https://www.dealii.org/current/doxygen/deal.II/step_29.html. <br><br> Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d. <br> <br> Intended learning outcome:
@@ -31,7 +31,7 @@ time \f$t \in \mathbb{R}^{+}\f$.
 
 
 \anchor Figure_1_acoustics
-\image html problem_desctiption.eps "Figure 1: Schematic presentation of the acoustic transducer problem where ." width=300px
+\image html problem_desctiption.png "Figure 1: Schematic presentation of the acoustic transducer." width=300px
 
 Quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$, as presented with red line in \ref Figure_1_acoustics "Figure 1", defined as 
 
@@ -139,7 +139,7 @@ Find \f$ p^{\rm {Re}}\f$ and  \f$p^{\rm {Re}} \in H^1(\Omega) \f$ such that:
 \end{equation}
 \f]
 
-where \f$\delta p^{\rm {Re}}\f$ and \f$\delta p^{\rm {Im}}\f$ are the trial functions for the real and imaginary fields, respectively, and fulfill
+where \f$\delta p^{\rm {Re}}\f$ and \f$\delta p^{\rm {Im}}\f$ are the trial functions for the real and imaginary fields, respectively, and fulfil
 the identity, \f$ \delta p({\mathbf{x}}) = \delta p^{\rm {Re}} + i \delta p^{\rm {Im}}\f$.
 
 By applying integration by parts for the laplacian term for the domain integral and substituting the 
@@ -204,7 +204,7 @@ And essential boundary conditions applied on \f$\Gamma_2\f$ are after applying d
 \f]
 
 \section tutorial_hemholtz_code_dissection Implementation
-The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MOFEM::Simple, 
+The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MoFEM::Simple, 
 determining boundary conditions, using boundary and domain elements accessed through the interface and pushing form integrators to pipelines for solving the problem.
 
 \subsection tutorial_hemholtz_strong_fields_and_shape_fun Declaration of fields for solution
@@ -592,7 +592,7 @@ will have to follow the steps below
   mpirun -np 2 ./helmholtz -file_name part.h5m -order 8 -k 180
   \endcode
   where in the first line the mesh `geometry.cub` presented in \ref Figure_2_acoustics "Figure 2" generated in the open source code CUBIT is partitioned in to parts and generated
-  the partioned mesh `part.h5m` with bounraries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in \ref Figure_1_acoustics "Figure 1". In the second line, program is run using two processors (the same number of partitions) with
+  the partitioned mesh `part.h5m` with boundaries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in \ref Figure_1_acoustics "Figure 1". In the second line, program is run using two processors (the same number of partitions) with
   fourth order polynomial of approximation and \f$k = 90\f$.
 
 \anchor Figure_2_acoustics
@@ -633,7 +633,7 @@ for t in range(100):
  Delete(passArrays1)
 \endcode
 
-  compiling the series of 100 files gnerated the video presented in \ref Figure_4_acustics "Figure 4" will be generated
+  compiling the series of 100 files generated the video presented in \ref Figure_4_acustics "Figure 4" will be generated
 
 \anchor Figure_4_acustics
 \image html wave_presentation.gif "Figure 4: Post processed results for visual presentation of the periodic movement of the stationary wave corresponding to the solution of the Helmholtz problem in frequency domain." width=700px

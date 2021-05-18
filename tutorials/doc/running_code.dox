@@ -25,16 +25,23 @@
 <table style="width:100%">
 
   <tr valign="top">
-        <td width="350px">COLAB-1: <a href="https://colab.research.google.com/drive/1eWtsHPa0eKr8VNhFJh5fnMPXh5b7iF6Y?usp=sharing">Poisson problem</a></td>
+        <td width="350px">COLAB-1: <a href="https://gist.github.com/likask/5a93bb5fd90f0e27772bd9f46363cd95">Poisson problem</a></td>
         <td> Google Colab
         <br/> *Keywords:* SCL-1 tutorial, Poisson's problem
         </td>
   </tr>
 
   <tr valign="top">
-        <td width="350px">COLAB-2: <a href="https://colab.research.google.com/drive/19Rt-alLKp1GgDqpi1ejQ79T3ERAbbP8R?usp=sharing">Hemholtz problem</a></td>
+        <td width="350px">COLAB-2: <a href="https://gist.github.com/likask/fbff780ff96c76a384fe417bcceb34f2">Helmholtz problem</a></td>
         <td> Google Colab
-        <br/> *Keywords:* CLX-0 tutorial, Hemholtz probem
+        <br/> *Keywords:* CLX-0 tutorial, Helmholtz peoblem
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">COLAB-3: <a href="https://gist.github.com/likask/5e38e09d79fbcf02a58f92ff9a96261c">Multifield plasticity</a></td>
+        <td> Google Colab
+        <br/> *Keywords:*  ADV-0 titorial, Multifield plasticity
         </td>
   </tr>
 
@@ -47,7 +54,7 @@
   <tr valign="top">
         <td width="350px">JUP-1: \subpage jup_tutorial_eigen_elastic</td>
         <td> Jupyter notebook
-        <br/> *Keywords:* VEC-1 tutorial, eiegn analysis 
+        <br/> *Keywords:* VEC-1 tutorial, eigen analysis 
         </td>
   </tr>
 
