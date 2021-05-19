@@ -1,6 +1,9 @@
 #!/bin/bash
 set -x
 
+# exit when any command fails
+set -e
+
 # Get file name
 if [ -z ${1+x} ]; then
   MESHFILE=1dTest.cub
@@ -45,7 +48,7 @@ fi
 
 
 # Partition mesh
-../../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
+../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
 
 # Run code
 rm -f out_*.h5m 
