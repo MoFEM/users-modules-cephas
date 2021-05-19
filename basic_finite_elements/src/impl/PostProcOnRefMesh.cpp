@@ -1007,8 +1007,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
   case HDIV:
     switch (nb_coefficients) {
     case 1:
-      cout << nb_coefficients << endl;
-      cout << "test ?" << endl;
       my_side_fe->getOpPtrVector().push_back(
           new OpCalculateHdivVectorField<3>(field_name, mat_ptr));
       break;
