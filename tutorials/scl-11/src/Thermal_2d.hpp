@@ -182,8 +182,8 @@ protected:
           auto t_col_base = col_data.getFTensor0N(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
-
-            locLhs(i) -= t_row_diff_base(i) * t_col_base * a *t_field *matD(i,j,k,l)* t_kd(k, l);
+            auto t_subLocMat = get_tensor1(locLhs, 3 * rr, cc);  
+            t_subLocMat(i) -= t_row_diff_base(i) * t_col_base * a *t_field *matD(i,j,k,l)* t_kd(k, l);
 
             // move to the derivatives of the next base functions on column
             ++t_col_diff_base;
