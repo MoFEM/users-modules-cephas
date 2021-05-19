@@ -158,18 +158,17 @@ MoFEMErrorCode Thermal_Elasticity2D::createCommonData() {
     FTensor::Index<'l', SPACE_DIM> l;
 
     constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-    MoFEMFunctionBegin;
-    auto t_u = getFTensor0FromVec(previousUpdate->fieldValue);
-    // auto alpha =  -1 * t_u * (young_modulus*coeff_expansion)/(1 - 2 * poisson_ratio);                     
-    auto alpha =  -1 * t_u * coeff_expansion; 
+    MoFEMFunctionBegin;                    
+    auto alpha = coeff_expansion; 
     constexpr double A =
         (SPACE_DIM == 2) ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*matDPtr);
+    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*thDPtr);
     t_D(i, j, k, l) = (2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
                       A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
                           t_kd(i, j) * t_kd(k, l)) * alpha;
+                          
     MoFEMFunctionReturn(0);
   };
 
@@ -532,9 +531,10 @@ MoFEMErrorCode Thermal_Elasticity2D::assembleSystem() {
         new OpSetInvJacH1ForFace(invJac));
   }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-  
+  // Start coupling term
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpK("U", "TEMP", thDPtr));
+      new OpKut("U", "TEMP", thDPtr, previousUpdate));
+  // end coupling     
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
       "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));  
 

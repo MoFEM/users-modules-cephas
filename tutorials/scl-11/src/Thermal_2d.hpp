@@ -111,6 +111,124 @@ struct DataAtGaussPoints {
   VectorDouble fieldDot;   // time derivative of field at integration point
 };
 
+struct OpKut : public OpFaceEle {
+public:
+  OpKut(std::string row_field_name, std::string col_field_name, 
+        boost::shared_ptr<MatrixDouble> mat_D,
+        boost::shared_ptr<DataAtGaussPoints> &common_data)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL), 
+        matD(mat_D), commonData(common_data) {
+    sYmm = true;
+  }
+protected:
+  boost::shared_ptr<MatrixDouble> matD;
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_col_dofs = col_data.getIndices().size();
+
+    if (nb_row_dofs && nb_col_dofs) {
+
+      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+      locLhs.clear();
+
+      // get element area
+      const double area = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+      
+      // get solution (field value) at integration point
+      auto t_field = getFTensor0FromVec(commonData->fieldValue);
+
+      // get gradient of the field at integration points
+      auto t_field_grad = getFTensor1FromMat<2>(commonData->fieldGrad);
+
+      // get time derivative of field at integration points
+      auto t_field_dot = getFTensor0FromVec(commonData->fieldDot);
+
+      // get derivatives of base functions on row
+      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+      
+      constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+
+      auto get_tensor1 = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 3>(
+                                             &m(r + 0, c), 
+                                             &m(r + 1, c), 
+                                             &m(r + 2, c));
+      };
+
+      FTensor::Index<'i', 2> i;
+      FTensor::Index<'j', 2> j;
+      FTensor::Index<'k', 2> k;
+      FTensor::Index<'l', 2> l;
+
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+
+        const double a = t_w * area;
+
+        for (int rr = 0; rr != nb_row_dofs; ++rr) {
+          // get derivatives of base functions on column
+          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+          // get the base functions on column (Temperature)
+          auto t_col_base = col_data.getFTensor0N(gg, 0);
+
+          for (int cc = 0; cc != nb_col_dofs; cc++) {
+
+            locLhs(i) -= t_row_diff_base(i) * t_col_base * a *t_field *matD(i,j,k,l)* t_kd(k, l);
+
+            // move to the derivatives of the next base functions on column
+            ++t_col_diff_base;
+          }
+
+          // move to the derivatives of the next base functions on row
+          ++t_row_diff_base;
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+
+        // move to the field at the next integration point
+        ++t_field;
+
+        // move to the gradient of the field at the next integration point
+        ++t_field_grad;
+        
+        // move to time derivative of the field at the next integration point
+        ++t_field_dot;
+      }
+
+      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+
+      // Fill value to local stiffness matrix ignoring boundary DOFs
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
+                          ADD_VALUES);
+
+      // Fill values of symmetric local stiffness matrix
+      if (row_side != col_side || row_type != col_type) {
+        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+        noalias(transLocLhs) = trans(locLhs);
+        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+                            ADD_VALUES);
+      }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
+  MatrixDouble locLhs, transLocLhs;
+  boost::shared_ptr<DataAtGaussPoints> commonData;
+};
 
 struct OpDomainRhs : public OpFaceEle {
 public:
