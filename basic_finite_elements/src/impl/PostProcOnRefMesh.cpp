@@ -857,9 +857,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
 
   if (type != MBVERTEX)
     MoFEMFunctionReturnHot(0);
-  // if (data.getFieldData().size() == 0)
-  //   MoFEMFunctionReturnHot(0);
-  
+
   CHKERR loopSideVolumes(feVolName, *sideOpFe);
 
   // quit if tag is not needed
@@ -876,6 +874,8 @@ PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
   // FieldSpace space = dof_ptr->getSpace();
 
   int full_size = rank * RANK;
+  if(space == HDIV)
+    full_size *= 3;
   // for paraview
   int tag_length = full_size > 3 && full_size < 9 ? 9 : full_size;
   double def_VAL[tag_length];
@@ -896,6 +896,7 @@ PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
   switch (space) {
   case H1:
   case L2:
+  case HDIV:
 
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
@@ -970,30 +971,59 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
   if (!mat_ptr)
     mat_ptr = boost::make_shared<MatrixDouble>();
 
-  boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
+  auto my_side_fe =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 
   // check number of coefficients
   auto field_ptr = mField.get_field_structure(field_name);
   const int nb_coefficients = field_ptr->getNbOfCoeffs();
+  FieldSpace space = field_ptr->getSpace();
 
-  switch (nb_coefficients) {
-  case 1:
-    my_side_fe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<1>(field_name, mat_ptr));
-    break; 
-  case 3:
-    my_side_fe->getOpPtrVector().push_back(
-        new OpCalculateVectorFieldValues<3>(field_name, mat_ptr));
+  switch (space) {
+  case L2:
+  case H1:
+    switch (nb_coefficients) {
+    case 1:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<1>(field_name, mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>(field_name, mat_ptr));
+      break;
+    case 6:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateTensor2SymmetricFieldValues<3>(field_name, mat_ptr));
+      break;
+    case 9:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateTensor2FieldValues<3, 3>(field_name, mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
     break;
-  case 6:
-    my_side_fe->getOpPtrVector().push_back(
-        new OpCalculateTensor2SymmetricFieldValues<3>(field_name,
-                                                      mat_ptr));
-    break;
+  case HDIV:
+    switch (nb_coefficients) {
+    case 1:
+      cout << nb_coefficients << endl;
+      cout << "test ?" << endl;
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHdivVectorField<3>(field_name, mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorField<3, 3>(field_name, mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+  break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
-            "field with that number of coefficients is not implemented");
+            "field with that space is not implemented.");
   }
 
   FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
