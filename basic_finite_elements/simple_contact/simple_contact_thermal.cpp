@@ -350,15 +350,13 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.add_field("MESH_NODE_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
                              3, MB_TAG_SPARSE, MF_ZERO);
+    if (!eigen_pos_flag) {
+      CHKERR m_field.add_field("EIGEN_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+                               3, MB_TAG_SPARSE, MF_ZERO);
+    }
 
     CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
                              MB_TAG_SPARSE, MF_ZERO);
-
-    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
-    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
-    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
-    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
-    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
     // Declare problem add entities (by tets) to the field
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "SPATIAL_POSITION");
@@ -366,6 +364,20 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBTRI, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBEDGE, "SPATIAL_POSITION", order);
     CHKERR m_field.set_field_order(0, MBVERTEX, "SPATIAL_POSITION", 1);
+
+    CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
+    CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
+    CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
+
+    if (!eigen_pos_flag) {
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "EIGEN_POSITIONS");
+      CHKERR m_field.set_field_order(0, MBTET, "EIGEN_POSITIONS", order);
+      CHKERR m_field.set_field_order(0, MBTRI, "EIGEN_POSITIONS", order);
+      CHKERR m_field.set_field_order(0, MBEDGE, "EIGEN_POSITIONS", order);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "EIGEN_POSITIONS", 1);
+    }
 
     CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "LAGMULT");
     CHKERR m_field.set_field_order(0, MBTRI, "LAGMULT", order_lambda);
@@ -520,6 +532,8 @@ int main(int argc, char *argv[]) {
                                                         "SPATIAL_POSITION");
     CHKERR m_field.modify_finite_element_add_field_data("SKIN",
                                                         "MESH_NODE_POSITIONS");
+    CHKERR m_field.modify_finite_element_add_field_data("SKIN",
+                                                        "EIGEN_POSITIONS");
 
     auto make_contact_element = [&]() {
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
@@ -553,7 +567,7 @@ int main(int argc, char *argv[]) {
       }
       contact_problem->setContactOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm, eigen_pos_flag, "PUT_A_FIELD");
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_rhs_simple_contact;
     };
 
@@ -583,7 +597,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm, eigen_pos_flag, "PUT_A_FIELD");
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_lhs_simple_contact;
     };
 
@@ -592,13 +606,13 @@ int main(int argc, char *argv[]) {
         m_field, cn_value_ptr, is_newton_cotes);
 
     // add fields to the global matrix by adding the element
-    if (eigen_pos_flag)
+    if (!eigen_pos_flag)
       contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                          "LAGMULT", contact_prisms);
     else
       contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
                                          "LAGMULT", contact_prisms, true,
-                                         eigen_pos_flag, "PUT_A_FIELD");
+                                         eigen_pos_flag, "EIGEN_POSITIONS");
 
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
@@ -796,6 +810,7 @@ int main(int argc, char *argv[]) {
     CHKERR post_proc_skin.generateReferenceElementMesh();
     CHKERR post_proc_skin.addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
+    CHKERR post_proc_skin.addFieldValuesPostProc("EIGEN_POSITIONS");
 
     struct OpGetFieldGradientValuesOnSkin
         : public FaceElementForcesAndSourcesCore::UserDataOperator {
@@ -864,6 +879,9 @@ int main(int argc, char *argv[]) {
 
     // save on mesh
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+
+    CHKERR m_field.getInterface<FieldBlas>()->fieldCopy(1., "SPATIAL_POSITION",
+                                                        "EIGEN_POSITIONS");
 
     Vec v_energy;
     CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "SPATIAL_POSITION",
