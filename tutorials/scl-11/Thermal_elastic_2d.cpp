@@ -164,8 +164,8 @@ MoFEMErrorCode Thermal_Elasticity2D::createCommonData() {
         (SPACE_DIM == 2) ? 2 * shear_modulus_G /
                                (bulk_modulus_K + (4. / 3.) * shear_modulus_G)
                          : 1;
-    auto t_D = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*thDPtr);
-    t_D(i, j, k, l) = (2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
+    auto t_DT = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*thDPtr);
+    t_DT(i, j, k, l) = (2 * shear_modulus_G * ((t_kd(i, k) ^ t_kd(j, l)) / 4.) +
                       A * (bulk_modulus_K - (2. / 3.) * shear_modulus_G) *
                           t_kd(i, j) * t_kd(k, l)) * alpha;
                           

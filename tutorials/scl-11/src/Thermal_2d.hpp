@@ -145,17 +145,17 @@ protected:
       auto t_w = getFTensor0IntegrationWeight();
       
       // get solution (field value) at integration point
-      auto t_field = getFTensor0FromVec(commonData->fieldValue);
+      auto t_temp = getFTensor0FromVec(commonData->fieldValue);
 
       // get gradient of the field at integration points
-      auto t_field_grad = getFTensor1FromMat<2>(commonData->fieldGrad);
+      // auto t_field_grad = getFTensor1FromMat<3>(commonData->fieldGrad);
 
       // get time derivative of field at integration points
-      auto t_field_dot = getFTensor0FromVec(commonData->fieldDot);
+      // auto t_field_dot = getFTensor0FromVec(commonData->fieldDot);
 
       // get derivatives of base functions on row
       auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
-      
+      auto t_D = getFTensor4DdgFromMat<2, 2, 0>(*matD);
       constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
       auto get_tensor1 = [](MatrixDouble &m, const int r, const int c) {
@@ -182,11 +182,11 @@ protected:
           auto t_col_base = col_data.getFTensor0N(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
-            auto t_subLocMat = get_tensor1(locLhs, 3 * rr, cc);  
-            t_subLocMat(i) -= t_row_diff_base(i) * t_col_base * a *t_field *matD(i,j,k,l)* t_kd(k, l);
+            auto t_subLocMat = get_tensor1(locLhs, rr, cc);  
+            t_subLocMat(j) -= t_row_diff_base(i) * t_col_base * a * t_temp * t_D(i,j,k,l) * t_kd(k, l);
 
             // move to the derivatives of the next base functions on column
-            ++t_col_diff_base;
+            ++t_col_base;
           }
 
           // move to the derivatives of the next base functions on row
@@ -197,13 +197,13 @@ protected:
         ++t_w;
 
         // move to the field at the next integration point
-        ++t_field;
-
+        ++t_temp;
+        ++t_D;
         // move to the gradient of the field at the next integration point
-        ++t_field_grad;
+        // ++t_field_grad;
         
         // move to time derivative of the field at the next integration point
-        ++t_field_dot;
+        // ++t_field_dot;
       }
 
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
