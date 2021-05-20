@@ -2307,12 +2307,16 @@ struct SimpleContactProblem {
   MoFEMErrorCode setMasterForceOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_node_field = false,
+      string eigen_nodes_field_name = "EIGEN_NODE_POSITIONS");
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_node_field = false,
+      string eigen_nodes_field_name = "EIGEN_NODE_POSITIONS");
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,

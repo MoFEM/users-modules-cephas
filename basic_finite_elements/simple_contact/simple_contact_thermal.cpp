@@ -157,8 +157,9 @@ int main(int argc, char *argv[]) {
                             "if set use ALM, if not use C-function", "",
                             PETSC_FALSE, &alm_flag, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_eigen_pos_flag",
-                            "if set use ALM, if not use C-function", "",
-                            PETSC_FALSE, &eigen_pos_flag, PETSC_NULL);
+                            "if set use eigen spatial positions are taken into "
+                            "account for predeformed configuration",
+                            "", PETSC_FALSE, &eigen_pos_flag, PETSC_NULL);
 
     CHKERR PetscOptionsReal("-my_scale_factor", "scale factor", "",
                             scale_factor, &scale_factor, PETSC_NULL);
@@ -577,7 +578,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm);
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_rhs_simple_contact;
     };
 
