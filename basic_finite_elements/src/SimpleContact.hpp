@@ -2188,7 +2188,7 @@ struct SimpleContactProblem {
     StateTagSide stateTagSide;
 
     OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
-                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                   boost::shared_ptr<CommonDataSimpleContact> common_data,
                    moab::Interface &moab_out,
                    StateTagSide state_tag_side = NO_TAG)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
@@ -2205,7 +2205,7 @@ struct SimpleContactProblem {
     std::ofstream &mySplit;
 
     OpMakeTestTextFile(MoFEM::Interface &m_field, string field_name,
-                       boost::shared_ptr<CommonDataSimpleContact> &common_data,
+                       boost::shared_ptr<CommonDataSimpleContact> common_data,
                        std::ofstream &_my_split)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
@@ -3508,7 +3508,7 @@ struct SimpleContactProblem {
 
     OpGetGaussPtsState(
         const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn, const bool alm_flag = false)
         : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
@@ -3528,7 +3528,7 @@ struct SimpleContactProblem {
 
     OpGetContactArea(
         const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn, const bool alm_flag = false)
         : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
