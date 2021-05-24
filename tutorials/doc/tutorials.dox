@@ -158,7 +158,7 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td>\ref tutorial_heat_method</td>
-       <td> Finding distance geodetic using heat method
+       <td> Finding geodesic distance with heat method
        <br/> *Keywords:*  Face elements embedded in 3d space
        </td>
   </tr>
@@ -171,7 +171,7 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\ref tutorial_hemholtz_problem</td>
-       <td> Hemholtz problem for acoustics
+       <td> Helmholtz problem for acoustics
        <br/> *Keywords:* Complex variable, Linear Solver, boundary markers
        </td>
   </tr>
@@ -184,7 +184,7 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\ref tutorial_elastic_problem</td>
-       <td> Linear elastic 
+       <td> Linear elasticity
        <br/> *Keywords:* Hooke equation
        </td>
   </tr>
@@ -192,20 +192,20 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_eigen_elastic</td>
        <td> Eigen elastic
-       <br/> *Keywords:* Eigen values, SLEP
+       <br/> *Keywords:* Eigen values, SLEPC
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref tutorial_dynamic_elastic</td>
-       <td> Dynamic elastic
-       <br/> *Keywords:* Time dependent problem
+       <td width="350px">\ref tutorial_nonlinear_elastic</td>
+       <td> Nonlinear elastic with Hencky material
+       <br/> *Keywords:* Nonlinear problem, [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html)
        </td>
   </tr>
 
   <tr valign="top">
        <td width="350px">\ref tutorial_nonlinear_dynamic_elastic</td>
-       <td> Nonlinear elastic
+       <td> Time-dependent nonlinear elastic (dynamics)
        <br/> *Keywords:* Alpha2 method
        </td>
   </tr>
@@ -220,7 +220,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tut_mix_poisson</td>
        <td> A mixed problem
-       <br/> *Keywords:* H-div space, homogenous boundary condistions by DOFs removal 
+       <br/> *Keywords:* H-div space, homogenous boundary conditions by DOFs removal 
        </td>
   </tr>
 
@@ -231,7 +231,7 @@ continuing with the one you are most excited about.
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref DD-0: Tranport data driven</td>
+       <td width="350px">\ref DD-0: Transport data driven</td>
        <td> Data driven for transport or heat conduction problems
        <br/> *Keywords:* Scalar problem
        </td>
@@ -265,7 +265,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_plastic_problem</td>
        <td> Plasticity problem
-       <br/> *Keywords:* Nonliera problem, linearisation, L2 space, boundary markers, displacement control, force control
+       <br/> *Keywords:* Nonlinear problem, linearisation, L2 space, boundary markers, displacement control, force control
        </td>
   </tr>
 
@@ -312,8 +312,8 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\subpage mix_us_flow</td>
-       <td> Mix formulation for capilary flow
-       <br/> *Keywords:* Caplilary flow in unsaturated soil. Nonlinear mix-formulation
+       <td> Mix formulation for capillary flow
+       <br/> *Keywords:* Capillary flow in unsaturated soil. Nonlinear mix-formulation
        </td>
   </tr>
 
@@ -326,14 +326,14 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\subpage poisson_tut2</td>
-       <td> Poison equation implementation of differentation operators
+       <td> Poison equation implementation of differentiation operators
        <br/> *Keywords:* %Poisson problem
        </td>
   </tr>
 
   <tr valign="top">
        <td width="350px">\subpage poisson_tut3</td>
-       <td> Poison equation implementation of differentation operators
+       <td> Poison equation implementation of differentiation operators
        <br/> *Keywords:* Using subproblems and nested matrices
        </td>
   </tr>
@@ -369,7 +369,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
         <td width="350px">\subpage reaction_diffusion_imp</td>
         <td> Reaction-diffusion Fisher's equation
-        <br/> *Keywords:* time solve, Monitor, nonlinearity, 
+        <br/> *Keywords:* Time solver, Monitor, nonlinearity, 
         </td>
   </tr>
 
@@ -390,7 +390,7 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">MOD-0: \subpage sope_film</td>
-       <td> Sope film as module
+       <td> Soap film as an external module
        <br/> *Keywords:* Module implementations
        </td>
   </tr>

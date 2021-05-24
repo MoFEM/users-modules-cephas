@@ -19,9 +19,7 @@
 using namespace MoFEM;
 using namespace boost::numeric;
 
-extern "C" {
-#include <triangle_ncc_rule.h>
-}
+#include <IntegrationRules.hpp>
 
 constexpr double SimpleContactProblem::TOL;
 constexpr int SimpleContactProblem::LAGRANGE_RANK;
@@ -32,12 +30,12 @@ SimpleContactProblem::SimpleContactElement::setGaussPts(int order) {
   MoFEMFunctionBegin;
   if (newtonCotes) {
     int rule = order + 2;
-    int nb_gauss_pts = triangle_ncc_order_num(rule);
+    int nb_gauss_pts = IntRules::NCC::triangle_ncc_order_num(rule);
     gaussPtsMaster.resize(3, nb_gauss_pts, false);
     gaussPtsSlave.resize(3, nb_gauss_pts, false);
     double xy_coords[2 * nb_gauss_pts];
     double w_array[nb_gauss_pts];
-    triangle_ncc_rule(rule, nb_gauss_pts, xy_coords, w_array);
+    IntRules::NCC::triangle_ncc_rule(rule, nb_gauss_pts, xy_coords, w_array);
 
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
       gaussPtsMaster(0, gg) = xy_coords[gg * 2];

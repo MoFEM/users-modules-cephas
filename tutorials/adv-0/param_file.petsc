@@ -7,7 +7,7 @@
 -snes_dtol 0
 -snes_max_linear_solve_fail 0
 #-snes_converged_reason
--snes_linesearch_type l2
+-snes_linesearch_type bt
 -snes_linesearch_max_it 3
 # -snes_linesearch_keeplambda
 #-snes_linesearch_minlambda 0.01
@@ -17,7 +17,7 @@
 -ts_max_steps 100
 
 -ts_max_time 2
--ts_exact_final_time stepover
+-ts_exact_final_time matchstep
 -ts_dt 0.05
 -ts_max_snes_failures 0
 -ts_error_if_step_fails true
@@ -27,7 +27,7 @@
 -ts_adapt_monitor
 
 -quasi_static 1
--ts_type theta
+-ts_type beuler
 -ts_theta_initial_guess_extrapolate 1
 -ts_theta_theta 1
 
@@ -36,3 +36,7 @@
 #-ts_alpha_radius 1
 
 -ts_max_snes_failures 20
+
+-mat_mumps_icntl_14 800 
+-mat_mumps_icntl_24 1 
+-mat_mumps_icntl_13 

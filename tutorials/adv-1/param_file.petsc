@@ -11,7 +11,7 @@
 -snes_max_it 20
 
 -ts_max_time 2
--ts_exact_final_time stepover
+-ts_exact_final_time matchstep
 -ts_dt 0.05
 -ts_max_snes_failures -1
 -ts_error_if_step_fails false

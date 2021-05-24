@@ -1,6 +1,6 @@
 /**
- * \file dynamic_elastic.cpp
- * \example dynamic_elastic.cpp
+ * \file nonlinear_elastic.cpp
+ * \example nonlinear_elastic.cpp
  *
  * Plane stress elastic dynamic problem
  *
@@ -182,48 +182,23 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
 
-    auto get_time = [&](double, double, double) {
-      auto *pipeline_mng = mField.getInterface<PipelineManager>();
-      auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
-      return fe_domain_rhs->ts_t;
-    };
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "FIX_ALL", "U", 0, 3);
 
-  auto fix_disp = [&](const std::string blockset_name) {
-    Range fix_ents;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
-                                                        true);
-      }
-    }
-    return fix_ents;
+  auto get_time = [&](double, double, double) {
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+    return fe_domain_rhs->ts_t;
   };
-
-  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
-    auto prb_mng = mField.getInterface<ProblemsManager>();
-    auto simple = mField.getInterface<Simple>();
-    MoFEMFunctionBegin;
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    verts.merge(ents);
-    if (SPACE_DIM == 3) {
-      Range adj;
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
-                                               moab::Interface::UNION);
-      verts.merge(adj);
-    };
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo, hi);
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
-  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
 
   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
     if (it->getName().compare(0, 5, "FORCE") == 0) {
@@ -244,7 +219,8 @@ MoFEMErrorCode Example::boundaryCondition() {
                             boost::make_shared<Range>(force_edges)));
     }
   }
-
+  
+  //! [Define gravity vector]
   auto get_body_force = [this](const double, const double, const double) {
     auto *pipeline_mng = mField.getInterface<PipelineManager>();
     FTensor::Index<'i', SPACE_DIM> i;
@@ -256,6 +232,8 @@ MoFEMErrorCode Example::boundaryCondition() {
     t_source(1) = 1 * time;
     return t_source;
   };
+  //! [Define gravity vector]
+  
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpBodyForce("U", get_body_force));
 
