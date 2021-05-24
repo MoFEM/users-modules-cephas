@@ -1104,64 +1104,66 @@ int main(int argc, char *argv[]) {
 
       PetscPrintf(PETSC_COMM_WORLD, "Write file %s\n", output_mesh_name);
       CHKERR moab.write_file(output_mesh_name, "MOAB");
-    }
 
-    auto get_tag_handle = [&](auto name, auto size) {
-      Tag th;
-      std::vector<double> def_vals(size, 0.0);
-      CHKERR moab.tag_get_handle(name, size, MB_TYPE_DOUBLE, th,
-                                 MB_TAG_CREAT | MB_TAG_SPARSE, def_vals.data());
-      return th;
-    };
+      auto get_tag_handle = [&](auto name, auto size) {
+        Tag th;
+        std::vector<double> def_vals(size, 0.0);
+        CHKERR moab.tag_get_handle(name, size, MB_TYPE_DOUBLE, th,
+                                   MB_TAG_CREAT | MB_TAG_SPARSE,
+                                   def_vals.data());
+        return th;
+      };
 
-    if (test_num) {
-      Range tets;
-      CHKERR moab.get_entities_by_dimension(0, 3, tets);
-      EntityHandle tet = tets.front();
-      std::vector<double> internal_stress, actual_stress;
-      internal_stress.resize(9, 0.);
-      actual_stress.resize(9, 0.);
-      std::vector<double> internal_stress_ref, actual_stress_ref;
-      internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
-      switch (test_num) {
-      case 1:
-        actual_stress_ref = {0., 0., 1., 0., 0., 0., 0., 0., 0.};
-        break;
-      case 2:
-        actual_stress_ref = {0., 5. / 3., 5. / 3., 0., 0., 0., 0., 0., 0.};
-        break;
-      case 3:
-      case 4:
-        break;
-      default:
-        SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
-                 test_num);
-      }
+      if (test_num) {
+        Range tets;
+        CHKERR moab.get_entities_by_dimension(0, 3, tets);
+        EntityHandle tet = tets.front();
+        std::vector<double> internal_stress, actual_stress;
+        internal_stress.resize(9, 0.);
+        actual_stress.resize(9, 0.);
+        std::vector<double> internal_stress_ref, actual_stress_ref;
+        internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
+        switch (test_num) {
+        case 1:
+          actual_stress_ref = {0., 0., 1., 0., 0., 0., 0., 0., 0.};
+          break;
+        case 2:
+          actual_stress_ref = {0., 5. / 3., 5. / 3., 0., 0., 0., 0., 0., 0.};
+          break;
+        case 3:
+        case 4:
+          break;
+        default:
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
+                   test_num);
+        }
 
-      auto th_internal_stress = get_tag_handle("MED_INTERNAL_STRESS", 9);
-      auto th_actual_stress = get_tag_handle("MED_ACTUAL_STRESS", 9);
-      CHKERR moab.tag_get_data(th_internal_stress, &tet, 1,
-                               internal_stress.data());
-      CHKERR moab.tag_get_data(th_actual_stress, &tet, 1, actual_stress.data());
-      if (test_num == 3 || test_num == 4) {
-        for (int i = 0; i < 9; i++) {
-          cout << actual_stress[i] << " | ";
-        };
-        cout << endl;
-      } else {
-        const double eps = 1e-12;
-        for (int i = 0; i < 9; i++) {
-          if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
-            SETERRQ3(
-                PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                "Wrong component %d of internal stress: should be %g but is %g",
-                i, internal_stress_ref[i], internal_stress[i]);
-          }
-          if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
-            SETERRQ3(
-                PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                "Wrong component %d of actual stress: should be %g but is %g",
-                i, actual_stress_ref[i], actual_stress[i]);
+        auto th_internal_stress = get_tag_handle("MED_INTERNAL_STRESS", 9);
+        auto th_actual_stress = get_tag_handle("MED_ACTUAL_STRESS", 9);
+        CHKERR moab.tag_get_data(th_internal_stress, &tet, 1,
+                                 internal_stress.data());
+        CHKERR moab.tag_get_data(th_actual_stress, &tet, 1,
+                                 actual_stress.data());
+        if (test_num == 3 || test_num == 4) {
+          for (int i = 0; i < 9; i++) {
+            cout << actual_stress[i] << " | ";
+          };
+          cout << endl;
+        } else {
+          const double eps = 1e-12;
+          for (int i = 0; i < 9; i++) {
+            if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
+              SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                       "Wrong component %d of internal stress: should be %g "
+                       "but is %g",
+                       i, internal_stress_ref[i], internal_stress[i]);
+            }
+            if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
+              SETERRQ3(
+                  PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                  "Wrong component %d of actual stress: should be %g but is %g",
+                  i, actual_stress_ref[i], actual_stress[i]);
+            }
           }
         }
       }
