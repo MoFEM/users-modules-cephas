@@ -109,6 +109,11 @@ int main(int argc, char *argv[]) {
     PetscReal flat_shift = 1.0;
     PetscReal mesh_height = 1.0;
 
+    PetscBool wave_surf_flag = PETSC_FALSE;
+    PetscInt wave_dim = 2;
+    PetscReal wave_length = 1.0;
+    PetscReal wave_ampl = 0.01;
+
     PetscBool delete_prisms = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
@@ -191,6 +196,16 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &deform_flat_flag, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_flat_shift", "flat shift ", "", flat_shift,
                             &flat_shift, PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_wave_surf",
+                            "if set true, make one of the surfaces wavy", "",
+                            PETSC_FALSE, &wave_surf_flag, PETSC_NULL);
+    CHKERR PetscOptionsInt("-my_wave_dim", "dimension (2 or 3)", "", wave_dim,
+                           &wave_dim, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_wave_length", "profile wavelength", "",
+                            wave_length, &wave_length, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
+                            &wave_ampl, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_delete_prisms", "if set true, delete prisms",
                             "", PETSC_FALSE, &delete_prisms, PETSC_NULL);
@@ -312,8 +327,7 @@ int main(int argc, char *argv[]) {
                                  slave_tris);
     }
 
-    auto deform_flat_surface = [&](int block_id, double shift, int dir,
-                                   double height) {
+    auto deform_flat_surface = [&](int block_id, double shift, double height) {
       MoFEMFunctionBegin;
       Range all_tets, all_nodes;
       for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
@@ -335,15 +349,65 @@ int main(int argc, char *argv[]) {
         double x = coords[0];
         double y = coords[1];
         double z = coords[2];
-        coords[2] += shift * dir;
+        coords[2] += shift;
+        CHKERR moab.set_coords(&*nit, 1, coords);
+      }
+      MoFEMFunctionReturn(0);
+    };
+
+    auto make_wavy_surface = [&](int block_id, int dim, double lambda,
+                                 double delta, double height) {
+      MoFEMFunctionBegin;
+      Range all_tets, all_nodes;
+      for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, bit)) {
+        if (bit->getName().compare(0, 11, "MAT_ELASTIC") == 0) {
+          const int id = bit->getMeshsetId();
+          Range tets;
+          if (id == block_id) {
+            CHKERR m_field.get_moab().get_entities_by_dimension(
+                bit->getMeshset(), 3, tets, true);
+            all_tets.merge(tets);
+          }
+        }
+      }
+      CHKERR m_field.get_moab().get_connectivity(all_tets, all_nodes);
+      double coords[3];
+      for (Range::iterator nit = all_nodes.begin(); nit != all_nodes.end();
+           nit++) {
+        CHKERR moab.get_coords(&*nit, 1, coords);
+        double x = coords[0];
+        double y = coords[1];
+        double z = coords[2];
+        double coef = (height + z) / height;
+        switch (dim) {
+        case 2:
+          coords[2] -= coef * delta * (1. - cos(2. * M_PI * x / lambda));
+          break;
+        case 3:
+          coords[2] -=
+              coef * delta *
+              (1. - cos(2. * M_PI * x / lambda) * cos(2. * M_PI * y / lambda));
+          break;
+        default:
+          SETERRQ1(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                   "Wrong dimension = %d", dim);
+        }
+
         CHKERR moab.set_coords(&*nit, 1, coords);
       }
       MoFEMFunctionReturn(0);
     };
 
     if (deform_flat_flag && analytical_input) {
-      CHKERR deform_flat_surface(1, flat_shift, 1, mesh_height);
-      CHKERR deform_flat_surface(2, flat_shift, -1, mesh_height);
+      CHKERR deform_flat_surface(1, flat_shift, mesh_height);
+      CHKERR deform_flat_surface(2, -flat_shift, mesh_height);
+    }
+
+    if (wave_surf_flag && analytical_input) {
+      CHKERR make_wavy_surface(1, wave_dim, wave_length, wave_ampl,
+                               mesh_height);
+      CHKERR make_wavy_surface(2, wave_dim, wave_length, -wave_ampl,
+                               mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -463,21 +527,38 @@ int main(int argc, char *argv[]) {
                                       "MESH_NODE_POSITIONS", false, false,
                                       MBTET, data_hooke_element_at_pts);
     auto thermal_strain =
-        [&thermal_expansion_coef, &init_temp](
+        [&thermal_expansion_coef, &init_temp, &test_num](
             FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> &t_coords) {
           FTensor::Tensor2_symmetric<double, 3> t_thermal_strain;
           FTensor::Index<'i', 3> i;
           FTensor::Index<'j', 3> j;
 
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
-
-          double temp = init_temp + 1.0;
+          double temp;
 
           t_thermal_strain(i, j) = 0.0;
-          t_thermal_strain(2, 2) = thermal_expansion_coef * (temp - init_temp);
 
-          // t_thermal_strain(i, j) =
-          //     thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
+          switch (test_num) {
+          case 0:
+            // Put here analytical formula which may depend on coordinates
+            temp = init_temp + 1.0;
+            t_thermal_strain(i, j) =
+                thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
+            break;
+          case 1:
+          case 2:
+            t_thermal_strain(i, j) = -thermal_expansion_coef * t_kd(i, j);
+            break;
+          case 3:
+            t_thermal_strain(2, 2) = thermal_expansion_coef;
+            break;
+          case 4:
+            t_thermal_strain(i, j) = thermal_expansion_coef * t_kd(i, j);
+            break;
+          default:
+            break;
+          }
+
           return t_thermal_strain;
         };
 
@@ -612,7 +693,7 @@ int main(int argc, char *argv[]) {
                                          "LAGMULT", contact_prisms);
     else
       contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                         "LAGMULT", contact_prisms, true,
+                                         "LAGMULT", contact_prisms,
                                          eigen_pos_flag, "EIGEN_POSITIONS");
 
     contact_problem->addPostProcContactElement(
@@ -881,9 +962,6 @@ int main(int argc, char *argv[]) {
     // save on mesh
     CHKERR DMoFEMMeshToGlobalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
-    CHKERR m_field.getInterface<FieldBlas>()->fieldCopy(1., "SPATIAL_POSITION",
-                                                        "EIGEN_POSITIONS");
-
     Vec v_energy;
     CHKERR HookeElement::calculateEnergy(dm, block_sets_ptr, "SPATIAL_POSITION",
                                          "MESH_NODE_POSITIONS", false, false,
@@ -921,7 +999,8 @@ int main(int argc, char *argv[]) {
     if (!ignore_contact) {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
-          "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag);
+          "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag, eigen_pos_flag,
+          "EIGEN_POSITIONS");
 
       mb_post.delete_mesh();
 
@@ -958,8 +1037,9 @@ int main(int argc, char *argv[]) {
                     (int)nb_gauss_pts[0], (int)nb_gauss_pts[1]);
 
         PetscPrintf(PETSC_COMM_SELF,
-                    "Active contact area: %9.9f out of %9.9f\n",
-                    contact_area[0], contact_area[1]);
+                    "Active contact area: %8.8f out of %8.8f (%8.8f% %)\n",
+                    contact_area[0], contact_area[1],
+                    contact_area[0] / contact_area[1] * 100.);
       }
 
       string out_file_name;
@@ -994,6 +1074,9 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
     }
+
+    CHKERR m_field.getInterface<FieldBlas>()->fieldCopy(1., "SPATIAL_POSITION",
+                                                        "EIGEN_POSITIONS");
 
     const int n_parts = m_field.get_comm_size();
     if (m_field.get_comm_rank() == 0) {
@@ -1047,6 +1130,9 @@ int main(int argc, char *argv[]) {
       case 2:
         actual_stress_ref = {0., 5. / 3., 5. / 3., 0., 0., 0., 0., 0., 0.};
         break;
+      case 3:
+      case 4:
+        break;
       default:
         SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
                  test_num);
@@ -1057,19 +1143,26 @@ int main(int argc, char *argv[]) {
       CHKERR moab.tag_get_data(th_internal_stress, &tet, 1,
                                internal_stress.data());
       CHKERR moab.tag_get_data(th_actual_stress, &tet, 1, actual_stress.data());
-      const double eps = 1e-12;
-      for (int i = 0; i < 9; i++) {
-        if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
-          SETERRQ3(
-              PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-              "Wrong component %d of internal stress: should be %g but is %g",
-              i, internal_stress_ref[i], internal_stress[i]);
-        }
-        if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
-          SETERRQ3(
-              PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-              "Wrong component %d of actual stress: should be %g but is %g", i,
-              actual_stress_ref[i], actual_stress[i]);
+      if (test_num == 3 || test_num == 4) {
+        for (int i = 0; i < 9; i++) {
+          cout << actual_stress[i] << " | ";
+        };
+        cout << endl;
+      } else {
+        const double eps = 1e-12;
+        for (int i = 0; i < 9; i++) {
+          if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
+            SETERRQ3(
+                PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                "Wrong component %d of internal stress: should be %g but is %g",
+                i, internal_stress_ref[i], internal_stress[i]);
+          }
+          if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
+            SETERRQ3(
+                PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                "Wrong component %d of actual stress: should be %g but is %g",
+                i, actual_stress_ref[i], actual_stress[i]);
+          }
         }
       }
     }

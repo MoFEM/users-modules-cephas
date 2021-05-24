@@ -278,7 +278,7 @@ add_test(
 )
 
 add_test(
-  test_simple_contact_thermal_1
+  test_hooke_internal_stress_1
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 1
@@ -292,7 +292,7 @@ add_test(
 )
 
 add_test(
-  test_simple_contact_thermal_2
+  test_hooke_internal_stress_2
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 2
@@ -304,4 +304,3 @@ add_test(
   -my_thermal_expansion_coef 1e-3
   -snes_monitor
 )
-
