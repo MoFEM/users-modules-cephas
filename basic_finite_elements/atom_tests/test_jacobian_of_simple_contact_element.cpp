@@ -47,6 +47,7 @@ int main(int argc, char *argv[]) {
     PetscBool convect_pts = PETSC_FALSE;
     PetscBool test_ale = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
+    PetscBool eigen_pos_flag = PETSC_FALSE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -72,11 +73,15 @@ int main(int argc, char *argv[]) {
                             "", PETSC_FALSE, &is_newton_cotes, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_convect", "set to convect integration pts", "",
                             PETSC_FALSE, &convect_pts, PETSC_NULL);
-    CHKERR PetscOptionsBool("-my_alm_flag", "set to convect integration pts",
+    CHKERR PetscOptionsBool("-my_alm_flag", "set to flag to use ALM",
                             "", PETSC_FALSE, &alm_flag, PETSC_NULL);
 
     CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-test_ale", &test_ale,
                                PETSC_NULL);
+
+    CHKERR PetscOptionsBool("-my_eigen_pos_flag",
+                            "set flag to test eigen spatial positions", "",
+                            PETSC_FALSE, &eigen_pos_flag, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -193,6 +198,16 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.set_field_order(0, MBEDGE, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBVERTEX, "MESH_NODE_POSITIONS", 1);
 
+    if(eigen_pos_flag){
+      CHKERR m_field.add_field("EIGEN_POSITIONS", H1, AINSWORTH_LEGENDRE_BASE,
+                               3, MB_TAG_SPARSE, MF_ZERO);
+      CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "EIGEN_POSITIONS");
+      CHKERR m_field.set_field_order(0, MBTET, "EIGEN_POSITIONS", order);
+      CHKERR m_field.set_field_order(0, MBTRI, "EIGEN_POSITIONS", order);
+      CHKERR m_field.set_field_order(0, MBEDGE, "EIGEN_POSITIONS", order);
+      CHKERR m_field.set_field_order(0, MBVERTEX, "EIGEN_POSITIONS", 1);
+    }
+
     // build field
     CHKERR m_field.build_fields();
 
@@ -225,6 +240,9 @@ int main(int argc, char *argv[]) {
 
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_coord,
                                                             "SPATIAL_POSITION");
+    if (eigen_pos_flag)
+      CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(
+          set_coord, "EIGEN_POSITIONS");
     CHKERR m_field.getInterface<FieldBlas>()->setVertexDofs(set_pressure,
                                                             "LAGMULT");
 
@@ -273,7 +291,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm);
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_rhs_simple_contact;
     };
 
@@ -283,7 +301,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm);
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_lhs_simple_contact;
     };
 
@@ -293,7 +311,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", alm_flag);
+          "LAGMULT", alm_flag, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_rhs_simple_contact;
     };
 
@@ -303,7 +321,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", alm_flag);
+          "LAGMULT", alm_flag, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_lhs_simple_contact;
     };
 
@@ -342,8 +360,13 @@ int main(int argc, char *argv[]) {
         };
 
     // add fields to the global matrix by adding the element
-    contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT", contact_prisms);
+    if (!eigen_pos_flag)
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms);
+    else
+      contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
+                                         "LAGMULT", contact_prisms,
+                                         eigen_pos_flag, "EIGEN_POSITIONS");
     Range all_tets;
     if (test_ale == PETSC_TRUE) {
       contact_problem->addContactElementALE(

@@ -2690,12 +2690,14 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name) {
   MoFEMFunctionBegin;
 
   CHKERR setMasterForceOperatorsLhs(
       boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),
-      common_data_simple_contact, field_name, lagrange_field_name);
+      common_data_simple_contact, field_name, lagrange_field_name, is_alm,
+      is_eigen_pos_field, eigen_pos_field_name);
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(new OpCalculateGradLambdaXi(
       lagrange_field_name, common_data_simple_contact));
