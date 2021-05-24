@@ -745,37 +745,47 @@ struct PostProcFaceOnRefinedMesh : public PostProcTemplateOnRefineMesh<
     return commonData;
   }
 
-  struct OpGetFieldGradientValuesOnSkin
+  template <int RANK>
+  struct OpGetFieldValuesOnSkinImpl
       : public FaceElementForcesAndSourcesCore::UserDataOperator {
 
     moab::Interface &postProcMesh;
     std::vector<EntityHandle> &mapGaussPts;
     boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> sideOpFe;
     const std::string feVolName;
-    boost::shared_ptr<MatrixDouble> gradMatPtr;
+    boost::shared_ptr<MatrixDouble> matPtr;
     const std::string tagName;
+    const std::string fieldName;
     const bool saveOnTag;
 
-    OpGetFieldGradientValuesOnSkin(
+    OpGetFieldValuesOnSkinImpl(
         moab::Interface &post_proc_mesh,
         std::vector<EntityHandle> &map_gauss_pts, const std::string field_name,
         const std::string tag_name,
         boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> side_fe,
-        const std::string vol_fe_name,
-        boost::shared_ptr<MatrixDouble> grad_mat_ptr, bool save_on_tag)
+        const std::string vol_fe_name, boost::shared_ptr<MatrixDouble> mat_ptr,
+        bool save_on_tag)
         : FaceElementForcesAndSourcesCore::UserDataOperator(
               field_name, UserDataOperator::OPCOL),
           postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts),
-          sideOpFe(side_fe), feVolName(vol_fe_name), gradMatPtr(grad_mat_ptr),
-          tagName(tag_name), saveOnTag(save_on_tag) {}
+          sideOpFe(side_fe), feVolName(vol_fe_name), matPtr(mat_ptr),
+          tagName(tag_name), fieldName(field_name), saveOnTag(save_on_tag) {}
 
     MoFEMErrorCode doWork(int side, EntityType type,
                           DataForcesAndSourcesCore::EntData &data);
   };
 
+  typedef struct OpGetFieldValuesOnSkinImpl<3> OpGetFieldGradientValuesOnSkin;
+  typedef struct OpGetFieldValuesOnSkinImpl<1> OpGetFieldValuesOnSkin;
+
   MoFEMErrorCode addFieldValuesGradientPostProcOnSkin(
-      const std::string field_name, const std::string vol_fe_name,
+      const std::string field_name, const std::string vol_fe_name = "dFE",
       boost::shared_ptr<MatrixDouble> grad_mat_ptr = nullptr,
+      bool save_on_tag = true);
+  
+  MoFEMErrorCode addFieldValuesPostProcOnSkin(
+      const std::string field_name, const std::string vol_fe_name = "dFE",
+      boost::shared_ptr<MatrixDouble> mat_ptr = nullptr,
       bool save_on_tag = true);
 
 private:

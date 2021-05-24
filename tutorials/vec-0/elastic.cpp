@@ -42,7 +42,9 @@ template <> struct ElementsAndOps<3> {
   using PostProcEle = PostProcVolumeOnRefinedMesh;
 };
 
+//! [Define dimension]
 constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
+//! [Define dimension]
 
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = ElementsAndOps<SPACE_DIM>::DomainEle;
@@ -97,7 +99,8 @@ private:
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto set_matrial_stiffens = [&]() {
+  //! [Calculate elasticity tensor]
+  auto set_material_stiffness = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
@@ -114,7 +117,9 @@ MoFEMErrorCode Example::createCommonData() {
                           t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
+  //! [Calculate elasticity tensor]
 
+  //! [Define gravity vector]
   auto set_body_force = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     MoFEMFunctionBegin;
@@ -123,7 +128,9 @@ MoFEMErrorCode Example::createCommonData() {
     t_force(1) = -1;
     MoFEMFunctionReturn(0);
   };
+  //! [Define gravity vector]
 
+  //! [Initialise containers for commonData]
   matGradPtr = boost::make_shared<MatrixDouble>();
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
@@ -133,8 +140,9 @@ MoFEMErrorCode Example::createCommonData() {
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
   bodyForceMatPtr->resize(SPACE_DIM, 1);
+  //! [Initialise containers for commonData]
 
-  CHKERR set_matrial_stiffens();
+  CHKERR set_material_stiffness();
   CHKERR set_body_force();
 
   MoFEMFunctionReturn(0);
@@ -184,42 +192,23 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto simple = mField.getInterface<Simple>();
+  auto bc_mng = mField.getInterface<BcManager>();
 
-  auto fix_disp = [&](const std::string blockset_name) {
-    Range fix_ents;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
-                                                        true);
-      }
-    }
-    return fix_ents;
-  };
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "FIX_ALL", "U", 0, 3);
 
-  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
-    auto prb_mng = mField.getInterface<ProblemsManager>();
-    auto simple = mField.getInterface<Simple>();
-    MoFEMFunctionBegin;
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    verts.merge(ents);
-    if (SPACE_DIM == 3) {
-      Range adj;
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
-                                               moab::Interface::UNION);
-      verts.merge(adj);
-    };
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo, hi);
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
-  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
+  //! [Pushing gravity load operator]
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
+  //! [Pushing gravity load operator]
 
   MoFEMFunctionReturn(0);
 }
@@ -237,9 +226,6 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpSetInvJacH1ForFace(invJac));
   }
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-
-  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
-      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * (approx_order - 1);
