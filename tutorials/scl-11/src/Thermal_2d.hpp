@@ -118,7 +118,7 @@ public:
         boost::shared_ptr<DataAtGaussPoints> &common_data)
       : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL), 
         matD(mat_D), commonData(common_data) {
-    sYmm = true;
+    sYmm = false;
   }
 protected:
   boost::shared_ptr<MatrixDouble> matD;
@@ -128,12 +128,12 @@ protected:
                         EntData &col_data) {
     MoFEMFunctionBegin;
 
-    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_row_dofs = row_data.getIndices().size()/2;
     const int nb_col_dofs = col_data.getIndices().size();
 
     if (nb_row_dofs && nb_col_dofs) {
 
-      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+      locLhs.resize(2 * nb_row_dofs, nb_col_dofs, false);
       locLhs.clear();
 
       // get element area
@@ -147,22 +147,13 @@ protected:
       // get solution (field value) at integration point
       auto t_temp = getFTensor0FromVec(commonData->fieldValue);
 
-      // get gradient of the field at integration points
-      // auto t_field_grad = getFTensor1FromMat<3>(commonData->fieldGrad);
-
-      // get time derivative of field at integration points
-      // auto t_field_dot = getFTensor0FromVec(commonData->fieldDot);
-
-      // get derivatives of base functions on row
-      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
       auto t_D = getFTensor4DdgFromMat<2, 2, 0>(*matD);
       constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
 
       auto get_tensor1 = [](MatrixDouble &m, const int r, const int c) {
-      return FTensor::Tensor1<double *, 3>(
+      return FTensor::Tensor1<double *, 2>(
                                              &m(r + 0, c), 
-                                             &m(r + 1, c), 
-                                             &m(r + 2, c));
+                                             &m(r + 1, c));
       };
 
       FTensor::Index<'i', 2> i;
@@ -170,20 +161,22 @@ protected:
       FTensor::Index<'k', 2> k;
       FTensor::Index<'l', 2> l;
 
+      // get derivatives of base functions on column
+      auto t_row_diff_base = row_data.getFTensor1DiffN<2>(); 
+
       // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
       for (int gg = 0; gg != nb_integration_points; gg++) {
 
         const double a = t_w * area;
 
         for (int rr = 0; rr != nb_row_dofs; ++rr) {
-          // get derivatives of base functions on column
-          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg, 0);
+
           // get the base functions on column (Temperature)
           auto t_col_base = col_data.getFTensor0N(gg, 0);
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
             auto t_subLocMat = get_tensor1(locLhs, rr, cc);  
-            t_subLocMat(j) -= t_row_diff_base(i) * t_col_base * a * t_temp * t_D(i,j,k,l) * t_kd(k, l);
+            t_subLocMat(i) -= t_row_diff_base(j) * t_col_base * a * t_D(i,j,k,l) * t_kd(k, l) * t_temp;
 
             // move to the derivatives of the next base functions on column
             ++t_col_base;
@@ -191,19 +184,13 @@ protected:
 
           // move to the derivatives of the next base functions on row
           ++t_row_diff_base;
+
+
         }
-
-        // move to the weight of the next integration point
-        ++t_w;
-
-        // move to the field at the next integration point
-        ++t_temp;
-        ++t_D;
-        // move to the gradient of the field at the next integration point
-        // ++t_field_grad;
-        
-        // move to time derivative of the field at the next integration point
-        // ++t_field_dot;
+          // move to the weight of the next integration point
+          ++t_w;
+          // move to the field at the next integration point
+          ++t_temp;
       }
 
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
@@ -213,12 +200,12 @@ protected:
                           ADD_VALUES);
 
       // Fill values of symmetric local stiffness matrix
-      if (row_side != col_side || row_type != col_type) {
-        transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
-        noalias(transLocLhs) = trans(locLhs);
-        CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
-                            ADD_VALUES);
-      }
+      // if (row_side != col_side || row_type != col_type) {
+      //   transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+      //   noalias(transLocLhs) = trans(locLhs);
+      //   CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+      //                       ADD_VALUES);
+      // }
     }
 
     MoFEMFunctionReturn(0);
@@ -633,7 +620,7 @@ MoFEMErrorCode OpPostProcElastic<DIM>::doWork(int side, EntityType type,
 
   auto set_plain_stress_strain = [&](auto &mat, auto &t) -> MatrixDouble3by3 & {
     //poisson_ratio is not passed in!
-    mat(2, 2) = -0.25 * (t(0, 0) + t(1, 1));
+    mat(2, 2) = -0. * (t(0, 0) + t(1, 1));
     return mat;
   };
 

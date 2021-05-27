@@ -1,0 +1,20 @@
+# --- Problem: poisson_2d_nonhomogeneous, poisson_2d_lagrange_multiplier
+
+## Linear solver (non-fieldsplit)
+-ksp_type fgmres 
+-pc_type lu 
+-pc_factor_mat_solver_type mumps
+-ksp_monitor
+
+## Fieldsplit (block) solver
+#-pc_type fieldsplit
+#-pc_fieldsplit_type schur
+#-ksp_type fgmres
+#-ksp_initial_guess_nonzero
+#-ksp_atol 1e-12
+#-ksp_rtol 0
+#-ksp_monitor ascii
+#-pc_fieldsplit_schur_precondition selfp
+#-fieldsplit_0_ksp_type gmres
+
+# ---
