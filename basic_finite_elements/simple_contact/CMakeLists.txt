@@ -311,9 +311,7 @@ add_test(
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 3
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/two_bars_contact_thermal.cub
-  -my_order 1
-  -my_order_contact 2
-  -my_ho_levels_num 2
+  -my_order 2
   -my_cn_value 1e2
   -my_alm_flag 0
   -my_output_mesh_file two_bars_contact_stress.h5m
