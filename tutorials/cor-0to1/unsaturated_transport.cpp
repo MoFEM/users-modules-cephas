@@ -120,11 +120,11 @@ int main(int argc, char *argv[]) {
     }
 
     // Create MOAB communicator
-    MPI_Comm moab_comm_world;
-    MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto moab_comm_wrap =
+        boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, moab_comm_world);
+      pcomm =
+          new ParallelComm(&moab, moab_comm_wrap->get_comm(), MYPCOMM_INDEX);
 
     const char *option;
     option = "PARALLEL=READ_PART;"

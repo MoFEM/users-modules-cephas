@@ -437,11 +437,12 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   CHKERR getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
                       tag_handles[2]);
   CHKERR getTagHandle(mField, "ORDER", MB_TYPE_INTEGER, tag_handles[3]);
+  
   ParallelComm *pcomm =
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  if (pcomm == NULL) {
-    pcomm = new ParallelComm(&mField.get_moab(), mField.get_comm());
-  }
+  if (pcomm == NULL)
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Communicator not set");
+
   tag_handles.push_back(pcomm->part_tag());
   std::ostringstream strm;
   strm << "error_" << iter_num << ".h5m";

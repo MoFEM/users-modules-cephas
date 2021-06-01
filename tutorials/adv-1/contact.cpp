@@ -187,7 +187,7 @@ MoFEMErrorCode Example::setupProblem() {
   ParallelComm *pcomm =
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   if (pcomm == NULL) {
-    pcomm = new ParallelComm(&mField.get_moab(), mField.get_comm());
+    SETERRQ(PETSC_COMM_WORLD, "Communicator not created");
   }
 
   CHKERR pcomm->filter_pstatus(skin_edges, PSTATUS_SHARED | PSTATUS_MULTISHARED,

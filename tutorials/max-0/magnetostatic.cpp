@@ -57,8 +57,11 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance;
 
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto moab_comm_wrap =
+        boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
+      pcomm =
+          new ParallelComm(&moab, moab_comm_wrap->get_comm(), MYPCOMM_INDEX);
 
     // Read parameters from line command
     PetscBool flg_file;
