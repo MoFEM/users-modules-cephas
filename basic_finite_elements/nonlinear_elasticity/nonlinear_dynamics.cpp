@@ -276,9 +276,13 @@ int main(int argc, char *argv[]) {
 
     moab::Core mb_instance;
     moab::Interface &moab = mb_instance;
+
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto moab_comm_wrap =
+        boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
+      pcomm =
+          new ParallelComm(&moab, moab_comm_wrap->get_comm(), MYPCOMM_INDEX);
 
     FieldApproximationBase base = NOBASE;
     char mesh_file_name[255];

@@ -64,10 +64,6 @@ int main(int argc, char *argv[]) {
               "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
-
     const char *option;
     option = ""; //"PARALLEL=BCAST;";//;DEBUG_IO";
     CHKERR moab.load_file(mesh_file_name, 0, option);
@@ -237,7 +233,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector(
         "THERMAL_PROBLEM", ROW, T, INSERT_VALUES, SCATTER_REVERSE);
 
-    if (pcomm->rank() == 0) {
+    if (m_field.get_comm_rank() == 0) {
       CHKERR moab.write_file("solution.h5m");
     }
 
@@ -247,7 +243,7 @@ int main(int argc, char *argv[]) {
     ent_method_on_10nodeTet.setNodes = false;
     CHKERR m_field.loop_dofs("TEMP", ent_method_on_10nodeTet);
 
-    if (pcomm->rank() == 0) {
+    if (m_field.get_comm_rank() == 0) {
       EntityHandle out_meshset;
       CHKERR moab.create_meshset(MESHSET_SET, out_meshset);
       CHKERR m_field.get_problem_finite_elements_entities(
