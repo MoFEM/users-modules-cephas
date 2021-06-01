@@ -70,7 +70,7 @@ mpirun --allow-run-as-root -np $NBPROCS \
 -ts_alpha_adapt false \
 -ts_max_reject -1 \
 -ts_max_snes_failures -1 \
--ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps \
+-ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps \
 -snes_type newtonls \
 -snes_linesearch_type l2 \
 -snes_linesearch_minlambda 1e-3 -snes_linesearch_damping 1. -snes_linesearch_max_it 3 \

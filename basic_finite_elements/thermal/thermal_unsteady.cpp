@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-ksp_monitor \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"

@@ -538,7 +538,7 @@ Typically, this can be done as follows
 \code
 cd mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation
 make -j2
-mpirun -np 2 ./elasticity_mixed_formulation -my_file LShape_incompressible.cub -my_order_p 2 -my_order_u 3 -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor
+mpirun -np 2 ./elasticity_mixed_formulation -my_file LShape_incompressible.cub -my_order_p 2 -my_order_u 3 -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps -ksp_monitor
 \endcode
 
 The options are explained as follows
@@ -558,7 +558,7 @@ means current directory
 - \e -pc_type \e lu: Direct solver based on <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCLU.html#PCLU">LU factorisation</a> as a preconditioner
 
 
-- \e -pc_factor_mat_solver_package \e mumps: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MATSOLVERMUMPS.html">MUMPS</a> is used as matrix solver
+- \e -pc_factor_mat_solver_type \e mumps: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MATSOLVERMUMPS.html">MUMPS</a> is used as matrix solver
 
 
 - \e -ksp_monitor: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPMonitorSet.html">function</a>  to be called at every iteration to monitor the
