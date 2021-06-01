@@ -127,7 +127,10 @@ struct PostProcCommonOnRefMesh {
 template <class ELEMENT> struct PostProcTemplateOnRefineMesh : public ELEMENT {
 
   moab::Core coreMesh;
+
   moab::Interface &postProcMesh;
+  boost::shared_ptr<WrapMPIComm> wrapRefMeshComm;
+
   std::vector<EntityHandle> mapGaussPts;
 
   PostProcTemplateOnRefineMesh(MoFEM::Interface &m_field)
@@ -529,13 +532,13 @@ struct PostProcTemplateVolumeOnRefinedMesh
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBeginHot;
 
-    moab::Interface &moab = T::coreMesh;
-    ParallelComm *pcomm =
-        ParallelComm::get_pcomm(&T::mField.get_moab(), MYPCOMM_INDEX);
     ParallelComm *pcomm_post_proc_mesh =
-        ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+        ParallelComm::get_pcomm(&(T::postProcMesh), MYPCOMM_INDEX);
     if (pcomm_post_proc_mesh == NULL) {
-      pcomm_post_proc_mesh = new ParallelComm(&moab, T::mField.get_comm());
+      T::wrapRefMeshComm =
+          boost::make_shared<WrapMPIComm>(T::mField.get_comm(), false);
+      pcomm_post_proc_mesh = new ParallelComm(&(T::postProcMesh),
+                                              (T::wrapRefMeshComm)->get_comm());
     }
 
     Range edges;
@@ -548,7 +551,7 @@ struct PostProcTemplateVolumeOnRefinedMesh
     Range tets;
     CHKERR T::postProcMesh.get_entities_by_type(0, MBTET, tets, false);
 
-    int rank = pcomm->rank();
+    int rank = T::mField.get_comm_rank();
     Range::iterator tit = tets.begin();
     for (; tit != tets.end(); tit++) {
       CHKERR T::postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(),

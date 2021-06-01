@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
         boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
       pcomm =
-          new ParallelComm(&moab, moab_comm_wrap->get_comm(), MYPCOMM_INDEX);
+          new ParallelComm(&moab, moab_comm_wrap->get_comm());
 
     // Read parameters from line command
     PetscBool flg_file;

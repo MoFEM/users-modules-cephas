@@ -24,7 +24,7 @@ private:
   MoFEM::Interface &mField;
   moab::Interface *moabVertex;
   boost::shared_ptr<CommonData> commonDataPtr;
-  WrapMPIComm moabCommWrap;
+  boost::shared_ptr<WrapMPIComm> moabCommWrap;
   ParallelComm *pComm;
 };
 
@@ -36,10 +36,10 @@ OpPostProcVertex::OpPostProcVertex(
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   doEntities[boundary_ent] = true;
   pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
-  moabCommWrap = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-  if (pComm == NULL)
-    pcomm =
-        new ParallelComm(&moabVertex, moabCommWrap->get_comm(), MYPCOMM_INDEX);
+  if (pComm == NULL) {
+    moabCommWrap = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pComm = new ParallelComm(moabVertex, moabCommWrap->get_comm());
+  }
 }
 
 MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,

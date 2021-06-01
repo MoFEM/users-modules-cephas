@@ -153,8 +153,6 @@ int main(int argc, char *argv[]) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_FOUND,
             "*** ERROR -my_file (MESH FILE NEEDED)");
   }
-  const char *option;
-  option = "";
 
   char time_data_file_for_ground_surface[255];
   PetscBool ground_temperature_analysis = PETSC_FALSE;
@@ -171,8 +169,8 @@ int main(int argc, char *argv[]) {
   //create MoAB database
   moab::Core mb_instance;
   moab::Interface& moab = mb_instance;
-  ParallelComm* pcomm = ParallelComm::get_pcomm(&moab,MYPCOMM_INDEX);
-  if(pcomm == NULL) pcomm =  new ParallelComm(&moab,PETSC_COMM_WORLD);
+  const char *option;
+  option = "";
   CHKERR moab.load_file(mesh_file_name, 0, option); 
   //create MoFEM  database
   MoFEM::Core core(moab);
@@ -567,7 +565,7 @@ int main(int argc, char *argv[]) {
   if (is_partitioned) {
     CHKERR moab.write_file("solution.h5m");
   } else {
-    if (pcomm->rank() == 0) {
+    if (m_field.get_comm_rank() == 0) {
       CHKERR moab.write_file("solution.h5m");
     }
   }

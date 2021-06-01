@@ -281,8 +281,7 @@ int main(int argc, char *argv[]) {
     auto moab_comm_wrap =
         boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm =
-          new ParallelComm(&moab, moab_comm_wrap->get_comm(), MYPCOMM_INDEX);
+      pcomm = new ParallelComm(&moab, moab_comm_wrap->get_comm());
 
     FieldApproximationBase base = NOBASE;
     char mesh_file_name[255];

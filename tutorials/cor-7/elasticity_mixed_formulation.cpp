@@ -60,11 +60,11 @@ int main(int argc, char *argv[]) {
     // Create separate MOAB communicator, it is duplicate of PETSc communicator.
     // NOTE That this should eliminate potential communication problems between
     // MOAB and PETSC functions.
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
     auto moab_comm_wrap =
         boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm =
-          new ParallelComm(&moab, moab_comm_wrap->get_comm(), MYPCOMM_INDEX);
+      pcomm = new ParallelComm(&moab, moab_comm_wrap->get_comm());
 
     // Get command line options
     char mesh_file_name[255];
