@@ -282,7 +282,7 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 1
-  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/thermal/test_1.cub
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/hooke_internal_stress_1.cub
   -my_order 2
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 1
@@ -296,11 +296,78 @@ add_test(
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
   -my_test_num 2
-  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/thermal/test_2.cub
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/hooke_internal_stress_2.cub
   -my_order 2
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 1
   -my_save_mean_stress 1
   -my_thermal_expansion_coef 1e-3
+  -snes_monitor
+)
+
+add_test(
+  test_two_bars_contact_analytical_input
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 3
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/two_bars_contact_thermal.cub
+  -my_order 1
+  -my_order_contact 2
+  -my_ho_levels_num 2
+  -my_cn_value 1e2
+  -my_alm_flag 0
+  -my_output_mesh_file two_bars_contact_stress.h5m
+  -my_analytical_input 1
+  -my_thermal_expansion_coef 0.2
+  -my_save_mean_stress 0
+  -my_deform_flat 1
+  -my_mesh_height 1.0
+  -my_flat_shift 0.1
+  -my_wave_surf 0
+  -my_scale_factor 1.0
+  -my_delete_prisms 0
+  -my_eigen_pos_flag 0
+  -snes_monitor
+)
+
+add_test(
+  test_two_bars_contact_eigen_stress
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 3
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/two_bars_contact_stress.h5m
+  -my_order 2
+  -my_cn_value 1e2
+  -my_alm_flag 0
+  -my_output_mesh_file med_stress.h5m
+  -my_analytical_input 0
+  -my_stress_tag_name INTERNAL_STRESS
+  -my_save_mean_stress 1
+  -my_deform_flat 0
+  -my_wave_surf 0
+  -my_scale_factor 1.0
+  -my_delete_prisms 1
+  -my_eigen_pos_flag 0
+  -snes_monitor
+)
+
+add_test(
+  test_two_bars_contact_actual_stress_eigen_pos
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 3
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/two_bars_contact_stress.h5m
+  -my_order 2
+  -my_cn_value 1e2
+  -my_alm_flag 0
+  -my_output_mesh_file med_stress.h5m
+  -my_analytical_input 0
+  -my_stress_tag_name ACTUAL_STRESS
+  -my_save_mean_stress 1
+  -my_deform_flat 0
+  -my_wave_surf 0
+  -my_scale_factor 1.0
+  -my_delete_prisms 1
+  -my_eigen_pos_flag 1
   -snes_monitor
 )

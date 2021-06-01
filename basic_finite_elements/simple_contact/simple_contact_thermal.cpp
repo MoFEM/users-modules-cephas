@@ -349,7 +349,7 @@ int main(int argc, char *argv[]) {
         double x = coords[0];
         double y = coords[1];
         double z = coords[2];
-        coords[2] += shift;
+        coords[2] -= shift;
         CHKERR moab.set_coords(&*nit, 1, coords);
       }
       MoFEMFunctionReturn(0);
@@ -406,8 +406,8 @@ int main(int argc, char *argv[]) {
     if (wave_surf_flag && analytical_input) {
       CHKERR make_wavy_surface(1, wave_dim, wave_length, wave_ampl,
                                mesh_height);
-      CHKERR make_wavy_surface(2, wave_dim, wave_length, -wave_ampl,
-                               mesh_height);
+      // CHKERR make_wavy_surface(2, wave_dim, wave_length, -wave_ampl,
+      //                          mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -535,7 +535,6 @@ int main(int argc, char *argv[]) {
 
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
           double temp;
-
           t_thermal_strain(i, j) = 0.0;
 
           switch (test_num) {
@@ -558,7 +557,6 @@ int main(int argc, char *argv[]) {
           default:
             break;
           }
-
           return t_thermal_strain;
         };
 
@@ -1122,15 +1120,22 @@ int main(int argc, char *argv[]) {
         internal_stress.resize(9, 0.);
         actual_stress.resize(9, 0.);
         std::vector<double> internal_stress_ref, actual_stress_ref;
-        internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
         switch (test_num) {
         case 1:
+          internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
           actual_stress_ref = {0., 0., 1., 0., 0., 0., 0., 0., 0.};
           break;
         case 2:
+          internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
           actual_stress_ref = {0., 5. / 3., 5. / 3., 0., 0., 0., 0., 0., 0.};
           break;
         case 3:
+          actual_stress_ref = {0., 0., -100., 0., 0., 0., 0., 0., 0.};
+          if (strcmp(stress_tag_name, "INTERNAL_STRESS") == 0)
+            internal_stress_ref = {0., 0., -200., 0., 0., 0., 0., 0., 0.};
+          else
+            internal_stress_ref = {0., 0., -100., 0., 0., 0., 0., 0., 0.};
+          break;
         case 4:
           break;
         default:
@@ -1144,13 +1149,20 @@ int main(int argc, char *argv[]) {
                                  internal_stress.data());
         CHKERR moab.tag_get_data(th_actual_stress, &tet, 1,
                                  actual_stress.data());
-        if (test_num == 3 || test_num == 4) {
+        {
+          cout << "INTERNAL: ";
+          for (int i = 0; i < 9; i++) {
+            cout << internal_stress[i] << " | ";
+          };
+          cout << endl;
+          cout << "ACTUAL: ";
           for (int i = 0; i < 9; i++) {
             cout << actual_stress[i] << " | ";
           };
           cout << endl;
-        } else {
-          const double eps = 1e-12;
+        }
+        if (save_mean_stress) {
+          const double eps = 1e-11;
           for (int i = 0; i < 9; i++) {
             if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
               SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,

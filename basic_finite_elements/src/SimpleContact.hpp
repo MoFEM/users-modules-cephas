@@ -237,21 +237,18 @@ struct SimpleContactProblem {
 
     if (range_slave_master_prisms.size() > 0) {
 
-      // C row as Lagrange_mul and col as SPATIAL_POSITION
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         field_name);
 
-      // CT col as Lagrange_mul and row as SPATIAL_POSITION
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         field_name);
 
-      // data
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          lagrange_field_name);
 
