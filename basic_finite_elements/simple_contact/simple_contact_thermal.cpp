@@ -667,7 +667,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm);
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_lhs_simple_contact;
     };
 
