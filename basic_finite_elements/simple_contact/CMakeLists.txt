@@ -356,7 +356,7 @@ add_test(
   -my_test_num 3
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/two_bars_contact_stress.h5m
   -my_order 2
-  -my_cn_value 1e2
+  -my_cn_value 1e4
   -my_alm_flag 0
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 0

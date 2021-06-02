@@ -1137,6 +1137,7 @@ int main(int argc, char *argv[]) {
             internal_stress_ref = {0., 0., -100., 0., 0., 0., 0., 0., 0.};
           break;
         case 4:
+
           break;
         default:
           SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
@@ -1161,20 +1162,24 @@ int main(int argc, char *argv[]) {
           };
           cout << endl;
         }
-        if (save_mean_stress) {
-          const double eps = 1e-11;
-          for (int i = 0; i < 9; i++) {
-            if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
-              SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                       "Wrong component %d of internal stress: should be %g "
-                       "but is %g",
-                       i, internal_stress_ref[i], internal_stress[i]);
-            }
-            if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
-              SETERRQ3(
-                  PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                  "Wrong component %d of actual stress: should be %g but is %g",
-                  i, actual_stress_ref[i], actual_stress[i]);
+        if (test_num == 4) {
+
+        } else {
+          if (save_mean_stress) {
+            const double eps = 1e-10;
+            for (int i = 0; i < 9; i++) {
+              if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
+                SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                         "Wrong component %d of internal stress: should be %g "
+                         "but is %g",
+                         i, internal_stress_ref[i], internal_stress[i]);
+              }
+              if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
+                SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                         "Wrong component %d of actual stress: should be %g "
+                         "but is %g",
+                         i, actual_stress_ref[i], actual_stress[i]);
+              }
             }
           }
         }
