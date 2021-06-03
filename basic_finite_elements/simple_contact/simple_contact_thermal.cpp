@@ -994,6 +994,9 @@ int main(int argc, char *argv[]) {
       fe_post_proc_simple_contact = make_contact_element();
     }
 
+    std::array<double, 2> nb_gauss_pts;
+    std::array<double, 2> contact_area;
+
     if (!ignore_contact) {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
@@ -1007,9 +1010,6 @@ int main(int argc, char *argv[]) {
 
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                       fe_post_proc_simple_contact);
-
-      std::array<double, 2> nb_gauss_pts;
-      std::array<double, 2> contact_area;
 
       auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
         MoFEMFunctionBegin;
@@ -1116,10 +1116,9 @@ int main(int argc, char *argv[]) {
         Range tets;
         CHKERR moab.get_entities_by_dimension(0, 3, tets);
         EntityHandle tet = tets.front();
-        std::vector<double> internal_stress, actual_stress;
-        internal_stress.resize(9, 0.);
-        actual_stress.resize(9, 0.);
-        std::vector<double> internal_stress_ref, actual_stress_ref;
+        std::array<double, 9> internal_stress, actual_stress;
+        std::array<double, 9> internal_stress_ref, actual_stress_ref;
+        std::array<double, 2> nb_gauss_pts_ref, contact_area_ref;
         switch (test_num) {
         case 1:
           internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
@@ -1137,7 +1136,8 @@ int main(int argc, char *argv[]) {
             internal_stress_ref = {0., 0., -100., 0., 0., 0., 0., 0., 0.};
           break;
         case 4:
-
+          nb_gauss_pts_ref = {96, 192};
+          contact_area_ref = {0.125, 0.25};
           break;
         default:
           SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
@@ -1150,23 +1150,11 @@ int main(int argc, char *argv[]) {
                                  internal_stress.data());
         CHKERR moab.tag_get_data(th_actual_stress, &tet, 1,
                                  actual_stress.data());
-        {
-          cout << "INTERNAL: ";
-          for (int i = 0; i < 9; i++) {
-            cout << internal_stress[i] << " | ";
-          };
-          cout << endl;
-          cout << "ACTUAL: ";
-          for (int i = 0; i < 9; i++) {
-            cout << actual_stress[i] << " | ";
-          };
-          cout << endl;
-        }
+        const double eps = 1e-10;
         if (test_num == 4) {
 
         } else {
           if (save_mean_stress) {
-            const double eps = 1e-10;
             for (int i = 0; i < 9; i++) {
               if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
                 SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
