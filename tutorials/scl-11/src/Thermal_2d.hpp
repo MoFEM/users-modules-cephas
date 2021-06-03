@@ -176,7 +176,7 @@ protected:
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
             auto t_subLocMat = get_tensor1(locLhs, rr, cc);  
-            t_subLocMat(i) -= t_row_diff_base(j) * t_col_base * a * t_D(i,j,k,l) * t_kd(k, l) * t_temp;
+            t_subLocMat(i) -= t_row_diff_base(j) * t_col_base * a * t_D(i,j,k,l) * t_kd(k, l);
 
             // move to the derivatives of the next base functions on column
             ++t_col_base;
@@ -190,7 +190,7 @@ protected:
           // move to the weight of the next integration point
           ++t_w;
           // move to the field at the next integration point
-          ++t_temp;
+          // ++t_temp;
       }
 
       // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
