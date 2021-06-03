@@ -376,7 +376,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-ksp_monitor\n";
 
   string param_file = "param_file.petsc";
@@ -406,11 +406,6 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
               "*** ERROR -my_file (MESH FILE NEEDED)");
     }
-
-    // create MOAB communicator
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     const char *option;
     option = "";

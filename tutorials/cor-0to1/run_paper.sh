@@ -76,7 +76,7 @@ mpirun -np $NBPROCS ./unsaturated_transport \
 -ts_max_snes_failures -1 \
 -ksp_type gmres \
 -pc_type lu \
--pc_factor_mat_solver_package mumps \
+-pc_factor_mat_solver_type mumps \
 -snes_type newtonls \
 -snes_linesearch_type l2 \
 -snes_linesearch_minlambda 1e-3 \

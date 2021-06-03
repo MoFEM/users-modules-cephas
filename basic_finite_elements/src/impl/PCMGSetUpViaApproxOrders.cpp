@@ -476,6 +476,8 @@ MoFEMErrorCode DMCreateMatrix_MGViaApproxOrders(DM dm, Mat *M) {
     CHKERR PetscObjectReference((PetscObject)*M);
   }
 
+  CHKERR MatSetDM(*M, dm);
+  
   PetscInfo1(dm, "Create Matrix DMMGViaApproxOrders leveldown = %d\n",
              leveldown);
 
@@ -615,6 +617,8 @@ MoFEMErrorCode DMCreateGlobalVector_MGViaApproxOrders(DM dm, Vec *g) {
         g, NULL);
 #endif
   }
+  CHKERR VecSetDM(*g, dm);
+
   PetscInfo1(dm, "Create global vector DMMGViaApproxOrders leveldown = %d\n",
              dm->leveldown);
   MoFEMFunctionReturn(0);

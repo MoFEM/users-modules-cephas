@@ -227,10 +227,6 @@ int main(int argc, char *argv[]) {
     option = "";
     CHKERR moab.load_file(mesh_file_name, 0, option);
 
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
-
     // Create MoFEM database and link it to MoAB
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;

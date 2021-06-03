@@ -1071,6 +1071,7 @@ MoFEMErrorCode MetaSpringBC::OpSpringFsMaterial::aSsemble(EntData &row_data) {
     }
   }
 
+  CHKERR VecSetOption(getSNESf(), VEC_IGNORE_NEGATIVE_INDICES, PETSC_TRUE);
   CHKERR VecSetValues(getSNESf(), nbRows, row_indices, &*nF.data().begin(),
                       ADD_VALUES);
 

@@ -677,21 +677,13 @@ int main(int argc, char *argv[]) {
   // Initialise MoFEM
   MoFEM::Core::Initialize(&argc, &argv, param_file, help);
 
-  // Create mesh database
-  moab::Core mb_instance;              // create database
-  moab::Interface &moab = mb_instance; // create interface to database
 
-  // Create moab communicator
-  // Create separate MOAB communicator, it is duplicate of PETSc communicator
-  // This should eliminate potential communication problems between
-  // MOAB and PETSC functions.
-  MPI_Comm moab_comm_world;
-  MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-  if (pcomm == NULL)
-    pcomm = new ParallelComm(&moab, moab_comm_world);
 
   try {
+
+    // Create mesh database
+    moab::Core mb_instance;              // create database
+    moab::Interface &moab = mb_instance; // create interface to database
 
     // Create MoFEM database and link it to MoAB
     MoFEM::Core core(moab);

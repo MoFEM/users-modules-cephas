@@ -74,15 +74,9 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, 1, "*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
-
     const char *option;
-    option = ""; //"PARALLEL=BCAST;";//;DEBUG_IO";
-    BARRIER_PCOMM_RANK_START(pcomm)
+    option = ""; 
     CHKERR moab.load_file(mesh_file_name, 0, option);
-    BARRIER_PCOMM_RANK_END(pcomm)
 
     // Create MoFEM (Joseph) database
     MoFEM::Core core(moab);
