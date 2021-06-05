@@ -262,11 +262,11 @@ MoFEMErrorCode DMMGViaApproxOrdersPushBackCoarseningIS(DM dm, IS is, Mat A,
         CHKERR MatShellSetOperation(*subA, MATOP_SOR,
                                     (void (*)(void))sub_mat_sor);
       } else {
-        #if PETSC_VERSION_GE(3, 8, 0)
-          CHKERR MatCreateSubMatrix(A, is2, is2, MAT_INITIAL_MATRIX, subA);
-        #else
-          CHKERR MatGetSubMatrix(A, is2, is2, MAT_INITIAL_MATRIX, subA);
-        #endif
+#if PETSC_VERSION_GE(3, 8, 0)
+        CHKERR MatCreateSubMatrix(A, is2, is2, MAT_INITIAL_MATRIX, subA);
+#else
+        CHKERR MatGetSubMatrix(A, is2, is2, MAT_INITIAL_MATRIX, subA);
+#endif
       }
     }
     if (dm_field->aO) {
@@ -336,11 +336,11 @@ MoFEMErrorCode DMMGViaApproxOrdersReplaceCoarseningIS(DM dm, IS *is_vec,
             CHKERR AOApplicationToPetscIS(dm_field->aO, is);
           }
           Mat subA;
-          #if PETSC_VERSION_GE(3, 8, 0)
-            CHKERR MatCreateSubMatrix(A, is, is, MAT_INITIAL_MATRIX, &subA);
-          #else
-            CHKERR MatGetSubMatrix(A, is, is, MAT_INITIAL_MATRIX, &subA);
-          #endif
+#if PETSC_VERSION_GE(3, 8, 0)
+          CHKERR MatCreateSubMatrix(A, is, is, MAT_INITIAL_MATRIX, &subA);
+#else
+          CHKERR MatGetSubMatrix(A, is, is, MAT_INITIAL_MATRIX, &subA);
+#endif
           CHKERR PetscObjectReference((PetscObject)subA);
           dm_field->kspOperators[ii] = subA;
           CHKERR MatDestroy(&subA);
@@ -477,7 +477,7 @@ MoFEMErrorCode DMCreateMatrix_MGViaApproxOrders(DM dm, Mat *M) {
   }
 
   CHKERR MatSetDM(*M, dm);
-  
+
   PetscInfo1(dm, "Create Matrix DMMGViaApproxOrders leveldown = %d\n",
              leveldown);
 
@@ -617,8 +617,6 @@ MoFEMErrorCode DMCreateGlobalVector_MGViaApproxOrders(DM dm, Vec *g) {
         g, NULL);
 #endif
   }
-  CHKERR VecSetDM(*g, dm);
-
   PetscInfo1(dm, "Create global vector DMMGViaApproxOrders leveldown = %d\n",
              dm->leveldown);
   MoFEMFunctionReturn(0);
