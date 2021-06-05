@@ -221,8 +221,18 @@ PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij, ArcLengthCtx *arc_ptr)
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
 }
 
+PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
+                               ArcLengthCtx *arc_ptr)
+    : pC(pc, true), shellAij(shell_Aij, true), Aij(aij, true),
+      arcPtrRaw(arc_ptr) {
+  auto comm = PetscObjectComm((PetscObject)aij);
+  kSP = createKSP(comm);
+  ierr = KSPAppendOptionsPrefix(kSP, "arc_length_");
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+}
+
 PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij,
-                               boost::shared_ptr<ArcLengthCtx> &arc_ptr)
+                               boost::shared_ptr<ArcLengthCtx> arc_ptr)
     : shellAij(shell_Aij, true), Aij(aij, true), arcPtrRaw(arc_ptr.get()),
       arcPtr(arc_ptr) {
   auto comm = PetscObjectComm((PetscObject)aij);
@@ -233,7 +243,7 @@ PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij,
 }
 
 PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
-                               boost::shared_ptr<ArcLengthCtx> &arc_ptr)
+                               boost::shared_ptr<ArcLengthCtx> arc_ptr)
     : pC(pc, true), shellAij(shell_Aij, true), Aij(aij, true),
       arcPtrRaw(arc_ptr.get()), arcPtr(arc_ptr) {
   auto comm = PetscObjectComm((PetscObject)aij);
