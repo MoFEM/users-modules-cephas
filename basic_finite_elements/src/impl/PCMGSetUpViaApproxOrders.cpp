@@ -474,9 +474,8 @@ MoFEMErrorCode DMCreateMatrix_MGViaApproxOrders(DM dm, Mat *M) {
     }
     *M = dm_field->kspOperators[dm_field->kspOperators.size() - 1 - leveldown];
     CHKERR PetscObjectReference((PetscObject)*M);
+    CHKERR MatSetDM(*M, dm);
   }
-
-  CHKERR MatSetDM(*M, dm);
 
   PetscInfo1(dm, "Create Matrix DMMGViaApproxOrders leveldown = %d\n",
              leveldown);
@@ -616,6 +615,7 @@ MoFEMErrorCode DMCreateGlobalVector_MGViaApproxOrders(DM dm, Vec *g) {
         dm_field->kspOperators[dm_field->kspOperators.size() - 1 - leveldown],
         g, NULL);
 #endif
+    CHKERR VecSetDM(*g, dm);
   }
   PetscInfo1(dm, "Create global vector DMMGViaApproxOrders leveldown = %d\n",
              dm->leveldown);
