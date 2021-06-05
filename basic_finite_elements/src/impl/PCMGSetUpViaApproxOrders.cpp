@@ -617,8 +617,6 @@ MoFEMErrorCode DMCreateGlobalVector_MGViaApproxOrders(DM dm, Vec *g) {
         g, NULL);
 #endif
   }
-  CHKERR VecSetDM(*g, dm);
-
   PetscInfo1(dm, "Create global vector DMMGViaApproxOrders leveldown = %d\n",
              dm->leveldown);
   MoFEMFunctionReturn(0);
