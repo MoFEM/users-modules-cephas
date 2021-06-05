@@ -536,7 +536,7 @@ int main(int argc, char *argv[]) {
           switch (test_num) {
           case 0:
             // Put here analytical formula which may depend on coordinates
-            temp = init_temp + 1.0;
+            temp = init_temp - 1.0;
             t_thermal_strain(i, j) =
                 thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
             break;
