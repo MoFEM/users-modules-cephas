@@ -237,21 +237,18 @@ struct SimpleContactProblem {
 
     if (range_slave_master_prisms.size() > 0) {
 
-      // C row as Lagrange_mul and col as SPATIAL_POSITION
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         field_name);
 
-      // CT col as Lagrange_mul and row as SPATIAL_POSITION
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         field_name);
 
-      // data
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          lagrange_field_name);
 
@@ -2304,7 +2301,9 @@ struct SimpleContactProblem {
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
 
   /**
    * @brief Function for the simple contact element that sets the user data

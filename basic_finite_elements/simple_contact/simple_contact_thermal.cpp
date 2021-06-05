@@ -345,7 +345,7 @@ int main(int argc, char *argv[]) {
         double x = coords[0];
         double y = coords[1];
         double z = coords[2];
-        coords[2] += shift;
+        coords[2] -= shift;
         CHKERR moab.set_coords(&*nit, 1, coords);
       }
       MoFEMFunctionReturn(0);
@@ -402,8 +402,8 @@ int main(int argc, char *argv[]) {
     if (wave_surf_flag && analytical_input) {
       CHKERR make_wavy_surface(1, wave_dim, wave_length, wave_ampl,
                                mesh_height);
-      CHKERR make_wavy_surface(2, wave_dim, wave_length, -wave_ampl,
-                               mesh_height);
+      // CHKERR make_wavy_surface(2, wave_dim, wave_length, -wave_ampl,
+      //                          mesh_height);
     }
 
     CHKERR m_field.add_field("SPATIAL_POSITION", H1, AINSWORTH_LEGENDRE_BASE, 3,
@@ -531,7 +531,6 @@ int main(int argc, char *argv[]) {
 
           constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
           double temp;
-
           t_thermal_strain(i, j) = 0.0;
 
           switch (test_num) {
@@ -554,7 +553,6 @@ int main(int argc, char *argv[]) {
           default:
             break;
           }
-
           return t_thermal_strain;
         };
 
@@ -665,7 +663,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm);
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
       return fe_lhs_simple_contact;
     };
 
@@ -992,6 +990,9 @@ int main(int argc, char *argv[]) {
       fe_post_proc_simple_contact = make_contact_element();
     }
 
+    std::array<double, 2> nb_gauss_pts;
+    std::array<double, 2> contact_area;
+
     if (!ignore_contact) {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
@@ -1005,9 +1006,6 @@ int main(int argc, char *argv[]) {
 
       CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ELEM",
                                       fe_post_proc_simple_contact);
-
-      std::array<double, 2> nb_gauss_pts;
-      std::array<double, 2> contact_area;
 
       auto get_contact_data = [&](auto vec, std::array<double, 2> &data) {
         MoFEMFunctionBegin;
@@ -1114,20 +1112,28 @@ int main(int argc, char *argv[]) {
         Range tets;
         CHKERR moab.get_entities_by_dimension(0, 3, tets);
         EntityHandle tet = tets.front();
-        std::vector<double> internal_stress, actual_stress;
-        internal_stress.resize(9, 0.);
-        actual_stress.resize(9, 0.);
-        std::vector<double> internal_stress_ref, actual_stress_ref;
-        internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
+        std::array<double, 9> internal_stress, actual_stress;
+        std::array<double, 9> internal_stress_ref, actual_stress_ref;
+        std::array<double, 2> nb_gauss_pts_ref, contact_area_ref;
         switch (test_num) {
         case 1:
+          internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
           actual_stress_ref = {0., 0., 1., 0., 0., 0., 0., 0., 0.};
           break;
         case 2:
+          internal_stress_ref = {5., 5., 5., 0., 0., 0., 0., 0., 0.};
           actual_stress_ref = {0., 5. / 3., 5. / 3., 0., 0., 0., 0., 0., 0.};
           break;
         case 3:
+          actual_stress_ref = {0., 0., -100., 0., 0., 0., 0., 0., 0.};
+          if (strcmp(stress_tag_name, "INTERNAL_STRESS") == 0)
+            internal_stress_ref = {0., 0., -200., 0., 0., 0., 0., 0., 0.};
+          else
+            internal_stress_ref = {0., 0., -100., 0., 0., 0., 0., 0., 0.};
+          break;
         case 4:
+          nb_gauss_pts_ref = {96, 192};
+          contact_area_ref = {0.125, 0.25};
           break;
         default:
           SETERRQ1(PETSC_COMM_SELF, MOFEM_NOT_FOUND, "Test number %d not found",
@@ -1140,25 +1146,24 @@ int main(int argc, char *argv[]) {
                                  internal_stress.data());
         CHKERR moab.tag_get_data(th_actual_stress, &tet, 1,
                                  actual_stress.data());
-        if (test_num == 3 || test_num == 4) {
-          for (int i = 0; i < 9; i++) {
-            cout << actual_stress[i] << " | ";
-          };
-          cout << endl;
+        const double eps = 1e-10;
+        if (test_num == 4) {
+
         } else {
-          const double eps = 1e-12;
-          for (int i = 0; i < 9; i++) {
-            if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
-              SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                       "Wrong component %d of internal stress: should be %g "
-                       "but is %g",
-                       i, internal_stress_ref[i], internal_stress[i]);
-            }
-            if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
-              SETERRQ3(
-                  PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
-                  "Wrong component %d of actual stress: should be %g but is %g",
-                  i, actual_stress_ref[i], actual_stress[i]);
+          if (save_mean_stress) {
+            for (int i = 0; i < 9; i++) {
+              if (std::abs(internal_stress[i] - internal_stress_ref[i]) > eps) {
+                SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                         "Wrong component %d of internal stress: should be %g "
+                         "but is %g",
+                         i, internal_stress_ref[i], internal_stress[i]);
+              }
+              if (std::abs(actual_stress[i] - actual_stress_ref[i]) > eps) {
+                SETERRQ3(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                         "Wrong component %d of actual stress: should be %g "
+                         "but is %g",
+                         i, actual_stress_ref[i], actual_stress[i]);
+              }
             }
           }
         }
