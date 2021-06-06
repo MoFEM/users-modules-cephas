@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     PetscBool test_ale = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
     PetscBool eigen_pos_flag = PETSC_FALSE;
-    PetscBool use_reference_coordinates = PETSC_FALSE;
+    PetscBool use_reference_coordinates = PETSC_TRUE;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
