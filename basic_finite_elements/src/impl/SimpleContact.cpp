@@ -2358,7 +2358,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrange_field_name, bool is_alm,
-    bool is_eigen_pos_field, string eigen_pos_field_name, bool use_reference_coordinates) {
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -2431,7 +2432,8 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrange_field_name, bool is_alm,
-    bool is_eigen_pos_field, string eigen_pos_field_name, bool use_reference_coordinates) {
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -2670,7 +2672,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrange_field_name, bool is_alm,
-    bool is_eigen_pos_field, string eigen_pos_field_name) {
+    bool is_eigen_pos_field, string eigen_pos_field_name, bool use_reference_coordinates) {
   MoFEMFunctionBegin;
   CHKERR setContactOperatorsLhs(
       boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),

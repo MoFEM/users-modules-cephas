@@ -2288,7 +2288,8 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm = false,
       bool is_eigen_pos_field = false,
-      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   MoFEMErrorCode setMasterForceOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,

@@ -531,7 +531,7 @@ add_test(
   -test_ale 1
 )
 add_test(
-  test_jacobian_of_simple_contact_element_ale_aigen_positions
+  test_jacobian_of_simple_contact_element_ale_eigen_positions
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
   -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 4 -my_order_lambda 3 
