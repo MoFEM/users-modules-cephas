@@ -305,6 +305,8 @@ add_test(
   -snes_monitor
 )
 
+### TWO BARS CONTACT THERMAL TEST ###
+
 add_test(
   test_two_bars_contact_analytical_input
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
@@ -370,6 +372,8 @@ add_test(
   -snes_monitor
 )
 
+### WAVY CONTACT THERMAL TEST ###
+
 add_test(
   test_wavy_contact_analytical_input
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
@@ -396,11 +400,11 @@ add_test(
 )
 
 add_test(
-  test_two_bars_contact_eigen_stress
+  test_wavy_contact_eigen_stress
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
-  -my_test_num 3
-  -my_file ${CMAKE_CURRENT_BINARY_DIR}/two_bars_contact_stress.h5m
+  -my_test_num 4
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/wavy_contact_stress.h5m
   -my_order 2
   -my_cn_value 1e2
   -my_alm_flag 0
@@ -417,13 +421,13 @@ add_test(
 )
 
 add_test(
-  test_two_bars_contact_actual_stress_eigen_pos
+  test_wavy_contact_actual_stress_eigen_pos
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
   ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
-  -my_test_num 3
-  -my_file ${CMAKE_CURRENT_BINARY_DIR}/two_bars_contact_stress.h5m
+  -my_test_num 4
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/wavy_contact_stress.h5m
   -my_order 2
-  -my_cn_value 1e4
+  -my_cn_value 1e2
   -my_alm_flag 0
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 0
@@ -436,6 +440,8 @@ add_test(
   -my_eigen_pos_flag 1
   -snes_monitor
 )
+
+### TWO BARS CONTACT ALM THERMAL TEST ###
 
 add_test(
   test_two_bars_contact_analytical_input_alm
@@ -489,6 +495,75 @@ add_test(
   -my_file ${CMAKE_CURRENT_BINARY_DIR}/two_bars_contact_stress.h5m
   -my_order 2
   -my_cn_value 1e4
+  -my_alm_flag 1
+  -my_output_mesh_file med_stress.h5m
+  -my_analytical_input 0
+  -my_stress_tag_name ACTUAL_STRESS
+  -my_save_mean_stress 1
+  -my_deform_flat 0
+  -my_wave_surf 0
+  -my_scale_factor 1.0
+  -my_delete_prisms 1
+  -my_eigen_pos_flag 1
+  -snes_monitor
+)
+
+### WAVY CONTACT ALM THERMAL TEST ###
+
+add_test(
+  test_wavy_contact_analytical_input_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 4
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/examples/wavy_contact_thermal.cub
+  -my_order 2
+  -my_cn_value 1e2
+  -my_alm_flag 1
+  -my_output_mesh_file wavy_contact_stress.h5m
+  -my_analytical_input 1
+  -my_thermal_expansion_coef 0.0025
+  -my_save_mean_stress 0
+  -my_deform_flat 0
+  -my_wave_surf 1
+  -my_wave_dim 2
+  -my_wave_length 2.0
+  -my_wave_ampl 0.01
+  -my_mesh_height 1.0
+  -my_scale_factor 1.0
+  -my_delete_prisms 0
+  -my_eigen_pos_flag 0
+  -snes_monitor
+)
+
+add_test(
+  test_wavy_contact_eigen_stress_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 4
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/wavy_contact_stress.h5m
+  -my_order 2
+  -my_cn_value 1e2
+  -my_alm_flag 1
+  -my_output_mesh_file med_stress.h5m
+  -my_analytical_input 0
+  -my_stress_tag_name INTERNAL_STRESS
+  -my_save_mean_stress 1
+  -my_deform_flat 0
+  -my_wave_surf 0
+  -my_scale_factor 1.0
+  -my_delete_prisms 1
+  -my_eigen_pos_flag 0
+  -snes_monitor
+)
+
+add_test(
+  test_wavy_contact_actual_stress_eigen_pos_alm
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/simple_contact_thermal
+  -my_test_num 4
+  -my_file ${CMAKE_CURRENT_BINARY_DIR}/wavy_contact_stress.h5m
+  -my_order 2
+  -my_cn_value 1e2
   -my_alm_flag 1
   -my_output_mesh_file med_stress.h5m
   -my_analytical_input 0

@@ -536,7 +536,7 @@ int main(int argc, char *argv[]) {
           switch (test_num) {
           case 0:
             // Put here analytical formula which may depend on coordinates
-            temp = init_temp + 1.0;
+            temp = init_temp - 1.0;
             t_thermal_strain(i, j) =
                 thermal_expansion_coef * (temp - init_temp) * t_kd(i, j);
             break;
@@ -1148,7 +1148,30 @@ int main(int argc, char *argv[]) {
                                  actual_stress.data());
         const double eps = 1e-10;
         if (test_num == 4) {
-
+          if (std::abs(nb_gauss_pts_ref[0] - nb_gauss_pts[0]) > eps) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                     "Wrong number of active contact gauss pts: should be %d "
+                     "but is %d",
+                     (int)nb_gauss_pts_ref[0], (int)nb_gauss_pts[0]);
+          }
+          if (std::abs(nb_gauss_pts_ref[1] - nb_gauss_pts[1]) > eps) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                     "Wrong total number of contact gauss pts: should be %d "
+                     "but is %d",
+                     (int)nb_gauss_pts_ref[1], (int)nb_gauss_pts[1]);
+          }
+          if (std::abs(contact_area_ref[0] - contact_area[0]) > eps) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                     "Wrong active contact area: should be %g "
+                     "but is %g",
+                     contact_area_ref[0], contact_area[0]);
+          }
+          if (std::abs(contact_area_ref[1] - contact_area[1]) > eps) {
+            SETERRQ2(PETSC_COMM_SELF, MOFEM_ATOM_TEST_INVALID,
+                     "Wrong potential contact area: should be %g "
+                     "but is %g",
+                     contact_area_ref[1], contact_area[1]);
+          }
         } else {
           if (save_mean_stress) {
             for (int i = 0; i < 9; i++) {
