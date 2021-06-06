@@ -643,7 +643,7 @@ int main(int argc, char *argv[]) {
       }
       contact_problem->setContactOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS", true);
       return fe_rhs_simple_contact;
     };
 
@@ -653,7 +653,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsRhs(
           fe_rhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS", true);
       return fe_rhs_simple_contact;
     };
 
@@ -663,7 +663,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setMasterForceOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS", true);
       return fe_lhs_simple_contact;
     };
 
@@ -673,7 +673,7 @@ int main(int argc, char *argv[]) {
       auto common_data_simple_contact = make_contact_common_data();
       contact_problem->setContactOperatorsLhs(
           fe_lhs_simple_contact, common_data_simple_contact, "SPATIAL_POSITION",
-          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS");
+          "LAGMULT", is_alm, eigen_pos_flag, "EIGEN_POSITIONS", true);
       return fe_lhs_simple_contact;
     };
 
@@ -997,7 +997,7 @@ int main(int argc, char *argv[]) {
       contact_problem->setContactOperatorsForPostProc(
           fe_post_proc_simple_contact, common_data_simple_contact, m_field,
           "SPATIAL_POSITION", "LAGMULT", mb_post, alm_flag, eigen_pos_flag,
-          "EIGEN_POSITIONS");
+          "EIGEN_POSITIONS", true);
 
       mb_post.delete_mesh();
 
