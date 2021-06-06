@@ -289,11 +289,11 @@ struct SimpleContactProblem {
    * @return                            Error code
    *
    */
-  MoFEMErrorCode addContactElementALE(const string element_name,
-                                      const string field_name,
-                                      const string mesh_node_field_name,
-                                      const string lagrange_field_name,
-                                      Range &range_slave_master_prisms) {
+  MoFEMErrorCode addContactElementALE(
+      const string element_name, const string field_name,
+      const string mesh_node_field_name, const string lagrange_field_name,
+      Range &range_slave_master_prisms, bool eigen_pos_flag = false,
+      const string eigen_node_field_name = "EIGEN_SPATIAL_POSITIONS") {
     MoFEMFunctionBegin;
 
     CHKERR mField.add_finite_element(element_name, MF_ZERO);
@@ -317,6 +317,10 @@ struct SimpleContactProblem {
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          lagrange_field_name);
+
+      if (eigen_pos_flag)
+        CHKERR mField.modify_finite_element_add_field_data(
+            element_name, eigen_node_field_name);
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
@@ -2239,7 +2243,8 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm = false,
       bool is_eigen_pos_field = false,
-      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   /**
    * @brief Function for the simple contact element for C function or ALM
@@ -2268,7 +2273,8 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm = false,
       bool is_eigen_pos_field = false,
-      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs
@@ -2289,21 +2295,24 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm = false,
       bool is_eigen_pos_field = false,
-      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm = false,
       bool is_eigen_pos_field = false,
-      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       string field_name, string lagrange_field_name, bool is_alm = false,
       bool is_eigen_pos_field = false,
-      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   /**
    * @brief Function for the simple contact element that sets the user data
@@ -2335,7 +2344,8 @@ struct SimpleContactProblem {
       moab::Interface &moab_out, bool alm_flag = false,
       bool is_eigen_pos_field = false,
       string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
-      StateTagSide state_tag_side = NO_TAG);
+      StateTagSide state_tag_side = NO_TAG,
+      bool use_reference_coordinates = false);
 
   /**
    * @brief Calculate tangent operator for contact force for change of
@@ -3501,7 +3511,8 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       const string field_name, const string mesh_node_field_name,
-      const string lagrange_field_name);
+      const string lagrange_field_name, bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
 
   struct OpGetGaussPtsState : public ContactOp {
 
