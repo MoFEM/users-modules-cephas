@@ -2672,7 +2672,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrange_field_name, bool is_alm,
-    bool is_eigen_pos_field, string eigen_pos_field_name, bool use_reference_coordinates) {
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
   CHKERR setContactOperatorsLhs(
       boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),
@@ -2701,7 +2702,8 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     string field_name, string lagrange_field_name, bool is_alm,
-    bool is_eigen_pos_field, string eigen_pos_field_name, bool use_reference_coordinates) {
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   CHKERR setMasterForceOperatorsLhs(
@@ -2730,8 +2732,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
     moab::Interface &moab_out, bool alm_flag, bool is_eigen_pos_field,
-    string eigen_pos_field_name, StateTagSide state_tag_side,
-    bool use_reference_coordinates) {
+    string eigen_pos_field_name, bool use_reference_coordinates,
+    StateTagSide state_tag_side) {
   MoFEMFunctionBegin;
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
@@ -4458,7 +4460,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
   //                                       common_data_simple_contact));
 
   // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
-  //     new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
+  //     new OpGetPositionAtGaussPtsSlave(field_name,
+  //     common_data_simple_contact));
 
   // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
   //     new OpGetGapSlave(field_name, common_data_simple_contact));

@@ -2345,8 +2345,8 @@ struct SimpleContactProblem {
       moab::Interface &moab_out, bool alm_flag = false,
       bool is_eigen_pos_field = false,
       string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
-      StateTagSide state_tag_side = NO_TAG,
-      bool use_reference_coordinates = false);
+      bool use_reference_coordinates = false,
+      StateTagSide state_tag_side = NO_TAG);
 
   /**
    * @brief Calculate tangent operator for contact force for change of
