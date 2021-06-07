@@ -69,7 +69,7 @@ include(${MoFEM_INSTALL_DIR}/lib/cmake/mofem/ExportFile.cmake)
 
 set(CMAKE_C_COMPILER ${MoFEM_CMAKE_C_COMPILER})
 set(CMAKE_CXX_COMPILER ${MoFEM_CMAKE_CXX_COMPILER})
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add options unique to compilation with Spack
