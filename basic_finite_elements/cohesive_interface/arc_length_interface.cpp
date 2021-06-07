@@ -170,7 +170,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps\n"
+                                 "-pc_factor_mat_solver_type mumps\n"
                                  "-ksp_monitor \n"
                                  "-ksp_atol 1e-10 \n"
                                  "-ksp_rtol 1e-10 \n"
@@ -245,11 +245,8 @@ int main(int argc, char *argv[]) {
 
     // Read mesh to MOAB
     const char *option;
-    option = ""; //"PARALLEL=BCAST;";//;DEBUG_IO";
+    option = ""; 
     CHKERR moab.load_file(mesh_file_name, 0, option);
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     // Data stored on mesh for restart
     Tag th_step_size, th_step;
@@ -553,7 +550,7 @@ int main(int argc, char *argv[]) {
     // partition
     CHKERR prb_mng_ptr->partitionProblem("ELASTIC_MECHANICS");
     CHKERR prb_mng_ptr->partitionFiniteElements("ELASTIC_MECHANICS", false, 0,
-                                                pcomm->size());
+                                                m_field.get_comm_size());
     // what are ghost nodes, see Petsc Manual
     CHKERR prb_mng_ptr->partitionGhostDofs("ELASTIC_MECHANICS");
 

@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type gmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-ksp_monitor\n";
 
   string param_file = "param_file.petsc";
@@ -47,23 +47,25 @@ int main(int argc, char *argv[]) {
       file.close();
     }
   }
+  
   MoFEM::Core::Initialize(&argc, &argv, param_file.c_str(), help);
 
-  // Create mesh database
-  moab::Core mb_instance;              // create database
-  moab::Interface &moab = mb_instance; // create interface to database
-
-  // Create moab communicator
-  // Create separate MOAB communicator, it is duplicate of PETSc communicator.
-  // NOTE That this should eliminate potential communication problems between
-  // MOAB and PETSC functions.
-  MPI_Comm moab_comm_world;
-  MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-  if (pcomm == NULL)
-    pcomm = new ParallelComm(&moab, moab_comm_world);
-
   try {
+
+    // Create mesh database
+    moab::Core mb_instance;              // create database
+    moab::Interface &moab = mb_instance; // create interface to database
+
+    // Create moab communicator
+    // Create separate MOAB communicator, it is duplicate of PETSc communicator.
+    // NOTE That this should eliminate potential communication problems between
+    // MOAB and PETSC functions.
+    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto moab_comm_wrap =
+        boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
+    if (pcomm == NULL)
+      pcomm = new ParallelComm(&moab, moab_comm_wrap->get_comm());
+
     // Get command line options
     char mesh_file_name[255];
     PetscBool flg_file;

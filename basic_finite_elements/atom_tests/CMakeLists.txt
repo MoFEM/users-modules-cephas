@@ -530,3 +530,22 @@ add_test(
   -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 4 -my_order_lambda 3 
   -test_ale 1
 )
+add_test(
+  test_jacobian_of_simple_contact_element_ale_eigen_positions
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 4 -my_order_lambda 3 
+  -test_ale 1 -my_eigen_pos_flag 1  -my_use_reference_coordinates 0
+)
+add_test(
+  test_jacobian_of_simple_contact_element_eigen
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 3 -my_order_lambda 3 -my_eigen_pos_flag 1
+)
+add_test(
+  test_jacobian_of_simple_contact_element_alm_eigen
+  ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1 
+  ${CMAKE_CURRENT_BINARY_DIR}/test_jacobian_of_simple_contact_element
+  -my_file 2tets_contact.cub -my_cn_value 1e2 -my_order 3 -my_order_lambda 3 -alm_flag 1 -my_eigen_pos_flag 1
+)

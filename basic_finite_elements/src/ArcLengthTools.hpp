@@ -76,6 +76,8 @@
  */
 struct ArcLengthCtx {
 
+  virtual ~ArcLengthCtx() = default;
+
   MoFEM::Interface &mField;
 
   double s;     ///< arc length radius
@@ -220,6 +222,7 @@ struct ArcLengthMatShell {
 
   ArcLengthMatShell(Mat aij, boost::shared_ptr<ArcLengthCtx> arc_ptr,
                     string problem_name);
+  virtual ~ArcLengthMatShell() = default;
 
   /// \deprecated use constructor with shared_ptr
   DEPRECATED ArcLengthMatShell(Mat aij, ArcLengthCtx *arc_ptr_raw,
@@ -249,14 +252,18 @@ struct PCArcLengthCtx {
   SmartPetscObj<Mat> Aij;
 
   PCArcLengthCtx(Mat shell_Aij, Mat aij,
-                 boost::shared_ptr<ArcLengthCtx> &arc_ptr);
+                 boost::shared_ptr<ArcLengthCtx> arc_ptr);
 
   PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
-                 boost::shared_ptr<ArcLengthCtx> &arc_ptr);
+                 boost::shared_ptr<ArcLengthCtx> arc_ptr);
 
   ArcLengthCtx *arcPtrRaw; // this is for back compatibility
+
   /// \deprecated use with shared_ptr
   DEPRECATED PCArcLengthCtx(Mat shell_Aij, Mat aij, ArcLengthCtx *arc_ptr_raw);
+  /// \deprecated use with shared_ptr
+  DEPRECATED PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
+                            ArcLengthCtx *arc_ptr_raw);
 
   friend MoFEMErrorCode PCApplyArcLength(PC pc, Vec pc_f, Vec pc_x);
   friend MoFEMErrorCode PCSetupArcLength(PC pc);

@@ -537,17 +537,19 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm =
+        boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range prims;
   CHKERR postProcMesh.get_entities_by_type(0, MBPRISM, prims, false);
   // std::cerr << "total prims size " << prims.size() << std::endl;
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   Range::iterator pit = prims.begin();
   for (; pit != prims.end(); pit++) {
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
@@ -830,16 +832,17 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range tris;
   CHKERR postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   Range::iterator pit = tris.begin();
   for (; pit != tris.end(); pit++) {
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
@@ -1080,16 +1083,17 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range edges;
   CHKERR postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   auto set_edges_rank = [&](const auto rank, const auto &edges) {
     std::vector<EntityHandle> ranks(edges.size(), rank);
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), edges,

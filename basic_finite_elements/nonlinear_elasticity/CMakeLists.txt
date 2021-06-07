@@ -87,7 +87,7 @@ if(ADOL-C_LIBRARY)
       ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
       ${CMAKE_CURRENT_BINARY_DIR}/stability
       -my_file ${CMAKE_CURRENT_SOURCE_DIR}/rod.h5m
-      -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps 
+      -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps 
       -ksp_monitor -ksp_atol 1e-12 -ksp_rtol 1e-12
       -st_ksp_type preonly -st_pc_type cholesky -st_pc_factor_mat_solver_package mumps
       -eps_monitor -eps_tol 1e-12

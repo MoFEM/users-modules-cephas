@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-ksp_monitor \n";
 
   string param_file = "param_file.petsc";
@@ -63,10 +63,6 @@ int main(int argc, char *argv[]) {
       SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_FOUND,
               "*** ERROR -my_file (MESH FILE NEEDED)");
     }
-
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     const char *option;
     option = ""; //"PARALLEL=BCAST;";//;DEBUG_IO";
@@ -237,7 +233,7 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector(
         "THERMAL_PROBLEM", ROW, T, INSERT_VALUES, SCATTER_REVERSE);
 
-    if (pcomm->rank() == 0) {
+    if (m_field.get_comm_rank() == 0) {
       CHKERR moab.write_file("solution.h5m");
     }
 
@@ -247,7 +243,7 @@ int main(int argc, char *argv[]) {
     ent_method_on_10nodeTet.setNodes = false;
     CHKERR m_field.loop_dofs("TEMP", ent_method_on_10nodeTet);
 
-    if (pcomm->rank() == 0) {
+    if (m_field.get_comm_rank() == 0) {
       EntityHandle out_meshset;
       CHKERR moab.create_meshset(MESHSET_SET, out_meshset);
       CHKERR m_field.get_problem_finite_elements_entities(
