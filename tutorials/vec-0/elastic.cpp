@@ -195,6 +195,49 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
 
+  auto get_ents_on_mesh_skin = [&]() {
+    Range boundary_entities;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+      if (entity_name.compare(0, 2, "BC") == 0) {
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   boundary_entities, true);
+      }
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
+
+    return boundary_entities;
+  };
+
+  auto mark_boundary_dofs = [&](Range &&skin_edges) {
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+                              skin_edges, *marker_ptr);
+    return marker_ptr;
+  };
+
+  auto remove_dofs_from_problem = [&](Range &&skin_edges) {
+    MoFEMFunctionBegin;
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    CHKERR problem_manager->removeDofsOnEntities(
+        simpleInterface->getProblemName(), "P_IMAG", skin_edges, 0, 1);
+    MoFEMFunctionReturn(0);
+  };
+
+  // Get global local vector of marked DOFs. Is global, since is set for all
+  // DOFs on processor. Is local since only DOFs on processor are in the
+  // vector. To access DOFs use local indices.
+  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
+
+  MoFEMFunctionReturn(0);
+}
+
   auto fix_disp = [&](const std::string blockset_name) {
     Range fix_ents;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {

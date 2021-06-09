@@ -1,6 +1,6 @@
 /*! \page poisson_tut4 A nonlinear Poisson equation
 
-In this tutorial, we show how to solve nonlinear Poisson equation.  Note that
+In this tutorial, we show how to solve a nonlinear Poisson equation.  Note that the 
 structure of the main program remains almost unchanged compared to linear
 analysis as shown in the first Poisson tutorial, i.e. \ref poisson_tut1.
 
@@ -34,7 +34,7 @@ Note that second class has to be the exact derivative of \f$A(u)\f$.
 
 \subsection poisson_tut4_linearization Linearization
 
-With that at hand we can express equation in the weak form, where residuals are
+With that at hand we can express the equation in the weak form, where residuals are
 \f[
 \mathbf{r}=
 \left[
@@ -50,7 +50,7 @@ r_g
 \end{array}
 \right.,\quad \forall v,\tau,\; u,v \in H^1(\Omega),\;\tau,\lambda \in H^1(\partial\Omega).
 \f]
-where \f$\overline{u}\f$ is given function on boundary, \f$f\f$ is a source
+where \f$\overline{u}\f$ is a given function on the boundary, \f$f\f$ is a source
 term, \f$u,\lambda\f$ are unknown  functions and \f$v,\tau\f$ are test
 functions. This notation, suitable for problems with many terms in the
 variational formulations, requires some explanation. First, we use the shorthand
@@ -134,7 +134,7 @@ where
 
 \subsection poisson_tut4_analytical_solution Analytical solution
 
-To validate correctness of implementation, we first presume exact solution to be
+To validate correctness of implementation, we first presume the exact solution to be
 polynomial, such that it can be precisely represented by finite element
 approximation base, see function
 \code
@@ -170,12 +170,12 @@ struct ExactLaplacianFunction {
   }
 };
 \endcode
-Note that source term has a complex form and is obtained from the following formula
+Note that the source term has a complex form and is obtained from the following formula
 \f[
 f = \nabla \cdot \left( A(u)\nabla u \right)
 \f]
-For 3rd polynomial order, as above, results can be obtained after tedious
-calculations, to avoid that you can use symbolic derivations from Mathematica, Maple,
+For 3rd order polynomials, as above, results can be obtained after tedious
+calculations, to avoid this you can use symbolic derivations from Mathematica, Maple,
 Matlab or free and open alternative <a href=http://maxima.sourceforge.net>Maxima</a>.
 
 \section poisson_tut4_code_dissection Code dissection
