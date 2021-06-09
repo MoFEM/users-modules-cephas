@@ -38,6 +38,7 @@ struct PostProcStress
   const bool fieldDisp;
   const bool replaceNonANumberByMaxValue;
   const double maxVal;
+  const bool printCauchy;
 
   PostProcStress(moab::Interface &post_proc_mesh,
                  std::vector<EntityHandle> &map_gauss_pts,
@@ -46,13 +47,14 @@ struct PostProcStress
                  PostProcCommonOnRefMesh::CommonDataForVolume &common_data,
                  const bool field_disp = false,
                  const bool replace_nonanumber_by_max_value = false,
-                 const double max_val = 1e16)
+                 const double max_val = 1e16,
+                 const bool print_cauchy_stress = false)
       : MoFEM::VolumeElementForcesAndSourcesCore::UserDataOperator(
             field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
         postProcMesh(post_proc_mesh), mapGaussPts(map_gauss_pts), dAta(data),
         commonData(common_data), fieldDisp(field_disp),
         replaceNonANumberByMaxValue(replace_nonanumber_by_max_value),
-        maxVal(max_val) {}
+        maxVal(max_val), printCauchy(print_cauchy_stress) {}
 
   NonlinearElasticElement::CommonData nonLinearElementCommonData;
 
@@ -89,13 +91,20 @@ struct PostProcStress
     int tag_length = 9;
     double def_VAL[tag_length];
     bzero(def_VAL, tag_length * sizeof(double));
-    Tag th_piola1, th_energy;
+    Tag th_piola1, th_energy, th_cauchy;
     CHKERR postProcMesh.tag_get_handle(tag_name_piola1.c_str(), tag_length,
                                        MB_TYPE_DOUBLE, th_piola1,
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
     CHKERR postProcMesh.tag_get_handle(tag_name_energy.c_str(), 1,
                                        MB_TYPE_DOUBLE, th_energy,
                                        MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+
+    if (printCauchy) {
+      string tag_name_cauchy = "MED_" + dof_ptr->getName() + "_CAUCHY_STRESS";
+      CHKERR postProcMesh.tag_get_handle(tag_name_cauchy.c_str(), tag_length,
+                                         MB_TYPE_DOUBLE, th_cauchy,
+                                         MB_TAG_CREAT | MB_TAG_SPARSE, def_VAL);
+    }
 
     int nb_gauss_pts = data.getN().size1();
     if (mapGaussPts.size() != (unsigned int)nb_gauss_pts) {
@@ -156,6 +165,14 @@ struct PostProcStress
                                        &dAta.materialDoublePtr->P(0, 0));
       CHKERR postProcMesh.tag_set_data(th_energy, &mapGaussPts[gg], 1,
                                        &dAta.materialDoublePtr->eNergy);
+      if (printCauchy) {
+        dAta.materialDoublePtr->sigmaCauchy.resize(3, 3);
+        CHKERR dAta.materialDoublePtr->calculateCauchyStress(
+            dAta, getNumeredEntFiniteElementPtr());
+        CHKERR postProcMesh.tag_set_data(
+            th_cauchy, &mapGaussPts[gg], 1,
+            &dAta.materialDoublePtr->sigmaCauchy(0, 0));
+      }
     }
 
     if (replaceNonANumberByMaxValue) {

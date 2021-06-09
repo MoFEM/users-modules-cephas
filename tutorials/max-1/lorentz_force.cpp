@@ -56,8 +56,11 @@ int main(int argc, char *argv[]) {
     moab::Interface &moab = mb_instance;
 
     ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto moab_comm_wrap =
+        boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
+      pcomm =
+          new ParallelComm(&moab, moab_comm_wrap->get_comm());
 
     // Read parameters from line command
     PetscBool flg_file;
@@ -119,7 +122,7 @@ int main(int argc, char *argv[]) {
     };
 
     const double dist = 1e-12;             // Distance for tree search
-    const int nb_random_points = 100;      // number of points
+    const int nb_random_points = 5000;     // number of points
     const int nb_steps = 10000;            // number of time steps
     const int mod_step = 10;               // save every step
     const double dt = 1e-5;                // Time step size
@@ -262,6 +265,9 @@ int main(int argc, char *argv[]) {
       return false;
     };
 
+    auto cache_ptr = boost::make_shared<CacheTuple>();
+    CHKERR m_field.cache_problem_entities(prb_ptr->getName(), cache_ptr);
+
     auto calc_position = [&]() {
       auto t_p = get_t_coords();
       auto t_init_p = get_t_init_coords();
@@ -281,7 +287,8 @@ int main(int argc, char *argv[]) {
 
         CHKERR field_eval_ptr->evalFEAtThePoint3D(
             point.data(), dist, prb_ptr->getName(), "MAGNETIC", data_at_pts,
-            m_field.get_comm_rank(), m_field.get_comm_rank(), MF_EXIST, QUIET);
+            m_field.get_comm_rank(), m_field.get_comm_rank(), cache_ptr,
+            MF_EXIST, QUIET);
 
         FTensor::Tensor1<double, 3> t_B;
 

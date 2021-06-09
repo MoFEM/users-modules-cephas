@@ -18,7 +18,7 @@ block 1 attribute index 1 1e1 	#young modulus
 block 1 attribute index 2 0.25 #poisson ratio
 
 block 2 volume 1
-block 2 name "BODY_FORCES")
+block 2 name "BODY_FORCES"
 block 2 attribute count 4
 block 2 attribute index 1 0.01		#material density
 block 2 attribute index 2 0.		#constant acceleration in x-direction

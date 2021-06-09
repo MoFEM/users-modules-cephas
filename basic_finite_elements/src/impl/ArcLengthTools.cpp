@@ -221,8 +221,18 @@ PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij, ArcLengthCtx *arc_ptr)
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
 }
 
+PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
+                               ArcLengthCtx *arc_ptr)
+    : pC(pc, true), shellAij(shell_Aij, true), Aij(aij, true),
+      arcPtrRaw(arc_ptr) {
+  auto comm = PetscObjectComm((PetscObject)aij);
+  kSP = createKSP(comm);
+  ierr = KSPAppendOptionsPrefix(kSP, "arc_length_");
+  CHKERRABORT(PETSC_COMM_WORLD, ierr);
+}
+
 PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij,
-                               boost::shared_ptr<ArcLengthCtx> &arc_ptr)
+                               boost::shared_ptr<ArcLengthCtx> arc_ptr)
     : shellAij(shell_Aij, true), Aij(aij, true), arcPtrRaw(arc_ptr.get()),
       arcPtr(arc_ptr) {
   auto comm = PetscObjectComm((PetscObject)aij);
@@ -233,7 +243,7 @@ PCArcLengthCtx::PCArcLengthCtx(Mat shell_Aij, Mat aij,
 }
 
 PCArcLengthCtx::PCArcLengthCtx(PC pc, Mat shell_Aij, Mat aij,
-                               boost::shared_ptr<ArcLengthCtx> &arc_ptr)
+                               boost::shared_ptr<ArcLengthCtx> arc_ptr)
     : pC(pc, true), shellAij(shell_Aij, true), Aij(aij, true),
       arcPtrRaw(arc_ptr.get()), arcPtr(arc_ptr) {
   auto comm = PetscObjectComm((PetscObject)aij);
@@ -343,9 +353,11 @@ MoFEMErrorCode PCSetupArcLength(PC pc) {
   CHKERR PCSetOperators(ctx->pC, ctx->Aij, ctx->Aij);
   CHKERR PCSetFromOptions(ctx->pC);
   CHKERR PCSetUp(ctx->pC);
-  // SetUp PC KSP solver
-  // CHKERR KSPSetType(ctx->kSP, KSPPREONLY);
+#if PETSC_VERSION_LT(3, 12, 0)
   CHKERR KSPSetTabLevel(ctx->kSP, 3);
+#else
+  CHKERR PetscObjectSetTabLevel((PetscObject)ctx->kSP, 3);
+#endif
   CHKERR KSPSetFromOptions(ctx->kSP);
   CHKERR KSPSetOperators(ctx->kSP, ctx->Aij, ctx->Aij);
   CHKERR KSPSetPC(ctx->kSP, ctx->pC);

@@ -82,7 +82,8 @@ private:
 MoFEMErrorCode Example::createCommonData() {
   MoFEMFunctionBegin;
 
-  auto set_matrial_stiffens = [&]() {
+  //! [Calculate elasticity tensor]
+  auto set_material_stiffness = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     FTensor::Index<'j', SPACE_DIM> j;
     FTensor::Index<'k', SPACE_DIM> k;
@@ -99,7 +100,9 @@ MoFEMErrorCode Example::createCommonData() {
                           t_kd(i, j) * t_kd(k, l);
     MoFEMFunctionReturn(0);
   };
+  //! [Calculate elasticity tensor]
 
+  //! [Define gravity vector]
   auto set_body_force = [&]() {
     FTensor::Index<'i', SPACE_DIM> i;
     MoFEMFunctionBegin;
@@ -123,7 +126,9 @@ MoFEMErrorCode Example::createCommonData() {
    
     MoFEMFunctionReturn(0);
   };
+  //! [Define gravity vector]
 
+  //! [Initialise containers for commonData]
   matGradPtr = boost::make_shared<MatrixDouble>();
   matStrainPtr = boost::make_shared<MatrixDouble>();
   matStressPtr = boost::make_shared<MatrixDouble>();
@@ -138,8 +143,9 @@ MoFEMErrorCode Example::createCommonData() {
 
 
   bodyForceMatPtr->resize(SPACE_DIM, 1);
+  //! [Initialise containers for commonData]
 
-  CHKERR set_matrial_stiffens();
+  CHKERR set_material_stiffness();
   CHKERR set_body_force();
 
   MoFEMFunctionReturn(0);
@@ -357,7 +363,7 @@ MoFEMErrorCode Example::outputResults() {
                              PETSC_NULL);
 
   pipeline_mng->getDomainLhsFE().reset();
-  auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
+  auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
     post_proc_fe->getOpPtrVector().push_back(
@@ -392,7 +398,7 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getDomainRhsFE().reset();
   pipeline_mng->getDomainLhsFE().reset();
 
-  if (SPACE_DIM) {
+  if (SPACE_DIM == 2) {
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
     pipeline_mng->getOpDomainRhsPipeline().push_back(

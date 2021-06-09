@@ -14,6 +14,9 @@ and mass matrix is implemented in \ref ConvectiveMassElement.
 
 \section dynamic_elastic_bar Dynamic analysis of prismatic 3d bar
 
+You can run this analysis in Jupyter notebook. First follow instruction here \ref docker_jupyterhub. Then select file in 
+\em um_view/linear_elasticity/dam_example.ipynb
+
 \subsection dynamic_elastic_bar_input_file Input files
 
 Following description and line commands are in presumption that user parent
@@ -139,14 +142,15 @@ users_modules/basic_finite_elements/nonlinear_elasticity/examples/dam in build d
 \code
 mpirun -np 4 ../../nonlinear_dynamics \
 -my_file dam.h5m \
--ts_dt 0.002 \
+-ts_dt 0.2 \
+-ts_alpha_radius 0.5 \
 -ts_final_time 8 -ts_max_snes_failures -1 \
 -my_time_data_file dam_history.in \
 -my_accelerogram accelerogram.in \
 -my_solve_at_time_zero 1 \
 -my_output_prt -1 -my_max_post_proc_ref_level 0 \
 -my_disp_order 2 \
--default_material HOOKE -is_linear -snes_lag_jacobian -2 \
+-default_material HOOKE -is_linear -snes_lag_jacobian 1 \
 -elastic_material_configuration block_data.in 2>&1 | tee log
 \endcode
 
@@ -168,7 +172,7 @@ User can set material parameters or approximation order to each block defined in
 
 \subsection journal_dam Journal file
 
-Mesh journal mesh file is shown below. Please note that at the end of the file boundary conditions,
+Mesh journal mesh file is included below. Please note that at the end of the file boundary conditions,
 blocks with elastic matrix, damping model and body forces are defined.
 
 dam.jou

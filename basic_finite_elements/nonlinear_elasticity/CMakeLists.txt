@@ -26,6 +26,8 @@ if(ADOL-C_LIBRARY)
   bfe_copy_and_install("README" "${permissions_default}")
   bfe_copy_and_install("*.h5m" "${permissions_default}")
   bfe_copy_and_install("*.txt" "${permissions_default}")
+  bfe_copy_and_install("*.ipynb" "${permissions_execute}")
+  bfe_copy_and_install("*.md" "${permissions_execute}")
 
   file(
     COPY ${CMAKE_CURRENT_SOURCE_DIR}/do_vtk.sh.in
@@ -77,7 +79,7 @@ if(ADOL-C_LIBRARY)
     -my_max_post_proc_ref_level 0 -my_disp_order 3 -my_vel_order 3
   )
 
-  if(SLEPC_LIBRARY)
+  if(SLEPC_FOUND)
 
     bfe_build_and_install(stability ${CMAKE_CURRENT_SOURCE_DIR}/stability.cpp)
   
@@ -85,14 +87,14 @@ if(ADOL-C_LIBRARY)
       ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2 
       ${CMAKE_CURRENT_BINARY_DIR}/stability
       -my_file ${CMAKE_CURRENT_SOURCE_DIR}/rod.h5m
-      -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps 
+      -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps 
       -ksp_monitor -ksp_atol 1e-12 -ksp_rtol 1e-12
       -st_ksp_type preonly -st_pc_type cholesky -st_pc_factor_mat_solver_package mumps
       -eps_monitor -eps_tol 1e-12
       -eps_nev 2 -eps_ncv 10  -eps_smalest_real -eps_gen_no_hermitian
       -my_max_post_proc_ref_level 0 -st_ksp_atol 1e-12 -st_ksp_rtol 1e-12 -my_order 2)
 
-  endif(SLEPC_LIBRARY)
+  endif(SLEPC_FOUND)
 
 endif(ADOL-C_LIBRARY)
 

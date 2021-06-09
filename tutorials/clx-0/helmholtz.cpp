@@ -51,7 +51,7 @@ struct Example {
 private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -64,6 +64,7 @@ private:
   MatrixDouble invJac;
 };
 
+//! [run problem]
 MoFEMErrorCode Example::runProblem() {
   MoFEMFunctionBegin;
   CHKERR readMesh();
@@ -75,6 +76,7 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
+//! [run problem]
 
 //! [Read mesh]
 MoFEMErrorCode Example::readMesh() {
@@ -92,18 +94,18 @@ MoFEMErrorCode Example::readMesh() {
 MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   // Add field
-  CHKERR simpleInterface->addDomainField("U_REAL", H1,
+  CHKERR simpleInterface->addDomainField("P_REAL", H1,
                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addDomainField("U_IMAG", H1,
+  CHKERR simpleInterface->addDomainField("P_IMAG", H1,
                                          AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField("U_REAL", H1,
+  CHKERR simpleInterface->addBoundaryField("P_REAL", H1,
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField("U_IMAG", H1,
+  CHKERR simpleInterface->addBoundaryField("P_IMAG", H1,
                                            AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
   int order = 6;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder("U_REAL", order);
-  CHKERR simpleInterface->setFieldOrder("U_IMAG", order);
+  CHKERR simpleInterface->setFieldOrder("P_REAL", order);
+  CHKERR simpleInterface->setFieldOrder("P_IMAG", order);
   CHKERR simpleInterface->setUp();
   MoFEMFunctionReturn(0);
 }
@@ -133,7 +135,7 @@ MoFEMErrorCode Example::boundaryCondition() {
 
   auto mark_boundary_dofs = [&](Range &&skin_edges) {
     auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<bool>>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
     problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
                               skin_edges, *marker_ptr);
     return marker_ptr;
@@ -143,7 +145,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     MoFEMFunctionBegin;
     auto problem_manager = mField.getInterface<ProblemsManager>();
     CHKERR problem_manager->removeDofsOnEntities(
-        simpleInterface->getProblemName(), "U_IMAG", skin_edges, 0, 1);
+        simpleInterface->getProblemName(), "P_IMAG", skin_edges, 0, 1);
     MoFEMFunctionReturn(0);
   };
 
@@ -179,21 +181,20 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpSetInvJacH1ForFace(invJac));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetBc("U_REAL", true, boundaryMarker));
+        new OpSetBc("P_REAL", true, boundaryMarker));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainGradGrad("U_REAL", "U_REAL", beta));
+        new OpDomainGradGrad("P_REAL", "P_REAL", beta));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainGradGrad("U_IMAG", "U_IMAG", beta));
+        new OpDomainGradGrad("P_IMAG", "P_IMAG", beta));
 
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainMass("U_REAL", "U_REAL", k2));
+        new OpDomainMass("P_REAL", "P_REAL", k2));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainMass("U_IMAG", "U_IMAG", k2));
+        new OpDomainMass("P_IMAG", "P_IMAG", k2));
 
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
 
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
@@ -201,26 +202,26 @@ MoFEMErrorCode Example::assembleSystem() {
   auto set_boundary = [&]() {
     MoFEMFunctionBegin;
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpSetBc("U_REAL", true, boundaryMarker));
+        new OpSetBc("P_REAL", true, boundaryMarker));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryMass("U_IMAG", "U_REAL", kp));
+        new OpBoundaryMass("P_IMAG", "P_REAL", kp));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryMass("U_REAL", "U_IMAG", km));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+        new OpBoundaryMass("P_REAL", "P_IMAG", km));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
 
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpSetBc("U_REAL", false, boundaryMarker));
+        new OpSetBc("P_REAL", false, boundaryMarker));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryMass("U_REAL", "U_REAL", beta));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+        new OpBoundaryMass("P_REAL", "P_REAL", beta));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
 
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpSetBc("U_REAL", false, boundaryMarker));
+        new OpSetBc("P_REAL", false, boundaryMarker));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource("U_REAL", beta));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("U_REAL"));
+        new OpBoundarySource("P_REAL", beta));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("P_REAL"));
 
-    CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+    CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
     MoFEMFunctionReturn(0);
   };
@@ -262,8 +263,8 @@ MoFEMErrorCode Example::outputResults() {
   pipeline_mng->getBoundaryRhsFE().reset();
   auto post_proc_fe = boost::make_shared<PostProcFaceOnRefinedMesh>(mField);
   post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc("U_REAL");
-  post_proc_fe->addFieldValuesPostProc("U_IMAG");
+  post_proc_fe->addFieldValuesPostProc("P_REAL");
+  post_proc_fe->addFieldValuesPostProc("P_IMAG");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_helmholtz.h5m");

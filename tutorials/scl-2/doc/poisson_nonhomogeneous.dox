@@ -13,9 +13,10 @@
 
 \tableofcontents
 
-\section basic_tutorials_poisson_nonhomogeneous_introduction Introduction
+\section basic_tutorials_poisson_nonhomogeneous_result Results
 
-
+\anchor figure_poisson_nonhomogeneous
+\image html poisson_nonhomogeneous.png "Figure: Poisson nonhomogeneous visualisation. Source term: 200sin(10x)cos(10y), boundary function: sin(10x)cos(10y)" width = 600px
 
 \section basic_tutorials_poisson_nonhomogeneous_plain_program Plain program 
 

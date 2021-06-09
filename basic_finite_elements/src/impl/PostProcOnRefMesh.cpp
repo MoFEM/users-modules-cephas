@@ -92,6 +92,13 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
              "data inconsistency %d!=%d", mapGaussPts.size(), nb_gauss_pts);
   }
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   switch (space) {
   case H1:
     commonData.fieldMap[rowFieldName].resize(nb_gauss_pts);
@@ -110,7 +117,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
             cblas_ddot((vAluesPtr->size() / rank), &(data.getN(gg)[0]), 1,
                        &((*vAluesPtr)[rr]), rank);
         (commonData.fieldMap[rowFieldName])[gg][rr] =
-            ((double *)tags_ptr[gg])[rr] += val;
+            ((double *)tags_ptr[gg])[rr] += set_float_precision(val);
       }
     }
     break;
@@ -130,7 +137,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
             cblas_ddot((vAluesPtr->size() / rank), &(data.getN(gg)[0]), 1,
                        &((*vAluesPtr)[rr]), rank);
         (commonData.fieldMap[rowFieldName])[gg][rr] =
-            ((double *)tags_ptr[gg])[rr] = val;
+            ((double *)tags_ptr[gg])[rr] = set_float_precision(val);
       }
     }
     break;
@@ -153,7 +160,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           FTensor::Tensor1<double *, 3> t_tag_val(ptr, &ptr[1], &ptr[2], 3);
           for (int rr = 0; rr != rank; rr++) {
             const double dof_val = (*vAluesPtr)[ll * rank + rr];
-            t_tag_val(i) += dof_val * t_n_hcurl(i);
+            t_tag_val(i) += set_float_precision(dof_val) * t_n_hcurl(i);
             ++t_tag_val;
           }
           ++t_n_hcurl;
@@ -183,7 +190,7 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldValues::doWork(
           FTensor::Tensor1<double *, 3> t_tag_val(ptr, &ptr[1], &ptr[2], 3);
           for (int rr = 0; rr != rank; rr++) {
             const double dof_val = (*vAluesPtr)[ll * rank + rr];
-            t_tag_val(i) += dof_val * t_n_hdiv(i);
+            t_tag_val(i) += set_float_precision(dof_val) * t_n_hdiv(i);
             ++t_tag_val;
           }
           ++t_n_hdiv;
@@ -261,6 +268,13 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
   }
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   switch (space) {
   case H1:
     commonData.gradMap[rowFieldName].resize(nb_gauss_pts);
@@ -280,7 +294,8 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
             (commonData.gradMap[rowFieldName])[gg](rr, dd) =
-                ((double *)tags_ptr[gg])[rank * rr + dd] += val;
+                ((double *)tags_ptr[gg])[rank * rr + dd] +=
+                set_float_precision(val);
           }
         }
       }
@@ -302,7 +317,8 @@ MoFEMErrorCode PostProcCommonOnRefMesh::OpGetFieldGradientValues::doWork(
             const double val =
                 data.getDiffN(gg)(dof, dd) * (*vAluesPtr)[rank * dof + rr];
             (commonData.gradMap[rowFieldName])[gg](rr, dd) =
-                ((double *)tags_ptr[gg])[rank * rr + dd] += val;
+                ((double *)tags_ptr[gg])[rank * rr + dd] +=
+                set_float_precision(val);
           }
         }
       }
@@ -329,21 +345,37 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
   //   generated");
   // }
 
-  // FIXME: Refinement not implement and inefficient implementation, looks ugly.
-
-  //
+  int max_ref_level_thick = 0;
+  PetscBool flg = PETSC_TRUE;
+  PetscOptionsGetInt(PETSC_NULL, PETSC_NULL,
+                     "-my_max_post_proc_ref_level_prism_thick",
+                     &max_ref_level_thick, &flg);
+  int const level_thick = max_ref_level_thick + 1;
   const EntityHandle *conn;
   int num_nodes;
   EntityHandle prism;
   const int nb_on_triangle = 6;
   const int nb_through_thickness = 3;
 
+  std::vector<PointsMap3D_multiIndex> pointsMapVector;
+  PointsMap3D_multiIndex pointsMap;
+
   if (elementsMap.find(numeredEntFiniteElementPtr->getEnt()) !=
       elementsMap.end()) {
-    prism = elementsMap[numeredEntFiniteElementPtr->getEnt()];
+    pointsMapVector = pointsMapVectorMap[numeredEntFiniteElementPtr->getEnt()];
   } else {
+    pointsMapVector.resize(0);
+    gaussPtsTrianglesOnly.resize(3, nb_on_triangle, false);
+    gaussPtsTrianglesOnly.clear();
+    gaussPtsThroughThickness.resize(2, nb_through_thickness * level_thick,
+                                    false);
+    gaussPtsThroughThickness.clear();
+
     MatrixDouble gauss_pts_triangles_only, gauss_pts_through_thickness;
-    {
+
+    double inc_thick = 1.0 / (double)level_thick;
+    for (int ll = 0; ll < level_thick; ll++) {
+
       gauss_pts_triangles_only.resize(3, 3, false);
       gauss_pts_triangles_only.clear();
       gauss_pts_triangles_only(0, 0) = 0;
@@ -353,62 +385,60 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
       gauss_pts_triangles_only(0, 2) = 0;
       gauss_pts_triangles_only(1, 2) = 1;
       gauss_pts_through_thickness.resize(2, 2, false);
-      gauss_pts_through_thickness(0, 0) = 0;
-      gauss_pts_through_thickness(0, 1) = 1;
-    }
-    ublas::vector<EntityHandle> prism_conn(6);
-    VectorDouble coords(3);
-    for (int ggf = 0; ggf != 3; ggf++) {
-      double ksi = gauss_pts_triangles_only(0, ggf);
-      double eta = gauss_pts_triangles_only(1, ggf);
-      coords[0] = ksi;
-      coords[1] = eta;
-      for (int ggt = 0; ggt != 2; ggt++) {
-        double zeta = gauss_pts_through_thickness(0, ggt);
-        coords[2] = zeta;
-        int side = ggt * 3 + ggf;
-        CHKERR postProcMesh.create_vertex(&coords[0], prism_conn[side]);
+      gauss_pts_through_thickness(0, 0) = ll * inc_thick;
+      gauss_pts_through_thickness(0, 1) = (ll + 1) * inc_thick;
+
+      ublas::vector<EntityHandle> prism_conn(6);
+      VectorDouble coords(3);
+      for (int ggf = 0; ggf != 3; ggf++) {
+        double ksi = gauss_pts_triangles_only(0, ggf);
+        double eta = gauss_pts_triangles_only(1, ggf);
+        coords[0] = ksi;
+        coords[1] = eta;
+        for (int ggt = 0; ggt != 2; ggt++) {
+          double zeta = gauss_pts_through_thickness(0, ggt);
+          coords[2] = zeta;
+          int side = ggt * 3 + ggf;
+          CHKERR postProcMesh.create_vertex(&coords[0], prism_conn[side]);
+        }
       }
-    }
-    CHKERR postProcMesh.create_element(MBPRISM, &prism_conn[0], 6, prism);
+      CHKERR postProcMesh.create_element(MBPRISM, &prism_conn[0], 6, prism);
 
-    elementsMap[numeredEntFiniteElementPtr->getEnt()] = prism;
-    // Range faces;
-    // CHKERR postProcMesh.get_adjacencies(&prism,1,2,true,faces);
-    Range edges;
-    CHKERR postProcMesh.get_adjacencies(&prism, 1, 1, true, edges);
-    EntityHandle meshset;
-    CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
-    CHKERR postProcMesh.add_entities(meshset, &prism, 1);
-    // CHKERR postProcMesh.add_entities(meshset,faces);
-    CHKERR postProcMesh.add_entities(meshset, edges);
-    if (tenNodesPostProcTets) {
-      CHKERR postProcMesh.convert_entities(meshset, true, false, false);
-    }
-    CHKERR postProcMesh.delete_entities(&meshset, 1);
-    CHKERR postProcMesh.delete_entities(edges);
-    // CHKERR postProcMesh.delete_entities(faces);
+      elementsMap[numeredEntFiniteElementPtr->getEnt()].push_back(prism);
+      // Range faces;
+      // CHKERR postProcMesh.get_adjacencies(&prism,1,2,true,faces);
+      Range edges;
+      CHKERR postProcMesh.get_adjacencies(&prism, 1, 1, true, edges);
+      EntityHandle meshset;
+      CHKERR postProcMesh.create_meshset(MESHSET_SET, meshset);
+      CHKERR postProcMesh.add_entities(meshset, &prism, 1);
+      // CHKERR postProcMesh.add_entities(meshset,faces);
+      CHKERR postProcMesh.add_entities(meshset, edges);
+      if (tenNodesPostProcTets) {
+        CHKERR postProcMesh.convert_entities(meshset, true, false, false);
+      }
+      CHKERR postProcMesh.delete_entities(&meshset, 1);
+      CHKERR postProcMesh.delete_entities(edges);
+      // CHKERR postProcMesh.delete_entities(faces);
 
-    CHKERR mField.get_moab().get_connectivity(
-        numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
-    MatrixDouble coords_prism_global;
-    coords_prism_global.resize(num_nodes, 3, false);
-    CHKERR mField.get_moab().get_coords(conn, num_nodes,
-                                        &coords_prism_global(0, 0));
+      CHKERR mField.get_moab().get_connectivity(
+          numeredEntFiniteElementPtr->getEnt(), conn, num_nodes, true);
+      MatrixDouble coords_prism_global;
+      coords_prism_global.resize(num_nodes, 3, false);
+      CHKERR mField.get_moab().get_coords(conn, num_nodes,
+                                          &coords_prism_global(0, 0));
 
-    CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
-    MatrixDouble coords_prism_local;
-    coords_prism_local.resize(num_nodes, 3, false);
-    CHKERR postProcMesh.get_coords(conn, num_nodes, &coords_prism_local(0, 0));
+      CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+      MatrixDouble coords_prism_local;
+      coords_prism_local.resize(num_nodes, 3, false);
+      CHKERR postProcMesh.get_coords(conn, num_nodes,
+                                     &coords_prism_local(0, 0));
 
-    if (gaussPtsThroughThickness.size2() != nb_through_thickness) {
-      pointsMap.clear();
-      gaussPtsTrianglesOnly.resize(3, nb_on_triangle, false);
-      gaussPtsTrianglesOnly.clear();
-      gaussPtsThroughThickness.resize(2, nb_through_thickness, false);
-      gaussPtsThroughThickness.clear();
       const double eps = 1e-6;
       int ggf = 0, ggt = 0;
+
+      pointsMap.clear();
+
       for (int nn = 0; nn != num_nodes; nn++) {
         double ksi = coords_prism_local(nn, 0);
         double eta = coords_prism_local(nn, 1);
@@ -420,57 +450,64 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsTrianglesOnly(
           ggf++;
         }
         if (fabs(ksi) < eps && fabs(eta) < eps) {
-          gaussPtsThroughThickness(0, ggt) = zeta;
+          gaussPtsThroughThickness(0, ggt + nb_through_thickness * ll) = zeta;
           ggt++;
         }
       }
+
+      pointsMapVector.push_back(pointsMap);
+
+      for (int nn = 0; nn != num_nodes; nn++) {
+        const double ksi = coords_prism_local(nn, 0);
+        const double eta = coords_prism_local(nn, 1);
+        const double zeta = coords_prism_local(nn, 2);
+        const double n0 = N_MBTRI0(ksi, eta);
+        const double n1 = N_MBTRI1(ksi, eta);
+        const double n2 = N_MBTRI2(ksi, eta);
+        const double e0 = N_MBEDGE0(zeta);
+        const double e1 = N_MBEDGE1(zeta);
+        double coords_global[3];
+        for (int dd = 0; dd != 3; dd++) {
+          coords_global[dd] = n0 * e0 * coords_prism_global(0, dd) +
+                              n1 * e0 * coords_prism_global(1, dd) +
+                              n2 * e0 * coords_prism_global(2, dd) +
+                              n0 * e1 * coords_prism_global(3, dd) +
+                              n1 * e1 * coords_prism_global(4, dd) +
+                              n2 * e1 * coords_prism_global(5, dd);
+        }
+        CHKERR postProcMesh.set_coords(&conn[nn], 1, coords_global);
+      }
     }
 
-    for (int nn = 0; nn != num_nodes; nn++) {
-      const double ksi = coords_prism_local(nn, 0);
-      const double eta = coords_prism_local(nn, 1);
-      const double zeta = coords_prism_local(nn, 2);
-      const double n0 = N_MBTRI0(ksi, eta);
-      const double n1 = N_MBTRI1(ksi, eta);
-      const double n2 = N_MBTRI2(ksi, eta);
-      const double e0 = N_MBEDGE0(zeta);
-      const double e1 = N_MBEDGE1(zeta);
-      double coords_global[3];
-      for (int dd = 0; dd != 3; dd++) {
-        coords_global[dd] = n0 * e0 * coords_prism_global(0, dd) +
-                            n1 * e0 * coords_prism_global(1, dd) +
-                            n2 * e0 * coords_prism_global(2, dd) +
-                            n0 * e1 * coords_prism_global(3, dd) +
-                            n1 * e1 * coords_prism_global(4, dd) +
-                            n2 * e1 * coords_prism_global(5, dd);
-      }
-      // cerr << coords_global[0] << " " << coords_global[1] << " " <<
-      // coords_global[2] << endl;
-      CHKERR postProcMesh.set_coords(&conn[nn], 1, coords_global);
-    }
+    pointsMapVectorMap[numeredEntFiniteElementPtr->getEnt()] = pointsMapVector;
   }
 
   mapGaussPts.clear();
-  mapGaussPts.resize(nb_through_thickness * nb_on_triangle);
-  CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+  mapGaussPts.resize(nb_through_thickness * nb_on_triangle * level_thick);
   fill(mapGaussPts.begin(), mapGaussPts.end(), 0);
-  {
-    int gg = 0;
-    for (unsigned int ggf = 0; ggf != gaussPtsTrianglesOnly.size2(); ggf++) {
-      const double ksi = gaussPtsTrianglesOnly(0, ggf);
-      const double eta = gaussPtsTrianglesOnly(1, ggf);
-      for (unsigned int ggt = 0; ggt != gaussPtsThroughThickness.size2();
-           ggt++, gg++) {
-        const double zeta = gaussPtsThroughThickness(0, ggt);
-        PointsMap3D_multiIndex::iterator it;
-        it =
-            pointsMap.find(boost::make_tuple(ksi * 100, eta * 100, zeta * 100));
-        if (it != pointsMap.end()) {
-          mapGaussPts[gg] = conn[it->nN];
-        }
+  int gg = 0;
+  int ll;
+
+  for (unsigned int ggf = 0; ggf != gaussPtsTrianglesOnly.size2(); ggf++) {
+    const double ksi = gaussPtsTrianglesOnly(0, ggf);
+    const double eta = gaussPtsTrianglesOnly(1, ggf);
+    for (unsigned int ggt = 0; ggt != gaussPtsThroughThickness.size2();
+         ggt++, gg++) {
+      ll = ggt / 3;
+      prism = elementsMap[numeredEntFiniteElementPtr->getEnt()][ll];
+      pointsMap = pointsMapVector[ll];
+      CHKERR postProcMesh.get_connectivity(prism, conn, num_nodes, false);
+
+      const double zeta = gaussPtsThroughThickness(0, ggt);
+      PointsMap3D_multiIndex::iterator it;
+      it = pointsMap.find(boost::make_tuple(ksi * 100, eta * 100, zeta * 100));
+      if (it != pointsMap.end()) {
+        mapGaussPts[gg] = conn[it->nN];
       }
     }
   }
+
+  int g = 0;
 
   MoFEMFunctionReturn(0);
 }
@@ -500,17 +537,19 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm =
+        boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range prims;
   CHKERR postProcMesh.get_entities_by_type(0, MBPRISM, prims, false);
   // std::cerr << "total prims size " << prims.size() << std::endl;
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   Range::iterator pit = prims.begin();
   for (; pit != prims.end(); pit++) {
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
@@ -653,7 +692,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::generateReferenceElementMesh() {
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
   MoFEMFunctionBegin;
-  if (gaussPtsTri.size1() == 0 && gaussPtsQuad.size1() == 0) 
+  if (gaussPtsTri.size1() == 0 && gaussPtsQuad.size1() == 0)
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
             "post-process mesh not generated");
 
@@ -793,16 +832,17 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range tris;
   CHKERR postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   Range::iterator pit = tris.begin();
   for (; pit != tris.end(); pit++) {
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
@@ -812,8 +852,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionReturn(0);
 }
 
+template <int RANK>
 MoFEMErrorCode
-PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
+PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -826,12 +867,20 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
-  auto dof_ptr = data.getFieldDofs()[0];
-  int rank = dof_ptr->getNbOfCoeffs();
+  auto &m_field = getPtrFE()->mField;
+  auto field_ptr = m_field.get_field_structure(fieldName);
+  const int rank = field_ptr->getNbOfCoeffs();
+  FieldSpace space = field_ptr->getSpace();
 
-  int tag_length = rank * 3;
-  FieldSpace space = dof_ptr->getSpace();
+  // auto dof_ptr = data.getFieldDofs()[0];
+  // int rank = dof_ptr->getNbOfCoeffs();
+  // FieldSpace space = dof_ptr->getSpace();
 
+  int full_size = rank * RANK;
+  if(space == HDIV)
+    full_size *= 3;
+  // for paraview
+  int tag_length = full_size > 3 && full_size < 9 ? 9 : full_size;
   double def_VAL[tag_length];
   bzero(def_VAL, tag_length * sizeof(double));
   Tag th;
@@ -844,25 +893,27 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   const void *tags_ptr[mapGaussPts.size()];
   int nb_gauss_pts = data.getN().size1();
   if (mapGaussPts.size() != (unsigned int)nb_gauss_pts ||
-      nb_gauss_pts != gradMatPtr->size2()) {
+      nb_gauss_pts != matPtr->size2()) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
   }
   switch (space) {
   case H1:
   case L2:
+  case HDIV:
 
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
-    // FIXME: this is not very efficient
+
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      for (int rr = 0; rr != rank; ++rr) {
-        for (int dd = 0; dd != 3; ++dd) {
-          const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
-          double *my_ptr = const_cast<double *>(my_ptr2);
-          my_ptr[rank * rr + dd] = (*gradMatPtr)(rank * rr + dd, gg);
+      const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
+      double *my_ptr = const_cast<double *>(my_ptr2);
+      for (int rr = 0; rr != RANK; ++rr) {
+        for (int dd = 0; dd != rank; ++dd) {
+          my_ptr[rank * rr + dd] = (*matPtr)(rank * rr + dd, gg);
         }
       }
     }
+
     break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
@@ -896,18 +947,94 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
     my_side_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
     break;
+  case 6:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateTensor2SymmetricFieldGradient<3, 3>(field_name,
+                                                           grad_mat_ptr));
+    break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "field with that number of coefficients is not implemented");
   }
 
   FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-      new OpGetFieldGradientValuesOnSkin(
+      new OpGetFieldValuesOnSkinImpl<3>(
           postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
           my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
 
   MoFEMFunctionReturn(0);
 }
+
+
+MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
+    const std::string field_name, const std::string vol_fe_name,
+    boost::shared_ptr<MatrixDouble> mat_ptr, bool save_on_tag) {
+  MoFEMFunctionBegin;
+
+  if (!mat_ptr)
+    mat_ptr = boost::make_shared<MatrixDouble>();
+
+  auto my_side_fe =
+      boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+  // check number of coefficients
+  auto field_ptr = mField.get_field_structure(field_name);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+  FieldSpace space = field_ptr->getSpace();
+
+  switch (space) {
+  case L2:
+  case H1:
+    switch (nb_coefficients) {
+    case 1:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<1>(field_name, mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>(field_name, mat_ptr));
+      break;
+    case 6:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateTensor2SymmetricFieldValues<3>(field_name, mat_ptr));
+      break;
+    case 9:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateTensor2FieldValues<3, 3>(field_name, mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+    break;
+  case HDIV:
+    switch (nb_coefficients) {
+    case 1:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHdivVectorField<3>(field_name, mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorField<3, 3>(field_name, mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+  break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "field with that space is not implemented.");
+  }
+
+  FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+      new OpGetFieldValuesOnSkinImpl<1>(
+          postProcMesh, mapGaussPts, field_name, field_name,
+          my_side_fe, vol_fe_name, mat_ptr, save_on_tag));
+
+  MoFEMFunctionReturn(0);
+}
+
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
   return OpSwitch<
@@ -956,27 +1083,27 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range edges;
   CHKERR postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   auto set_edges_rank = [&](const auto rank, const auto &edges) {
     std::vector<EntityHandle> ranks(edges.size(), rank);
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), edges,
                                      &*ranks.begin());
   };
   set_edges_rank(rank, edges);
-  
+
   CHKERR pcomm_post_proc_mesh->resolve_shared_ents(0);
   MoFEMFunctionReturn(0);
 }
-
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::setGaussPts(int order) {
   MoFEMFunctionBegin;

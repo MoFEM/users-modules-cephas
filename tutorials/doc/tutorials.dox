@@ -16,7 +16,7 @@ the following directories when you install MoFEM with developer version \ref ins
 - Source code:
   `$HOME/mofem_install/mofem-cephas/mofem/users_modules/tutorials`
 - Binary files (build directory):
-  `$HOME/mofem_install/um/build_release/tutorials`
+  `$HOME/mofem_install/mofem-cephas/mofem/users_modules/um-build-RelWithDebInfo-abcd1234/tutorials/`
 
 Each tutorial in this page includes code name and keywords for quick reference
 and search within the browser. 
@@ -41,14 +41,7 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td>\ref lessons_introduction</td>
        <td> Brief introduction about MoFEM interfaces which enable users to implement the codes with different level of complexity.
-       <br/> *Keywords:* 
-       </td>
-  </tr>
-
-  <tr valign="top">
-       <td width="350px">\ref hierarchical_approximation_1</td>
-       <td> Introduce elementary concepts of the Finite Element Method (FEM) with hierarchical shape functions and their implementation in MoFEM
-       <br/> *Keywords:* Hierarchical approximation
+       <br/> *Keywords:* Design
        </td>
   </tr>
 
@@ -63,6 +56,13 @@ continuing with the one you are most excited about.
        <td>\ref integration</td>
        <td> Numerical integration is essential for most of the numerical methods employed to solve partial differential equations (PDEs)
        <br/> *Keywords:* UDOs and integration
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\ref hierarchical_approximation_1</td>
+       <td> Introduce elementary concepts of the Finite Element Method (FEM) with hierarchical shape functions and their implementation in MoFEM
+       <br/> *Keywords:* Hierarchical approximation
        </td>
   </tr>
 
@@ -149,6 +149,20 @@ continuing with the one you are most excited about.
        </td>
   </tr>
 
+  <tr valign="top">
+       <td>\ref radiation_pluto</td>
+       <td> Nonlinear problem at the boundary
+       <br/> *Keywords:* axisymmetric problem, linearisation 
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td>\ref tutorial_heat_method</td>
+       <td> Finding geodesic distance with heat method
+       <br/> *Keywords:*  Face elements embedded in 3d space
+       </td>
+  </tr>
+
 </table>
 
 \section tutorials_complex_field_problems Problems with complex variable fields
@@ -157,10 +171,10 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\ref tutorial_hemholtz_problem</td>
-       <td> Hemholtz problem for acoustics
-       <br/> *Keywords:* Complex variable, Linear Solver
+       <td> Helmholtz problem for acoustics
+       <br/> *Keywords:* Complex variable, Linear Solver, boundary markers
        </td>
-  </tr
+  </tr>
 
 </table>
 
@@ -170,7 +184,7 @@ continuing with the one you are most excited about.
 
   <tr valign="top">
        <td width="350px">\ref tutorial_elastic_problem</td>
-       <td> Linear elastic 
+       <td> Linear elasticity
        <br/> *Keywords:* Hooke equation
        </td>
   </tr>
@@ -178,35 +192,35 @@ continuing with the one you are most excited about.
   <tr valign="top">
        <td width="350px">\ref tutorial_eigen_elastic</td>
        <td> Eigen elastic
-       <br/> *Keywords:* Eigen values, SLEP
+       <br/> *Keywords:* Eigen values, SLEPC
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref tutorial_dynamic_elastic</td>
-       <td> Dynamic elastic
-       <br/> *Keywords:* Time dependent problem
+       <td width="350px">\ref tutorial_nonlinear_elastic</td>
+       <td> Nonlinear elastic with Hencky material
+       <br/> *Keywords:* Nonlinear problem, [SNES](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/SNES/index.html)
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref VEC-2: Nonlinear elasticity</td>
-       <td> Nonlinear elastic
-       <br/> *Keywords:* 
+       <td width="350px">\ref tutorial_nonlinear_dynamic_elastic</td>
+       <td> Time-dependent nonlinear elastic (dynamics)
+       <br/> *Keywords:* Alpha2 method
        </td>
   </tr>
 
 </table>
 
 
-\section tutorials_vector_complex_field_problems Complex and mixed field problems
+\section tutorials_vector_complex_field_problems Mixed field problems
 
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref MIX-2: Mixed problem</td>
+       <td width="350px">\ref tut_mix_poisson</td>
        <td> A mixed problem
-       <br/> *Keywords:* 
+       <br/> *Keywords:* H-div space, homogenous boundary conditions by DOFs removal 
        </td>
   </tr>
 
@@ -217,7 +231,7 @@ continuing with the one you are most excited about.
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref DD-0: Tranport data driven</td>
+       <td width="350px">\ref DD-0: Transport data driven</td>
        <td> Data driven for transport or heat conduction problems
        <br/> *Keywords:* Scalar problem
        </td>
@@ -249,37 +263,135 @@ continuing with the one you are most excited about.
 <table style="width:100%">
 
   <tr valign="top">
-       <td width="350px">\ref ADV-1: Plasticity</td>
+       <td width="350px">\ref tutorial_plastic_problem</td>
        <td> Plasticity problem
-       <br/> *Keywords:* 
+       <br/> *Keywords:* Nonlinear problem, linearisation, L2 space, boundary markers, displacement control, force control
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-2: Contact</td>
+       <td width="350px">\ref tutorial_contact_problem</td>
        <td> Contact problem
-       <br/> *Keywords:* 
+       <br/> *Keywords:* H-curl/H-div space, mix formulations
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-3: Fracture</td>
+       <td width="350px">\ref ADV-2: Fracture</td>
        <td> Fracture problem
        <br/> *Keywords:* 
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-4: Various fields and finite element spaces</td>
+       <td width="350px">\ref ADV-3: Various fields and finite element spaces</td>
        <td> Problem with various fields and finite element spaces
        <br/> *Keywords:* 
        </td>
   </tr>
 
   <tr valign="top">
-       <td width="350px">\ref ADV-5: Elasticity with spring and rod elements</td>
+       <td width="350px">\ref ADV-4: Elasticity with spring and rod elements</td>
        <td> Problem with mixed dimension (1D, 2D, 3D)
        <br/> *Keywords:* 
+       </td>
+  </tr>
+
+</table>
+
+\section tutorials_core Tutorials using core interfaces or low level implementation
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">\subpage mix_transport</td>
+       <td> Mix formulation for transport problem
+       <br/> *Keywords:* h-adaptivity and error estimator
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage mix_us_flow</td>
+       <td> Mix formulation for capillary flow
+       <br/> *Keywords:* Capillary flow in unsaturated soil. Nonlinear mix-formulation
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut1</td>
+       <td> Poison equation again with different implementations
+       <br/> *Keywords:* %Poisson problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut2</td>
+       <td> Poison equation implementation of differentiation operators
+       <br/> *Keywords:* %Poisson problem
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut3</td>
+       <td> Poison equation implementation of differentiation operators
+       <br/> *Keywords:* Using subproblems and nested matrices
+       </td>
+  </tr>
+
+  <tr valign="top">
+       <td width="350px">\subpage poisson_tut4</td>
+       <td> Poison nonlinear equation again
+       <br/> *Keywords:* SNES solver and linearisation
+       </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage simple_elasticity_1</td>
+        <td> Older implementation of elastic problem
+        <br/> *Keywords:* Operators and low level implementation
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage elasticity_mixed_formulation</td>
+        <td> Older implementation of mixed elastic problem
+        <br/> *Keywords:* Pressure field and incompressibility
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage spring_element</td>
+        <td> Implementation of boundary element with springs
+        <br/> *Keywords:* face element, spring, user data operators
+        </td>
+  </tr>
+
+  <tr valign="top">
+        <td width="350px">\subpage reaction_diffusion_imp</td>
+        <td> Reaction-diffusion Fisher's equation
+        <br/> *Keywords:* Time solver, Monitor, nonlinearity, 
+        </td>
+  </tr>
+
+
+  <tr valign="top">
+        <td width="350px">\subpage tutorial_navier_stokes</td>
+        <td> Navier-Stokes equations
+        <br/> *Keywords:* viscous fluid flow, mixed formulation, drag force computation 
+        </td>
+  </tr>
+
+
+</table>
+
+\section tutorials_module Tutorials implemented as a separate module
+
+<table style="width:100%">
+
+  <tr valign="top">
+       <td width="350px">MOD-0: \subpage sope_film</td>
+       <td> Soap film as an external module
+       <br/> *Keywords:* Module implementations
        </td>
   </tr>
 

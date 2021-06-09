@@ -54,7 +54,7 @@ function(tutorials_build_and_install target source)
     mofem_petsc
     mofem_approx
     mofem_third_party
-    mofem_cblas
+    mofem_matrix_function
     ${MoFEM_PROJECT_LIBS})
   install(TARGETS ${target} DESTINATION ${TUTORIALS_INSTALL_DIR}/${TUTORIALS_MOD_DIR})
 endfunction(tutorials_build_and_install)
@@ -75,6 +75,9 @@ endfunction()
 set(TUTORIALS_DIRS 
   fun-0
   fun-1
+  fun-2
+  msh-1
+  msh-2
   scl-0
   scl-1
   scl-2
@@ -83,17 +86,25 @@ set(TUTORIALS_DIRS
   scl-5
   scl-6
   scl-7
+  scl-8
+  scl-9
   clx-0
   vec-0
   vec-1
   vec-2
+  vec-3
+  mix-0
   max-0
   max-1
-  other_tutorials/mix_transport
-  other_tutorials/poisson
-  other_tutorials/simple_elasticity
-  other_tutorials/elasticity_mixed_formulation
-  other_tutorials/reaction_diffusion
+  adv-0
+  adv-1
+  cor-0to1
+  cor-2to5
+  cor-6
+  cor-7
+  cor-8
+  cor-9
+  cor-10
 )
 
 foreach(LOOP_DIR ${TUTORIALS_DIRS})

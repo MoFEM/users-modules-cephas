@@ -1,0 +1,24 @@
+Check before run
+================
+
+* Check where is your mesh file
+* Check what version of openmpi (or other MPI library) are you using
+
+If you are using spack and you would like to use mpirun and mbconvert 
+tools please first run the following 
+======================================================================
+
+spack load moab
+
+Example Static (elasticity_mixed_formulation)
+==========================
+
+mpirun -np 2 ./elasticity_mixed_formulation -my_file LShape_incompressible.h5m my_order_p 2 -my_order_u 3
+
+Parameters set by default from param_file.petsc file
+============================
+
+-ksp_type gmres
+-pc_type lu
+-pc_factor_mat_solver_type mumps
+-ksp_monitor

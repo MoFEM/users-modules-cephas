@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
                                  "-my_cn_value 1. \n"
                                  "-my_r_value 1. \n"
                                  "-my_alm_flag 0 \n";
-                                 
+
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
     std::ofstream file(param_file.c_str(), std::ios::ate);
@@ -161,8 +161,9 @@ int main(int argc, char *argv[]) {
                             wave_length, &wave_length, PETSC_NULL);
     CHKERR PetscOptionsReal("-my_wave_ampl", "profile amplitude", "", wave_ampl,
                             &wave_ampl, PETSC_NULL);
-    CHKERR PetscOptionsReal("-my_mesh_height", "vertical dimension of the mesh ",
-                            "", mesh_height, &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_mesh_height",
+                            "vertical dimension of the mesh ", "", mesh_height,
+                            &mesh_height, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -180,10 +181,6 @@ int main(int argc, char *argv[]) {
     const char *option;
     option = "";
     CHKERR moab.load_file(mesh_file_name, 0, option);
-    
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
-    if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, PETSC_COMM_WORLD);
 
     // Create MoFEM database and link it to MoAB
     MoFEM::Core core(moab);
@@ -421,9 +418,8 @@ int main(int argc, char *argv[]) {
 
     CHKERR elastic.setOperators("SPATIAL_POSITION", "MESH_NODE_POSITIONS",
                                 false, false);
-    
+
     auto make_contact_element = [&]() {
-      
       return boost::make_shared<SimpleContactProblem::SimpleContactElement>(
           m_field);
     };
@@ -495,9 +491,8 @@ int main(int argc, char *argv[]) {
 
     // add fields to the global matrix by adding the element
     contact_problem->addContactElement("CONTACT_ELEM", "SPATIAL_POSITION",
-                                       "LAGMULT",
-                                       contact_prisms);
-                                       
+                                       "LAGMULT", contact_prisms);
+
     contact_problem->addPostProcContactElement(
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);

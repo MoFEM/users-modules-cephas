@@ -1,0 +1,389 @@
+/*! \page poisson_tut3 COR-4: Using fieldsplit solver and DM sub problem.
+
+
+In this tutorial, we show how to create sub-problems by using discrete manager (DM)
+and sub-problems DMs to create nested matrices and use them with field-split
+preconditioner. This example shows simplified use of field-split preconditioner,
+for more advanced example of use of sub discrete managers and field-split
+preconditioner see \ref cell_forces.cpp
+
+The field-split preconditioner is a block solver where on a block of matrices we
+apply Jacobi or Gauss–Seidel iterations. Alternatively, if a matrix has 2x2
+blocks, a Schur complement can be approximated by preconditioner.  We do not
+intend to explain mathematical details of block solver but merely show how to
+use PETSc preconditioner, i.e. \e PCFIELDSPLIT (see
+<http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html>).
+
+Block matrix is represented using nested matrix, see details MATNEST (see
+<http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MatCreateNest.html>).
+
+We change only small part of the code described in tutorial \ref poisson_tut1.
+
+\tableofcontents
+
+\section poisson_tut3_block_matrix Block matrix
+
+We solve the same problem to one shown in \ref poisson_tut1.  However, to remove
+some issues with field-split solver, we will make the upper diagonal block of
+matrix invertible, by adding stabilisation matrix, which in this case has the
+interpretation of the penalty;
+\f[
+\left[
+\begin{array}{cc}
+\mathbf{K}+\mathbf{S} & \mathbf{C}^\textrm{T}\\
+\mathbf{C} & \mathbf{0}
+\end{array}
+\right]
+\left\{
+\begin{array}{c}
+\mathbf{U}\\
+\mathbf{L}
+\end{array}
+\right\}
+=
+\left[
+\begin{array}{c}
+\mathbf{F}+\mathbf{S}\overline{U} \\
+\mathbf{g}
+\end{array}
+\right],\\
+\mathbf{K}=
+\int_\Omega (\nabla \boldsymbol\phi)^\textrm{T} \nabla \boldsymbol\phi \textrm{d}\Omega,\quad
+\mathbf{C} = \int_{\partial\Omega} \boldsymbol\psi^\textrm{T} \boldsymbol\phi \textrm{d}\partial\Omega,\\
+\mathbf{F} = \int_\Omega \boldsymbol\phi^\textrm{T} f \textrm{d}\Omega,\quad
+\mathbf{g} = \int_{\partial\Omega} \boldsymbol\psi^\textrm{T} \overline{u} \textrm{d}\partial\Omega,\\
+\mathbf{S} = \int_{\partial\Omega} \boldsymbol\phi^\textrm{T} \boldsymbol\phi \textrm{d}\partial\Omega.
+\f]
+
+\section poisson_tut3_code_dissection Code dissection
+
+\include analytical_poisson_field_split.cpp
+
+\section poisson_tut3_adding_penalty Creating penalty finite element instance
+
+This code is largely the same as in \ref analytical_poisson.cpp, with
+only two places where we introduce changes. We will focus only on those parts.
+First we make pointer new penalty finite element instance,
+\code
+ boost::shared_ptr<ForcesAndSourcesCore> boundary_penalty_lhs_fe;
+\endcode
+and create finite element class instance itself
+\code
+boundary_penalty_lhs_fe = boost::shared_ptr<ForcesAndSourcesCore>(new FaceElementForcesAndSourcesCore(m_field));
+\endcode
+with that at hand we can add appropriate user data operators
+\code
+boundary_penalty_lhs_fe->getOpPtrVector().push_back(new PoissonExample::OpS(beta));
+\endcode
+
+Implementation of penalty operator \ref OpS::iNtegrate is in file \ref analytical_poisson_field_split.cpp
+and do not differ to what was shown in \ref poisson_tut2.
+
+\section poisson_tut3_code_dissection Creation and assembly of sub-DM problems
+
+We will start with declaration of data structure necessary for creation of nested
+matrix. Nested matrix is PETSc structure which is used to store block matrices
+and on which one can perform operations as on other matrices types.
+\code
+DM dm_sub_KK,dm_sub_LU;
+ublas::matrix<Mat> nested_matrices(2,2);
+ublas::vector<IS> nested_is(2);
+\endcode
+Vector of \e IS (Index Set) is used to store global indices of block matrices.
+
+\subsection poisson_tut3_diagonal Assembly of K and S matrices
+
+- We create sub DM from DM
+\code
+CHKERR DMCreate(PETSC_COMM_WORLD,&dm_sub_KK);
+CHKERR DMSetType(dm_sub_KK,"DMMOFEM");
+CHKERR DMMoFEMCreateSubDM(dm_sub_KK,dm,"SUB_KK"); 
+\endcode
+
+- Configure and set-up DM
+\code
+CHKERR DMMoFEMSetSquareProblem(dm_sub_KK,PETSC_TRUE); 
+CHKERR DMMoFEMAddSubFieldRow(dm_sub_KK,"U"); 
+CHKERR DMMoFEMAddSubFieldCol(dm_sub_KK,"U"); 
+CHKERR DMMoFEMAddElement(dm_sub_KK,simple_interface->getDomainFEName().c_str()); 
+CHKERR DMMoFEMAddElement(dm_sub_KK,simple_interface->getBoundaryFEName().c_str()); 
+CHKERR DMSetUp(dm_sub_KK); 
+\endcode
+
+- Get global indices of DM for sub DM for the upper diagonal block
+\code
+CHKERR DMMoFEMGetSubRowIS(dm_sub_KK,&nested_is[0]); 
+\endcode
+
+- Create matrix and assemble matrix \f$\mathbf{K}\f$ and penalty matrix
+\f$\mathbf{S}\f$ by iteration over domain finite elements entities and
+boundary finite elements entities
+\code
+CHKERR DMCreateMatrix(dm_sub_KK,&nested_matrices(0,0)); 
+domain_lhs_fe->ksp_B = nested_matrices(0,0);
+CHKERR DMoFEMLoopFiniteElements(dm_sub_KK,simple_interface->getDomainFEName(),domain_lhs_fe); 
+boundary_penalty_lhs_fe->ksp_B = nested_matrices(0,0);
+CHKERR DMoFEMLoopFiniteElements(dm_sub_KK,simple_interface->getBoundaryFEName(),boundary_penalty_lhs_fe); 
+CHKERR MatAssemblyBegin(nested_matrices(0,0),MAT_FINAL_ASSEMBLY); 
+CHKERR MatAssemblyEnd(nested_matrices(0,0),MAT_FINAL_ASSEMBLY); 
+CHKERR DMDestroy(&dm_sub_KK); 
+\endcode
+
+\subsection poisson_tut3_off_diagonal Assembly of C matrix
+
+Assembly of off-diagonal blocks is similar to diagonal term, note that
+of diagonal block is not square matrix and integration is only over finite
+elements entities on the boundary
+\code
+CHKERR DMCreate(PETSC_COMM_WORLD,&dm_sub_LU);
+CHKERR DMSetType(dm_sub_LU,"DMMOFEM");
+CHKERR DMMoFEMCreateSubDM(dm_sub_LU,dm,"SUB_LU"); 
+CHKERR DMMoFEMSetSquareProblem(dm_sub_LU,PETSC_FALSE); 
+CHKERR DMMoFEMAddSubFieldRow(dm_sub_LU,"L"); 
+CHKERR DMMoFEMAddSubFieldCol(dm_sub_LU,"U"); 
+CHKERR DMMoFEMAddElement(dm_sub_LU,simple_interface->getBoundaryFEName().c_str()); 
+CHKERR DMSetUp(dm_sub_LU); 
+CHKERR DMMoFEMGetSubRowIS(dm_sub_LU,&nested_is[1]); 
+CHKERR DMCreateMatrix(dm_sub_LU,&nested_matrices(1,0)); 
+boundary_lhs_fe->ksp_B = nested_matrices(1,0);
+CHKERR DMoFEMLoopFiniteElements(dm_sub_LU,simple_interface->getBoundaryFEName(),boundary_lhs_fe); 
+CHKERR MatAssemblyBegin(nested_matrices(1,0),MAT_FINAL_ASSEMBLY); 
+CHKERR MatAssemblyEnd(nested_matrices(1,0),MAT_FINAL_ASSEMBLY); 
+CHKERR MatTranspose(nested_matrices(1,0),MAT_INITIAL_MATRIX,&nested_matrices(0,1)); 
+CHKERR DMDestroy(&dm_sub_LU); 
+\endcode
+
+\subsection poisson_tut3_vector Assembly of the right hand side vector
+
+Now we assemble global the right hand side vector, in the usual way using global
+DM
+\code
+domain_rhs_fe->ksp_f = F;
+CHKERR DMoFEMLoopFiniteElements(dm,simple_interface->getDomainFEName(),domain_rhs_fe); 
+boundary_rhs_fe->ksp_f = F;
+CHKERR DMoFEMLoopFiniteElements(dm,simple_interface->getBoundaryFEName(),boundary_rhs_fe); 
+CHKERR VecAssemblyBegin(F); 
+CHKERR VecAssemblyEnd(F); 
+\endcode
+
+\subsection poisson_tut3_nested_matrix Creation of global nested matrix
+
+For details how to create nested matrix see PETSc manual
+(<http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MatCreateNest.html>)
+\code
+CHKERR MatCreateNest(
+  PETSC_COMM_WORLD,
+  2,&nested_is[0],2,&nested_is[0],&nested_matrices(0,0),&A
+); 
+\endcode
+
+\subsection poisson_tut3_solver Solving problem
+
+- Create solver instance, and set-up from command line
+\code
+// Create solver and link it to DM
+KSP solver;
+CHKERR KSPCreate(PETSC_COMM_WORLD,&solver); 
+CHKERR KSPSetFromOptions(solver); 
+// Set operators
+CHKERR KSPSetOperators(solver,A,A); 
+\endcode
+
+- Get access to solver pre-conditioner and set-up PCFIELDSPLIT
+(see <http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFIELDSPLIT.html>)
+\code
+PC pc;
+CHKERR KSPGetPC(solver,&pc); 
+PetscBool is_pcfs = PETSC_FALSE;
+PetscObjectTypeCompare((PetscObject)pc,PCFIELDSPLIT,&is_pcfs);
+if(is_pcfs) {
+  CHKERR PCFieldSplitSetIS(pc,NULL,nested_is[0]); 
+  CHKERR PCFieldSplitSetIS(pc,NULL,nested_is[1]); 
+} else {
+  SETERRQ(
+    PETSC_COMM_WORLD,
+    MOFEM_DATA_INCONSISTENCY,
+    "Only works with pre-conditioner PCFIELDSPLIT"
+  );
+}
+\endcode
+Note that we set nested matrix as operator for pre-conditioner, and
+using <a href="http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCFieldSplitSetIS.html">PCFieldSplitSetIS</a>
+we setting elements of the field to PCFIELDSPLIT pre-conditioner.
+
+- Finally set-up solver and solve system of equations
+\code
+// Set-up solver, is type of solver and pre-conditioners
+CHKERR KSPSetUp(solver); 
+// At solution process, KSP solver uses DM creates matrices, Calculates
+// values of the left hand side and the right hand side vector. then
+// solves the system of equations. Results are stored in the vector D.
+CHKERR KSPSolve(solver,F,D); 
+\endcode
+
+\section poisson_tut3_running_program Running the program
+
+In order to run the program, one should first go to the directory where the problem is located, compile the code and then run the executable file. Typically, this can be done as follows
+
+\code
+cd mofem_install/um/build/basic_finite_elements/poisson
+make -j2
+mpirun -np 2  ./analytical_poisson_field_split -file_name cube_2part.h5m -order 3 -pc_type fieldsplit
+\endcode
+where options in .petscrc file are
+\code
+-ksp_type fgmres
+-ksp_atol 1e-12
+-ksp_rtol 0
+-ksp_monitor ascii
+-pc_fieldsplit_type schur
+-pc_fieldsplit_schur_precondition self
+-fieldsplit_0_ksp_type gmres
+#-fieldsplit_0_ksp_monitor
+-fieldsplit_0_ksp_max_it 100
+-fieldsplit_0_ksp_atol 1e-6
+-fieldsplit_0_ksp_rtol 1e-6
+-fieldsplit_0_pc_type lu
+-fieldsplit_0_pc_factor_mat_solver_package mumps
+-fieldsplit_0_pc_type gamg
+-fieldsplit_0_pc_mg_smoothup 5
+-fieldsplit_0_pc_mg_smoothdown 5
+-fieldsplit_0_mg_coarse_ksp_type preonly
+-fieldsplit_0_mg_coarse_pc_type hypre
+-fieldsplit_0_mg_coarse_pc_hypre_type parasails
+-fieldsplit_0_mg_coarse_pc_hypre_parasails_sym SPD
+-fieldsplit_0_mg_coarse_pc_hypre_parasails_thresh 0.2
+-fieldsplit_0_mg_coarse_pc_hypre_parasails_logging 1
+-fieldsplit_1_ksp_type minres
+-fieldsplit_1_ksp_monitor
+-fieldsplit_1_ksp_max_it 100
+-fieldsplit_1_ksp_atol 1e-2
+-fieldsplit_1_ksp_rtol 1e-2
+-fieldsplit_1_pc_type lsc
+-fieldsplit_1_lsc_ksp_type cg
+-fieldsplit_1_lsc_ksp_atol 1e-5
+-fieldsplit_1_lsc_ksp_rtol 1e-5
+-fieldsplit_1_lsc_ksp_max_it 100
+-fieldsplit_1_lsc_pc_type hypre
+-fieldsplit_1_lsc_pc_hypre_type parasails
+-fieldsplit_1_lsc_pc_hypre_parasails_sym SPD
+-fieldsplit_1_lsc_pc_hypre_parasails_nlevels 1
+-fieldsplit_1_lsc_pc_hypre_parasails_thresh 0.2
+-fieldsplit_1_lsc_pc_hypre_parasails_logging 1
+\endcode
+as result of this we get
+\verbatim
+ 0 KSP Residual norm 8.033746248668e-01
+** ParaSails Setup Pattern Statistics ***********
+symmetric             : 1
+thresh                : 0.200000
+num_levels            : 1
+Max cost (average)    : 3.9e+01 (2.0e+01)
+Nnz (ratio)           : 39 ( 0.07)
+Max setup pattern time:      0.0
+*************************************************
+** ParaSails Setup Values Statistics ************
+filter                : 0.100000
+loadbal               : 0.000000
+Final Nnz (ratio)     : 39 ( 0.07)
+Max setup values time :      0.0
+*************************************************
+Setup (pattern and values) times:
+ 0:      0.0
+ 1:      0.0
+ave:      0.0
+*************************************************
+** ParaSails Setup Pattern Statistics ***********
+symmetric             : 1
+thresh                : 0.200000
+num_levels            : 1
+Max cost (average)    : 6.0e+08 (4.9e+08)
+Nnz (ratio)           : 103886 ( 1.48)
+Max setup pattern time:      0.0
+*************************************************
+** ParaSails Setup Values Statistics ************
+filter                : 0.100000
+loadbal               : 0.000000
+Final Nnz (ratio)     : 91505 ( 1.31)
+Max setup values time :      0.4
+*************************************************
+Setup (pattern and values) times:
+ 0:      0.3
+ 1:      0.4
+ave:      0.3
+*************************************************
+   Residual norms for fieldsplit_1_ solve.
+   0 KSP Residual norm 8.569397744104e+03
+   1 KSP Residual norm 2.381604391507e+03
+   2 KSP Residual norm 1.122966950794e+03
+   3 KSP Residual norm 6.059895318115e+02
+   4 KSP Residual norm 2.785669509756e+02
+   5 KSP Residual norm 1.439683032222e+02
+   6 KSP Residual norm 6.002357292386e+01
+ 1 KSP Residual norm 7.690377439031e-04
+   Residual norms for fieldsplit_1_ solve.
+   0 KSP Residual norm 2.956833059930e+05
+   1 KSP Residual norm 1.787320287092e+05
+   2 KSP Residual norm 9.550287792776e+04
+   3 KSP Residual norm 4.057604924174e+04
+   4 KSP Residual norm 2.237002256464e+04
+   5 KSP Residual norm 1.082742229824e+04
+   6 KSP Residual norm 3.839937493403e+03
+   7 KSP Residual norm 1.837737978611e+03
+ 2 KSP Residual norm 4.494035527480e-06
+   Residual norms for fieldsplit_1_ solve.
+   0 KSP Residual norm 2.705597685965e+05
+   1 KSP Residual norm 1.587873121132e+05
+   2 KSP Residual norm 7.567285121798e+04
+   3 KSP Residual norm 4.027211131979e+04
+   4 KSP Residual norm 2.030643277176e+04
+   5 KSP Residual norm 9.996336070718e+03
+   6 KSP Residual norm 4.499209738782e+03
+   7 KSP Residual norm 2.298423470140e+03
+ 3 KSP Residual norm 2.350518497486e-08
+   Residual norms for fieldsplit_1_ solve.
+   0 KSP Residual norm 3.304403201367e+05
+   1 KSP Residual norm 1.993083865911e+05
+   2 KSP Residual norm 9.397960969595e+04
+   3 KSP Residual norm 4.928650742565e+04
+   4 KSP Residual norm 2.451251367195e+04
+   5 KSP Residual norm 1.237756537851e+04
+   6 KSP Residual norm 5.480296653554e+03
+   7 KSP Residual norm 3.101516648503e+03
+ 4 KSP Residual norm 9.568748302483e-11
+   Residual norms for fieldsplit_1_ solve.
+   0 KSP Residual norm 4.448880690454e+05
+   1 KSP Residual norm 2.628153049738e+05
+   2 KSP Residual norm 1.281287424988e+05
+   3 KSP Residual norm 7.292699051221e+04
+   4 KSP Residual norm 3.180368227288e+04
+   5 KSP Residual norm 1.546252803266e+04
+   6 KSP Residual norm 6.807281733103e+03
+   7 KSP Residual norm 3.144299396548e+03
+ 5 KSP Residual norm 5.494536394249e-13
+Approximation error 3.391e-11
+\endverbatim
+Note that KPS solver make 5 iterations to converge, since in this case,
+Schur complaint is approximated by pre-conditioner. If from other hand
+we use full Schur complement with and use direct solver
+\code
+mpirun -np 1 ./analytical_poisson_field_split \
+-file_name cube_1part.h5m -order 3 \
+-pc_type fieldsplit \
+-pc_fieldsplit_schur_precondition full \
+-fieldsplit_1_pc_type lu -fieldsplit_1_pc_factor_mat_solver_packag mumps \
+-dm_mat_type aij
+\endcode
+we will get
+\verbatim
+0 KSP Residual norm 8.033746248668e-01
+1 KSP Residual norm 6.498236020454e-01
+2 KSP Residual norm 9.691076621610e-12
+\endverbatim
+Note that we converged in three steps in that case.
+
+\section poisson_tut3_excercise Exercises
+
+- Use direct solver for pre-conditioner for two blocks and check how it changes convergence
+
+*/

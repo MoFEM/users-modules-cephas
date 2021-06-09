@@ -22,3 +22,6 @@
 
 .DS_Store
 tutorials/.vscode/launch.json
+basic_finite_elements/.vscode
+tutorials/.vscode
+tools/.vscode

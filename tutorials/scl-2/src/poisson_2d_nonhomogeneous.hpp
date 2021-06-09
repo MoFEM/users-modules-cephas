@@ -19,7 +19,6 @@ constexpr auto MatSetValues = MoFEM::MatSetValues<MoFEM::EssentialBcStorage>;
 
 FTensor::Index<'i', 2> i;
 
-// const double body_source = 10;
 typedef boost::function<double(const double, const double, const double)>
     ScalarFunc;
 
@@ -98,7 +97,7 @@ public:
   }
 
 private:
-  boost::shared_ptr<std::vector<bool>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   MatrixDouble locLhs, transLocLhs;
 };
 

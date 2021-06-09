@@ -19,7 +19,6 @@ if(MED_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
@@ -33,7 +32,6 @@ target_link_libraries(add_meshsets
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -46,7 +44,6 @@ target_link_libraries(mofem_part
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -59,7 +56,6 @@ target_link_libraries(split_sideset
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -72,7 +68,6 @@ target_link_libraries(mesh_cut
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -85,11 +80,23 @@ target_link_libraries(field_to_vertices
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
 install(TARGETS field_to_vertices DESTINATION bin)
+
+add_executable(remove_mofem_meshsets
+  ${CMAKE_CURRENT_SOURCE_DIR}/remove_mofem_meshsets.cpp)
+target_link_libraries(remove_mofem_meshsets
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS remove_mofem_meshsets DESTINATION bin)
 
 add_executable(delete_ho_nodes ${CMAKE_CURRENT_SOURCE_DIR}/delete_ho_nodes.cpp)
 target_link_libraries(delete_ho_nodes
@@ -98,7 +105,6 @@ target_link_libraries(delete_ho_nodes
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -111,7 +117,6 @@ target_link_libraries(meshset_to_vtk
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -125,7 +130,6 @@ target_link_libraries(uniform_mesh_refinement
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -138,11 +142,22 @@ target_link_libraries(extrude_prisms
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
 install(TARGETS extrude_prisms DESTINATION bin)
+
+add_executable(get_skin ${CMAKE_CURRENT_SOURCE_DIR}/get_skin.cpp)
+target_link_libraries(get_skin
+  mofem_finite_elements
+  mofem_interfaces
+  mofem_multi_indices
+  mofem_petsc
+  mofem_approx
+  mofem_third_party
+  ${MoFEM_PROJECT_LIBS}
+)
+install(TARGETS get_skin DESTINATION bin)
 
 cm_export_file("convert.py" export_tools)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/convert.py
@@ -164,7 +179,6 @@ if(ADOL-C_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
