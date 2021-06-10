@@ -89,7 +89,7 @@ private:
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 
-    // Object to mark boundary entities for the assembling of domain elements
+  // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_1;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_2;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_3;
@@ -183,7 +183,7 @@ MoFEMErrorCode Example::createCommonData() {
   thDPtr = boost::make_shared<MatrixDouble>();
   bodyForceMatPtr = boost::make_shared<MatrixDouble>();
 
-  auto previousUpdate = boost::shared_ptr<DataAtGaussPoints>(new DataAtGaussPoints());
+  previousUpdate = boost::shared_ptr<DataAtGaussPoints>(new DataAtGaussPoints());
   fieldValuePtr = boost::shared_ptr<VectorDouble>(previousUpdate,&previousUpdate->fieldValue);
 
   constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -294,7 +294,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 20, "BOUNDARY_CONDITION_1") == 0) {
+      if (entity_name.compare(0, 5, "FIX_X") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities, true);
       }
@@ -379,7 +379,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
       Range boundary_entities_loop;
-      if (entity_name.compare(0, 20, "BOUNDARY_CONDITION_1") == 0) {
+      if (entity_name.compare(0, 5, "FIX_X") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities_loop, true);
         boundary_entities.merge(boundary_entities_loop);                                           
@@ -427,6 +427,17 @@ auto get_ents_on_mesh_skin_1 = [&]() {
   boundaryMarker_5 = mark_boundary_dofs(get_ents_on_mesh_skin_5());
   fluxBoundaryConditions_1 = get_ents_on_mesh_skin_2();
   fluxBoundaryConditions_2 = get_ents_on_mesh_skin_3();
+
+  EntityHandle meshset_skin1;
+  CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin1);
+  CHKERR mField.get_moab().add_entities(meshset_skin1, get_ents_on_mesh_skin_1());
+  // CHKERR mField.get_moab().write_mesh("bottom.vtk", &meshset_skin1,1);
+
+    EntityHandle meshset_skin5;
+  CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin5);
+  CHKERR mField.get_moab().add_entities(meshset_skin5, get_ents_on_mesh_skin_5());
+  // CHKERR mField.get_moab().write_mesh("top.vtk", &meshset_skin5,1);
+
 
   MoFEMFunctionReturn(0);
 }
@@ -487,25 +498,31 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
 
+    // Push operator to get TEMP from Integration Points and pass at pointer 
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+    new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
+
     // Push back the LHS  for conduction
     pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetBc("TEMP", true, boundaryMarker_1));
+        new OpSetBc("TEMP", true, boundaryMarker_4));
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainGradGrad("TEMP", "TEMP", D_mat));   
     pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpUnSetBc("TEMP"));
     
     pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpSetBc("TEMP", true, boundaryMarker_1));
+        new OpSetBc("TEMP", true, boundaryMarker_4));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainSource("TEMP", sourceTermFunction));
     pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpUnSetBc("TEMP"));
 
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-    
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));   
+
     // Start coupling term
-    // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpKut("U", "TEMP", thDPtr, previousUpdate));
+
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpKut("U", "TEMP", thDPtr, previousUpdate));
+
     // end coupling
 
     // Body force operator
@@ -518,15 +535,23 @@ MoFEMErrorCode Example::assembleSystem() {
     CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
+
+//  Operator for coupling LHS boundary term
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpSetBc("TEMP", true, boundaryMarker_4));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+        new OpBoundaryLhs_tm("U", "TEMP", thDPtr, previousUpdate));
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("TEMP"));
+
     // Start Code for non zero Dirichelet conditions
    // Push operators in boundary pipeline LHS for Dirichelet
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+
+   pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpSetBc("TEMP", false, boundaryMarker_1));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryMass("TEMP", "TEMP", q_unit));
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("TEMP"));
   
-
        // Push operators in boundary pipeline LHS for Dirichelet
     pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpSetBc("TEMP", false, boundaryMarker_5));
@@ -538,34 +563,43 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpSetBc("TEMP", false, boundaryMarker_1));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource("TEMP", bc_1));
+        new OpBoundaryRhs("TEMP", bc_1));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
   
    // Push operators in boundary pipeline RHS for Dirichelet
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpSetBc("TEMP", false, boundaryMarker_5));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource("TEMP", bc_2));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
+        new OpBoundaryRhs("TEMP", bc_2));
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP")); 
   
+
+    //   // Push operator to get TEMP from Integration Points and pass at pointer 
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    // new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
+
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpBoundaryRhsThermoMech("U", thDPtr, previousUpdate));
+
+
 // End Code for non zero Dirichelet conditions
 
-    // Push operators to the Pipeline that is responsible for calculating RHS of
-    // boundary elements
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpSetBc("TEMP", false, boundaryMarker_2));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource("TEMP", flux_1));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
+    // // Push operators to the Pipeline that is responsible for calculating RHS of
+    // // boundary elements
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpSetBc("TEMP", false, boundaryMarker_2));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpBoundarySource("TEMP", flux_1));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
   
 
-    // Push operators to the Pipeline that is responsible for calculating RHS of
-    // boundary elements
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpSetBc("TEMP", false, boundaryMarker_3));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource("TEMP", flux_2));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
+    // // Push operators to the Pipeline that is responsible for calculating RHS of
+    // // boundary elements
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpSetBc("TEMP", false, boundaryMarker_3));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpBoundarySource("TEMP", flux_2));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
   
     CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
     CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
@@ -613,9 +647,17 @@ MoFEMErrorCode Example::outputResults() {
                                                                matGradPtr));
   post_proc_fe->getOpPtrVector().push_back(
       new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+
+      // Push operator to get TEMP from Integration Points and pass at pointer 
+    post_proc_fe->getOpPtrVector().push_back(
+    new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
+
   post_proc_fe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
+      new OpTensorTimesSymmetricTensorNew<SPACE_DIM, SPACE_DIM>(
+          "U", matStrainPtr, matStressPtr, matDPtr, thDPtr, previousUpdate));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //   new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+  //       "U", matStrainPtr, matStressPtr, matDPtr));
   post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
       "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
       matStressPtr));
