@@ -371,7 +371,7 @@ MoFEMErrorCode Example::solveSystem() {
                              null_fe, monitor_ptr);
 
   double ftime = 1;
-  CHKERR TSSetMaxTime(ts, ftime);
+  // CHKERR TSSetMaxTime(ts, ftime);
   CHKERR TSSetExactFinalTime(ts, TS_EXACTFINALTIME_MATCHSTEP);
 
   auto T = smartCreateDMVector(simple->getDM());
@@ -390,7 +390,11 @@ MoFEMErrorCode Example::solveSystem() {
   CHKERR TSGetTime(ts, &ftime);
 
   PetscInt steps, snesfails, rejects, nonlinits, linits;
+#if PETSC_VERSION_GE(3, 8, 0)
   CHKERR TSGetStepNumber(ts, &steps);
+#else
+  CHKERR TSGetTimeStepNumber(ts, &steps);
+#endif
   CHKERR TSGetSNESFailures(ts, &snesfails);
   CHKERR TSGetStepRejections(ts, &rejects);
   CHKERR TSGetSNESIterations(ts, &nonlinits);

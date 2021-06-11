@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type fgmres\n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n";
+                                 "-pc_factor_mat_solver_type mumps \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -120,11 +120,12 @@ int main(int argc, char *argv[]) {
     }
 
     // Create MOAB communicator
-    MPI_Comm moab_comm_world;
-    MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-    ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+    auto moab_comm_wrap =
+        boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
     if (pcomm == NULL)
-      pcomm = new ParallelComm(&moab, moab_comm_world);
+      pcomm =
+          new ParallelComm(&moab, moab_comm_wrap->get_comm());
 
     const char *option;
     option = "PARALLEL=READ_PART;"
@@ -311,7 +312,6 @@ int main(int argc, char *argv[]) {
     CHKERR uf.solveProblem();
     CHKERR uf.destroyMatrices();
 
-    MPI_Comm_free(&moab_comm_world);
   }
   CATCH_ERRORS;
 

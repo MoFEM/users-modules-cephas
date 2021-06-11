@@ -537,17 +537,19 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm =
+        boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range prims;
   CHKERR postProcMesh.get_entities_by_type(0, MBPRISM, prims, false);
   // std::cerr << "total prims size " << prims.size() << std::endl;
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   Range::iterator pit = prims.begin();
   for (; pit != prims.end(); pit++) {
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
@@ -830,16 +832,17 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range tris;
   CHKERR postProcMesh.get_entities_by_type(0, MBTRI, tris, false);
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   Range::iterator pit = tris.begin();
   for (; pit != tris.end(); pit++) {
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), &*pit, 1,
@@ -849,8 +852,9 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::postProcess() {
   MoFEMFunctionReturn(0);
 }
 
+template <int RANK>
 MoFEMErrorCode
-PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
+PostProcFaceOnRefinedMesh::OpGetFieldValuesOnSkinImpl<RANK>::doWork(
     int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
   MoFEMFunctionBegin;
 
@@ -863,12 +867,20 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   if (!saveOnTag)
     MoFEMFunctionReturnHot(0);
 
-  auto dof_ptr = data.getFieldDofs()[0];
-  int rank = dof_ptr->getNbOfCoeffs();
+  auto &m_field = getPtrFE()->mField;
+  auto field_ptr = m_field.get_field_structure(fieldName);
+  const int rank = field_ptr->getNbOfCoeffs();
+  FieldSpace space = field_ptr->getSpace();
 
-  int tag_length = rank * 3;
-  FieldSpace space = dof_ptr->getSpace();
+  // auto dof_ptr = data.getFieldDofs()[0];
+  // int rank = dof_ptr->getNbOfCoeffs();
+  // FieldSpace space = dof_ptr->getSpace();
 
+  int full_size = rank * RANK;
+  if(space == HDIV)
+    full_size *= 3;
+  // for paraview
+  int tag_length = full_size > 3 && full_size < 9 ? 9 : full_size;
   double def_VAL[tag_length];
   bzero(def_VAL, tag_length * sizeof(double));
   Tag th;
@@ -881,25 +893,27 @@ PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin::doWork(
   const void *tags_ptr[mapGaussPts.size()];
   int nb_gauss_pts = data.getN().size1();
   if (mapGaussPts.size() != (unsigned int)nb_gauss_pts ||
-      nb_gauss_pts != gradMatPtr->size2()) {
+      nb_gauss_pts != matPtr->size2()) {
     SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY, "data inconsistency");
   }
   switch (space) {
   case H1:
   case L2:
+  case HDIV:
 
     CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0], mapGaussPts.size(),
                                        tags_ptr);
-    // FIXME: this is not very efficient
+
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
-      for (int rr = 0; rr != rank; ++rr) {
-        for (int dd = 0; dd != 3; ++dd) {
-          const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
-          double *my_ptr = const_cast<double *>(my_ptr2);
-          my_ptr[rank * rr + dd] = (*gradMatPtr)(rank * rr + dd, gg);
+      const double *my_ptr2 = static_cast<const double *>(tags_ptr[gg]);
+      double *my_ptr = const_cast<double *>(my_ptr2);
+      for (int rr = 0; rr != RANK; ++rr) {
+        for (int dd = 0; dd != rank; ++dd) {
+          my_ptr[rank * rr + dd] = (*matPtr)(rank * rr + dd, gg);
         }
       }
     }
+
     break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
@@ -933,18 +947,94 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
     my_side_fe->getOpPtrVector().push_back(
         new OpCalculateVectorFieldGradient<3, 3>(field_name, grad_mat_ptr));
     break;
+  case 6:
+    my_side_fe->getOpPtrVector().push_back(
+        new OpCalculateTensor2SymmetricFieldGradient<3, 3>(field_name,
+                                                           grad_mat_ptr));
+    break;
   default:
     SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
             "field with that number of coefficients is not implemented");
   }
 
   FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
-      new OpGetFieldGradientValuesOnSkin(
+      new OpGetFieldValuesOnSkinImpl<3>(
           postProcMesh, mapGaussPts, field_name, field_name + "_GRAD",
           my_side_fe, vol_fe_name, grad_mat_ptr, save_on_tag));
 
   MoFEMFunctionReturn(0);
 }
+
+
+MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
+    const std::string field_name, const std::string vol_fe_name,
+    boost::shared_ptr<MatrixDouble> mat_ptr, bool save_on_tag) {
+  MoFEMFunctionBegin;
+
+  if (!mat_ptr)
+    mat_ptr = boost::make_shared<MatrixDouble>();
+
+  auto my_side_fe =
+      boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
+
+  // check number of coefficients
+  auto field_ptr = mField.get_field_structure(field_name);
+  const int nb_coefficients = field_ptr->getNbOfCoeffs();
+  FieldSpace space = field_ptr->getSpace();
+
+  switch (space) {
+  case L2:
+  case H1:
+    switch (nb_coefficients) {
+    case 1:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<1>(field_name, mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateVectorFieldValues<3>(field_name, mat_ptr));
+      break;
+    case 6:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateTensor2SymmetricFieldValues<3>(field_name, mat_ptr));
+      break;
+    case 9:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateTensor2FieldValues<3, 3>(field_name, mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+    break;
+  case HDIV:
+    switch (nb_coefficients) {
+    case 1:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHdivVectorField<3>(field_name, mat_ptr));
+      break;
+    case 3:
+      my_side_fe->getOpPtrVector().push_back(
+          new OpCalculateHVecTensorField<3, 3>(field_name, mat_ptr));
+      break;
+    default:
+      SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+              "field with that number of coefficients is not implemented");
+    }
+  break;
+  default:
+    SETERRQ(PETSC_COMM_SELF, MOFEM_NOT_IMPLEMENTED,
+            "field with that space is not implemented.");
+  }
+
+  FaceElementForcesAndSourcesCore::getOpPtrVector().push_back(
+      new OpGetFieldValuesOnSkinImpl<1>(
+          postProcMesh, mapGaussPts, field_name, field_name,
+          my_side_fe, vol_fe_name, mat_ptr, save_on_tag));
+
+  MoFEMFunctionReturn(0);
+}
+
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
   return OpSwitch<
@@ -993,16 +1083,17 @@ MoFEMErrorCode PostProcEdgeOnRefinedMesh::preProcess() {
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
-  ParallelComm *pcomm =
-      ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
   if (pcomm_post_proc_mesh == NULL) {
-    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+    wrapRefMeshComm = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pcomm_post_proc_mesh =
+        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
+
   Range edges;
   CHKERR postProcMesh.get_entities_by_type(0, MBEDGE, edges, false);
-  int rank = pcomm->rank();
+  int rank = mField.get_comm_rank();
   auto set_edges_rank = [&](const auto rank, const auto &edges) {
     std::vector<EntityHandle> ranks(edges.size(), rank);
     CHKERR postProcMesh.tag_set_data(pcomm_post_proc_mesh->part_tag(), edges,

@@ -493,6 +493,80 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsMaster::doWork(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode
+SimpleContactProblem::OpGetMatPosForDisplAtGaussPtsMaster::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  auto t_new_spat_pos_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_master(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_new_spat_pos_master(i) -= t_base_master * t_field_data_master(i);
+
+      ++t_base_master;
+      ++t_field_data_master;
+    }
+    ++t_new_spat_pos_master;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpGetDeformationFieldForDisplAtGaussPtsMaster::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  auto t_new_spat_pos_master = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsMasterPtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_master(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_master(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_new_spat_pos_master(i) += t_base_master * t_field_data_master(i);
+
+      ++t_base_master;
+      ++t_field_data_master;
+    }
+    ++t_new_spat_pos_master;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
 MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
     int side, EntityType type, EntData &data) {
   MoFEMFunctionBegin;
@@ -502,9 +576,11 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
     MoFEMFunctionReturnHot(0);
 
   const int nb_gauss_pts = data.getN().size1();
+
   if (type == MBVERTEX) {
     commonDataSimpleContact->positionAtGaussPtsSlavePtr.get()->resize(
         3, nb_gauss_pts, false);
+
     commonDataSimpleContact->positionAtGaussPtsSlavePtr.get()->clear();
   }
 
@@ -520,7 +596,7 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
 
     FTensor::Tensor1<double *, 3> t_field_data_slave(
         &data.getFieldData()[0], &data.getFieldData()[1],
-        &data.getFieldData()[2], 3); // in-between
+        &data.getFieldData()[2], 3);
 
     for (int bb = 0; bb != nb_base_fun_col; ++bb) {
       t_position_slave(i) += t_base_slave * t_field_data_slave(i);
@@ -529,6 +605,79 @@ MoFEMErrorCode SimpleContactProblem::OpGetPositionAtGaussPtsSlave::doWork(
       ++t_field_data_slave;
     }
     ++t_position_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode SimpleContactProblem::OpGetMatPosForDisplAtGaussPtsSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  auto t_new_spat_pos_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_new_spat_pos_slave(i) -= t_base_slave * t_field_data_slave(i);
+
+      ++t_base_slave;
+      ++t_field_data_slave;
+    }
+    ++t_new_spat_pos_slave;
+  }
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode
+SimpleContactProblem::OpGetDeformationFieldForDisplAtGaussPtsSlave::doWork(
+    int side, EntityType type, EntData &data) {
+  MoFEMFunctionBegin;
+  const int nb_dofs = data.getFieldData().size();
+
+  if (nb_dofs == 0)
+    MoFEMFunctionReturnHot(0);
+
+  const int nb_gauss_pts = data.getN().size1();
+
+  auto t_new_spat_pos_slave = getFTensor1FromMat<3>(
+      *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
+
+  int nb_base_fun_col = data.getFieldData().size() / 3;
+
+  FTensor::Index<'i', 3> i;
+
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+    FTensor::Tensor0<double *> t_base_slave(&data.getN()(gg, 0));
+
+    FTensor::Tensor1<double *, 3> t_field_data_slave(
+        &data.getFieldData()[0], &data.getFieldData()[1],
+        &data.getFieldData()[2], 3);
+
+    for (int bb = 0; bb != nb_base_fun_col; ++bb) {
+      t_new_spat_pos_slave(i) += t_base_slave * t_field_data_slave(i);
+
+      ++t_base_slave;
+      ++t_field_data_slave;
+    }
+    ++t_new_spat_pos_slave;
   }
 
   MoFEMFunctionReturn(0);
@@ -2075,15 +2224,13 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
                                 MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
 
   Tag th_lag_mult;
-  if (lagFieldSet)
-    CHKERR moabOut.tag_get_handle("LAGMULT", 1, MB_TYPE_DOUBLE, th_lag_mult,
-                                  MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+  CHKERR moabOut.tag_get_handle("LAGMULT", 1, MB_TYPE_DOUBLE, th_lag_mult,
+                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
 
   Tag th_lag_gap_prod;
-  if (lagFieldSet)
-    CHKERR moabOut.tag_get_handle("LAG_GAP_PROD", 1, MB_TYPE_DOUBLE,
-                                  th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
-                                  &def_vals);
+  CHKERR moabOut.tag_get_handle("LAG_GAP_PROD", 1, MB_TYPE_DOUBLE,
+                                th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
+                                &def_vals);
 
   Tag th_state;
   CHKERR moabOut.tag_get_handle("STATE", 1, MB_TYPE_DOUBLE, th_state,
@@ -2210,7 +2357,9 @@ MoFEMErrorCode SimpleContactProblem::OpMakeTestTextFile::doWork(int side,
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -2225,6 +2374,25 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
+
+  if (is_eigen_pos_field) {
+    fe_rhs_simple_contact->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsMaster(
+            eigen_pos_field_name, common_data_simple_contact));
+
+    fe_rhs_simple_contact->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsSlave(
+            eigen_pos_field_name, common_data_simple_contact));
+    if (use_reference_coordinates) {
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetMatPosForDisplAtGaussPtsMaster("MESH_NODE_POSITIONS",
+                                                  common_data_simple_contact));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetMatPosForDisplAtGaussPtsSlave("MESH_NODE_POSITIONS",
+                                                 common_data_simple_contact));
+    }
+  }
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetGapSlave(field_name, common_data_simple_contact));
@@ -2263,7 +2431,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhs(
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   fe_rhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -2275,13 +2445,6 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
   fe_rhs_simple_contact->getOpPtrVector().push_back(
       new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
                                      common_data_simple_contact));
-
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetPositionAtGaussPtsMaster(field_name,
-                                        common_data_simple_contact));
-
-  fe_rhs_simple_contact->getOpPtrVector().push_back(
-      new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
 
   if (!is_alm) {
     fe_rhs_simple_contact->getOpPtrVector().push_back(
@@ -2296,6 +2459,26 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
     fe_rhs_simple_contact->getOpPtrVector().push_back(
         new OpGetPositionAtGaussPtsSlave(field_name,
                                          common_data_simple_contact));
+
+    if (is_eigen_pos_field) {
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetDeformationFieldForDisplAtGaussPtsMaster(
+              eigen_pos_field_name, common_data_simple_contact));
+
+      fe_rhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetDeformationFieldForDisplAtGaussPtsSlave(
+              eigen_pos_field_name, common_data_simple_contact));
+
+      if (use_reference_coordinates) {
+        fe_rhs_simple_contact->getOpPtrVector().push_back(
+            new OpGetMatPosForDisplAtGaussPtsMaster(
+                "MESH_NODE_POSITIONS", common_data_simple_contact));
+
+        fe_rhs_simple_contact->getOpPtrVector().push_back(
+            new OpGetMatPosForDisplAtGaussPtsSlave("MESH_NODE_POSITIONS",
+                                                   common_data_simple_contact));
+      }
+    }
 
     fe_rhs_simple_contact->getOpPtrVector().push_back(
         new OpGetGapSlave(field_name, common_data_simple_contact));
@@ -2315,7 +2498,9 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsRhs(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
@@ -2330,6 +2515,26 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
+
+  if (is_eigen_pos_field) {
+    fe_lhs_simple_contact->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsMaster(
+            eigen_pos_field_name, common_data_simple_contact));
+
+    fe_lhs_simple_contact->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsSlave(
+            eigen_pos_field_name, common_data_simple_contact));
+
+    if (use_reference_coordinates) {
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetMatPosForDisplAtGaussPtsMaster("MESH_NODE_POSITIONS",
+                                                  common_data_simple_contact));
+
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetMatPosForDisplAtGaussPtsSlave("MESH_NODE_POSITIONS",
+                                                 common_data_simple_contact));
+    }
+  }
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpGetGapSlave(field_name, common_data_simple_contact));
@@ -2393,7 +2598,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -2418,6 +2625,25 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpGetPositionAtGaussPtsSlave(field_name,
                                          common_data_simple_contact));
+
+    if (is_eigen_pos_field) {
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetDeformationFieldForDisplAtGaussPtsMaster(
+              eigen_pos_field_name, common_data_simple_contact));
+
+      fe_lhs_simple_contact->getOpPtrVector().push_back(
+          new OpGetDeformationFieldForDisplAtGaussPtsSlave(
+              eigen_pos_field_name, common_data_simple_contact));
+      if (use_reference_coordinates) {
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
+            new OpGetMatPosForDisplAtGaussPtsMaster(
+                "MESH_NODE_POSITIONS", common_data_simple_contact));
+
+        fe_lhs_simple_contact->getOpPtrVector().push_back(
+            new OpGetMatPosForDisplAtGaussPtsSlave("MESH_NODE_POSITIONS",
+                                                   common_data_simple_contact));
+      }
+    }
 
     fe_lhs_simple_contact->getOpPtrVector().push_back(
         new OpGetGapSlave(field_name, common_data_simple_contact));
@@ -2445,11 +2671,14 @@ MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
     boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
   CHKERR setContactOperatorsLhs(
       boost::dynamic_pointer_cast<SimpleContactElement>(fe_lhs_simple_contact),
-      common_data_simple_contact, field_name, lagrange_field_name);
+      common_data_simple_contact, field_name, lagrange_field_name, is_alm,
+      is_eigen_pos_field, eigen_pos_field_name);
 
   fe_lhs_simple_contact->getOpPtrVector().push_back(
       new OpCalculateGradPositionXi(field_name, common_data_simple_contact));
@@ -2472,7 +2701,9 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhs(
 MoFEMErrorCode SimpleContactProblem::setMasterForceOperatorsLhs(
     boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-    string field_name, string lagrange_field_name, bool is_alm) {
+    string field_name, string lagrange_field_name, bool is_alm,
+    bool is_eigen_pos_field, string eigen_pos_field_name,
+    bool use_reference_coordinates) {
   MoFEMFunctionBegin;
 
   CHKERR setMasterForceOperatorsLhs(
@@ -2500,7 +2731,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
     boost::shared_ptr<SimpleContactElement> fe_post_proc_simple_contact,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
-    moab::Interface &moab_out, bool alm_flag, bool lagrange_field,
+    moab::Interface &moab_out, bool alm_flag, bool is_eigen_pos_field,
+    string eigen_pos_field_name, bool use_reference_coordinates,
     StateTagSide state_tag_side) {
   MoFEMFunctionBegin;
 
@@ -2519,6 +2751,25 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
 
+  if (is_eigen_pos_field) {
+    fe_post_proc_simple_contact->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsMaster(
+            eigen_pos_field_name, common_data_simple_contact));
+
+    fe_post_proc_simple_contact->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsSlave(
+            eigen_pos_field_name, common_data_simple_contact));
+    if (use_reference_coordinates) {
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetMatPosForDisplAtGaussPtsMaster("MESH_NODE_POSITIONS",
+                                                  common_data_simple_contact));
+
+      fe_post_proc_simple_contact->getOpPtrVector().push_back(
+          new OpGetMatPosForDisplAtGaussPtsSlave("MESH_NODE_POSITIONS",
+                                                 common_data_simple_contact));
+    }
+  }
+
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpGetGapSlave(field_name, common_data_simple_contact));
 
@@ -2536,7 +2787,7 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsForPostProc(
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(
       new OpMakeVtkSlave(m_field, field_name, common_data_simple_contact,
-                         moab_out, lagrange_field, state_tag_side));
+                         moab_out, state_tag_side));
 
   fe_post_proc_simple_contact->getOpPtrVector().push_back(new OpGetContactArea(
       lagrange_field_name, common_data_simple_contact, cnValue, alm_flag));
@@ -4204,15 +4455,16 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
       new OpGetNormalMasterALE("MESH_NODE_POSITIONS",
                                common_data_simple_contact));
 
-  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetPositionAtGaussPtsMaster(field_name,
-                                        common_data_simple_contact));
+  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+  //     new OpGetPositionAtGaussPtsMaster(field_name,
+  //                                       common_data_simple_contact));
 
-  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
+  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+  //     new OpGetPositionAtGaussPtsSlave(field_name,
+  //     common_data_simple_contact));
 
-  fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
-      new OpGetGapSlave(field_name, common_data_simple_contact));
+  // fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
+  //     new OpGetGapSlave(field_name, common_data_simple_contact));
 
   fe_rhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpGetLagMulAtGaussPtsSlave(lagrange_field_name,
@@ -4347,7 +4599,8 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
     boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
     boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
     const string field_name, const string mesh_node_field_name,
-    const string lagrange_field_name) {
+    const string lagrange_field_name, bool is_eigen_pos_field,
+    string eigen_pos_field_name) {
   MoFEMFunctionBegin;
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(new OpGetNormalSlaveALE(
@@ -4363,6 +4616,16 @@ MoFEMErrorCode SimpleContactProblem::setContactOperatorsLhsALE(
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpGetPositionAtGaussPtsSlave(field_name, common_data_simple_contact));
+
+  if (is_eigen_pos_field) {
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsMaster(
+            eigen_pos_field_name, common_data_simple_contact));
+
+    fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
+        new OpGetDeformationFieldForDisplAtGaussPtsSlave(
+            eigen_pos_field_name, common_data_simple_contact));
+  }
 
   fe_lhs_simple_contact_ale->getOpPtrVector().push_back(
       new OpGetGapSlave(field_name, common_data_simple_contact));

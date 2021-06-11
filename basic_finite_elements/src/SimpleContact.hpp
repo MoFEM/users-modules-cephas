@@ -223,42 +223,38 @@ struct SimpleContactProblem {
    * positions
    * @param  range_slave_master_prisms  Range for prism entities used to create
    * contact elements
-   * @param  lagrange_field             Boolean used to determine existence of
-   * Lagrange multipliers field (default is true)
    * @return                            Error code
    *
    */
-  MoFEMErrorCode addContactElement(const string element_name,
-                                   const string field_name,
-                                   const string lagrange_field_name,
-                                   Range &range_slave_master_prisms,
-                                   bool lagrange_field = true) {
+  MoFEMErrorCode addContactElement(
+      const string element_name, const string field_name,
+      const string lagrange_field_name, Range &range_slave_master_prisms,
+      bool eigen_pos_flag = false,
+      const string eigen_node_field_name = "EIGEN_SPATIAL_POSITIONS") {
     MoFEMFunctionBegin;
 
     CHKERR mField.add_finite_element(element_name, MF_ZERO);
 
     if (range_slave_master_prisms.size() > 0) {
 
-      // C row as Lagrange_mul and col as SPATIAL_POSITION
-      if (lagrange_field)
-        CHKERR mField.modify_finite_element_add_field_row(element_name,
-                                                          lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                        lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         field_name);
 
-      // CT col as Lagrange_mul and row as SPATIAL_POSITION
-      if (lagrange_field)
-        CHKERR mField.modify_finite_element_add_field_col(element_name,
-                                                          lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                        lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         field_name);
 
-      // data
-      if (lagrange_field)
-        CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                           lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         lagrange_field_name);
+
+      if (eigen_pos_flag)
+        CHKERR mField.modify_finite_element_add_field_data(
+            element_name, eigen_node_field_name);
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
@@ -290,43 +286,41 @@ struct SimpleContactProblem {
    * positions
    * @param  range_slave_master_prisms  Range for prism entities used to create
    * contact elements
-   * @param  lagrange_field             Boolean used to determine existence of
-   * Lagrange multipliers field (default is true)
    * @return                            Error code
    *
    */
-  MoFEMErrorCode addContactElementALE(const string element_name,
-                                      const string field_name,
-                                      const string mesh_node_field_name,
-                                      const string lagrange_field_name,
-                                      Range &range_slave_master_prisms,
-                                      bool lagrange_field = true) {
+  MoFEMErrorCode addContactElementALE(
+      const string element_name, const string field_name,
+      const string mesh_node_field_name, const string lagrange_field_name,
+      Range &range_slave_master_prisms, bool eigen_pos_flag = false,
+      const string eigen_node_field_name = "EIGEN_SPATIAL_POSITIONS") {
     MoFEMFunctionBegin;
 
     CHKERR mField.add_finite_element(element_name, MF_ZERO);
 
     if (range_slave_master_prisms.size() > 0) {
 
-      if (lagrange_field)
-        CHKERR mField.modify_finite_element_add_field_row(element_name,
-                                                          lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_row(element_name,
+                                                        lagrange_field_name);
 
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         field_name);
       CHKERR mField.modify_finite_element_add_field_col(element_name,
                                                         mesh_node_field_name);
 
-      if (lagrange_field)
-        CHKERR mField.modify_finite_element_add_field_col(element_name,
-                                                          lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_col(element_name,
+                                                        lagrange_field_name);
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         field_name);
       CHKERR mField.modify_finite_element_add_field_row(element_name,
                                                         mesh_node_field_name);
 
-      if (lagrange_field)
-        CHKERR mField.modify_finite_element_add_field_data(element_name,
-                                                           lagrange_field_name);
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         lagrange_field_name);
+
+      if (eigen_pos_flag)
+        CHKERR mField.modify_finite_element_add_field_data(
+            element_name, eigen_node_field_name);
 
       CHKERR mField.modify_finite_element_add_field_data(element_name,
                                                          field_name);
@@ -771,6 +765,42 @@ struct SimpleContactProblem {
   /**
    * @brief Operator for the simple contact element
    *
+   * Calculates the spacial coordinates of the gauss points of master triangle.
+   *
+   */
+  struct OpGetMatPosForDisplAtGaussPtsMaster : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetMatPosForDisplAtGaussPtsMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of master triangle.
+   *
+   */
+  struct OpGetDeformationFieldForDisplAtGaussPtsMaster : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetDeformationFieldForDisplAtGaussPtsMaster(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACEMASTER),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
    * Calculates the spacial coordinates of the gauss points of slave triangle.
    *
    */
@@ -778,6 +808,42 @@ struct SimpleContactProblem {
 
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     OpGetPositionAtGaussPtsSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of slave triangle.
+   *
+   */
+  struct OpGetMatPosForDisplAtGaussPtsSlave : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetMatPosForDisplAtGaussPtsSlave(
+        const string field_name,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
+        : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
+          commonDataSimpleContact(common_data_contact) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+  };
+
+  /**
+   * @brief Operator for the simple contact element
+   *
+   * Calculates the spacial coordinates of the gauss points of slave triangle.
+   *
+   */
+  struct OpGetDeformationFieldForDisplAtGaussPtsSlave : public ContactOp {
+
+    boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
+    OpGetDeformationFieldForDisplAtGaussPtsSlave(
         const string field_name,
         boost::shared_ptr<CommonDataSimpleContact> common_data_contact)
         : ContactOp(field_name, UserDataOperator::OPCOL, ContactOp::FACESLAVE),
@@ -2120,17 +2186,15 @@ struct SimpleContactProblem {
     MoFEM::Interface &mField;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
     moab::Interface &moabOut;
-    bool lagFieldSet;
     StateTagSide stateTagSide;
 
     OpMakeVtkSlave(MoFEM::Interface &m_field, string field_name,
-                   boost::shared_ptr<CommonDataSimpleContact> &common_data,
-                   moab::Interface &moab_out, bool lagrange_field = true,
+                   boost::shared_ptr<CommonDataSimpleContact> common_data,
+                   moab::Interface &moab_out,
                    StateTagSide state_tag_side = NO_TAG)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
-          moabOut(moab_out), lagFieldSet(lagrange_field),
-          stateTagSide(state_tag_side) {}
+          moabOut(moab_out), stateTagSide(state_tag_side) {}
 
     MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
   };
@@ -2139,15 +2203,14 @@ struct SimpleContactProblem {
 
     MoFEM::Interface &mField;
     boost::shared_ptr<CommonDataSimpleContact> commonDataSimpleContact;
-    bool lagFieldSet;
     std::ofstream &mySplit;
 
     OpMakeTestTextFile(MoFEM::Interface &m_field, string field_name,
-                       boost::shared_ptr<CommonDataSimpleContact> &common_data,
-                       std::ofstream &_my_split, bool lagrange_field = true)
+                       boost::shared_ptr<CommonDataSimpleContact> common_data,
+                       std::ofstream &_my_split)
         : ContactOp(field_name, UserDataOperator::OPROW, ContactOp::FACESLAVE),
           mField(m_field), commonDataSimpleContact(common_data),
-          lagFieldSet(lagrange_field), mySplit(_my_split) {
+          mySplit(_my_split) {
       mySplit << fixed << setprecision(8);
       mySplit << "[0] Lagrange multiplier [1] Gap" << endl;
     }
@@ -2167,15 +2230,21 @@ struct SimpleContactProblem {
    * @param  lagrange_field_name        String of field name for Lagrange
    * multipliers
    * @param  is_alm                     bool flag to determine choice of
-   * approach between ALM or C function to solve frictionless problem default is
-   * false
+   * approach between ALM or C function to solve frictionless problem
+   * @param is_eigen_pos_field         bool flag to determine choice of
+   * whether eigen displacements have to be taken into account
+   * @param eigen_pos_field_name      String of field name for eigen spatial
+   * position
    * @return                            Error code
    *
    */
   MoFEMErrorCode setContactOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   /**
    * @brief Function for the simple contact element for C function or ALM
@@ -2192,13 +2261,20 @@ struct SimpleContactProblem {
    * @param  is_alm                     bool flag to determine choice of
    * approach between ALM or C function to solve frictionless problem default is
    * false
+   * @param is_eigen_pos_field         bool flag to determine choice of
+   * whether eigen displacements have to be taken into account
+   * @param eigen_pos_field_name      String of field name for eigen spatial
+   * position
    * @return                            Error code
    *
    */
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   /**
    * @copydoc SimpleContactProblem::setContactOperatorsLhs
@@ -2210,22 +2286,34 @@ struct SimpleContactProblem {
   MoFEMErrorCode setContactOperatorsLhs(
       boost::shared_ptr<ConvectMasterContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   MoFEMErrorCode setMasterForceOperatorsRhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   MoFEMErrorCode setMasterForceOperatorsLhs(
       boost::shared_ptr<ConvectSlaveContactElement> fe_lhs_simple_contact,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
-      string field_name, string lagrange_field_name, bool is_alm = false);
+      string field_name, string lagrange_field_name, bool is_alm = false,
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false);
 
   /**
    * @brief Function for the simple contact element that sets the user data
@@ -2241,8 +2329,12 @@ struct SimpleContactProblem {
    * multipliers
    * @param  moab_out                    MOAB interface used to output
    * values at integration points
-   * @param  lagrange_field              Booleand to determine existence of
-   * lagrange field
+   * @param  alm_flag                     bool flag to determine choice of
+   * approach between ALM or C function to solve frictionless problem
+   * @param is_eigen_pos_field         bool flag to determine choice of
+   * whether eigen displacements have to be taken into account
+   * @param eigen_pos_field_name      String of field name for eigen spatial
+   * position
    * @return                             Error code
    *
    */
@@ -2251,7 +2343,10 @@ struct SimpleContactProblem {
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       MoFEM::Interface &m_field, string field_name, string lagrange_field_name,
       moab::Interface &moab_out, bool alm_flag = false,
-      bool lagrange_field = true, StateTagSide state_tag_side = NO_TAG);
+      bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS",
+      bool use_reference_coordinates = false,
+      StateTagSide state_tag_side = NO_TAG);
 
   /**
    * @brief Calculate tangent operator for contact force for change of
@@ -3417,12 +3512,14 @@ struct SimpleContactProblem {
       boost::shared_ptr<SimpleContactElement> fe_lhs_simple_contact_ale,
       boost::shared_ptr<CommonDataSimpleContact> common_data_simple_contact,
       const string field_name, const string mesh_node_field_name,
-      const string lagrange_field_name);
+      const string lagrange_field_name, bool is_eigen_pos_field = false,
+      string eigen_pos_field_name = "EIGEN_SPATIAL_POSITIONS");
+
   struct OpGetGaussPtsState : public ContactOp {
 
     OpGetGaussPtsState(
         const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn, const bool alm_flag = false)
         : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
@@ -3442,7 +3539,7 @@ struct SimpleContactProblem {
 
     OpGetContactArea(
         const string lagrange_field_name,
-        boost::shared_ptr<CommonDataSimpleContact> &common_data_contact,
+        boost::shared_ptr<CommonDataSimpleContact> common_data_contact,
         const double cn, const bool alm_flag = false)
         : ContactOp(lagrange_field_name, UserDataOperator::OPCOL,
                     ContactOp::FACESLAVE),
