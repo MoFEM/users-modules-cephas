@@ -29,19 +29,28 @@ constexpr int SPACE_DIM = 2; //< Space dimension of problem, mesh
 using EntData = DataForcesAndSourcesCore::EntData;
 using DomainEle = FaceElementForcesAndSourcesCoreBase;
 using DomainEleOp = DomainEle::UserDataOperator;
-
+using EdgeEle = EdgeElementForcesAndSourcesCoreBase;
+using EdgeEleOp = EdgeEle::UserDataOperator;
+using PostProcEle = PostProcFaceOnRefinedMesh;
 
 using OpK = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradSymTensorGrad<1, SPACE_DIM, SPACE_DIM, 0>;
 
-// using OpG = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
-//     GAUSS>::OpMixTensorTimesGradImpl<1>;
+using OpP = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpGradGrad<1, 1, SPACE_DIM>;
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 
 using OpInternalForce =
     FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
         GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+
+//boundary opperator aliasing
+
+using OpBoundaryMass = FormsIntegrators<EdgeEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+using OpBoundarySource = FormsIntegrators<EdgeEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpSource<1, 1>;
 
 constexpr double young_modulus = 1000.;
 constexpr double poisson_ratio = 0.3;
@@ -59,6 +68,7 @@ struct Example {
 
 private:
   MoFEM::Interface &mField;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -200,12 +210,12 @@ MoFEMErrorCode Example::setupProblem() {
 //! [Boundary condition]
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
-
+  auto simple = mField.getInterface<Simple>();
   auto get_ents_on_mesh_skin = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 2, "BC") == 0) {
+      if (entity_name.compare(0, 7, "FIX_P_2") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities, true);
       }
@@ -222,27 +232,20 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto mark_boundary_dofs = [&](Range &&skin_edges) {
     auto problem_manager = mField.getInterface<ProblemsManager>();
     auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
+    problem_manager->markDofs(simple->getProblemName(), ROW,
                               skin_edges, *marker_ptr);
     return marker_ptr;
   };
 
-  auto remove_dofs_from_problem = [&](Range &&skin_edges) {
-    MoFEMFunctionBegin;
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    CHKERR problem_manager->removeDofsOnEntities(
-        simpleInterface->getProblemName(), "P_IMAG", skin_edges, 0, 1);
-    MoFEMFunctionReturn(0);
-  };
+
 
   // Get global local vector of marked DOFs. Is global, since is set for all
   // DOFs on processor. Is local since only DOFs on processor are in the
   // vector. To access DOFs use local indices.
   boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
-  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
 
-  MoFEMFunctionReturn(0);
-}
+//   MoFEMFunctionReturn(0);
+// }
 
   auto fix_disp = [&](const std::string blockset_name) {
     Range fix_ents;
@@ -275,7 +278,9 @@ MoFEMErrorCode Example::boundaryCondition() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
+  CHKERR remove_ents(fix_disp("FIX_X1"), 0, 0);
+  CHKERR remove_ents(fix_disp("FIX_X2"), 0, 0);
+  CHKERR remove_ents(fix_disp("FIX_P_1"), 0, 0);
   CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
   CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
   CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
@@ -302,11 +307,15 @@ MoFEMErrorCode Example::assembleSystem() {
   double conductivity = 0.05;
   CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-conductivity",
                              &conductivity, PETSC_NULL);
+  auto beta_conductivity = [&conductivity](const double, const double, const double) {
+    return conductivity;
+  };
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-  //pipeline_mng->getOpDomainLhsPipeline().push_back(new OpG("P", conductivity));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpP("P", "P", beta_conductivity));
 
-  pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpBodyForce("U", bodyForceMatPtr));
+ pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+"U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
+
 
 
  double water_table = -0.;
@@ -319,35 +328,62 @@ MoFEMErrorCode Example::assembleSystem() {
          "U", specific_weight_water, water_table));
 
 
- auto integration_rule = [](int, int, int approx_order) {
-   return 2 * (approx_order - 1);
- };
- CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
- CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
 
+
+//Boundary opperators
+
+ double prescribed_pressure = 1.;
+ CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_pressure",
+                            &prescribed_pressure, PETSC_NULL);
+ auto beta = [&prescribed_pressure](const double, const double, const double) {return prescribed_pressure;};
+ auto beta_1 = [](const double, const double, const double) { return 1.; };
+
+//  auto set_boundary =
+//      [&]() {
+//        MoFEMFunctionBegin;
+       pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+           new OpSetBc("P", false, boundaryMarker));
+       pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+           new OpBoundaryMass("P", "P", beta_1));
+       pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+           new OpUnSetBc("P"));
+
+       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+           new OpSetBc("P", false, boundaryMarker));
+       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+           new OpBoundarySource("P", beta));
+       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+           new OpUnSetBc("P"));
+
+       auto integration_rule = [](int, int, int approx_order) {
+         return 2 * (approx_order - 1);
+       };
+       CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+       CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+    //  };
+ //! [Push operators to pipeline]
  MoFEMFunctionReturn(0);
 }
-//! [Push operators to pipeline]
+ //! [Solve]
+ MoFEMErrorCode
+ Example::solveSystem() {
+   MoFEMFunctionBegin;
+   auto *simple = mField.getInterface<Simple>();
+   auto *pipeline_mng = mField.getInterface<PipelineManager>();
+   auto solver = pipeline_mng->createKSP();
+   CHKERR KSPSetFromOptions(solver);
+   CHKERR KSPSetUp(solver);
 
-//! [Solve]
-MoFEMErrorCode Example::solveSystem() {
-  MoFEMFunctionBegin;
-  auto *simple = mField.getInterface<Simple>();
-  auto *pipeline_mng = mField.getInterface<PipelineManager>();
-  auto solver = pipeline_mng->createKSP();
-  CHKERR KSPSetFromOptions(solver);
-  CHKERR KSPSetUp(solver);
+   auto dm = simple->getDM();
+   auto D = smartCreateDMVector(dm);
+   auto F = smartVectorDuplicate(D);
 
-  auto dm = simple->getDM();
-  auto D = smartCreateDMVector(dm);
-  auto F = smartVectorDuplicate(D);
-
-  CHKERR KSPSolve(solver, F, D);
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-  MoFEMFunctionReturn(0);
-}
+   CHKERR KSPSolve(solver, F, D);
+   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+   MoFEMFunctionReturn(0);
+ }
 //! [Solve]
 
 //! [Postprocess results]
@@ -381,7 +417,9 @@ MoFEMErrorCode Example::outputResults() {
   post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
       "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
       matStressPtr, water_table, specific_weight_water ));
-  post_proc_fe->addFieldValuesPostProc("U");
+  post_proc_fe->addFieldValuesPostProc("U"); 
+  post_proc_fe->addFieldValuesPostProc("P");
+  post_proc_fe->addFieldValuesGradientPostProc("P");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_elastic.h5m");
@@ -415,8 +453,8 @@ MoFEMErrorCode Example::checkResults() {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpInternalForce("U", matStressPtr));
   (*bodyForceMatPtr) *= -1;
-   pipeline_mng->getOpDomainRhsPipeline().push_back(
-       new OpBodyForce("U", bodyForceMatPtr));
+  pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+      "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
 
   auto integration_rule = [](int, int, int p_data) { return 2 * (p_data - 1); };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
