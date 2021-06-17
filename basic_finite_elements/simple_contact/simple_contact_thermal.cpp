@@ -230,6 +230,10 @@ int main(int argc, char *argv[]) {
     // Create MoFEM database and link it to MoAB
     MoFEM::Core core(moab);
     MoFEM::Interface &m_field = core;
+    
+    Version file_ver;
+    CHKERR MoFEM::UnknownInterface::getFileVersion(moab, file_ver);
+    MOFEM_LOG("WORLD", Sev::inform) << "File version " << file_ver.strVersion();
 
     std::vector<BitRefLevel> bit_levels;
     bit_levels.push_back(BitRefLevel().set(0));
