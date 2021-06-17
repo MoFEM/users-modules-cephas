@@ -316,7 +316,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 20, "BOUNDARY_CONDITION_2") == 0) {
+      if (entity_name.compare(0, 5, "FIX_Y") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities, true);
       }
@@ -384,7 +384,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
                                                    boundary_entities_loop, true);
         boundary_entities.merge(boundary_entities_loop);                                           
       }
-      if (entity_name.compare(0, 20, "BOUNDARY_CONDITION_2") == 0) {
+      if (entity_name.compare(0, 20, "FIX_Y") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities_loop, true);
         boundary_entities.merge(boundary_entities_loop);                                           
@@ -433,7 +433,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
   CHKERR mField.get_moab().add_entities(meshset_skin1, get_ents_on_mesh_skin_1());
   // CHKERR mField.get_moab().write_mesh("bottom.vtk", &meshset_skin1,1);
 
-    EntityHandle meshset_skin5;
+  EntityHandle meshset_skin5;
   CHKERR mField.get_moab().create_meshset(MESHSET_SET, meshset_skin5);
   CHKERR mField.get_moab().add_entities(meshset_skin5, get_ents_on_mesh_skin_5());
   // CHKERR mField.get_moab().write_mesh("top.vtk", &meshset_skin5,1);
@@ -520,9 +520,13 @@ MoFEMErrorCode Example::assembleSystem() {
     pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));   
 
     // Start coupling term
-
+    
+    // Push operator to get TEMP from Integration Points and pass at pointer 
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
+    new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetBc("TEMP", false, boundaryMarker_4));
     pipeline_mng->getOpDomainLhsPipeline().push_back(new OpKut("U", "TEMP", thDPtr, previousUpdate));
-
+    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("TEMP"));
     // end coupling
 
     // Body force operator
@@ -573,15 +577,6 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpBoundaryRhs("TEMP", bc_2));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP")); 
   
-
-    //   // Push operator to get TEMP from Integration Points and pass at pointer 
-    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-    // new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
-
-    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-    //     new OpBoundaryRhsThermoMech("U", thDPtr, previousUpdate));
-
-
 // End Code for non zero Dirichelet conditions
 
     // // Push operators to the Pipeline that is responsible for calculating RHS of

@@ -119,8 +119,8 @@ public:
         matD(mat_D), commonData(common_data) {
     sYmm = false;
   }
-protected:
-  boost::shared_ptr<MatrixDouble> matD;
+// protected:
+//   boost::shared_ptr<MatrixDouble> matD;
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
@@ -210,12 +210,117 @@ protected:
 
     MoFEMFunctionReturn(0);
   }
-
+protected:
+  boost::shared_ptr<MatrixDouble> matD;
 private:
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
   MatrixDouble locLhs, transLocLhs;
   boost::shared_ptr<DataAtGaussPoints> commonData;
 };
+
+struct OpKut_2 : public OpFaceEle {
+public:
+  OpKut_2(std::string row_field_name, std::string col_field_name, 
+        boost::shared_ptr<MatrixDouble> mat_D,boost::shared_ptr<DataAtGaussPoints> &common_data)
+      : OpFaceEle(row_field_name, col_field_name, OpFaceEle::OPROWCOL), 
+        matD(mat_D), commonData(common_data) {
+    sYmm = false;
+  }
+// protected:
+//   boost::shared_ptr<MatrixDouble> matD;
+
+  MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
+                        EntityType col_type, EntData &row_data,
+                        EntData &col_data) {
+    MoFEMFunctionBegin;
+
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_col_dofs = col_data.getIndices().size();
+
+    if (nb_row_dofs && nb_col_dofs) {
+
+      locLhs.resize(nb_row_dofs, nb_col_dofs, false);
+      locLhs.clear();
+
+      // get element area
+      const double area = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+      
+ 
+      auto t_D = getFTensor4DdgFromMat<2, 2, 0>(*matD);
+      constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+
+      auto get_tensor1 = [](MatrixDouble &m, const int r, const int c) {
+      return FTensor::Tensor1<double *, 2>(
+                                             &m(r + 0, c), 
+                                             &m(r + 1, c));
+      };
+
+      FTensor::Index<'i', 2> i;
+      FTensor::Index<'j', 2> j;
+      FTensor::Index<'k', 2> k;
+      FTensor::Index<'l', 2> l;
+      
+      
+      
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+      // get solution (field value) at integration point
+      auto t_temp = getFTensor0FromVec(commonData->fieldValue);
+
+        const double a = t_w * area;
+        
+        auto t_row_base = row_data.getFTensor0N(gg,0);
+        for (int rr = 0; rr != nb_row_dofs/2; ++rr) {
+
+          // get the base functions on column (Temperature)
+          auto t_col_diff_base = col_data.getFTensor1DiffN<2>(gg,0);
+
+          for (int cc = 0; cc != nb_col_dofs; cc++) {
+            auto t_subLocMat = get_tensor1(locLhs, 2*rr, cc);  
+            t_subLocMat(i) -= t_row_base * t_col_diff_base(j) * a * t_D(i,j,k,l) * t_kd(k, l);
+
+            // move to the derivatives of the next base functions on column
+            ++t_col_diff_base;
+          }
+
+          // move to the derivatives of the next base functions on row
+          ++t_row_base;
+          }
+          // move to the weight of the next integration point
+          ++t_w;
+          ++t_temp;
+      }
+
+      // FILL VALUES OF LOCAL MATRIX ENTRIES TO THE GLOBAL MATRIX
+
+      // Fill value to local stiffness matrix ignoring boundary DOFs
+      CHKERR MatSetValues(getKSPB(), row_data, col_data, &locLhs(0, 0),
+                          ADD_VALUES);
+
+      // Fill values of symmetric local stiffness matrix
+      // if (row_side != col_side || row_type != col_type) {
+      //   transLocLhs.resize(nb_col_dofs, nb_row_dofs, false);
+      //   noalias(transLocLhs) = trans(locLhs);
+      //   CHKERR MatSetValues(getKSPB(), col_data, row_data, &transLocLhs(0, 0),
+      //                       ADD_VALUES);
+      // }
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+protected:
+  boost::shared_ptr<MatrixDouble> matD;
+private:
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
+  MatrixDouble locLhs, transLocLhs;
+  boost::shared_ptr<DataAtGaussPoints> commonData;
+};
+
 
 struct OpDomainRhs : public OpFaceEle {
 public:
@@ -287,8 +392,8 @@ public:
     sYmm = false;
   }
   
-protected:
-  boost::shared_ptr<MatrixDouble> matD;
+// protected:
+//   boost::shared_ptr<MatrixDouble> matD;
 
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
@@ -332,8 +437,7 @@ protected:
       FTensor::Index<'k', 2> k;
       FTensor::Index<'l', 2> l;
 
-      // get derivatives of base functions on column
-      auto t_row_diff_base = row_data.getFTensor1DiffN<2>();
+
 
       // to the face area
       auto t_normal = getFTensor1Normal();
@@ -345,6 +449,8 @@ protected:
       // }
       // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL MATRIX
       for (int gg = 0; gg != nb_integration_points; gg++) {
+        // get derivatives of base functions on column
+        auto t_row_diff_base = row_data.getFTensor1DiffN<2>(gg,0);
         const double a = t_w * edge;
         // get base functions on row
         auto t_row_base = row_data.getFTensor0N(gg,0);
@@ -354,7 +460,7 @@ protected:
 
           for (int cc = 0; cc != nb_col_dofs; cc++) {
             auto t_subLocMat = get_tensor1(locBoundaryLhs, 2*rr, cc);  
-            t_subLocMat(i) -= (t_row_base * t_col_base * a * t_D(i,j,k,l) * t_kd(k, l))*t_normal(j);
+            t_subLocMat(i) += (t_row_base * t_col_base * a * t_D(i,j,k,l) * t_kd(k, l))*t_normal(j);
 
 
             // move to the next base functions on column
@@ -382,7 +488,8 @@ protected:
 
     MoFEMFunctionReturn(0);
   }
-
+protected:
+  boost::shared_ptr<MatrixDouble> matD;
 private:
   MatrixDouble locBoundaryLhs, transLocBoundaryLhs;
   boost::shared_ptr<DataAtGaussPoints> commonData;
@@ -503,6 +610,7 @@ public:
 
           // move to the next base function
           ++t_base;
+          // cerr << "loc_temp_rhs : " << locBoundaryRhs << endl;
         }
 
         // move to the weight of the next integration point
