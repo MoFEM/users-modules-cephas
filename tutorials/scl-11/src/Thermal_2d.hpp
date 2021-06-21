@@ -443,7 +443,7 @@ public:
       auto t_normal = getFTensor1Normal();
       t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
 
-      cerr << "t_normal " << t_normal << endl; 
+      // cerr << "t_normal " << t_normal << endl; 
       // if( t_normal(0) - 1. < 1.e-7){
       // cerr << "col_data.getIndices() "<< col_data.getIndices() <<endl;
       // }
@@ -630,6 +630,95 @@ public:
 private:
   ScalarFunc boundaryFunc;
   VectorDouble locBoundaryRhs;
+};
+
+struct OpBoundaryRhs_tm : public OpEdgeEle {
+public:
+  OpBoundaryRhs_tm(std::string field_name, ScalarFunc boundary_function,
+  boost::shared_ptr<MatrixDouble> mat_D,boost::shared_ptr<DataAtGaussPoints> &common_data)
+      : OpEdgeEle(field_name, OpEdgeEle::OPROW),
+        boundaryFunc(boundary_function), matD(mat_D), commonData(common_data) {
+          sYmm = false;
+        }
+
+  MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data) {
+    MoFEMFunctionBegin;
+
+    const int nb_row_dofs = row_data.getIndices().size();
+
+    if (nb_row_dofs) {
+
+      locBoundaryRhs.resize(nb_row_dofs, false);
+      locBoundaryRhs.clear();
+
+      // get (boundary) element length
+      const double edge = getMeasure();
+
+      // get number of integration points
+      const int nb_integration_points = getGaussPts().size2();
+      // get integration weights
+      auto t_w = getFTensor0IntegrationWeight();
+      // get coordinates at integration point
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+      
+      auto t_D = getFTensor4DdgFromMat<2, 2, 0>(*matD);
+      
+      constexpr auto t_kd = FTensor::Kronecker_Delta_symmetric<int>();
+      
+      auto get_tensor1 = [](VectorDouble &m, const int r) {
+        return FTensor::Tensor1<double *, 2>(
+                                              &m(r + 0), 
+                                              &m(r + 1));
+      };
+
+      FTensor::Index<'i', 2> i;
+      FTensor::Index<'j', 2> j;
+      FTensor::Index<'k', 2> k;
+      FTensor::Index<'l', 2> l;
+
+      // to the face area
+      auto t_normal = getFTensor1Normal();
+      t_normal(i) /= sqrt(t_normal(j) * t_normal(j));
+      
+      // START THE LOOP OVER INTEGRATION POINTS TO CALCULATE LOCAL VECTOR
+      for (int gg = 0; gg != nb_integration_points; gg++) {
+
+        auto t_row_base = row_data.getFTensor0N(gg,0);
+
+        const double a = t_w * edge;
+
+        double boundary_term =
+            boundaryFunc(t_coords(0), t_coords(1), t_coords(2));
+
+        for (int rr = 0; rr != nb_row_dofs/2; ++rr) {
+
+          auto t_subLocMat = get_tensor1(locBoundaryRhs, 2*rr); 
+
+          t_subLocMat(i) += (t_row_base * boundary_term * a * t_D(i,j,k,l) * t_kd(k, l))*t_normal(j);
+
+          // move to the next base function
+          ++t_row_base;
+          
+        }
+
+        // move to the weight of the next integration point
+        ++t_w;
+        // move to the coordinates of the next integration point
+        ++t_coords;
+      }
+
+      // FILL VALUES OF LOCAL VECTOR ENTRIES TO THE GLOBAL VECTOR
+      CHKERR VecSetValues(getKSPf(), row_data, &*locBoundaryRhs.begin(), ADD_VALUES);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+protected:
+ boost::shared_ptr<MatrixDouble> matD;
+private:
+  ScalarFunc boundaryFunc;
+  VectorDouble locBoundaryRhs;
+  boost::shared_ptr<DataAtGaussPoints> commonData;
 };
 
 // New LHS and RHS for domain bc Neumann
@@ -898,7 +987,7 @@ MoFEMErrorCode OpPostProcElastic<DIM>::doWork(int side, EntityType type,
 
   auto set_plain_stress_strain = [&](auto &mat, auto &t) -> MatrixDouble3by3 & {
     //poisson_ratio is not passed in!
-    mat(2, 2) = -0. * (t(0, 0) + t(1, 1));
+    mat(2, 2) = -0.3 * (t(0, 0) + t(1, 1));
     return mat;
   };
 

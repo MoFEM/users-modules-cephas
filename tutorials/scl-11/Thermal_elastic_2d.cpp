@@ -64,7 +64,7 @@ using OpInternalForce =
 // These Youngs modulus and poisson ratio should be an input
 
 constexpr double young_modulus = 50e3;
-constexpr double poisson_ratio = 0.;
+constexpr double poisson_ratio = 0.3;
 constexpr double coeff_expansion = 1e-5;
 constexpr double bulk_modulus_K = young_modulus / (3 * (1 - 2 * poisson_ratio));
 constexpr double shear_modulus_G = young_modulus / (2 * (1 + poisson_ratio));
@@ -294,7 +294,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 5, "FIX_X") == 0) {
+      if (entity_name.compare(0, 6, "TEMP_1") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities, true);
       }
@@ -316,7 +316,7 @@ auto get_ents_on_mesh_skin_1 = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 5, "FIX_Y") == 0) {
+      if (entity_name.compare(0, 6, "TEMP_2") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities, true);
       }
@@ -379,12 +379,12 @@ auto get_ents_on_mesh_skin_1 = [&]() {
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
       Range boundary_entities_loop;
-      if (entity_name.compare(0, 5, "FIX_X") == 0) {
+      if (entity_name.compare(0, 6, "TEMP_1") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities_loop, true);
         boundary_entities.merge(boundary_entities_loop);                                           
       }
-      if (entity_name.compare(0, 20, "FIX_Y") == 0) {
+      if (entity_name.compare(0, 6, "TEMP_2") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities_loop, true);
         boundary_entities.merge(boundary_entities_loop);                                           
@@ -522,11 +522,11 @@ MoFEMErrorCode Example::assembleSystem() {
     // Start coupling term
     
     // Push operator to get TEMP from Integration Points and pass at pointer 
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-    new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetBc("TEMP", false, boundaryMarker_4));
+    // pipeline_mng->getOpDomainLhsPipeline().push_back(
+    // new OpCalculateScalarFieldValues("TEMP", fieldValuePtr)); 
+    // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetBc("TEMP", false, boundaryMarker_4));
     pipeline_mng->getOpDomainLhsPipeline().push_back(new OpKut("U", "TEMP", thDPtr, previousUpdate));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("TEMP"));
+    // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("TEMP"));
     // end coupling
 
     // Body force operator
@@ -541,12 +541,12 @@ MoFEMErrorCode Example::assembleSystem() {
 
 
 //  Operator for coupling LHS boundary term
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpSetBc("TEMP", true, boundaryMarker_4));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryLhs_tm("U", "TEMP", thDPtr, previousUpdate));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("TEMP"));
-
+    // pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+    //     new OpSetBc("TEMP", true, boundaryMarker_4));
+    // pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+    //     new OpBoundaryLhs_tm("U", "TEMP", thDPtr, previousUpdate));
+    // pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("TEMP"));
+    
     // Start Code for non zero Dirichelet conditions
    // Push operators in boundary pipeline LHS for Dirichelet
 
@@ -575,7 +575,14 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpSetBc("TEMP", false, boundaryMarker_5));
     pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpBoundaryRhs("TEMP", bc_2));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP")); 
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("TEMP"));
+
+
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpBoundaryRhs_tm("U", bc_1, thDPtr, previousUpdate ));
+    // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+    //     new OpBoundaryRhs_tm("U", bc_2, thDPtr, previousUpdate));
+  
   
 // End Code for non zero Dirichelet conditions
 
