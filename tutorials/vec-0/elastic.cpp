@@ -215,7 +215,7 @@ MoFEMErrorCode Example::boundaryCondition() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
-      if (entity_name.compare(0, 7, "FIX_P_2") == 0) {
+      if (entity_name.compare(0, 7, "FIX_P_1") == 0) {
         CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
                                                    boundary_entities, true);
       }
@@ -229,6 +229,23 @@ MoFEMErrorCode Example::boundaryCondition() {
     return boundary_entities;
   };
 
+  auto get_ents_on_flux_boundary = [&]() {
+    Range boundary_entities;
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      std::string entity_name = it->getName();
+      if (entity_name.compare(0, 7, "FIX_Q_2") == 0) {
+        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                   boundary_entities, true);
+      }
+    }
+    // Add vertices to boundary entities
+    Range boundary_vertices;
+    CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                              boundary_vertices, true);
+    boundary_entities.merge(boundary_vertices);
+
+    return boundary_entities;
+  };
   auto mark_boundary_dofs = [&](Range &&skin_edges) {
     auto problem_manager = mField.getInterface<ProblemsManager>();
     auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
@@ -242,10 +259,10 @@ MoFEMErrorCode Example::boundaryCondition() {
   // Get global local vector of marked DOFs. Is global, since is set for all
   // DOFs on processor. Is local since only DOFs on processor are in the
   // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  boundaryMarker = mark_boundary_dofs(get_ents_on_flux_boundary());
 
-//   MoFEMFunctionReturn(0);
-// }
+  //   MoFEMFunctionReturn(0);
+  // }
 
   auto fix_disp = [&](const std::string blockset_name) {
     Range fix_ents;
@@ -278,15 +295,29 @@ MoFEMErrorCode Example::boundaryCondition() {
     MoFEMFunctionReturn(0);
   };
 
-  CHKERR remove_ents(fix_disp("FIX_X1"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_X2"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_P_1"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
-  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
+  auto bc_mng = mField.getInterface<BcManager>();
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                           "U", 0, 3);
 
+  auto remove_dofs_from_problem = [&](Range &&skin_edges) {
+    MoFEMFunctionBegin;
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    CHKERR problem_manager->removeDofsOnEntities(
+        simple->getProblemName(), "P", skin_edges, 0, 1);
+    MoFEMFunctionReturn(0);
+  };
+  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
   MoFEMFunctionReturn(0);
 }
+
+
+
 //! [Boundary condition]
 
 //! [Push operators to pipeline]
@@ -341,26 +372,33 @@ MoFEMErrorCode Example::assembleSystem() {
 //  auto set_boundary =
 //      [&]() {
 //        MoFEMFunctionBegin;
-       pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-           new OpSetBc("P", false, boundaryMarker));
-       pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-           new OpBoundaryMass("P", "P", beta_1));
-       pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-           new OpUnSetBc("P"));
+      //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+      //      new OpSetBc("P", false, boundaryMarker));
+      //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+      //      new OpBoundaryMass("P", "P", beta_1));
+      //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+      //      new OpUnSetBc("P"));
 
-       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-           new OpSetBc("P", false, boundaryMarker));
-       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-           new OpBoundarySource("P", beta));
-       pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-           new OpUnSetBc("P"));
+      //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      //      new OpSetBc("P", false, boundaryMarker));
+      //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      //      new OpBoundarySource("P", beta));
+      //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      //      new OpUnSetBc("P"));
 
-       auto integration_rule = [](int, int, int approx_order) {
-         return 2 * (approx_order - 1);
-       };
-       CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
-       CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-    //  };
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpSetBc("P", true, boundaryMarker));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpBoundarySource("P", beta));
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpUnSetBc("P"));
+ auto integration_rule = [](int, int, int approx_order) {
+   return 2 * (approx_order - 1);
+ };
+ CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+ CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+ CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+ //  };
  //! [Push operators to pipeline]
  MoFEMFunctionReturn(0);
 }
@@ -399,6 +437,10 @@ MoFEMErrorCode Example::outputResults() {
                              PETSC_NULL);
 
   pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getDomainRhsFE().reset();
+  pipeline_mng->getBoundaryRhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
+
   auto post_proc_fe = boost::make_shared<PostProcEle>(mField);
   post_proc_fe->generateReferenceElementMesh();
   if (SPACE_DIM == 2) {
