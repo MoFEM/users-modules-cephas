@@ -912,14 +912,20 @@ struct MixTransportElement {
                 "data inconsistency");
       }
       int nb_gauss_pts = data.getN().size1();
+
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = data.getFTensor2DiffN<3, 3>();
+
       int gg = 0;
       for (; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         if (getHoGaussPtsDetJac().size() > 0) {
           w *= getHoGaussPtsDetJac()(gg);
         }
-        CHKERR getDivergenceOfHDivBaseFunctions(side, type, data, gg, divVec);
-        ;
+        for(auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
         noalias(Nf) -= w * divVec * cTx.valuesAtGaussPts[gg];
       }
       CHKERR VecSetValues(F, nb_row, &data.getIndices()[0], &Nf[0], ADD_VALUES);
@@ -986,15 +992,20 @@ struct MixTransportElement {
       NN.resize(nb_row, nb_col);
       NN.clear();
       divVec.resize(nb_col, false);
+
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = col_data.getFTensor2DiffN<3, 3>();
+
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         if (getHoGaussPtsDetJac().size() > 0) {
           w *= getHoGaussPtsDetJac()(gg);
         }
-        CHKERR getDivergenceOfHDivBaseFunctions(col_side, col_type, col_data,
-                                                gg, divVec);
-        ;
+        for (auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
         noalias(NN) += w * outer_prod(row_data.getN(gg), divVec);
       }
       CHKERR MatSetValues(Aij, nb_row, &row_data.getIndices()[0], nb_col,
@@ -1377,8 +1388,15 @@ struct MixTransportElement {
         cTx.fluxesAtGaussPts.clear();
       }
       divVec.resize(nb_dofs);
+
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = data.getFTensor2DiffN<3, 3>();
+
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
-        CHKERR getDivergenceOfHDivBaseFunctions(side, type, data, gg, divVec);
+        for(auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
         cTx.divergenceAtGaussPts[gg] += inner_prod(divVec, data.getFieldData());
         ublas::matrix_column<MatrixDouble> flux_at_gauss_pt(
             cTx.fluxesAtGaussPts, gg);

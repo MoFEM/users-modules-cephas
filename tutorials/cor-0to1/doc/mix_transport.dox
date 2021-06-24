@@ -1072,9 +1072,11 @@ struct MixTransport::MixTransportElement::OpVDivSigma_L2Hdiv: public MoFEM::Volu
     int nb_gauss_pts = row_data.getVectorN().size1();
     for(int gg = 0;gg<nb_gauss_pts;gg++) {
       double w = getGaussPts()(3,gg)*getVolume();
+      /// FIXME:
+      /// This in newer versions is removed. Using FTensor you can directly calulate 
+      /// trace of direvative of HDiv base function.
       CHKERR getDivergenceOfHDivBaseFunctions(
-        row_side,row_type,col_data,gg,divVec
-      ); 
+        row_side,row_type,col_data,gg,divVec);   
       noalias(C) += w*outer_prod(divVec,row_data.getN(gg));
     }
     CHKERR MatSetValues(
@@ -1153,6 +1155,9 @@ over integration points and calculate local matrix \b C, as follows
 int nb_gauss_pts = row_data.getVectorN().size1();
 for(int gg = 0;gg<nb_gauss_pts;gg++) {
   double w = getGaussPts()(3,gg)*getVolume();
+  /// FIXME:
+  /// This in newer versions is removed. Using FTensor you can directly calulate 
+  /// trace of direvative of HDiv base function. 
   CHKERR getDivergenceOfHDivBaseFunctions(
     row_side,row_type,col_data,gg,divVec
   ); 

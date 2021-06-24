@@ -355,10 +355,19 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_w = getFTensor0IntegrationWeight();
       // Get volume
       double vol = getVolume();
+
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = data.getFTensor2DiffN<3, 3>();
+
       // Get material parameters
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // Get divergence
+        for(auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
+
         CHKERR getDivergenceOfHDivBaseFunctions(side, type, data, gg, divVec);
         const double alpha = t_w * vol;
         block_data->h = t_h;

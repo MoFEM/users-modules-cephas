@@ -493,9 +493,12 @@ struct MagneticElement {
 
       MatrixDouble row_curl_mat, col_curl_mat;
       FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
 
       const double c0 = 1. / blockData.mU;
       const int nb_gauss_pts = row_data.getN().size1();
+      auto t_row_curl_base = row_data.getFTensor2DiffN<3, 3>();
 
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
@@ -503,33 +506,25 @@ struct MagneticElement {
         double w = getGaussPts()(3, gg) * getVolume();
         // if ho geometry is given
         w *= getHoGaussPtsDetJac()(gg);
-        CHKERR getCurlOfHCurlBaseFunctions(row_side, row_type, row_data, gg,
-                                           row_curl_mat);
-        CHKERR getCurlOfHCurlBaseFunctions(col_side, col_type, col_data, gg,
-                                           col_curl_mat);
 
-        // cerr << row_curl_mat << endl;
-        // cerr << col_curl_mat << endl;
-
-        FTensor::Tensor1<double *, 3> t_row_curl(&row_curl_mat(0, HVEC0),
-                                                 &row_curl_mat(0, HVEC1),
-                                                 &row_curl_mat(0, HVEC2), 3);
+        FTensor::Tensor1<double, 3> t_row_curl;
         for (int aa = 0; aa != nb_row_dofs; aa++) {
+          t_row_curl(i) = levi_civita(j, i, k) * t_row_curl_base(j, k);
+
           FTensor::Tensor0<double *> t_local_mat(&entityLocalMatrix(aa, 0), 1);
-          FTensor::Tensor1<double *, 3> t_col_curl(&col_curl_mat(0, HVEC0),
-                                                   &col_curl_mat(0, HVEC1),
-                                                   &col_curl_mat(0, HVEC2), 3);
+          FTensor::Tensor1<double, 3> t_col_curl;
+
+          auto t_col_curl_base = col_data.getFTensor2DiffN<3, 3>(gg, 0);
           for (int bb = 0; bb != nb_col_dofs; bb++) {
+            t_col_curl(i) = levi_civita(j, i, k) * t_col_curl_base(j, k);
             t_local_mat += c0 * w * t_row_curl(i) * t_col_curl(i);
-            ++t_col_curl;
             ++t_local_mat;
+            ++t_col_curl_base;
           }
-          ++t_row_curl;
+          
+          ++t_row_curl_base;
         }
       }
-
-      // cerr << entityLocalMatrix << endl;
-      // cerr << endl;
 
       CHKERR MatSetValues(blockData.A, nb_row_dofs, &row_data.getIndices()[0],
                           nb_col_dofs, &col_data.getIndices()[0],
@@ -790,6 +785,8 @@ struct MagneticElement {
       const void *tags_ptr[mapGaussPts.size()];
       MatrixDouble row_curl_mat;
       FTensor::Index<'i', 3> i;
+      FTensor::Index<'j', 3> j;
+      FTensor::Index<'k', 3> k;
       const int nb_gauss_pts = row_data.getN().size1();
       if (nb_gauss_pts != static_cast<int>(mapGaussPts.size())) {
         SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
@@ -799,12 +796,10 @@ struct MagneticElement {
 
       CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0],
                                          mapGaussPts.size(), tags_ptr);
-
+      auto t_curl_base = row_data.getFTensor2DiffN<3, 3>();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
 
         // get curl of base functions
-        CHKERR getCurlOfHCurlBaseFunctions(row_side, row_type, row_data, gg,
-                                           row_curl_mat);
         FTensor::Tensor1<double *, 3> t_base_curl(&row_curl_mat(0, HVEC0),
                                                   &row_curl_mat(0, HVEC1),
                                                   &row_curl_mat(0, HVEC2), 3);
@@ -815,9 +810,12 @@ struct MagneticElement {
         FTensor::Tensor1<double *, 3> t_curl(ptr, &ptr[1], &ptr[2]);
 
         // calculate curl value
+        auto t_dof = row_data.getFTensor0FieldData();
         for (int aa = 0; aa != nb_row_dofs; aa++) {
-          t_curl(i) += row_data.getFieldData()[aa] * t_base_curl(i);
-          ++t_base_curl;
+          t_curl(i) += row_data.getFieldData()[aa] *
+                       (levi_civita(j, i, k) * t_curl_base(j, k));
+          ++t_curl_base;
+          ++t_dof;
         }
       }
       MoFEMFunctionReturn(0);
