@@ -19,6 +19,9 @@
 
 namespace ContactOps {
 
+constexpr auto VecSetValues = MoFEM::VecSetValues<EssentialBcStorage>;
+constexpr auto MatSetValues = MoFEM::MatSetValues<EssentialBcStorage>;
+
 //! [Common data]
 struct CommonData {
   boost::shared_ptr<MatrixDouble> mDPtr;

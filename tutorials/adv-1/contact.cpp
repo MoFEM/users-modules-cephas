@@ -97,6 +97,15 @@ using OpInertiaForce = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
 //! [Only used for dynamics]
 
+//! [Essential boundary conditions]
+using OpBoundaryMass = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::BiLinearForm<GAUSS>::OpMass<1, SPACE_DIM>;
+using OpBoundaryVec = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
+using OpBoundaryInternal = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 1>;
+//! [Essential boundary conditions]
+
 // Only used with Hencky/nonlinear material
 using OpKPiola = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpGradTensorGrad<1, SPACE_DIM, SPACE_DIM, 1>;
@@ -143,6 +152,8 @@ private:
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uZScatter;
+
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
   template <int DIM> Range getEntsOnMeshSkin();
 };
@@ -261,6 +272,8 @@ MoFEMErrorCode Example::createCommonData() {
 //! [Boundary condition]
 MoFEMErrorCode Example::bC() {
   MoFEMFunctionBegin;
+  auto bc_mng = mField.getInterface<BcManager>();
+  auto simple = mField.getInterface<Simple>();
 
   auto fix_disp = [&](const std::string blockset_name) {
     Range fix_ents;
@@ -294,19 +307,60 @@ MoFEMErrorCode Example::bC() {
   };
 
   Range boundary_ents;
-  boundary_ents.merge(fix_disp("FIX_X"));
-  boundary_ents.merge(fix_disp("FIX_Y"));
-  boundary_ents.merge(fix_disp("FIX_Z"));
-  boundary_ents.merge(fix_disp("FIX_ALL"));
-  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(boundary_ents);
+  boundary_ents.merge(fix_disp("REMOVE_X"));
+  boundary_ents.merge(fix_disp("REMOVE_Y"));
+  boundary_ents.merge(fix_disp("REMOVE_Z"));
+  boundary_ents.merge(fix_disp("REMOVE_ALL"));
+  Range no_contact_ents = fix_disp("NO_CONTACT");
+  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
+      boundary_ents);
   CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
       mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
       0, 2);
+  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
+      mField.getInterface<Simple>()->getProblemName(), "SIGMA", no_contact_ents,
+      0, 2);
 
-  CHKERR remove_ents(fix_disp("FIX_X"), 0, 0);
-  CHKERR remove_ents(fix_disp("FIX_Y"), 1, 1);
-  CHKERR remove_ents(fix_disp("FIX_Z"), 2, 2);
-  CHKERR remove_ents(fix_disp("FIX_ALL"), 0, 3);
+  CHKERR remove_ents(fix_disp("REMOVE_X"), 0, 0);
+  CHKERR remove_ents(fix_disp("REMOVE_Y"), 1, 1);
+  CHKERR remove_ents(fix_disp("REMOVE_Z"), 2, 2);
+  CHKERR remove_ents(fix_disp("REMOVE_ALL"), 0, 3);
+
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
+                                        0, 0);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
+                                        1, 1);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Z", "U",
+                                        2, 2);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
+                                        "U", 0, 3);
+
+  auto &bc_map = bc_mng->getBcMapByBlockName();
+
+  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  for (auto b : bc_map) {
+    if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
+      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
+      }
+    }
+  }
+  auto get_boundary_markers = [&](Range bound_ents, int lo, int hi) {
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+
+    CHKERR problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U",
+                                           lo, hi, ProblemsManager::MarkOP::OR,
+                                           1, *marker_ptr);
+    CHKERR problem_manager->markDofs(simple->getProblemName(), ROW,
+                                     ProblemsManager::AND, bound_ents,
+                                     *marker_ptr);
+    return marker_ptr;
+  };
+
+  if (boundaryMarker->empty())
+    boundaryMarker = get_boundary_markers(Range(), -1, -1);
 
   MoFEMFunctionReturn(0);
 }
@@ -333,6 +387,7 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -365,7 +420,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpMass("U", "U", get_rho));
     }
-
+    pipeline.push_back(new OpUnSetBc("U"));
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
   };
@@ -383,6 +438,7 @@ MoFEMErrorCode Example::OPs() {
       t_source(1) = 1.0 * time;
       return t_source;
     };
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -410,6 +466,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
     }
+    pipeline.push_back(new OpUnSetBc("U"));
 
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
@@ -424,6 +481,8 @@ MoFEMErrorCode Example::OPs() {
         new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr, 1));
     pipeline.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
+    
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpMixUTimesDivLambdaRhs(
         "U", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(
@@ -438,6 +497,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -450,6 +510,17 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
+    auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
+    for (auto bc : bc_map) {
+      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+        pipeline.push_back(
+            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        pipeline.push_back(new OpBoundaryMass(
+            "U", "U", [](double, double, double) { return 1.; },
+            bc.second->getBcEdgesPtr()));
+        pipeline.push_back(new OpUnSetBc("U"));
+      }
+    }
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -462,11 +533,47 @@ MoFEMErrorCode Example::OPs() {
         ));
   };
 
+  auto time_scaled = [&](double, double, double) {
+    auto *pipeline_mng = mField.getInterface<PipelineManager>();
+    auto &fe_domain_rhs = pipeline_mng->getDomainRhsFE();
+    return -fe_domain_rhs->ts_t;
+  };
+
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
+    for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
+      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+        pipeline.push_back(
+            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
+        attr_vec->clear();
+        if (bc.second->bcAttributes.size() < SPACE_DIM)
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                   "Wrong size of boundary attributes vector. Set right block "
+                   "size attributes. Size of attributes %d",
+                   bc.second->bcAttributes.size());
+        std::copy(&bc.second->bcAttributes[0],
+                  &bc.second->bcAttributes[SPACE_DIM],
+                  attr_vec->data().begin());
+
+        pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
+                                             bc.second->getBcEdgesPtr()));
+        pipeline.push_back(new OpBoundaryInternal(
+            "U", commonDataPtr->contactDispPtr,
+            [](double, double, double) { return 1.; },
+            bc.second->getBcEdgesPtr()));
+
+        pipeline.push_back(new OpUnSetBc("U"));
+      }
+    }
+
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [](double, double, double) { return spring_stiffness; }));
+    pipeline.push_back(new OpUnSetBc("U"));
+    
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
