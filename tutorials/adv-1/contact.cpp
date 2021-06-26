@@ -421,6 +421,7 @@ MoFEMErrorCode Example::OPs() {
           new OpMass("U", "U", get_rho));
     }
     pipeline.push_back(new OpUnSetBc("U"));
+
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
   };
@@ -525,12 +526,14 @@ MoFEMErrorCode Example::OPs() {
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpSpringLhs(
         "U", "U",
 
         [this](double, double, double) { return spring_stiffness; }
 
         ));
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto time_scaled = [&](double, double, double) {
