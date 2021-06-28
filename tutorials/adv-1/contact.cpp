@@ -297,22 +297,14 @@ MoFEMErrorCode Example::bC() {
                                         "U", 0, 3);
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
-  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-  for (auto b : bc_map) {
-    if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
-      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
-      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
-        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
-      }
-    }
-  }
-
-  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
-  for (auto b : bc_map) {
-    if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
-      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
-      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
-        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
+  if (bc_map.size()) {
+    boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+    for (auto b : bc_map) {
+      if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
+        boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+        for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+          (*boundaryMarker)[i] |= b.second->bcMarkers[i];
+        }
       }
     }
   }
@@ -342,7 +334,8 @@ MoFEMErrorCode Example::OPs() {
   henky_common_data_ptr->matDPtr = commonDataPtr->mDPtr;
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    if (boundaryMarker)
+      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -380,7 +373,8 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
 
-    pipeline.push_back(new OpUnSetBc("U"));
+    if (boundaryMarker)
+      pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -397,7 +391,8 @@ MoFEMErrorCode Example::OPs() {
       return t_source;
     };
 
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    if (boundaryMarker)
+      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
     pipeline.push_back(new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -454,7 +449,9 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainRhsPipeline().push_back(new OpInertiaForce(
           "U", mat_acceleration, [](double, double, double) { return rho; }));
     }
-    pipeline.push_back(new OpUnSetBc("U"));
+
+    if (boundaryMarker)
+      pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
@@ -481,7 +478,8 @@ MoFEMErrorCode Example::OPs() {
       }
     }
 
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    if (boundaryMarker)
+      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
@@ -492,7 +490,8 @@ MoFEMErrorCode Example::OPs() {
         [this](double, double, double) { return spring_stiffness; }
 
         ));
-    pipeline.push_back(new OpUnSetBc("U"));
+    if (boundaryMarker)
+      pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto time_scaled = [&](double, double, double) {
@@ -530,12 +529,14 @@ MoFEMErrorCode Example::OPs() {
       }
     }
 
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+    if (boundaryMarker)
+      pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [](double, double, double) { return spring_stiffness; }));
-    pipeline.push_back(new OpUnSetBc("U"));
+    if (boundaryMarker)
+      pipeline.push_back(new OpUnSetBc("U"));
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
