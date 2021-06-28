@@ -509,7 +509,7 @@ MoFEMErrorCode Example::OPs() {
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
         attr_vec->clear();
-        if (bc.second->bcAttributes.size() < SPACE_DIM)
+        if (bc.second->bcAttributes.size() != SPACE_DIM)
           SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
                    "Wrong size of boundary attributes vector. Set right block "
                    "size attributes. Size of attributes %d",
