@@ -19,3 +19,7 @@
 
 -ts_monitor
 -ts_adapt_monitor
+
+-mat_mumps_icntl_14 800 
+-mat_mumps_icntl_24 1 
+-mat_mumps_icntl_13 1
