@@ -89,7 +89,6 @@ using OpInternalForceCauchy = FormsIntegrators<DomainEleOp>::Assembly<
     PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 //! [Only used with Hooke equation (linear material model)]
 
-
 //! [Only used for dynamics]
 using OpMass = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
     GAUSS>::OpMass<1, SPACE_DIM>;
@@ -207,7 +206,8 @@ MoFEMErrorCode Example::setupProblem() {
 
   CHKERR simple->setFieldOrder("SIGMA", order - 1, &boundary_ents);
   // Range adj_edges;
-  // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false, adj_edges,
+  // CHKERR mField.get_moab().get_adjacencies(boundary_ents, 1, false,
+  // adj_edges,
   //                                          moab::Interface::UNION);
   // adj_edges.merge(boundary_ents);
   // CHKERR simple->setFieldOrder("U", order, &adj_edges);
@@ -275,56 +275,17 @@ MoFEMErrorCode Example::bC() {
   auto bc_mng = mField.getInterface<BcManager>();
   auto simple = mField.getInterface<Simple>();
 
-  auto fix_disp = [&](const std::string blockset_name) {
-    Range fix_ents;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      if (it->getName().compare(0, blockset_name.length(), blockset_name) ==
-          0) {
-        CHKERR mField.get_moab().get_entities_by_handle(it->meshset, fix_ents,
-                                                        true);
-      }
-    }
-    return fix_ents;
-  };
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "NO_CONTACT", "SIGMA", 0, 3);
 
-  auto remove_ents = [&](const Range &&ents, const int lo, const int hi) {
-    auto prb_mng = mField.getInterface<ProblemsManager>();
-    auto simple = mField.getInterface<Simple>();
-    MoFEMFunctionBegin;
-    Range verts;
-    CHKERR mField.get_moab().get_connectivity(ents, verts, true);
-    verts.merge(ents);
-    if (SPACE_DIM == 3) {
-      Range adj;
-      CHKERR mField.get_moab().get_adjacencies(ents, 1, false, adj,
-                                               moab::Interface::UNION);
-      verts.merge(adj);
-    };
-    CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(verts);
-    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "U", verts,
-                                         lo, hi);
-    MoFEMFunctionReturn(0);
-  };
-
-  Range boundary_ents;
-  boundary_ents.merge(fix_disp("REMOVE_X"));
-  boundary_ents.merge(fix_disp("REMOVE_Y"));
-  boundary_ents.merge(fix_disp("REMOVE_Z"));
-  boundary_ents.merge(fix_disp("REMOVE_ALL"));
-  Range no_contact_ents = fix_disp("NO_CONTACT");
-  CHKERR mField.getInterface<CommInterface>()->synchroniseEntities(
-      boundary_ents);
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      mField.getInterface<Simple>()->getProblemName(), "SIGMA", boundary_ents,
-      0, 2);
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      mField.getInterface<Simple>()->getProblemName(), "SIGMA", no_contact_ents,
-      0, 2);
-
-  CHKERR remove_ents(fix_disp("REMOVE_X"), 0, 0);
-  CHKERR remove_ents(fix_disp("REMOVE_Y"), 1, 1);
-  CHKERR remove_ents(fix_disp("REMOVE_Z"), 2, 2);
-  CHKERR remove_ents(fix_disp("REMOVE_ALL"), 0, 3);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_X",
+                                           "U", 0, 0);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Y",
+                                           "U", 1, 1);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(), "REMOVE_Z",
+                                           "U", 2, 2);
+  CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
+                                           "REMOVE_ALL", "U", 0, 3);
 
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
                                         0, 0);
@@ -336,6 +297,15 @@ MoFEMErrorCode Example::bC() {
                                         "U", 0, 3);
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
+  boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
+  for (auto b : bc_map) {
+    if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
+      boundaryMarker->resize(b.second->bcMarkers.size(), 0);
+      for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
+        (*boundaryMarker)[i] |= b.second->bcMarkers[i];
+      }
+    }
+  }
 
   boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
   for (auto b : bc_map) {
@@ -346,21 +316,6 @@ MoFEMErrorCode Example::bC() {
       }
     }
   }
-  auto get_boundary_markers = [&](Range bound_ents, int lo, int hi) {
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-
-    CHKERR problem_manager->modifyMarkDofs(simple->getProblemName(), ROW, "U",
-                                           lo, hi, ProblemsManager::MarkOP::OR,
-                                           1, *marker_ptr);
-    CHKERR problem_manager->markDofs(simple->getProblemName(), ROW,
-                                     ProblemsManager::AND, bound_ents,
-                                     *marker_ptr);
-    return marker_ptr;
-  };
-
-  if (boundaryMarker->empty())
-    boundaryMarker = get_boundary_markers(Range(), -1, -1);
 
   MoFEMFunctionReturn(0);
 }
@@ -388,6 +343,7 @@ MoFEMErrorCode Example::OPs() {
 
   auto add_domain_ops_lhs = [&](auto &pipeline) {
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
     if (is_large_strains) {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>(
@@ -420,10 +376,11 @@ MoFEMErrorCode Example::OPs() {
       pipeline_mng->getOpDomainLhsPipeline().push_back(
           new OpMass("U", "U", get_rho));
     }
-    pipeline.push_back(new OpUnSetBc("U"));
 
     pipeline.push_back(new OpMixDivULhs("SIGMA", "U", 1, true));
     pipeline.push_back(new OpLambdaGraULhs("SIGMA", "U", 1, true));
+
+    pipeline.push_back(new OpUnSetBc("U"));
   };
 
   auto add_domain_ops_rhs = [&](auto &pipeline) {
@@ -433,12 +390,13 @@ MoFEMErrorCode Example::OPs() {
       FTensor::Tensor1<double, SPACE_DIM> t_source;
       auto fe_domain_rhs = pipeline_mng->getDomainRhsFE();
       const auto time = fe_domain_rhs->ts_t;
-      
+
       // hardcoded gravity load
       t_source(i) = 0;
       t_source(1) = 1.0 * time;
       return t_source;
     };
+
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
     pipeline.push_back(new OpBodyForce("U", get_body_force));
@@ -467,7 +425,6 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(
           new OpInternalForceCauchy("U", commonDataPtr->mStressPtr));
     }
-    pipeline.push_back(new OpUnSetBc("U"));
 
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
@@ -482,8 +439,7 @@ MoFEMErrorCode Example::OPs() {
         new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr, 1));
     pipeline.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
-    
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
+
     pipeline.push_back(new OpMixUTimesDivLambdaRhs(
         "U", commonDataPtr->contactStressDivergencePtr));
     pipeline.push_back(
@@ -514,6 +470,8 @@ MoFEMErrorCode Example::OPs() {
     auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
     for (auto bc : bc_map) {
       if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+        MOFEM_LOG("EXAMPLE", Sev::inform)
+            << "Set boundary matrix for " << bc.first;
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         pipeline.push_back(new OpBoundaryMass(
@@ -522,11 +480,12 @@ MoFEMErrorCode Example::OPs() {
         pipeline.push_back(new OpUnSetBc("U"));
       }
     }
+
+    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dU("SIGMA", "U", commonDataPtr));
     pipeline.push_back(
         new OpConstrainBoundaryLhs_dTraction("SIGMA", "SIGMA", commonDataPtr));
-    pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
     pipeline.push_back(new OpSpringLhs(
         "U", "U",
 
@@ -545,6 +504,8 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
       if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+        MOFEM_LOG("EXAMPLE", Sev::inform)
+            << "Set boundary residual for " << bc.first;
         pipeline.push_back(
             new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
         auto attr_vec = boost::make_shared<MatrixDouble>(SPACE_DIM, 1);
@@ -569,14 +530,12 @@ MoFEMErrorCode Example::OPs() {
       }
     }
 
-    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
-
+    pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
         [](double, double, double) { return spring_stiffness; }));
     pipeline.push_back(new OpUnSetBc("U"));
-    
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
