@@ -1,6 +1,9 @@
 #!/bin/bash
 set -x
 
+# exit when any command fails
+set -e
+
 # Get file name
 if [ -z ${1+x} ]; then
   MESHFILE=1dTest.cub
@@ -45,7 +48,7 @@ fi
 
 
 # Partition mesh
-../../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
+../../tools/mofem_part -my_file $MESHFILE -meshsets_config $CONFIGFILE -my_nparts $NBPROCS
 
 # Run code
 rm -f out_*.h5m 
@@ -67,7 +70,7 @@ mpirun --allow-run-as-root -np $NBPROCS \
 -ts_alpha_adapt false \
 -ts_max_reject -1 \
 -ts_max_snes_failures -1 \
--ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps \
+-ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps \
 -snes_type newtonls \
 -snes_linesearch_type l2 \
 -snes_linesearch_minlambda 1e-3 -snes_linesearch_damping 1. -snes_linesearch_max_it 3 \

@@ -366,7 +366,7 @@ MoFEMErrorCode MixedPoisson::solveRefineLoop() {
 }
 //! [Solve and refine loop]
 
-//! [Check results]
+//! [Check error]
 MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   MoFEMFunctionBegin;
   PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
@@ -437,11 +437,12 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   CHKERR getTagHandle(mField, "ERROR_INDICATOR", MB_TYPE_DOUBLE,
                       tag_handles[2]);
   CHKERR getTagHandle(mField, "ORDER", MB_TYPE_INTEGER, tag_handles[3]);
+  
   ParallelComm *pcomm =
       ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
-  if (pcomm == NULL) {
-    pcomm = new ParallelComm(&mField.get_moab(), mField.get_comm());
-  }
+  if (pcomm == NULL)
+    SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY, "Communicator not set");
+
   tag_handles.push_back(pcomm->part_tag());
   std::ostringstream strm;
   strm << "error_" << iter_num << ".h5m";
@@ -450,7 +451,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
                                       tag_handles.data(), tag_handles.size());
   MoFEMFunctionReturn(0);
 }
-//! [Check results]
+//! [Check error]
 
 //! [Output results]
 MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
@@ -481,6 +482,7 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
 }
 //! [Output results]
 
+//! [OpError]
 MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
                                              EntData &data) {
   MoFEMFunctionBegin;
@@ -545,6 +547,7 @@ MoFEMErrorCode MixedPoisson::OpError::doWork(int side, EntityType type,
                       ADD_VALUES);
   MoFEMFunctionReturn(0);
 }
+//! [OpError]
 
 int main(int argc, char *argv[]) {
   // Initialisation of MoFEM/PETSc and MOAB data structures

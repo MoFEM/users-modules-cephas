@@ -1,10 +1,7 @@
-/*! \page tutorial_hemholtz_problem CLX-0: Hemholtz problem 
+/*! \page tutorial_hemholtz_problem CLX-0: Helmholtz problem 
 
-\note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
 
-<br>
-
-\note Intended learning outcome:
+\note This problem formulation follows tutorial from deal.II https://www.dealii.org/current/doxygen/deal.II/step_29.html. <br><br> Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d. <br> <br> Intended learning outcome:
 - general structure of a program developed using MoFEM
 - idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
 - working with complex variable fields
@@ -28,10 +25,15 @@ The wave equation is:
 \end{align}
 \f]
 
-where \f$c\f$ is the wave speed assumed to be constant and \f$ P({\mathbf{x}}, t) \f$ is the spatially and temporally varying pressure, with spatial position vector \f${\mathbf{x}} \in \mathbb{R}^2\f$ and 
+that is true in the whole domain of the problem under consideration that is the grey area in \ref Figure_1_acoustics "Figure 1".
+Variable \f$c\f$ is the wave speed assumed to be constant and \f$ P({\mathbf{x}}, t) \f$ is the spatially and temporally varying pressure, with spatial position vector \f${\mathbf{x}} \in \mathbb{R}^2\f$ and 
 time \f$t \in \mathbb{R}^{+}\f$.
 
-Moreover, quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$ defined as 
+
+\anchor Figure_1_acoustics
+\image html problem_desctiption.png "Figure 1: Schematic presentation of the acoustic transducer." width=300px
+
+Quasi-absorbing boundary conditions are assumed for part of the boundary of the domain \f$\Gamma_1\f$, as presented with red line in \ref Figure_1_acoustics "Figure 1", defined as 
 
 \f[
 \begin{align}
@@ -42,7 +44,7 @@ Moreover, quasi-absorbing boundary conditions are assumed for part of the bounda
 
 where \f$\mathbf{N}\f$ is the unit normal vector on the quasi absorbing boundary, \f$\Gamma_1\f$.
 
-Finally, a source of constant frequency, \f$\omega\f$, and amplitude is assumed to be located on a different part of the boundary of the domain \f$\Gamma_2\f$:
+A source of constant frequency, \f$\omega\f$, and amplitude is assumed to be located on a different part of the boundary of the domain \f$\Gamma_2\f$:
 
 \f[
 \begin{align}
@@ -51,9 +53,10 @@ Finally, a source of constant frequency, \f$\omega\f$, and amplitude is assumed 
 \end{align}
 \f]
 
-Since there is only one source with constant frequency and since the boundaries are quasi-absorbing that resemble infinite boundary conditions,
-the problem can be solved in the frequency domain and the solution can admit a variable separation:
+where \f$\Gamma_1\f$ is presented with black line in \ref Figure_1_acoustics "Figure 1",
 
+Since we focus attention on a single frequency, we solve the problem in the frequency domain, reducing problem complexity. 
+Assuming that the solution can admit variable separation:
 \f[
 \begin{align}
   \label{eq:four}
@@ -71,7 +74,7 @@ where now the spatially varying pressure amplitude, \f$p(\mathbf{x})\f$, a compl
 \f]
 
 By introducing the wave number \f$k = \omega / c \f$ and substituting \eqref{eq:four} and \eqref{eq:five} in \eqref{eq:one} to \eqref{eq:three}
-the Helmholtz problem is recovered:
+we arrive to the Helmholtz problem:
 
 \f[
     \begin{equation}
@@ -136,7 +139,7 @@ Find \f$ p^{\rm {Re}}\f$ and  \f$p^{\rm {Re}} \in H^1(\Omega) \f$ such that:
 \end{equation}
 \f]
 
-where \f$\delta p^{\rm {Re}}\f$ and \f$\delta p^{\rm {Im}}\f$ are the trial functions for the real and imaginary fields, respectively, and fulfill
+where \f$\delta p^{\rm {Re}}\f$ and \f$\delta p^{\rm {Im}}\f$ are the trial functions for the real and imaginary fields, respectively, and fulfil
 the identity, \f$ \delta p({\mathbf{x}}) = \delta p^{\rm {Re}} + i \delta p^{\rm {Im}}\f$.
 
 By applying integration by parts for the laplacian term for the domain integral and substituting the 
@@ -201,52 +204,21 @@ And essential boundary conditions applied on \f$\Gamma_2\f$ are after applying d
 \f]
 
 \section tutorial_hemholtz_code_dissection Implementation
-The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MOFEM::Simple, 
+The focus of this section is on describing the procedure for solving two field problems in MoFEM using interface MoFEM::Simple, 
 determining boundary conditions, using boundary and domain elements accessed through the interface and pushing form integrators to pipelines for solving the problem.
 
 \subsection tutorial_hemholtz_strong_fields_and_shape_fun Declaration of fields for solution
 The focus of this section is on the points highlighted in the Notes in the beginning of the tutorial.
 The problem is run by execution of a series of functions when invoking the function Example::runProblem():
 
-\code
-MoFEMErrorCode Example::runProblem() {
-  MoFEMFunctionBegin;
-  CHKERR readMesh();
-  CHKERR setupProblem();
-  CHKERR boundaryCondition();
-  CHKERR assembleSystem();
-  CHKERR solveSystem();
-  CHKERR outputResults();
-  CHKERR checkResults();
-  MoFEMFunctionReturn(0);
-}
-\endcode
+\snippet users_modules/tutorials/clx-0/helmholtz.cpp run problem
+
+
 
 where Example::readMesh() executes the mesh reading procedure, then Example::setupProblem() involves adding the two unknown fields on the entities of the mesh and determine 
 the base function space, base, field rank and base order
 
-\code
-//! [Set up problem]
-MoFEMErrorCode Example::setupProblem() {
-  MoFEMFunctionBegin;
-  // Add field
-  CHKERR simpleInterface->addDomainField("P_REAL", H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addDomainField("P_IMAG", H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField("P_REAL", H1,
-                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  CHKERR simpleInterface->addBoundaryField("P_IMAG", H1,
-                                           AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
-  int order = 6;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder("P_REAL", order);
-  CHKERR simpleInterface->setFieldOrder("P_IMAG", order);
-  CHKERR simpleInterface->setUp();
-  MoFEMFunctionReturn(0);
-}
-//! [Set up problem]
-\endcode
+\snippet users_modules/tutorials/clx-0/helmholtz.cpp Set up problem
 
 where the fields \f$p^{\rm{Re}}\f$ and \f$p^{\rm{Im}}\f$ are marked as P_REAL and P_IMAG, respectively.
 Furthermore, the space chosen is H1, the base is AINSWORTH_BERNSTEIN_BEZIER_BASE and dimension is 1 that corresponds to a scalar field.
@@ -273,56 +245,7 @@ Finally, the fields are set up via `simpleInterface->setUp()`.
 \subsection tutorial_hemholtz_treatment_of_boundaries Boundary treatment
 Thereafter, the boundary entities are marked based on the input in Example::boundaryCondition() as shown in the snippet below
 
-\code
-//! [Applying essential BC]
-MoFEMErrorCode Example::boundaryCondition() {
-  MoFEMFunctionBegin;
-
-  auto get_ents_on_mesh_skin = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 2, "BC") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
-      }
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
-
-    return boundary_entities;
-  };
-
-  auto mark_boundary_dofs = [&](Range &&skin_edges) {
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simpleInterface->getProblemName(), ROW,
-                              skin_edges, *marker_ptr);
-    return marker_ptr;
-  };
-
-  auto remove_dofs_from_problem = [&](Range &&skin_edges) {
-    MoFEMFunctionBegin;
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    CHKERR problem_manager->removeDofsOnEntities(
-        simpleInterface->getProblemName(), "P_IMAG", skin_edges, 0, 1);
-    MoFEMFunctionReturn(0);
-  };
-
-  // Get global local vector of marked DOFs. Is global, since is set for all
-  // DOFs on processor. Is local since only DOFs on processor are in the
-  // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
-  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
-
-  MoFEMFunctionReturn(0);
-}
-//! [Applying essential BC]
-\endcode
-
+\snippet users_modules/tutorials/clx-0/helmholtz.cpp Applying essential BC
 
 The present code is designated for 2D problems. 
 Hence, all vertices and edges located on the \f$\Gamma_2\f$ boundary, marked with BLOCK_SET with name "BC" in the input file, are added to the
@@ -333,81 +256,7 @@ via the lambda function `remove_dofs_from_problem`.
 \subsection tutorial_hemholtz_assembly Pushing UDOs to domain and boundary pipelines
 Function Example::assembleSystem() is responsible for evaluating linear and bilinear forms for the problem and assembling the system to be solved
 
-\code
-//! [Push operators to pipeline]
-MoFEMErrorCode Example::assembleSystem() {
-  MoFEMFunctionBegin;
-  PipelineManager *pipeline_mng = mField.getInterface<PipelineManager>();
-
-  double k = 90;
-  CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-k", &k, PETSC_NULL);
-
-  auto beta = [](const double, const double, const double) { return -1; };
-  auto k2 = [k](const double, const double, const double) { return pow(k, 2); };
-  auto kp = [k](const double, const double, const double) { return k; };
-  auto km = [k](const double, const double, const double) { return -k; };
-  auto integration_rule = [](int, int, int p_data) { return 2 * p_data; };
-
-  auto set_domain = [&]() {
-    MoFEMFunctionBegin;
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetBc("P_REAL", true, boundaryMarker));
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainGradGrad("P_REAL", "P_REAL", beta));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainGradGrad("P_IMAG", "P_IMAG", beta));
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainMass("P_REAL", "P_REAL", k2));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainMass("P_IMAG", "P_IMAG", k2));
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
-
-    CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
-    MoFEMFunctionReturn(0);
-  };
-
-  auto set_boundary = [&]() {
-    MoFEMFunctionBegin;
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpSetBc("P_REAL", true, boundaryMarker));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryMass("P_IMAG", "P_REAL", kp));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryMass("P_REAL", "P_IMAG", km));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
-
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpSetBc("P_REAL", false, boundaryMarker));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-        new OpBoundaryMass("P_REAL", "P_REAL", beta));
-    pipeline_mng->getOpBoundaryLhsPipeline().push_back(new OpUnSetBc("P_REAL"));
-
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpSetBc("P_REAL", false, boundaryMarker));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-        new OpBoundarySource("P_REAL", beta));
-    pipeline_mng->getOpBoundaryRhsPipeline().push_back(new OpUnSetBc("P_REAL"));
-
-    CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
-    CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
-    MoFEMFunctionReturn(0);
-  };
-
-  CHKERR set_domain();
-  CHKERR set_boundary();
-
-  MoFEMFunctionReturn(0);
-}
-//! [Push operators to pipeline]
-\endcode
+\snippet users_modules/tutorials/clx-0/helmholtz.cpp Push operators to pipeline
 
 where the wave-number \f$k\f$ has a default value of 90 and can be determined by the user via command line option -k as dictated by the lines below
 \code
@@ -739,18 +588,16 @@ will have to follow the steps below
 - Third, in the terminal, run commands to partition the input mesh and start
   the analysis
   \code
-  mofem_part -my_file geometry.cub -output_file part.h5m -my_nparts 2
-  mpirun -np2 ./helmholtz -file_name part.h5m -order 8 -k 180
+  mofem_part -my_file geometry.cub -output_file part.h5m -my_nparts 2 -dim 2 -adj_dim 1
+  mpirun -np 2 ./helmholtz -file_name part.h5m -order 8 -k 180
   \endcode
-  where in the first line the mesh `geometry.cub` presented in \ref Figure_1_acoustics "Figure 1" generated in the open source code CUBIT is partitioned in to parts and generated
-  the partioned mesh `part.h5m` with bounraries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in \ref Figure_2_acoustics "Figure 2". In the second line, program is run using two processors (the same number of partitions) with
+  where in the first line the mesh `geometry.cub` presented in \ref Figure_2_acoustics "Figure 2" generated in the open source code CUBIT is partitioned in to parts and generated
+  the partitioned mesh `part.h5m` with boundaries and domain corresponding to \f$Gamma_1\f$ and \f$Gamma_2\f$ presented in \ref Figure_1_acoustics "Figure 1". In the second line, program is run using two processors (the same number of partitions) with
   fourth order polynomial of approximation and \f$k = 90\f$.
 
-\anchor Figure_1_acoustics
-\image html transducer_mesh.png "Figure 1: Mesh under the name `geometry.cub` used for partitioning." width=600px
-
 \anchor Figure_2_acoustics
-\image html problem_desctiption.eps "Figure 2: Schematic presentation of the acoustic transducer problem where ." width=300px
+\image html transducer_mesh.png "Figure 2: Mesh under the name `geometry.cub` used for partitioning." width=600px
+
 
 - After the analysis has run successfully, an output file, `out_helmholtz.h5m`, is generated. 
   To convert the results from `.h5m` format into `.vtk` 
@@ -786,14 +633,10 @@ for t in range(100):
  Delete(passArrays1)
 \endcode
 
-  compiling the series of 100 files gnerated the video presented in \ref Figure_4_acustics "Figure 4" will be generated
+  compiling the series of 100 files generated the video presented in \ref Figure_4_acustics "Figure 4" will be generated
 
 \anchor Figure_4_acustics
 \image html wave_presentation.gif "Figure 4: Post processed results for visual presentation of the periodic movement of the stationary wave corresponding to the solution of the Helmholtz problem in frequency domain." width=700px
-
-
-
-
 
 \include helmholtz.cpp
 

@@ -24,9 +24,9 @@ greater than \f$\sqrt{Dr}\f$ will transform abandoned species into another
 "mutant" form, switching state variable \f$u\f$ from the equilibrium state of
 \f$u=0\f$ to another equilibrium state of \f$u=k\f$.
 
-To understand equation better, we can focus our attention on the spreading of
+To understand the equation better, we can focus our attention on the spreading of
 fire on a plane of dry grass which is isolated from the rest of the domain by a
-closed trench of water. Fire will spread over the whole area, where all grass
+closed trench of water. Fire will spread over the whole area, whereby all grass
 over time will be consumed by fire and transformed into ash, i.e. mutant, where
 virgin (unburned) grass is indicated by \f$u=0\f$, and grass consumed by fire,
 i.e. ash is \f$u=k\f$. The front of the fire will move with the velocity not
@@ -72,8 +72,8 @@ below
 time mpirun -np $NBPROC ./reaction_diffusion_equation 2>&1 | tee log
 \endcode
 
-with parameters to run calculations can be found in the file \em
-param_file.petsc stored in the working directory
+with the necessary parameters to run calculations found in the file \em
+param_file.petsc which is stored in the working directory
 
 \include
 users_modules/basic_finite_elements/reaction_diffusion_equation/param_file.petsc
@@ -96,7 +96,7 @@ has to be set to \em node)
 
 To solve the equation, we apply standard Galerkin method, used in finite
 element approximation, i.e. multiplying both sides by a test function and
-integrate by parts to reduce demand for the regularity of tested and testing
+integrating by parts to reduce the demand for the regularity of the tested and testing
 functions, we get
 \f[
 \int_\Omega v \frac{\partial u}{\partial t} \textrm{d}\Omega +
@@ -104,17 +104,17 @@ functions, we get
 =
 \int_\Omega v r u \left(1-\frac{u}{k}\right) \textrm{d}\Omega
 \f]
-where \f$\Omega\f$ is solution Domain. To have a unique solution, we have to a
-priori enforce essential boundary conditions, such that test functions \f$v\f$
+where \f$\Omega\f$ is the solution Domain. To have a unique solution, we have to a
+priori enforce essential boundary conditions, such that the test functions \f$v\f$
 and tested function \f$u\f$ disappear on the boundary \f$\partial\Omega\f$.
-Also, approximation and tested functions are in
-Hilbert space \f$H^1_0(\Omega)\f$, such that integral of the first derivative
+Also, the approximation and tested functions are in
+Hilbert space \f$H^1_0(\Omega)\f$, such that the integral of the first derivative
 and function value over the domain is bounded. That will make the solution for
 our weak equation stable and equal to the solution of the strong equation, if
 smooth enough initial and boundary conditions are provided. Moreover, the
 solution to the problem can be approximated by a finite-dimensional and complete
 set of the piecewise mesh conforming polynomials, which are dense in
-\f$H^1(\Omega)\f$, thus we will have a convergence of approximate solution to
+\f$H^1(\Omega)\f$, thus we will have convergence of the approximate solution to
 the exact solution with mesh refinement or increasing polynomial approximation
 order. The approximation of test and tested functions is given as follows
 
@@ -160,7 +160,7 @@ described in <a
 href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>PETSc
 documentation</a> in section 6. Moreover, we focus attention on IMEX method,
 i.e. implicit-explicit time integration. The IMEX method is particularly useful
-when two time scales are separated and present in the solution, i.e. one fast
+whereby two time scales are separated and present in the solution, i.e. one fast
 scale, associated with \em stiff part of a differential equation, and \em slow
 scale usually associated with the strongly nonlinear part of the equation. In
 our particular case, \em stiff part of the equation is assisted with the
@@ -201,21 +201,21 @@ where
 \f[
 \sigma = \left. \frac{\partial \dot{u}}{\partial u} \right|_{u^n}
 \f]
-is paramter provided by algortim of time integration implemented in PETSc. The
-key advantage of the presented algorithm is that implementation of equation
+is the parameter provided by the algorithm of time integration, implemented in PETSc. The
+key advantage of the presented algorithm is that implementation of the equation
 is independent on time integration algorithm, and user can freely and quickly
 change time integration method without need of changing a line of the code. The
 change of time integration scheme is accounted by \f$\sigma\f$.
 
 \section reaction_diffusion_implementation Implementation
 
-Total control on solution process including calling functions to calculate
+Total control of the solution process including calling functions to calculate
 matrices and vectors in the right order is handled by PETSc time solver
-(TS). TS call MoFEM methods iterating over finite element entities to which are
+(TS). TS calls MoFEM methods iterating over finite element entities, which are
 provided by Discrete Manager (DM). MoFEM is responsible for
 managing degrees of freedom, finite elements, and iterating over entities on
-the mesh. MOAB is the mesh database where all data are stored on mesh tags at
-any point of analysis.
+the mesh. MOAB is the mesh database where all data is stored on mesh tags at
+any point of the analysis.
 
 MoFEM and MOAB databases provide low-level functions, however in this case
 flexibility of \ref MoFEM::Simple interface is adequate. \ref MoFEM::Simple
@@ -224,7 +224,7 @@ and it creates problem data structures accessed by DM. DM is a bridge between
 PETSc and MoFEM data structures and functions, in this particular case TS.
 
 The programmer responsibility is to initialise data structures, methods and
-provide users operators called by finite elements to evaluate matrices and
+provide users operators, called by finite elements, to evaluate matrices and
 vectors when called by time solver (TS). The relation between TS functions, DM
 in MoFEM and finite elements are shown in \ref Figure3 "Figure 3".
 
@@ -289,16 +289,16 @@ CHKERR simple_interface->setUp();
 \endcode
 Note that here we add only one field \em u, in \f$H^1(\Omega)\f$ space,
 approximation base is constructed following AINSWORTH_LEGENDRE_BASE recipe, and
-field is a scalar field, i.e. number of coefficients for base function is 1.
-Simple interface presumes that field is spanned over the whole domain, and
+field is scalar, i.e. number of coefficients for base function is 1.
+Simple interface presumes that the field is spanned over the whole domain, and
 integration in domain will be performed over the highest dimension entities on
-the mesh, in this particular example all triangles. The finite element name is
+the mesh, in this particular example, all triangles. The finite element name is
 accessed through
 \code
 std::string fe_name = simple_interface->getDomainFEName();
 \endcode
-On that element,finite element instances will be executed, described
-below, and on each element, user pushes a set of operators to execute. On the
+On that element, finite element instances will be executed, described
+below, and on each element, the user pushes a set of operators to execute. On the
 other hand, finite element instances will be called through DM manager by TS
 solver.
 
@@ -307,19 +307,19 @@ through DM
 \code
 MoFEM::SmartPetscObj<DM> dm = simple_interface->getDM();
 \endcode
-Note that MoFEM::SmartPetscObj wraps PETSc object can be used as a regular PETSc
-object but user is relieved from the need of calling the destructor for it.
-Having access to DM one can push finite element instances which can be used by
+Note that MoFEM::SmartPetscObj wraps PETSc object so that they can be used as a regular PETSc
+object but the user is relieved from the need of calling the destructor for it.
+Having access to DM, one can push finite element instances which can be used by
 TS to calculate matrices and vectors at subsequent time steps.
 
 \subsection reaction_diffusion_telling_ts Telling TS which elements should be used
 
 In \ref Figure3 "Figure 3", yellows are PETSc functions and those on red
-background are part of DM interfacing TS with MoFEM. In this tutorial TS is set
+background are part of DM, interfacing TS with MoFEM. In this tutorial TS is set
 to use IMEX (implicit/explicit) method, <a
 href=https://www.mcs.anl.gov/petsc/petsc-current/docs/manual.pdf>see
 details</a> in section 6. Methods calculating vector and matrices needed by TS
-solver to proceed set by DM functions are as follows
+solver to proceed set by DM functions, are as follows
 
 -# \ref MoFEM::DMMoFEMTSSetRHSFunction to calculate \f$\mathbf{G}\f$
 -# \ref MoFEM::DMMoFEMTSSetIFunction to calculate \f$\mathbf{F}\f$
@@ -345,14 +345,14 @@ boost::shared_ptr<Ele> vol_ele_stiff_lhs(new Ele(m_field));
 \endcode
 
 where integration rule, controlling number of integration points on each
-elment are set by
+element are set by
 \code
 auto vol_rule = [](int, int, int p) -> int { return 2 * p; };
 vol_ele_slow_rhs->getRuleHook = vol_rule;
 vol_ele_stiff_rhs->getRuleHook = vol_rule;
 vol_ele_stiff_lhs->getRuleHook = vol_rule;
 \endcode
-The integration rule depends on type of operator evaluated on element, in our
+The integration rule depends on the type of operator evaluated on the element, in our
 case, we evaluate mass matrices, thus we need to calculate integrals exactly
 with polynomial order \f$2p\f$.
 

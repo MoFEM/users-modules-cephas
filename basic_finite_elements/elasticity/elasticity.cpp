@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type gmres \n"
                                  "-pc_type lu \n"
-                                 "-pc_factor_mat_solver_package mumps \n"
+                                 "-pc_factor_mat_solver_type mumps \n"
                                  "-ksp_monitor \n"
                                  "-snes_type newtonls \n"
                                  "-snes_linesearch_type basic \n"
@@ -554,7 +554,7 @@ int main(int argc, char *argv[]) {
           };
 
       fe_rhs_ptr->getOpPtrVector().push_back(
-          new HookeElement::OpAnalyticalInternalStain_dx<0>(
+          new HookeElement::OpAnalyticalInternalStrain_dx<0>(
               "DISPLACEMENT", data_at_pts, thermal_strain));
     }
 
@@ -934,23 +934,12 @@ int main(int argc, char *argv[]) {
     auto set_post_proc_skin = [&](auto &post_proc_skin) {
       MoFEMFunctionBegin;
       CHKERR post_proc_skin.generateReferenceElementMesh();
-      auto my_vol_side_fe_ptr =
-          boost::make_shared<MoFEM::VolumeElementForcesAndSourcesCoreOnSide>(
-              m_field);
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("MESH_NODE_POSITIONS",
-                                                   data_at_pts->HMat));
-      my_vol_side_fe_ptr->getOpPtrVector().push_back(
-          new OpCalculateVectorFieldGradient<3, 3>("DISPLACEMENT",
-                                                   data_at_pts->hMat));
-
       CHKERR post_proc_skin.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
-      post_proc_skin.getOpPtrVector().push_back(
-          new PostProcFaceOnRefinedMesh::OpGetFieldGradientValuesOnSkin(
-              post_proc_skin.postProcMesh, post_proc_skin.mapGaussPts,
-              "DISPLACEMENT", "DISPLACEMENT_GRAD", my_vol_side_fe_ptr,
-              "ELASTIC", data_at_pts->hMat, true));
+      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+          "DISPLACEMENT", "ELASTIC", data_at_pts->hMat, true);
+      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+          "MESH_NODE_POSITIONS", "ELASTIC", data_at_pts->HMat, false);
       post_proc_skin.getOpPtrVector().push_back(
           new HookeElement::OpPostProcHookeElement<
               FaceElementForcesAndSourcesCore>(

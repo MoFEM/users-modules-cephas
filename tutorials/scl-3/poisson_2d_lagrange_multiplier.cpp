@@ -5,6 +5,9 @@
 using namespace MoFEM;
 using namespace Poisson2DLagrangeMultiplierOperators;
 
+using PostProcFaceEle = PostProcFaceOnRefinedMesh;
+using PostProcEdgeEle = PostProcEdgeOnRefinedMesh;
+
 static char help[] = "...\n\n";
 
 struct Poisson2DLagrangeMultiplier {
@@ -18,9 +21,9 @@ private:
   // Declaration of other main functions called in runProgram()
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
-  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode boundaryCondition();
   MoFEMErrorCode assembleSystem();
+  MoFEMErrorCode setIntegrationRules();
   MoFEMErrorCode solveSystem();
   MoFEMErrorCode outputResults();
 
@@ -41,15 +44,6 @@ private:
   MoFEM::Interface &mField;
   Simple *simpleInterface;
 
-  // mpi parallel communicator
-  MPI_Comm mpiComm;
-  // Number of processors
-  const int mpiRank;
-
-  // Discrete Manager and linear KSP solver using SmartPetscObj
-  SmartPetscObj<DM> dM;
-  SmartPetscObj<KSP> kspSolver;
-
   // Field name and approximation order
   std::string domainField;   // displacement field
   std::string boundaryField; // Lagrange multiplier field
@@ -59,43 +53,13 @@ private:
   // Object to mark boundary entities for the assembling of domain elements
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
 
-  // MoFEM working Pipelines for LHS and RHS of domain and boundary
-  boost::shared_ptr<FaceEle> domainPipelineLhs;
-  boost::shared_ptr<FaceEle> domainPipelineRhs;
-  boost::shared_ptr<EdgeEle> boundaryPipelineLhs;
-  boost::shared_ptr<EdgeEle> boundaryPipelineRhs;
-
-  // Object needed for postprocessing
-  boost::shared_ptr<FaceEle> domainPostProc;
-  boost::shared_ptr<EdgeEle> boundaryPostProc;
-
   // Boundary entities marked for fieldsplit (block) solver - optional
   Range boundaryEntitiesForFieldsplit;
 };
 
 Poisson2DLagrangeMultiplier::Poisson2DLagrangeMultiplier(
     MoFEM::Interface &m_field)
-    : domainField("U"), boundaryField("L"), mField(m_field),
-      mpiComm(mField.get_comm()), mpiRank(mField.get_comm_rank()) {
-  domainPipelineLhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  domainPipelineRhs = boost::shared_ptr<FaceEle>(new FaceEle(mField));
-  boundaryPipelineLhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
-  boundaryPipelineRhs = boost::shared_ptr<EdgeEle>(new EdgeEle(mField));
-}
-
-MoFEMErrorCode Poisson2DLagrangeMultiplier::runProgram() {
-  MoFEMFunctionBegin;
-
-  readMesh();
-  setupProblem();
-  setIntegrationRules();
-  boundaryCondition();
-  assembleSystem();
-  solveSystem();
-  outputResults();
-
-  MoFEMFunctionReturn(0);
-}
+    : domainField("U"), boundaryField("L"), mField(m_field) {}
 
 MoFEMErrorCode Poisson2DLagrangeMultiplier::readMesh() {
   MoFEMFunctionBegin;
@@ -125,27 +89,11 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::setupProblem() {
   MoFEMFunctionReturn(0);
 }
 
-MoFEMErrorCode Poisson2DLagrangeMultiplier::setIntegrationRules() {
-  MoFEMFunctionBegin;
-
-  auto domain_rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto domain_rule_rhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  domainPipelineLhs->getRuleHook = domain_rule_lhs;
-  domainPipelineRhs->getRuleHook = domain_rule_rhs;
-
-  auto boundary_rule_lhs = [](int, int, int p) -> int { return 2 * p; };
-  auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
-  boundaryPipelineLhs->getRuleHook = boundary_rule_lhs;
-  boundaryPipelineRhs->getRuleHook = boundary_rule_rhs;
-
-  MoFEMFunctionReturn(0);
-}
-
 MoFEMErrorCode Poisson2DLagrangeMultiplier::boundaryCondition() {
   MoFEMFunctionBegin;
 
   // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  auto get_ents_on_mesh_skin = [&]() {
+  auto get_ents_on_mesh = [&]() {
     Range boundary_entities;
     for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
       std::string entity_name = it->getName();
@@ -177,7 +125,7 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::boundaryCondition() {
   // Get global local vector of marked DOFs. Is global, since is set for all
   // DOFs on processor. Is local since only DOFs on processor are in the
   // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh_skin());
+  boundaryMarker = mark_boundary_dofs(get_ents_on_mesh());
 
   MoFEMFunctionReturn(0);
 }
@@ -185,58 +133,56 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::boundaryCondition() {
 MoFEMErrorCode Poisson2DLagrangeMultiplier::assembleSystem() {
   MoFEMFunctionBegin;
 
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // domain elements
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpCalculateInvJacForFace(invJac));
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpSetInvJacH1ForFace(invJac));
 
-    domainPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainLhsPipeline().push_back(
         new OpDomainLhsK(domainField, domainField, boundaryMarker));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // domain elements
-    domainPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpDomainRhsPipeline().push_back(
         new OpDomainRhsF(domainField, sourceTermFunction, boundaryMarker));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating LHS of
     // boundary elements (Lagrange multiplier)
-    boundaryPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryLhsC(domainField, boundaryField));
-    boundaryPipelineLhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryLhsPipeline().push_back(
         new OpBoundaryLhsC(boundaryField, domainField));
   }
 
   { // Push operators to the Pipeline that is responsible for calculating RHS of
     // boundary elements (Lagrange multiplier)
-    boundaryPipelineRhs->getOpPtrVector().push_back(
+    pipeline_mng->getOpBoundaryRhsPipeline().push_back(
         new OpBoundaryRhsG(boundaryField, boundaryFunction));
   }
 
-  // get Discrete Manager (SmartPetscObj)
-  dM = simpleInterface->getDM();
+  MoFEMFunctionReturn(0);
+}
 
-  { // Set operators for linear equations solver (KSP) from MoFEM Pipelines
+MoFEMErrorCode Poisson2DLagrangeMultiplier::setIntegrationRules() {
+  MoFEMFunctionBegin;
 
-    // Set operators for calculation of LHS and RHS of domain elements
-    boost::shared_ptr<FaceEle> null_face;
-    CHKERR DMMoFEMKSPSetComputeOperators(dM, simpleInterface->getDomainFEName(),
-                                         domainPipelineLhs, null_face,
-                                         null_face);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getDomainFEName(),
-                                   domainPipelineRhs, null_face, null_face);
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
 
-    // Set operators for calculation of LHS and RHS of domain elements
-    boost::shared_ptr<EdgeEle> null_edge;
-    CHKERR DMMoFEMKSPSetComputeOperators(
-        dM, simpleInterface->getBoundaryFEName(), boundaryPipelineLhs,
-        null_edge, null_edge);
-    CHKERR DMMoFEMKSPSetComputeRHS(dM, simpleInterface->getBoundaryFEName(),
-                                   boundaryPipelineRhs, null_edge, null_edge);
-  }
+  auto domain_rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  auto domain_rule_rhs = [](int, int, int p) -> int { return 2 * (p - 1); };
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(domain_rule_lhs);
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(domain_rule_rhs);
+
+  auto boundary_rule_lhs = [](int, int, int p) -> int { return 2 * p; };
+  auto boundary_rule_rhs = [](int, int, int p) -> int { return 2 * p; };
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_lhs);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(boundary_rule_rhs);
 
   MoFEMFunctionReturn(0);
 }
@@ -244,23 +190,22 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::assembleSystem() {
 MoFEMErrorCode Poisson2DLagrangeMultiplier::solveSystem() {
   MoFEMFunctionBegin;
 
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+
+  auto ksp_solver = pipeline_mng->createKSP();
+  CHKERR KSPSetFromOptions(ksp_solver);
+
   // Create RHS and solution vectors
-  SmartPetscObj<Vec> global_rhs, global_solution;
-  CHKERR DMCreateGlobalVector_MoFEM(dM, global_rhs);
-  global_solution = smartVectorDuplicate(global_rhs);
+  auto dm = simpleInterface->getDM();
+  auto F = smartCreateDMVector(dm);
+  auto D = smartVectorDuplicate(F);
 
-  // Setup KSP solver
-  kspSolver = createKSP(mField.get_comm());
-  CHKERR KSPSetFromOptions(kspSolver);
-
-  // Fieldsplit is more complicated to implement in this case: U & L
   // Setup fieldsplit (block) solver - optional: yes/no
   if (1) {
     PC pc;
-    CHKERR KSPGetPC(kspSolver, &pc);
+    CHKERR KSPGetPC(ksp_solver, &pc);
     PetscBool is_pcfs = PETSC_FALSE;
     PetscObjectTypeCompare((PetscObject)pc, PCFIELDSPLIT, &is_pcfs);
-    cerr << "Running FIELDSPLIT 000..." << endl;
 
     // Set up FIELDSPLIT, only when user set -pc_type fieldsplit
     // Identify the index for boundary entities, remaining will be for domain
@@ -269,7 +214,7 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::solveSystem() {
       IS is_domain, is_boundary;
       cerr << "Running FIELDSPLIT..." << endl;
       const MoFEM::Problem *problem_ptr;
-      CHKERR DMMoFEMGetProblemPtr(dM, &problem_ptr);
+      CHKERR DMMoFEMGetProblemPtr(dm, &problem_ptr);
       CHKERR mField.getInterface<ISManager>()->isCreateProblemFieldAndRank(
           problem_ptr->getName(), ROW, domainField, 0, 1, &is_boundary,
           &boundaryEntitiesForFieldsplit);
@@ -281,16 +226,15 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::solveSystem() {
     }
   }
 
-  CHKERR KSPSetDM(kspSolver, dM);
-  CHKERR KSPSetUp(kspSolver);
+  CHKERR KSPSetUp(ksp_solver);
 
   // Solve the system
-  CHKERR KSPSolve(kspSolver, global_rhs, global_solution);
-  // VecView(global_rhs, PETSC_VIEWER_STDOUT_SELF);
+  CHKERR KSPSolve(ksp_solver, F, D);
 
   // Scatter result data on the mesh
-  CHKERR DMoFEMMeshToGlobalVector(dM, global_solution, INSERT_VALUES,
-                                  SCATTER_REVERSE);
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
 
   MoFEMFunctionReturn(0);
 }
@@ -298,20 +242,37 @@ MoFEMErrorCode Poisson2DLagrangeMultiplier::solveSystem() {
 MoFEMErrorCode Poisson2DLagrangeMultiplier::outputResults() {
   MoFEMFunctionBegin;
 
-  domainPostProc =
-      boost::shared_ptr<FaceEle>(new PostProcFaceOnRefinedMesh(mField));
+  auto pipeline_mng = mField.getInterface<PipelineManager>();
+  pipeline_mng->getDomainLhsFE().reset();
+  pipeline_mng->getBoundaryLhsFE().reset();
 
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(domainPostProc)
-      ->generateReferenceElementMesh();
+  auto post_proc_domain_fe = boost::make_shared<PostProcFaceEle>(mField);
+  post_proc_domain_fe->generateReferenceElementMesh();
+  post_proc_domain_fe->addFieldValuesPostProc(domainField);
+  pipeline_mng->getDomainRhsFE() = post_proc_domain_fe;
 
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(domainPostProc)
-      ->addFieldValuesPostProc(domainField);
+  auto post_proc_boundary_fe = boost::make_shared<PostProcEdgeEle>(mField);
+  post_proc_boundary_fe->generateReferenceElementMesh();
+  post_proc_boundary_fe->addFieldValuesPostProc(boundaryField);
+  pipeline_mng->getBoundaryRhsFE() = post_proc_boundary_fe;
 
-  CHKERR DMoFEMLoopFiniteElements(dM, simpleInterface->getDomainFEName(),
-                                  domainPostProc);
+  CHKERR pipeline_mng->loopFiniteElements();
+  CHKERR post_proc_domain_fe->writeFile("out_result_domain.h5m");
+  CHKERR post_proc_boundary_fe->writeFile("out_result_boundary.h5m");
 
-  CHKERR boost::static_pointer_cast<PostProcFaceOnRefinedMesh>(domainPostProc)
-      ->writeFile("out_result.h5m");
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode Poisson2DLagrangeMultiplier::runProgram() {
+  MoFEMFunctionBegin;
+
+  readMesh();
+  setupProblem();
+  boundaryCondition();
+  assembleSystem();
+  setIntegrationRules();
+  solveSystem();
+  outputResults();
 
   MoFEMFunctionReturn(0);
 }

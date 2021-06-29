@@ -2,9 +2,7 @@
  * \file approximation.cpp
  * \example approximation.cpp
  *
- * Using PipelineManager interface calculate the divergence of base functions,
- * and integral of flux on the boundary. Since the h-div space is used, volume
- * integral and boundary integral should give the same result.
+ * Utility for plotting base functions for different spaces, polynomial bases 
  */
 
 /* This file is part of MoFEM.
@@ -169,7 +167,7 @@ MoFEMErrorCode Example::setupProblem() {
 
   // Declare elements
   enum bases { AINSWORTH, AINSWORTH_LOBATTO, DEMKOWICZ, BERNSTEIN, LASBASETOP };
-  const char *list_bases[] = {"ainsworth", "ainsworth_labatto", "demkowicz",
+  const char *list_bases[] = {"ainsworth", "ainsworth_lobatto", "demkowicz",
                               "bernstein"};
 
   PetscBool flg;
@@ -188,7 +186,7 @@ MoFEMErrorCode Example::setupProblem() {
   else if (choice_base_value == BERNSTEIN)
     base = AINSWORTH_BERNSTEIN_BEZIER_BASE;
 
-  enum spaces { H1SPACE, L2SPACE, HCURLSPACE, HDIVSAPCE, LASBASETSPACE };
+  enum spaces { H1SPACE, L2SPACE, HCURLSPACE, HDIVSPACE, LASBASETSPACE };
   const char *list_spaces[] = {"h1", "l2", "hcurl", "hdiv"};
   PetscInt choice_space_value = H1SPACE;
   CHKERR PetscOptionsGetEList(PETSC_NULL, NULL, "-space", list_spaces,
@@ -202,7 +200,7 @@ MoFEMErrorCode Example::setupProblem() {
     space = L2;
   else if (choice_space_value == HCURLSPACE)
     space = HCURL;
-  else if (choice_space_value == HDIVSAPCE)
+  else if (choice_space_value == HDIVSPACE)
     space = HDIV;
 
   CHKERR simpleInterface->addDomainField("U", space, base, 1);

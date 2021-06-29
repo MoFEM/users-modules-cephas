@@ -1,19 +1,205 @@
-/*! \page tut_mix_poisson MIX-0: Mixed poisson equation
+/*! \page tut_mix_poisson MIX-0: Mixed formulation of Poisson equation
 
-\note Prerequisites of this tutorial include \ref basic_tutorials_mesh_generation_2d
+\note Prerequisites of this tutorial include \ref basic_tutorials_poisson_homogeneous and \ref hierarchical_approximation_1
 
 <br>
 
 \note Intended learning outcome:
-- general structure of a program developed using MoFEM
-- idea of [Simple Interface](http://mofem.eng.gla.ac.uk/mofem/html/struct_mo_f_e_m_1_1_simple.html) in MoFEM and how to use it
-- idea of Domain element in MoFEM and how to use it
-- Use default Forms Integrals
-- how to **push** the developed UDOs to the *Pipeline*
-- utilisation of tools to convert outputs (MOAB) and visualise them (Paraview)
-
+- Motivation for using mixed problem formulation
+- Derivation of the mixed weak form for the Poisson equation
+- Preliminaries for function spaces L2 and H(div) 
+- Implementation of the mixed weak form and error indicators
+- Convergence analysis for p-adaptive refinement
 \tableofcontents
 
-\include mixed_poisson.cpp
+\section mix_poisson_introduction Introduction and motivation 
+
+We will start this tutorial by introducing the idea of the <em>mixed form</em> and its difference from the coupled problem formulation. In case of the coupled problem, we consider the interplay between two (or more) sub-problems governed by different physical equations and therefore described by two (or more) fields. Examples of coupled problems include thermoelasticity, electroelasticity, fluid-structure interaction and many others. On the contrary, mixed problem formulation is obtained upon introduction of one (or more) auxiliary variable(s) in a problem governed by one physical process. Examples of classical problems permitting (and benefiting from) such formulation are:
+- Incompressible elasticity (auxiliary variable: hydrostatic pressure)
+- Stokes/Navier-Stokes problem for viscous incompressible flow (auxiliary variable: fluid pressure)
+- Convection-Reaction-Diffusion problem (auxiliary variable: flux)
+- Mechanical contact problem (auxiliary variable: contact pressure).
+
+There are multiple reasons for using mixed formulation, see \cite boffi2013mixed for more details:
+- Presence of constraints in a problem under study (incompressible elasticity/fluid flow, contact problem)
+- Importance of new variables appearing in the formulation (accurate computation of stresses in elastic problem and fluxes in diffusion problem)
+- Possibility to obtain weaker formulation with less requirements on the regularity of the solution
+- Embedded reliable and efficient <em>a posteriori</em> error estimates.
+
+Note that in this tutorial particular attention will be given to the error estimators naturally emerging within the mixed formulation and permitting easy implementation of adaptive refinement.
+
+\section mix_poisson_weak_form Derivation of the mixed weak form for the Poisson equation
+
+The strong form of the boundary value problem for the Poisson equation reads:
+\f[
+\begin{align}
+\label{eq:poisson}-\textrm{div}\:(\nabla u) = f & \quad \textrm{in}\; \Omega \\
+\label{eq:dirichlet}u = 0 & \quad \textrm{on}\; \partial\Omega,
+\end{align}
+\f]
+where the homogeneous Dirichlet boundary condition is imposed on the whole boundary of the domain. In order to obtain the mixed formulation, we introduce a new variable \f$\mathbf{q}\f$ representing the flux and rewrite the statement of the problem as follows:
+\f[
+\begin{align}
+\label{eq:flux}\mathbf{q} &= \nabla u & \textrm{in}\; \Omega\\
+\label{eq:cont}-\textrm{div}\,\mathbf{q} &= f & \textrm{in}\; \Omega\\
+\label{eq:bc}u &= 0 & \textrm{on}\; \partial\Omega.
+\end{align}
+\f]
+
+We then multiply the left and right hand sides of Eqs. \eqref{eq:flux} and \eqref{eq:cont} by test functions \f$\delta\mathbf{q}\f$ and \f$\delta u\f$, respectively, and integrate over the domain:
+\f[
+\begin{align}
+\label{eq:flux_int}\int_{\Omega}\mathbf{q}\cdot\delta\mathbf{q}\,\textrm{d}\Omega - \int_{\Omega}\nabla u \cdot \delta\mathbf{q} \,\textrm{d}\Omega &= 0 \\
+-\int_{\Omega}\textrm{div}\,\mathbf{q}\delta u \,\textrm{d}\Omega &= \int_{\Omega}f\, \delta u \,\textrm{d}\Omega 
+\end{align}
+\f]
+
+We now notice that the second term in \eqref{eq:flux_int} can be integrated by parts, providing:
+\f[
+\begin{align}
+\label{eq:flux_int_part}\int_{\Omega}\mathbf{q}\cdot\delta\mathbf{q}\,\textrm{d}\Omega + \int_{\Omega} u\, \textrm{div}\, \delta\mathbf{q} \,\textrm{d}\Omega -\int_{\partial\Omega} u\, \delta\mathbf{q}\cdot\mathbf{n} \,\textrm{d}\Gamma &= 0 \\
+-\int_{\Omega}\textrm{div}\,\mathbf{q}\,\delta u \,\textrm{d}\Omega &= \int_{\Omega}f\, \delta u \,\textrm{d}\Omega 
+\end{align}
+\f]
+Since \f$u=0\f$ on \f$\partial\Omega\f$, the boundary term in \eqref{eq:flux_int_part} vanishes. Note that in this case the Dirichlet boundary condition on the field \f$u\f$ \eqref{eq:bc} is imposed in the sense of natural boundary condition, which is typical for mixed formulations. We arrive at the mixed weak form of the problem \eqref{eq:poisson}-\eqref{eq:dirichlet}: 
+Find \f$\mathbf{q}\in H(\textrm{div};\Omega)\f$ and \f$u\in L^2(\Omega)\f$ such that
+\f[
+\begin{align}
+\label{eq:weak_1}\int_{\Omega}\mathbf{q}\cdot\delta\mathbf{q}\,\textrm{d}\Omega + \int_{\Omega} u\, \textrm{div}\, \delta\mathbf{q} \,\textrm{d}\Omega &= 0 & \forall\, \delta\mathbf{q} \in H(\textrm{div};\Omega)\\
+\label{eq:weak_2}\int_{\Omega}\textrm{div}\,\mathbf{q}\,\delta u \,\textrm{d}\Omega &= -\int_{\Omega}f\, \delta u \,\textrm{d}\Omega & \forall\, \delta u \in L^2(\Omega) 
+\end{align}
+\f]
+where the following notations of function spaces were used:
+\f[
+\begin{align}
+L^2(\Omega) &:= \left\{ u(\mathbf{x}) : \Omega \rightarrow R \;\left|\; \int_{\Omega}|u|^2\;\textrm{d}\Omega = ||u||^2_{\Omega} < +\infty\right.\right\}
+\\
+H(\textrm{div};\Omega) &:= \left\{ \mathbf{q} \in [L^2(\Omega)]^2 \;\left|\; \textrm{div}\:\mathbf{u}\in L^2(\Omega)\right.\right\}
+\end{align}
+\f]
+
+As was mentioned above, one of the main benefits of the mixed formulation is associated with embedded error estimates. It is important to distinguish between error <em>indicators</em> which compute local measure of the error and error <em>estimators</em> which provide mathematically strict bounds on the global error. In this tutorial we will consider only the former, and in particular, will study a simple error indicator which represents the norm of difference between the gradient of field \f$u\f$ and the flux \f$\mathbf{q}\f$ computed over a finite element \f$\Omega_e\f$, see \cite repin2008posteriori for more details:
+\f[
+\begin{equation}
+\label{eq:indic}\eta_e := ||\nabla u - \mathbf{q}||_{\Omega_e}^2.
+\end{equation}
+\f]
+
+\section mix_poisson_code Implementation
+
+Note that function MixedPoisson::runProblem() is shorter than in previous tutorials, e.g. \ref basic_tutorials_poisson_homogeneous since several functions are nested in MixedPoisson::solveRefineLoop():
+\snippet users_modules/tutorials/mix-0/mixed_poisson.cpp Run programme
+
+Furthermore, function MixedPoisson::readMesh() is similar to the one in \ref basic_tutorials_poisson_homogeneous and will not be discussed here. However, the function MixedPoisson::setupProblem() has features unique to the considered problem:
+\snippet users_modules/tutorials/mix-0/mixed_poisson.cpp Set up problem
+
+First, we add domain fields for the flux \f$\mathbf{q}\f$ (choosing space `HCURL`) and for \f$u\f$ (space `L2`). Space H(curl) in 2D is defined as: 
+\f[
+H(\textrm{curl};\Omega) := \left\{ \mathbf{q} \in [L^2(\Omega)]^2 \;\left|\; \textrm{curl}\:\mathbf{u}\in L^2(\Omega)\right.\right\}
+\f]
+It is important to note that choosing the H(curl) space for fluxes is not a mistake here. In turns out that in 2D case spaces H(div) and H(curl) are isomorphic, and therefore only base for H(curl) has been implemented in 2D. Base vectors for H(div) space can be easily obtained after rotation of H(curl) space base vectors by a right angle, see \cite boffi2013mixed for more details. Note also that bases of both H(div) and H(curl) are vectorial, and, therefore, only 1 coefficient per base function is required for vector field \f$\mathbf{q}\f$.
+
+Next, user-defined orders are set for the fields: if \f$p\f$ is the order for the flux \f$\mathbf{q}\in H(\textrm{div};\Omega)\f$, then order for the field \f$u\in L^2(\Omega)\f$ is \f$(p-1)\f$ which is required to satisfy the inf-sup (LBB) stability conditions  \cite boffi2013mixed. Finally, since in this tutorial we will discuss the implementation of adaptive p-refinement, the user-defined approximation order \f$p\f$ is stored in the MOAB database on <em>tags</em> of each domain element.
+
+Setting the integration rule in function MixedPoisson::setIntegrationRules() is similar to other tutorials:
+\snippet  users_modules/tutorials/mix-0/mixed_poisson.cpp Set integration rule
+The highest order of the integrand is found in the diagonal term in Eq. \eqref{eq:weak_1}, and therefore the rule is set to \f$(2 p + 1)\f$, where \f$p\f$ is order of base functions for fluxes. Note that the order is increased by 1 to accommodate for the case of the higher order geometry.
+
+As was mentioned above, functions MixedPoisson::assembleSystem(), MixedPoisson::solveSystem(), MixedPoisson::checkError() and MixedPoisson::outputResults() are nested in MixedPoisson::solveRefineLoop(). Note that first, these functions are called outside the loop:
+\snippet users_modules/tutorials/mix-0/mixed_poisson.cpp Solve and refine loop 
+If user-defined number of p-refinement iterations is greater or equal to 1, then the loop starts from the refinement procedure and, subsequently, calls to MixedPoisson::assembleSystem(), MixedPoisson::solveSystem(), MixedPoisson::checkError() and MixedPoisson::outputResults() are repeated. We will now consider these functions in more detail. 
+
+\subsection mix_poisson_assemble Assembling the system
+\snippet users_modules/tutorials/mix-0/mixed_poisson.cpp Assemble system
+Assembly of the system requires first computation of the Jacobian matrix, its inverse and the determinant. Furthermore, as the H(curl) space was chosen for approximation of the flux field, the transformation of the base to H(div) space (rotation by the right angle of the base vectors) is obtained by pushing the corresponding operator. Moreover, as the base for H(div) space is vectorial, the contravariant Piola transform is required, see \cite boffi2013mixed for more details, and the associated operator is also pushed to the pipeline. Upon these preliminary steps, only three additional operators are needed to assemble the discretized version of the system \eqref{eq:weak_1}- \eqref{eq:weak_2}:
+- Operator OpHdivHdiv() is used to compute the diagonal term in \eqref{eq:weak_1};
+- Operator OpHdivU() computes off-diagonal (symmetric) terms in \eqref{eq:weak_1} and \eqref{eq:weak_2}
+- Operator OpDomainSource() assembles the source term in \eqref{eq:weak_2}.
+
+\subsection mix_poisson_error_op Operators for computing error indicators 
+
+The solution of the system is implemented in MixedPoisson::solveSystem() and is similar to other tutorials. However, function MixedPoisson::checkError() deserves discussion here:
+\snippet  users_modules/tutorials/mix-0/mixed_poisson.cpp Check error
+First, computation of the error and error indicators requires the same operators for Jacobian (inverse and determinant), transformation of the base for the space H(div) and contravariant Piola transform as were discussed above. Upon pushing those, we add operators for evaluating values of the field \f$u\f$, its gradient, and the values of the flux \f$\mathbf{q}\f$ at gauss points of the domain elements. Finally, before the loop over all finite elements is performed, the operator MixedPoisson::OpError() is pushed to the pipeline:
+\snippet users_modules/tutorials/mix-0/mixed_poisson.cpp OpError
+
+In particular, operator MixedPoisson::OpError integrates over the domain elements following values:
+- L2 norm of the error \f$||u^h - u^*||_{\Omega_e}^2\f$
+- H1 seminorm of the error \f$||\nabla u^h - \nabla u^*||_{\Omega_e}^2\f$
+- error indicator \f$\eta_e=||\nabla u^h - \mathbf{q}^h||_{\Omega_e}^2\f$
+
+These values are then stored as tags on the corresponding elements in the MOAB database, and, furthermore, are summed up with contributions from other elements to provide the global values.
+
+\subsection mix_poisson_ref Algorithm of adaptive p-refinement
+
+What remains to be discussed is probably the most important part of this tutorial: how the computed values of the error indicator are used to drive adaptive p-refinement. The corresponding algorithm is implemented in MixedPoisson::refineOrder():
+
+\snippet users_modules/tutorials/mix-0/mixed_poisson.cpp Refine
+
+The algorithm starts by looping over all domain elements and reading the current approximation order and the value of the error indicator from <em>tags</em> of the MOAB database. If for a given element the local indicator is greater than the mean value over the whole domain, i.e.
+\f[
+\begin{equation}
+\label{eq:crit}\eta_e>\frac{1}{N}\sum_{e=1}^{N}\eta_e,
+\end{equation}
+\f]
+where \f$N\f$ is total number of domain elements, then such element is added to the refinement level corresponding to its current approximation order. Once the criterion \eqref{eq:crit} is checked for all elements in the domain, the approximation order \f$p\f$ is increased by 1 only for elements marked for the refinement on the current iteration.
+
+\section mix_poisson_example Example
+
+To demonstrate the discussed above implementation of the mixed form, we consider the Poisson equation in the rectangular 2D domain with Dirichlet boundary conditions prescribed on the whole boundary:
+\f[
+\begin{cases}
+-\textrm{div}\:(\nabla u) = f &\textrm{in}\; \Omega := \left(-\frac{1}{2};\frac{1}{2}\right)\times\left(-\frac{1}{2};\frac{1}{2}\right)\\
+u = 0 &\textrm{on}\; \partial\Omega
+\end{cases}
+\f]
+For testing purposes, we will construct the problem for a given solution: 
+\f[
+u^*(x,y)= e^{-100(x^2 + y^2)}  \cos \pi x \cos \pi y
+\f]
+The gradient of this functions is
+\f[
+\nabla u^* =
+\begin{bmatrix} 
+-e^{-100(x^2 + y^2)} (200 x \cos\pi x + \pi \sin\pi x) \cos\pi y\\ 
+-e^{-100(x^2 + y^2)} (200 y \cos\pi y + \pi \sin\pi y) \cos\pi x
+\end{bmatrix}, 
+\f]
+see \ref mixed_poisson_figure_1 "Figure 1", while the source term reads:
+\f[
+f(x,y) = -e^{-100(x^2 + y^2)} \Bigl\{400 \pi (x \cos\pi y \sin\pi x + y \cos\pi x \sin \pi y) +2\left[20000 (x^2 + y^2) - 200 - \pi^2 \right]\cos\pi x \cos\pi y  \Bigr\}
+\f]
+
+\anchor mixed_poisson_figure_1
+\image html function_and_gradient.png "Figure 1: Analytical solution and the norm of its gradient" width=1000px
+
+First, we will verify the implementation by running the code without the refinement loop:
+\code
+./mixed_poisson -file_name test.h5m -base_order 2
+\endcode
+Using meshes with different element sizes and setting different approximation orders, we can study the convergence of e.g. field \f$u\f$, see \ref mixed_poisson_figure_2 "Figure 2(a)", which for the considered mixed formulation satisfies the following <em>a priori</em> error bound, see \cite boffi2013mixed
+\f[
+||u^h-u^*||_{\Omega}\leq C(u,\mathbf{q})\,h^{p}
+\f]
+where \f$h\f$ is the element size, \f$p\f$ is approximation order for fluxes field \f$\mathbf{q}\f$ and order for field \f$u\f$ is \f$(p-1)\f$. 
+
+\anchor mixed_poisson_figure_2
+\image html conv_study.pdf "Figure 2: L2 error of the numerical solution for different approximations orders with respect to (a) element size, (b) number of DOFs" width=1000px
+
+Furthermore, we can plot the values of the local errors and local error indicators \f$\eta_e\f$, given by \eqref{eq:indic}. \ref mixed_poisson_figure_3 "Figure 3" shows that the considered error indicator (difference between the gradient of field u and the flux) is very close to the H1 seminorm of the error computed using the analytical solution. Moreover, the indicator is very effective in highlighting the regions where the L2-norm of the solution is pronounced. 
+
+\anchor mixed_poisson_figure_3
+\image html error_indicators.jpg "Figure 3: Local error and error indicator" width=1000px
+
+Next, we run the code invoking the adaptive p-refinement:
+\code
+./mixed_poisson -file_name test.h5m -base_order 2 -ref_iter_num 10
+\endcode
+In this case, we can observe coherent evolution of the approximation orders saved on element tags and the corresponding distribution of the error in the domain, see \ref mixed_poisson_figure_4 "Figure 4":
+
+\anchor mixed_poisson_figure_4
+\image html adaptive_refinement.gif "Figure 4: Approximation order and local error for several iterations of the adaptive p-refinement" width=1000px
+
+Finally we extend the convergence analysis and plot the error as a function of number of DOFs used in simulation, see \ref mixed_poisson_figure_2 "Figure 2(b)". We can observe in this simple example the effectiveness of using the p-adaptivity, driven by the error indicator. Indeed, such an approach, which is increasing approximation order only in regions where the error is pronounced, requires much less DOFs then the approach based on global h- or p-refinement to obtain the same accuracy of the solution.
 
 */

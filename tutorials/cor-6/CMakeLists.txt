@@ -20,7 +20,7 @@ add_test(simple_elasticity
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 1
   ${CMAKE_CURRENT_BINARY_DIR}/simple_elasticity
   -file_name ${CMAKE_CURRENT_SOURCE_DIR}/simple_elasticity.h5m -order 3
-  -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor
+  -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps -ksp_monitor
   -test 1)
 
  cm_export_file("simple_elasticity.h5m" export_files_simple_elasticity)

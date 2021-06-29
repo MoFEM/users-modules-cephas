@@ -34,14 +34,13 @@ will solve a simple Poisson's equation in 2D with homogeneous boundary condition
 (zero boundary values). The physical example of this equation is that you
 have a membrane that is fixed at its boundary and it experiences a uniformly
 distributed force on its surface, then you are asked to estimate the
-displacement of the membrane. The formal definition of the problem as follows 
+displacement of the membrane. The strong form of the problem as follows 
 
-Find \f$ u \in H_0^{1}(\Omega) \f$ such that
 \f[
   \begin{align}
 -\nabla \cdot \nabla u(\mathbf{x}) &= f \quad {\rm in} \quad {
 \Omega}, \\ 
-{\hat u}(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
+{ u}(\mathbf{x}) &= 0 \quad {\rm on} \quad \partial { \Omega},
   \end{align}
 \f]
 where \f$ { \Omega} \f$ denotes the domain occupied by the body and
@@ -58,11 +57,11 @@ As you may have already learned from the basic finite element method, in order
 to approximate the field \f$ u \f$ of the problem equation, we need to 
 derive the weak form. The procedure to achieve it is as follows
 
-- First, multiplying both sides of the equation by a *test* function \f$ v \f$
+- First, multiplying both sides of the equation by a *test* function \f$ \delta u \f$
   and then integrate over the domain \f$ \Omega \f$
 \f[
   \begin{equation}
--\int_\Omega v(\nabla \cdot \nabla u ) ~d\Omega= \int_\Omega v f ~d\Omega.
+-\int_\Omega \delta u(\nabla \cdot \nabla u ) ~d\Omega= \int_\Omega \delta u f ~d\Omega.
   \end{equation}
 \f]
 
@@ -70,24 +69,24 @@ derive the weak form. The procedure to achieve it is as follows
   we have
 \f[
   \begin{equation}
-  \int_\Omega \nabla v \cdot \nabla u ~d\Omega - \int_{\partial \Omega} v {\bf n} \cdot
-  \nabla u ~d\partial \Omega = \int_\Omega v f ~d\Omega.
+  \int_\Omega \nabla \delta u \cdot \nabla u ~d\Omega - \int_{\partial \Omega} \delta u {\bf n} \cdot
+  \nabla u ~d\partial \Omega = \int_\Omega \delta u f ~d\Omega.
   \end{equation}
 \f]
-It is noted that the test function \f$ v \f$ has to satisfy the homogeneous
-  boundary condition, i.e. \f$ v=0 \f$ on \f$ \partial \Omega \f$. Substituting
+It is noted that the test function \f$ \delta u \f$ has to satisfy the homogeneous
+  boundary condition, i.e. \f$ \delta u=0 \f$ on \f$ \partial \Omega \f$. Substituting
   it to the above equation, we finally obtain the weak form of the problem
 \f[
   \begin{equation}
-\int_\Omega \nabla v \cdot \nabla u ~d\Omega = \int_\Omega v f ~d\Omega, \quad \forall v \in H_{0}^{1}(\Omega),
+\int_\Omega \nabla \delta u \cdot \nabla u ~d\Omega = \int_\Omega \delta u f ~d\Omega, \quad \forall \delta u \in H_{0}^{1}(\Omega),
   \end{equation}
 \f]
-  where the space for test function \f$ v \f$ is \f$ H_{0}^{1}(\Omega):=\left\{v
-  \in H^{1}(\Omega) \mid v=0 \text { on } \partial \Omega\right\} \f$.
+  where the space for test function \f$ \delta u \f$ is \f$
+  H_{0}^{1}(\Omega):=\left\{v \in H^{1}(\Omega) \mid v=0 \text { on } \partial \Omega\right\} \f$.
 
 We are now solving this equation of the weak form instead of the original
 equation. This equation is asking for the solution of \f$ u \f$ that is true for
-all test function \f$ v \f$. In order to achieve it, we will approximate \f$ u
+all test function \f$ \delta u \f$. In order to achieve it, we will approximate \f$ u
 \f$ following a process in finite element called *discretisation* which will be
 presented in the next part.
 
@@ -112,11 +111,11 @@ of \f$ \phi_j \f$ by default (provided that you give it some hints) and you will
 find the solution of \f$ u^h \f$, of course, with the help of MoFEM.
 
 Keep in mind that, in the weak form, we have another term that also needs to be
-taken care of, that is the test function \f$ v \f$. As we were saying, the weak
-form has to be satisfied with all test function \f$ v \f$ meaning it has to be
-true with the arbitrary choice of \f$ v_i=\phi_i \f$.
+taken care of, that is the test function \f$ \delta u \f$. As we were saying, the weak
+form has to be satisfied with all test function \f$ \delta u \f$ meaning it has to be
+true with the arbitrary choice of \f$ \delta u_i=\phi_i \f$.
 
-Substituting \f$ u \f$ and \f$ v \f$ into the weak form, we have the discrete
+Substituting \f$ u \f$ and \f$ \delta u \f$ into the weak form, we have the discrete
 form of the problem given by 
 \f[
   \begin{equation}
@@ -124,7 +123,7 @@ form of the problem given by
 \right) ~d{\Omega^e}= \int_{\Omega^e} \phi_i f ~d{\Omega^e}.
   \end{equation}
 \f]
-Moving \f$ \bar{u}_j \f$ outside of the parentheses and rearraging the equation, we
+Moving \f$ \bar{u}_j \f$ outside of the parentheses and rearranging the equation, we
 have 
 \f[
   \begin{equation}
@@ -226,7 +225,7 @@ As a common practice, typically all the implementation of UDOs for a specific
 problem is put in a `*.hpp` file. This file will be included in the main `*.cpp`
 file which contains all the necessary classes and functions. Detailed
 explanation of the implementation of UDOs, how you pushed UDOs to Pipeline as
-well as developement of classes/functions are presented below
+well as development of classes/functions are presented below
 
 \subsection basic_tutorials_poisson_homogeneous_udo User Data Operators 
 
@@ -244,7 +243,7 @@ vector. They are
 
 Before going into details of the implementation of the two UDOs in
 poisson_2d_homogeneous.hpp, let's have a look at the first few lines of code of
-the file that includes some libaries for finite element implementation, some
+the file that includes some libraries for finite element implementation, some
 aliases, and declaration/initialisation as commented below.
 
 \code
@@ -562,7 +561,7 @@ they are presented in Eq. (11)
 \code
 locLhs(rr, cc) += t_row_diff_base(i) * t_col_diff_base(i) * a;
 \endcode
-where `a` is the intemediate variable of type `double` and calculated earlier as
+where `a` is the intermediate variable of type `double` and calculated earlier as
 \code
 const double a = t_w * area;
 \endcode
@@ -616,7 +615,7 @@ memory address where the first components of the local stiffness matrix
 `getKSPB()` is the method to set the value of LHS matrix that will be solved by
 the iterative solver namely [KSP](https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/index.html) in PETSc.
 
-And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we tranpose
+And finally, as global \f$ {\bf K} \f$ matrix is also symmetric, we transpose
 everything that has already assembled to form the full matrix of \f$ {\bf K} \f$. This process is implemented and visualised as follows
 \code
       if (row_side != col_side || row_type != col_type) {
@@ -731,7 +730,7 @@ beginning of the `*.hpp` to calculate the local vector
         }
 \endcode
 
-Similarly to the implemenation of matrix UDO, the final part of the code
+Similarly to the implementation of matrix UDO, the final part of the code
 involves filling/assembling the calculated values from local force vector to the
 global one. This procedure for force vector is slightly different from the
 matrix. It is done in two steps. First, we need to tell the program to ignore
@@ -801,7 +800,7 @@ or some of the member functions declared above
   MatrixDouble invJac;
 \endcode
 
-\note For writting program in MoFEM, we follow some coding practices for code
+\note For writhing program in MoFEM, we follow some coding practices for code
 style and naming convention described at \ref coding_practice
 
 
@@ -823,44 +822,23 @@ The constructor specifies
 
 Now the first function that actually does some finite element task is the
 function responsible for reading input mesh
-\code
-MoFEMErrorCode Poisson2DHomogeneous::readMesh() {
-  MoFEMFunctionBegin;
 
-  CHKERR mField.getInterface(simpleInterface);
-  CHKERR simpleInterface->getOptions();
-  CHKERR simpleInterface->loadFile();
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Read mesh
 
-  MoFEMFunctionReturn(0);
-}
-\endcode
 Apart from the codes for error handling, the main three lines of code
-is a standard way to read an input mesh using Simple interface. Inteface in
+is a standard way to read an input mesh using Simple interface. Interface in
 MoFEM is a set of rules through which program developers use to setup a problem.
 Simple interface provides simplest but also less flexible way to setup a
-problem. More on the intefaces can be found at \ref
+problem. More on the interfaces can be found at \ref
 basic_lessons1_interfaces. Implementation of more advanced interfaces will be
 presented in later tutorials.
 
 \subsubsection basic_tutorials_poisson_homogeneous_setupproblem setupProblem()
 Next is the function that is responsible for setting up the finite element
 problem 
-\code 
-MoFEMErrorCode Poisson2DHomogeneous::setupProblem() {
-  MoFEMFunctionBegin;
 
-  CHKERR simpleInterface->addDomainField(domainField, H1,
-                                         AINSWORTH_BERNSTEIN_BEZIER_BASE, 1);
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Setup problem
 
-  int oRder = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &oRder, PETSC_NULL);
-  CHKERR simpleInterface->setFieldOrder(domainField, oRder);
-
-  CHKERR simpleInterface->setUp();
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
 This function has
 - `simpleInterface->addDomainField`: Add the domain field through the
   `simpleInterface`. We need to add the domain field only as the field at
@@ -888,32 +866,9 @@ This function has
 
 This function helps to deal with the boundary condition and its
 implementation for the current problem is as follows
-\code
-MoFEMErrorCode Poisson2DHomogeneous::boundaryCondition() {
-  MoFEMFunctionBegin;
 
-  // Get boundary edges marked in block named "BOUNDARY_CONDITION"
-  Range boundary_entities;
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    std::string entity_name = it->getName();
-    if (entity_name.compare(0, 18, "BOUNDARY_CONDITION") == 0) {
-      CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                 boundary_entities, true);
-    }
-  }
-  // Add vertices to boundary entities
-  Range boundary_vertices;
-  CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                            boundary_vertices, true);
-  boundary_entities.merge(boundary_vertices);
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Boundary condition
 
-  // Remove DOFs as homogeneous boundary condition is used
-  CHKERR mField.getInterface<ProblemsManager>()->removeDofsOnEntities(
-      simpleInterface->getProblemName(), domainField, boundary_entities);
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
 There is two parts of the implementation for the boundary condition for the
 current problem of Poisson's equation with homogeneous boundary condition
 
@@ -980,32 +935,7 @@ for setting operators for KSP solver (iterative linear solver provided by PETSc)
 from the implemented pipelines. The full source code for the function is as
 follows 
 
-\code
-MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
-  MoFEMFunctionBegin;
-
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  { // Push operators to the Pipeline that is responsible for calculating LHS
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpCalculateInvJacForFace(invJac));
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpSetInvJacH1ForFace(invJac));
-
-    pipeline_mng->getOpDomainLhsPipeline().push_back(
-        new OpDomainLhsMatrixK(domainField, domainField));
-  }
-
-  { // Push operators to the Pipeline that is responsible for calculating RHS
-
-    pipeline_mng->getOpDomainRhsPipeline().push_back(
-        new OpDomainRhsVectorF(domainField));
-  }
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Assemble system
 
 - First, the pipeline manager (`pipeline_mng`) that manages two main pipelines
   are created. These two main pipelines are
@@ -1018,7 +948,7 @@ MoFEMErrorCode Poisson2DHomogeneous::assembleSystem() {
 - Second, pushing the operators to the Pipeline that is responsible for the
 calculation of the LHS matrix. This is done in two steps. Initially, the
 operators to calculate the *inverse of the Jacobian* of the mapping from
-reference (parent) space to the phyisical space is pushed first and then
+reference (parent) space to the physical space is pushed first and then
 the implemented UDO for stiffness matrix `OpDomainLhsMatrixK` is pushed to the 
 LhsPipeline.
 \code
@@ -1033,7 +963,7 @@ LhsPipeline.
         new OpDomainLhsMatrixK(domainField, domainField));
   }
 \endcode
-It is noted that the procedure to push operators calculting the inverse of
+It is noted that the procedure to push operators calculating the inverse of
 Jacobian with the presence of the gradient of approximation function is needed
 only for 2D problem. For 3D problem, it is done automatically and user does not
 have to manually add codes to push operators calculating the inverse of
@@ -1058,20 +988,10 @@ for calculating inverse of Jacobian is not needed as well.
 
 This function is responsible for setting the Gauss integration rules and it
 looks like this
-\code
-MoFEMErrorCode Poisson2DHomogeneous::setIntegrationRules() {
-  MoFEMFunctionBegin;
 
-  auto rule_lhs = [](int, int, int p) -> int { return 2 * (p - 1); };
-  auto rule_rhs = [](int, int, int p) -> int { return p; };
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Set
+integration rules
 
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(rule_lhs);
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(rule_rhs);
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
 Here \f$ p \f$ is the polynomial order of the approximation function. For
 the LHS matrix, we are calculating the integral of function \f$\nabla \phi_i
 \cdot \nabla \phi_j\f$ so the polynomial order of the integral is \f$ p - 1 \f$ 
@@ -1090,32 +1010,8 @@ now can actually solve the system of equations using iterative KSP solver from
 
 The codes for the function that is responsible for solving the systems of
 equations look like this
-\code
-MoFEMErrorCode Poisson2DHomogeneous::solveSystem() {
-  MoFEMFunctionBegin;
 
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-
-  auto ksp_solver = pipeline_mng->createKSP();
-  CHKERR KSPSetFromOptions(ksp_solver);
-  CHKERR KSPSetUp(ksp_solver);
-
-  // Create RHS and solution vectors
-  auto dm = simpleInterface->getDM();
-  auto F = smartCreateDMVector(dm);
-  auto D = smartVectorDuplicate(F);
-
-  // KSP solver
-  CHKERR KSPSolve(ksp_solver, F, D);
-
-  // Scatter result data on the mesh
-  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Solve system
 
 It starts first with getting the pipeline manager
 \code
@@ -1154,7 +1050,7 @@ previous sections was just the definition. All the calculations (all the loops
 to calculate matrix and vector entries implemented in UDOs) are only triggered
 when the line of code above calling `KSPSolve()` function is executed.
 
-Lastly, the results are scatttered through DM and ready to be fed to the output
+Lastly, the results are scattered through DM and ready to be fed to the output
 mesh in the next step
 \code
   // Scatter result data on the mesh
@@ -1168,23 +1064,8 @@ mesh in the next step
 
 This function is solely responsible for the postprocessing of the results
 writing the calculated field values to the output mesh.
-\code
-MoFEMErrorCode Poisson2DHomogeneous::outputResults() {
-  MoFEMFunctionBegin;
 
-  auto pipeline_mng = mField.getInterface<PipelineManager>();
-  pipeline_mng->getDomainLhsFE().reset();
-
-  auto post_proc_fe = boost::make_shared<PostProcFaceEle>(mField);
-  post_proc_fe->generateReferenceElementMesh();
-  post_proc_fe->addFieldValuesPostProc(domainField);
-  pipeline_mng->getDomainRhsFE() = post_proc_fe;
-  CHKERR pipeline_mng->loopFiniteElements();
-  CHKERR post_proc_fe->writeFile("out_result.h5m"); 
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Output results
 
 \subsubsection basic_tutorials_poisson_homogeneous_run_analysis runProgram() 
 
@@ -1192,59 +1073,16 @@ Finally, having all the necessary tasks implemented in the corresponding
 functions, we can now put them together in the last function of the main class.
 This function is responsible for the calling sequence which is similar to most
 of other finite element programs
-\code
-MoFEMErrorCode Poisson2DHomogeneous::runProgram() {
-  MoFEMFunctionBegin;
 
-  readMesh();
-  setupProblem();
-  boundaryCondition();
-  assembleSystem();
-  setIntegrationRules();
-  solveSystem();
-  outputResults();
-
-  MoFEMFunctionReturn(0);
-}
-\endcode
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Run program
 
 \subsection basic_tutorials_poisson_homogeneous_main_function The main() function
 
 This `main()` function does not do much job apart from creating the top-level
 class and call the function to trigger the analysis 
-\code
-int main(int argc, char *argv[]) {
 
-  // Initialisation of MoFEM/PETSc and MOAB data structures
-  const char param_file[] = "param_file.petsc";
-  MoFEM::Core::Initialize(&argc, &argv, param_file, help);
+\snippet users_modules/tutorials/scl-1/poisson_2d_homogeneous.cpp Main
 
-  // Error handling
-  try {
-    // Register MoFEM discrete manager in PETSc
-    DMType dm_name = "DMMOFEM";
-    CHKERR DMRegister_MoFEM(dm_name);
-
-    // Create MOAB instance
-    moab::Core mb_instance;              // mesh database
-    moab::Interface &moab = mb_instance; // mesh database interface
-
-    // Create MoFEM instance
-    MoFEM::Core core(moab); // finite element database
-    MoFEM::Interface &m_field = core; // finite element interface
-
-    // Run the main analysis
-    Poisson2DHomogeneous poisson_problem(m_field);
-    CHKERR poisson_problem.runProgram();
-  }
-  CATCH_ERRORS;
-
-  // Finish work: cleaning memory, getting statistics, etc.
-  MoFEM::Core::Finalize();
-
-  return 0;
-}
-\endcode
 So you can see, at the beginning, it creates the Discrete Managers that enable
 information flows between MoFEM (finite element implementation), MOAB (element
 topology management), and PETSc (algebraic solvers). After that, it creates
@@ -1362,7 +1200,7 @@ see the deformation as below
 
 \subsection basic_tutorials_poisson_homogeneous_discussion Discussion
 
-As mentioned at the begining of this tutorial, this Poisson
+As mentioned at the beginning of this tutorial, this Poisson
 equation with homogeneous boundary condition helps to predict the deformation
 of a membrane that is fixed at the boundary bearing an uniformly distributed
 force on its surface. In this case, the force \f$ f=5.0\f$ is hardcoded in the

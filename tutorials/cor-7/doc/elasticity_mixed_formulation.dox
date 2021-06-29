@@ -11,11 +11,11 @@ encouraged to have a look at \ref general_data_structure,
 to have better ideas how MoFEM works and how a specific problem is implemented
 in the platform. They may also find this <a href="https://youtu.be/rO1_j8p9epk">tutorial video</a>  helpful.
 
-The remain of the tutorial is organised as follows. The
+The remainder of the tutorial is organised as follows. The
 mathematical and finite element formulation is presented in the next section
-before the input mesh of L-shape structure which is used as an example is
+before the input mesh of the L-shape structure which is used as an example is
 defined. It is followed by explanation of the source code and then how to run
-and visualise the results. Remark on choosing approximation order and its consequence will be discussed at the end of the tutorial.
+and visualise the results. Remarks on choosing approximation order and its consequence will be discussed at the end of the tutorial.
 
 \section elasticity_mixed_formulation_mathematical_fe_formulation Mathematical and finite element formulation
 
@@ -54,7 +54,7 @@ The above problem of compressible elasticity can be solved using typical finite
 element procedure. However, in case of \f$ \nu=0.5 \f$, \f$ \lambda \f$ becomes
 infinity implying incompressible state. This causes \e volumetric \e locking
 which makes the approximation converge very slowly or even unable to converge.
-Therefore, an alternative formulation need to be considered to bypass this
+Therefore, an alternative formulation needs to be considered to bypass this
 difficulty. This can be done by introducing additional independent unknown
 called \e hydrostatic \e pressure \f$ p \f$ where \f$ p = -\lambda u_{k,k} \f$.
 Therefore, the following equation should be added to the formal problem
@@ -187,10 +187,11 @@ finite elements.
 - Creat MoAB communicator
 \code 
   MPI_Comm moab_comm_world;
-  MPI_Comm_dup(PETSC_COMM_WORLD, &moab_comm_world);
-  ParallelComm *pcomm = ParallelComm::get_pcomm(&moab, MYPCOMM_INDEX);
+  auto moab_comm_wrap =
+      boost::make_shared<WrapMPIComm>(PETSC_COMM_WORLD, false);
   if (pcomm == NULL)
-    pcomm = new ParallelComm(&moab, moab_comm_world);
+    pcomm =
+        new ParallelComm(&moab, moab_comm_wrap->get_comm());
 \endcode
 
 
@@ -537,7 +538,7 @@ Typically, this can be done as follows
 \code
 cd mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation
 make -j2
-mpirun -np 2 ./elasticity_mixed_formulation -my_file LShape_incompressible.cub -my_order_p 2 -my_order_u 3 -ksp_type gmres -pc_type lu -pc_factor_mat_solver_package mumps -ksp_monitor
+mpirun -np 2 ./elasticity_mixed_formulation -my_file LShape_incompressible.cub -my_order_p 2 -my_order_u 3 -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps -ksp_monitor
 \endcode
 
 The options are explained as follows
@@ -557,7 +558,7 @@ means current directory
 - \e -pc_type \e lu: Direct solver based on <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/PC/PCLU.html#PCLU">LU factorisation</a> as a preconditioner
 
 
-- \e -pc_factor_mat_solver_package \e mumps: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MATSOLVERMUMPS.html">MUMPS</a> is used as matrix solver
+- \e -pc_factor_mat_solver_type \e mumps: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/Mat/MATSOLVERMUMPS.html">MUMPS</a> is used as matrix solver
 
 
 - \e -ksp_monitor: <a href="https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPMonitorSet.html">function</a>  to be called at every iteration to monitor the

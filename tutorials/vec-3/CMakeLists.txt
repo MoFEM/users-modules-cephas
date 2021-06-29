@@ -13,6 +13,7 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 
 set(permissions_default 
   OWNER_WRITE 
@@ -52,4 +53,4 @@ add_test(
   nonlinear_dynamic_elastic
   ${MoFEM_MPI_RUN} ${MPI_RUN_FLAGS} -np 2
   ${CMAKE_CURRENT_BINARY_DIR}/nonlinear_dynamic_elastic_2d
-  -file_name part.h5m -order 1 -ts_max_time 0.3 -ts_dt 0.1 -log_no_color -test)
+  -file_name part.h5m -order 1 -ts_final_time 0.3 -ts_dt 0.1 -log_no_color -test)

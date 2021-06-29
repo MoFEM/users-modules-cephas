@@ -19,7 +19,6 @@ if(MED_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )
@@ -33,7 +32,6 @@ target_link_libraries(add_meshsets
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -46,7 +44,6 @@ target_link_libraries(mofem_part
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -59,7 +56,6 @@ target_link_libraries(split_sideset
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -72,7 +68,6 @@ target_link_libraries(mesh_cut
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -85,7 +80,6 @@ target_link_libraries(field_to_vertices
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -99,7 +93,6 @@ target_link_libraries(remove_mofem_meshsets
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -112,7 +105,6 @@ target_link_libraries(delete_ho_nodes
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -125,7 +117,6 @@ target_link_libraries(meshset_to_vtk
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -139,7 +130,6 @@ target_link_libraries(uniform_mesh_refinement
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -152,7 +142,6 @@ target_link_libraries(extrude_prisms
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -165,7 +154,6 @@ target_link_libraries(get_skin
   mofem_multi_indices
   mofem_petsc
   mofem_approx
-  mofem_cblas
   mofem_third_party
   ${MoFEM_PROJECT_LIBS}
 )
@@ -191,7 +179,6 @@ if(ADOL-C_LIBRARY)
     mofem_multi_indices
     mofem_petsc
     mofem_approx
-    mofem_cblas
     mofem_third_party
     ${MoFEM_PROJECT_LIBS}
   )

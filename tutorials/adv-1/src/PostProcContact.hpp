@@ -24,6 +24,7 @@ private:
   MoFEM::Interface &mField;
   moab::Interface *moabVertex;
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<WrapMPIComm> moabCommWrap;
   ParallelComm *pComm;
 };
 
@@ -35,8 +36,10 @@ OpPostProcVertex::OpPostProcVertex(
   std::fill(&doEntities[MBVERTEX], &doEntities[MBMAXTYPE], false);
   doEntities[boundary_ent] = true;
   pComm = ParallelComm::get_pcomm(moabVertex, MYPCOMM_INDEX);
-  if (pComm == NULL)
-    pComm = new ParallelComm(moabVertex, PETSC_COMM_WORLD);
+  if (pComm == NULL) {
+    moabCommWrap = boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+    pComm = new ParallelComm(moabVertex, moabCommWrap->get_comm());
+  }
 }
 
 MoFEMErrorCode OpPostProcVertex::doWork(int side, EntityType type,
@@ -231,6 +234,7 @@ struct Monitor : public FEMethod {
     if (SPACE_DIM == 2)
       vertexPostProc->getOpPtrVector().push_back(
           new OpSetContravariantPiolaTransformOnEdge());
+
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
             "U", commonDataPtr->contactDispPtr));
@@ -239,9 +243,6 @@ struct Monitor : public FEMethod {
             "SIGMA", commonDataPtr->contactTractionPtr));
     vertexPostProc->getOpPtrVector().push_back(
         new OpPostProcVertex(*m_field_ptr, "U", commonDataPtr, &moabVertex));
-    vertexPostProc->setRuleHook = [](int a, int b, int c) {
-      return 2 * order + 1;
-    };
 
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
     postProcFe->generateReferenceElementMesh();

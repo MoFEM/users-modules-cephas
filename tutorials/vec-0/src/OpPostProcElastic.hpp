@@ -72,6 +72,13 @@ MoFEMErrorCode OpPostProcElastic<DIM>::doWork(int side, EntityType type,
 
   MatrixDouble3by3 mat(3, 3);
 
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
+
   auto set_matrix_symm = [&](auto &t) -> MatrixDouble3by3 & {
     mat.clear();
     for (size_t r = 0; r != DIM; ++r)
@@ -86,6 +93,8 @@ MoFEMErrorCode OpPostProcElastic<DIM>::doWork(int side, EntityType type,
   };
 
   auto set_tag = [&](auto th, auto gg, MatrixDouble3by3 &mat) {
+    for(auto &v : mat.data())
+      v = set_float_precision(v);
     return postProcMesh.tag_set_data(th, &mapGaussPts[gg], 1,
                                      &*mat.data().begin());
   };

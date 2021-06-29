@@ -13,7 +13,7 @@
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-0/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-3/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../vec-2/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../adv-0/src)
 
 set(permissions_default 
