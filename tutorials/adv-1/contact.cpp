@@ -390,7 +390,7 @@ MoFEMErrorCode Example::OPs() {
 
       // hardcoded gravity load
       t_source(i) = 0;
-      t_source(1) = 0.0 * time;
+      t_source(1) = 1.0 * time;
       return t_source;
     };
 
