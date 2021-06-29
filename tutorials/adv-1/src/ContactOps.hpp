@@ -388,4 +388,102 @@ MoFEMErrorCode OpConstrainBoundaryLhs_dTraction::doWork(
   MoFEMFunctionReturn(0);
 }
 
+struct OpRotate : BoundaryEleOp {
+
+  using ScalarFun =
+      boost::function<double(const double, const double, const double)>;
+
+  OpRotate(std::string disp_name, boost::shared_ptr<VectorDouble> omega,
+           boost::shared_ptr<VectorDouble> c_coords, ScalarFun scalar_fun,
+           boost::shared_ptr<Range> ents_ptr)
+      : BoundaryEleOp(disp_name, BoundaryEleOp::OPROW), entsPtr(ents_ptr),
+        sourceVec(omega), centerCoords(c_coords), betaCoeff(scalar_fun) {}
+
+  MoFEMErrorCode doWork(int row_side, EntityType row_type, EntData &row_data) {
+    MoFEMFunctionBegin;
+    const int nb_row_dofs = row_data.getIndices().size();
+    const int nb_row_base_functions = row_data.getN().size2();
+
+    if (nb_row_dofs) {
+
+      EntityHandle ent = getFEEntityHandle();
+      if (entsPtr->find(ent) == entsPtr->end()) {
+        MoFEMFunctionReturnHot(0);
+      }
+
+      auto t_coords = getFTensor1CoordsAtGaussPts();
+
+      locRes.resize(nb_row_dofs, false);
+      locRes.clear();
+
+      const int nb_integration_pts = getGaussPts().size2();
+      auto t_row_val = row_data.getFTensor0N();
+      auto t_w = getFTensor0IntegrationWeight();
+      const double vol = getMeasure();
+      FTensor::Tensor1<double, SPACE_DIM> rot_disp;
+      auto t_omega = getFTensor1FromArray<3, 3>(*sourceVec);
+      auto t_cen_coords = getFTensor1FromArray<3, 3>(*centerCoords);
+      FTensor::Tensor1<double, 3> scaled_omega;
+      FTensor::Tensor1<double, 3> c_dist;
+      FTensor::Index<'I', 3> I;
+
+      auto get_rotation = [&](auto vec) {
+        FTensor::Tensor2<double, 3, 3> t_R;
+
+        FTensor::Index<'i', 3> i;
+        FTensor::Index<'j', 3> j;
+        FTensor::Index<'k', 3> k;
+
+        constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
+        t_R(i, j) = t_kd(i, j);
+
+        const double angle = sqrt(vec(i) * vec(i));
+        if (std::abs(angle) < 1e-18)
+          return t_R;
+
+        FTensor::Tensor2<double, 3, 3> t_ang;
+        t_ang(i, j) = FTensor::levi_civita<double>(i, j, k) * vec(k);
+        const double a = sin(angle) / angle;
+        const double ss_2 = sin(angle / 2.);
+        const double b = 2. * ss_2 * ss_2 / (angle * angle);
+        t_R(i, j) += a * t_ang(i, j);
+        t_R(i, j) += b * t_ang(i, k) * t_ang(k, j);
+
+        return t_R;
+      };
+
+      // scale with time (t_coords is just a placeholder)
+      scaled_omega(I) =
+          t_omega(I) * -betaCoeff(t_coords(0), t_coords(1), t_coords(2));
+      auto rot = get_rotation(scaled_omega);
+
+      for (int gg = 0; gg != nb_integration_pts; ++gg) {
+        const double a = vol * t_w;
+        c_dist(i) = t_cen_coords(i) - t_coords(i);
+        rot_disp(i) = c_dist(i) - rot(j, i) * c_dist(j);
+
+        auto t_nf = getFTensor1FromArray<SPACE_DIM, SPACE_DIM>(locRes);
+        for (int rr = 0; rr != nb_row_dofs / SPACE_DIM; ++rr) {
+          t_nf(i) -= a * t_row_val * rot_disp(i);
+          ++t_row_val;
+          ++t_nf;
+        }
+
+        ++t_coords;
+        ++t_w;
+      }
+
+      CHKERR VecSetValues(getSNESf(), row_data, &*locRes.begin(), ADD_VALUES);
+    }
+    MoFEMFunctionReturn(0);
+  }
+
+private:
+  VectorDouble locRes;
+  ScalarFun betaCoeff;
+  boost::shared_ptr<Range> entsPtr;
+  boost::shared_ptr<VectorDouble> sourceVec;
+  boost::shared_ptr<VectorDouble> centerCoords;
+};
+
 }; // namespace OpContactTools

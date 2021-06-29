@@ -295,12 +295,15 @@ MoFEMErrorCode Example::bC() {
                                         2, 2);
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_ALL",
                                         "U", 0, 3);
+  CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "ROTATE",
+                                        "U", 0, 3);
 
   auto &bc_map = bc_mng->getBcMapByBlockName();
   if (bc_map.size()) {
     boundaryMarker = boost::make_shared<std::vector<char unsigned>>();
     for (auto b : bc_map) {
-      if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (std::regex_match(b.first, std::regex("(.*)_FIX_(.*)")) ||
+          std::regex_match(b.first, std::regex("(.*)_ROTATE_(.*)"))) {
         boundaryMarker->resize(b.second->bcMarkers.size(), 0);
         for (int i = 0; i != b.second->bcMarkers.size(); ++i) {
           (*boundaryMarker)[i] |= b.second->bcMarkers[i];
@@ -387,7 +390,7 @@ MoFEMErrorCode Example::OPs() {
 
       // hardcoded gravity load
       t_source(i) = 0;
-      t_source(1) = 1.0 * time;
+      t_source(1) = 0.0 * time;
       return t_source;
     };
 
@@ -466,7 +469,8 @@ MoFEMErrorCode Example::OPs() {
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
     auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
     for (auto bc : bc_map) {
-      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
+      if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)")) ||
+          std::regex_match(bc.first, std::regex("(.*)_ROTATE_(.*)"))) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
             << "Set boundary matrix for " << bc.first;
         pipeline.push_back(
@@ -520,6 +524,35 @@ MoFEMErrorCode Example::OPs() {
 
         pipeline.push_back(new OpBoundaryVec("U", attr_vec, time_scaled,
                                              bc.second->getBcEdgesPtr()));
+        pipeline.push_back(new OpBoundaryInternal(
+            "U", commonDataPtr->contactDispPtr,
+            [](double, double, double) { return 1.; },
+            bc.second->getBcEdgesPtr()));
+
+        pipeline.push_back(new OpUnSetBc("U"));
+      }
+      if (std::regex_match(bc.first, std::regex("(.*)_ROTATE_(.*)"))) {
+        MOFEM_LOG("EXAMPLE", Sev::inform)
+            << "Set boundary (rotation) residual for " << bc.first;
+        pipeline.push_back(
+            new OpSetBc("U", false, bc.second->getBcMarkersPtr()));
+        auto angles = boost::make_shared<VectorDouble>(3);
+        auto c_coords = boost::make_shared<VectorDouble>(3);
+        if (bc.second->bcAttributes.size() != 6)
+          SETERRQ1(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+                   "Wrong size of boundary attributes vector. Set the correct "
+                   "block size attributed (3) angles and (3) coordinates for "
+                   "center of rotation. Size of attributes %d",
+                   bc.second->bcAttributes.size());
+        std::copy(&bc.second->bcAttributes[0],
+                  &bc.second->bcAttributes[3],
+                  angles->data().begin());
+        std::copy(&bc.second->bcAttributes[3],
+                  &bc.second->bcAttributes[6],
+                  c_coords->data().begin());
+
+        pipeline.push_back(new OpRotate("U", angles, c_coords, time_scaled,
+                                        bc.second->getBcEdgesPtr()));
         pipeline.push_back(new OpBoundaryInternal(
             "U", commonDataPtr->contactDispPtr,
             [](double, double, double) { return 1.; },
