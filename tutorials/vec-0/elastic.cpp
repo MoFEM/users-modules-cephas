@@ -41,11 +41,10 @@ using OpP = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
 using OpBodyForce = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpBaseTimesVector<1, SPACE_DIM, 0>;
 
-using OpInternalForce =
-    FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
-        GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
+using OpInternalForce = FormsIntegrators<DomainEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpGradTimesSymTensor<1, SPACE_DIM, SPACE_DIM>;
 
-//boundary opperator aliasing
+// boundary opperator aliasing
 
 using OpBoundaryMass = FormsIntegrators<EdgeEleOp>::Assembly<
     PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
@@ -69,6 +68,7 @@ struct Example {
 private:
   MoFEM::Interface &mField;
   boost::shared_ptr<std::vector<unsigned char>> boundaryMarker;
+  boost::shared_ptr<std::vector<unsigned char>> boundaryMarker_2;
 
   MoFEMErrorCode readMesh();
   MoFEMErrorCode setupProblem();
@@ -121,19 +121,14 @@ MoFEMErrorCode Example::createCommonData() {
     CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-unit_weight", &unit_weight,
                                PETSC_NULL);
     t_force(i) = 0;
-    if (SPACE_DIM==2)
-    {
+    if (SPACE_DIM == 2) {
       t_force(1) = -unit_weight;
-    }
-    else if (SPACE_DIM==3)
-    {
+    } else if (SPACE_DIM == 3) {
       t_force(2) = -unit_weight;
     }
-    
-    
-    
-    //t_force(i) = 0;
-   
+
+    // t_force(i) = 0;
+
     MoFEMFunctionReturn(0);
   };
   //! [Define gravity vector]
@@ -144,13 +139,11 @@ MoFEMErrorCode Example::createCommonData() {
   matStressPtr = boost::make_shared<MatrixDouble>();
   matDPtr = boost::make_shared<MatrixDouble>();
 
-
   bodyForceMatPtr = boost::make_shared<MatrixDouble>();
   waterPressurePtr = boost::make_shared<VectorDouble>();
 
-      constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
+  constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
   matDPtr->resize(size_symm * size_symm, 1);
-
 
   bodyForceMatPtr->resize(SPACE_DIM, 1);
   //! [Initialise containers for commonData]
@@ -168,11 +161,11 @@ MoFEMErrorCode Example::runProblem() {
   CHKERR readMesh();
   CHKERR setupProblem();
   CHKERR createCommonData();
-  CHKERR boundaryCondition();
+  // CHKERR boundaryCondition();
   CHKERR assembleSystem();
   CHKERR solveSystem();
   CHKERR outputResults();
-  //CHKERR checkResults();
+  // CHKERR checkResults();
   MoFEMFunctionReturn(0);
 }
 //! [Run problem]
@@ -192,15 +185,16 @@ MoFEMErrorCode Example::setupProblem() {
   MoFEMFunctionBegin;
   Simple *simple = mField.getInterface<Simple>();
   // Add field
-  CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
-  CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  // CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
+  // CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addDomainField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addBoundaryField("P", H1, AINSWORTH_LEGENDRE_BASE, 1);
   int order = 3;
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   int order_pressure = 3;
-  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order_pressure", &order_pressure, PETSC_NULL);
-  CHKERR simple->setFieldOrder("U", order);
+  CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order_pressure", &order_pressure,
+                            PETSC_NULL);
+  // CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("P", order_pressure);
   CHKERR simple->setUp();
   MoFEMFunctionReturn(0);
@@ -211,55 +205,54 @@ MoFEMErrorCode Example::setupProblem() {
 MoFEMErrorCode Example::boundaryCondition() {
   MoFEMFunctionBegin;
   auto simple = mField.getInterface<Simple>();
-  auto get_ents_on_mesh_skin = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 7, "FIX_P_1") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
-      }
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
+  //  auto get_ents_on_mesh_skin = [&]() {
+  //   Range boundary_entities;
+  //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+  //     std::string entity_name = it->getName();
+  //     if (entity_name.compare(0, 7, "FIX_P_1") == 0) {
+  //       CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+  //                                                  boundary_entities, true);
+  //     }
+  //   }
+  //   // Add vertices to boundary entities
+  //   Range boundary_vertices;
+  //   CHKERR mField.get_moab().get_connectivity(boundary_entities,
+  //                                             boundary_vertices, true);
+  //   boundary_entities.merge(boundary_vertices);
 
-    return boundary_entities;
-  };
+  //   return boundary_entities;
+  // };
 
-  auto get_ents_on_flux_boundary = [&]() {
-    Range boundary_entities;
-    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-      std::string entity_name = it->getName();
-      if (entity_name.compare(0, 7, "FIX_Q_2") == 0) {
-        CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                   boundary_entities, true);
-      }
-    }
-    // Add vertices to boundary entities
-    Range boundary_vertices;
-    CHKERR mField.get_moab().get_connectivity(boundary_entities,
-                                              boundary_vertices, true);
-    boundary_entities.merge(boundary_vertices);
+  // auto get_ents_on_flux_boundary = [&]() {
+  //   Range boundary_entities;
+  //   for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+  //     std::string entity_name = it->getName();
+  //     if (entity_name.compare(0, 7, "FIX_Q_2") == 0) {
+  //       CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+  //                                                  boundary_entities, true);
+  //     }
+  //   }
+  //   // Add vertices to boundary entities
+  //   Range boundary_vertices;
+  //   CHKERR mField.get_moab().get_connectivity(boundary_entities,
+  //                                             boundary_vertices, true);
+  //   boundary_entities.merge(boundary_vertices);
 
-    return boundary_entities;
-  };
-  auto mark_boundary_dofs = [&](Range &&skin_edges) {
-    auto problem_manager = mField.getInterface<ProblemsManager>();
-    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
-    problem_manager->markDofs(simple->getProblemName(), ROW,
-                              skin_edges, *marker_ptr);
-    return marker_ptr;
-  };
-
-
+  //   return boundary_entities;
+  // };
+  // auto mark_boundary_dofs = [&](Range &&skin_edges) {
+  //   auto problem_manager = mField.getInterface<ProblemsManager>();
+  //   auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+  //   problem_manager->markDofs(simple->getProblemName(), ROW,
+  //                             skin_edges, *marker_ptr);
+  //   return marker_ptr;
+  // };
 
   // Get global local vector of marked DOFs. Is global, since is set for all
   // DOFs on processor. Is local since only DOFs on processor are in the
   // vector. To access DOFs use local indices.
-  boundaryMarker = mark_boundary_dofs(get_ents_on_flux_boundary());
+  cerr << "\n\nCHECK!\n\n";
+  // boundaryMarker = mark_boundary_dofs(get_ents_on_flux_boundary());
 
   //   MoFEMFunctionReturn(0);
   // }
@@ -308,15 +301,13 @@ MoFEMErrorCode Example::boundaryCondition() {
   auto remove_dofs_from_problem = [&](Range &&skin_edges) {
     MoFEMFunctionBegin;
     auto problem_manager = mField.getInterface<ProblemsManager>();
-    CHKERR problem_manager->removeDofsOnEntities(
-        simple->getProblemName(), "P", skin_edges, 0, 1);
+    CHKERR problem_manager->removeDofsOnEntities(simple->getProblemName(), "P",
+                                                 skin_edges, 0, 1);
     MoFEMFunctionReturn(0);
   };
-  CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
+  // CHKERR remove_dofs_from_problem(get_ents_on_mesh_skin());
   MoFEMFunctionReturn(0);
 }
-
-
 
 //! [Boundary condition]
 
@@ -336,93 +327,197 @@ MoFEMErrorCode Example::assembleSystem() {
         new OpSetInvJacH1ForFace(invJac));
   }
   double conductivity = 0.05;
-  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-conductivity",
-                             &conductivity, PETSC_NULL);
-  auto beta_conductivity = [&conductivity](const double, const double, const double) {
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-conductivity", &conductivity,
+                             PETSC_NULL);
+  auto beta_conductivity = [&conductivity](const double, const double,
+                                           const double) {
     return conductivity;
   };
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
-  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpP("P", "P", beta_conductivity));
+  // pipeline_mng->getOpDomainLhsPipeline().push_back(new OpK("U", "U", matDPtr));
 
- pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
-"U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
+  auto simple = mField.getInterface<Simple>();
+  auto mark_boundary_dofs = [&](Range &&skin_edges) {
+    auto problem_manager = mField.getInterface<ProblemsManager>();
+    auto marker_ptr = boost::make_shared<std::vector<unsigned char>>();
+    problem_manager->markDofs(simple->getProblemName(), ROW, skin_edges,
+                              *marker_ptr);
+    return marker_ptr;
+  };
+
+  // std::string boundary_pressure_1 = "FIX_P_1";
+  // std::string boundary_pressure_2 = "FIX_P_2";
+  // std::string boundary_flux_1 = "FIX_Q_1";
+  // std::string boundary_flux_2 = "FIX_Q_2";
+
+  // if (name_1.compare(name_2)) {
+  //   cerr << "This will never print\n";
+  // }
+
+  auto get_ents_on_flux_boundary =
+      [&](std::string block_name) {
+        Range boundary_entities;
+         for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(
+                                    mField, BLOCKSET, it)) {
+          std::string entity_name = it->getName();
+          if (entity_name.compare(block_name))
+            // if (entity_name.compare(0, 7, "FIX_Q_2") == 0) {
+            CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
+                                                       boundary_entities, true);
+        }
+
+  // Add vertices to boundary entities
+  Range boundary_vertices;
+  CHKERR mField.get_moab().get_connectivity(boundary_entities,
+                                            boundary_vertices, true);
+  boundary_entities.merge(boundary_vertices);
+
+  return boundary_entities;
+  };
+
+  std::string boundary_pressure_1 = "FIX_P_1";
+  std::string boundary_pressure_2 = "FIX_P_2";
+
+  boundaryMarker =
+      mark_boundary_dofs(get_ents_on_flux_boundary(boundary_pressure_1));
+  boundaryMarker_2 =
+      mark_boundary_dofs(get_ents_on_flux_boundary(boundary_pressure_2));
+
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetBc(
+      "P", true, boundaryMarker));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(new OpSetBc(
+      "P", true, boundaryMarker_2)); // true means dont fill any values on that
+  //                                  // boundary as the values are prescribed.
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpP("P", "P", beta_conductivity));
+  pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpUnSetBc("P")); // releases the true condtion of OpSetBc
+
+  // pipeline_mng->getOpDomainRhsPipeline().push_back(new OpBodyForce(
+  //     "U", bodyForceMatPtr, [](double, double, double) { return 1.; }));
+
+  double water_table = -0.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-water_table", &water_table,
+                             PETSC_NULL);
+  double specific_weight_water = 9.81;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-specific_weight_water",
+                             &specific_weight_water, PETSC_NULL);
+
+  // pipeline_mng->getOpDomainRhsPipeline().push_back(
+  //     new OpDomainRhsHydrostaticStress<SPACE_DIM>("U", specific_weight_water,
+  //                                                 water_table));
+
+  // Boundary opperators
+
+  double prescribed_pressure_1 = 1.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_pressure_1",
+                             &prescribed_pressure_1, PETSC_NULL);
+  auto beta = [&prescribed_pressure_1](const double, const double, const double) {
+    return prescribed_pressure_1;
+  };
+  double prescribed_pressure_2 = 1.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_pressure_2",
+                             &prescribed_pressure_2, PETSC_NULL);
+  auto beta_pressure = [&prescribed_pressure_2](const double, const double, const double) {
+    return prescribed_pressure_2;
+  };
+  auto beta_1 = [](const double, const double, const double) { return 1.; };
+
+  //  auto set_boundary =
+  //      [&]() {
+  //        MoFEMFunctionBegin;
+  //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+  //      new OpSetBc("P", false, boundaryMarker));
+  //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+  //      new OpBoundaryMass("P", "P", beta_1));
+  //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+  //      new OpUnSetBc("P"));
+
+  //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //      new OpSetBc("P", false, boundaryMarker));
+  //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //      new OpBoundarySource("P", beta));
+  //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //      new OpUnSetBc("P"));
 
 
-
- double water_table = -0.;
- CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-water_table", &water_table, PETSC_NULL);
- double specific_weight_water = 9.81 ;
- CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-specific_weight_water", &specific_weight_water, PETSC_NULL);
-
- pipeline_mng->getOpDomainRhsPipeline().push_back(
-     new OpDomainRhsHydrostaticStress<SPACE_DIM>(
-         "U", specific_weight_water, water_table));
-
-
-
-
-//Boundary opperators
-
- double prescribed_pressure = 1.;
- CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_pressure",
-                            &prescribed_pressure, PETSC_NULL);
- auto beta = [&prescribed_pressure](const double, const double, const double) {return prescribed_pressure;};
- auto beta_1 = [](const double, const double, const double) { return 1.; };
-
-//  auto set_boundary =
-//      [&]() {
-//        MoFEMFunctionBegin;
-      //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      //      new OpSetBc("P", false, boundaryMarker));
-      //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      //      new OpBoundaryMass("P", "P", beta_1));
-      //  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
-      //      new OpUnSetBc("P"));
-
-      //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      //      new OpSetBc("P", false, boundaryMarker));
-      //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      //      new OpBoundarySource("P", beta));
-      //  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      //      new OpUnSetBc("P"));
-
+  // std::string boundary_flux_1 = "FIX_Q_1";
+  // std::string boundary_flux_2 = "FIX_Q_2";
+  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+      new OpBoundaryMass("P", "P", beta_1,
+                         boost::make_shared<Range>(
+                             get_ents_on_flux_boundary(boundary_pressure_1))));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpSetBc("P", true, boundaryMarker));
+      new OpBoundarySource("P", beta,
+                           boost::make_shared<Range>(get_ents_on_flux_boundary(
+                               boundary_pressure_1))));
+  pipeline_mng->getOpBoundaryLhsPipeline().push_back(
+      new OpBoundaryMass("P", "P", beta_1,
+                         boost::make_shared<Range>(
+                             get_ents_on_flux_boundary(boundary_pressure_2))));
   pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpBoundarySource("P", beta));
-  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
-      new OpUnSetBc("P"));
- auto integration_rule = [](int, int, int approx_order) {
-   return 2 * (approx_order - 1);
- };
- CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
- CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
- CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
- //  };
- //! [Push operators to pipeline]
- MoFEMFunctionReturn(0);
+      new OpBoundarySource("P", beta_pressure,
+                           boost::make_shared<Range>(get_ents_on_flux_boundary(
+                               boundary_pressure_2))));
+
+  // auto remove_dofs_from_problem = [&](Range &&skin_edges) {
+  //   MoFEMFunctionBegin;
+  //   auto problem_manager = mField.getInterface<ProblemsManager>();
+  //   CHKERR problem_manager->removeDofsOnEntities(simple->getProblemName(), "P",
+  //                                                skin_edges, 0, 1);
+  //   MoFEMFunctionReturn(0);
+  // };
+  // CHKERR remove_dofs_from_problem(
+  //     get_ents_on_flux_boundary(boundary_pressure_2));
+
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpSetBc("P", true, boundaryMarker));
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpBoundarySource("P", beta));
+  // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+  //     new OpUnSetBc("P"));
+  auto integration_rule = [](int, int, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule);
+  CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule);
+  //  };
+  //! [Push operators to pipeline]
+  MoFEMFunctionReturn(0);
 }
- //! [Solve]
- MoFEMErrorCode
- Example::solveSystem() {
-   MoFEMFunctionBegin;
-   auto *simple = mField.getInterface<Simple>();
-   auto *pipeline_mng = mField.getInterface<PipelineManager>();
-   auto solver = pipeline_mng->createKSP();
-   CHKERR KSPSetFromOptions(solver);
-   CHKERR KSPSetUp(solver);
-
-   auto dm = simple->getDM();
-   auto D = smartCreateDMVector(dm);
-   auto F = smartVectorDuplicate(D);
-
-   CHKERR KSPSolve(solver, F, D);
-   CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
-   CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
-   CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
-   MoFEMFunctionReturn(0);
- }
 //! [Solve]
+MoFEMErrorCode Example::solveSystem() {
+  MoFEMFunctionBegin;
+  auto *simple = mField.getInterface<Simple>();
+  auto *pipeline_mng = mField.getInterface<PipelineManager>();
+  auto solver = pipeline_mng->createKSP();
+  CHKERR KSPSetFromOptions(solver);
+  CHKERR KSPSetUp(solver);
+
+  auto dm = simple->getDM();
+  auto D = smartCreateDMVector(dm);
+  auto F = smartVectorDuplicate(D);
+
+  CHKERR KSPSolve(solver, F, D);
+  CHKERR VecGhostUpdateBegin(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR VecGhostUpdateEnd(D, INSERT_VALUES, SCATTER_FORWARD);
+  CHKERR DMoFEMMeshToLocalVector(dm, D, INSERT_VALUES, SCATTER_REVERSE);
+  MoFEMFunctionReturn(0);
+}
+//! [Solve]
+
+
+
+
+
+
+
+
+
+
+
+
 
 //! [Postprocess results]
 MoFEMErrorCode Example::outputResults() {
@@ -448,18 +543,18 @@ MoFEMErrorCode Example::outputResults() {
         new OpCalculateInvJacForFace(invJac));
     post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
   }
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
-                                                               matGradPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
-  post_proc_fe->getOpPtrVector().push_back(
-      new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
-          "U", matStrainPtr, matStressPtr, matDPtr));
-  post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
-      "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
-      matStressPtr, water_table, specific_weight_water ));
-  post_proc_fe->addFieldValuesPostProc("U"); 
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpCalculateVectorFieldGradient<SPACE_DIM, SPACE_DIM>("U",
+  //                                                              matGradPtr));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpSymmetrizeTensor<SPACE_DIM>("U", matGradPtr, matStrainPtr));
+  // post_proc_fe->getOpPtrVector().push_back(
+  //     new OpTensorTimesSymmetricTensor<SPACE_DIM, SPACE_DIM>(
+  //         "U", matStrainPtr, matStressPtr, matDPtr));
+  // post_proc_fe->getOpPtrVector().push_back(new OpPostProcElastic<SPACE_DIM>(
+  //     "U", post_proc_fe->postProcMesh, post_proc_fe->mapGaussPts, matStrainPtr,
+  //     matStressPtr, water_table, specific_weight_water));
+  // post_proc_fe->addFieldValuesPostProc("U");
   post_proc_fe->addFieldValuesPostProc("P");
   post_proc_fe->addFieldValuesGradientPostProc("P");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
