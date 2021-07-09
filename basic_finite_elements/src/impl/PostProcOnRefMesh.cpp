@@ -525,13 +525,6 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::setGaussPtsThroughThickness(
 
 MoFEMErrorCode PostProcFatPrismOnRefinedMesh::preProcess() {
   MoFEMFunctionBegin;
-  // MoAB
-  ParallelComm *pcomm_post_proc_mesh =
-      ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-  if (pcomm_post_proc_mesh != NULL) {
-    delete pcomm_post_proc_mesh;
-  }
-  // CHKERR postProcMesh.delete_mesh();
   MoFEMFunctionReturn(0);
 }
 
@@ -822,11 +815,6 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::setGaussPts(int order) {
 
 MoFEMErrorCode PostProcFaceOnRefinedMesh::preProcess() {
   MoFEMFunctionBeginHot;
-  ParallelComm *pcomm_post_proc_mesh =
-      ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-  if (pcomm_post_proc_mesh != NULL) {
-    delete pcomm_post_proc_mesh;
-  }
   MoFEMFunctionReturnHot(0);
 }
 
