@@ -73,6 +73,8 @@ gmsh.model.setPhysicalName(1, 301, 'FIX_Y1')
 gmsh.model.addPhysicalGroup(1, [8], 302)
 #gmsh.model.setPhysicalName(1, 302, 'FIX_X2')
 gmsh.model.setPhysicalName(1, 302, 'FORCE')
+gmsh.model.addPhysicalGroup(1, [7], 303)
+gmsh.model.setPhysicalName(1, 303, 'REACTION')
 ```
 
 # Meshing
