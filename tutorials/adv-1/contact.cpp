@@ -464,6 +464,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_lhs = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     auto &bc_map = mField.getInterface<BcManager>()->getBcMapByBlockName();
     for (auto bc : bc_map) {
       if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
@@ -492,6 +493,7 @@ MoFEMErrorCode Example::OPs() {
         ));
     if (boundaryMarker)
       pipeline.push_back(new OpUnSetBc("U"));
+    MoFEMFunctionReturn(0);
   };
 
   auto time_scaled = [&](double, double, double) {
@@ -501,6 +503,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_ops_rhs = [&](auto &pipeline) {
+    MoFEMFunctionBegin;
     for (auto &bc : mField.getInterface<BcManager>()->getBcMapByBlockName()) {
       if (std::regex_match(bc.first, std::regex("(.*)_FIX_(.*)"))) {
         MOFEM_LOG("EXAMPLE", Sev::inform)
@@ -534,9 +537,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(new OpConstrainBoundaryRhs("SIGMA", commonDataPtr));
     pipeline.push_back(new OpSpringRhs(
         "U", commonDataPtr->contactDispPtr,
-        [](double, double, double) { return spring_stiffness; }));
+        [this](double, double, double) { return spring_stiffness; }));
     if (boundaryMarker)
       pipeline.push_back(new OpUnSetBc("U"));
+    MoFEMFunctionReturn(0);
   };
 
   add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -546,8 +550,8 @@ MoFEMErrorCode Example::OPs() {
 
   add_boundary_base_ops(pipeline_mng->getOpBoundaryLhsPipeline());
   add_boundary_base_ops(pipeline_mng->getOpBoundaryRhsPipeline());
-  add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
-  add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
+  CHKERR add_boundary_ops_lhs(pipeline_mng->getOpBoundaryLhsPipeline());
+  CHKERR add_boundary_ops_rhs(pipeline_mng->getOpBoundaryRhsPipeline());
 
   auto integration_rule = [](int, int, int approx_order) {
     return 2 * order + 1;
