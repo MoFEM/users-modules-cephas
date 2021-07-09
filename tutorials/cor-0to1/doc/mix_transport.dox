@@ -370,8 +370,7 @@ In this example, we have four kinds of finite elements \e MIX,
 \code{.cpp}
 MoFEMErrorCode MixTransport::MixTransportElement::addFiniteElements(
   const std::string &fluxes_name,
-  const std::string &values_name,
-  const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS"
+  const std::string &values_name
 ) {
   MoFEMFunctionBegin;
 

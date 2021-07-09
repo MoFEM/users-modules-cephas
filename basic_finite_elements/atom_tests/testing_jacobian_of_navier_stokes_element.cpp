@@ -284,6 +284,8 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    CHKERR addHOOps("MESH_NODE_POSITIONS", *feLhs, true, false, false, true);
+    CHKERR addHOOps("MESH_NODE_POSITIONS", *feRhs, true, false, false, true);
     if (only_stokes) {
       CHKERR NavierStokesElement::setStokesOperators(feRhs, feLhs, "U", "P",
                                                      commonData);

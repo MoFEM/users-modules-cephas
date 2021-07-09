@@ -221,8 +221,7 @@ struct MixTransportElement {
 
   /// \brief add finite elements
   MoFEMErrorCode addFiniteElements(
-      const std::string &fluxes_name, const std::string &values_name,
-      const std::string mesh_nodals_positions = "MESH_NODE_POSITIONS") {
+      const std::string &fluxes_name, const std::string &values_name) {
     MoFEMFunctionBegin;
 
     // Set up volume element operators. Operators are used to calculate
@@ -249,20 +248,6 @@ struct MixTransportElement {
     CHKERR mField.modify_finite_element_add_field_data("MIX_SKELETON",
                                                        fluxes_name);
 
-    // In some cases you like to use HO geometry to describe shape of the bode,
-    // curved edges and faces, for example body is a sphere. HO geometry is
-    // approximated by a field,  which can be hierarchical, so shape of the
-    // edges could be given by polynomial of arbitrary order.
-    //
-    // Check if field "mesh_nodals_positions" is defined, and if it is add that
-    // field to data of finite element. MoFEM will use that that to calculate
-    // Jacobian as result that geometry in nonlinear.
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("MIX",
-                                                         mesh_nodals_positions);
-      CHKERR mField.modify_finite_element_add_field_data("MIX_SKELETON",
-                                                         mesh_nodals_positions);
-    }
     // Look for all BLOCKSET which are MAT_THERMALSET, takes entities from those
     // BLOCKSETS and add them to "MIX" finite element. In addition get data form
     // that meshset and set conductivity which is used to calculate fluxes from
@@ -299,10 +284,6 @@ struct MixTransportElement {
                                                        fluxes_name);
     CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",
                                                        values_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("MIX_BCVALUE",
-                                                         mesh_nodals_positions);
-    }
 
     // Define element to apply essential boundary conditions.
     CHKERR mField.add_finite_element("MIX_BCFLUX", MF_ZERO);
@@ -314,11 +295,6 @@ struct MixTransportElement {
                                                        fluxes_name);
     CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",
                                                        values_name);
-    if (mField.check_field(mesh_nodals_positions)) {
-      CHKERR mField.modify_finite_element_add_field_data("MIX_BCFLUX",
-                                                         mesh_nodals_positions);
-    }
-
     MoFEMFunctionReturn(0);
   }
 

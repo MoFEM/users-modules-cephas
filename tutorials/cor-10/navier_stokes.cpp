@@ -422,6 +422,8 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
 
   feLhsPtr->getRuleHook = NavierStokesElement::VolRule();
   feRhsPtr->getRuleHook = NavierStokesElement::VolRule();
+  CHKERR addHOOps("MESH_NODE_POSITIONS", *feLhsPtr, true, false, false, true);
+  CHKERR addHOOps("MESH_NODE_POSITIONS", *feRhsPtr, true, false, false, true);
 
   feDragPtr = boost::shared_ptr<FaceElementForcesAndSourcesCore>(
       new FaceElementForcesAndSourcesCore(mField));
@@ -429,6 +431,8 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
       new VolumeElementForcesAndSourcesCoreOnSide(mField));
 
   feDragPtr->getRuleHook = NavierStokesElement::FaceRule();
+  CHKERR addHOOps("MESH_NODE_POSITIONS", *feDragSidePtr, true, false, false,
+                  true);
 
   if (isStokesFlow) {
     CHKERR NavierStokesElement::setStokesOperators(
@@ -455,6 +459,8 @@ MoFEMErrorCode NavierStokesExample::setupElementInstances() {
   // for postprocessing:
   fePostProcPtr = boost::make_shared<PostProcVolumeOnRefinedMesh>(mField);
   CHKERR fePostProcPtr->generateReferenceElementMesh();
+  CHKERR addHOOps("MESH_NODE_POSITIONS", *fePostProcPtr, true, false, false,
+                  true);
   CHKERR fePostProcPtr->addFieldValuesPostProc("VELOCITY");
   CHKERR fePostProcPtr->addFieldValuesPostProc("PRESSURE");
   CHKERR fePostProcPtr->addFieldValuesPostProc("MESH_NODE_POSITIONS");

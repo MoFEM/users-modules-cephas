@@ -101,6 +101,9 @@ struct MonitorPostProc : public FEMethod {
 
     if (!iNit) {
       CHKERR postProc.generateReferenceElementMesh();
+      if(mField.check_field("MESH_NODE_POSITIONS"))
+        CHKERR addHOOps("MESH_NODE_POSITIONS", postProc, true, false, false,
+                        false);
       CHKERR postProc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR postProc.addFieldValuesPostProc("VELOCITY");
       CHKERR postProc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
@@ -448,6 +451,12 @@ int main(int argc, char *argv[]) {
     // st_venant_kirchhoff_material_double;  CHKERR
     // elastic.setBlocks(&st_venant_kirchhoff_material_double,&st_venant_kirchhoff_material_adouble);
     CHKERR elastic.addElement("ELASTIC", "DISPLACEMENT");
+    CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true, false,
+                    false, false);
+    CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeLhs(), true, false,
+                    false, false);
+    CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
+                    false, false, false);
     CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
                                 true);
 
@@ -457,6 +466,7 @@ int main(int argc, char *argv[]) {
     CHKERR elastic_materials.setBlocks(inertia.setOfBlocks);
     CHKERR inertia.addConvectiveMassElement("MASS_ELEMENT", "VELOCITY",
                                             "DISPLACEMENT");
+    CHKERR inertia.addHOOps();
     CHKERR inertia.addVelocityElement("VELOCITY_ELEMENT", "VELOCITY",
                                       "DISPLACEMENT");
 

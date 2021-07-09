@@ -648,10 +648,15 @@ int main(int argc, char *argv[]) {
       elastic.setOfBlocks[id].PoissonRatio = poisson_ratio;
       elastic.setOfBlocks[id].materialDoublePtr = hooke_double_ptr;
       elastic.setOfBlocks[id].materialAdoublePtr = hooke_adouble_ptr;
-      rval = m_field.get_moab().get_entities_by_type(
+      CHKERR m_field.get_moab().get_entities_by_type(
           m_field.get_finite_element_meshset("ELASTIC"), MBTET,
           elastic.setOfBlocks[id].tEts, true);
-      CHKERRG(rval);
+      CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
+                      false, false, false);
+      CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
+                      false, false, false);
+      CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
+                      false, false, false);
       CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
                                   true);
     }

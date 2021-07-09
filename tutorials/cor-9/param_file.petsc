@@ -3,7 +3,7 @@
  -ts_monitor 
  -ts_exact_final_time stepover 
  -ts_dt 0.1 
- -ts_final_time 30
+ -ts_max_time 30
 
  -ts_arkimex_type a2
  -ts_adapt_type none 

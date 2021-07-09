@@ -481,12 +481,17 @@ int main(int argc, char *argv[]) {
         boost::make_shared<std::map<int, MassBlockData>>();
     CHKERR ConvectiveMassElement::setBlocks(m_field, mass_block_sets_ptr);
 
-    boost::shared_ptr<ForcesAndSourcesCore> fe_lhs_ptr(
-        new VolumeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<ForcesAndSourcesCore> fe_rhs_ptr(
-        new VolumeElementForcesAndSourcesCore(m_field));
+    auto fe_lhs_ptr =
+        boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
+    auto fe_rhs_ptr =
+        boost::make_shared<VolumeElementForcesAndSourcesCore>(m_field);
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
+
+    CHKERR addHOOps("MESH_NODE_POSITIONS", *fe_lhs_ptr, true, false, false,
+                    false);
+    CHKERR addHOOps("MESH_NODE_POSITIONS", *fe_rhs_ptr, true, false, false,
+                    false);
 
     boost::shared_ptr<ForcesAndSourcesCore> prism_fe_lhs_ptr(
         new PrismFE(m_field));
@@ -938,7 +943,8 @@ int main(int argc, char *argv[]) {
       CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
           "DISPLACEMENT", "ELASTIC", data_at_pts->hMat, true);
-      CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+    CHKERR post_proc_skin.addFieldValuesGradientPostProcOnSkin(
+
           "MESH_NODE_POSITIONS", "ELASTIC", data_at_pts->HMat, false);
       post_proc_skin.getOpPtrVector().push_back(
           new HookeElement::OpPostProcHookeElement<
@@ -953,6 +959,8 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Add operators to the elements, starting with some generic operators
       CHKERR post_proc.generateReferenceElementMesh();
+      CHKERR addHOOps("MESH_NODE_POSITIONS", post_proc, true, false, false,
+                      false);
       CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
       CHKERR post_proc.addFieldValuesGradientPostProc("DISPLACEMENT");

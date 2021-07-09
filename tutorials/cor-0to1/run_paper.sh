@@ -59,7 +59,7 @@ mpirun -np $NBPROCS ./unsaturated_transport \
 -ts_monitor \
 -ts_type beuler \
 -ts_dt $DT \
--ts_final_time $FT \
+-ts_max_time $FT \
 -ts_monitor \
 -ts_adapt_always_accept true \
 -ts_adapt_monitor \

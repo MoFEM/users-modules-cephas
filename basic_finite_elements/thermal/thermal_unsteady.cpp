@@ -92,8 +92,10 @@ struct MonitorPostProc: public FEMethod {
 
   MoFEMErrorCode postProcess() {
     MoFEMFunctionBegin;
-    
+
     if(!iNit) {
+      CHKERR addHOOps("MESH_NODE_POSITIONS", postProc, true, false, false,
+                      false);
       CHKERR postProc.generateReferenceElementMesh(); 
       CHKERR postProc.addFieldValuesPostProc("TEMP"); 
       CHKERR postProc.addFieldValuesPostProc("TEMP_RATE"); 
@@ -340,6 +342,10 @@ int main(int argc, char *argv[]) {
                                                       "TEMP_RATE");
   // and temperature element default element operators at integration (gauss)
   // points
+  CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeRhs(), true,
+                  false, false, false);
+  CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeLhs(), true,
+                  false, false, false);
   CHKERR thermal_elements.setTimeSteppingProblem("TEMP", "TEMP_RATE");
 
   // set block material data from option file

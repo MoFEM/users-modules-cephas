@@ -74,7 +74,7 @@ if(ADOL-C_LIBRARY)
     -ksp_atol 1e-10 -ksp_rtol 1e-10 -snes_monitor
     -snes_type newtonls -snes_linesearch_type basic
     -snes_max_it 100 -snes_atol 1e-7 -snes_rtol 1e-7
-    -ts_monitor -ts_type alpha -ts_dt 0.001 -ts_final_time 0.002
+    -ts_monitor -ts_type alpha -ts_dt 0.001 -ts_max_time 0.002
     -my_time_data_file ${CMAKE_CURRENT_SOURCE_DIR}/data.txt -my_output_prt 1
     -my_max_post_proc_ref_level 0 -my_disp_order 3 -my_vel_order 3
   )
@@ -89,7 +89,7 @@ if(ADOL-C_LIBRARY)
       -my_file ${CMAKE_CURRENT_SOURCE_DIR}/rod.h5m
       -ksp_type gmres -pc_type lu -pc_factor_mat_solver_type mumps 
       -ksp_monitor -ksp_atol 1e-12 -ksp_rtol 1e-12
-      -st_ksp_type preonly -st_pc_type cholesky -st_pc_factor_mat_solver_package mumps
+      -st_ksp_type preonly -st_pc_type cholesky -st_pc_factor_mat_solver_type mumps
       -eps_monitor -eps_tol 1e-12
       -eps_nev 2 -eps_ncv 10  -eps_smalest_real -eps_gen_no_hermitian
       -my_max_post_proc_ref_level 0 -st_ksp_atol 1e-12 -st_ksp_rtol 1e-12 -my_order 2)

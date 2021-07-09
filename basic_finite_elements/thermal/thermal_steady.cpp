@@ -167,6 +167,12 @@ int main(int argc, char *argv[]) {
         ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("THERMAL_PROBLEM", &A);
 
     DirichletTemperatureBc my_dirichlet_bc(m_field, "TEMP", A, T, F);
+
+    CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeRhs(),
+                    true, false, false, false);
+    CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeLhs(),
+                    true, false, false, false);
+
     CHKERR thermal_elements.setThermalFiniteElementRhsOperators("TEMP", F);
     CHKERR thermal_elements.setThermalFiniteElementLhsOperators("TEMP", A);
     CHKERR thermal_elements.setThermalFluxFiniteElementRhsOperators("TEMP", F);
