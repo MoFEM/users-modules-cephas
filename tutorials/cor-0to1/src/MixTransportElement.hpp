@@ -1029,19 +1029,11 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        double x, y, z;
-        if (getHOCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHOCoordsAtGaussPts()(gg, 0);
-          y = getHOCoordsAtGaussPts()(gg, 1);
-          z = getHOCoordsAtGaussPts()(gg, 2);
-        } else {
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
         double flux = 0;
         CHKERR cTx.getSource(fe_ent, x, y, z, flux);
-        ;
         noalias(Nf) += w * data.getN(gg) * flux;
       }
       CHKERR VecSetValues(F, nb_row, &data.getIndices()[0], &Nf[0], ADD_VALUES);
@@ -1436,16 +1428,9 @@ struct MixTransportElement {
       deltaFlux.resize(3, false);
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        double x, y, z;
-        if (getHOCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHOCoordsAtGaussPts()(gg, 0);
-          y = getHOCoordsAtGaussPts()(gg, 1);
-          z = getHOCoordsAtGaussPts()(gg, 2);
-        } else {
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
         double flux;
         CHKERR cTx.getSource(fe_ent, x, y, z, flux);
         ;

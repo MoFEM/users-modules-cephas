@@ -1537,14 +1537,7 @@ HookeElement::OpAnalyticalInternalStrain_dx<S>::iNtegrate(EntData &row_data) {
   };
 
   const int nb_integration_pts = getGaussPts().size2();
-
-  auto get_coords = [&]() {
-    if (getHOCoordsAtGaussPts().size1() == nb_integration_pts)
-      return getFTensor1HOCoordsAtGaussPts();
-    else
-      return getFTensor1CoordsAtGaussPts();
-  };
-  auto t_coords = get_coords();
+  auto t_coords = getFTensor1CoordsAtGaussPts();
 
   // get element volume
   double vol = getVolume();
