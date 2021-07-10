@@ -69,7 +69,7 @@ struct MagneticElement {
   };
 
   MagneticElement(MoFEM::Interface &m_field) : mField(m_field) {}
-  virtual ~MagneticElement() {}
+  virtual ~MagneticElement() = default;
 
   /**
    * \brief data structure storing material constants, model parameters,
@@ -766,7 +766,6 @@ struct MagneticElement {
               data.fieldName, UserDataOperator::OPROW),
           blockData(data), postProcMesh(post_proc_mesh),
           mapGaussPts(map_gauss_pts) {}
-    virtual ~OpPostProcessCurl() {}
 
     MoFEMErrorCode doWork(int row_side, EntityType row_type,
                           DataForcesAndSourcesCore::EntData &row_data) {
@@ -784,7 +783,12 @@ struct MagneticElement {
       if (nb_row_dofs == 0)
         MoFEMFunctionReturnHot(0);
       const void *tags_ptr[mapGaussPts.size()];
-      MatrixDouble row_curl_mat;
+
+      if(nb_row_dofs != row_data.getFieldData().size())
+        SETERRQ2(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+                 "Wrong number of base functions and DOFs %d != %d",
+                 nb_row_dofs, row_data.getFieldData().size());
+
       FTensor::Index<'i', 3> i;
       FTensor::Index<'j', 3> j;
       FTensor::Index<'k', 3> k;
@@ -794,27 +798,19 @@ struct MagneticElement {
                  "Inconsistency number of dofs %d!=%d", nb_gauss_pts,
                  mapGaussPts.size());
       }
-
       CHKERR postProcMesh.tag_get_by_ptr(th, &mapGaussPts[0],
                                          mapGaussPts.size(), tags_ptr);
       auto t_curl_base = row_data.getFTensor2DiffN<3, 3>();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
-
-        // get curl of base functions
-        FTensor::Tensor1<double *, 3> t_base_curl(&row_curl_mat(0, HVEC0),
-                                                  &row_curl_mat(0, HVEC1),
-                                                  &row_curl_mat(0, HVEC2), 3);
-
         // get pointer to tag values on entity (i.e. vertex on refined
         // post-processing mesh)
         double *ptr = &((double *)tags_ptr[gg])[0];
-        FTensor::Tensor1<double *, 3> t_curl(ptr, &ptr[1], &ptr[2]);
-
+        FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3> t_curl(ptr, &ptr[1],
+                                                                  &ptr[2]);
         // calculate curl value
         auto t_dof = row_data.getFTensor0FieldData();
         for (int aa = 0; aa != nb_row_dofs; aa++) {
-          t_curl(i) += row_data.getFieldData()[aa] *
-                       (levi_civita(j, i, k) * t_curl_base(j, k));
+          t_curl(i) += t_dof * (levi_civita(j, i, k) * t_curl_base(j, k));
           ++t_curl_base;
           ++t_dof;
         }
