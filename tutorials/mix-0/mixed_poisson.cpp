@@ -261,7 +261,7 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacHcurlFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpMakeHighOrderGeometryWeightsOnFace());
+      new OpSetHOWeigthsOnFace());
 
   auto beta = [](const double, const double, const double) { return 1; };
   pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -386,7 +386,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetInvJacL2ForFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpMakeHighOrderGeometryWeightsOnFace());
+      new OpSetHOWeigthsOnFace());
 
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpCalculateScalarFieldValues("U", commonDataPtr->approxVals));
