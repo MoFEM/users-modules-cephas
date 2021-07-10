@@ -720,8 +720,8 @@ struct MagneticElement {
 
         // Current is on surface where natural bc are applied. It is set that
         // current is in XY plane, circular, around the coil.
-        const double x = getHoCoordsAtGaussPts()(gg, 0);
-        const double y = getHoCoordsAtGaussPts()(gg, 1);
+        const double x = getHOCoordsAtGaussPts()(gg, 0);
+        const double y = getHOCoordsAtGaussPts()(gg, 1);
         const double r = sqrt(x * x + y * y);
         FTensor::Tensor1<double, 3> t_j;
         t_j(0) = -y / r;

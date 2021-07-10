@@ -146,7 +146,7 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
       if (fe_type == MBTRI)
         val /= 2;
       for (int dd = 0; dd != 3; ++dd) {
-        coords[dd] = getHoCoordsAtGaussPts()(gg, dd);
+        coords[dd] = getHOCoordsAtGaussPts()(gg, dd);
         normal[dd] = getNormalsAtGaussPts()(gg, dd);
       }
 

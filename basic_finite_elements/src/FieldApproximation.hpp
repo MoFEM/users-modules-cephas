@@ -200,12 +200,12 @@ struct FieldApproximationH1 {
 
         double x, y, z, w;
         w = getVolume() * getGaussPts()(3, gg);
-        if (getHoCoordsAtGaussPts().size1() == nb_gauss_pts) {
+        if (getHOCoordsAtGaussPts().size1() == nb_gauss_pts) {
           // intergation points global positions if higher order geometry is
           // given
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
+          x = getHOCoordsAtGaussPts()(gg, 0);
+          y = getHOCoordsAtGaussPts()(gg, 1);
+          z = getHOCoordsAtGaussPts()(gg, 2);
         } else {
           // intergartion point global positions for linear tetrahedral element
           x = getCoordsAtGaussPts()(gg, 0);
@@ -415,12 +415,12 @@ struct FieldApproximationH1 {
           w *= getArea();
         }
 
-        if (getHoCoordsAtGaussPts().size1() == nb_gauss_pts) {
+        if (getHOCoordsAtGaussPts().size1() == nb_gauss_pts) {
           // intergation points global positions if higher order geometry is
           // given
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
+          x = getHOCoordsAtGaussPts()(gg, 0);
+          y = getHOCoordsAtGaussPts()(gg, 1);
+          z = getHOCoordsAtGaussPts()(gg, 2);
         } else {
           // intergartion point global positions for linear tetrahedral element
           x = getCoordsAtGaussPts()(gg, 0);

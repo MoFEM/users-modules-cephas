@@ -1030,10 +1030,10 @@ struct MixTransportElement {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         double x, y, z;
-        if (getHoCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
+        if (getHOCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
+          x = getHOCoordsAtGaussPts()(gg, 0);
+          y = getHOCoordsAtGaussPts()(gg, 1);
+          z = getHOCoordsAtGaussPts()(gg, 2);
         } else {
           x = getCoordsAtGaussPts()(gg, 0);
           y = getCoordsAtGaussPts()(gg, 1);
@@ -1094,9 +1094,9 @@ struct MixTransportElement {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double x, y, z;
         if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
+          x = getHOCoordsAtGaussPts()(gg, 0);
+          y = getHOCoordsAtGaussPts()(gg, 1);
+          z = getHOCoordsAtGaussPts()(gg, 2);
         } else {
           x = getCoordsAtGaussPts()(gg, 0);
           y = getCoordsAtGaussPts()(gg, 1);
@@ -1189,9 +1189,9 @@ struct MixTransportElement {
         // get integration point coordinates
         double x, y, z;
         if (getNormalsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
+          x = getHOCoordsAtGaussPts()(gg, 0);
+          y = getHOCoordsAtGaussPts()(gg, 1);
+          z = getHOCoordsAtGaussPts()(gg, 2);
         } else {
           x = getCoordsAtGaussPts()(gg, 0);
           y = getCoordsAtGaussPts()(gg, 1);
@@ -1437,10 +1437,10 @@ struct MixTransportElement {
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
         double x, y, z;
-        if (getHoCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
-          x = getHoCoordsAtGaussPts()(gg, 0);
-          y = getHoCoordsAtGaussPts()(gg, 1);
-          z = getHoCoordsAtGaussPts()(gg, 2);
+        if (getHOCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
+          x = getHOCoordsAtGaussPts()(gg, 0);
+          y = getHOCoordsAtGaussPts()(gg, 1);
+          z = getHOCoordsAtGaussPts()(gg, 2);
         } else {
           x = getCoordsAtGaussPts()(gg, 0);
           y = getCoordsAtGaussPts()(gg, 1);
@@ -1567,9 +1567,9 @@ struct MixTransportElement {
             double x, y, z;
             if (static_cast<int>(getNormalsAtGaussPts().size1()) ==
                 nb_gauss_pts) {
-              x = getHoCoordsAtGaussPts()(gg, 0);
-              y = getHoCoordsAtGaussPts()(gg, 1);
-              z = getHoCoordsAtGaussPts()(gg, 2);
+              x = getHOCoordsAtGaussPts()(gg, 0);
+              y = getHOCoordsAtGaussPts()(gg, 1);
+              z = getHOCoordsAtGaussPts()(gg, 2);
             } else {
               x = getCoordsAtGaussPts()(gg, 0);
               y = getCoordsAtGaussPts()(gg, 1);

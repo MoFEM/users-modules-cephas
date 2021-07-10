@@ -262,8 +262,8 @@ HookeInternalStressElement::OpGetAnalyticalInternalStress<S>::doWork(
   const int nb_integration_pts = getGaussPts().size2();
 
   auto get_coords = [&]() {
-    if (getHoCoordsAtGaussPts().size1() == nb_integration_pts)
-      return getFTensor1HoCoordsAtGaussPts();
+    if (getHOCoordsAtGaussPts().size1() == nb_integration_pts)
+      return getFTensor1HOCoordsAtGaussPts();
     else
       return getFTensor1CoordsAtGaussPts();
   };
