@@ -86,9 +86,6 @@ struct FieldApproximationH1 {
       unsigned int nb_gauss_pts = row_data.getN().size1();
       for (unsigned int gg = 0; gg != nb_gauss_pts; gg++) {
         double w = getVolume() * getGaussPts()(3, gg);
-        if (getHoCoordsAtGaussPts().size1() == nb_gauss_pts) {
-          w *= getHoGaussPtsDetJac()[gg];
-        }
         // noalias(NN) += w*outer_prod(row_data.getN(gg),col_data.getN(gg));
         cblas_dger(CblasRowMajor, nb_row_dofs, nb_col_dofs, w,
                    &row_data.getN()(gg, 0), 1, &col_data.getN()(gg, 0), 1,
@@ -209,8 +206,6 @@ struct FieldApproximationH1 {
           x = getHoCoordsAtGaussPts()(gg, 0);
           y = getHoCoordsAtGaussPts()(gg, 1);
           z = getHoCoordsAtGaussPts()(gg, 2);
-          // correction of jacobian for higher order geometry
-          w *= getHoGaussPtsDetJac()[gg];
         } else {
           // intergartion point global positions for linear tetrahedral element
           x = getCoordsAtGaussPts()(gg, 0);

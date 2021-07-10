@@ -135,9 +135,7 @@ MoFEMErrorCode HookeElement::OpCalculateEnergy::doWork(int row_side,
     for (int gg = 0; gg != nb_integration_pts; ++gg) {
       // calculate scalar weight times element volume
       double a = t_w * vol;
-      if (getHoGaussPtsDetJac().size() && det_H.empty()) {
-        a *= getHoGaussPtsDetJac()[gg];
-      } else if (det_H.size()) {
+      if (det_H.size()) {
         a *= det_H[gg];
       }
       energy_ptr[0] += a * t_energy;
@@ -396,12 +394,6 @@ MoFEMErrorCode HookeElement::OpRhs_dx::iNtegrate(EntData &row_data) {
 
     // calculate scalar weight times element volume
     double a = t_w * vol;
-
-    if (getHoGaussPtsDetJac().size()) {
-      // If HO geometry
-      a *= getHoGaussPtsDetJac()[gg];
-    }
-
     auto t_nf = get_tensor1(nF, 0);
 
     int rr = 0;

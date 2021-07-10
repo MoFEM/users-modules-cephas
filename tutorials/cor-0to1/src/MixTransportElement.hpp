@@ -761,11 +761,6 @@ struct MixTransportElement {
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // get integration weight and multiply by element volume
         double w = getGaussPts()(3, gg) * getVolume();
-        // in case that HO geometry is defined that below take into account that
-        // edges of element are curved
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         const double x = getCoordsAtGaussPts()(gg, 0);
         const double y = getCoordsAtGaussPts()(gg, 1);
         const double z = getCoordsAtGaussPts()(gg, 2);
@@ -833,9 +828,6 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         const double x = getCoordsAtGaussPts()(gg, 0);
         const double y = getCoordsAtGaussPts()(gg, 1);
         const double z = getCoordsAtGaussPts()(gg, 2);
@@ -895,9 +887,6 @@ struct MixTransportElement {
       int gg = 0;
       for (; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         for(auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
@@ -975,9 +964,6 @@ struct MixTransportElement {
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         for (auto &v : divVec) {
           v = t_base_diff_hdiv(i, i);
           ++t_base_diff_hdiv;
@@ -1009,9 +995,6 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         noalias(Nf) += w * data.getN(gg) * cTx.divergenceAtGaussPts[gg];
       }
       CHKERR VecSetValues(F, nb_row, &data.getIndices()[0], &Nf[0], ADD_VALUES);
@@ -1046,9 +1029,6 @@ struct MixTransportElement {
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         double x, y, z;
         if (getHoCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
           x = getHoCoordsAtGaussPts()(gg, 0);
@@ -1456,9 +1436,6 @@ struct MixTransportElement {
       deltaFlux.resize(3, false);
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double w = getGaussPts()(3, gg) * getVolume();
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()(gg);
-        }
         double x, y, z;
         if (getHoCoordsAtGaussPts().size1() == (unsigned int)nb_gauss_pts) {
           x = getHoCoordsAtGaussPts()(gg, 0);

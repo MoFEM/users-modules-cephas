@@ -221,12 +221,6 @@ HookeInternalStressElement::OpInternalStrain_dx::iNtegrate(EntData &row_data) {
 
     // calculate scalar weight times element volume
     double a = t_w * vol;
-
-    if (getHoGaussPtsDetJac().size()) {
-      // If HO geometry
-      a *= getHoGaussPtsDetJac()[gg];
-    }
-
     auto t_nf = get_tensor1(nF, 0);
 
     int rr = 0;

@@ -978,9 +978,6 @@ MoFEMErrorCode HookeElement::OpLhs_dx_dx<S>::iNtegrate(EntData &row_data,
 
     // calculate scalar weight times element volume
     double a = t_w * vol;
-    if (getHoGaussPtsDetJac().size()) {
-      a *= getHoGaussPtsDetJac()[gg];
-    }
 
     // iterate over row base functions
     int rr = 0;
@@ -1573,11 +1570,6 @@ HookeElement::OpAnalyticalInternalStrain_dx<S>::iNtegrate(EntData &row_data) {
 
     // calculate scalar weight times element volume
     double a = t_w * vol;
-
-    if (getHoGaussPtsDetJac().size()) {
-      // If HO geometry
-      a *= getHoGaussPtsDetJac()[gg];
-    }
 
     auto t_nf = get_tensor1(nF, 0);
 

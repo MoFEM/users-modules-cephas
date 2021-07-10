@@ -71,10 +71,6 @@ ThermalElement::OpThermalRhs::doWork(int side, EntityType type,
     MatrixDouble val =
         dAta.cOnductivity_mat * getVolume() * getGaussPts()(3, gg);
 
-    if (getHoGaussPtsDetJac().size() > 0) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
-
     // ublas
     ublas::noalias(Nf) += prod(prod(data.getDiffN(gg, nb_row_dofs), val),
                                commonData.getGradAtGaussPts(gg));
@@ -115,9 +111,6 @@ MoFEMErrorCode ThermalElement::OpThermalLhs::doWork(
 
     MatrixDouble val =
         dAta.cOnductivity_mat * getVolume() * getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
 
     // ublas
     MatrixDouble K1 = prod(row_data.getDiffN(gg, nb_row), val);
@@ -151,9 +144,6 @@ MoFEMErrorCode ThermalElement::OpHeatCapacityRhs::doWork(
   Nf.clear();
   for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
     double val = getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
     val *= commonData.temperatureRateAtGaussPts[gg];
     ////////////
     // cblas
@@ -188,9 +178,6 @@ MoFEMErrorCode ThermalElement::OpHeatCapacityLhs::doWork(
   for (unsigned int gg = 0; gg < row_data.getN().size1(); gg++) {
 
     double val = getGaussPts()(3, gg);
-    if (getHoGaussPtsDetJac().size() > 0) {
-      val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-    }
 
     // ublas
     noalias(M) +=
