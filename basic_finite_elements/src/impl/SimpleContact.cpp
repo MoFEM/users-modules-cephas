@@ -5044,7 +5044,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
     vecF.clear();
 
     const double area_m =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+        commonDataSimpleContact->areaMaster; // same area in master and slave
 
     auto get_tensor_vec = [](VectorDouble &n, const int r) {
       return FTensor::Tensor1<double *, 3>(&n(r + 0), &n(r + 1), &n(r + 2));
@@ -5053,7 +5053,7 @@ SimpleContactProblem::OpCalAugmentedTangentTractionsRhsMaster::doWork(
     FTensor::Index<'i', 3> i;
     FTensor::Index<'j', 3> j;
 
-    auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_w = getFTensor0IntegrationWeightMaster();
 
     auto t_aug_lambda_ptr =
         getFTensor0FromVec(*commonDataSimpleContact->augmentedLambdasPtr);
@@ -5369,9 +5369,9 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterMaster::doWork(
   NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
   NN.clear();
 
-  auto t_w = getFTensor0IntegrationWeightSlave();
+  auto t_w = getFTensor0IntegrationWeightMaster();
 
-  const double area_master = commonDataSimpleContact->areaSlave;
+  const double area_master = commonDataSimpleContact->areaMaster;
 
   auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<3>(
       *commonDataSimpleContact->tangentAugmentedLambdasPtr);
@@ -5518,9 +5518,9 @@ SimpleContactProblem::OpContactAugmentedFrictionMasterSlave::doWork(
   NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
   NN.clear();
 
-  auto t_w = getFTensor0IntegrationWeightSlave();
+  auto t_w = getFTensor0IntegrationWeightMaster();
 
-  const double area_master = commonDataSimpleContact->areaSlave;
+  const double area_master = commonDataSimpleContact->areaMaster;
 
   auto normal =
       get_tensor_vec(commonDataSimpleContact->normalVectorSlavePtr.get()[0]);
@@ -5630,7 +5630,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
     int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
     const double area_master =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+        commonDataSimpleContact->areaMaster; // same area in master and slave
 
     auto get_tensor_vec = [](VectorDouble &n) {
       return FTensor::Tensor1<double *, 3>(&n(0), &n(1), &n(2));
@@ -5649,7 +5649,7 @@ SimpleContactProblem::OpCalContactAugmentedTangentLambdaOverLambdaMasterSlave::
     NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
     NN.clear();
 
-    auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_w = getFTensor0IntegrationWeightMaster();
 
     auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<3>(
         *commonDataSimpleContact->tangentAugmentedLambdasPtr);
@@ -5734,7 +5734,7 @@ MoFEMErrorCode SimpleContactProblem::
     int nb_base_fun_col = col_data.getFieldData().size() / 3;
 
     const double area_master =
-        commonDataSimpleContact->areaSlave; // same area in master and slave
+        commonDataSimpleContact->areaMaster; // same area in master and slave
 
     auto get_tensor_from_mat = [](MatrixDouble &m, const int r, const int c) {
       return FTensor::Tensor2<double *, 3, 3>(
@@ -5754,7 +5754,7 @@ MoFEMErrorCode SimpleContactProblem::
     NN.resize(3 * nb_base_fun_row, 3 * nb_base_fun_col, false);
     NN.clear();
 
-    auto t_w = getFTensor0IntegrationWeightSlave();
+    auto t_w = getFTensor0IntegrationWeightMaster();
 
     auto t_tangent_aug_lambda_ptr = getFTensor1FromMat<3>(
         *commonDataSimpleContact->tangentAugmentedLambdasPtr);
@@ -6261,6 +6261,7 @@ MoFEMErrorCode SimpleContactProblem::
     for (int gg = 0; gg != nb_gauss_pts; ++gg) {
 
       if (t_aug_lambda_ptr > 0. /*&& std::abs(t_aug_lambda_ptr) > ALM_TOL*/) {
+        
         ++t_norm_tang_aug_lambda_ptr;
         ++t_tangent_aug_lambda_ptr;
         ++t_aug_lambda_ptr;
@@ -6287,11 +6288,12 @@ MoFEMErrorCode SimpleContactProblem::
           auto t_assemble_m = get_tensor_from_mat(NN, 3 * bbr, 3 * bbc);
 
           if (stick) {
+            
             t_assemble_m(i, j) +=
                 n * ( t_kd(i, j) - t_normal(i) * t_normal(j));
             
           } else {
-
+            
             const double pow_3 = t_norm_tang_aug_lambda_ptr *
                                  t_norm_tang_aug_lambda_ptr *
                                  t_norm_tang_aug_lambda_ptr;
