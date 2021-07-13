@@ -329,7 +329,7 @@ MoFEMErrorCode Example::assembleSystem() {
   double conductivity = 0.05;
   CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-conductivity", &conductivity,
                              PETSC_NULL);
-  auto beta_conductivity = [&conductivity](const double, const double,
+  auto beta_conductivity = [=](const double, const double,
                                            const double) {
     return conductivity;
   };
@@ -359,10 +359,10 @@ MoFEMErrorCode Example::assembleSystem() {
          for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(
                                     mField, BLOCKSET, it)) {
           std::string entity_name = it->getName();
-          if (entity_name.compare(block_name))
+          if (entity_name.compare(block_name)==0){
             // if (entity_name.compare(0, 7, "FIX_Q_2") == 0) {
             CHKERR it->getMeshsetIdEntitiesByDimension(mField.get_moab(), 1,
-                                                       boundary_entities, true);
+                                                       boundary_entities, true);}
         }
 
   // Add vertices to boundary entities
@@ -376,6 +376,8 @@ MoFEMErrorCode Example::assembleSystem() {
 
   std::string boundary_pressure_1 = "FIX_P_1";
   std::string boundary_pressure_2 = "FIX_P_2";
+  std::string boundary_flux_1 = "FIX_Q_1";
+  std::string boundary_flux_2 = "FIX_Q_2";
 
   boundaryMarker =
       mark_boundary_dofs(get_ents_on_flux_boundary(boundary_pressure_1));
@@ -411,14 +413,26 @@ MoFEMErrorCode Example::assembleSystem() {
   double prescribed_pressure_1 = 1.;
   CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_pressure_1",
                              &prescribed_pressure_1, PETSC_NULL);
-  auto beta = [&prescribed_pressure_1](const double, const double, const double) {
+  auto beta = [=](const double, const double, const double) {
     return prescribed_pressure_1;
   };
   double prescribed_pressure_2 = 1.;
   CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_pressure_2",
                              &prescribed_pressure_2, PETSC_NULL);
-  auto beta_pressure = [&prescribed_pressure_2](const double, const double, const double) {
+  auto beta_pressure = [=](const double, const double, const double) {
     return prescribed_pressure_2;
+  };
+  double prescribed_flux_1 = 1.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_flux_1",
+                             &prescribed_pressure_1, PETSC_NULL);
+  auto beta_flux_1 = [=](const double, const double, const double) {
+    return prescribed_pressure_1;
+  };
+  double prescribed_flux_2 = 1.;
+  CHKERR PetscOptionsGetReal(PETSC_NULL, "", "-prescribed_flux_2",
+                             &prescribed_pressure_2, PETSC_NULL);
+  auto beta_flux_2 = [=](const double, const double, const double) {
+    return prescribed_flux_2;
   };
   auto beta_1 = [](const double, const double, const double) { return 1.; };
 
@@ -459,6 +473,17 @@ MoFEMErrorCode Example::assembleSystem() {
                            boost::make_shared<Range>(get_ents_on_flux_boundary(
                                boundary_pressure_2))));
 
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpBoundarySource("P", beta_flux_1,
+                           boost::make_shared<Range>(get_ents_on_flux_boundary(
+                               boundary_flux_1)))); // for flux 1
+
+  pipeline_mng->getOpBoundaryRhsPipeline().push_back(
+      new OpBoundarySource("P", beta_flux_2,
+                           boost::make_shared<Range>(get_ents_on_flux_boundary(
+                               boundary_flux_2)))); // for flux 2
+
+                               
   // auto remove_dofs_from_problem = [&](Range &&skin_edges) {
   //   MoFEMFunctionBegin;
   //   auto problem_manager = mField.getInterface<ProblemsManager>();
@@ -476,7 +501,7 @@ MoFEMErrorCode Example::assembleSystem() {
   // pipeline_mng->getOpBoundaryRhsPipeline().push_back(
   //     new OpUnSetBc("P"));
   auto integration_rule = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
+    return 2 * (approx_order);
   };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule);
