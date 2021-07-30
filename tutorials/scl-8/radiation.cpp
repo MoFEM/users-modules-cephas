@@ -29,7 +29,7 @@ static char help[] = "...\n\n";
 
 #include <BasicFiniteElements.hpp>
 
-using DomainEle = PipelineManager::FaceEle2D;
+using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
 using EdgeEle = PipelineManager::EdgeEle2D;
 using EdgeEleOp = EdgeEle::UserDataOperator;

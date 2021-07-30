@@ -28,7 +28,7 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEle = PipelineManager::FaceEle;
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle2D;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
