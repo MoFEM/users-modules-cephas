@@ -1482,6 +1482,12 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     feVolRhs->postProcessHook = postProcessVol(*this, feVolRhs);
     feVolLhs->postProcessHook = postProcessVol(*this, feVolLhs);
 
+    // Set Piola transform
+    feFaceBc->getOpPtrVector().push_back(
+        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+    feFaceRhs->getOpPtrVector().push_back(
+        new OpHOSetContravariantPiolaTransformOnFace3D(HDIV));
+
     // create method for setting history for fluxes on boundary
     scaleMethodFlux = boost::shared_ptr<MethodForForceScaling>(
         new TimeForceScale("-flux_history", false));
@@ -1489,6 +1495,7 @@ struct UnsaturatedFlowElement : public MixTransportElement {
     // create method for setting history for presure heads on boundary
     scaleMethodValue = boost::shared_ptr<MethodForForceScaling>(
         new TimeForceScale("-head_history", false));
+
 
     // Set operator to calculate essential boundary conditions
     feFaceBc->getOpPtrVector().push_back(

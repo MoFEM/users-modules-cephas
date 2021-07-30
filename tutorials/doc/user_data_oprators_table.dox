@@ -383,7 +383,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <td>
 
-Apply contravariant (Piola) transfer to Hdiv space on face \ref MoFEM::OpSetContravariantPiolaTransformFace and \ref MoFEM::OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace
+Apply contravariant (Piola) transfer to Hdiv space on face \ref MoFEM::OpSetContravariantPiolaTransformOnFace2D and \ref MoFEM::OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace
 
 
 Contravariant Piola transformation
@@ -404,7 +404,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac))
+    new OpSetContravariantPiolaTransformOnFace2D(jac))
 \endcode
 
 %Example for face emerged in 3d space. 
@@ -416,7 +416,7 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
      new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac));
 pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFaceEmbeddedIn3DSpace(jac));
+    new OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac));
 \endcode
 Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
 
@@ -442,9 +442,9 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac));
+    new OpSetContravariantPiolaTransformOnFace2D(jac));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac))    
+    new OpSetContravariantPiolaTransformOnFace2D(jac))    
 \endcode
 
 <tr>
@@ -473,9 +473,9 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 pipeline_mng->getOpDomainRhsPipeline().push_back(
     new OpMakeHdivFromHcurl());
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac));
+    new OpSetContravariantPiolaTransformOnFace2D(jac));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformFace(jac))    
+    new OpSetContravariantPiolaTransformOnFace2D(jac))    
 \endcode
 
 <tr>

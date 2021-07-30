@@ -198,20 +198,11 @@ struct FieldApproximationH1 {
       unsigned int nb_gauss_pts = data.getN().size1();
       for (unsigned int gg = 0; gg != nb_gauss_pts; gg++) {
 
-        double x, y, z, w;
-        w = getVolume() * getGaussPts()(3, gg);
-        if (getHOCoordsAtGaussPts().size1() == nb_gauss_pts) {
-          // intergation points global positions if higher order geometry is
-          // given
-          x = getHOCoordsAtGaussPts()(gg, 0);
-          y = getHOCoordsAtGaussPts()(gg, 1);
-          z = getHOCoordsAtGaussPts()(gg, 2);
-        } else {
-          // intergartion point global positions for linear tetrahedral element
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        const double w = getVolume() * getGaussPts()(3, gg);
+        // intergartion point global positions for linear tetrahedral element
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
 
         std::vector<VectorDouble> fun_val;
 
@@ -407,26 +398,13 @@ struct FieldApproximationH1 {
       // integration
       unsigned int nb_gauss_pts = data.getN().size1();
       for (unsigned int gg = 0; gg != nb_gauss_pts; gg++) {
-        double x, y, z, w;
-        w = getGaussPts()(2, gg);
-        if (getNormalsAtGaussPts().size1()) {
-          w *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
-        } else {
-          w *= getArea();
-        }
+        double w = getGaussPts()(2, gg);
+        w *= 0.5 * cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
 
-        if (getHOCoordsAtGaussPts().size1() == nb_gauss_pts) {
-          // intergation points global positions if higher order geometry is
-          // given
-          x = getHOCoordsAtGaussPts()(gg, 0);
-          y = getHOCoordsAtGaussPts()(gg, 1);
-          z = getHOCoordsAtGaussPts()(gg, 2);
-        } else {
-          // intergartion point global positions for linear tetrahedral element
-          x = getCoordsAtGaussPts()(gg, 0);
-          y = getCoordsAtGaussPts()(gg, 1);
-          z = getCoordsAtGaussPts()(gg, 2);
-        }
+        // intergartion point global positions for linear tetrahedral element
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
+        const double z = getCoordsAtGaussPts()(gg, 2);
 
         if (getNormalsAtGaussPts().size1()) {
           noalias(normal) = getNormalsAtGaussPts(gg);

@@ -257,7 +257,7 @@ MoFEMErrorCode MixedPoisson::assembleSystem() {
       new OpCalculateInvJacForFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainLhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformFace(jAC));
+      new OpSetContravariantPiolaTransformOnFace2D(jAC));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpSetInvJacHcurlFace(invJac));
   pipeline_mng->getOpDomainLhsPipeline().push_back(
@@ -380,7 +380,7 @@ MoFEMErrorCode MixedPoisson::checkError(int iter_num) {
       new OpCalculateInvJacForFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
   pipeline_mng->getOpDomainRhsPipeline().push_back(
-      new OpSetContravariantPiolaTransformFace(jAC));
+      new OpSetContravariantPiolaTransformOnFace2D(jAC));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
       new OpSetInvJacHcurlFace(invJac));
   pipeline_mng->getOpDomainRhsPipeline().push_back(
@@ -467,7 +467,7 @@ MoFEMErrorCode MixedPoisson::outputResults(int iter_num) {
       new OpCalculateInvJacForFace(invJac));
   post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
   post_proc_fe->getOpPtrVector().push_back(
-      new OpSetContravariantPiolaTransformFace(jAC));
+      new OpSetContravariantPiolaTransformOnFace2D(jAC));
   post_proc_fe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
 
   post_proc_fe->addFieldValuesPostProc("FLUX");

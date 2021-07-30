@@ -231,10 +231,8 @@ struct Monitor : public FEMethod {
     CHKERR DMoFEMGetInterfacePtr(dM, &m_field_ptr);
     vertexPostProc = boost::make_shared<BoundaryEle>(*m_field_ptr);
 
-    if (SPACE_DIM == 2)
-      vertexPostProc->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformOnEdge());
-
+    vertexPostProc->getOpPtrVector().push_back(
+        new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     vertexPostProc->getOpPtrVector().push_back(
         new OpCalculateVectorFieldValues<SPACE_DIM>(
             "U", commonDataPtr->contactDispPtr));
@@ -246,6 +244,7 @@ struct Monitor : public FEMethod {
 
     postProcFe = boost::make_shared<PostProcEle>(*m_field_ptr);
     postProcFe->generateReferenceElementMesh();
+
     if (SPACE_DIM == 2) {
       jAC.resize(2, 2, false);
       invJac.resize(2, 2, false);
@@ -255,7 +254,7 @@ struct Monitor : public FEMethod {
       postProcFe->getOpPtrVector().push_back(new OpSetInvJacH1ForFace(invJac));
       postProcFe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       postProcFe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformFace(jAC));
+          new OpSetContravariantPiolaTransformOnFace2D(jAC));
       postProcFe->getOpPtrVector().push_back(new OpSetInvJacHcurlFace(invJac));
     }
 

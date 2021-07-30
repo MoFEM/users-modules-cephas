@@ -342,6 +342,8 @@ struct MagneticElement {
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
+    tri_fe.getOpPtrVector().push_back(
+        new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
     tri_fe.getOpPtrVector().push_back(new OpNaturalBC(blockData));
 
     // create matrices and vectors
@@ -720,8 +722,8 @@ struct MagneticElement {
 
         // Current is on surface where natural bc are applied. It is set that
         // current is in XY plane, circular, around the coil.
-        const double x = getHOCoordsAtGaussPts()(gg, 0);
-        const double y = getHOCoordsAtGaussPts()(gg, 1);
+        const double x = getCoordsAtGaussPts()(gg, 0);
+        const double y = getCoordsAtGaussPts()(gg, 1);
         const double r = sqrt(x * x + y * y);
         FTensor::Tensor1<double, 3> t_j;
         t_j(0) = -y / r;
