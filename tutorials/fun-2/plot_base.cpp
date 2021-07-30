@@ -253,7 +253,7 @@ MoFEMErrorCode Example::outputResults() {
       post_proc_fe->getOpPtrVector().push_back(new OpCalculateJacForFace(jac));
       post_proc_fe->getOpPtrVector().push_back(new OpMakeHdivFromHcurl());
       post_proc_fe->getOpPtrVector().push_back(
-          new OpSetContravariantPiolaTransformFace(jac));
+          new OpSetContravariantPiolaTransformOnFace2D(jac));
     }
   }
 

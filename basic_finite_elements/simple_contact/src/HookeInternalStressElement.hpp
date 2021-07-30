@@ -260,7 +260,6 @@ HookeInternalStressElement::OpGetAnalyticalInternalStress<S>::doWork(
   };
 
   const int nb_integration_pts = getGaussPts().size2();
-
   auto t_coords = getFTensor1CoordsAtGaussPts();
 
   // elastic stiffness tensor (4th rank tensor with minor and major

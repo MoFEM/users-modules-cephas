@@ -141,21 +141,12 @@ MoFEMErrorCode NeumannForcesSurface::OpNeumannForceAnalytical::doWork(
 
     // get integration weight and Jacobian of integration point (area of face)
     double val = getGaussPts()(2, gg);
-    if (hoGeometry || fe_type == MBQUAD) {
-      val *= cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
-      if (fe_type == MBTRI)
-        val /= 2;
-      for (int dd = 0; dd != 3; ++dd) {
-        coords[dd] = getHOCoordsAtGaussPts()(gg, dd);
-        normal[dd] = getNormalsAtGaussPts()(gg, dd);
-      }
-
-    } else {
-      val *= getArea();
-      for (int dd = 0; dd != 3; ++dd) {
-        coords[dd] = getCoordsAtGaussPts()(gg, dd);
-        normal = getNormal();
-      }
+    val *= cblas_dnrm2(3, &getNormalsAtGaussPts()(gg, 0), 1);
+    if (fe_type == MBTRI)
+      val /= 2;
+    for (int dd = 0; dd != 3; ++dd) {
+      coords[dd] = getCoordsAtGaussPts()(gg, dd);
+      normal[dd] = getNormalsAtGaussPts()(gg, dd);
     }
 
     if (analyticalForceOp) {

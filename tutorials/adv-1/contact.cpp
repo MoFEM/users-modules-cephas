@@ -32,20 +32,28 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
+  static constexpr FieldSpace CONTACT_SPACE = HCURL;
   using DomainEle = PipelineManager::FaceEle2D;
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = PipelineManager::EdgeEle2D;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
+  using OpSetPiolaTransformOnBoundary = OpSetContravariantPiolaTransformOnEdge;
 };
 
 template <> struct ElementsAndOps<3> {
+  static constexpr FieldSpace CONTACT_SPACE = HDIV;
   using DomainEle = VolumeElementForcesAndSourcesCore;
   using DomainEleOp = DomainEle::UserDataOperator;
   using BoundaryEle = FaceElementForcesAndSourcesCore;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcVolumeOnRefinedMesh;
+  using OpSetPiolaTransformOnBoundary =
+      OpHOSetContravariantPiolaTransformOnFace3D;
 };
+
+constexpr FieldSpace ElementsAndOps<2>::CONTACT_SPACE;
+constexpr FieldSpace ElementsAndOps<3>::CONTACT_SPACE;
 
 constexpr int SPACE_DIM =
     EXECUTABLE_DIMENSION; //< Space dimension of problem, mesh
@@ -57,6 +65,9 @@ using DomainEleOp = ElementsAndOps<SPACE_DIM>::DomainEleOp;
 using BoundaryEle = ElementsAndOps<SPACE_DIM>::BoundaryEle;
 using BoundaryEleOp = ElementsAndOps<SPACE_DIM>::BoundaryEleOp;
 using PostProcEle = ElementsAndOps<SPACE_DIM>::PostProcEle;
+using OpSetPiolaTransformOnBoundary =
+    ElementsAndOps<SPACE_DIM>::OpSetPiolaTransformOnBoundary;
+constexpr FieldSpace CONTACT_SPACE = ElementsAndOps<SPACE_DIM>::CONTACT_SPACE;
 
 //! [Operators used for contact]
 using OpMixDivULhs = FormsIntegrators<DomainEleOp>::Assembly<
@@ -179,13 +190,10 @@ MoFEMErrorCode Example::setupProblem() {
   CHKERR simple->addDomainField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
   CHKERR simple->addBoundaryField("U", H1, AINSWORTH_LEGENDRE_BASE, SPACE_DIM);
 
-  if (SPACE_DIM == 2) {
-    CHKERR simple->addDomainField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-    CHKERR simple->addBoundaryField("SIGMA", HCURL, DEMKOWICZ_JACOBI_BASE, 2);
-  } else {
-    CHKERR simple->addDomainField("SIGMA", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
-    CHKERR simple->addBoundaryField("SIGMA", HDIV, DEMKOWICZ_JACOBI_BASE, 3);
-  }
+  CHKERR simple->addDomainField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
+                                SPACE_DIM);
+  CHKERR simple->addBoundaryField("SIGMA", CONTACT_SPACE, DEMKOWICZ_JACOBI_BASE,
+                                  SPACE_DIM);
 
   CHKERR simple->setFieldOrder("U", order);
   CHKERR simple->setFieldOrder("SIGMA", 0);
@@ -324,7 +332,7 @@ MoFEMErrorCode Example::OPs() {
       pipeline.push_back(new OpCalculateInvJacForFace(invJac));
       pipeline.push_back(new OpSetInvJacH1ForFace(invJac));
       pipeline.push_back(new OpMakeHdivFromHcurl());
-      pipeline.push_back(new OpSetContravariantPiolaTransformFace(jAc));
+      pipeline.push_back(new OpSetContravariantPiolaTransformOnFace2D(jAc));
       pipeline.push_back(new OpSetInvJacHcurlFace(invJac));
     }
   };
@@ -455,8 +463,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   auto add_boundary_base_ops = [&](auto &pipeline) {
-    if (SPACE_DIM == 2)
-      pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge());
+    pipeline.push_back(new OpSetPiolaTransformOnBoundary(CONTACT_SPACE));
     pipeline.push_back(new OpCalculateVectorFieldValues<SPACE_DIM>(
         "U", commonDataPtr->contactDispPtr));
     pipeline.push_back(new OpCalculateHVecTensorTrace<SPACE_DIM, BoundaryEleOp>(
