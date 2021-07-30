@@ -1029,9 +1029,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
 
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
-  return opSwitch<
-      FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
-      FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>();
+  return opSwitch<0>();
 }
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {
