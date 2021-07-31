@@ -488,9 +488,9 @@ int main(int argc, char *argv[]) {
     fe_lhs_ptr->getRuleHook = VolRule();
     fe_rhs_ptr->getRuleHook = VolRule();
 
-    CHKERR addHOOps("MESH_NODE_POSITIONS", *fe_lhs_ptr, true, false, false,
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fe_lhs_ptr, true, false, false,
                     false);
-    CHKERR addHOOps("MESH_NODE_POSITIONS", *fe_rhs_ptr, true, false, false,
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *fe_rhs_ptr, true, false, false,
                     false);
 
     boost::shared_ptr<ForcesAndSourcesCore> prism_fe_lhs_ptr(
@@ -959,7 +959,7 @@ int main(int argc, char *argv[]) {
       MoFEMFunctionBegin;
       // Add operators to the elements, starting with some generic operators
       CHKERR post_proc.generateReferenceElementMesh();
-      CHKERR addHOOps("MESH_NODE_POSITIONS", post_proc, true, false, false,
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, true, false, false,
                       false);
       CHKERR post_proc.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");

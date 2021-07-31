@@ -183,9 +183,9 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.getInterface<MatrixManager>()
         ->createMPIAIJWithArrays<PetscGlobalIdx_mi_tag>("TEST_PROBLEM", &A);
 
-    CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeRhs(),
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", thermal_elements.getLoopFeRhs(),
                     true, false, false, false);
-    CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeLhs(),
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", thermal_elements.getLoopFeLhs(),
                     true, false, false, false);
 
     CHKERR thermal_elements.setThermalFiniteElementRhsOperators("TEMP", F);
@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
 
       PostProcVolumeOnRefinedMesh post_proc(m_field);
       CHKERR post_proc.generateReferenceElementMesh();
-      CHKERR addHOOps("MESH_NODE_POSITIONS", post_proc, true, false, false,
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, true, false, false,
                       false);
       CHKERR post_proc.addFieldValuesPostProc("TEMP");
       CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");

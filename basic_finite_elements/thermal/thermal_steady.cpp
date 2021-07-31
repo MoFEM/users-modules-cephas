@@ -168,9 +168,9 @@ int main(int argc, char *argv[]) {
 
     DirichletTemperatureBc my_dirichlet_bc(m_field, "TEMP", A, T, F);
 
-    CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeRhs(),
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", thermal_elements.getLoopFeRhs(),
                     true, false, false, false);
-    CHKERR addHOOps("MESH_NODE_POSITIONS", thermal_elements.getLoopFeLhs(),
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", thermal_elements.getLoopFeLhs(),
                     true, false, false, false);
 
     CHKERR thermal_elements.setThermalFiniteElementRhsOperators("TEMP", F);

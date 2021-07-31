@@ -651,11 +651,11 @@ int main(int argc, char *argv[]) {
       CHKERR m_field.get_moab().get_entities_by_type(
           m_field.get_finite_element_meshset("ELASTIC"), MBTET,
           elastic.setOfBlocks[id].tEts, true);
-      CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
                       false, false, false);
-      CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeRhs(), true,
                       false, false, false);
-      CHKERR addHOOps("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
+      CHKERR addHOOpsVol("MESH_NODE_POSITIONS", elastic.getLoopFeEnergy(), true,
                       false, false, false);
       CHKERR elastic.setOperators("DISPLACEMENT", "MESH_NODE_POSITIONS", false,
                                   true);

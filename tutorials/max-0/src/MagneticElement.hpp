@@ -338,7 +338,7 @@ struct MagneticElement {
     auto material_grad_mat = boost::make_shared<MatrixDouble>();
     auto material_det_vec = boost::make_shared<VectorDouble>();
     auto material_inv_grad_mat = boost::make_shared<MatrixDouble>();
-    CHKERR addHOOps("MESH_NODE_POSITIONS", vol_fe, false, true, false, true);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", vol_fe, false, true, false, true);
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
@@ -417,7 +417,7 @@ struct MagneticElement {
     MoFEMFunctionBegin;
     PostProcVolumeOnRefinedMesh post_proc(mField);
     CHKERR post_proc.generateReferenceElementMesh();
-    CHKERR addHOOps("MESH_NODE_POSITIONS", post_proc, false, true, false, true);
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", post_proc, false, true, false, true);
     CHKERR post_proc.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc.addFieldValuesPostProc(blockData.fieldName);
     post_proc.getOpPtrVector().push_back(new OpPostProcessCurl(

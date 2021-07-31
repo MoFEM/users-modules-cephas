@@ -105,10 +105,10 @@ struct ConvectiveMassElement {
     return feEnergy;
   } ///< get kinetic energy element
 
-  MoFEMErrorCode addHOOps() {
+  MoFEMErrorCode addHOOpsVol() {
     MoFEMFunctionBegin;
     auto add_ops = [&](auto &fe) {
-      return MoFEM::addHOOps("MESH_NODE_POSITIONS", fe, true, false, false,
+      return MoFEM::addHOOpsVol("MESH_NODE_POSITIONS", fe, true, false, false,
                              false);
     };
     CHKERR add_ops(feMassRhs);

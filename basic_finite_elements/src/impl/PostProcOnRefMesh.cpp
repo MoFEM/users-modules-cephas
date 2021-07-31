@@ -923,7 +923,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 
   if (!mField.check_field("MESH_NODE_POSITIONS"))
-    CHKERR addHOOps("MESH_NODE_POSITIONS", *my_side_fe, true, false, false,
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *my_side_fe, true, false, false,
                     false);
 
   // check number of coefficients
