@@ -176,6 +176,9 @@ int main(int argc, char *argv[]) {
       fe_name << "FORCE_FE_" << it->getMeshsetId();
       string fe_name_str = fe_name.str();
       neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+      CHKERR addHOOpsFace3D(
+          "MESH_NODE_POSITIONS", neumann_forces.at(fe_name_str).getLoopFe(),
+          false, false);
       neumann_forces.at(fe_name_str)
           .addForce("DISPLACEMENT", F, it->getMeshsetId());
       ForceCubitBcData data;
@@ -189,6 +192,9 @@ int main(int argc, char *argv[]) {
       fe_name << "PRESSURE_FE_" << it->getMeshsetId();
       string fe_name_str = fe_name.str();
       neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+      CHKERR addHOOpsFace3D(
+          "MESH_NODE_POSITIONS", neumann_forces.at(fe_name_str).getLoopFe(),
+          false, false);
       neumann_forces.at(fe_name_str)
           .addPressure("DISPLACEMENT", F, it->getMeshsetId());
       PressureCubitBcData data;

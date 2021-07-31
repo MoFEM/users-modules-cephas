@@ -696,6 +696,9 @@ int main(int argc, char *argv[]) {
     boost::ptr_map<std::string, NeumannForcesSurface> neumann_forces;
     string fe_name_str = "FORCE_FE";
     neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                          neumann_forces.at(fe_name_str).getLoopFe(), false,
+                          false);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
       CHKERR neumann_forces.at(fe_name_str)
@@ -703,6 +706,9 @@ int main(int argc, char *argv[]) {
     }
     fe_name_str = "PRESSURE_FE";
     neumann_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                          neumann_forces.at(fe_name_str).getLoopFe(), false,
+                          false);
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
              m_field, SIDESET | PRESSURESET, it)) {
       CHKERR neumann_forces.at(fe_name_str)

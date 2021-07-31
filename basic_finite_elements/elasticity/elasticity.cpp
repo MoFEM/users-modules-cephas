@@ -876,6 +876,8 @@ int main(int argc, char *argv[]) {
     CHKERR DMoFEMLoopFiniteElements(dm, "BODY_FORCE",
                                     &body_forces_methods.getLoopFe());
     // Assemble fluid pressure forces
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", fluid_pressure_fe.getLoopFe(),
+                          false, false);
     CHKERR fluid_pressure_fe.setNeumannFluidPressureFiniteElementOperators(
         "DISPLACEMENT", F, false, true);
 
@@ -938,6 +940,8 @@ int main(int argc, char *argv[]) {
 
     auto set_post_proc_skin = [&](auto &post_proc_skin) {
       MoFEMFunctionBegin;
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", post_proc_skin, false,
+                            false);
       CHKERR post_proc_skin.generateReferenceElementMesh();
       CHKERR post_proc_skin.addFieldValuesPostProc("DISPLACEMENT");
       CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");

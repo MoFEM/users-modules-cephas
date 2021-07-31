@@ -1233,6 +1233,13 @@ MoFEMErrorCode MetaSpringBC::setSpringOperators(
       boost::make_shared<MetaSpringBC::DataAtIntegrationPtsSprings>(m_field);
   CHKERR commonDataPtr->getParameters();
 
+  if (m_field.check_field(mesh_nodals_positions)) {
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_lhs_ptr, false,
+                          false);
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_rhs_ptr, false,
+                          false);
+  }
+
   for (auto &sitSpring : commonDataPtr->mapSpring) {
 
     fe_spring_lhs_ptr->getOpPtrVector().push_back(
@@ -1272,6 +1279,15 @@ MoFEMErrorCode MetaSpringBC::setSpringOperatorsMaterial(
   // Push operators to instances for springs
   // loop over blocks
   CHKERR data_at_integration_pts->getParameters();
+
+  if (m_field.check_field(mesh_nodals_positions)) {
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_lhs_ptr_dx, false,
+                          false);
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_lhs_ptr_dX, false,
+                          false);
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, *fe_spring_rhs_ptr, false,
+                          false);
+  }
 
   for (auto &sitSpring : data_at_integration_pts->mapSpring) {
 

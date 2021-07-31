@@ -26,40 +26,9 @@ using namespace MoFEM;
 #include <boost/numeric/ublas/vector_proxy.hpp>
 #include <AnalyticalDirichlet.hpp>
 
-AnalyticalDirichletBC::ApproxField::OpHoCoord::OpHoCoord(
-    const std::string field_name, MatrixDouble &ho_coords)
+AnalyticalDirichletBC::ApproxField::OpLhs::OpLhs(const std::string field_name)
     : FaceElementForcesAndSourcesCore::UserDataOperator(
-          field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
-      hoCoords(ho_coords) {}
-
-MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpHoCoord::doWork(
-    int side, EntityType type, DataForcesAndSourcesCore::EntData &data) {
-  MoFEMFunctionBegin;
-
-    if (data.getFieldData().size() == 0)
-      MoFEMFunctionReturnHot(0);
-
-    hoCoords.resize(data.getN().size1(), 3);
-    if (type == MBVERTEX) {
-      hoCoords.clear();
-    }
-
-    int nb_dofs = data.getFieldData().size();
-    for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
-      for (int dd = 0; dd < 3; dd++) {
-        hoCoords(gg, dd) += cblas_ddot(nb_dofs / 3, &data.getN(gg)[0], 1,
-                                       &data.getFieldData()[dd], 3);
-      }
-    }
-
-  MoFEMFunctionReturn(0);
-}
-
-AnalyticalDirichletBC::ApproxField::OpLhs::OpLhs(const std::string field_name,
-                                                 MatrixDouble &ho_coords)
-    : FaceElementForcesAndSourcesCore::UserDataOperator(
-          field_name, ForcesAndSourcesCore::UserDataOperator::OPROWCOL),
-      hoCoords(ho_coords) {}
+          field_name, ForcesAndSourcesCore::UserDataOperator::OPROWCOL) {}
 
 MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
     int row_side, int col_side, EntityType row_type, EntityType col_type,
@@ -85,17 +54,9 @@ MoFEMErrorCode AnalyticalDirichletBC::ApproxField::OpLhs::doWork(
   for (unsigned int gg = 0; gg < nb_gauss_pts; gg++) {
 
     double w = getGaussPts()(2, gg);
-    if (hoCoords.size1() == row_data.getN().size1()) {
-
-      // higher order element
-      double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
-      w *= area;
-
-    } else {
-
-      // linear element
-      w *= getArea();
-    }
+    // higher order element
+    double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
+    w *= area;
 
     cblas_dger(CblasRowMajor, nb_row_dofs, nb_col_dofs, w,
                &row_data.getN()(gg, 0), 1, &col_data.getN()(gg, 0), 1,

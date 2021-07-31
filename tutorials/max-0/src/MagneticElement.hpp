@@ -342,6 +342,12 @@ struct MagneticElement {
     vol_fe.getOpPtrVector().push_back(new OpCurlCurl(blockData));
     vol_fe.getOpPtrVector().push_back(new OpStab(blockData));
     TriFE tri_fe(mField);
+    tri_fe.meshPositionsFieldName = "none";
+
+    tri_fe.getOpPtrVector().push_back(
+        new OpGetHONormalsOnFace("MESH_NODE_POSITIONS"));
+    tri_fe.getOpPtrVector().push_back(
+        new OpCalculateHOCoords("MESH_NODE_POSITIONS"));
     tri_fe.getOpPtrVector().push_back(
         new OpHOSetCovariantPiolaTransformOnFace3D(HCURL));
     tri_fe.getOpPtrVector().push_back(new OpNaturalBC(blockData));

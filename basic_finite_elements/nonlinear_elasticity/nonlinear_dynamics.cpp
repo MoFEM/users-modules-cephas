@@ -403,6 +403,8 @@ int main(int argc, char *argv[]) {
     // Add fluid pressure finite elements
     FluidPressure fluid_pressure_fe(m_field);
     fluid_pressure_fe.addNeumannFluidPressureBCElements("DISPLACEMENT");
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", fluid_pressure_fe.getLoopFe(),
+                          false, false);
     fluid_pressure_fe.setNeumannFluidPressureFiniteElementOperators(
         "DISPLACEMENT", PETSC_NULL, false, true);
 
@@ -675,6 +677,9 @@ int main(int argc, char *argv[]) {
     {
       string fe_name_str = "FORCE_FE";
       surface_forces.insert(fe_name_str, new NeumannForcesSurface(m_field));
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                            surface_forces.at(fe_name_str).getLoopFe(), false,
+                            false);
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                       NODESET | FORCESET, it)) {
         CHKERR surface_forces.at(fe_name_str)
@@ -688,6 +693,9 @@ int main(int argc, char *argv[]) {
     {
       string fe_name_str = "PRESSURE_FE";
       surface_pressure.insert(fe_name_str, new NeumannForcesSurface(m_field));
+      CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS",
+                            surface_pressure.at(fe_name_str).getLoopFe(), false,
+                            false);
       for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
                m_field, SIDESET | PRESSURESET, it)) {
         CHKERR surface_pressure.at(fe_name_str)

@@ -1360,54 +1360,70 @@ MoFEMErrorCode MetaNeumannForces::setMomentumFluxOperators(
     boost::ptr_map<std::string, NeumannForcesSurface> &neumann_forces, Vec F,
     const std::string field_name, const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
-
-  string fe_name;
-  fe_name = "FORCE_FE";
-  neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
   bool ho_geometry = m_field.check_field(mesh_nodals_positions);
-  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
-                                                  it)) {
-    CHKERR neumann_forces.at(fe_name).addForce(
-        field_name, F, it->getMeshsetId(), ho_geometry, false);
-  }
-  // Reading forces from BLOCKSET
-  const string block_set_force_name("FORCE");
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-    if (it->getName().compare(0, block_set_force_name.length(),
-                              block_set_force_name) == 0) {
-      CHKERR neumann_forces.at(fe_name).addForce(
-          field_name, F, it->getMeshsetId(), ho_geometry, true);
+  // Add forces
+  {
+    std::string fe_name = "FORCE_FE";
+    neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
+    auto &nf = neumann_forces.at(fe_name);
+    auto &fe = nf.getLoopFe();
+
+    if (ho_geometry)
+      CHKERR addHOOpsFace3D(mesh_nodals_positions, fe, false, false);
+
+    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
+                                                    it)) {
+      CHKERR nf.addForce(field_name, F, it->getMeshsetId(), ho_geometry, false);
+    }
+    // Reading forces from BLOCKSET
+    const string block_set_force_name("FORCE");
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      if (it->getName().compare(0, block_set_force_name.length(),
+                                block_set_force_name) == 0) {
+        CHKERR nf.addForce(field_name, F, it->getMeshsetId(), ho_geometry,
+                           true);
+      }
     }
   }
 
-  fe_name = "PRESSURE_FE";
-  neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
-  for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
-                                                  SIDESET | PRESSURESET, it)) {
-    CHKERR neumann_forces.at(fe_name).addPressure(
-        field_name, F, it->getMeshsetId(), ho_geometry, false);
-  }
+  // Add pressures
+  {
+    std::string fe_name = "PRESSURE_FE";
+    neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
 
-  // Reading pressures from BLOCKSET
-  const string block_set_pressure_name("PRESSURE");
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-    if (it->getName().compare(0, block_set_pressure_name.length(),
-                              block_set_pressure_name) == 0) {
-      CHKERR neumann_forces.at(fe_name).addPressure(
-          field_name, F, it->getMeshsetId(), ho_geometry, true);
+    auto &nf = neumann_forces.at(fe_name);
+    auto &fe = nf.getLoopFe();
+
+    if (ho_geometry)
+      CHKERR addHOOpsFace3D(mesh_nodals_positions, fe, false, false);
+
+    for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(
+             m_field, SIDESET | PRESSURESET, it)) {
+      CHKERR nf.addPressure(field_name, F, it->getMeshsetId(), ho_geometry,
+                            false);
+    }
+
+    // Reading pressures from BLOCKSET
+    const string block_set_pressure_name("PRESSURE");
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      if (it->getName().compare(0, block_set_pressure_name.length(),
+                                block_set_pressure_name) == 0) {
+        CHKERR nf.addPressure(field_name, F, it->getMeshsetId(), ho_geometry,
+                              true);
+      }
+    }
+
+    // Reading pressures from BLOCKSET
+    const string block_set_linear_pressure_name("LINEAR_PRESSURE");
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
+      if (it->getName().compare(0, block_set_linear_pressure_name.length(),
+                                block_set_linear_pressure_name) == 0) {
+        CHKERR nf.addLinearPressure(field_name, F, it->getMeshsetId(),
+                                    ho_geometry);
+      }
     }
   }
-
-  // Reading pressures from BLOCKSET
-  const string block_set_linear_pressure_name("LINEAR_PRESSURE");
-  for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(m_field, BLOCKSET, it)) {
-    if (it->getName().compare(0, block_set_linear_pressure_name.length(),
-                              block_set_linear_pressure_name) == 0) {
-      CHKERR neumann_forces.at(fe_name).addLinearPressure(
-          field_name, F, it->getMeshsetId(), ho_geometry);
-    }
-  }
-
+  
   MoFEMFunctionReturn(0);
 }
 
@@ -1441,15 +1457,21 @@ MoFEMErrorCode MetaNeumannForces::setMassFluxOperators(
     boost::ptr_map<std::string, NeumannForcesSurface> &neumann_forces, Vec F,
     const std::string field_name, const std::string mesh_nodals_positions) {
   MoFEMFunctionBegin;
+  bool ho_geometry = m_field.check_field(mesh_nodals_positions);
 
   string fe_name;
   fe_name = "FLUX_FE";
   neumann_forces.insert(fe_name, new NeumannForcesSurface(m_field));
+
+  auto &nf = neumann_forces.at(fe_name);
+  auto &fe = nf.getLoopFe();
+
+  if (ho_geometry)
+    CHKERR addHOOpsFace3D(mesh_nodals_positions, fe, false, false);
+
   for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,
                                                   SIDESET | PRESSURESET, it)) {
-    bool ho_geometry = m_field.check_field(mesh_nodals_positions);
-    CHKERR neumann_forces.at(fe_name).addFlux(field_name, F, it->getMeshsetId(),
-                                              ho_geometry);
+    CHKERR nf.addFlux(field_name, F, it->getMeshsetId(), ho_geometry);
   }
   MoFEMFunctionReturn(0);
 }

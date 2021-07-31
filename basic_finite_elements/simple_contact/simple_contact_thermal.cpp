@@ -888,6 +888,7 @@ int main(int argc, char *argv[]) {
     /// Post proc on the skin
     PostProcFaceOnRefinedMesh post_proc_skin(m_field);
     CHKERR post_proc_skin.generateReferenceElementMesh();
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", post_proc_skin, false, false);
     CHKERR post_proc_skin.addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc_skin.addFieldValuesPostProc("MESH_NODE_POSITIONS");
     CHKERR post_proc_skin.addFieldValuesPostProc("EIGEN_POSITIONS");
@@ -1055,6 +1056,8 @@ int main(int argc, char *argv[]) {
         new PostProcFaceOnRefinedMesh(m_field));
 
     CHKERR post_proc_contact_ptr->generateReferenceElementMesh();
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *post_proc_contact_ptr, false,
+                          false);
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("LAGMULT");
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("SPATIAL_POSITION");
     CHKERR post_proc_contact_ptr->addFieldValuesPostProc("MESH_NODE_POSITIONS");
