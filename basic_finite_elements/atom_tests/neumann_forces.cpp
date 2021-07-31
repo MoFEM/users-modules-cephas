@@ -34,14 +34,14 @@ int main(int argc, char *argv[]) {
 
     PetscBool flg = PETSC_TRUE;
     char mesh_file_name[255];
-    ierr = PetscOptionsGetString(PETSC_NULL,PETSC_NULL,"-my_file",mesh_file_name,255,&flg); CHKERRG(ierr);
+    CHKERR PetscOptionsGetString(PETSC_NULL,PETSC_NULL,"-my_file",mesh_file_name,255,&flg);
     if(flg != PETSC_TRUE) {
       SETERRQ(PETSC_COMM_SELF,1,"*** ERROR -my_file (MESH FILE NEEDED)");
     }
 
     const char *option;
     option = "";
-    rval = moab.load_file(mesh_file_name, 0, option); CHKERRG(rval);
+    CHKERR moab.load_file(mesh_file_name, 0, option);
 
     //Create MoFEM (Joseph) database
     MoFEM::Core core(moab);
@@ -51,37 +51,37 @@ int main(int argc, char *argv[]) {
     BitRefLevel bit_level0;
     bit_level0.set(0);
     EntityHandle meshset_level0;
-    rval = moab.create_meshset(MESHSET_SET,meshset_level0); CHKERRG(rval);
-    ierr = m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(0,3,bit_level0); CHKERRG(ierr);
+    CHKERR moab.create_meshset(MESHSET_SET,meshset_level0);
+    CHKERR m_field.getInterface<BitRefManager>()->setBitRefLevelByDim(0,3,bit_level0);
 
     //Fields
-    ierr = m_field.add_field("DISPLACEMENT",H1,AINSWORTH_LEGENDRE_BASE,3); CHKERRG(ierr);
-    ierr = m_field.add_field("MESH_NODE_POSITIONS",H1,AINSWORTH_LEGENDRE_BASE,3); CHKERRG(ierr);
+    CHKERR m_field.add_field("DISPLACEMENT",H1,AINSWORTH_LEGENDRE_BASE,3);
+    CHKERR m_field.add_field("MESH_NODE_POSITIONS",H1,AINSWORTH_LEGENDRE_BASE,3);
 
     //Problem
-    ierr = m_field.add_problem("TEST_PROBLEM"); CHKERRG(ierr);
+    CHKERR m_field.add_problem("TEST_PROBLEM");
     //set refinement level for problem
-    ierr = m_field.modify_problem_ref_level_add_bit("TEST_PROBLEM",bit_level0); CHKERRG(ierr);
+    CHKERR m_field.modify_problem_ref_level_add_bit("TEST_PROBLEM",bit_level0);
 
     //meshset consisting all entities in mesh
     EntityHandle root_set = moab.get_root_set();
     //add entities to field
-    ierr = m_field.add_ents_to_field_by_type(root_set,MBTET,"DISPLACEMENT"); CHKERRG(ierr);
-    ierr = m_field.add_ents_to_field_by_type(root_set,MBTET,"MESH_NODE_POSITIONS"); CHKERRG(ierr);
+    CHKERR m_field.add_ents_to_field_by_type(root_set,MBTET,"DISPLACEMENT");
+    CHKERR m_field.add_ents_to_field_by_type(root_set,MBTET,"MESH_NODE_POSITIONS");
 
     for(_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,NODESET|FORCESET,it)) {
 
       std::ostringstream fe_name;
       fe_name << "FORCE_FE_" << it->getMeshsetId();
-      ierr = m_field.add_finite_element(fe_name.str()); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_row(fe_name.str(),"DISPLACEMENT"); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_col(fe_name.str(),"DISPLACEMENT"); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_data(fe_name.str(),"DISPLACEMENT"); CHKERRG(ierr);
-      ierr = m_field.modify_problem_add_finite_element("TEST_PROBLEM",fe_name.str()); CHKERRG(ierr);
+      CHKERR m_field.add_finite_element(fe_name.str());
+      CHKERR m_field.modify_finite_element_add_field_row(fe_name.str(),"DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_col(fe_name.str(),"DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_data(fe_name.str(),"DISPLACEMENT");
+      CHKERR m_field.modify_problem_add_finite_element("TEST_PROBLEM",fe_name.str());
 
       Range tris;
-      rval = moab.get_entities_by_type(it->meshset,MBTRI,tris,true); CHKERRG(rval);
-      ierr = m_field.add_ents_to_finite_element_by_type(tris,MBTRI,fe_name.str()); CHKERRG(ierr);
+      CHKERR moab.get_entities_by_type(it->meshset,MBTRI,tris,true);
+      CHKERR m_field.add_ents_to_finite_element_by_type(tris,MBTRI,fe_name.str());
 
     }
 
@@ -89,58 +89,58 @@ int main(int argc, char *argv[]) {
 
       std::ostringstream fe_name;
       fe_name << "PRESSURE_FE_" << it->getMeshsetId();
-      ierr = m_field.add_finite_element(fe_name.str()); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_row(fe_name.str(),"DISPLACEMENT"); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_col(fe_name.str(),"DISPLACEMENT"); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_data(fe_name.str(),"DISPLACEMENT"); CHKERRG(ierr);
-      ierr = m_field.modify_finite_element_add_field_data(fe_name.str(),"MESH_NODE_POSITIONS"); CHKERRG(ierr);
-      ierr = m_field.modify_problem_add_finite_element("TEST_PROBLEM",fe_name.str()); CHKERRG(ierr);
+      CHKERR m_field.add_finite_element(fe_name.str());
+      CHKERR m_field.modify_finite_element_add_field_row(fe_name.str(),"DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_col(fe_name.str(),"DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_data(fe_name.str(),"DISPLACEMENT");
+      CHKERR m_field.modify_finite_element_add_field_data(fe_name.str(),"MESH_NODE_POSITIONS");
+      CHKERR m_field.modify_problem_add_finite_element("TEST_PROBLEM",fe_name.str());
 
       Range tris;
-      rval = moab.get_entities_by_type(it->meshset,MBTRI,tris,true); CHKERRG(rval);
-      ierr = m_field.add_ents_to_finite_element_by_type(tris,MBTRI,fe_name.str()); CHKERRG(ierr);
+      CHKERR moab.get_entities_by_type(it->meshset,MBTRI,tris,true);
+      CHKERR m_field.add_ents_to_finite_element_by_type(tris,MBTRI,fe_name.str());
 
     }
 
     //set app. order
     //see Hierarchic Finite Element Bases on Unstructured Tetrahedral Meshes (Mark Ainsworth & Joe Coyle)
     int order = 2;
-    ierr = m_field.set_field_order(root_set,MBTET,"DISPLACEMENT",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTRI,"DISPLACEMENT",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBEDGE,"DISPLACEMENT",order); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBVERTEX,"DISPLACEMENT",1); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTET,"MESH_NODE_POSITIONS",2); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBTRI,"MESH_NODE_POSITIONS",2); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBEDGE,"MESH_NODE_POSITIONS",2); CHKERRG(ierr);
-    ierr = m_field.set_field_order(root_set,MBVERTEX,"MESH_NODE_POSITIONS",1); CHKERRG(ierr);
+    CHKERR m_field.set_field_order(root_set,MBTET,"DISPLACEMENT",order);
+    CHKERR m_field.set_field_order(root_set,MBTRI,"DISPLACEMENT",order);
+    CHKERR m_field.set_field_order(root_set,MBEDGE,"DISPLACEMENT",order);
+    CHKERR m_field.set_field_order(root_set,MBVERTEX,"DISPLACEMENT",1);
+    CHKERR m_field.set_field_order(root_set,MBTET,"MESH_NODE_POSITIONS",2);
+    CHKERR m_field.set_field_order(root_set,MBTRI,"MESH_NODE_POSITIONS",2);
+    CHKERR m_field.set_field_order(root_set,MBEDGE,"MESH_NODE_POSITIONS",2);
+    CHKERR m_field.set_field_order(root_set,MBVERTEX,"MESH_NODE_POSITIONS",1);
 
     /****/
     //build database
     //build field
-    ierr = m_field.build_fields(); CHKERRG(ierr);
+    CHKERR m_field.build_fields();
     //set FIELD1 from positions of 10 node tets
     Projection10NodeCoordsOnField ent_method(m_field,"MESH_NODE_POSITIONS");
-    ierr = m_field.loop_dofs("MESH_NODE_POSITIONS",ent_method); CHKERRG(ierr);
+    CHKERR m_field.loop_dofs("MESH_NODE_POSITIONS",ent_method);
 
     //build finite elemnts
-    ierr = m_field.build_finite_elements(); CHKERRG(ierr);
+    CHKERR m_field.build_finite_elements();
     //build adjacencies
-    ierr = m_field.build_adjacencies(bit_level0); CHKERRG(ierr);
+    CHKERR m_field.build_adjacencies(bit_level0);
     //build problem
     ProblemsManager *prb_mng_ptr;
-    ierr = m_field.getInterface(prb_mng_ptr); CHKERRG(ierr);
-    ierr = prb_mng_ptr->buildProblem("TEST_PROBLEM",true); CHKERRG(ierr);
+    CHKERR m_field.getInterface(prb_mng_ptr);
+    CHKERR prb_mng_ptr->buildProblem("TEST_PROBLEM",true);
 
     /****/
     //mesh partitioning
     //partition
-    ierr = prb_mng_ptr->partitionSimpleProblem("TEST_PROBLEM"); CHKERRG(ierr);
-    ierr = prb_mng_ptr->partitionFiniteElements("TEST_PROBLEM"); CHKERRG(ierr);
+    CHKERR prb_mng_ptr->partitionSimpleProblem("TEST_PROBLEM");
+    CHKERR prb_mng_ptr->partitionFiniteElements("TEST_PROBLEM");
     //what are ghost nodes, see Petsc Manual
-    ierr = prb_mng_ptr->partitionGhostDofs("TEST_PROBLEM"); CHKERRG(ierr);
+    CHKERR prb_mng_ptr->partitionGhostDofs("TEST_PROBLEM");
 
     Vec F;
-    ierr = m_field.getInterface<VecManager>()->vecCreateGhost("TEST_PROBLEM",ROW,&F); CHKERRG(ierr);
+    CHKERR m_field.getInterface<VecManager>()->vecCreateGhost("TEST_PROBLEM",ROW,&F);
 
     typedef tee_device<std::ostream, std::ofstream> TeeDevice;
     typedef stream<TeeDevice> TeeStream;
@@ -150,16 +150,16 @@ int main(int argc, char *argv[]) {
     TeeDevice my_tee(std::cout, ofs);
     TeeStream my_split(my_tee);
 
-    ierr = VecZeroEntries(F); CHKERRG(ierr);
+    CHKERR VecZeroEntries(F);
     boost::ptr_map<std::string,NeumannForcesSurface> neumann_forces;
     for(_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field,NODESET|FORCESET,it)) {
       std::ostringstream fe_name;
       fe_name << "FORCE_FE_" << it->getMeshsetId();
       string fe_name_str = fe_name.str();
       neumann_forces.insert(fe_name_str,new NeumannForcesSurface(m_field));
-      neumann_forces.at(fe_name_str).addForce("DISPLACEMENT",F,it->getMeshsetId()); CHKERRG(ierr);
+      neumann_forces.at(fe_name_str).addForce("DISPLACEMENT",F,it->getMeshsetId());
       ForceCubitBcData data;
-      ierr = it->getBcDataStructure(data); CHKERRG(ierr);
+      CHKERR it->getBcDataStructure(data);
       my_split << *it << std::endl;
       my_split << data << std::endl;
     }
@@ -168,25 +168,25 @@ int main(int argc, char *argv[]) {
       fe_name << "PRESSURE_FE_" << it->getMeshsetId();
       string fe_name_str = fe_name.str();
       neumann_forces.insert(fe_name_str,new NeumannForcesSurface(m_field));
-      neumann_forces.at(fe_name_str).addPressure("DISPLACEMENT",F,it->getMeshsetId()); CHKERRG(ierr);
+      neumann_forces.at(fe_name_str).addPressure("DISPLACEMENT",F,it->getMeshsetId());
       PressureCubitBcData data;
-      ierr = it->getBcDataStructure(data); CHKERRG(ierr);
+      CHKERR it->getBcDataStructure(data);
       my_split << *it << std::endl;
       my_split << data << std::endl;
     }
     boost::ptr_map<std::string,NeumannForcesSurface>::iterator mit = neumann_forces.begin();
     for(;mit!=neumann_forces.end();mit++) {
-      ierr = m_field.loop_finite_elements("TEST_PROBLEM",mit->first,mit->second->getLoopFe()); CHKERRG(ierr);
+      CHKERR m_field.loop_finite_elements("TEST_PROBLEM",mit->first,mit->second->getLoopFe());
     }
-    ierr = VecAssemblyBegin(F); CHKERRG(ierr);
-    ierr = VecAssemblyEnd(F); CHKERRG(ierr);
+    CHKERR VecAssemblyBegin(F);
+    CHKERR VecAssemblyEnd(F);
 
-    ierr = m_field.getInterface<VecManager>()->setGlobalGhostVector("TEST_PROBLEM",ROW,F,INSERT_VALUES,SCATTER_REVERSE); CHKERRG(ierr);
+    CHKERR m_field.getInterface<VecManager>()->setGlobalGhostVector("TEST_PROBLEM",ROW,F,INSERT_VALUES,SCATTER_REVERSE);
 
     const double eps = 1e-4;
 
     const Problem *problemPtr;
-    ierr = m_field.get_problem("TEST_PROBLEM",&problemPtr); CHKERRG(ierr);
+    CHKERR m_field.get_problem("TEST_PROBLEM",&problemPtr);
     for(_IT_NUMEREDDOF_ROW_FOR_LOOP_(problemPtr,dit)) {
 
       my_split.precision(3);
@@ -197,11 +197,11 @@ int main(int argc, char *argv[]) {
     }
 
     double sum = 0;
-    ierr = VecSum(F,&sum); CHKERRG(ierr);
+    CHKERR VecSum(F,&sum);
     sum = fabs(sum)<eps ? 0.0 : sum;
     my_split << std::endl << "Sum : " << std::setprecision(3) << sum << std::endl;
 
-    ierr = VecDestroy(&F); CHKERRG(ierr);
+    CHKERR VecDestroy(&F);
 
   } 
   CATCH_ERRORS;
