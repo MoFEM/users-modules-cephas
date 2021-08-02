@@ -35,10 +35,10 @@ template <> struct ElementsAndOps<2> {
   static constexpr FieldSpace CONTACT_SPACE = HCURL;
   using DomainEle = PipelineManager::FaceEle;
   using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
-  using OpSetPiolaTransformOnBoundary = OpSetContravariantPiolaTransformOnEdge;
+  using OpSetPiolaTransformOnBoundary = OpSetContravariantPiolaTransformOnEdge2D;
 };
 
 template <> struct ElementsAndOps<3> {

@@ -106,6 +106,10 @@ struct PrismFE : public FatPrismElementForcesAndSourcesCore {
 int PrismFE::getRuleTrianglesOnly(int order) { return 2 * order; };
 int PrismFE::getRuleThroughThickness(int order) { return 2 * order; };
 
+using EdgeEle = MoFEM::EdgeElementForcesAndSourcesCoreSwitch<
+    EdgeElementForcesAndSourcesCore::NO_HO_GEOMETRY |
+    EdgeElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>;
+
 int main(int argc, char *argv[]) {
 
   const string default_options = "-ksp_type gmres \n"
@@ -601,11 +605,10 @@ int main(int argc, char *argv[]) {
 
     // Implementation of Simple Rod element
     // Create new instances of edge elements for Simple Rod
-    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_lhs_ptr(
-        new EdgeElementForcesAndSourcesCore(m_field));
-    boost::shared_ptr<EdgeElementForcesAndSourcesCore> fe_simple_rod_rhs_ptr(
-        new EdgeElementForcesAndSourcesCore(m_field));
+    boost::shared_ptr<EdgeEle> fe_simple_rod_lhs_ptr(new EdgeEle(m_field));
+    boost::shared_ptr<EdgeEle> fe_simple_rod_rhs_ptr(new EdgeEle(m_field));
 
+    
     CHKERR MetaSimpleRodElement::setSimpleRodOperators(
         m_field, fe_simple_rod_lhs_ptr, fe_simple_rod_rhs_ptr, "DISPLACEMENT",
         "MESH_NODE_POSITIONS");
@@ -859,11 +862,10 @@ int main(int argc, char *argv[]) {
     CHKERR MetaEdgeForces::setOperators(m_field, edge_forces, F,
                                         "DISPLACEMENT");
     {
-      boost::ptr_map<std::string, EdgeForce>::iterator fit =
-          edge_forces.begin();
+      auto fit = edge_forces.begin();
       for (; fit != edge_forces.end(); fit++) {
-        CHKERR DMoFEMLoopFiniteElements(dm, fit->first.c_str(),
-                                        &fit->second->getLoopFe());
+        auto &fe = fit->second->getLoopFe();
+        CHKERR DMoFEMLoopFiniteElements(dm, fit->first.c_str(), &fe);
       }
     }
     // Assemble body forces, implemented in BodyForceConstantField

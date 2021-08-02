@@ -31,7 +31,7 @@ static char help[] = "...\n\n";
 
 using DomainEle = PipelineManager::FaceEle;
 using DomainEleOp = DomainEle::UserDataOperator;
-using EdgeEle = PipelineManager::EdgeEle2D;
+using EdgeEle = PipelineManager::EdgeEle;
 using EdgeEleOp = EdgeEle::UserDataOperator;
 using EntData = DataForcesAndSourcesCore::EntData;
 using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
