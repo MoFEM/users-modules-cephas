@@ -106,9 +106,7 @@ struct PrismFE : public FatPrismElementForcesAndSourcesCore {
 int PrismFE::getRuleTrianglesOnly(int order) { return 2 * order; };
 int PrismFE::getRuleThroughThickness(int order) { return 2 * order; };
 
-using EdgeEle = MoFEM::EdgeElementForcesAndSourcesCoreSwitch<
-    EdgeElementForcesAndSourcesCore::NO_HO_GEOMETRY |
-    EdgeElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>;
+using EdgeEle = MoFEM::EdgeElementForcesAndSourcesCore;
 
 int main(int argc, char *argv[]) {
 

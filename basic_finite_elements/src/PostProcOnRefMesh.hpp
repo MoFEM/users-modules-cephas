@@ -812,9 +812,7 @@ struct PostProcFaceOnRefinedMeshFor2D : public PostProcFaceOnRefinedMesh {
   MoFEMErrorCode operator()();
 };
 
-using EdgeEleBasePostProc = MoFEM::EdgeElementForcesAndSourcesCoreSwitch<
-    EdgeElementForcesAndSourcesCore::NO_HO_GEOMETRY |
-    EdgeElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>;
+using EdgeEleBasePostProc = MoFEM::EdgeElementForcesAndSourcesCore;
 
 /**
  * \brief Postprocess on edge
