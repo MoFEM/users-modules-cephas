@@ -28,7 +28,7 @@ struct SimpleContactProblem {
 
   using ContactEle = ContactPrismElementForcesAndSourcesCore;
   using ContactOp = ContactPrismElementForcesAndSourcesCore::UserDataOperator;
-  using EntData = EntData;
+  using EntData = DataForcesAndSourcesCore::EntData;
   using FaceUserDataOperator =
       FaceElementForcesAndSourcesCore::UserDataOperator;
 
