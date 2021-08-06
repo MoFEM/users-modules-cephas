@@ -3506,6 +3506,7 @@ MoFEMFunctionReturn(0);
 
   auto solve_rotation_angles_in_sub_dim = [](int N, int ii, FTensor::Tensor1<double, 3> &Vcol) {
     FTensor::Tensor1<double, 3> angles_work;
+    angles_work(i) = 0;
     double r = 1.;
     for (int jj = N - 1; jj != ii; --jj) {
       double y = Vcol(jj);
