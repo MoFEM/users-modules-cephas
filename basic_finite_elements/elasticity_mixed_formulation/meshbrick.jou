@@ -1,0 +1,6 @@
+reset
+set duplicate block elements on
+
+brick x 10 y 2 z 2
+
+save as "/Users/hoangnguyen/mofem_install/um/build/basic_finite_elements/elasticity_mixed_formulation/LShape_incompressible.cub" overwrite
