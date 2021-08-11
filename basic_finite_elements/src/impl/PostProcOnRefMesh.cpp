@@ -539,11 +539,12 @@ MoFEMErrorCode PostProcFatPrismOnRefinedMesh::postProcess() {
   MoFEMFunctionBegin;
   ParallelComm *pcomm_post_proc_mesh =
       ParallelComm::get_pcomm(&postProcMesh, MYPCOMM_INDEX);
-  if (pcomm_post_proc_mesh == NULL) {
-    wrapRefMeshComm =
-        boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
-    pcomm_post_proc_mesh =
-        new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
+   if (pcomm_post_proc_mesh == NULL) {
+    pcomm_post_proc_mesh = new ParallelComm(&postProcMesh, mField.get_comm());
+  //   wrapRefMeshComm =
+  //       boost::make_shared<WrapMPIComm>(mField.get_comm(), false);
+  //   pcomm_post_proc_mesh =
+  //       new ParallelComm(&postProcMesh, wrapRefMeshComm->get_comm());
   }
 
   Range prims;
