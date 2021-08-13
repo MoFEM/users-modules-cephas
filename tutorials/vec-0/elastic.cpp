@@ -519,12 +519,12 @@ pipeline_mng->getOpBoundaryRhsPipeline().push_back(
                              boundary_flux_2)))); // for flux 2
 
 
-pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetBc("P", true, boundaryMarker));
-pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpDomainGradTimesGravAcceleration("P", gravityDirectionMatPtr,
-                                          beta_conductivity));
-pipeline_mng->getOpDomainRhsPipeline().push_back(new OpUnSetBc("P"));
+// pipeline_mng->getOpDomainRhsPipeline().push_back(
+//     new OpSetBc("P", true, boundaryMarker));
+// pipeline_mng->getOpDomainRhsPipeline().push_back(
+//     new OpDomainGradTimesGravAcceleration("P", gravityDirectionMatPtr,
+//                                           beta_conductivity));
+// pipeline_mng->getOpDomainRhsPipeline().push_back(new OpUnSetBc("P"));
 // auto remove_dofs_from_problem = [&](Range &&skin_edges) {
 //   MoFEMFunctionBegin;
 //   auto problem_manager = mField.getInterface<ProblemsManager>();
@@ -622,7 +622,7 @@ MoFEMErrorCode Example::outputResults() {
   //     matStressPtr, water_table, specific_weight_water));
   // post_proc_fe->addFieldValuesPostProc("U");
   post_proc_fe->addFieldValuesPostProc("P");
-  //post_proc_fe->addFieldValuesGradientPostProc("P");
+  post_proc_fe->addFieldValuesGradientPostProc("P");
   pipeline_mng->getDomainRhsFE() = post_proc_fe;
   CHKERR pipeline_mng->loopFiniteElements();
   CHKERR post_proc_fe->writeFile("out_elastic.h5m");
