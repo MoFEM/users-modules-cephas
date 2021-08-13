@@ -2216,30 +2216,32 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
     MoFEMFunctionReturnHot(0);
   int nb_gauss_pts = data.getN().size1();
 
-  double def_vals;
-  def_vals = 0;
+  double def_val = 0.;
 
   Tag th_gap;
   CHKERR moabOut.tag_get_handle("GAP", 1, MB_TYPE_DOUBLE, th_gap,
-                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_val);
 
   Tag th_lag_mult;
   CHKERR moabOut.tag_get_handle("LAGMULT", 1, MB_TYPE_DOUBLE, th_lag_mult,
-                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_val);
 
   Tag th_lag_gap_prod;
   CHKERR moabOut.tag_get_handle("LAG_GAP_PROD", 1, MB_TYPE_DOUBLE,
                                 th_lag_gap_prod, MB_TAG_CREAT | MB_TAG_SPARSE,
-                                &def_vals);
+                                &def_val);
+
+  int def_val_int = 0;
 
   Tag th_state;
-  CHKERR moabOut.tag_get_handle("STATE", 1, MB_TYPE_DOUBLE, th_state,
-                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_vals);
+  CHKERR moabOut.tag_get_handle("STATE", 1, MB_TYPE_INTEGER, th_state,
+                                MB_TAG_CREAT | MB_TAG_SPARSE, &def_val_int);
+
   Tag th_state_side;
   if (stateTagSide > 0) {
     CHKERR mField.get_moab().tag_get_handle(
-        "STATE", 1, MB_TYPE_DOUBLE, th_state_side, MB_TAG_CREAT | MB_TAG_SPARSE,
-        &def_vals);
+        "STATE", 1, MB_TYPE_INTEGER, th_state_side,
+        MB_TAG_CREAT | MB_TAG_SPARSE, &def_val_int);
   }
 
   auto get_tag_pos = [&](const std::string name) {
@@ -2274,25 +2276,38 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
 
   int count_active_pts = 0;
 
-  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
+  auto set_float_precision = [](const double x) {
+    if (std::abs(x) < std::numeric_limits<float>::epsilon())
+      return 0.;
+    else
+      return x;
+  };
 
+  for (int gg = 0; gg != nb_gauss_pts; ++gg) {
     const double *slave_coords_ptr = &(getCoordsAtGaussPtsSlave()(gg, 0));
     CHKERR moabOut.create_vertex(slave_coords_ptr, new_vertex);
-    CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &t_gap_ptr);
 
+    double gap_vtk = set_float_precision(t_gap_ptr);
+    CHKERR moabOut.tag_set_data(th_gap, &new_vertex, 1, &gap_vtk);
+
+    double lag_gap_prod_vtk = set_float_precision(t_lag_gap_prod_slave);
     CHKERR moabOut.tag_set_data(th_lag_gap_prod, &new_vertex, 1,
-                                &t_lag_gap_prod_slave);
-    CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1, &t_lagrange_slave);
+                                &lag_gap_prod_vtk);
 
-    CHKERR moabOut.tag_set_data(th_state, &new_vertex, 1, &t_state_ptr);
+    double lagrange_slave_vtk = set_float_precision(t_lagrange_slave);
+    CHKERR moabOut.tag_set_data(th_lag_mult, &new_vertex, 1,
+                                &lagrange_slave_vtk);
 
+    int state = 0;
     if (t_state_ptr > 0.5) {
+      state = 1;
       ++count_active_pts;
     }
+    CHKERR moabOut.tag_set_data(th_state, &new_vertex, 1, &state);
 
     auto get_vec_ptr = [&](auto t) {
       for (int dd = 0; dd != 3; ++dd)
-        pos_vec[dd] = t(dd);
+        pos_vec[dd] = set_float_precision(t(dd));
       return pos_vec.data();
     };
 
@@ -2313,9 +2328,9 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   }
 
   if (stateTagSide > 0) {
-    double state_side = 0.0;
+    int state_side = 0;
     if (count_active_pts >= nb_gauss_pts / 2) {
-      state_side = 1.0;
+      state_side = 1;
     }
     CHKERR mField.get_moab().tag_set_data(th_state_side, &tri_ent, 1,
                                           &state_side);

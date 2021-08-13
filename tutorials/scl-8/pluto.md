@@ -353,7 +353,7 @@ Next, using Taylor series expansion, we get
 
 \begin{equation}
 r(T_k+\delta T_{k+1})=
-r(T_k+\delta T_{k+1}) 
+r(T_k) 
 + \left.\frac{\partial r}{\partial T}\right|_{T=T_k} \delta T_{k+1} 
 + \frac{1}{2!}\left.\frac{\partial^2 r}{\partial T^2}\right|_{T=T_k} (\delta T_{k+1})^2
 + \frac{1}{3!}\left.\frac{\partial^3 r}{\partial T^3}\right|_{T=T_k} (\delta T_{k+1})^3
@@ -366,7 +366,7 @@ This infinite Taylor series, however, if $\delta T_{k+1}$ is small, then $(\delt
 
 \begin{equation}
 r(T_k+\delta T_{k+1}) \approx 
-r(T_k+\delta T_{k+1}) + \left.\frac{\partial r}{\partial T}\right|_{T=T_k} \delta T_{k+1} = 0. 
+r(T_k) + \left.\frac{\partial r}{\partial T}\right|_{T=T_k} \delta T_{k+1} = 0. 
 \label{eq:taylor3} \tag{17}
 \end{equation}
 

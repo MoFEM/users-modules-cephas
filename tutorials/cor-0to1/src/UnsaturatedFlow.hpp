@@ -355,11 +355,20 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_w = getFTensor0IntegrationWeight();
       // Get volume
       double vol = getVolume();
+
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = data.getFTensor2DiffN<3, 3>();
+      divVec.resize(nb_dofs, false);
+
       // Get material parameters
       int nb_gauss_pts = data.getN().size1();
       for (int gg = 0; gg != nb_gauss_pts; gg++) {
         // Get divergence
-        CHKERR getDivergenceOfHDivBaseFunctions(side, type, data, gg, divVec);
+        for(auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
+
         const double alpha = t_w * vol;
         block_data->h = t_h;
         block_data->x = t_coords(0);
@@ -718,13 +727,18 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       nN.resize(nb_row, nb_col, false);
       divVec.resize(nb_col, false);
       nN.clear();
+      // take direvatives of base functions
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = col_data.getFTensor2DiffN<3, 3>();
       // Scale eq.
       const double scale = block_data->sCale;
       int nb_gauss_pts = row_data.getN().size1();
       for (int gg = 0; gg < nb_gauss_pts; gg++) {
         double alpha = getGaussPts()(3, gg) * getVolume() * scale;
-        CHKERR getDivergenceOfHDivBaseFunctions(col_side, col_type, col_data,
-                                                gg, divVec);
+        for(auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
         noalias(nN) += alpha * outer_prod(row_data.getN(gg), divVec);
       }
       CHKERR MatSetValues(getFEMethod()->ts_B, nb_row,
@@ -796,6 +810,9 @@ struct UnsaturatedFlowElement : public MixTransportElement {
       auto t_w = getFTensor0IntegrationWeight();
       // Get base function
       auto t_n_hdiv_row = row_data.getFTensor1N<3>();
+      // Get direvatives of base functions
+      FTensor::Index<'i', 3> i;
+      auto t_base_diff_hdiv = row_data.getFTensor2DiffN<3, 3>();
       // Get volume
       double vol = getVolume();
       int nb_gauss_pts = row_data.getN().size1();
@@ -811,8 +828,10 @@ struct UnsaturatedFlowElement : public MixTransportElement {
         const double KK = K * K;
         const double diffK = block_data->diffK;
         double alpha = t_w * vol;
-        CHKERR getDivergenceOfHDivBaseFunctions(row_side, row_type, row_data,
-                                                gg, divVec);
+        for(auto &v : divVec) {
+          v = t_base_diff_hdiv(i, i);
+          ++t_base_diff_hdiv;
+        }
         noalias(nN) -= alpha * outer_prod(divVec, col_data.getN(gg));
         FTensor::Tensor0<double *> t_a(&*nN.data().begin());
         for (int rr = 0; rr != nb_row; rr++) {
