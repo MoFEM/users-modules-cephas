@@ -128,10 +128,10 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<NeumannForcesSurface::MyTriangleFE> fe_mat_lhs_ptr(
         surfacePressure, &(surfacePressure->getLoopFeMatLhs()));
 
-    fe_rhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
-    fe_lhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
-    fe_mat_rhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
-    fe_mat_lhs_ptr->meshPositionsFieldName = "MESH_NODE_POSITIONS";
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_rhs_ptr, false, false);
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_lhs_ptr, false, false);
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_mat_rhs_ptr, false, false);
+    CHKERR addHOOpsFace3D("MESH_NODE_POSITIONS", *fe_mat_lhs_ptr, false, false);
 
     Range nodes;
     CHKERR moab.get_entities_by_type(0, MBVERTEX, nodes, false);

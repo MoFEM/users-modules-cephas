@@ -812,19 +812,21 @@ struct PostProcFaceOnRefinedMeshFor2D : public PostProcFaceOnRefinedMesh {
   MoFEMErrorCode operator()();
 };
 
+using EdgeEleBasePostProc = MoFEM::EdgeElementForcesAndSourcesCore;
+
 /**
  * \brief Postprocess on edge
  *
  * \ingroup mofem_fs_post_proc
  */
-struct PostProcEdgeOnRefinedMesh : public PostProcTemplateOnRefineMesh<
-                                       MoFEM::EdgeElementForcesAndSourcesCore> {
+struct PostProcEdgeOnRefinedMesh
+    : public PostProcTemplateOnRefineMesh<EdgeEleBasePostProc> {
 
   bool sixNodePostProcTris;
 
   PostProcEdgeOnRefinedMesh(MoFEM::Interface &m_field,
                             bool six_node_post_proc_tris = true)
-      : PostProcTemplateOnRefineMesh<MoFEM::EdgeElementForcesAndSourcesCore>(
+      : PostProcTemplateOnRefineMesh<EdgeEleBasePostProc>(
             m_field),
         sixNodePostProcTris(six_node_post_proc_tris) {}
 
@@ -845,7 +847,6 @@ struct PostProcEdgeOnRefinedMesh : public PostProcTemplateOnRefineMesh<
   virtual PostProcCommonOnRefMesh::CommonData &getCommonData() {
     return commonData;
   }
-
 };
 
 #endif //__POSTPROC_ON_REF_MESH_HPP

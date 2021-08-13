@@ -58,7 +58,7 @@ mpirun --allow-run-as-root -np $NBPROCS \
 ./unsaturated_transport \
 -my_file out.h5m  -configure $CONFIGFILE  \
 -ts_monitor -ts_type beuler \
--ts_dt $DT -ts_final_time $FT \
+-ts_dt $DT -ts_max_time $FT \
 -ts_monitor -ts_adapt_monitor \
 -ts_adapt_type basic \
 -ts_adapt_dt_max 0.005 \

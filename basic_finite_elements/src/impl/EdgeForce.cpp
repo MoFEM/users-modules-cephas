@@ -74,15 +74,11 @@ EdgeForce::OpEdgeForce::doWork(int side, EntityType type,
 
       if (!rr) {
         wEights[gg] = 0;
-        if (getTangetAtGaussPts().size1() > 0) {
-          // This is if edge is curved, i.e. HO geometry
-          for (int dd = 0; dd < 3; dd++) {
-            wEights[gg] += pow(getTangetAtGaussPts()(gg, dd), 2);
-          }
-          wEights[gg] = sqrt(wEights[gg]);
-        } else {
-          wEights[gg] = getLength();
+        // This is if edge is curved, i.e. HO geometry
+        for (int dd = 0; dd < 3; dd++) {
+          wEights[gg] += pow(getTangetAtGaussPts()(gg, dd), 2);
         }
+        wEights[gg] = sqrt(wEights[gg]);
         wEights[gg] *= getGaussPts()(1, gg);
       }
 

@@ -108,10 +108,16 @@ struct MetaEdgeForces {
   static MoFEMErrorCode
   setOperators(MoFEM::Interface &m_field,
                boost::ptr_map<std::string, EdgeForce> &edge_forces, Vec F,
-               const std::string field_name) {
+               const std::string field_name,
+               std::string mesh_node_positions = "MESH_NODE_POSITIONS") {
     MoFEMFunctionBegin;
     string fe_name = "FORCE_FE";
     edge_forces.insert(fe_name, new EdgeForce(m_field));
+    if (m_field.check_field(mesh_node_positions)) {
+      auto &fe = edge_forces.at(fe_name).getLoopFe();
+      fe.getOpPtrVector().push_back(
+          new OpGetHOTangentsOnEdge(mesh_node_positions));
+    }
     for (_IT_CUBITMESHSETS_BY_BCDATA_TYPE_FOR_LOOP_(m_field, NODESET | FORCESET,
                                                     it)) {
       CHKERR edge_forces.at(fe_name).addForce(field_name, F,

@@ -13,7 +13,7 @@ Example thermo-elasticity
 =========================
 
 mpirun -np 2 ../thermal/thermal_unsteady   -my_file heat_exchange.h5m \
--ts_dt 0.0025 -ts_final_time 0.06 \
+-ts_dt 0.0025 -ts_max_time 0.06 \
 -snes_lag_jacobian -2  -my_order 1 -my_max_post_proc_ref_level 1 \
 -ts_exact_final_time stepover
 
@@ -30,7 +30,7 @@ mpirun -np 2 ./elasticity \
 -my_order 3 \
 -pc_type mg \
 -mofem_mg_verbose 1 -mofem_mg_coarse_order 1 -mofem_mg_levels 3 \
--mg_coarse_ksp_type preonly -mg_coarse_pc_type lu -mg_coarse_pc_factor_mat_solver_package mumps \
+-mg_coarse_ksp_type preonly -mg_coarse_pc_type lu -mg_coarse_pc_factor_mat_solver_type mumps \
 -pc_mg_smoothup 10 -pc_mg_smoothdown 10 \
 -pc_mg_type multiplicative \
 -log_view

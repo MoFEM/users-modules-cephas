@@ -79,7 +79,7 @@ param_file.petsc which is stored in the working directory
 users_modules/basic_finite_elements/reaction_diffusion_equation/param_file.petsc
 
 The key parameters are
-- \em -ts_final_time: time duration
+- \em -ts_max_time: time duration
 - \em -ts_dt: time step size
 - \em -ts_arkimex_type: ARKIMEX time integration type
 - \em -ts_adapt_type: time step adaptation (if the stiff part is not updated, it

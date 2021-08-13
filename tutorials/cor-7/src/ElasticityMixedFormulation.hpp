@@ -180,9 +180,6 @@ struct OpAssembleP
 
         // Get volume and integration weight
         double w = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
 
         // INTEGRATION
         int row_bb = 0;
@@ -280,9 +277,6 @@ struct OpAssembleG
 
       // Get volume and integration weight
       double w = getVolume() * getGaussPts()(3, gg);
-      if (getHoGaussPtsDetJac().size() > 0) {
-        w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-      }
 
       int row_bb = 0;
       for (; row_bb != row_nb_dofs / 3; row_bb++) {
@@ -390,9 +384,6 @@ struct OpAssembleK
 
       // Get volume and integration weight
       double w = getVolume() * getGaussPts()(3, gg);
-      if (getHoGaussPtsDetJac().size() > 0) {
-        w *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-      }
 
       int row_bb = 0;
       for (; row_bb != row_nb_dofs / 3; row_bb++) {

@@ -33,9 +33,9 @@ using namespace MoFEM;
 template <int DIM> struct ElementsAndOps {};
 
 template <> struct ElementsAndOps<2> {
-  using DomainEle = PipelineManager::FaceEle2D;
+  using DomainEle = PipelineManager::FaceEle;
   using DomainEleOp = DomainEle::UserDataOperator;
-  using BoundaryEle = PipelineManager::EdgeEle2D;
+  using BoundaryEle = PipelineManager::EdgeEle;
   using BoundaryEleOp = BoundaryEle::UserDataOperator;
   using PostProcEle = PostProcFaceOnRefinedMesh;
 };
@@ -331,8 +331,22 @@ MoFEMErrorCode Example::bC() {
 
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "REACTION",
                                         "U", 0, 3);
-  if (auto bc = bc_mng->popMarkDOFsOnEntities(simple->getProblemName() + "_U_" +
-                                              "REACTION")) {
+  for (auto b : bc_map) {
+    MOFEM_LOG("EXAMPLE", Sev::verbose) << "Marker " << b.first;
+  }
+
+  // OK. We have problem with GMesh, it adding empty characters at the end of
+  // block. So first block is search by regexp. popMarkDOFsOnEntities should
+  // work with regexp.
+  std::string reaction_block_set;
+  for (auto b : bc_map) {
+    if (std::regex_match(b.first, std::regex("(.*)_REACTION.*"))) {
+      reaction_block_set = b.first;
+      break;
+    }
+  }
+
+  if (auto bc = bc_mng->popMarkDOFsOnEntities(reaction_block_set)) {
     reactionMarker = bc->getBcMarkersPtr();
 
     // Only take reaction from nodes
@@ -343,6 +357,10 @@ MoFEMErrorCode Example::bC() {
                              *reactionMarker);
 
   } else {
+    MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
+  }
+
+  if (!reactionMarker) {
     MOFEM_LOG("EXAMPLE", Sev::warning) << "REACTION blockset does not exist";
   }
 

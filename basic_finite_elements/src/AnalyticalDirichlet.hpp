@@ -43,29 +43,17 @@ struct AnalyticalDirichletBC {
     };
 
     ApproxField(MoFEM::Interface &m_field) : feApprox(m_field) {}
-    virtual ~ApproxField() {}
+    virtual ~ApproxField() = default;
 
     MyTriFE feApprox;
     MyTriFE &getLoopFeApprox() { return feApprox; }
-
-    MatrixDouble hoCoords;
-    struct OpHoCoord
-        : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
-
-      MatrixDouble &hoCoords;
-      OpHoCoord(const std::string field_name, MatrixDouble &ho_coords);
-
-      MoFEMErrorCode doWork(int side, EntityType type,
-                            DataForcesAndSourcesCore::EntData &data);
-    };
 
     /** \brief Lhs operator used to build matrix
      */
     struct OpLhs
         : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
-      MatrixDouble &hoCoords;
-      OpLhs(const std::string field_name, MatrixDouble &ho_coords);
+      OpLhs(const std::string field_name);
 
       MatrixDouble NN, transNN;
       MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
@@ -81,18 +69,14 @@ struct AnalyticalDirichletBC {
         : public MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator {
 
       // Range tRis;
-      MatrixDouble &hoCoords;
       boost::shared_ptr<FUNEVAL> functionEvaluator;
       int fieldNumber;
 
       OpRhs(const std::string field_name,
-            // Range tris,
-            MatrixDouble &ho_coords,
             boost::shared_ptr<FUNEVAL> function_evaluator, int field_number)
           : MoFEM::FaceElementForcesAndSourcesCore::UserDataOperator(
                 field_name, ForcesAndSourcesCore::UserDataOperator::OPROW),
-            hoCoords(ho_coords), functionEvaluator(function_evaluator),
-            fieldNumber(field_number) {}
+            functionEvaluator(function_evaluator), fieldNumber(field_number) {}
 
       VectorDouble NTf;
       VectorInt iNdices;
@@ -108,25 +92,19 @@ struct AnalyticalDirichletBC {
         const auto &dof_ptr = data.getFieldDofs()[0];
         unsigned int rank = dof_ptr->getNbOfCoeffs();
 
+        const auto &gauss_pts = getGaussPts();
+        const auto &coords_at_gauss_pts = getCoordsAtGaussPts();
+
         NTf.resize(nb_row / rank);
         iNdices.resize(nb_row / rank);
 
         for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
 
-          double x, y, z;
-          double val = getGaussPts()(2, gg);
-          if (hoCoords.size1() == data.getN().size1()) {
-            double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
-            val *= area;
-            x = hoCoords(gg, 0);
-            y = hoCoords(gg, 1);
-            z = hoCoords(gg, 2);
-          } else {
-            val *= getArea();
-            x = getCoordsAtGaussPts()(gg, 0);
-            y = getCoordsAtGaussPts()(gg, 1);
-            z = getCoordsAtGaussPts()(gg, 2);
-          }
+          const double area = norm_2(getNormalsAtGaussPts(gg)) * 0.5;
+          const double val = gauss_pts(2, gg) * area;
+          const double x = coords_at_gauss_pts(gg, 0);
+          const double y = coords_at_gauss_pts(gg, 1);
+          const double z = coords_at_gauss_pts(gg, 2);
 
           VectorDouble a = (*functionEvaluator)(x, y, z)[fieldNumber];
 
@@ -142,9 +120,8 @@ struct AnalyticalDirichletBC {
                 ublas::slice(rr, rank, data.getIndices().size() / rank));
 
             noalias(NTf) = data.getN(gg, nb_row / rank) * a[rr] * val;
-            ierr = VecSetValues(getFEMethod()->snes_f, iNdices.size(),
+            CHKERR VecSetValues(getFEMethod()->snes_f, iNdices.size(),
                                 &iNdices[0], &*NTf.data().begin(), ADD_VALUES);
-            CHKERRG(ierr);
           }
         }
 
@@ -196,16 +173,15 @@ struct AnalyticalDirichletBC {
                const string nodals_positions = "MESH_NODE_POSITIONS") {
     MoFEMFunctionBeginHot;
     if (approxField.getLoopFeApprox().getOpPtrVector().empty()) {
-      if (m_field.check_field(nodals_positions)) {
-        approxField.getLoopFeApprox().getOpPtrVector().push_back(
-            new ApproxField::OpHoCoord(nodals_positions, approxField.hoCoords));
-      }
+      if (m_field.check_field(nodals_positions))
+        CHKERR addHOOpsFace3D(nodals_positions, approxField.getLoopFeApprox(),
+                              false, false);
       approxField.getLoopFeApprox().getOpPtrVector().push_back(
-          new ApproxField::OpLhs(field_name, approxField.hoCoords));
+          new ApproxField::OpLhs(field_name));
     }
     approxField.getLoopFeApprox().getOpPtrVector().push_back(
-        new ApproxField::OpRhs<FUNEVAL>(field_name, approxField.hoCoords,
-                                        function_evaluator, field_number));
+        new ApproxField::OpRhs<FUNEVAL>(field_name, function_evaluator,
+                                        field_number));
     MoFEMFunctionReturnHot(0);
   }
 

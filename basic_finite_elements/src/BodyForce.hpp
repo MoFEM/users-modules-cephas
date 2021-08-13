@@ -70,9 +70,6 @@ struct BodyForceConstantField {
 
       for (unsigned int gg = 0; gg < data.getN().size1(); gg++) {
         double val = getVolume() * getGaussPts()(3, gg);
-        if (getHoGaussPtsDetJac().size() > 0) {
-          val *= getHoGaussPtsDetJac()[gg]; ///< higher order geometry
-        }
         for (int rr = 0; rr < rank; rr++) {
 
           double acc;

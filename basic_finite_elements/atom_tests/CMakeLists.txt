@@ -171,7 +171,7 @@ add_test(
   -ksp_type fgmres -pc_type bjacobi -ksp_atol 0 -ksp_rtol 1e-12
   -snes_type newtonls -snes_linesearch_type basic
   -snes_max_it 100 -snes_atol 1e-8 -snes_rtol 1e-8
-  -ts_monitor -ts_type beuler -ts_dt 1 -ts_final_time 2  -ksp_monitor -snes_max_it 3 -snes_monitor
+  -ts_monitor -ts_type beuler -ts_dt 1 -ts_max_time 2  -ksp_monitor -snes_max_it 3 -snes_monitor
 )
 
 # add theraml stress eleme

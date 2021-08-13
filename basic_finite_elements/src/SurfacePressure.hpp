@@ -32,7 +32,7 @@ struct NeumannForcesSurface {
    */
   struct MethodForAnalyticalForce {
 
-    virtual ~MethodForAnalyticalForce() {}
+    virtual ~MethodForAnalyticalForce() = default;
 
     /**
      * User implemented analytical force

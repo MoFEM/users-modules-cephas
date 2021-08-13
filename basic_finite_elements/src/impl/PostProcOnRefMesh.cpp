@@ -922,6 +922,10 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesGradientPostProcOnSkin(
   boost::shared_ptr<VolumeElementForcesAndSourcesCoreOnSide> my_side_fe =
       boost::make_shared<VolumeElementForcesAndSourcesCoreOnSide>(mField);
 
+  if (!mField.check_field("MESH_NODE_POSITIONS"))
+    CHKERR addHOOpsVol("MESH_NODE_POSITIONS", *my_side_fe, true, false, false,
+                    false);
+
   // check number of coefficients
   auto field_ptr = mField.get_field_structure(field_name);
   const int nb_coefficients = field_ptr->getNbOfCoeffs();
@@ -1025,9 +1029,7 @@ MoFEMErrorCode PostProcFaceOnRefinedMesh::addFieldValuesPostProcOnSkin(
 
 
 MoFEMErrorCode PostProcFaceOnRefinedMeshFor2D::operator()() {
-  return OpSwitch<
-      FaceElementForcesAndSourcesCore::NO_CONTRAVARIANT_TRANSFORM_HDIV |
-      FaceElementForcesAndSourcesCore::NO_COVARIANT_TRANSFORM_HCURL>();
+  return opSwitch<0>();
 }
 
 MoFEMErrorCode PostProcEdgeOnRefinedMesh::generateReferenceElementMesh() {
