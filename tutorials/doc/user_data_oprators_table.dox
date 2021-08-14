@@ -411,12 +411,14 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 \code
 Matrix jac;
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpCalculateJacForFaceEmbeddedIn3DSpace(jac));
+ new OpCalculateJacForFaceEmbeddedIn3DSpace(jac));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-     new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac));
-pipeline_mng->getOpDomainRhsPipeline().push_back(new OpMakeHdivFromHcurl());
+  new OpCalculateInvJacForFaceEmbeddedIn3DSpace(inv_jac));
 pipeline_mng->getOpDomainRhsPipeline().push_back(
-    new OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac));
+  new OpMakeHdivFromHcurl());
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new 
+  OpSetContravariantPiolaTransformOnFace2DEmbeddedIn3DSpace(jac));
 \endcode
 Note, in that case problem is 2d, however surface on which PDE is solved is emerged in 3d space.
 
@@ -546,7 +548,7 @@ pipeline_mng->getOpDomainLhsPipeline().push_back(
 
 <td>
 
-Integrate force term for scalar and vectorial fields
+Integrat source term for scalar and vectorial fields
 \ref MoFEM::OpSourceImpl
 
 \f[
@@ -601,6 +603,67 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <tr>
 
+<td>
+
+Integrate term for discrete scalar fields
+\ref MoFEM::OpBaseTimesScalarFieldImpl
+
+\code
+using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesScalarField<BASE_DIM>;
+\endcode
+
+<td>
+
+%Example
+\code
+using OpBaseTimesV = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesScalarField<1>;
+auto vec_at_gauss_pts = boost::make_shared<VectorDouble>();
+// Push operator which sets vec_at_gauss_pts
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpBaseTimesV("U", vec_ptr_at_gauss_pts));
+\endcode
+
+<tr>
+
+<td>
+
+Integrate term for discrete vector fields
+\ref MoFEM::OpBaseTimesScalarFieldImpl
+
+\code
+using OpBaseTimesM = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<BASE_DIM, FIELD_DIM, S>;
+\endcode
+
+<td>
+
+%Example for scalar base  and field vector field (e.g. body forces)
+\code
+using OpBaseFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<1, 3, 0>;
+auto body_force = boost::make_shared<MatrixDouble>();
+auto t_body_force = getFTensor1FromMat<3, 0>(*body_force);
+t_body_force(0) = 0;
+t_body_force(1) = 0;
+t_body_force(2) = -9.81;
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpBaseFlux("U", body_force));
+\endcode
+
+%Example for base in Hdiv space and field in Hdiv space
+\code
+using OpBaseFlux = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<3, 3, 1>;
+auto flux_at_gauss_pts = boost::make_shared<MatrixDouble>();
+// Push operator which sets flux at integration points
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+  new OpBaseFlux("U", flux_at_gauss_pts));
+\endcode
+
+<tr>
+
 </table>
 
 \note Linear froms are defined in file LinearFormsIntegrators.hpp
@@ -639,8 +702,61 @@ using OpDomainGradGrad = FormsIntegrators<DomainEleOp>::Assembly<
 pipeline_mng->getOpDomainLhsPipeline().push_back(
       new OpDomainGradGrad("U", "U", beta));
 \endcode
+%Example usage: helmholtz.cpp
 <tr>
 
+<td>
+Integrate mass \ref MoFEM::OpMassImpl
+\code 
+using OpMass = 
+  FormsIntegrators<OP>::Assembly<
+  ASSEMBLY_TYPE>::
+  BiLinearForm<INTEGRATION_TYPE>::
+  OpMass<BASE_DIM, FIELD_DIM>;
+\endcode
+%Example usage: helmholtz.cp
+
+<td>
+
+%Example for scalar base and scalar field
+\code
+auto volume_specific_heat_capacity = [](double x, double y , double z) {
+  return 1;
+};
+using OpCapacity = 
+  FormsIntegrators<OP>::Assembly< PETSC>::BiLinearForm<GAUSS>::OpMass<1, 1>;
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+      new OpCapacity("T", "T", volume_specific_heat_capacity));
+\endcode
+%Example usage: helmholtz.cpp
+
+<tr>
+
+<td>
+
+Integrate base divergence times base \ref MoFEM::OpMixDivTimesScalarImpl
+\code 
+using OpHcurlHcurl = 
+  FormsIntegrators<OP>::Assembly<
+  ASSEMBLY_TYPE>::
+  BiLinearForm<INTEGRATION_TYPE>::
+  OpMixDivTimesScalarImpl<SPACE_DIM>;
+\endcode
+%Example usage: mixed_poisson.cpp
+
+<td>
+
+%Example
+\code
+using OpHdivU = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::BiLinearForm<
+    GAUSS>::OpMixDivTimesScalar<2>;
+auto unity = []() { return 1; };
+pipeline_mng->getOpDomainLhsPipeline().push_back(
+    new OpHdivU("FLUX", "U", unity, true));
+\endcode
+%Example usage: mixed_poisson.cpp
+
+<tr>
 
 </table>
 
