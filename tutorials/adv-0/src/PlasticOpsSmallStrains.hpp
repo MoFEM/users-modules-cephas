@@ -162,7 +162,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, 0)), t_flow));
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dstrain(i, j) * t_diff_grad_symmetrise(i, j, k, l);

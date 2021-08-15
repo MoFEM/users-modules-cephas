@@ -194,7 +194,8 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
     const size_t nb_base_functions = data.getN().size2();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double beta = alpha * constrain(t_tau_dot, t_f, hardening(t_tau));
+      const double beta =
+          alpha * constrain(t_tau_dot, t_f, hardening(t_tau, 0));
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
@@ -691,7 +692,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, 0)), t_flow));
 
       constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
       auto t_L = symm_L_tensor();
@@ -772,13 +773,13 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
       const double alpha = getMeasure() * t_w;
       const double c0 =
           alpha * t_a *
-          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau));
+          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, 0));
 
       const double c1 =
           alpha
 
-          * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau)) *
-          hardening_dtau(t_tau);
+          * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, 0)) *
+          hardening_dtau(t_tau, 0);
 
       auto mat_ptr = locMat.data().begin();
 

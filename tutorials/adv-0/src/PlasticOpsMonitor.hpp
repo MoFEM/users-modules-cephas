@@ -86,7 +86,7 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
   size_t gg = 0;
   for (int gg = 0; gg != commonDataPtr->plasticSurface.size(); ++gg) {
     const double tau = (commonDataPtr->plasticTau)[gg];
-    const double f = (commonDataPtr->plasticSurface)[gg] - hardening(tau);
+    const double f = (commonDataPtr->plasticSurface)[gg] - hardening(tau, 0);
     CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_3d(t_flow));

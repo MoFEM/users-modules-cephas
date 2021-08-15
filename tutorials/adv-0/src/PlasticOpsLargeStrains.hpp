@@ -201,7 +201,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
           t_D,
           diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau)), t_flow));
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, 0)), t_flow));
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
       t_diff_constrain_dlog_c(k, l) =

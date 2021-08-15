@@ -110,6 +110,14 @@ double Qinf = 265;
 double b_iso = 16.93;
 int order = 2;
 
+inline long double hardening(long double tau, double temp) {
+  return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
+}
+
+inline long double hardening_dtau(long double tau, double temp) {
+  return H + Qinf * b_iso * std::exp(-b_iso * tau);
+}
+
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
 #include <OpPostProcElastic.hpp>

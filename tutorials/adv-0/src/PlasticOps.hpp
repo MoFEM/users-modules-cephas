@@ -394,14 +394,6 @@ diff_deviator(FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> &&t_diff_stress) {
   return t_diff_deviator;
 };
 
-inline long double hardening(long double tau) {
-  return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
-}
-
-inline long double hardening_dtau(long double tau) {
-  return H + Qinf * b_iso * std::exp(-b_iso * tau);
-}
-
 /**
  *
 
