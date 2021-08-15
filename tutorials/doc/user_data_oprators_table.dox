@@ -315,6 +315,30 @@ for(auto gg = 0;gg!=nb_integtation_pts;++gg) {
 
 <tr>
 
+<td>
+
+Evaluate tenorial field values for vectorial bases (Hdiv and Hcurl)
+\ref MoFEM::OpCalculateHVecVectorField
+
+\f[ 
+u_{j}^h(\pmb\xi^g) = \sum_i^N \phi^i_j(\pmb\xi^g) 
+\overline{u}_i^{jk}
+\f]
+where \f$j\f$ and \f$j\f$ tensor element (coefficient) indices.
+
+<td>
+
+%Example
+\code
+constexpr int BASE_DIM = 3;
+auto vals_integration_pts = boost::make_shared<MatrixDouble>();
+pipeline_mng->getOpDomainRhsPipeline().push_back(
+          new OpCalculateHVecTensorField<3, 3>(
+            field_name, vals_integration_pts));
+\endcode
+
+<tr>
+
 </table>
 
 \note User data operators are defined in file \ref UserDataOperators.hpp

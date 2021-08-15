@@ -498,16 +498,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dEP::doWork(int row_side, int col_side,
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
 
-    auto get_row_base = [&]() {
-      if (is_dual_base) {
-        double *base_ptr = &*commonDataPtr->dualBaseMat.data().begin();
-        return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(base_ptr);
-      } else {
-        return row_data.getFTensor0N();
-      }
-    };
 
-    auto t_row_base = get_row_base();
+    auto t_row_base = row_data.getFTensor0N();
 
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
@@ -607,16 +599,8 @@ OpCalculatePlasticFlowLhs_dTAU::doWork(int row_side, int col_side,
     auto t_flow =
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
 
-    auto get_row_base = [&]() {
-      if (is_dual_base) {
-        double *base_ptr = &*commonDataPtr->dualBaseMat.data().begin();
-        return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(base_ptr);
-      } else {
-        return row_data.getFTensor0N();
-      }
-    };
 
-    auto t_row_base = get_row_base();
+    auto t_row_base = row_data.getFTensor0N();
 
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
@@ -690,15 +674,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
     const size_t nb_row_base_functions = row_data.getN().size2();
     auto t_w = getFTensor0IntegrationWeight();
 
-    auto get_row_base = [&]() {
-      if (is_dual_base) {
-        double *base_ptr = &*commonDataPtr->dualBaseMat.data().begin();
-        return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(base_ptr);
-      } else {
-        return row_data.getFTensor0N();
-      }
-    };
-    auto t_row_base = get_row_base();
+    auto t_row_base = row_data.getFTensor0N();
 
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
@@ -790,15 +766,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
 
     const double t_a = getTSa();
 
-    auto get_row_base = [&]() {
-      if (is_dual_base) {
-        double *base_ptr = &*commonDataPtr->dualBaseMat.data().begin();
-        return FTensor::Tensor0<FTensor::PackPtr<double *, 1>>(base_ptr);
-      } else {
-        return row_data.getFTensor0N();
-      }
-    };
-    auto t_row_base = get_row_base();
+    auto t_row_base = row_data.getFTensor0N();
 
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
