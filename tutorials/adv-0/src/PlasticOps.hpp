@@ -64,6 +64,7 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
   VectorDouble plasticTauDot;
   MatrixDouble plasticStrain;
   MatrixDouble plasticStrainDot;
+  VectorDouble tempVal;
 
   inline auto getPlasticTauPtr() {
     return boost::shared_ptr<VectorDouble>(shared_from_this(), &plasticTau);
@@ -78,6 +79,10 @@ struct CommonData : public boost::enable_shared_from_this<CommonData> {
     return boost::shared_ptr<MatrixDouble>(shared_from_this(),
                                            &plasticStrainDot);
   }
+  inline auto getTempValPtr() {
+    return boost::shared_ptr<VectorDouble>(shared_from_this(), &tempVal);
+  }
+
 };
 //! [Common data]
 

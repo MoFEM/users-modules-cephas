@@ -180,7 +180,15 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
   const size_t nb_dofs = data.getIndices().size();
   if (nb_dofs) {
 
+    const size_t nb_integration_pts = data.getN().size1();
+    const size_t nb_base_functions = data.getN().size2();
+
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
+    if (commonDataPtr->tempVal.size() != nb_integration_pts) {
+      commonDataPtr->tempVal.resize(nb_integration_pts, false);
+      commonDataPtr->tempVal.clear();
+    }
+    auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
 
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
@@ -190,12 +198,10 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
     std::fill(&nf[0], &nf[nb_dofs], 0);
 
     auto t_base = data.getFTensor0N();
-    const size_t nb_integration_pts = data.getN().size1();
-    const size_t nb_base_functions = data.getN().size2();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
       const double beta =
-          alpha * constrain(t_tau_dot, t_f, hardening(t_tau, 0));
+          alpha * constrain(t_tau_dot, t_f, hardening(t_tau, t_temp));
 
       size_t bb = 0;
       for (; bb != nb_dofs; ++bb) {
@@ -206,6 +212,7 @@ MoFEMErrorCode OpCalculateContrainsRhs::doWork(int side, EntityType type,
         ++t_base;
 
       ++t_tau;
+      ++t_temp;
       ++t_tau_dot;
       ++t_f;
       ++t_w;
@@ -679,6 +686,11 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
 
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
+    if(commonDataPtr->tempVal.size()!=nb_integration_pts) {
+      commonDataPtr->tempVal.resize(nb_integration_pts, 0);
+      commonDataPtr->tempVal.clear(); 
+    }
+    auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
     auto t_flow =
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
@@ -690,9 +702,9 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
 
       auto mat_ptr = locMat.data().begin();
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
-          t_D,
-          diff_constrain_dstress(
-              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, 0)), t_flow));
+          t_D, diff_constrain_dstress(
+                   diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
+                   t_flow));
 
       constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
       auto t_L = symm_L_tensor();
@@ -724,6 +736,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dEP::doWork(int row_side, int col_side,
 
       ++t_f;
       ++t_tau;
+      ++t_temp;
       ++t_tau_dot;
       ++t_flow;
       ++t_w;
@@ -763,6 +776,11 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
     auto t_w = getFTensor0IntegrationWeight();
     auto t_f = getFTensor0FromVec(commonDataPtr->plasticSurface);
     auto t_tau = getFTensor0FromVec(commonDataPtr->plasticTau);
+    if (commonDataPtr->tempVal.size() != nb_integration_pts) {
+      commonDataPtr->tempVal.resize(nb_integration_pts, 0);
+      commonDataPtr->tempVal.clear();
+    }
+    auto t_temp = getFTensor0FromVec(commonDataPtr->tempVal);
     auto t_tau_dot = getFTensor0FromVec(commonDataPtr->plasticTauDot);
 
     const double t_a = getTSa();
@@ -773,13 +791,13 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
       const double alpha = getMeasure() * t_w;
       const double c0 =
           alpha * t_a *
-          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, 0));
+          diff_constrain_ddot_tau(t_tau_dot, t_f, hardening(t_tau, t_temp));
 
       const double c1 =
           alpha
 
-          * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, 0)) *
-          hardening_dtau(t_tau, 0);
+          * diff_constrain_dsigma_y(t_tau_dot, t_f, hardening(t_tau, t_temp)) *
+          hardening_dtau(t_tau, t_temp);
 
       auto mat_ptr = locMat.data().begin();
 
@@ -800,6 +818,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dTAU::doWork(int row_side, int col_side,
       ++t_w;
       ++t_f;
       ++t_tau;
+      ++t_temp;
       ++t_tau_dot;
     }
 

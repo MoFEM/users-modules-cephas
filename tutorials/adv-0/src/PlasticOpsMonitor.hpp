@@ -76,6 +76,7 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
 
   auto th_plastic_surface = get_tag("PLASTIC_SURFACE", 1);
   auto th_tau = get_tag("PLASTIC_MULTIPLIER", 1);
+  auto th_temperature = get_tag("TEMPERATURE", 1);
   auto th_plastic_flow = get_tag("PLASTIC_FLOW", 9);
   auto th_plastic_strain = get_tag("PLASTIC_STRAIN", 9);
 
@@ -83,12 +84,19 @@ MoFEMErrorCode OpPostProcPlastic::doWork(int side, EntityType type,
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
   auto t_plastic_strain =
       getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrain);
+  if (commonDataPtr->tempVal.size() != commonDataPtr->plasticSurface.size()) {
+    commonDataPtr->tempVal.resize(commonDataPtr->plasticSurface.size(), 0);
+    commonDataPtr->tempVal.clear();
+  }
+
   size_t gg = 0;
   for (int gg = 0; gg != commonDataPtr->plasticSurface.size(); ++gg) {
+    const double temp = (commonDataPtr->tempVal)[gg];
     const double tau = (commonDataPtr->plasticTau)[gg];
-    const double f = (commonDataPtr->plasticSurface)[gg] - hardening(tau, 0);
+    const double f = (commonDataPtr->plasticSurface)[gg] - hardening(tau, temp);
     CHKERR set_tag(th_plastic_surface, gg, set_scalar(f));
     CHKERR set_tag(th_tau, gg, set_scalar(tau));
+    CHKERR set_tag(th_temperature, gg, set_scalar(temp));
     CHKERR set_tag(th_plastic_flow, gg, set_matrix_3d(t_flow));
     CHKERR set_tag(th_plastic_strain, gg, set_matrix_3d(t_plastic_strain));
     ++t_flow;
