@@ -161,21 +161,21 @@ MoFEMErrorCode DirichletDisplacementBc::getRotationBcFromBlock(
       std::vector<double> mydata;
       CHKERR bc_data.back().getEntitiesFromBc(mField, &(*it));
       CHKERR it->getAttributes(mydata);
-      if (mydata.size() < 7) {
+      if (mydata.size() < 6) {
         SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
-                "7 attributes are required for Rotation (angle + 3 center "
-                "coords + 3 normal coords, (+ 3 optional) flags for xyz)");
+                "6 attributes are required for Rotation (angle + 3 center "
+                "coords + 3 angles, (+ 3 optional) flags for xyz)");
       }
       for (int ii : {0, 1, 2}) {
         bc_data.back().bc_flags[ii] = 1;
-        bc_data.back().t_centr(ii) = mydata[ii + 1];
-        bc_data.back().t_normal(ii) = mydata[ii + 4];
+        bc_data.back().t_centr(ii) = mydata[ii + 0];
+        bc_data.back().t_normal(ii) = mydata[ii + 3];
       }
-      if (mydata.size() > 9)
+      if (mydata.size() > 8)
         for (int ii : {0, 1, 2})
-          bc_data.back().bc_flags[ii] = mydata[7 + ii];
+          bc_data.back().bc_flags[ii] = mydata[6 + ii];
 
-      bc_data.back().scaled_values[0] = mydata[0];
+      bc_data.back().scaled_values[0] = bc_data.back().t_normal.l2();
       bc_data.back().is_rotation = true;
     }
   }

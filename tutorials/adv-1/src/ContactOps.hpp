@@ -43,6 +43,109 @@ FTensor::Index<'j', SPACE_DIM> j;
 FTensor::Index<'k', SPACE_DIM> k;
 FTensor::Index<'l', SPACE_DIM> l;
 
+struct NestedMatrixContainer {
+  AO aO[4]; // row - row - col - col
+  ublas::matrix<SmartPetscObj<Mat>> nested_matrices;
+
+  NestedMatrixContainer() { nested_matrices.resize(2, 2); }
+  ~NestedMatrixContainer() {
+    cout << "DESTRUCTOR CALLED " << endl;
+    for (int i = 0; i != 4; i++)
+      CHKERR AODestroy(&aO[i]);
+  }
+  static boost::weak_ptr<NestedMatrixContainer> nestContainerPtr;
+};
+
+boost::weak_ptr<NestedMatrixContainer> NestedMatrixContainer::nestContainerPtr;
+
+MoFEMErrorCode CsMatZeroRowsColumns(Mat mat, PetscInt numRows,
+                                    const PetscInt rows[], PetscScalar diag,
+                                    Vec x, Vec b) {
+  MoFEMFunctionBegin;
+
+  if (auto nested_cont = NestedMatrixContainer::nestContainerPtr.lock()) {
+    auto &ao = nested_cont->aO;
+    auto &nested_matrices = nested_cont->nested_matrices;
+    if (numRows > 0) {
+      std::vector<int> row_vec0(rows, rows + numRows);
+      auto row_vec1 = row_vec0;
+
+      CHKERR AOApplicationToPetsc(ao[0], numRows, &*row_vec0.begin());
+      CHKERR AOApplicationToPetsc(ao[1], numRows, &*row_vec1.begin());
+
+      CHKERR MatZeroRowsColumns(nested_matrices(0, 0), numRows,
+                                &*row_vec0.begin(), diag, x, b);
+      CHKERR MatZeroRowsColumns(nested_matrices(0, 1), numRows,
+                                &*row_vec0.begin(), diag, x, b);
+      CHKERR MatZeroRowsColumns(nested_matrices(1, 1), numRows,
+                                &*row_vec1.begin(), diag, x, b);
+    }
+
+  } else
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "nested container weak pointer problem");
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode CsMatMissingDiagonal(Mat mat, PetscBool *missing, PetscInt *dd) {
+  MoFEMFunctionBegin;
+
+  if (auto nested_cont = NestedMatrixContainer::nestContainerPtr.lock()) {
+    auto &ao = nested_cont->aO;
+    auto &nested_matrices = nested_cont->nested_matrices;
+    PetscBool missing0;
+    CHKERR MatMissingDiagonal(nested_matrices(0, 0), &missing0, dd);
+    CHKERR MatMissingDiagonal(nested_matrices(1, 1), missing, dd);
+    *missing = PetscBool(*missing || missing0);
+  } else
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "nested container weak pointer problem");
+
+  MoFEMFunctionReturn(0);
+}
+
+MoFEMErrorCode CsMatSetValues(Mat mat, PetscInt m, const PetscInt idxm[],
+                              PetscInt n, const PetscInt idxn[],
+                              const PetscScalar v[], InsertMode addv) {
+  MoFEMFunctionBegin;
+
+  if (auto nested_cont = NestedMatrixContainer::nestContainerPtr.lock()) {
+    auto &ao = nested_cont->aO;
+    auto &nested_matrices = nested_cont->nested_matrices;
+
+    std::vector<int> my_row_indices0(idxm, idxm + m);
+    std::vector<int> my_row_indices1(idxm, idxm + m);
+
+    std::vector<int> my_col_indices0(idxn, idxn + n);
+    std::vector<int> my_col_indices1(idxn, idxn + n);
+
+    CHKERR AOApplicationToPetsc(ao[0], my_row_indices0.size(),
+                                &*my_row_indices0.begin());
+    CHKERR AOApplicationToPetsc(ao[1], my_row_indices1.size(),
+                                &*my_row_indices1.begin());
+    CHKERR AOApplicationToPetsc(ao[2], my_col_indices0.size(),
+                                &*my_col_indices0.begin());
+    CHKERR AOApplicationToPetsc(ao[3], my_col_indices1.size(),
+                                &*my_col_indices1.begin());
+
+    ::MatSetValues(nested_matrices(0, 0), my_row_indices0.size(),
+                   &*my_row_indices0.begin(), my_col_indices0.size(),
+                   &*my_col_indices0.begin(), v, addv);
+    ::MatSetValues(nested_matrices(0, 1), my_row_indices0.size(),
+                   &*my_row_indices0.begin(), my_col_indices1.size(),
+                   &*my_col_indices1.begin(), v, addv);
+
+    return ::MatSetValues(nested_matrices(1, 1), my_row_indices1.size(),
+                          &*my_row_indices1.begin(), my_col_indices1.size(),
+                          &*my_col_indices1.begin(), v, addv);
+  } else
+    SETERRQ(PETSC_COMM_SELF, MOFEM_DATA_INCONSISTENCY,
+            "nested container weak pointer problem");
+
+  MoFEMFunctionReturn(0);
+}
+
 struct OpConstrainBoundaryRhs : public BoundaryEleOp {
   OpConstrainBoundaryRhs(const std::string field_name,
                          boost::shared_ptr<CommonData> common_data_ptr);
