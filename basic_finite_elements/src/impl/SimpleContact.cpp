@@ -2327,7 +2327,7 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
                                 get_vec_ptr(t_position_slave));
                                 
     CHKERR moabOut.tag_set_data(th_master_coords, &new_vertex, 1,
-                                get_vec_ptr(t_coords_at_gauss_pts_slave));
+                                get_vec_ptr(t_coords_at_gauss_pts_master));
 
     ++t_gap_ptr;
     ++t_lagrange_slave;
