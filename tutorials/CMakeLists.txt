@@ -98,6 +98,7 @@ set(TUTORIALS_DIRS
   max-1
   adv-0
   adv-1
+  adv-2
   cor-0to1
   cor-2to5
   cor-6

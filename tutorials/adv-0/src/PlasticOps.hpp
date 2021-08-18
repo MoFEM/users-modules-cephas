@@ -51,9 +51,85 @@ u_i,b_i)_\Omega -(\delta u_i,\overline{t}_i)_{\partial\Omega_\sigma}=0 & \forall
 
 namespace PlasticOps {
 
+struct NCIntegration {
+
+  static auto integrationRuleNC(int, int, int approx_order) { return -1; };
+
+  static auto setNCRule3D(ForcesAndSourcesCore * fe_ptr, int, int,
+                                    int approx_order, int add) {
+    MoFEMFunctionBegin;
+
+    const int rule = 2 * (approx_order - 1) + add;
+
+    if (rule <= 0) {
+      auto &gauss_pts = fe_ptr->gaussPts;
+      gauss_pts.resize(4, 1);
+      gauss_pts(0, 0) = gauss_pts(1, 0) = gauss_pts(2, 0) = 0.25;
+      gauss_pts(3, 0) = 1;
+      MoFEMFunctionReturnHot(0);
+    }
+
+    const auto order_num = IntRules::NCO::tetrahedron_nco_order_num(rule);
+    MatrixDouble xyz(order_num, 3);
+    VectorDouble w(order_num);
+    IntRules::NCC::tetrahedron_ncc_rule(rule, order_num, &*xyz.data().begin(),
+                                        &*w.begin());
+
+    double s = 0;
+    auto &gauss_pts = fe_ptr->gaussPts;
+    gauss_pts.resize(4, order_num);
+    for (int gg = 0; gg != order_num; ++gg) {
+      gauss_pts(3, gg) = w(gg);
+      for (auto d : {0, 1, 2})
+        gauss_pts(d, gg) = xyz(gg, d);
+    }
+
+    MoFEMFunctionReturn(0);
+  };
+
+  static auto setNCRule2D(ForcesAndSourcesCore *fe_ptr, int, int,
+                          int approx_order, int add) {
+    MoFEMFunctionBegin;
+
+    const int rule = 2 * (approx_order - 1) + add;
+    if (rule <= 0) {
+      auto &gauss_pts = fe_ptr->gaussPts;
+      gauss_pts.resize(4, 1);
+      gauss_pts(0, 0) = gauss_pts(1, 0) = 0.25;
+      gauss_pts(2, 0) = 1;
+      MoFEMFunctionReturnHot(0);
+    }
+    const auto order_num = IntRules::NCO::triangle_nco_order_num(rule);
+    MatrixDouble xyz(order_num, 2);
+    VectorDouble w(order_num);
+
+    auto &gauss_pts = fe_ptr->gaussPts;
+    gauss_pts.resize(3, order_num);
+    auto set = [&](double ws) {
+      for (int gg = 0; gg != order_num; ++gg) {
+        gauss_pts(2,  gg) = w(gg) * ws;
+        for (auto d : {0, 1})
+          gauss_pts(d, gg) = xyz(gg, d);
+      }
+    };
+
+    IntRules::NCC::triangle_ncc_rule(rule, order_num, &*xyz.data().begin(),
+                                     &*w.begin());
+    set(1);
+
+
+    MoFEMFunctionReturn(0);
+  };
+
+private:
+
+};
+
 //! [Common data]
 struct CommonData : public boost::enable_shared_from_this<CommonData> {
   boost::shared_ptr<MatrixDouble> mDPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr_Axiator;
+  boost::shared_ptr<MatrixDouble> mDPtr_Deviator;
   boost::shared_ptr<MatrixDouble> mGradPtr;
   boost::shared_ptr<MatrixDouble> mStrainPtr;
   boost::shared_ptr<MatrixDouble> mStressPtr;
@@ -113,10 +189,12 @@ protected:
 struct OpPlasticStress : public DomainEleOp {
   OpPlasticStress(const std::string field_name,
                   boost::shared_ptr<CommonData> common_data_ptr,
+                  boost::shared_ptr<MatrixDouble> matDPtr,
                   const double scale = 1);
   MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
 
 private:
+  boost::shared_ptr<MatrixDouble> matDPtr;
   const double scaleStress;
   boost::shared_ptr<CommonData> commonDataPtr;
 };
@@ -142,13 +220,15 @@ private:
 struct OpCalculatePlasticInternalForceLhs_dEP : public DomainEleOp {
   OpCalculatePlasticInternalForceLhs_dEP(
       const std::string row_field_name, const std::string col_field_name,
-      boost::shared_ptr<CommonData> common_data_ptr);
+      boost::shared_ptr<CommonData> common_data_ptr,
+      boost::shared_ptr<MatrixDouble> mat_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
 
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
+  boost::shared_ptr<MatrixDouble> mDPtr;
   MatrixDouble locMat;
 };
 
@@ -156,7 +236,8 @@ struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP : public DomainEleOp {
   OpCalculatePlasticInternalForceLhs_LogStrain_dEP(
       const std::string row_field_name, const std::string col_field_name,
       boost::shared_ptr<CommonData> common_data_ptr,
-      boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr);
+      boost::shared_ptr<HenckyOps::CommonData> common_henky_data_ptr,
+      boost::shared_ptr<MatrixDouble> mat_D_ptr);
   MoFEMErrorCode doWork(int row_side, int col_side, EntityType row_type,
                         EntityType col_type, EntData &row_data,
                         EntData &col_data);
@@ -164,6 +245,7 @@ struct OpCalculatePlasticInternalForceLhs_LogStrain_dEP : public DomainEleOp {
 private:
   boost::shared_ptr<CommonData> commonDataPtr;
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
+  boost::shared_ptr<MatrixDouble> matDPtr;
   MatrixDouble locMat;
 };
 

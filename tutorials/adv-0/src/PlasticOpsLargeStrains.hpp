@@ -54,6 +54,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonDataPtr->mDPtr_Deviator);
 
     auto t_grad =
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
@@ -74,7 +76,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_LogStrain_dU::doWork(
       dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
 
       auto t_diff_plastic_flow_dstrain = diff_plastic_flow_dstrain(
-          t_D,
+          t_D_Deviator,
           diff_plastic_flow_dstress(t_f, t_flow, diff_deviator(diff_tensor())));
       FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_flow_stress_dlogC;
       t_flow_stress_dlogC(i, j, k, l) =
@@ -188,6 +190,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
         getFTensor2SymmetricFromMat<SPACE_DIM>(*(commonDataPtr->mStressPtr));
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonDataPtr->mDPtr_Deviator);
 
     auto t_grad =
         getFTensor2FromMat<SPACE_DIM, SPACE_DIM>(*(commonDataPtr->mGradPtr));
@@ -204,9 +208,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_LogStrain_dU::doWork(
       dC_dF(i, j, k, l) = (t_kd(i, l) * t_F(k, j)) + (t_kd(j, l) * t_F(k, i));
 
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
-          t_D, diff_constrain_dstress(
-                   diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
-                   t_flow));
+          t_D_Deviator,
+          diff_constrain_dstress(
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
+              t_flow));
 
       FTensor::Tensor2_symmetric<double, SPACE_DIM> t_diff_constrain_dlog_c;
       t_diff_constrain_dlog_c(k, l) =

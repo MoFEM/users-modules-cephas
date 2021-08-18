@@ -439,7 +439,8 @@ MoFEMErrorCode Example::OPs() {
             "SIGMA", commonDataPtr->contactStressDivergencePtr));
 
     pipeline.push_back(
-        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr, 1));
+        new OpMixDivURhs("SIGMA", commonDataPtr->contactDispPtr,
+                         [](double, double, double) { return 1; }));
     pipeline.push_back(
         new OpMixLambdaGradURhs("SIGMA", commonDataPtr->mGradPtr));
 

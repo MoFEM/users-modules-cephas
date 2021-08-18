@@ -53,6 +53,8 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonDataPtr->mDPtr_Deviator);
 
     constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     constexpr auto size_symm = (SPACE_DIM * (SPACE_DIM + 1)) / 2;
@@ -65,7 +67,7 @@ MoFEMErrorCode OpCalculatePlasticFlowLhs_dU::doWork(int row_side, int col_side,
 
       double alpha = getMeasure() * t_w;
       auto t_diff_plastic_flow_dstrain = diff_plastic_flow_dstrain(
-          t_D,
+          t_D_Deviator,
           diff_plastic_flow_dstress(t_f, t_flow, diff_deviator(diff_tensor())));
       FTensor::Ddg<double, SPACE_DIM, SPACE_DIM> t_flow_stress_dstrain;
       t_flow_stress_dstrain(i, j, k, l) =
@@ -153,6 +155,8 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticFlow);
     auto t_D =
         getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(*commonDataPtr->mDPtr);
+    auto t_D_Deviator = getFTensor4DdgFromMat<SPACE_DIM, SPACE_DIM, 0>(
+        *commonDataPtr->mDPtr_Deviator);
 
     // constexpr auto t_kd = FTensor::Kronecker_Delta<int>();
     // FTensor::Tensor4<double, SPACE_DIM, SPACE_DIM, SPACE_DIM, SPACE_DIM>
@@ -165,9 +169,10 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       double alpha = getMeasure() * t_w;
 
       auto t_diff_constrain_dstrain = diff_constrain_dstrain(
-          t_D, diff_constrain_dstress(
-                   diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
-                   t_flow));
+          t_D_Deviator,
+          diff_constrain_dstress(
+              diff_constrain_df(t_tau_dot, t_f, hardening(t_tau, t_temp)),
+              t_flow));
       FTensor::Tensor2<double, SPACE_DIM, SPACE_DIM> t_diff_constrain_dgrad;
       t_diff_constrain_dgrad(k, l) =
           t_diff_constrain_dstrain(i, j) * t_diff_grad_symmetrise(i, j, k, l);
