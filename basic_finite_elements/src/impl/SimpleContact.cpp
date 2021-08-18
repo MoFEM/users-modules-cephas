@@ -2269,15 +2269,15 @@ MoFEMErrorCode SimpleContactProblem::OpMakeVtkSlave::doWork(int side,
   auto t_position_slave = getFTensor1FromMat<3>(
       *commonDataSimpleContact->positionAtGaussPtsSlavePtr);
 
-  MatrixDouble coords_at_gauss_pts_slave, coords_at_gauss_pts_master;
-  coords_at_gauss_pts_slave =
-      trans(getCoordsAtGaussPtsSlave()); // because the size is (nb_gg, 3)
+  auto get_ftensor_coords_at_gauss_pts_slave = [&](auto &coords_at_gauss_pts) {
+    auto ptr = &*coords_at_gauss_pts.data().begin();
+    return FTensor::Tensor1<FTensor::PackPtr<double *, 3>, 3>(&ptr[0], &ptr[1],
+                                                              &ptr[2]);
+  };
   auto t_coords_at_gauss_pts_slave =
-      getFTensor1FromMat<3>(coords_at_gauss_pts_slave);
-  coords_at_gauss_pts_master =
-      trans(getCoordsAtGaussPtsMaster()); // because the size is (nb_gg, 3)
+      get_ftensor_coords_at_gauss_pts_slave(getCoordsAtGaussPtsSlave());
   auto t_coords_at_gauss_pts_master =
-      getFTensor1FromMat<3>(coords_at_gauss_pts_master);
+      get_ftensor_coords_at_gauss_pts_slave(getCoordsAtGaussPtsMaster());
 
   auto t_state_ptr =
       getFTensor0FromVec(*commonDataSimpleContact->gaussPtsStatePtr);
