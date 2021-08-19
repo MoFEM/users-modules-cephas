@@ -21,6 +21,7 @@
 
 #include <BasicFiniteElements.hpp>
 #include <Hooke.hpp>
+#include <../../tutorials/cor-2to5/src/AuxPoissonFunctions.hpp>
 
 using namespace std;
 using namespace MoFEM;
@@ -49,7 +50,9 @@ int main(int argc, char *argv[]) {
                                  "-my_step_num 1 \n"
                                  "-my_cn_value 1. \n"
                                  "-my_r_value 1. \n"
-                                 "-my_alm_flag 0 \n";
+                                 "-my_alm_flag 0 \n"
+                                 "-my_error_check 0 \n"
+                                 "-my_contact_pressure_error 0. \n";
 
   string param_file = "param_file.petsc";
   if (!static_cast<bool>(ifstream(param_file))) {
@@ -99,12 +102,14 @@ int main(int argc, char *argv[]) {
     PetscBool convect_pts = PETSC_FALSE;
     PetscBool print_contact_state = PETSC_FALSE;
     PetscBool alm_flag = PETSC_FALSE;
+    PetscBool error_check = PETSC_FALSE;
     PetscBool wave_surf_flag = PETSC_FALSE;
     PetscInt wave_dim = 2;
     PetscInt wave_surf_block_id = 1;
     PetscReal wave_length = 1.0;
     PetscReal wave_ampl = 0.01;
     PetscReal mesh_height = 1.0;
+    PetscReal contact_pressure_error = 0.;
 
     CHKERR PetscOptionsBegin(PETSC_COMM_WORLD, "", "Elastic Config", "none");
 
@@ -147,7 +152,10 @@ int main(int argc, char *argv[]) {
                             PETSC_FALSE, &print_contact_state, PETSC_NULL);
     CHKERR PetscOptionsBool("-my_alm_flag",
                             "if set use ALM, if not use C-function", "",
-                            PETSC_FALSE, &alm_flag, PETSC_NULL);
+                            PETSC_FALSE, &alm_flag, PETSC_NULL);                            
+    CHKERR PetscOptionsBool("-my_error_check",
+                            "if set evaluate error, if not use C-function", "",
+                            PETSC_FALSE, &error_check, PETSC_NULL);
 
     CHKERR PetscOptionsBool("-my_wave_surf",
                             "if set true, make one of the surfaces wavy", "",
@@ -164,6 +172,9 @@ int main(int argc, char *argv[]) {
     CHKERR PetscOptionsReal("-my_mesh_height",
                             "vertical dimension of the mesh ", "", mesh_height,
                             &mesh_height, PETSC_NULL);
+    CHKERR PetscOptionsReal("-my_contact_pressure_error",
+                            "contact pressure value for testing ", "", contact_pressure_error,
+                            &contact_pressure_error, PETSC_NULL);
 
     ierr = PetscOptionsEnd();
     CHKERRQ(ierr);
@@ -373,6 +384,13 @@ int main(int argc, char *argv[]) {
     CHKERR m_field.add_field("LAGMULT", H1, AINSWORTH_LEGENDRE_BASE, 1,
                              MB_TAG_SPARSE, MF_ZERO);
 
+    if (error_check) {
+      CHKERR m_field.add_field("ERROR", L2, AINSWORTH_LEGENDRE_BASE, 1,
+                               MB_TAG_SPARSE, MF_ZERO);
+      CHKERR m_field.add_ents_to_field_by_type(slave_tris, MBTRI, "ERROR");
+      CHKERR m_field.set_field_order(0, MBTRI, "ERROR", 0);
+    }
+
     CHKERR m_field.add_ents_to_field_by_type(0, MBTET, "MESH_NODE_POSITIONS");
     CHKERR m_field.set_field_order(0, MBTET, "MESH_NODE_POSITIONS", 1);
     CHKERR m_field.set_field_order(0, MBTRI, "MESH_NODE_POSITIONS", 1);
@@ -497,6 +515,10 @@ int main(int argc, char *argv[]) {
         "CONTACT_POST_PROC", "SPATIAL_POSITION", "LAGMULT",
         "MESH_NODE_POSITIONS", slave_tris);
 
+    if (error_check)
+      contact_problem->addContactPressureErrorElement("CONTACT_ERROR_ELEM", "LAGMULT", "ERROR",
+                                       slave_tris);
+
     CHKERR MetaNeumannForces::addNeumannBCElements(m_field, "SPATIAL_POSITION");
 
     // Add spring boundary condition applied on surfaces.
@@ -535,6 +557,8 @@ int main(int argc, char *argv[]) {
     CHKERR DMMoFEMAddElement(dm, "PRESSURE_FE");
     CHKERR DMMoFEMAddElement(dm, "SPRING");
     CHKERR DMMoFEMAddElement(dm, "CONTACT_POST_PROC");
+    if (error_check)
+      CHKERR DMMoFEMAddElement(dm, "CONTACT_ERROR_ELEM");
 
     CHKERR DMSetUp(dm);
 
@@ -913,6 +937,31 @@ int main(int argc, char *argv[]) {
                          out_file_name.c_str());
       CHKERR post_proc_contact_ptr->postProcMesh.write_file(
           out_file_name.c_str(), "MOAB", "PARALLEL=WRITE_PART");
+    }
+    if (error_check) {
+      Vec global_error;
+      CHKERR PoissonExample::AuxFunctions(m_field).createGhostVec(&global_error);
+      boost::shared_ptr<VectorDouble> lagmult_values_at_integration_ptr =
+          boost::make_shared<VectorDouble>();
+
+      auto target_pressure = [=](const double, const double, const double) { return contact_pressure_error; };
+
+      boost::shared_ptr<FaceElementForcesAndSourcesCore> fe_error_evaluator(
+          new FaceElementForcesAndSourcesCore(m_field));
+
+      fe_error_evaluator->getOpPtrVector().push_back(
+          new OpCalculateScalarFieldValues("LAGMULT",
+                                           lagmult_values_at_integration_ptr));
+
+      fe_error_evaluator->getOpPtrVector().push_back(new SimpleContactProblem::OpContactPressureError(
+          target_pressure, lagmult_values_at_integration_ptr, global_error));
+
+      CHKERR DMoFEMLoopFiniteElements(dm, "CONTACT_ERROR_ELEM",
+                                      fe_error_evaluator);
+
+      CHKERR PoissonExample::AuxFunctions(m_field).assembleGhostVector(
+          global_error);
+      CHKERR PoissonExample::AuxFunctions(m_field).printError(global_error);
     }
   }
   CATCH_ERRORS;

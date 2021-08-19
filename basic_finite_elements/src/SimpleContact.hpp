@@ -399,6 +399,40 @@ struct SimpleContactProblem {
     MoFEMFunctionReturn(0);
   }
 
+  /**
+   * @brief Function that adds a new finite element for contact pressure error evaluator
+   *
+   * @param  element_name          String for the element name
+   * @param  lagrange_field_name   String of field name for Lagrange multipliers
+   * @param  error_field_name   String of field name for mesh node positions
+   * @param  range_slave_tris      Range for slave triangles of contact elements
+   * @return                       Error code
+   *
+   */
+  MoFEMErrorCode addContactPressureErrorElement(
+      const string element_name, const string lagrange_field_name,
+      const string error_field_name, Range &slave_tris) {
+    MoFEMFunctionBegin;
+
+    CHKERR mField.add_finite_element(element_name, MF_ZERO);
+
+    if (slave_tris.size() > 0) {
+
+      // data
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         lagrange_field_name);
+
+      CHKERR mField.modify_finite_element_add_field_data(element_name,
+                                                         error_field_name);
+
+      // Adding slave_tris to Element element_name
+      CHKERR mField.add_ents_to_finite_element_by_type(slave_tris, MBTRI,
+                                                       element_name);
+    }
+
+    MoFEMFunctionReturn(0);
+  }
+
   struct CommonDataSimpleContact
       : public boost::enable_shared_from_this<CommonDataSimpleContact> {
 
@@ -3553,6 +3587,30 @@ struct SimpleContactProblem {
     const double cN;
     const bool almFlag;
     VectorDouble vecR;
+  };
+
+  /**
+   * \brief Evaluate contact pressure error
+   */
+  struct OpContactPressureError : public FaceUserDataOperator {
+
+    OpContactPressureError(ScalarFun lag_mult_value,
+                           boost::shared_ptr<VectorDouble> &field_vals,
+                           Vec global_error)
+        : FaceUserDataOperator("ERROR", UserDataOperator::OPROW), globalError(global_error),
+          lagMultValue(lag_mult_value), fieldVals(field_vals) {}
+
+    MoFEMErrorCode doWork(int side, EntityType type, EntData &data);
+
+  private:
+    FTensor::Number<0> NX;
+    FTensor::Number<1> NY;
+    FTensor::Number<2> NZ;
+
+    Vec globalError; ///< ghost vector with global (integrated over volume)
+                     ///< error
+    ScalarFun lagMultValue; ///< function with exact solution
+    boost::shared_ptr<VectorDouble> fieldVals;
   };
 };
 

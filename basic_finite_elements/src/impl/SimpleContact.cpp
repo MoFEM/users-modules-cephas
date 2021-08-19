@@ -4445,6 +4445,46 @@ MoFEMErrorCode SimpleContactProblem::OpContactMaterialVolOnSideLhs::aSsemble(
   MoFEMFunctionReturn(0);
 }
 
+MoFEMErrorCode
+SimpleContactProblem::OpContactPressureError::doWork(int side, EntityType type,
+                                                     EntData &data) {
+
+  MoFEMFunctionBegin;
+  if (type != MBTRI)
+    MoFEMFunctionReturnHot(0);
+  // clear field dofs
+  data.getFieldData().clear();
+  // get volume of element
+  const double vol = getArea();
+  // get integration weight
+  auto t_w = getFTensor0IntegrationWeight();
+  // get solution at integration point
+  auto t_lag_mult = getFTensor0FromVec(*fieldVals);
+  // get coordinates at integration point
+  auto t_coords = getFTensor1CoordsAtGaussPts();
+
+  double nb_int_points = getGaussPts().size2();
+  for (int gg = 0; gg != nb_int_points; gg++) {
+    double alpha = vol * t_w;
+    // evaluate exact value
+    double exact_lag_mult =
+        lagMultValue(t_coords(NX), t_coords(NY), t_coords(NZ));
+    // error
+    double error = (t_lag_mult - exact_lag_mult) * (t_lag_mult - exact_lag_mult);
+    // iterate over base functions
+    data.getFieldData()[0] += alpha * error;
+    ++t_w;        // move to next integration point
+    ++t_lag_mult; // next value of function at integration point
+    ++t_coords;   // next coordinate at integration point
+  }
+
+  data.getFieldDofs()[0]->getFieldData() = sqrt(data.getFieldData()[0]);
+  // assemble vector to global error
+  CHKERR VecSetValue(globalError, 0, data.getFieldData()[0], ADD_VALUES);
+
+  MoFEMFunctionReturn(0);
+}
+
 // setup operators for calculation of active set
 MoFEMErrorCode SimpleContactProblem::setContactOperatorsRhsALEMaterial(
     boost::shared_ptr<SimpleContactElement> fe_rhs_simple_contact_ale,
