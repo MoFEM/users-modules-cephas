@@ -200,6 +200,7 @@ MoFEMErrorCode OpCalculateContrainsLhs_dU::doWork(int row_side, int col_side,
       ++t_tau;
       ++t_tau_dot;
       ++t_flow;
+      ++t_temp;
       ++t_w;
     }
 
