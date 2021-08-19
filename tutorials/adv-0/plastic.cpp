@@ -668,11 +668,11 @@ MoFEMErrorCode Example::OPs() {
   // Axiator
   feAxiatorLhs = boost::make_shared<DomainEle>(mField);
   feAxiatorRhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_axial_stress = [](int, int, int approx_order) {
-    return 2 * approx_order + 1;
+  auto integration_rule_axiator = [](int, int, int approx_order) {
+    return 2 * (approx_order - 1);
   };
-  feAxiatorLhs->getRuleHook = integration_rule_axial_stress;
-  feAxiatorRhs->getRuleHook = integration_rule_axial_stress;
+  feAxiatorLhs->getRuleHook = integration_rule_axiator;
+  feAxiatorRhs->getRuleHook = integration_rule_axiator;
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
                                commonPlasticDataPtr->mDPtr_Deviator);
@@ -701,33 +701,11 @@ MoFEMErrorCode Example::OPs() {
                                commonPlasticDataPtr->mDPtr_Axiator);
   CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
   
-
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(
-      NCIntegration::integrationRuleNC);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(
-      NCIntegration::integrationRuleNC);
-
-  if (SPACE_DIM == 3) {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule3D(fe_ptr, ro, co, ao, 0);
-    };
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainLhsFE())
-        ->setRuleHook = set;
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainRhsFE())
-        ->setRuleHook = set;
-  } else {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule2D(fe_ptr, ro, co, ao, 0);
-    };
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainLhsFE())
-        ->setRuleHook = set;
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainRhsFE())
-        ->setRuleHook = set;
-  }
+  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
 
   auto integration_rule_bc = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -792,18 +770,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
-  reactionFe->getRuleHook = NCIntegration::integrationRuleNC;
-  if (SPACE_DIM == 3) {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule3D(fe_ptr, ro, co, ao, 0);
-    };
-    reactionFe->setRuleHook = set;
-  } else {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule2D(fe_ptr, ro, co, ao, 0);
-    };
-    reactionFe->setRuleHook = set;
-  }
+  reactionFe->getRuleHook = integration_rule_deviator;
 
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
 
