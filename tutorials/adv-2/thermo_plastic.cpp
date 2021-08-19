@@ -123,22 +123,29 @@ double visH = 0;
 double cn = 1;
 double Qinf = 265;
 double b_iso = 16.93;
-double heat_conductivity = 1;//45;
-double heat_capacity = 1;//460;
-double omega_0 = 2e-3;
-double omega_h = 2e-3;
-double Tref = 290;
+double heat_conductivity =
+    45 * 1e-5; // Force / (time temerature )  or Power / (length temperature)
+double heat_capacity = 200; // length^2/(time^2 temerature)
+double omega_0 = 4e-2;
+double omega_h = omega_0;
+double omega_inf = omega_h;
 int order = 2;
 
 inline long double hardening(long double tau, double temp) {
-  return H * tau + Qinf * (1. - std::exp(-b_iso * tau)) + sigmaY;
+  return H * tau * (1 - omega_h * temp) +
+         Qinf * (1. - std::exp(-b_iso * tau)) * (1 - omega_inf * temp) +
+         sigmaY * (1 - omega_0 * temp);
 }
 
 inline long double hardening_dtau(long double tau, double temp) {
-  return H + Qinf * b_iso * std::exp(-b_iso * tau);
+  return H * (1 - omega_h * temp) +
+         Qinf * b_iso * std::exp(-b_iso * tau) * (1 - omega_inf * temp);
 }
 
-inline long double hardening_dtemp(long double tau, double temp) { return 0; }
+inline long double hardening_dtemp(long double tau, double temp) {
+  return -H * tau * omega_h - Qinf * (1. - std::exp(-b_iso * tau)) * omega_inf -
+         sigmaY * omega_0;
+}
 
 #include <HenckyOps.hpp>
 #include <PlasticOps.hpp>
@@ -167,8 +174,10 @@ private:
   boost::shared_ptr<HenckyOps::CommonData> commonHenckyDataPtr;
   boost::shared_ptr<PostProcEle> postProcFe;
   boost::shared_ptr<DomainEle> reactionFe;
-  boost::shared_ptr<DomainEle> thermalFeRhs;
-  boost::shared_ptr<DomainEle> thermalFeLhs;
+  boost::shared_ptr<DomainEle> feAxiatorRhs;
+  boost::shared_ptr<DomainEle> feAxiatorLhs;
+  boost::shared_ptr<DomainEle> feThermalRhs;
+  boost::shared_ptr<DomainEle> feThermalLhs;
 
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uXScatter;
   std::tuple<SmartPetscObj<Vec>, SmartPetscObj<VecScatter>> uYScatter;
@@ -245,8 +254,6 @@ MoFEMErrorCode Example::createCommonData() {
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-conductivity",
                                  &heat_conductivity, PETSC_NULL);
-    CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-temperature_reference",
-                                 &temperature_reference, PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_0", &omega_0,
                                  PETSC_NULL);
     CHKERR PetscOptionsGetScalar(PETSC_NULL, "", "-omega_h", &omega_0,
@@ -274,6 +281,7 @@ MoFEMErrorCode Example::createCommonData() {
       H *= scale;
       Qinf *= scale;
       visH *= scale;
+      heat_capacity *= scale;
 
       MOFEM_LOG("EXAMPLE", Sev::inform)
           << "Scaled Young modulus " << young_modulus;
@@ -284,6 +292,8 @@ MoFEMErrorCode Example::createCommonData() {
       MOFEM_LOG("EXAMPLE", Sev::inform) << "Scaled Viscous hardening " << visH;
       MOFEM_LOG("EXAMPLE", Sev::inform)
           << "Scaled Saturation yield stress " << Qinf;
+      MOFEM_LOG("EXAMPLE", Sev::inform)
+          << "Scaled heat capacity " << heat_capacity;
     }
 
     MoFEMFunctionReturn(0);
@@ -553,9 +563,10 @@ MoFEMErrorCode Example::OPs() {
     pipeline.push_back(
         new OpCalculateContrainsLhs_dTAU("TAU", "TAU", commonPlasticDataPtr));
 
-    // pipeline.push_back(new PlasticThermalOps::OpCalculateContrainsLhs_dT(
-    //     "TAU", "EP", commonPlasticDataPtr));
-
+    pipeline.push_back(new PlasticThermalOps::OpCalculateContrainsLhs_dT(
+        "TAU", "T", commonPlasticDataPtr));
+    pipeline.push_back(new PlasticThermalOps::OpPlasticHeatProduction_dEP(
+        "T", "EP", commonPlasticDataPtr));
 
     pipeline.push_back(new OpUnSetBc("U"));
     MoFEMFunctionReturn(0);
@@ -565,11 +576,13 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionBegin;
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
 
-
     pipeline.push_back(
         new OpCalculatePlasticFlowRhs("EP", commonPlasticDataPtr));
     pipeline.push_back(
         new OpCalculateContrainsRhs("TAU", commonPlasticDataPtr));
+
+    pipeline.push_back(new PlasticThermalOps::OpPlasticHeatProduction(
+        "T", commonPlasticDataPtr));
 
     MoFEMFunctionReturn(0);
   };
@@ -673,30 +686,28 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_lhs_thermal = [&](auto &pipeline, auto fe) {
+  auto add_domain_ops_lhs_thermal = [&](auto &pipeline, auto &fe) {
     MoFEMFunctionBegin;
     auto resistance = [](const double, const double, const double) {
       return (1. / heat_conductivity);
     };
     auto capacity = [&](const double, const double, const double) {
-      return heat_capacity * fe->ts_a;
+      return -heat_capacity * fe.ts_a;
     };
     auto unity = []() { return 1; };
     pipeline.push_back(new OpHdivHdiv("FLUX", "FLUX", resistance));
     pipeline.push_back(new OpHdivT("FLUX", "T", unity, true));
-    // pipeline.push_back(new OpCapacity("T", "T", capacity));
-    pipeline.push_back(new PlasticThermalOps::OpPlasticHeatProduction_dEP(
-        "T", "EP", commonPlasticDataPtr));
+    pipeline.push_back(new OpCapacity("T", "T", capacity));
     MoFEMFunctionReturn(0);
   };
 
-  auto add_domain_ops_rhs_thermal = [&](auto &pipeline, auto fe) {
+  auto add_domain_ops_rhs_thermal = [&](auto &pipeline) {
     MoFEMFunctionBegin;
     auto resistance = [](const double, const double, const double) {
       return (1. / heat_conductivity);
     };
     auto capacity = [&](const double, const double, const double) {
-      return heat_capacity;
+      return -heat_capacity;
     };
     auto unity = [](const double, const double, const double) { return 1; };
     pipeline.push_back(new OpHdivFlux(
@@ -705,15 +716,13 @@ MoFEMErrorCode Example::OPs() {
         new OpHDivTemp("FLUX", commonPlasticDataPtr->getTempValPtr(), unity));
     pipeline.push_back(new OpBaseDivFlux(
         "T", commonPlasticDataPtr->getTempDivFluxPtr(), unity));
-    auto source = [&](const double x, const double y, const double z) {
-      return 1;
-    };
+    // auto source = [&](const double x, const double y, const double z) {
+    //   return 1;
+    // };
     // pipeline.push_back(new OpHeatSource("T", source));
 
-    // pipeline.push_back(new OpBaseDotT(
-    //     "T", commonPlasticDataPtr->getTempValDotPtr(), capacity));
-    pipeline.push_back(new PlasticThermalOps::OpPlasticHeatProduction(
-        "T", commonPlasticDataPtr));
+    pipeline.push_back(new OpBaseDotT(
+        "T", commonPlasticDataPtr->getTempValDotPtr(), capacity));
     MoFEMFunctionReturn(0);
   };
 
@@ -743,13 +752,19 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  thermalFeRhs = boost::make_shared<DomainEle>(mField);
-  thermalFeLhs = boost::make_shared<DomainEle>(mField);
+  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
+  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
+  auto integration_rule_axiator = [](int, int, int approx_order) { return 1; };
+  feAxiatorRhs->getRuleHook = integration_rule_axiator;
+  feAxiatorLhs->getRuleHook = integration_rule_axiator;
+
+  feThermalRhs = boost::make_shared<DomainEle>(mField);
+  feThermalLhs = boost::make_shared<DomainEle>(mField);
   auto integration_rule_thermal = [](int, int, int approx_order) {
-    return 2 * approx_order + 1;
+    return 2 * approx_order;
   };
-  thermalFeRhs->getRuleHook = integration_rule_thermal;
-  thermalFeLhs->getRuleHook = integration_rule_thermal;
+  feThermalRhs->getRuleHook = integration_rule_thermal;
+  feThermalLhs->getRuleHook = integration_rule_thermal;
 
   // Mechanics
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -761,12 +776,14 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_lhs_mechanical(
       pipeline_mng->getOpBoundaryLhsPipeline());
 
-  // Temperature
-  CHKERR add_domain_base_ops(thermalFeLhs->getOpPtrVector());
-  CHKERR add_domain_ops_lhs_mechanical(thermalFeLhs->getOpPtrVector(),
+  // Axiator
+  CHKERR add_domain_base_ops(feAxiatorLhs->getOpPtrVector());
+  CHKERR add_domain_ops_lhs_mechanical(feAxiatorLhs->getOpPtrVector(),
                                        commonPlasticDataPtr->mDPtr_Axiator);
-  CHKERR add_domain_ops_lhs_thermal(thermalFeLhs->getOpPtrVector(),
-                                    thermalFeLhs);
+  // Temperature
+  CHKERR add_domain_base_ops(feThermalLhs->getOpPtrVector());
+  CHKERR add_domain_ops_lhs_thermal(feThermalLhs->getOpPtrVector(),
+                                    *feThermalLhs);
 
   // Mechanics
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainRhsPipeline());
@@ -777,43 +794,24 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_boundary_ops_rhs_mechanical(
       pipeline_mng->getOpBoundaryRhsPipeline());
 
-  // Temperature
-  CHKERR add_domain_base_ops(thermalFeRhs->getOpPtrVector());
-  CHKERR add_domain_stress_ops(thermalFeRhs->getOpPtrVector(),
+  // Axiator
+  CHKERR add_domain_base_ops(feAxiatorRhs->getOpPtrVector());
+  CHKERR add_domain_stress_ops(feAxiatorRhs->getOpPtrVector(),
                                commonPlasticDataPtr->mDPtr_Axiator);
-  CHKERR add_domain_ops_rhs_mechanical(thermalFeRhs->getOpPtrVector());
-  CHKERR add_domain_ops_rhs_thermal(thermalFeRhs->getOpPtrVector(),
-                                    thermalFeRhs);
+  CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
+
+  // Temperature
+  CHKERR add_domain_base_ops(feThermalRhs->getOpPtrVector());
+  CHKERR add_domain_ops_rhs_thermal(feThermalRhs->getOpPtrVector());
   CHKERR
   add_boundary_ops_rhs_thermal(pipeline_mng->getOpBoundaryRhsPipeline(),
                                       pipeline_mng->getBoundaryRhsFE());
 
-  CHKERR pipeline_mng->setDomainRhsIntegrationRule(
-      NCIntegration::integrationRuleNC);
-  CHKERR pipeline_mng->setDomainLhsIntegrationRule(
-      NCIntegration::integrationRuleNC);
-
-  if (SPACE_DIM == 3) {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule3D(fe_ptr, ro, co, ao, 0);
-    };
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainLhsFE())
-        ->setRuleHook = set;
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainRhsFE())
-        ->setRuleHook = set;
-  } else {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule2D(fe_ptr, ro, co, ao, 0);
-    };
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainLhsFE())
-        ->setRuleHook = set;
-    boost::dynamic_pointer_cast<ForcesAndSourcesCore>(
-        pipeline_mng->getDomainRhsFE())
-        ->setRuleHook = set;
-  }
+  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+  CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
+  CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
 
   auto integration_rule_bc = [](int, int, int approx_order) {
     return 2 * approx_order;
@@ -854,18 +852,7 @@ MoFEMErrorCode Example::OPs() {
   };
 
   reactionFe = boost::make_shared<DomainEle>(mField);
-  reactionFe->getRuleHook = NCIntegration::integrationRuleNC;
-  if (SPACE_DIM == 3) {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule3D(fe_ptr, ro, co, ao, 0);
-    };
-    reactionFe->setRuleHook = set;
-  } else {
-    auto set = [&](ForcesAndSourcesCore *fe_ptr, int ro, int co, int ao) {
-      return NCIntegration::setNCRule2D(fe_ptr, ro, co, ao, 0);
-    };
-    reactionFe->setRuleHook = set;
-  }
+  reactionFe->getRuleHook = integration_rule_deviator;
 
   CHKERR create_reaction_pipeline(reactionFe->getOpPtrVector());
 
@@ -963,9 +950,13 @@ MoFEMErrorCode Example::tsSolve() {
   auto D = smartCreateDMVector(dm);
 
   boost::shared_ptr<FEMethod> null;
-  CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), thermalFeLhs,
+  CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), feAxiatorLhs,
                                null, null);
-  CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), thermalFeRhs,
+  CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), feAxiatorRhs,
+                               null, null);
+  CHKERR DMMoFEMTSSetIJacobian(dm, simple->getDomainFEName(), feThermalLhs,
+                               null, null);
+  CHKERR DMMoFEMTSSetIFunction(dm, simple->getDomainFEName(), feThermalRhs,
                                null, null);
 
   CHKERR create_post_process_element();
