@@ -2,7 +2,7 @@
  * \file plastic.cpp
  * \example plastic.cpp
  *
- * Plane stress elastic problem
+ * Plasticity in 2d and 3d
  *
  */
 
@@ -396,6 +396,21 @@ MoFEMErrorCode Example::OPs() {
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
 
+  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
+  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
+  auto integration_rule_axiator = [](int, int, int approx_order) {
+    return 1;
+  };
+  feAxiatorLhs->getRuleHook = integration_rule_axiator;
+  feAxiatorRhs->getRuleHook = integration_rule_axiator;
+
+  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+  auto integration_rule_bc = [](int, int, int approx_order) {
+    return 2 * approx_order;
+  };
+
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
 
@@ -666,13 +681,6 @@ MoFEMErrorCode Example::OPs() {
   };
 
   // Axiator
-  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
-  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_axiator = [](int, int, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
-  feAxiatorLhs->getRuleHook = integration_rule_axiator;
-  feAxiatorRhs->getRuleHook = integration_rule_axiator;
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
   CHKERR add_domain_stress_ops(pipeline_mng->getOpDomainLhsPipeline(),
                                commonPlasticDataPtr->mDPtr_Deviator);
@@ -701,15 +709,9 @@ MoFEMErrorCode Example::OPs() {
                                commonPlasticDataPtr->mDPtr_Axiator);
   CHKERR add_domain_ops_rhs_mechanical(feAxiatorRhs->getOpPtrVector());
   
-  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
 
-  auto integration_rule_bc = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
