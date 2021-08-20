@@ -688,6 +688,30 @@ pipeline_mng->getOpDomainRhsPipeline().push_back(
 
 <tr>
 
+<td>
+
+Integrate natural boundary condidition
+\code
+MoFEM::OpNormalMixVecTimesScalarImpl
+\endcode
+
+\code
+using OpMixNaturalBC = FormsIntegrators<BoundaryEleOp>::Assembly<PETSC>::LinearForm<
+    GAUSS>::OpBaseTimesVector<3>;
+\endcode
+
+<td>
+
+%Example
+\code
+using OpTemperatureBC = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpNormalMixVecTimesScalar<SPACE_DIM>;
+pipeline.push_back(
+   new OpTemperatureBC("FLUX", [](double,double.double) { return 1;},
+                      boost::make_shared<Range>(skin_edges)));
+\endcode
+%Example usage thermo_plastic.cpp
+
 </table>
 
 \note Linear froms are defined in file LinearFormsIntegrators.hpp
