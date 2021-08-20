@@ -87,8 +87,6 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
     const size_t nb_integration_pts = data.getN().size1();
     const size_t nb_base_functions = data.getN().size2();
 
-    auto t_plastic_strain =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrain);
     auto t_plastic_strain_dot =
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrainDot);
     auto t_D =
@@ -102,7 +100,8 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
     auto t_base = data.getFTensor0N();
     for (size_t gg = 0; gg != nb_integration_pts; ++gg) {
       const double alpha = getMeasure() * t_w;
-      const double beta = alpha * (t_D(i, j, k, l) * t_plastic_strain(k, l)) *
+      const double beta = alpha *
+                          (t_D(i, j, k, l) * t_plastic_strain_dot(k, l)) *
                           t_plastic_strain_dot(i, j);
 
       size_t bb = 0;
@@ -114,7 +113,6 @@ MoFEMErrorCode OpPlasticHeatProduction::doWork(int side, EntityType type,
         ++t_base;
 
       ++t_w;
-      ++t_plastic_strain;
       ++t_plastic_strain_dot;
     }
 
@@ -154,8 +152,6 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
 
     auto t_row_base = row_data.getFTensor0N();
 
-    auto t_plastic_strain =
-        getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrain);
     auto t_plastic_strain_dot =
         getFTensor2SymmetricFromMat<SPACE_DIM>(commonDataPtr->plasticStrainDot);
     auto t_D =
@@ -173,14 +169,10 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
       auto t_mat =
           get_mat_scalar_dtensor_sym(locMat, FTensor::Number<SPACE_DIM>());
 
-      FTensor::Tensor1<double, size_symm> t_D_ep;
-      t_D_ep(L) =
-          ((t_D(i, j, k, l) * t_plastic_strain_dot(k, l)) * t_L(i, j, L)) *
-          alpha;
       FTensor::Tensor1<double, size_symm> t_D_ep_dot;
       t_D_ep_dot(L) =
-          ((t_D(i, j, k, l) * t_plastic_strain(k, l)) * t_L(i, j, L)) *
-          (alpha * ts_a);
+          ((t_D(i, j, k, l) * t_plastic_strain_dot(k, l)) * t_L(i, j, L)) *
+          (alpha * ts_a * 2);
 
       size_t rr = 0;
       for (; rr != nb_row_dofs; ++rr) {
@@ -188,7 +180,7 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
         auto t_col_base = col_data.getFTensor0N(gg, 0);
         for (size_t cc = 0; cc != nb_col_dofs / size_symm; cc++) {
 
-          t_mat(L) += (t_row_base * t_col_base) * (t_D_ep(L) + t_D_ep_dot(L));
+          t_mat(L) += (t_row_base * t_col_base) * (t_D_ep_dot(L));
 
           ++t_mat;
           ++t_col_base;
@@ -200,7 +192,6 @@ MoFEMErrorCode OpPlasticHeatProduction_dEP::doWork(int row_side, int col_side,
         ++t_row_base;
 
       ++t_w;
-      ++t_plastic_strain;
       ++t_plastic_strain_dot;
     }
 

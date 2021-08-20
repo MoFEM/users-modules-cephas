@@ -1,8 +1,8 @@
 /**
- * \file plastic.cpp
- * \example plastic.cpp
+ * \file thermo_plastic.cpp
+ * \example thermo_plastic.cpp
  *
- * Plane stress elastic problem
+ * Thermo plasticity
  *
  */
 
@@ -111,6 +111,8 @@ using OpBaseDotT = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
 using OpBaseDivFlux = OpBaseDotT;
 using OpHeatSource = FormsIntegrators<DomainEleOp>::Assembly<PETSC>::LinearForm<
     GAUSS>::OpSource<1, 1>;
+using OpTemperatureBC = FormsIntegrators<BoundaryEleOp>::Assembly<
+    PETSC>::LinearForm<GAUSS>::OpNormalMixVecTimesScalar<SPACE_DIM>;
 
 double scale = 1.;
 
@@ -121,14 +123,14 @@ double sigmaY = 450;
 double H = 129;
 double visH = 0;
 double cn = 1;
-double Qinf = 265;
+double Qinf = 0;//265;
 double b_iso = 16.93;
 double heat_conductivity =
-    45 * 1e-5; // Force / (time temerature )  or Power / (length temperature)
-double heat_capacity = 200; // length^2/(time^2 temerature)
-double omega_0 = 4e-2;
-double omega_h = omega_0;
-double omega_inf = omega_h;
+    45 * 1e-3; // Force / (time temerature )  or Power / (length temperature)
+double heat_capacity = 400; // length^2/(time^2 temerature)
+double omega_0 = 5e-4;
+double omega_h = 5e-2;
+double omega_inf = 0;
 int order = 2;
 
 inline long double hardening(long double tau, double temp) {
@@ -187,6 +189,18 @@ private:
   boost::shared_ptr<std::vector<unsigned char>> reactionMarker;
 
   std::vector<FTensor::Tensor1<double, 3>> bodyForces;
+
+  struct BcTempFun {
+    BcTempFun(double v, FEMethod &fe) : valTemp(v), fE(fe) {}
+    double operator()(const double, const double, const double) {
+      return -valTemp;// * fE.ts_t;
+    }
+
+  private:
+    double valTemp;
+    FEMethod &fE;
+  };
+  std::vector<BcTempFun> bcTemperatureFunctions;
 };
 
 //! [Run problem]
@@ -217,6 +231,7 @@ MoFEMErrorCode Example::setupProblem() {
   const auto flux_space = (SPACE_DIM == 2) ? HCURL : HDIV;
   CHKERR simple->addDomainField("T", L2, AINSWORTH_LEGENDRE_BASE, 1);
   CHKERR simple->addDomainField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
+  // CHKERR simple->addBoundaryField("FLUX", flux_space, DEMKOWICZ_JACOBI_BASE, 1);
 
   CHKERR PetscOptionsGetInt(PETSC_NULL, "", "-order", &order, PETSC_NULL);
   CHKERR simple->setFieldOrder("U", order);
@@ -372,6 +387,27 @@ MoFEMErrorCode Example::bC() {
   CHKERR bc_mng->removeBlockDOFsOnEntities(simple->getProblemName(),
                                            "ZERO_FLUX", "FLUX", 0, 1);
 
+  PetscBool zero_fix_skin_flux = PETSC_TRUE;
+  CHKERR PetscOptionsGetBool(PETSC_NULL, "", "-fix_skin_flux",
+                             &zero_fix_skin_flux, PETSC_NULL);
+  if (zero_fix_skin_flux) {
+    Range faces;
+    CHKERR mField.get_moab().get_entities_by_dimension(0, SPACE_DIM, faces);
+    Skinner skin(&mField.get_moab());
+    Range skin_ents;
+    CHKERR skin.find_skin(0, faces, false, skin_ents);
+    ParallelComm *pcomm =
+        ParallelComm::get_pcomm(&mField.get_moab(), MYPCOMM_INDEX);
+    if (pcomm == NULL)
+      SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
+              "Communicator not created");
+    CHKERR pcomm->filter_pstatus(skin_ents,
+                                 PSTATUS_SHARED | PSTATUS_MULTISHARED,
+                                 PSTATUS_NOT, -1, &skin_ents);
+    CHKERR prb_mng->removeDofsOnEntities(simple->getProblemName(), "FLUX",
+                                         skin_ents, 0, 1);
+  }
+
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_X", "U",
                                         0, 0);
   CHKERR bc_mng->pushMarkDOFsOnEntities(simple->getProblemName(), "FIX_Y", "U",
@@ -437,6 +473,29 @@ MoFEMErrorCode Example::OPs() {
   MoFEMFunctionBegin;
   auto pipeline_mng = mField.getInterface<PipelineManager>();
   auto simple = mField.getInterface<Simple>();
+
+  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+  auto integration_rule_bc = [](int, int, int approx_order) {
+    return 2 * approx_order;
+  };
+
+  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
+  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
+  auto integration_rule_axiator = [](int, int, int approx_order) {
+    return 2 * (approx_order - 1);
+  };
+  feAxiatorRhs->getRuleHook = integration_rule_axiator;
+  feAxiatorLhs->getRuleHook = integration_rule_axiator;
+
+  feThermalRhs = boost::make_shared<DomainEle>(mField);
+  feThermalLhs = boost::make_shared<DomainEle>(mField);
+  auto integration_rule_thermal = [](int, int, int approx_order) {
+    return 2 * approx_order;
+  };
+  feThermalRhs->getRuleHook = integration_rule_thermal;
+  feThermalLhs->getRuleHook = integration_rule_thermal;
 
   auto add_domain_base_ops = [&](auto &pipeline) {
     MoFEMFunctionBegin;
@@ -627,7 +686,7 @@ MoFEMErrorCode Example::OPs() {
     auto time_scaled = [&](double, double, double) {
       auto *pipeline_mng = mField.getInterface<PipelineManager>();
       auto &fe_domain_rhs = pipeline_mng->getBoundaryRhsFE();
-      return -fe_domain_rhs->ts_t;
+      return -sin(2 * (fe_domain_rhs->ts_t / 2) * M_PI);
     };
 
     pipeline.push_back(new OpSetBc("U", true, boundaryMarker));
@@ -726,45 +785,37 @@ MoFEMErrorCode Example::OPs() {
     MoFEMFunctionReturn(0);
   };
 
-  auto add_boundary_ops_rhs_thermal = [&](auto &pipeline, auto fe) {
+  auto add_boundary_ops_rhs_thermal = [&](auto &pipeline, auto &fe) {
     MoFEMFunctionBegin;
 
-    // auto get_time = [&](double, double, double) { return -fe->ts_t; };
+    if (SPACE_DIM == 2) {
+      pipeline.push_back(new OpSetContravariantPiolaTransformOnEdge2D());
+    } else if (SPACE_DIM == 3) {
+      pipeline.push_back(new OpHOSetCovariantPiolaTransformOnFace3D(HDIV));
+    }
 
-    // for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
-    //   const std::string block_name = "TEMPERATURE";
-    //   if (it->getName().compare(0, block_name.size(), block_name) == 0) {
-    //     Range temp_edges;
-    //     std::vector<double> attr_vec;
-    //     CHKERR it->getMeshsetIdEntitiesByDimension(
-    //         mField.get_moab(), SPACE_DIM - 1, temp_edges, true);
-    //     it->getAttributes(attr_vec);
-    //     if (attr_vec.size() != 1)
-    //       SETERRQ(PETSC_COMM_WORLD, MOFEM_DATA_INCONSISTENCY,
-    //               "Wrong size of boundary attributes vector. Set right block "
-    //               "size attributes.");
-    //     auto temp_vec_ptr = boost::make_shared<VectorDouble>(1, attr_vec[0]);
-    //     pipeline.push_back(
-    //         new OpHdivT("T", temp_vec_ptr, get_time,
-    //                              boost::make_shared<Range>(temp_edges)));
-    //   }
-    // }
+    for (_IT_CUBITMESHSETS_BY_SET_TYPE_FOR_LOOP_(mField, BLOCKSET, it)) {
+      const std::string block_name = "TEMPERATURE";
+      if (it->getName().compare(0, block_name.size(), block_name) == 0) {
+        Range temp_edges;
+        std::vector<double> attr_vec;
+        CHKERR it->getMeshsetIdEntitiesByDimension(
+            mField.get_moab(), SPACE_DIM - 1, temp_edges, true);
+        it->getAttributes(attr_vec);
+        if (attr_vec.size() != 1)
+          SETERRQ(PETSC_COMM_SELF, MOFEM_INVALID_DATA,
+                  "Should be one attribute");
+        MOFEM_LOG("EXAMPLE", Sev::inform)
+            << "Set temerature " << attr_vec[0] << " on ents:\n"
+            << temp_edges;
+        bcTemperatureFunctions.push_back(BcTempFun(attr_vec[0], fe));
+        pipeline.push_back(
+            new OpTemperatureBC("FLUX", bcTemperatureFunctions.back(),
+                                boost::make_shared<Range>(temp_edges)));
+      }
+    }
     MoFEMFunctionReturn(0);
   };
-
-  feAxiatorRhs = boost::make_shared<DomainEle>(mField);
-  feAxiatorLhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_axiator = [](int, int, int approx_order) { return 1; };
-  feAxiatorRhs->getRuleHook = integration_rule_axiator;
-  feAxiatorLhs->getRuleHook = integration_rule_axiator;
-
-  feThermalRhs = boost::make_shared<DomainEle>(mField);
-  feThermalLhs = boost::make_shared<DomainEle>(mField);
-  auto integration_rule_thermal = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
-  feThermalRhs->getRuleHook = integration_rule_thermal;
-  feThermalLhs->getRuleHook = integration_rule_thermal;
 
   // Mechanics
   CHKERR add_domain_base_ops(pipeline_mng->getOpDomainLhsPipeline());
@@ -805,17 +856,11 @@ MoFEMErrorCode Example::OPs() {
   CHKERR add_domain_ops_rhs_thermal(feThermalRhs->getOpPtrVector());
   CHKERR
   add_boundary_ops_rhs_thermal(pipeline_mng->getOpBoundaryRhsPipeline(),
-                                      pipeline_mng->getBoundaryRhsFE());
+                               *pipeline_mng->getBoundaryRhsFE());
 
-  auto integration_rule_deviator = [](int o_row, int o_col, int approx_order) {
-    return 2 * (approx_order - 1);
-  };
   CHKERR pipeline_mng->setDomainRhsIntegrationRule(integration_rule_deviator);
   CHKERR pipeline_mng->setDomainLhsIntegrationRule(integration_rule_deviator);
 
-  auto integration_rule_bc = [](int, int, int approx_order) {
-    return 2 * approx_order;
-  };
   CHKERR pipeline_mng->setBoundaryLhsIntegrationRule(integration_rule_bc);
   CHKERR pipeline_mng->setBoundaryRhsIntegrationRule(integration_rule_bc);
 
